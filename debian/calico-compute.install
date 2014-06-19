@@ -1,0 +1,7 @@
+usr/bin/neutron-calico-agent usr/bin
+usr/bin/neutron-enable-proxy-arp usr/bin
+usr/bin/neutron-disable-proxy-arp usr/bin
+usr/etc/neutron/calico_agent.ini etc/neutron
+usr/etc/neutron/rootwrap.d/calico.filters etc/neutron/rootwrap.d
+usr/bin/calico-gen-bird-conf.sh usr/bin
+usr/share/calico/* usr/share/calico

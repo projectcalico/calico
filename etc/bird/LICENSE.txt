@@ -1,0 +1,2 @@
+The sample BIRD configuration in this directory is distributed under
+GPLv3.  See the file COPYING-v3 for details.

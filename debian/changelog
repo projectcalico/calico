@@ -1,0 +1,5 @@
+calico (0.1) trusty; urgency=medium
+
+  * Initial release.
+
+ -- Neil Jerram <nj@metaswitch.com>  Thu, 26 Jun 2014 16:03:59 +0100

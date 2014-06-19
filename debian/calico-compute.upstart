@@ -1,0 +1,17 @@
+# vim:set ft=upstart ts=2 et:
+description "Calico Agent"
+author "Project Calico Maintainers <maintainers@projectcalico.org>"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+chdir /var/run
+
+pre-start script
+  mkdir -p /var/run/neutron
+  chown neutron:root /var/run/neutron
+end script
+
+exec start-stop-daemon --start --chuid neutron --exec /usr/bin/neutron-calico-agent -- --config-file=/etc/neutron/neutron.conf --config-file=/etc/neutron/calico_agent.ini --log-file=/var/log/neutron/calico-agent.log
