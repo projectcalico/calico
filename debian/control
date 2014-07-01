@@ -12,6 +12,7 @@ Depends:
  bird,
  calico-common,
  neutron-dhcp-agent,
+ iptables-persistent,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
