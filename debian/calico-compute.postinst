@@ -11,6 +11,9 @@ then
     iptables -C POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill ||
     iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill
 
+    # Save current iptables for subsequent reboots.
+    iptables-save > /etc/iptables/rules.v4
+
     # Enable IP forwarding.
     echo 1 > /proc/sys/net/ipv4/ip_forward
 fi

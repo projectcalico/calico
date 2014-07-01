@@ -1,3 +1,11 @@
+calico (0.2) trusty; urgency=medium
+
+  * Make iptables rule for DHCP checksum filling persist across compute
+	node reboots.
+  * Add firewall_driver config to calico_agent.ini.
+
+ -- Neil Jerram <nj@metaswitch.com>  Tue, 01 Jul 2014 15:17:52 +0100
+
 calico (0.1) trusty; urgency=medium
 
   * Initial release.
