@@ -68,7 +68,7 @@ class CalicoManager(object):
         return tap_device_name
 
     def add_static_route(self, tap_device_name, fixed_ips, mac_address):
-        LOG.warning('CalicoManager::add_static_route')
+        LOG.debug('CalicoManager::add_static_route')
         result = True
         for ip_data in fixed_ips:
             ip_address = ip_data["ip_address"]
