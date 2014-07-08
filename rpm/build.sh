@@ -17,6 +17,7 @@
 
 dobuild () {
     repo=$1
+    branch=$2
 
     set -x
 
@@ -24,13 +25,13 @@ dobuild () {
     cd ~/rpmbuild
     [ -d $repo ] || git clone https://github.com/Metaswitch/${repo}.git
     cd $repo
-    git fetch
+    git fetch origin
     git reset --hard origin/rpm
 
     # Infer RPM spec and package names, and link the package spec into
     # ../SPECS.
     spec=`basename rpm/*.spec .spec`
-    pkg=${2:-$spec}
+    pkg=${3:-$spec}
     spec=${spec}.spec
     cd ../SPECS
     ln -sf ../${repo}/rpm/$spec
@@ -40,7 +41,7 @@ dobuild () {
 
     # Link patches into ../SOURCES.
     cd ../SOURCES
-    for f in ../${repo}/rpm/*.patch; do ln -sf $f; done
+    for f in ../${repo}/rpm/*; do ln -sf $f; done
 
     # Tar up the Git source, with the naming that rpmbuild expects.
     cd ..
@@ -67,7 +68,7 @@ dobuildx () {
     fi
 }
 
-dobuildx calico-dnsmasq
-dobuildx calico-nova nova
-dobuildx calico-neutron neutron
-dobuildx calico
+dobuildx calico master
+dobuildx calico-dnsmasq master
+dobuildx calico-nova rpm nova
+dobuildx calico-neutron rpm neutron
