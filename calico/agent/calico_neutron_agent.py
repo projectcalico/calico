@@ -581,6 +581,11 @@ def enable_local_routing():
     """
     Helper 'main' function, run as root to allow packets received on a specific
     interface to be redirected to the host's localhost address.
+
+    Note that this means that guests can route to the host by issuing packets
+    with a destination IP of 127.0.0.1. Calico will be enhanced to block all
+    such traffic except that which is necessary for correct VM function in the
+    next sprint as part of the enhanced security task.
     """
     tap_name = sys.argv[1]
     print "Enabling local routing on %s" % tap_name
