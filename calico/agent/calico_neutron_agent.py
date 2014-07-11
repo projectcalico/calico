@@ -96,8 +96,9 @@ class CalicoManager(object):
     def _setup_metadata_forwarding(self):
         LOG.debug('CalicoManager::_setup_metadata_forwarding')
         self.firewall.ipv4['nat'].add_rule(
-           'PREROUTING', '-s 0.0.0.0/0 -d 169.254.169.254/32 -p tcp -m tcp'
-           ' --dport 80 -j REDIRECT --to-port %s' % cfg.CONF.metadata_port
+           'PREROUTING', '-s 0.0.0.0/0 -d 169.254.169.254/32 -p tcp -m tcp '
+           '--dport 80 -j DNAT '
+           '--to-destination 127.0.0.1:%s' % cfg.CONF.metadata_port
         )
         self.firewall.iptables.apply()
 
