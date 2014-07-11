@@ -53,6 +53,19 @@ TAP_FS = "/sys/devices/virtual/net/"
 
 
 class CalicoManager(object):
+    OPTS = [
+        cfg.IntOpt('metadata_port',
+                   default=9697,
+                   help=_("TCP Port used by Neutron metadata namespace "
+                          "proxy.")),
+        cfg.BoolOpt('enable_metadata_proxy', default=True,
+                    help=_("Allow running metadata proxy.")),
+        cfg.StrOpt('metadata_proxy_socket',
+                   default='$state_path/metadata_proxy',
+                   help=_('Location of Metadata Proxy UNIX domain '
+                          'socket')),
+    ]
+
     def __init__(self, interface_mappings, root_helper):
         LOG.debug('CalicoManager::__init__')
         self.interface_mappings = interface_mappings
@@ -471,6 +484,7 @@ class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
 
 def main():
     eventlet.monkey_patch()
+    cfg.CONF.register_opts(CalicoManager.OPTS)
     cfg.CONF(project='neutron')
 
     logging_config.setup_logging(cfg.CONF)
