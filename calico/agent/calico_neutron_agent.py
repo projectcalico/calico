@@ -153,6 +153,10 @@ class CalicoManager(object):
             utils.execute(
                 ['arp', '-s', ip_address, mac_address],
                 root_helper=self.root_helper)
+            local_routing_out = utils.execute(
+                ['neutron-enable-local-routing', tap_device_name],
+                root_helper=self.root_helper)
+            result &= 'Enabled local routing' in local_routing_out
         return result
 
     def remove_static_route(self, tap_device_name, fixed_ips, mac_address):
@@ -176,6 +180,7 @@ class CalicoManager(object):
                           ip_address, tap_device_name)
             utils.execute(['neutron-disable-proxy-arp', tap_device_name],
                           root_helper=self.root_helper)
+            utils.execute(['neutron-disable-local-routing', tap_device_name])
             arp_out, arp_err = utils.execute(
                 ['arp', '-d', ip_address, '-i', tap_device_name],
                 root_helper=self.root_helper,
