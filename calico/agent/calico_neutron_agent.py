@@ -577,6 +577,28 @@ def disable_proxy_arp():
         f.write('0')
     print "Disabled proxy arp on %s" % tap_name
 
+def enable_local_routing():
+    """
+    Helper 'main' function, run as root to allow packets received on a specific
+    interface to be redirected to the host's localhost address.
+    """
+    tap_name = sys.argv[1]
+    print "Enabling local routing on %s" % tap_name
+    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap_name, 'wb') as f:
+        f.write('1')
+    print "Enabled local routing on %s" % tap_name
+
+def disable_local_routing():
+    """
+    Helper 'main' function, run as root to prevent packets received on a
+    specific interface being redirected to the host's localhost address.
+    """
+    tap_name = sys.argv[1]
+    print "Disabling local routing on %s" % tap_name
+    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap_name, 'wb') as f:
+        f.write('0')
+    print "Disabled local routing on %s" % tap_name
+
 
 if __name__ == "__main__":
     main()
