@@ -25,12 +25,15 @@
 import os
 import sys
 import time
+import uuid
 
 import eventlet
 from oslo.config import cfg
 
 from neutron.agent.linux import ip_lib
 from neutron.agent.linux import utils
+from neutron.agent.linux import iptables_manager
+from neutron.agent.linux import external_process
 from neutron.agent import rpc as agent_rpc
 from neutron.agent import securitygroups_rpc as sg_rpc
 from neutron.common import config as logging_config
@@ -71,6 +74,54 @@ class CalicoManager(object):
         self.interface_mappings = interface_mappings
         self.root_helper = root_helper
         self.ip = ip_lib.IPWrapper(self.root_helper)
+        self.proxy_uuid = None
+
+        # Calico runs an extra firewall manager in addition to the normal
+        # Neutron agent firewall.
+        self.firewall = iptables_manager.IptablesManager(
+            root_helper=self.root_helper,
+            use_ipv6=True,
+            binary_name="calico-manager"
+        )
+
+        if cfg.CONF.enable_metadata_proxy:
+            self.enable_metadata_proxy()
+
+    def enable_metadata_proxy(self):
+        LOG.debug('CalicoManager::enable_metadata_proxy')
+        self.proxy_uuid = uuid.uuid4()
+        self._setup_metadata_forwarding()
+        self._launch_metadata_proxy()
+
+    def _setup_metadata_forwarding(self):
+        LOG.debug('CalicoManager::_setup_metadata_forwarding')
+        self.firewall.ipv4['nat'].add_rule(
+           'PREROUTING', '-s 0.0.0.0/0 -d 169.254.169.254/32 -p tcp -m tcp'
+           ' --dport 80 -j REDIRECT --to-port %s' % cfg.CONF.metadata_port
+        )
+        self.firewall.iptables.apply()
+
+    def _launch_metadata_proxy(self):
+        LOG.debug('CalicoManager::_launch_metadata_proxy')
+        def callback(pid_file):
+            proxy_socket = cfg.CONF.metadata_proxy_socket
+            proxy_cmd = ['neutron-ns-metadata-proxy',
+                         '--pid_file=%s' % pid_file,
+                         '--metadata_proxy_socket=%s' % proxy_socket,
+                         '--flat=%s' % self.proxy_uuid,
+                         '--state_path=%s' % cfg.CONF.state_path,
+                         '--metadata_port=%s' % cfg.CONF.metadata_port]
+            proxy_cmd.extend(config.get_log_args(
+                cfg.CONF,
+                'neutron-ns-metadata-proxy-%s.log' % self.proxy_uuid))
+            return proxy_cmd
+
+        pm = external_process.ProcessManager(
+            cfg.CONF,
+            proxy_uuid,
+            self.root_helper,
+            namespace=None)
+        pm.enable(callback)
 
     def get_tap_device_name(self, interface_id):
         LOG.debug('CalicoManager::get_tap_device_name')
