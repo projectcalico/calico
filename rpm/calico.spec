@@ -23,7 +23,7 @@ Virtualization (NFV).
 %package compute
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       bird, calico-common, neutron-dhcp-agent, iptables-persistent
+Requires:       bird, calico-common, openstack-neutron, iptables
 
 %description compute
 This package provides the pieces needed on a compute node.
