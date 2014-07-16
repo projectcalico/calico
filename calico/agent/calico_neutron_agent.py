@@ -77,7 +77,9 @@ class CalicoManager(object):
         self.proxy_uuid = None
 
         # Calico runs an extra firewall manager in addition to the normal
-        # Neutron agent firewall.
+        # Neutron agent firewall. This is used to implement Calico's tighter
+        # security policy in addition to OpenStack's normal security rules, and
+        # to handle cloud-init.
         self.firewall = iptables_manager.IptablesManager(
             root_helper=self.root_helper,
             use_ipv6=True,
@@ -95,6 +97,9 @@ class CalicoManager(object):
 
     def _setup_metadata_forwarding(self):
         LOG.debug('CalicoManager::_setup_metadata_forwarding')
+        # This rule uses DNAT, not REDIRECT. We need to use DNAT to make sure
+        # that we don't leave the source address as 127.0.0.1, which would
+        # confuse the hell out of cloud-init.
         self.firewall.ipv4['nat'].add_rule(
            'PREROUTING', '-s 0.0.0.0/0 -d 169.254.169.254/32 -p tcp -m tcp '
            '--dport 80 -j DNAT '
@@ -589,9 +594,9 @@ def enable_local_routing():
     interface to be redirected to the host's localhost address.
 
     Note that this means that guests can route to the host by issuing packets
-    with a destination IP of 127.0.0.1. Calico will be enhanced to block all
-    such traffic except that which is necessary for correct VM function in the
-    next sprint as part of the enhanced security task.
+    with a destination IP of 127.0.0.1. In the next sprint, as part of the
+    enhanced security task, Calico will be enhanced to block all such traffic
+    except that which is necessary for correct VM function.
     """
     tap_name = sys.argv[1]
     print "Enabling local routing on %s" % tap_name
