@@ -1,0 +1,8 @@
+description "Calico Agent"
+
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [S016]
+
+respawn
+
+exec su -s /bin/sh -c "exec /usr/bin/neutron-calico-agent --log-file /var/log/neutron/calico-agent.log --config-file /usr/share/neutron/neutron-dist.conf --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/calico_agent.ini" neutron
