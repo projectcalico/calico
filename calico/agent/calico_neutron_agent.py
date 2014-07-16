@@ -25,12 +25,15 @@
 import os
 import sys
 import time
+import uuid
 
 import eventlet
 from oslo.config import cfg
 
 from neutron.agent.linux import ip_lib
 from neutron.agent.linux import utils
+from neutron.agent.linux import iptables_manager
+from neutron.agent.linux import external_process
 from neutron.agent import rpc as agent_rpc
 from neutron.agent import securitygroups_rpc as sg_rpc
 from neutron.common import config as logging_config
@@ -53,11 +56,78 @@ TAP_FS = "/sys/devices/virtual/net/"
 
 
 class CalicoManager(object):
+    OPTS = [
+        cfg.IntOpt('metadata_port',
+                   default=9697,
+                   help=_("TCP Port used by Neutron metadata namespace "
+                          "proxy.")),
+        cfg.BoolOpt('enable_metadata_proxy', default=True,
+                    help=_("Allow running metadata proxy.")),
+        cfg.StrOpt('metadata_proxy_socket',
+                   default='$state_path/metadata_proxy',
+                   help=_('Location of Metadata Proxy UNIX domain '
+                          'socket')),
+    ]
+
     def __init__(self, interface_mappings, root_helper):
         LOG.debug('CalicoManager::__init__')
         self.interface_mappings = interface_mappings
         self.root_helper = root_helper
         self.ip = ip_lib.IPWrapper(self.root_helper)
+        self.proxy_uuid = None
+
+        # Calico runs an extra firewall manager in addition to the normal
+        # Neutron agent firewall. This is used to implement Calico's tighter
+        # security policy in addition to OpenStack's normal security rules, and
+        # to handle cloud-init.
+        self.firewall = iptables_manager.IptablesManager(
+            root_helper=self.root_helper,
+            use_ipv6=True,
+            binary_name="calico-manager"
+        )
+
+        if cfg.CONF.enable_metadata_proxy:
+            self.enable_metadata_proxy()
+
+    def enable_metadata_proxy(self):
+        LOG.debug('CalicoManager::enable_metadata_proxy')
+        self.proxy_uuid = uuid.uuid4()
+        self._setup_metadata_forwarding()
+        self._launch_metadata_proxy()
+
+    def _setup_metadata_forwarding(self):
+        LOG.debug('CalicoManager::_setup_metadata_forwarding')
+        # This rule uses DNAT, not REDIRECT. We need to use DNAT to make sure
+        # that we don't leave the source address as 127.0.0.1, which would
+        # confuse the hell out of cloud-init.
+        self.firewall.ipv4['nat'].add_rule(
+           'PREROUTING', '-s 0.0.0.0/0 -d 169.254.169.254/32 -p tcp -m tcp '
+           '--dport 80 -j DNAT '
+           '--to-destination 127.0.0.1:%s' % cfg.CONF.metadata_port
+        )
+        self.firewall.iptables.apply()
+
+    def _launch_metadata_proxy(self):
+        LOG.debug('CalicoManager::_launch_metadata_proxy')
+        def callback(pid_file):
+            proxy_socket = cfg.CONF.metadata_proxy_socket
+            proxy_cmd = ['neutron-ns-metadata-proxy',
+                         '--pid_file=%s' % pid_file,
+                         '--metadata_proxy_socket=%s' % proxy_socket,
+                         '--flat=%s' % self.proxy_uuid,
+                         '--state_path=%s' % cfg.CONF.state_path,
+                         '--metadata_port=%s' % cfg.CONF.metadata_port]
+            proxy_cmd.extend(config.get_log_args(
+                cfg.CONF,
+                'neutron-ns-metadata-proxy-%s.log' % self.proxy_uuid))
+            return proxy_cmd
+
+        pm = external_process.ProcessManager(
+            cfg.CONF,
+            proxy_uuid,
+            self.root_helper,
+            namespace=None)
+        pm.enable(callback)
 
     def get_tap_device_name(self, interface_id):
         LOG.debug('CalicoManager::get_tap_device_name')
@@ -89,6 +159,10 @@ class CalicoManager(object):
             utils.execute(
                 ['arp', '-s', ip_address, mac_address],
                 root_helper=self.root_helper)
+            local_routing_out = utils.execute(
+                ['neutron-enable-local-routing', tap_device_name],
+                root_helper=self.root_helper)
+            result &= 'Enabled local routing' in local_routing_out
         return result
 
     def remove_static_route(self, tap_device_name, fixed_ips, mac_address):
@@ -112,6 +186,7 @@ class CalicoManager(object):
                           ip_address, tap_device_name)
             utils.execute(['neutron-disable-proxy-arp', tap_device_name],
                           root_helper=self.root_helper)
+            utils.execute(['neutron-disable-local-routing', tap_device_name])
             arp_out, arp_err = utils.execute(
                 ['arp', '-d', ip_address, '-i', tap_device_name],
                 root_helper=self.root_helper,
@@ -471,6 +546,7 @@ class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
 
 def main():
     eventlet.monkey_patch()
+    cfg.CONF.register_opts(CalicoManager.OPTS)
     cfg.CONF(project='neutron')
 
     logging_config.setup_logging(cfg.CONF)
@@ -511,6 +587,33 @@ def disable_proxy_arp():
     with open('/proc/sys/net/ipv4/conf/%s/proxy_arp' % tap_name, 'wb') as f:
         f.write('0')
     print "Disabled proxy arp on %s" % tap_name
+
+def enable_local_routing():
+    """
+    Helper 'main' function, run as root to allow packets received on a specific
+    interface to be redirected to the host's localhost address.
+
+    Note that this means that guests can route to the host by issuing packets
+    with a destination IP of 127.0.0.1. In the next sprint, as part of the
+    enhanced security task, Calico will be enhanced to block all such traffic
+    except that which is necessary for correct VM function.
+    """
+    tap_name = sys.argv[1]
+    print "Enabling local routing on %s" % tap_name
+    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap_name, 'wb') as f:
+        f.write('1')
+    print "Enabled local routing on %s" % tap_name
+
+def disable_local_routing():
+    """
+    Helper 'main' function, run as root to prevent packets received on a
+    specific interface being redirected to the host's localhost address.
+    """
+    tap_name = sys.argv[1]
+    print "Disabling local routing on %s" % tap_name
+    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap_name, 'wb') as f:
+        f.write('0')
+    print "Disabled local routing on %s" % tap_name
 
 
 if __name__ == "__main__":
