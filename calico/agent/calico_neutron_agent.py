@@ -30,6 +30,7 @@ import uuid
 import eventlet
 from oslo.config import cfg
 
+from neutron.agent.common import config as common_config
 from neutron.agent.linux import ip_lib
 from neutron.agent.linux import utils
 from neutron.agent.linux import iptables_manager
@@ -91,7 +92,7 @@ class CalicoManager(object):
 
     def enable_metadata_proxy(self):
         LOG.debug('CalicoManager::enable_metadata_proxy')
-        self.proxy_uuid = uuid.uuid4()
+        self.proxy_uuid = uuid.uuid4().hex
         self._setup_metadata_forwarding()
         self._launch_metadata_proxy()
 
@@ -105,7 +106,7 @@ class CalicoManager(object):
            '--dport 80 -j DNAT '
            '--to-destination 127.0.0.1:%s' % cfg.CONF.metadata_port
         )
-        self.firewall.iptables.apply()
+        self.firewall.apply()
 
     def _launch_metadata_proxy(self):
         LOG.debug('CalicoManager::_launch_metadata_proxy')
@@ -117,14 +118,14 @@ class CalicoManager(object):
                          '--flat=%s' % self.proxy_uuid,
                          '--state_path=%s' % cfg.CONF.state_path,
                          '--metadata_port=%s' % cfg.CONF.metadata_port]
-            proxy_cmd.extend(config.get_log_args(
+            proxy_cmd.extend(common_config.get_log_args(
                 cfg.CONF,
                 'neutron-ns-metadata-proxy-%s.log' % self.proxy_uuid))
             return proxy_cmd
 
         pm = external_process.ProcessManager(
             cfg.CONF,
-            proxy_uuid,
+            self.proxy_uuid,
             self.root_helper,
             namespace=None)
         pm.enable(callback)
