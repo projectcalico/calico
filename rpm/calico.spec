@@ -88,19 +88,20 @@ This package provides common files.
 %build
 %{__python} setup.py build
 
-# Install sysv init scripts
-install -p -D -m 755 %{SOURCE15} %{buildroot}%{_initrddir}/calico-compute
-
-# Setup directories
-install -d -m 755 %{buildroot}%{_datadir}/neutron
-
-# Install upstart jobs examples
-install -p -m 644 %{SOURCE25} %{buildroot}%{_datadir}/neutron/
-
 
 %install
 rm -rf $RPM_BUILD_ROOT
 %{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
+
+# Setup directories
+install -d -m 755 %{buildroot}%{_datadir}/calico
+install -d -m 755 %{buildroot}%{_initrddir}
+
+# Install sysv init scripts
+install -p -D -m 755 %{SOURCE15} %{buildroot}%{_initrddir}/calico-compute
+
+# Install upstart jobs examples
+install -p -m 644 %{SOURCE25} %{buildroot}%{_datadir}/calico/
 
 
 %clean
