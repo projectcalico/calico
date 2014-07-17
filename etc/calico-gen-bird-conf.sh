@@ -25,6 +25,7 @@ rr_ip_address=$2
 as_number=$3
 
 # Generate BIRD config file.
+mkdir -p $(dirname $BIRD_CONF)
 sed -e "
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 s/@RR_IP_ADDRESS@/$rr_ip_address/;
