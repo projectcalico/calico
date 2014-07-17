@@ -4,6 +4,15 @@
 #
 # chkconfig:   - 98 02
 # description: Calico Agent
+
+### BEGIN INIT INFO
+# Provides:
+# Required-Start: $remote_fs $network $syslog
+# Required-Stop: $remote_fs $syslog
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Calico Agent
+# Description: Calico Agent
 ### END INIT INFO
 
 . /etc/rc.d/init.d/functions
