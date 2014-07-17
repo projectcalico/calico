@@ -34,6 +34,15 @@ s/@AS_NUMBER@/$as_number/;
 
 echo BIRD configuration generated at $BIRD_CONF
 
-# Restart BIRD.
-service bird restart
-echo BIRD restarted
+if [ -f /etc/redhat-release ]; then
+    # On a Red Hat system, we assume that BIRD is locally built and
+    # installed, as it is not available for RHEL 6.5 in packaged form.
+    # Run this now.
+    /usr/local/sbin/bird -c /etc/bird/bird.conf
+    echo BIRD started
+else
+    # On a Debian/Ubuntu system, BIRD is packaged and already running,
+    # so just restart it.
+    service bird restart
+    echo BIRD restarted
+fi
