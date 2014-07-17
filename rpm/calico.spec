@@ -38,7 +38,7 @@ if [ $1 -eq 1 ] ; then
     # when sending DHCP responses over the TAP interfaces to guest
     # VMs, as apparently Linux doesn't itself do the checksum
     # calculation in that case.
-    iptables -C POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill ||
+    iptables -D POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill >/dev/null 2>&1 || true
     iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill
 
     # Save current iptables for subsequent reboots.
