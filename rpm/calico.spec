@@ -96,6 +96,10 @@ rm -rf $RPM_BUILD_ROOT
 # Setup directories
 install -d -m 755 %{buildroot}%{_datadir}/calico
 install -d -m 755 %{buildroot}%{_initrddir}
+install -d -m 755 %{buildroot}%{_sysconfdir}
+
+# Move /usr/etc/* to /etc/*
+mv %{buildroot}/usr/etc/* %{buildroot}%{_sysconfdir}/
 
 # Install sysv init scripts
 install -p -D -m 755 %{SOURCE15} %{buildroot}%{_initrddir}/calico-compute
@@ -116,7 +120,7 @@ rm -rf $RPM_BUILD_ROOT
 %files compute
 %defattr(-,root,root,-)
 /usr/bin/*
-/usr/etc/*
+/etc/*
 /usr/share/calico/*
 %{_initrddir}/calico-compute
 %{_datadir}/calico/calico-compute.upstart
