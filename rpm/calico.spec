@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.2
+Version:        0.3
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -137,3 +137,5 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Jul 18 2014 Neil Jerram <nj@metaswitch.com> 0.3
+- First RPM-packaged release of Project Calico

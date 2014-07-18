@@ -1,3 +1,9 @@
+calico (0.3) trusty; urgency=medium
+
+  * Fix provision of metadata to new instances.
+
+ -- Neil Jerram <nj@metaswitch.com>  Fri, 18 Jul 2014 18:06:15 +0100
+
 calico (0.2) trusty; urgency=medium
 
   * Make iptables rule for DHCP checksum filling persist across compute
