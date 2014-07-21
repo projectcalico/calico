@@ -25,6 +25,7 @@ rr_ip_address=$2
 as_number=$3
 
 # Generate BIRD config file.
+mkdir -p $(dirname $BIRD_CONF)
 sed -e "
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 s/@RR_IP_ADDRESS@/$rr_ip_address/;
@@ -33,6 +34,15 @@ s/@AS_NUMBER@/$as_number/;
 
 echo BIRD configuration generated at $BIRD_CONF
 
-# Restart BIRD.
-service bird restart
-echo BIRD restarted
+if [ -f /etc/redhat-release ]; then
+    # On a Red Hat system, we assume that BIRD is locally built and
+    # installed, as it is not available for RHEL 6.5 in packaged form.
+    # Run this now.
+    /usr/local/sbin/bird -c /etc/bird/bird.conf
+    echo BIRD started
+else
+    # On a Debian/Ubuntu system, BIRD is packaged and already running,
+    # so just restart it.
+    service bird restart
+    echo BIRD restarted
+fi
