@@ -1,3 +1,9 @@
+calico (0.3-1) trusty; urgency=medium
+
+  * Fix Ubuntu upstart job so that calico-compute runs after iptables-persistent
+
+ -- Neil Jerram <nj@metaswitch.com>  Thu, 24 Jul 2014 17:38:32 +0100
+
 calico (0.3) trusty; urgency=medium
 
   * Fix provision of metadata to new instances.
