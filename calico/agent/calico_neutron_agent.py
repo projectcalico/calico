@@ -46,7 +46,6 @@ from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common.rpc import common as rpc_common
 from neutron.openstack.common.rpc import dispatcher
-from neutron.plugins.linuxbridge.common import config  # noqa
 from calico import common as calico_common
 
 LOG = logging.getLogger(__name__)
@@ -67,6 +66,12 @@ class CalicoManager(object):
                    default='$state_path/metadata_proxy',
                    help=_('Location of Metadata Proxy UNIX domain '
                           'socket')),
+    ]
+
+    AGENT_OPTS = [
+        cfg.IntOpt('polling_interval', default=2,
+                   help=_("The number of seconds the agent will wait between "
+                          "polling for local device changes.")),
     ]
 
     def __init__(self, root_helper):
@@ -538,8 +543,11 @@ class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
 def main():
     eventlet.monkey_patch()
     cfg.CONF.register_opts(CalicoManager.OPTS)
+    cfg.CONF.register_opts(CalicoManager.AGENT_OPTS, "AGENT")
     cfg.CONF(project='neutron')
 
+    common_config.register_agent_state_opts_helper(cfg.CONF)
+    common_config.register_root_helper(cfg.CONF)
     logging_config.setup_logging(cfg.CONF)
 
     polling_interval = cfg.CONF.AGENT.polling_interval
