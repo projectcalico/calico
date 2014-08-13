@@ -47,7 +47,6 @@ from neutron.openstack.common import loopingcall
 from neutron.openstack.common.rpc import common as rpc_common
 from neutron.openstack.common.rpc import dispatcher
 from neutron.plugins.linuxbridge.common import config  # noqa
-from neutron.plugins.linuxbridge.common import constants as lconst
 from calico import common as calico_common
 
 LOG = logging.getLogger(__name__)
@@ -279,9 +278,8 @@ class CalicoRpcCallbacks(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                     segmentation_id = kwargs.get('segmentation_id')
                 else:
                     # compatibility with pre-Havana RPC vlan_id encoding
-                    vlan_id = kwargs.get('vlan_id')
-                    (network_type,
-                     segmentation_id) = lconst.interpret_vlan_id(vlan_id)
+                    LOG.error("Calico agent requires Icehouse or later")
+                    sys.exit(1)
                 physical_network = kwargs.get('physical_network')
                 # create the networking for the port
                 if self.agent.routing_mgr.add_interface(port['network_id'],
@@ -455,9 +453,8 @@ class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
                         segmentation_id = details.get('segmentation_id')
                     else:
                         # compatibility with pre-Havana RPC vlan_id encoding
-                        vlan_id = details.get('vlan_id')
-                        (network_type,
-                         segmentation_id) = lconst.interpret_vlan_id(vlan_id)
+                        LOG.error("Calico agent requires Icehouse or later")
+                        sys.exit(1)
 
                     if self.routing_mgr.add_interface(details['network_id'],
                                                       network_type,
