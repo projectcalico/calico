@@ -69,9 +69,8 @@ class CalicoManager(object):
                           'socket')),
     ]
 
-    def __init__(self, interface_mappings, root_helper):
+    def __init__(self, root_helper):
         LOG.debug('CalicoManager::__init__')
-        self.interface_mappings = interface_mappings
         self.root_helper = root_helper
         self.ip = ip_lib.IPWrapper(self.root_helper)
         self.proxy_uuid = None
@@ -334,24 +333,21 @@ class CalicoPluginApi(agent_rpc.PluginApi,
 
 class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
 
-    def __init__(self, interface_mappings, polling_interval,
-                 root_helper):
+    def __init__(self, polling_interval, root_helper):
         LOG.debug('CalicoNeutronAgentRPC::__init__')
         self.polling_interval = polling_interval
         self.root_helper = root_helper
-        self.setup_calico_routing(interface_mappings)
-
-        configurations = {'interface_mappings': interface_mappings}
+        self.setup_calico_routing()
 
         self.agent_state = {
             'binary': 'neutron-calico-agent',
             'host': cfg.CONF.host,
             'topic': constants.L2_AGENT_TOPIC,
-            'configurations': configurations,
+            'configurations': {},
             'agent_type': calico_common.AGENT_TYPE_CALICO,
             'start_flag': True}
 
-        self.setup_rpc(interface_mappings.values())
+        self.setup_rpc()
         self.init_firewall()
 
     def _report_state(self):
@@ -365,19 +361,16 @@ class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
         except Exception:
             LOG.exception(_("Failed reporting state!"))
 
-    def setup_rpc(self, physical_interfaces):
+    def setup_rpc(self):
         LOG.debug('CalicoNeutronAgentRPC::setup_rpc')
-        if physical_interfaces:
-            mac = utils.get_interface_mac(physical_interfaces[0])
+        devices = ip_lib.IPWrapper(self.root_helper).get_devices(True)
+        if devices:
+            mac = utils.get_interface_mac(devices[0].name)
         else:
-            devices = ip_lib.IPWrapper(self.root_helper).get_devices(True)
-            if devices:
-                mac = utils.get_interface_mac(devices[0].name)
-            else:
-                LOG.error(_("Unable to obtain MAC address for unique ID. "
-                            "Agent terminated!"))
-                exit(1)
-                return
+            LOG.error(_("Unable to obtain MAC address for unique ID. "
+                        "Agent terminated!"))
+            exit(1)
+            return
         self.agent_id = '%s%s' % ('lb', (mac.replace(":", "")))
         LOG.info(_("RPC agent_id: %s"), self.agent_id)
 
@@ -403,9 +396,9 @@ class CalicoNeutronAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
                 self._report_state)
             heartbeat.start(interval=report_interval)
 
-    def setup_calico_routing(self, interface_mappings):
+    def setup_calico_routing(self):
         LOG.debug('CalicoNeutronAgentRPC::setup_calico_routing')
-        self.routing_mgr = CalicoManager(interface_mappings, self.root_helper)
+        self.routing_mgr = CalicoManager(self.root_helper)
 
     def process_network_devices(self, device_info):
         LOG.info(_("Process network devices %s"), device_info)
@@ -548,20 +541,10 @@ def main():
     cfg.CONF(project='neutron')
 
     logging_config.setup_logging(cfg.CONF)
-    try:
-        interface_mappings = q_utils.parse_mappings(
-            cfg.CONF.LINUX_BRIDGE.physical_interface_mappings)
-    except ValueError as e:
-        LOG.error(_("Parsing physical_interface_mappings failed: %s."
-                    " Agent terminated!"), e)
-        sys.exit(1)
-    LOG.info(_("Interface mappings: %s"), interface_mappings)
 
     polling_interval = cfg.CONF.AGENT.polling_interval
     root_helper = cfg.CONF.AGENT.root_helper
-    agent = CalicoNeutronAgentRPC(interface_mappings,
-                                  polling_interval,
-                                  root_helper)
+    agent = CalicoNeutronAgentRPC(polling_interval, root_helper)
     LOG.info(_("Agent initialized successfully, now running... "))
     agent.daemon_loop()
     sys.exit(0)
