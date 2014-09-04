@@ -26,6 +26,7 @@ import os
 import sys
 import time
 import uuid
+import netaddr
 
 import eventlet
 from oslo.config import cfg
@@ -160,9 +161,17 @@ class CalicoManager(object):
                 ['neutron-enable-proxy-arp', tap_device_name],
                 root_helper=self.root_helper)
             result &= "Enabled proxy arp" in proxy_arp_out
-            utils.execute(
-                ['arp', '-s', ip_address, mac_address],
-                root_helper=self.root_helper)
+            if netaddr.valid_ipv6(ip_address):
+                LOG.debug("IPv6 address: %s" % ip_address)
+                utils.execute(
+                    ['ip', '-6', 'neigh', 'add', ip_address,
+                     'lladdr', mac_address, 'dev', tap_device_name],
+                    root_helper=self.root_helper)
+            else:
+                LOG.debug("IPv4 address: %s" % ip_address)
+                utils.execute(
+                    ['arp', '-s', ip_address, mac_address],
+                    root_helper=self.root_helper)
             local_routing_out = utils.execute(
                 ['neutron-enable-local-routing', tap_device_name],
                 root_helper=self.root_helper)
