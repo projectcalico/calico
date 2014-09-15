@@ -25,7 +25,7 @@ Virtualization (NFV).
 %package compute
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, openstack-neutron, openstack-neutron-linuxbridge, iptables
+Requires:       calico-common, openstack-neutron, iptables
 
 %description compute
 This package provides the pieces needed on a compute node.
