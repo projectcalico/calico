@@ -49,7 +49,9 @@ if [ $1 -eq 1 ] ; then
     iptables-save > /etc/sysconfig/iptables
 
     # Enable IP forwarding.
-    echo 1 > /proc/sys/net/ipv4/ip_forward
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    sysctl -p
 
     /sbin/chkconfig --add calico-compute
     /sbin/service calico-compute start >/dev/null 2>&1
