@@ -1,3 +1,11 @@
+calico (0.4) trusty; urgency=medium
+
+  * Import routes from all ethernet interfaces (in BIRD config)
+  * Changes to remove unnecessary dependencies on linuxbridge code
+  * Enhancements for Calico/IPv6 connectivity
+
+ -- Neil Jerram <nj@metaswitch.com>  Tue, 16 Sep 2014 17:27:09 +0100
+
 calico (0.3-1) trusty; urgency=medium
 
   * Fix Ubuntu upstart job so that calico-compute runs after iptables-persistent

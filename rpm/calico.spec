@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.3
+Version:        0.4
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -139,5 +139,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Sep 16 2014 Neil Jerram <nj@metaswitch.com> 0.4
+- Import routes from all ethernet interfaces (in BIRD config)
+- Changes to remove unnecessary dependencies on linuxbridge code
+- Enhancements for Calico/IPv6 connectivity
+
 * Fri Jul 18 2014 Neil Jerram <nj@metaswitch.com> 0.3
 - First RPM-packaged release of Project Calico
