@@ -1,0 +1,35 @@
+
+router id @MY_IPV4_ADDRESS@;
+
+# Configure synchronization between BIRD's routing tables and the
+# kernel.
+protocol kernel {
+  learn;          # Learn all alien routes from the kernel
+  persist;        # Don't remove routes on bird shutdown
+  scan time 2;    # Scan kernel routing table every 20 seconds
+  device routes;
+  export all;     # Default is export none
+}
+
+# Watch interface up/down events.
+protocol device {
+  scan time 2;    # Scan interfaces every 10 seconds
+}
+
+protocol direct {
+   debug all;
+   interface "-dummy0", "dummy1", "eth*";
+}
+
+# Peer with route reflector.
+protocol bgp N1 {
+  description "Connection to BGP route reflector";
+  local as @AS_NUMBER@;
+  neighbor @RR_IPV6_ADDRESS@ as @AS_NUMBER@;
+  multihop;
+  import all;
+  export all;
+  next hop self;    # Disable next hop processing and always advertise our
+                    # local address as nexthop
+  source address @MY_IPV6_ADDRESS@;  # The local address we use for the TCP connection
+}

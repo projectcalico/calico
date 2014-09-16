@@ -14,4 +14,5 @@ neutron-enable-local-routing: CommandFilter, neutron-enable-local-routing, root
 neutron-disable-local-routing: CommandFilter, neutron-disable-local-routing, root
 arp: CommandFilter, arp, root
 kill: CommandFilter, kill, root
+ip: CommandFilter, ip, root
 
