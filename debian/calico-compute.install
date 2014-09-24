@@ -6,4 +6,5 @@ usr/bin/neutron-disable-local-routing usr/bin
 usr/etc/neutron/calico_agent.ini etc/neutron
 usr/etc/neutron/rootwrap.d/calico.filters etc/neutron/rootwrap.d
 usr/bin/calico-gen-bird-conf.sh usr/bin
+usr/bin/calico-gen-bird6-conf.sh usr/bin
 usr/share/calico/* usr/share/calico
