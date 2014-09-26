@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.4
+Version:        0.4.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -139,6 +139,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Sep 26 2014 Neil Jerram <nj@metaswitch.com> 0.4.1
+- Install generator script and template for BIRD6 config
+
 * Tue Sep 16 2014 Neil Jerram <nj@metaswitch.com> 0.4
 - Import routes from all ethernet interfaces (in BIRD config)
 - Changes to remove unnecessary dependencies on linuxbridge code

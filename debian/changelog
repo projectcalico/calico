@@ -1,3 +1,9 @@
+calico (0.4.1) trusty; urgency=medium
+
+  * Install generator script and template for BIRD6 config
+
+ -- Neil Jerram <nj@metaswitch.com>  Fri, 26 Sep 2014 10:56:05 +0100
+
 calico (0.4) trusty; urgency=medium
 
   * Import routes from all ethernet interfaces (in BIRD config)
