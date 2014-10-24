@@ -542,7 +542,6 @@ def initialise_logging():
     Sets up the full logging configuration. This applies to the felix log and
     hence to all children.
     """
-    log = logging.getLogger("felix")
     log.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
