@@ -24,10 +24,11 @@ guarantees that all configuration lives in a single place.
 """
 import ConfigParser
 import logging
+import argparse
 
 
 # TODO(CB2): We should search a number of places for config.
-CONFIG_FILE_PATH = 'felix/felix.cfg'
+CONFIG_FILE_PATH = 'felix.cfg'
 
 
 class _Config(object):
@@ -35,8 +36,13 @@ class _Config(object):
         self._KnownSections = set()
         self._KnownObjects  = set()
 
+        # Parse command line args.
+        parser = argparse.ArgumentParser(description='Felix (Calico agent)')
+        parser.add_argument('-c', '--config-file', dest='config_file')
+        args = parser.parse_args()
+
         self._parser = ConfigParser.ConfigParser()
-        self._parser.read(CONFIG_FILE_PATH)
+        self._parser.read(args.config_file or CONFIG_FILE_PATH)
 
         # Build up the list of sections.
         self._items    = {}

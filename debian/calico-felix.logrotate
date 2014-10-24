@@ -1,0 +1,7 @@
+/var/log/calico/felix.log {
+    daily
+    missingok
+    compress
+    delaycompress
+    notifempty
+}

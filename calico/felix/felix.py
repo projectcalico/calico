@@ -29,10 +29,10 @@ import time
 import uuid
 import zmq
 
-from .config import Config
-from .endpoint import Address, Endpoint
-from .fsocket import Socket, Message
-import futils
+from calico.felix.config import Config
+from calico.felix.endpoint import Address, Endpoint
+from calico.felix.fsocket import Socket, Message
+from calico.felix import futils
 
 
 # Logger

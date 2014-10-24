@@ -1,0 +1,17 @@
+# vim:set ft=upstart ts=2 et:
+description "Felix (Calico agent)"
+author "Project Calico Maintainers <maintainers@projectcalico.org>"
+
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+respawn
+
+chdir /var/run
+
+pre-start script
+  mkdir -p /var/run/calico
+  chown neutron:root /var/run/calico
+end script
+
+exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-felix -- --config-file=/etc/calico/felix.cfg

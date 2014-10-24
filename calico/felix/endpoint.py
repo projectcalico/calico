@@ -19,7 +19,7 @@ felix.endpoint
 Contains Felix logic to manage endpoints and their configuration.
 """
 
-import futils
+from calico.felix import futils
 import logging
 import subprocess
 

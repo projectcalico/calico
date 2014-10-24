@@ -23,7 +23,7 @@ import logging
 import time
 import zmq
 
-from .config import Config
+from calico.felix.config import Config
 
 log = logging.getLogger(__name__)
 
