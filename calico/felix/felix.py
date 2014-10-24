@@ -547,6 +547,7 @@ def initialise_logging():
 
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
+    futils.mkdir_p(os.path.dirname(Config.LOGFILE))
     handler = logging.handlers.TimedRotatingFileHandler(Config.LOGFILE, when='D', backupCount=10)
     handler.setLevel(Config.LOGLEVFILE)
     handler.setFormatter(formatter)
