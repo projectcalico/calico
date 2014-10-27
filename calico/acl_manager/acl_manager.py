@@ -23,7 +23,7 @@ from calico.acl_manager.net_store import NetworkStore
 from calico.acl_manager.acl_publisher import ACLPublisher
 from calico.acl_manager.acl_store import ACLStore
 from calico.acl_manager.processor import RuleProcessor
-from calico.felix import futils
+from calico import common
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def main():
     log_file_path = self._parser.get('log', 'LogFilePath')
 
     # Configure logging.
-    futils.mkdir_p(os.path.dirname(log_file_path))
+    common.mkdir_p(os.path.dirname(log_file_path))
     logging.basicConfig(filename=log_file_path, level=logging.DEBUG)
     
     # Create ZeroMQ context.

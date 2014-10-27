@@ -23,7 +23,6 @@ import logging
 import os
 import subprocess
 import time
-import errno
 
 from calico.felix.config import Config
 
@@ -567,16 +566,4 @@ def list_eps_with_rules():
             eps.add(words[1].replace(IPSET_TO_PORT_PREFIX, ""))
             
     return eps
-
-def mkdir_p(path):
-    """http://stackoverflow.com/a/600612/190597 (tzot)"""
-    try:
-        os.makedirs(path, exist_ok=True)  # Python>3.2
-    except TypeError:
-        try:
-            os.makedirs(path)
-        except OSError as exc: # Python >2.5
-            if exc.errno == errno.EEXIST and os.path.isdir(path):
-                pass
-            else: raise
 

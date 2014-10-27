@@ -33,6 +33,7 @@ from calico.felix.config import Config
 from calico.felix.endpoint import Address, Endpoint
 from calico.felix.fsocket import Socket, Message
 from calico.felix import futils
+from calico import common
 
 
 # Logger
@@ -545,7 +546,7 @@ def initialise_logging():
 
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
-    futils.mkdir_p(os.path.dirname(Config.LOGFILE))
+    common.mkdir_p(os.path.dirname(Config.LOGFILE))
     handler = logging.handlers.TimedRotatingFileHandler(Config.LOGFILE, when='D', backupCount=10)
     handler.setLevel(Config.LOGLEVFILE)
     handler.setFormatter(formatter)
