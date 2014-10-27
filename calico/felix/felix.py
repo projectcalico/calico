@@ -328,7 +328,7 @@ class FelixAgent(object):
 
         We respond to HEARTBEATs immediately.
         """
-        log.debug("Received heartbeat message.")
+        log.debug("Received heartbeat message on EP REP socket.")
         sock = self.sockets[Socket.TYPE_EP_REP]
         sock.send(Message(Message.TYPE_HEARTBEAT, {}))
         return
