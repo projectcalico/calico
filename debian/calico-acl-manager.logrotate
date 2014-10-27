@@ -1,0 +1,7 @@
+/var/log/calico/acl_manager.log {
+    daily
+    missingok
+    compress
+    delaycompress
+    notifempty
+}

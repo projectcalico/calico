@@ -21,10 +21,6 @@ import json
 
 log = logging.getLogger(__name__)
 
-# The hostname of the Calico plugin that this ACL Manager will subscribe to
-# network information from.  This must be customized to use ACL Manager.
-PLUGIN_HOST = "calico01"
-
 PLUGIN_ACLGET_PORT = "9903"
 PLUGIN_ACLPUB_PORT = "9904"
 
@@ -38,9 +34,10 @@ class NetworkSubscriber(object):
     owns the ZeroMQ sockets that transport the Network API.
     """
 
-    def __init__(self, context, network_store):
+    def __init__(self, context, network_store, plugin_address):
         """Create and start the Network Subscriber."""
         log.debug("Initializing Calico ACL Manager Network Subscriber")
+        self.plugin_address = plugin_address
         self.subscribe_thread = Thread(target = self.subscribe_thread_func,
                                        args = (context, network_store))
         self.subscribe_thread.start()
@@ -59,7 +56,7 @@ class NetworkSubscriber(object):
         log.debug("Creating Network API subscriber socket")
         self.sub_socket = context.socket(zmq.SUB)
         self.sub_socket.connect("tcp://%(address)s:%(port)s" %
-                                {"address": PLUGIN_HOST,
+                                {"address": self.plugin_address,
                                  "port": PLUGIN_ACLPUB_PORT})
         self.sub_socket.setsockopt(zmq.SUBSCRIBE, "groups")
         self.sub_socket.setsockopt(zmq.SUBSCRIBE, "networkheartbeat")
@@ -69,7 +66,7 @@ class NetworkSubscriber(object):
         log.debug("Creating Network API synchronization socket")
         self.req_socket = context.socket(zmq.REQ)
         self.req_socket.connect("tcp://%(address)s:%(port)s" %
-                                {"address": PLUGIN_HOST,
+                                {"address": self.plugin_address,
                                  "port": PLUGIN_ACLGET_PORT})
 
         # Perform the start of day synchronization.  Published updates are

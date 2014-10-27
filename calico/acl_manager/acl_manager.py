@@ -15,16 +15,33 @@
 
 import zmq
 import logging
-from net_subscriber import NetworkSubscriber
-from net_store import NetworkStore
-from acl_publisher import ACLPublisher
-from acl_store import ACLStore
-from processor import RuleProcessor
+import argparse
+import ConfigParser
+import os
+from calico.acl_manager.net_subscriber import NetworkSubscriber
+from calico.acl_manager.net_store import NetworkStore
+from calico.acl_manager.acl_publisher import ACLPublisher
+from calico.acl_manager.acl_store import ACLStore
+from calico.acl_manager.processor import RuleProcessor
+from calico.felix import futils
 
 log = logging.getLogger(__name__)
 
 def main():
-    logging.basicConfig(filename="acl_manager.log", level=logging.DEBUG)
+    # Parse command line args.
+    parser = argparse.ArgumentParser(description='Calico ACL Manager')
+    parser.add_argument('-c', '--config-file', dest='config_file')
+    args = parser.parse_args()
+
+    # Read config file.
+    self._parser = ConfigParser.ConfigParser()
+    self._parser.read(args.config_file or 'acl_manager.cfg')
+    plugin_address = self._parser.get('global', 'PluginAddress')
+    log_file_path = self._parser.get('log', 'LogFilePath')
+
+    # Configure logging.
+    futils.mkdir_p(os.path.dirname(log_file_path))
+    logging.basicConfig(filename=log_file_path, level=logging.DEBUG)
     
     # Create ZeroMQ context.
     context = zmq.Context()
@@ -40,7 +57,7 @@ def main():
     processor = RuleProcessor(acl_store, network_store)
     network_store.add_processor(processor)
     
-    subscriber = NetworkSubscriber(context, network_store)
+    subscriber = NetworkSubscriber(context, network_store, plugin_address)
 
 if __name__ == "__main__":
     main()
