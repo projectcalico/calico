@@ -134,9 +134,13 @@ mv %{buildroot}/usr/etc/* %{buildroot}%{_sysconfdir}/
 
 # Install sysv init scripts
 install -p -D -m 755 %{SOURCE15} %{buildroot}%{_initrddir}/calico-compute
+install -p -D -m 755 %{SOURCE35} %{buildroot}%{_initrddir}/calico-felix
+install -p -D -m 755 %{SOURCE55} %{buildroot}%{_initrddir}/calico-acl-manager
 
 # Install upstart jobs examples
 install -p -m 644 %{SOURCE25} %{buildroot}%{_datadir}/calico/
+install -p -m 644 %{SOURCE45} %{buildroot}%{_datadir}/calico/
+install -p -m 644 %{SOURCE65} %{buildroot}%{_datadir}/calico/
 
 
 %clean
