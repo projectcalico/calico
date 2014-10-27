@@ -461,7 +461,6 @@ class FelixAgent(object):
 
         while True:
             # Issue a poll request on all active sockets
-            trace("Round we go again")
             endpoint_resync_needed = False
             acl_resync_needed = False
 
@@ -579,11 +578,6 @@ def main():
     # Create an instance of the Felix agent and start it running.
     agent = FelixAgent()
     agent.run()
-
-def trace(string):
-    # This is a bit of a hokey way to do trace, but good enough for now
-    #log.debug(string)
-    pass
 
 
 if __name__ == "__main__":
