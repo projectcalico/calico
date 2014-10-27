@@ -34,10 +34,10 @@ def main():
     args = parser.parse_args()
 
     # Read config file.
-    self._parser = ConfigParser.ConfigParser()
-    self._parser.read(args.config_file or 'acl_manager.cfg')
-    plugin_address = self._parser.get('global', 'PluginAddress')
-    log_file_path = self._parser.get('log', 'LogFilePath')
+    config = ConfigParser.ConfigParser()
+    config.read(args.config_file or 'acl_manager.cfg')
+    plugin_address = config.get('global', 'PluginAddress')
+    log_file_path = config.get('log', 'LogFilePath')
 
     # Configure logging.
     common.mkdir_p(os.path.dirname(log_file_path))
