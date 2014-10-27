@@ -9,6 +9,10 @@ URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
 Source15:	calico-compute.init
 Source25:	calico-compute.upstart
+Source35:	calico-felix.init
+Source45:	calico-felix.upstart
+Source55:	calico-acl-manager.init
+Source65:	calico-acl-manager.upstart
 BuildArch:	noarch
 
 
@@ -25,7 +29,7 @@ Virtualization (NFV).
 %package compute
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, openstack-neutron, iptables
+Requires:       calico-common, calico-felix, openstack-neutron, iptables
 
 %description compute
 This package provides the pieces needed on a compute node.
@@ -73,7 +77,7 @@ fi
 %package control
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common
+Requires:       calico-common, calico-acl-manager
 
 %description control
 This package provides the pieces needed on a controller node.
@@ -85,6 +89,27 @@ Summary:        Project Calico virtual networking for cloud data centers
 
 %description common
 This package provides common files.
+
+
+%package felix
+Group:          Applications/Engineering
+Summary:        Project Calico virtual networking for cloud data centers
+Requires:       calico-common, ipset, python-pip, python-zmq
+
+%description felix
+This package provides the Felix component.
+
+%post felix
+pip install python-iptables
+
+
+%package acl-manager
+Group:          Applications/Engineering
+Summary:        Project Calico virtual networking for cloud data centers
+Requires:       calico-common, python-zmq
+
+%description acl-manager
+This package provides the ACL Manager component.
 
 
 %prep
@@ -125,8 +150,10 @@ rm -rf $RPM_BUILD_ROOT
 
 %files compute
 %defattr(-,root,root,-)
-/usr/bin/*
-/etc/*
+/usr/bin/neutron-calico-agent
+/usr/bin/calico-gen-bird-conf.sh
+/usr/bin/calico-gen-bird6-conf.sh
+/etc/neutron/calico_agent.ini
 /usr/share/calico/*
 %{_initrddir}/calico-compute
 %{_datadir}/calico/calico-compute.upstart
@@ -134,6 +161,22 @@ rm -rf $RPM_BUILD_ROOT
 
 %files control
 %defattr(-,root,root,-)
+%doc
+
+%files felix
+%defattr(-,root,root,-)
+/usr/bin/calico-felix
+/etc/calico/felix.cfg
+%{_initrddir}/calico-felix
+%{_datadir}/calico/calico-felix.upstart
+%doc
+
+%files acl-manager
+%defattr(-,root,root,-)
+/usr/bin/calico-acl-manager
+/etc/calico/acl_manager.cfg
+%{_initrddir}/calico-acl-manager
+%{_datadir}/calico/calico-acl-manager.upstart
 %doc
 
 

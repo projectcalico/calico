@@ -1,0 +1,8 @@
+description "Calico ACL Manager"
+
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [S016]
+
+respawn
+
+exec su -s /bin/sh -c "exec /usr/bin/calico-acl-manager --config-file /etc/calico/acl_manager.cfg" root
