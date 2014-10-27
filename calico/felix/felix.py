@@ -202,15 +202,20 @@ class FelixAgent(object):
 
         # Now remove rules for any endpoints that should no longer exist. This
         # method returns a set of endpoint suffices.
-        rule_ids  = futils.list_eps_with_rules()
         known_ids = { ep.suffix for ep in self.endpoints.values() }
 
-        for id in rule_ids:
-            if id not in known_ids:
-                # Found rules which we own for an endpoint which does not exist.
-                # Remove those rules.
-                log.warning("Removing rules for removed object %s" % id)
-                futils.del_rules(id)
+        for type in [ futils.IPV4, futils.IPV6 ]:
+            rule_ids  = futils.list_eps_with_rules(type)
+
+            for id in rule_ids:
+                if id not in known_ids:
+                    # Found rules which we own for an endpoint which does not exist.
+                    # Remove those rules.
+                    if type == futils.IPV4:
+                        log.warning("Removing IPv4 rules for removed object %s" % id)
+                    else:
+                        log.warning("Removing IPv6 rules for removed object %s" % id)
+                    futils.del_rules(id, type)
 
     def handle_endpointcreated(self, message):
         """

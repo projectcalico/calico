@@ -42,12 +42,22 @@ CHAIN_FROM_PREFIX        = "felix-from-"
 
 # ipset names. An ipset can either have a port and protocol or not - it cannot
 # have a mix of members with and without them.
-IPSET_TO_NOPORT_PREFIX   = "felix-to-noport-"
-IPSET_TO_PORT_PREFIX     = "felix-to-port-"
-IPSET_FROM_NOPORT_PREFIX = "felix-from-noport-"
-IPSET_FROM_PORT_PREFIX   = "felix-from-port-"
-IPSET_TMP_PORT           = "felix-tmp-port"
-IPSET_TMP_NOPORT         = "felix-tmp-noport"
+IPSET_TO_NOPORT_PREFIX    = "felix-to-noport-"
+IPSET_TO_PORT_PREFIX      = "felix-to-port-"
+IPSET_FROM_NOPORT_PREFIX  = "felix-from-noport-"
+IPSET_FROM_PORT_PREFIX    = "felix-from-port-"
+IPSET6_TO_NOPORT_PREFIX   = "felix-6-to-noport-"
+IPSET6_TO_PORT_PREFIX     = "felix-6-to-port-"
+IPSET6_FROM_NOPORT_PREFIX = "felix-6-from-noport-"
+IPSET6_FROM_PORT_PREFIX   = "felix-6-from-port-"
+IPSET_TMP_PORT            = "felix-tmp-port"
+IPSET_TMP_NOPORT          = "felix-tmp-noport"
+IPSET6_TMP_PORT           = "felix-6-tmp-port"
+IPSET6_TMP_NOPORT         = "felix-6-tmp-noport"
+
+# Flag to indicate "IP v4" or "IP v6"; just a boolean but more readable.
+IPV4 = True
+IPV6 = False
 
 def tap_exists(tap):
     """
@@ -55,15 +65,18 @@ def tap_exists(tap):
     """
     return os.path.exists("/sys/class/net/" + tap)
 
-def list_routes(tap):
+def list_routes(type, tap):
     """
     List routes for a given tap interface. Returns a set with all addresses for
     which there is a route to the device.
     """
-    # TODO: currently IP v4 only
     routes = set()
 
-    data = subprocess.check_output(["ip", "route", "list", "dev", tap])
+    if type == IPV4:
+        data = subprocess.check_output(["ip", "route", "list", "dev", tap])
+    else:
+        data = subprocess.check_output(["ip", "-6", "route", "list", "dev", tap])
+
     lines = data.split("\n")
 
     for line in lines:
@@ -76,23 +89,27 @@ def list_routes(tap):
 
     return routes
 
-def add_route(ip,tap):
+def add_route(type,ip,tap):
     """
     Add a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
-    # TODO: currently IP v4 only
-    subprocess.check_call(['arp', '-Ds', ip, tap, '-i', tap])
-    subprocess.check_call(["ip", "route", "add", ip, "dev", tap])
+    if type == IPV4:
+        subprocess.check_call(['arp', '-Ds', ip, tap, '-i', tap])
+        subprocess.check_call(["ip", "route", "add", ip, "dev", tap])
+    else:
+        subprocess.check_call(["ip", "-6", "route", "add", ip, "dev", tap])
 
-def del_route(ip,tap):
+def del_route(type, ip,tap):
     """
     Delete a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
-    # TODO: currently IP v4 only
-    subprocess.check_call(['arp', '-d', ip, '-i', tap])
-    subprocess.check_call(["ip", "route", "del", ip, "dev", tap])
+    if type == IPV6:
+        subprocess.check_call(['arp', '-d', ip, '-i', tap])
+        subprocess.check_call(["ip", "route", "del", ip, "dev", tap])
+    else:
+        subprocess.check_call(["ip", "-6", "route", "del", ip, "dev", tap])
 
 def configure_tap(tap):
     """
@@ -183,139 +200,224 @@ def set_global_rules():
         rule  = iptc.Rule()
         rule.create_target(CHAIN_INPUT)
         insert_rule(rule,chain)
-       
 
-def set_rules(id,iface,localips,mac):
+    # Now the IP v6 filter table. This needs to have calico-filter-FORWARD and
+    # calico-filter-INPUT chains
+    table = iptc.Table6(iptc.Table6.FILTER)
+    if not table.is_chain(CHAIN_FORWARD):
+        table.create_chain(CHAIN_FORWARD)
+
+    if not table.is_chain(CHAIN_INPUT):
+        table.create_chain(CHAIN_INPUT)
+
+    if rules_check != 0:
+        # Add rules that forces us through the chain we have just created / verified
+        chain = iptc.Chain(table,"FORWARD")
+        rule  = iptc.Rule()
+        rule.create_target(CHAIN_FORWARD)
+        insert_rule(rule,chain)
+
+        chain = iptc.Chain(table,"INPUT")
+        rule  = iptc.Rule()
+        rule.create_target(CHAIN_INPUT)
+        insert_rule(rule,chain)
+
+def set_rules(id,iface,type,localips,mac):
     """
     Add (or modify) the rules for a particular endpoint, whose id
     is supplied.
     """
-    to_chain   = CHAIN_TO_PREFIX + id
-    from_chain = CHAIN_FROM_PREFIX + id
+    to_chain_name   = CHAIN_TO_PREFIX + id
+    from_chain_name = CHAIN_FROM_PREFIX + id
 
-    to_ipset_port     = IPSET_TO_PORT_PREFIX + id
-    to_ipset_noport   = IPSET_TO_NOPORT_PREFIX + id
-    from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
-    from_ipset_noport = IPSET_FROM_NOPORT_PREFIX + id
-
-    table = iptc.Table(iptc.Table.FILTER)
+    # Set up all the ipsets.
+    if type == IPV4:
+        to_ipset_port     = IPSET_TO_PORT_PREFIX + id
+        to_ipset_noport   = IPSET_TO_NOPORT_PREFIX + id
+        from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
+        from_ipset_noport = IPSET_FROM_NOPORT_PREFIX + id
+        family            = "inet"
+    else:
+        to_ipset_port     = IPSET6_TO_PORT_PREFIX + id
+        to_ipset_noport   = IPSET6_TO_NOPORT_PREFIX + id
+        from_ipset_port   = IPSET6_FROM_PORT_PREFIX + id
+        from_ipset_noport = IPSET6_FROM_NOPORT_PREFIX + id
+        family            = "inet6"
 
     # Create ipsets if they do not already exist.
     if subprocess.call(["ipset", "list", to_ipset_port]) != 0:
-        subprocess.check_call(["ipset", "create", to_ipset_port, "hash:net,port"])
+        subprocess.check_call(["ipset", "create", to_ipset_port, "hash:net,port",
+                               "family", family])
 
     if subprocess.call(["ipset", "list", to_ipset_noport]) != 0:
-        subprocess.check_call(["ipset", "create", to_ipset_noport, "hash:net"])
+        subprocess.check_call(["ipset", "create", to_ipset_noport, "hash:net",
+                               "family", family])
 
     if subprocess.call(["ipset", "list", from_ipset_port]) != 0:
-        subprocess.check_call(["ipset", "create", from_ipset_port, "hash:net,port"])
+        subprocess.check_call(["ipset", "create", from_ipset_port, "hash:net,port",
+                               "family", family])
 
     if subprocess.call(["ipset", "list", from_ipset_noport]) != 0:
-        subprocess.check_call(["ipset", "create", from_ipset_noport, "hash:net"])
+        subprocess.check_call(["ipset", "create", from_ipset_noport, "hash:net",
+                               "family", family])
 
-    # Create the two chains for packets to / from the interface
-    if not table.is_chain(to_chain):
-        chain = table.create_chain(to_chain)
+    # IP v4 iptables rules
+    if type == IPV4:
+        table  = iptc.Table(iptc.Table.FILTER)
     else:
-        chain = iptc.Chain(table,to_chain)
+        table  = iptc.Table6(iptc.Table6.FILTER)
+        
+    # Create the chains for packets to the interface
+    if not table.is_chain(to_chain_name):
+        to_chain = table.create_chain(to_chain_name)
+    else:
+        to_chain = iptc.Chain(table,to_chain_name)
 
-    # The "to" chain has 3 default rules.
-    # Rule 0 says "drop if state INVALID".
+    # Put rules into that chain.
+    index = 0
+   
+    if type == IPV6:
+        # In ipv6 only, there are 6 rules that need to be created first.
+        # RETURN     ipv6-icmp    anywhere             anywhere             ipv6-icmptype 130
+        # RETURN     ipv6-icmp    anywhere             anywhere             ipv6-icmptype 131
+        # RETURN     ipv6-icmp    anywhere             anywhere             ipv6-icmptype 132
+        # RETURN     ipv6-icmp    anywhere             anywhere             ipv6-icmp router-advertisement
+        # RETURN     ipv6-icmp    anywhere             anywhere             ipv6-icmp neighbour-solicitation
+        # RETURN     ipv6-icmp    anywhere             anywhere             ipv6-icmp neighbour-advertisement
+        #
+        # These rules are ICMP types 130, 131, 132, 134, 135 and 136, and can be
+        # created on the command line with something like :
+        #         ip6tables -A plw -j RETURN --protocol icmpv6 --icmpv6-type 130
+        for icmp in [ "130", "131", "132", "134", "135", "136" ]:
+            rule          = iptc.Rule()
+            rule.create_target("RETURN")
+            rule.protocol = "icmpv6"
+            match = iptc.Match(rule, "icmpv6-type")
+            match.icmpv6_type = icmp
+            rule.add_match(match)
+            insert_rule(rule,to_chain,index)
+            index += 1
+
+    # For both rule types, the rules are now the same.
+    # "Drop if state INVALID".
     rule          = iptc.Rule()
     rule.create_target("DROP")
     match = iptc.Match(rule, "state")
     match.state = "INVALID"
     rule.add_match(match)
-    insert_rule(rule,chain,0)
+    insert_rule(rule,to_chain,index)
+    index += 1
     
-    # Rule 1 says "return if state RELATED or ESTABLISHED".
+    # "Return if state RELATED or ESTABLISHED".
     rule          = iptc.Rule()
     rule.create_target("RETURN")
     match = iptc.Match(rule, "state")
     match.state = "RELATED,ESTABLISHED"
     rule.add_match(match)
-    insert_rule(rule,chain,1)
+    insert_rule(rule,to_chain,index)
+    index += 1
 
-    # Rules 2 and 3 say "accept anything whose sources matches this ipset".
+    # "Accept anything whose sources matches this ipset" (for two ipsets)
     rule = iptc.Rule()
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
     match.match_set = [to_ipset_port, "src"]
     rule.add_match(match)
-    insert_rule(rule,chain,2)
+    insert_rule(rule,to_chain,index)
+    index += 1
    
     rule = iptc.Rule()
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
     match.match_set = [to_ipset_noport, "src"]
     rule.add_match(match)
-    insert_rule(rule,chain,3)
-   
-    # Last rule (at end) says drop unconditionally.
+    insert_rule(rule,to_chain,index)
+    index += 1
+
+    # Finally, "DROP unconditionally"
     rule          = iptc.Rule()
     rule.create_target("DROP")
-    insert_rule(rule,chain,RULE_POSN_LAST)
+    insert_rule(rule,to_chain,RULE_POSN_LAST)
 
     # Now the chain that manages packets from the interface.
-    if not table.is_chain(from_chain):
-        chain = table.create_chain(from_chain)
+    if not table.is_chain(from_chain_name):
+        from_chain = table.create_chain(from_chain_name)
     else:
-        chain = iptc.Chain(table,from_chain)
+        from_chain = iptc.Chain(table,from_chain_name)
 
-    # Rule 0 says "drop if state INVALID".
+    # Now the from chain
+    index = 0
+    if type == IPV6:
+        # In ipv6 only, we start with a rule that allows all ICMP traffic from
+        # this endpoint to anywhere.
+        rule          = iptc.Rule()
+        rule.create_target("RETURN")
+        rule.protocol = "icmpv6"
+        insert_rule(rule,to_chain,index)
+        index += 1
+
+    # "Drop if state INVALID".
     rule          = iptc.Rule()
     rule.create_target("DROP")
     match = iptc.Match(rule, "state")
     match.state = "INVALID"
     rule.add_match(match)
-    insert_rule(rule,chain,0)
+    insert_rule(rule,from_chain,index)
+    index += 1
     
-    # Rule 1 says "return if state RELATED or ESTABLISHED".
+    # "Return if state RELATED or ESTABLISHED".
     rule          = iptc.Rule()
     rule.create_target("RETURN")
     match = iptc.Match(rule, "state")
     match.state = "RELATED,ESTABLISHED"
     rule.add_match(match)
-    insert_rule(rule,chain,1)
+    insert_rule(rule, from_chain, index)
+    index += 1
 
-    # Rule 2 says allow through UDP packets from port 68 to port 67
-    # This ensures that DHCP can work before the IP address is known.
-    rule          = iptc.Rule()
-    rule.protocol = "udp"
-    rule.create_target("RETURN")
-    match = iptc.Match(rule, "udp")
-    match.source_port = "68"
-    match.destination_port = "67"
-    rule.add_match(match)
-    insert_rule(rule,chain,2)
+    if type == IPV4:
+        # Only IP v4 needs rules for DHCP traffic here.
+        # "Allow through UDP packets from port 68 to port 67" (client to server)
+        # This ensures that DHCP can work before the IP address is known.
+        rule          = iptc.Rule()
+        rule.protocol = "udp"
+        rule.create_target("RETURN")
+        match = iptc.Match(rule, "udp")
+        match.source_port = "68"
+        match.destination_port = "67"
+        rule.add_match(match)
+        insert_rule(rule, from_chain, index)
+        index += 1
 
-    # Rule 3 says drop UDP in the other direction, so that endpoints cannot
-    # hijack DHCP traffic by acting as DHCP servers.
-    rule          = iptc.Rule()
-    rule.protocol = "udp"
-    rule.create_target("DROP")
-    match = iptc.Match(rule, "udp")
-    match.sport = "67"
-    match.dport = "68"
-    rule.add_match(match)
-    insert_rule(rule,chain,3)
+        # Drop UDP in the other direction, so that endpoints cannot hijack DHCP
+        # traffic by acting as DHCP servers.
+        rule          = iptc.Rule()
+        rule.protocol = "udp"
+        rule.create_target("DROP")
+        match = iptc.Match(rule, "udp")
+        match.sport = "67"
+        match.dport = "68"
+        rule.add_match(match)
+        insert_rule(rule, from_chain, index)
+        index += 1
 
-    # Rules 4 and 5 say to drop packets whose destination matches the supplied ipset.
+    # "Drop packets whose destination matches the supplied ipset."
     rule = iptc.Rule()
     rule.create_target("DROP")
     match = iptc.Match(rule, "set")
     match.match_set = [from_ipset_port, "dst"]
     rule.add_match(match)
-    insert_rule(rule,chain,4)
+    insert_rule(rule, from_chain, index)
+    index += 1
 
     rule = iptc.Rule()
     rule.create_target("DROP")
     match = iptc.Match(rule, "set")
     match.match_set = [from_ipset_noport, "dst"]
     rule.add_match(match)
-    insert_rule(rule,chain,5)
+    insert_rule(rule, from_chain, index)
+    index += 1
 
-    # Rule 6 says allow through packets from the correct MAC and IP address.
+    # Now allow through packets from the correct MAC and IP address.
     for ip in localips:
         rule = iptc.Rule()
         rule.create_target("RETURN")
@@ -323,16 +425,16 @@ def set_rules(id,iface,localips,mac):
         match            = iptc.Match(rule, "mac")
         match.mac_source = mac
         rule.add_match(match)
-        insert_rule(rule,chain,6)
+        insert_rule(rule,from_chain,index)
+        index += 1
 
     # TODO: If you remove an IP from an instance, we do not tidy it up here.
     # We ought to run through all such rules and tidy them up.
        
-    # Last rule (at end) says drop unconditionally; other rules allowing things
-    # may be added before this.
+    # Last rule (at end) says drop unconditionally.
     rule          = iptc.Rule()
     rule.create_target("DROP")
-    insert_rule(rule,chain,RULE_POSN_LAST)
+    insert_rule(rule,from_chain,RULE_POSN_LAST)
 
     # TODO: This is a hack, because of a bug in python-iptables where it fails to
     # correctly match some rules; see https://github.com/ldx/python-iptables/issues/111
@@ -349,7 +451,7 @@ def set_rules(id,iface,localips,mac):
         log.debug("Rules for interface %s do not already exist" % iface)
         chain = iptc.Chain(table,CHAIN_INPUT)
         rule  = iptc.Rule()
-        target        = iptc.Target(rule, from_chain)
+        target        = iptc.Target(rule, from_chain_name)
         rule.target   = target
         match = iptc.Match(rule, "physdev")
         match.physdev_in = iface
@@ -362,7 +464,7 @@ def set_rules(id,iface,localips,mac):
         # appropriate.
         chain = iptc.Chain(table,CHAIN_FORWARD)
         rule  = iptc.Rule()
-        target        = iptc.Target(rule, from_chain)
+        target        = iptc.Target(rule, from_chain_name)
         rule.target   = target
         match = iptc.Match(rule, "physdev")
         match.physdev_in = iface
@@ -371,7 +473,7 @@ def set_rules(id,iface,localips,mac):
         insert_rule(rule,chain,RULE_POSN_LAST)
 
         rule  = iptc.Rule()
-        target        = iptc.Target(rule, to_chain)
+        target        = iptc.Target(rule, to_chain_name)
         rule.target   = target
         match = iptc.Match(rule, "physdev")
         match.physdev_out = iface
@@ -380,24 +482,32 @@ def set_rules(id,iface,localips,mac):
         insert_rule(rule,chain,RULE_POSN_LAST)
 
         rule  = iptc.Rule()
-        target             = iptc.Target(rule, to_chain)
+        target             = iptc.Target(rule, to_chain_name)
         rule.target        = target
         rule.out_interface = iface
         insert_rule(rule,chain,RULE_POSN_LAST)
 
-def del_rules(id):
+def del_rules(id,type):
     """
     Remove the rules for an endpoint which is no longer managed.
     """
     to_chain   = CHAIN_TO_PREFIX + id
     from_chain = CHAIN_FROM_PREFIX + id
 
-    to_ipset_port     = IPSET_TO_PORT_PREFIX + id
-    to_ipset_noport   = IPSET_TO_NOPORT_PREFIX + id
-    from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
-    from_ipset_noport = IPSET_FROM_NOPORT_PREFIX + id
+    if type == IPV4:
+        to_ipset_port     = IPSET_TO_PORT_PREFIX + id
+        to_ipset_noport   = IPSET_TO_NOPORT_PREFIX + id
+        from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
+        from_ipset_noport = IPSET_FROM_NOPORT_PREFIX + id
 
-    table = iptc.Table(iptc.Table.FILTER)
+        table = iptc.Table(iptc.Table.FILTER)
+    else:
+        to_ipset_port     = IPSET6_TO_PORT_PREFIX + id
+        to_ipset_noport   = IPSET6_TO_NOPORT_PREFIX + id
+        from_ipset_port   = IPSET6_FROM_PORT_PREFIX + id
+        from_ipset_noport = IPSET6_FROM_NOPORT_PREFIX + id
+
+        table = iptc.Table6(iptc.Table6.FILTER)
 
     # Remove the rules routing to the chain we are about to remove
     # The baroque structure is caused by the python-iptables interface.
@@ -460,98 +570,98 @@ def del_rules(id):
     if subprocess.call(["ipset", "list", to_ipset_port]) != 0:
         subprocess.check_call(["ipset", "destroy", to_ipset_port])
 
-def set_acls(id,inbound,in_default,outbound,out_default):
+def set_acls(id,type,inbound,in_default,outbound,out_default):
     """
     Set up the ACLs, making sure that they match.
     """
-    log.debug("Create ACLs for endpoint %s, with inbound %s" % (id, inbound))
+    if type == IPV4:
+        to_ipset_port     = IPSET_TO_PORT_PREFIX + id
+        to_ipset_noport   = IPSET_TO_NOPORT_PREFIX + id
+        from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
+        from_ipset_noport = IPSET_FROM_NOPORT_PREFIX + id
+        tmp_ipset_port    = IPSET_TMP_PORT
+        tmp_ipset_noport  = IPSET_TMP_NOPORT
+        family            = "inet"
+    else:
+        to_ipset_port     = IPSET6_TO_PORT_PREFIX + id
+        to_ipset_noport   = IPSET6_TO_NOPORT_PREFIX + id
+        from_ipset_port   = IPSET6_FROM_PORT_PREFIX + id
+        from_ipset_noport = IPSET6_FROM_NOPORT_PREFIX + id
+        tmp_ipset_port    = IPSET6_TMP_PORT
+        tmp_ipset_noport  = IPSET6_TMP_NOPORT
+        family            = "inet6"
 
-    to_ipset_port     = IPSET_TO_PORT_PREFIX + id
-    to_ipset_noport   = IPSET_TO_NOPORT_PREFIX + id
-    from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
-    from_ipset_noport = IPSET_FROM_NOPORT_PREFIX + id
+    if subprocess.call(["ipset", "list", tmp_ipset_port]) != 0:
+        subprocess.check_call(["ipset", "create", tmp_ipset_port, "hash:net,port"])
 
-    if subprocess.call(["ipset", "list", IPSET_TMP_PORT]) != 0:
-        subprocess.check_call(["ipset", "create", IPSET_TMP_PORT, "hash:net,port"])
+    if subprocess.call(["ipset", "list", tmp_ipset_noport]) != 0:
+        subprocess.check_call(["ipset", "create", tmp_ipset_noport, "hash:net"])
 
-    if subprocess.call(["ipset", "list", IPSET_TMP_NOPORT]) != 0:
-        subprocess.check_call(["ipset", "create", IPSET_TMP_NOPORT, "hash:net"])
-
-    subprocess.check_call(["ipset", "flush", IPSET_TMP_PORT])
-    subprocess.check_call(["ipset", "flush", IPSET_TMP_NOPORT])
+    subprocess.check_call(["ipset", "flush", tmp_ipset_port])
+    subprocess.check_call(["ipset", "flush", tmp_ipset_noport])
 
     # The ipset format is something like "10.11.1.3,udp:0"
     # Further valid examples include
     #   10.11.1.0/24
     #   10.11.1.0/24,tcp
     #   10.11.1.0/24,80
-    for rule in inbound:
-        if rule['cidr'] is None:
-            # No cidr - give up.
-            log.error("Invalid rule without cidr for %s : %s", id, rule)
-            continue
-        if rule['protocol'] is None and rule['port'] is not None:
-            # No protocol - must also be no port.
-            log.error("Invalid rule without port but no protocol for %s : %s", id, rule)
-            continue
-
-        if rule['port'] is not None:
-            value = "%s,%s:%s" % (rule['cidr'],rule['protocol'],rule['port'])
-            subprocess.check_call(["ipset", "add", IPSET_TMP_PORT, value, "-exist"])
-        elif rule['protocol'] is not None:
-            value = "%s,%s:0" % (rule['cidr'],rule['protocol'])
-            subprocess.check_call(["ipset", "add", IPSET_TMP_PORT, value, "-exist"])
+    for iter in [ "to", "from" ]:
+        if iter == "to":
+            list         = inbound
+            if type == IPV4:
+                descr        = "inbound IPv4"
+            else:
+                descr        = "inbound IPv4"
+            ipset_port   = to_ipset_port
+            ipset_noport = to_ipset_noport
         else:
-            value = rule['cidr']
-            subprocess.check_call(["ipset", "add", IPSET_TMP_NOPORT, value, "-exist"])
+            list         = outbound
+            if type == IPV4:
+                descr        = "outbound IPv4"
+            else:
+                descr        = "outbound IPv4"
+            ipset_port   = from_ipset_port
+            ipset_noport = from_ipset_noport
+
+        for rule in list:
+            if rule['cidr'] is None:
+                # No cidr - give up.
+                log.error("Invalid %s rule without cidr for %s : %s", (descr, id, rule))
+                continue
+            if rule['protocol'] is None and rule['port'] is not None:
+                # No protocol - must also be no port.
+                log.error("Invalid %s rule without port but no protocol for %s : %s", (descr, id, rule))
+                continue
+
+            if rule['port'] is not None:
+                value = "%s,%s:%s" % (rule['cidr'],rule['protocol'],rule['port'])
+                subprocess.check_call(["ipset", "add", tmp_ipset_port, value, "-exist"])
+            elif rule['protocol'] is not None:
+                value = "%s,%s:0" % (rule['cidr'],rule['protocol'])
+                subprocess.check_call(["ipset", "add", tmp_ipset_port, value, "-exist"])
+            else:
+                value = rule['cidr']
+                subprocess.check_call(["ipset", "add", tmp_ipset_noport, value, "-exist"])
+
+        # Now that we have added the rules, swap the tmp ipsets with the proper ones.
+        subprocess.check_call(["ipset", "swap", tmp_ipset_noport, ipset_noport])
+        subprocess.check_call(["ipset", "swap", tmp_ipset_port, ipset_port])
+
+        # Get the temporary ipsets clean again - we leave them existing but empty.
+        subprocess.check_call(["ipset", "flush", tmp_ipset_port])
+        subprocess.check_call(["ipset", "flush", tmp_ipset_noport])
           
-    # Now that we have added the rules, swap the tmp ipsets with the proper ones.
-    subprocess.check_call(["ipset", "swap", IPSET_TMP_NOPORT, to_ipset_noport])
-    subprocess.check_call(["ipset", "swap", IPSET_TMP_PORT, to_ipset_port])
-
-    # Get the temporary ipsets clean for outbound rules.
-    subprocess.check_call(["ipset", "flush", IPSET_TMP_PORT])
-    subprocess.check_call(["ipset", "flush", IPSET_TMP_NOPORT])
-
-    # TODO: This code is block coped from that above. Clearly refactoring would
-    #       be a good idea here
-    for rule in outbound:
-        if rule['cidr'] is None:
-            # No cidr - give up.
-            log.error("Invalid rule without cidr for %s : %s", id, rule)
-            continue
-        if rule['protocol'] is None and rule['port'] is not None:
-            # No protocol - must also be no port.
-            log.error("Invalid rule without port but no protocol for %s : %s", id, rule)
-            continue
-
-        if rule['port'] is not None:
-            value = "%s,%s:%s" % (rule['cidr'],rule['protocol'],rule['port'])
-            subprocess.check_call(["ipset", "add", IPSET_TMP_PORT, value, "-exist"])
-        elif rule['protocol'] is not None:
-            value = "%s,%s:0" % (rule['cidr'],rule['protocol'])
-            subprocess.check_call(["ipset", "add", IPSET_TMP_PORT, value, "-exist"])
-        else:
-            value = rule['cidr']
-            subprocess.check_call(["ipset", "add", IPSET_TMP_NOPORT, value, "-exist"])
-
-    # Now that we have added the rules, swap the tmp ipsets with the proper ones.
-    subprocess.check_call(["ipset", "swap", IPSET_TMP_NOPORT, from_ipset_noport])
-    subprocess.check_call(["ipset", "swap", IPSET_TMP_PORT, from_ipset_port])
-
-    # Empty the ipsets - we could leave the old data lying around, but tidier
-    # to delete it all.
-    subprocess.check_call(["ipset", "flush", IPSET_TMP_PORT])
-    subprocess.check_call(["ipset", "flush", IPSET_TMP_NOPORT])
-
-          
-def list_eps_with_rules():
+def list_eps_with_rules(type):
     """
     Lists all of the endpoints for which rules exist and are owned by Felix.
     Returns a set of suffices, i.e. the start of the uuid / end of the interface
     name.
     """
-    table = iptc.Table(iptc.Table.FILTER)
+    if type == IPV4:
+        table = iptc.Table(iptc.Table.FILTER)
+    else:
+        table = iptc.Table6(iptc.Table6.FILTER)
+
     eps  = { chain.name.replace(CHAIN_TO_PREFIX, "")
              for chain in table.chains
              if chain.name.startswith(CHAIN_TO_PREFIX) }
@@ -565,6 +675,8 @@ def list_eps_with_rules():
         words = line.split()
         if len(words) > 1 and words[0] == "Name:" and words[1].startswith(IPSET_TO_PORT_PREFIX):
             eps.add(words[1].replace(IPSET_TO_PORT_PREFIX, ""))
+        elif len(words) > 1 and words[0] == "Name:" and words[1].startswith(IPSET6_TO_PORT_PREFIX):
+            eps.add(words[1].replace(IPSET6_TO_PORT_PREFIX, ""))
             
     return eps
 

@@ -28,7 +28,7 @@ import argparse
 
 
 # TODO(CB2): We should search a number of places for config.
-CONFIG_FILE_PATH = 'felix.cfg'
+CONFIG_FILE_PATH = '/etc/calico/felix.cfg'
 
 
 class _Config(object):
@@ -91,6 +91,8 @@ class _Config(object):
         self.LOGLEVSCR  = _loglevels[self.LOGLEVSCR.lower()]
 
     def get_cfg_entry(self, section, name, default):
+        # TODO: if we raise an exception, then felix just terminates. We should
+        # make sure that it gets properly logged.
         if section.lower() not in self._items:
             raise Exception("Section %s missing from config file" % (section))
 
