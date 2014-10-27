@@ -11,7 +11,7 @@ chdir /var/run
 
 pre-start script
   mkdir -p /var/run/calico
-  chown neutron:root /var/run/calico
+  chown root:root /var/run/calico
 end script
 
 exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-felix -- --config-file=/etc/calico/felix.cfg
