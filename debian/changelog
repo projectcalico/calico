@@ -1,3 +1,9 @@
+calico (0.5) trusty; urgency=medium
+
+  * New Calico architecture
+
+ -- Neil Jerram <nj@metaswitch.com>  Mon, 27 Oct 2014 16:31:06 +0000
+
 calico (0.4.1) trusty; urgency=medium
 
   * Install generator script and template for BIRD6 config

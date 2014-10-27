@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.4.1
+Version:        0.5
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -186,6 +186,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 27 2014 Neil Jerram <nj@metaswitch.com> 0.4.1
+- New Calico architecture
+
 * Fri Sep 26 2014 Neil Jerram <nj@metaswitch.com> 0.4.1
 - Install generator script and template for BIRD6 config
 
