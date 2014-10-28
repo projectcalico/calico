@@ -321,37 +321,28 @@ def set_rules(id,iface,type,localips,mac):
             insert_rule(rule,to_chain,index)
             index += 1
 
+    rule = get_rule(type)
+    rule.create_target("DROP")
     if type == IPV4:
-        # TODO: This does not work for IP v6; there are just intermittent issues
-        # with it that need investigating.
-        #
-        # For both rule types, the rules are now the same.
-        # "Drop if state INVALID".
-        # Here be dragons; python-iptables seems to require both that the protocol
-        # be specified and create_match be used (not the Match... add_match model)
-        # or it occasionally fails with "XTablesError : can't find match state"
-        rule = get_rule(type)
-        rule.create_target("DROP")
-        #rule.protocol = "tcp"
         match = rule.create_match("state")
-        if type == IPV4:
-            match.state = "INVALID"
-        else:
-            match.state = ["INVALID"]
-        insert_rule(rule,to_chain,index)
-        index += 1
+        match.state = "INVALID"
+    else:
+        match = rule.create_match("conntrack")
+        match.ctstate = ["INVALID"]
+    insert_rule(rule,to_chain,index)
+    index += 1
 
-        # "Return if state RELATED or ESTABLISHED".
-        rule = get_rule(type)
-        rule.create_target("RETURN")
-        #rule.protocol = "tcp"
+    # "Return if state RELATED or ESTABLISHED".
+    rule = get_rule(type)
+    rule.create_target("RETURN")
+    if type == IPV4:
         match = rule.create_match("state")
-        if type == IPV4:
-            match.state = "RELATED,ESTABLISHED"
-        else:
-            match.state = ["RELATED", "ESTABLISHED"]
-        insert_rule(rule,to_chain,index)
-        index += 1
+        match.state = "RELATED,ESTABLISHED"
+    else:
+        match = rule.create_match("conntrack")
+        match.ctstate = ["RELATED", "ESTABLISHED"]
+    insert_rule(rule,to_chain,index)
+    index += 1
 
     # "Accept anything whose sources matches this ipset" (for two ipsets)
     rule = get_rule(type)
@@ -392,30 +383,29 @@ def set_rules(id,iface,type,localips,mac):
         insert_rule(rule,from_chain,index)
         index += 1
 
+    # "Drop if state INVALID".
+    rule = get_rule(type)
+    rule.create_target("DROP")
     if type == IPV4:
-        # "Drop if state INVALID".
-        rule = get_rule(type)
-        rule.create_target("DROP")
-        #rule.protocol = "tcp"
         match = rule.create_match("state")
-        if type == IPV4:
-            match.state = "INVALID"
-        else:
-            match.state = ["INVALID"]
-        insert_rule(rule,from_chain,index)
-        index += 1
+        match.state = "INVALID"
+    else:
+        match = rule.create_match("conntrack")
+        match.ctstate = ["INVALID"]
+    insert_rule(rule,from_chain,index)
+    index += 1
 
-        # "Return if state RELATED or ESTABLISHED".
-        rule = get_rule(type)
-        rule.create_target("RETURN")
-        #rule.protocol = "tcp"
+    # "Return if state RELATED or ESTABLISHED".
+    rule = get_rule(type)
+    rule.create_target("RETURN")
+    if type == IPV4:
         match = rule.create_match("state")
-        if type == IPV4:
-            match.state = "RELATED,ESTABLISHED"
-        else:
-            match.state = ["RELATED,ESTABLISHED"]
-        insert_rule(rule, from_chain, index)
-        index += 1
+        match.state = "RELATED,ESTABLISHED"
+    else:
+        match = rule.create_match("conntrack")
+        match.ctstate = ["RELATED,ESTABLISHED"]
+    insert_rule(rule, from_chain, index)
+    index += 1
 
     if type == IPV4:
         # Only IP v4 needs rules for DHCP traffic here.
