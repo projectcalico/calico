@@ -146,15 +146,15 @@ class Socket(object):
 
         The timeout criteria are:
 
-        - for a REQ socket, if a request has been outstanding for more than 5
-          seconds;
+        - for a REQ socket, if a request has been outstanding for more than the
+          connection timeout;
         - for a SUB or REP socket, if a heartbeat has not been received for
-          more than 45 seconds.
+          more than the connection timeout.
         """
         if self.type in Socket.REQUEST_TYPES:
-            return (self.request_outstanding and self._inactive_for(5000))
+            return (self.request_outstanding and self._inactive_for(Config.CONN_TIMEOUT_MS))
         else:
-            return self._inactive_for(45000)
+            return self._inactive_for(Config.CONN_TIMEOUT_MS)
 
     def _inactive_for(self, dur):
         """

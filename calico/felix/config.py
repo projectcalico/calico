@@ -27,7 +27,8 @@ import logging
 import argparse
 
 
-# TODO(CB2): We should search a number of places for config.
+# This is the default configuration path - we expect in most cases that the
+# configuration file path is passed in on the command line.
 CONFIG_FILE_PATH = 'felix.cfg'
 
 
