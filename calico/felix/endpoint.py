@@ -31,9 +31,16 @@ class Address(object):
     An address as reported to felix by the plugin
     """
     def __init__(self, fields):
-        # Constructor parsed the address fields.
-        self.gateway = fields['gateway'].encode('ascii')
-        self.ipv4    = fields['addr'].encode('ascii')
+        if fields['gateway'] is None:
+            self.gateway = None
+        else:
+            self.gateway = fields['gateway'].encode('ascii')
+
+        self.ip      = fields['addr'].encode('ascii')
+        if ":" in self.ip:
+            self.type = futils.IPV6
+        else:
+            self.type = futils.IPV4
 
 class Endpoint(object):
     """
@@ -45,6 +52,8 @@ class Endpoint(object):
         self.suffix         = uuid.encode('ascii')[:11]
         self.tap            = "tap" + self.suffix
         self.mac            = mac.encode('ascii')
+
+        # Addresses is a set of addresses.
         self.addresses      = set()
 
         # pending_resync is set True when we want to resync all data,
@@ -78,10 +87,10 @@ class Endpoint(object):
         futils.configure_tap(self.tap)
 
         # Build up list of addresses that should be present
-        ipv4_intended = set([addr.ipv4.encode('ascii') for addr in self.addresses
-                             if addr.ipv4 is not None])
-        ipv6_intended = set([addr.ipv4.encode('ascii') for addr in self.addresses
-                             if addr.ipv6 is not None])
+        ipv4_intended = set([addr.ip.encode('ascii') for addr in self.addresses
+                             if addr.type is futils.IPV4])
+        ipv6_intended = set([addr.ip.encode('ascii') for addr in self.addresses
+                             if addr.type is futils.IPV6])
 
         for ipv4 in ipv4_intended:
             if ipv4 not in ipv4_routes:

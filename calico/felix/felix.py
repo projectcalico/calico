@@ -293,7 +293,7 @@ class FelixAgent(object):
             "rc": "SUCCESS",
             "message": "",
         }
-        sock.send(Message(Message.TYPE_EP_CR, fields))
+        sock.send(Message(Message.TYPE_EP_UP, fields))
 
         return
 
@@ -320,6 +320,15 @@ class FelixAgent(object):
         sock._zmq.setsockopt(zmq.UNSUBSCRIBE, delete_id.encode('utf-8'))
 
         endpoint.remove()
+
+        # Send a message indicating our success.
+        sock = self.sockets[Socket.TYPE_EP_REP]
+        fields = {
+            "rc": "SUCCESS",
+            "message": "",
+        }
+        sock.send(Message(Message.TYPE_EP_RM, fields))
+
         return
 
     def handle_heartbeat(self, message):
@@ -546,8 +555,12 @@ def initialise_logging():
     Sets up the full logging configuration. This applies to the felix log and
     hence to all children.
     """
-    log.setLevel(logging.DEBUG)
+    # Here we want to set fields in the logger of the parent, so remove the
+    # last dot and all after it from __name__.
+    name = __name__
+    log  = logging.getLogger(name[:name.rfind(".")])
 
+    log.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
     futils.mkdir_p(os.path.dirname(Config.LOGFILE))
@@ -571,18 +584,22 @@ def set_global_state():
     """
 
 def main():
-    # Initialise the logging.
-    initialise_logging()
+    try:
+        # Initialise the logging.
+        initialise_logging()
 
-    # We have restarted - tell the world.
-    log.error("Felix started")
+        # We have restarted - tell the world.
+        log.error("Felix started")
 
-    # Read and set up global state
-    set_global_state()
+        # Read and set up global state
+        set_global_state()
 
-    # Create an instance of the Felix agent and start it running.
-    agent = FelixAgent()
-    agent.run()
+        # Create an instance of the Felix agent and start it running.
+        agent = FelixAgent()
+        agent.run()
+    except:
+        e = sys.exc_info()[0]
+        log.exception(e)
 
 
 if __name__ == "__main__":
