@@ -123,14 +123,15 @@ class Endpoint(object):
 
         return False
 
-    def update_acls(self, acls):
+    def update_acls(self):
         """
         Updates the ACL state of a machine.
         """
-        self.need_acls = False
-        self.acl_data = acls
+        acls = self.acl_data
 
-        log.debug("Update ACLs for endpoint %s" % self.suffix)
+        if acls is None:
+            log.debug("No ACLs available yet for %s" % (self.suffix))
+            return
 
         log.debug("ACLs for %s are %s" % (self.suffix, acls))
 

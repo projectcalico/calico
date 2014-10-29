@@ -63,7 +63,7 @@ class FelixAgent(object):
         #: All the endpoints managed by this Felix, keyed off their UUID.
         self.endpoints = {}
 
-        # Set of IDs of endpoints that need to be retried (the tap interface
+        # Set of UUIDs of endpoints that need to be retried (the tap interface
         # did not exist when the ENDPOINTCREATED was received).
         self.ep_retry = set()
 
@@ -405,7 +405,14 @@ class FelixAgent(object):
 
         endpoint_id = message.endpoint_id
         endpoint = self.endpoints[endpoint_id]
-        endpoint.update_acls(message.fields['acls'])
+
+        endpoint.need_acls = False
+        endpoint.acl_data  = message.fields['acls']
+
+        if endpoint.uuid in self.ep_retry:
+            log.debug("Holding ACLs for endpoint %s that is pending retry" % endpoint.suffix)
+        else:
+            endpoint.update_acls()
 
         return
 
@@ -566,6 +573,9 @@ class FelixAgent(object):
                     if endpoint.program_endpoint():
                         # Failed again - put back on list
                         self.ep_retry.add(uuid)
+                    else:
+                        # Programmed OK, so we should apply any ACLs we might have.
+                        endpoint.update_acls()
                 else:
                     log.debug("No retry programming %s - no longer exists" % uuid)
 
