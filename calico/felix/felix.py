@@ -208,6 +208,7 @@ class FelixAgent(object):
         if successful:
             for ep in self.endpoints.values():
                 if ep.pending_resync:
+                    log.info("Remove endpoint %s that is no longer being managed" % ep.uuid)
                     ep.remove()
 
         # Now remove rules for any endpoints that should no longer exist. This
@@ -241,11 +242,13 @@ class FelixAgent(object):
         # First, check whether we know about this endpoint already. If we do,
         # we should raise a warning log unless we're in the middle of a resync.
         endpoint = self.endpoints.get(endpoint_id)
-        if endpoint is not None and resync_id is not None:
+        if endpoint is not None and resync_id is None:
             log.warning(
                 "Received endpoint creation for existing endpoint %s",
                 endpoint_id
             )
+        elif endpoint is not None and resync_id is not None:
+            endpoint.pending_resync = False
         elif endpoint is None:
             endpoint = self._create_endpoint(endpoint_id, mac)
 
@@ -463,6 +466,7 @@ class FelixAgent(object):
         endpoint.mac = mac
 
         # Program the endpoint - i.e. set things up for it.
+        log.debug("Program %s" % endpoint.suffix)
         if endpoint.program_endpoint():
             # Failed to program this endpoint - put on the retry list.
             self.ep_retry.add(endpoint.uuid)
@@ -570,6 +574,7 @@ class FelixAgent(object):
             for uuid in retry_list:
                 if uuid in self.endpoints:
                     endpoint = self.endpoints[uuid]
+                    log.debug("Retry program of %s" % endpoint.suffix)
                     if endpoint.program_endpoint():
                         # Failed again - put back on list
                         self.ep_retry.add(uuid)
