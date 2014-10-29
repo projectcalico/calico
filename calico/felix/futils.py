@@ -321,7 +321,7 @@ def set_rules(id,iface,type,localips,mac):
             rule.create_target("RETURN")
             rule.protocol = "icmpv6"
             match = iptc.Match(rule, "icmp6")
-            match.icmpv6_type = icmp
+            match.icmpv6_type = [ icmp ]
             rule.add_match(match)
             insert_rule(rule,to_chain,index)
             index += 1
