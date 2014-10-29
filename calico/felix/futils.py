@@ -611,10 +611,11 @@ def set_acls(id,type,inbound,in_default,outbound,out_default):
         family            = "inet6"
 
     if subprocess.call(["ipset", "list", tmp_ipset_port]) != 0:
-        subprocess.check_call(["ipset", "create", tmp_ipset_port, "hash:net,port"])
-
+        subprocess.check_call(["ipset", "create", tmp_ipset_port,
+                               "hash:net,port", "family", family])
     if subprocess.call(["ipset", "list", tmp_ipset_noport]) != 0:
-        subprocess.check_call(["ipset", "create", tmp_ipset_noport, "hash:net"])
+        subprocess.check_call(["ipset", "create", tmp_ipset_noport,
+                               "hash:net", "family", family])
 
     subprocess.check_call(["ipset", "flush", tmp_ipset_port])
     subprocess.check_call(["ipset", "flush", tmp_ipset_noport])
