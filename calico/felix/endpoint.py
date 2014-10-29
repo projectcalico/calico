@@ -121,7 +121,7 @@ class Endpoint(object):
         futils.set_rules(self.suffix, self.tap, futils.IPV4, ipv4_intended, self.mac)
         futils.set_rules(self.suffix, self.tap, futils.IPV6, ipv6_intended, self.mac)
 
-        return True
+        return False
 
     def update_acls(self, acls):
         """
