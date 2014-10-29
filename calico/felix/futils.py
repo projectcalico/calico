@@ -328,25 +328,16 @@ def set_rules(id,iface,type,localips,mac):
 
     rule = get_rule(type)
     rule.create_target("DROP")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "INVALID"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["INVALID"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["INVALID"]
     insert_rule(rule,to_chain,index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
     rule = get_rule(type)
     rule.create_target("RETURN")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "RELATED,ESTABLISHED"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["RELATED,ESTABLISHED"]
-        match.ctstate = ["ESTABLISHED"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["RELATED,ESTABLISHED"]
     insert_rule(rule,to_chain,index)
     index += 1
 
@@ -392,25 +383,16 @@ def set_rules(id,iface,type,localips,mac):
     # "Drop if state INVALID".
     rule = get_rule(type)
     rule.create_target("DROP")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "INVALID"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["INVALID"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["INVALID"]
     insert_rule(rule,from_chain,index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
     rule = get_rule(type)
     rule.create_target("RETURN")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "RELATED,ESTABLISHED"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["RELATED,ESTABLISHED"]
-        match.ctstate = ["ESTABLISHED"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["RELATED,ESTABLISHED"]
     insert_rule(rule, from_chain, index)
     index += 1
 
