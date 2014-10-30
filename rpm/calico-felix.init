@@ -29,7 +29,7 @@ start() {
         [ -f $config ] || exit 6
     done
     echo -n $"Starting $prog: "
-    daemon --user neutron --pidfile $pidfile "$exec --config-file /etc/calico/felix.cfg &>/dev/null & echo \$! > $pidfile"
+    daemon --user root --pidfile $pidfile "$exec --config-file /etc/calico/felix.cfg &>/dev/null & echo \$! > $pidfile"
     retval=$?
     echo
     [ $retval -eq 0 ] && touch $lockfile
