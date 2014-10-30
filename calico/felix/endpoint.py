@@ -47,6 +47,10 @@ class Endpoint(object):
     Endpoint represents an endpoint in a Calico network, managed by a specific
     instance of Felix.
     """
+    STATE_ENABLED  = "enabled"
+    STATE_DISABLED = "disabled"
+    STATES         = [ STATE_ENABLED, STATE_DISABLED ]
+
     def __init__(self, uuid, mac):
         self.uuid           = uuid.encode('ascii')
         self.suffix         = uuid.encode('ascii')[:11]
@@ -63,6 +67,9 @@ class Endpoint(object):
         self.need_acls      = True   # Need to get ACL data back?
         self.acl_data       = None   # ACL data structure
 
+        # Assume disabled until we know different
+        self.state          = Endpoint.STATE_DISABLED
+
     def remove(self):
         # Delete a programmed endpoint. Remove the rules only, since the routes will vanish
         # due course when the tap interface goes.
@@ -76,23 +83,31 @@ class Endpoint(object):
         # DHCP"
         #
         # Returns True if the endpoint needs to be retried.
-        if not futils.tap_exists(self.tap):
-            # TODO: need to retry at some point, not just give up until next resync
+        if not futils.tap_exists(self.tap) and self.state == Endpoint.STATE_ENABLED:
             log.error("Unable to configure non-existent interface %s" % self.tap)
             return True
+        elif not futils.tap_exists(self.tap):
+            # No tap interface, but disabled. This is not an error, and there
+            # is nothing to do.
+            log.debug("Tap interface missing when disabling endpoint %s" % self.uuid)
+            return False
+
+        # Configure the tap interface.
+        if self.state == Endpoint.STATE_ENABLED:
+            futils.configure_tap(self.tap)
+
+            # Build up list of addresses that should be present
+            ipv4_intended = set([addr.ip.encode('ascii') for addr in self.addresses
+                                 if addr.type is futils.IPV4])
+            ipv6_intended = set([addr.ip.encode('ascii') for addr in self.addresses
+                                 if addr.type is futils.IPV6])
+        else:
+            # Disabled endpoint; we should remove all the routes.
+            ipv4_intended = set()
+            ipv6_intended = set()
 
         ipv4_routes   = futils.list_routes(futils.IPV4, self.tap)
         ipv6_routes   = futils.list_routes(futils.IPV6, self.tap)
-        ipv6_intended = set()
-
-        # Configure the tap interface.
-        futils.configure_tap(self.tap)
-
-        # Build up list of addresses that should be present
-        ipv4_intended = set([addr.ip.encode('ascii') for addr in self.addresses
-                             if addr.type is futils.IPV4])
-        ipv6_intended = set([addr.ip.encode('ascii') for addr in self.addresses
-                             if addr.type is futils.IPV6])
 
         for ipv4 in ipv4_intended:
             if ipv4 not in ipv4_routes:
@@ -118,8 +133,15 @@ class Endpoint(object):
                 log.info("Remove extra IPv6 route to address %s for tap %s" % (ipv6, self.tap))
                 futils.del_route(futils.IPV6, ipv6, self.tap)
 
+        # Set up the rules for this endpoint, not including ACLs. Note that if
+        # the endpoint is disabled, then it has no permitted addresses, so it
+        # cannot send any data.
         futils.set_rules(self.suffix, self.tap, futils.IPV4, ipv4_intended, self.mac)
         futils.set_rules(self.suffix, self.tap, futils.IPV6, ipv6_intended, self.mac)
+
+        # If we have just disabled an endpoint, disable incoming traffic too
+        if self.state == Endpoint.STATE_DISABLED:
+            self.update_acls()
 
         return False
 
@@ -127,11 +149,19 @@ class Endpoint(object):
         """
         Updates the ACL state of a machine.
         """
-        acls = self.acl_data
+
+        if self.state == Endpoint.STATE_ENABLED:
+            acls = self.acl_data
+        else:
+            acls = None
 
         if acls is None:
-            log.debug("No ACLs available yet for %s" % (self.suffix))
-            return
+            log.debug("Set up empty ACLs for %s" % (self.suffix))
+            default = { 'inbound_default' : 'DENY',
+                        'inbound' : [],
+                        'outbound_default' : 'DENY',
+                        'outbound' : [], }
+            acls    = { 'v4' : default, 'v6' : default }
 
         log.debug("ACLs for %s are %s" % (self.suffix, acls))
 
