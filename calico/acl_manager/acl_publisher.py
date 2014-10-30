@@ -124,7 +124,6 @@ class ACLPublisher:
             log.info("Sending ACL heartbeat %s" % heartbeat)
             self.pub_lock.acquire()
             self.pub_socket.send_multipart(["aclheartbeat",
-                                            "",
                                             heartbeat.encode("utf-8")])
             self.pub_lock.release()
             log.debug("Sent ACL heartbeat")
