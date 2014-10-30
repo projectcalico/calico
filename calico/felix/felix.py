@@ -39,6 +39,10 @@ from calico import common
 # Logger
 log = logging.getLogger(__name__)
 
+# Return codes to send.
+RC_SUCCESS  = "SUCCESS"
+RC_INVALID  = "INVALID"
+RC_NOTEXIST = "NOTEXIST"
 
 class FelixAgent(object):
     """
@@ -233,6 +237,8 @@ class FelixAgent(object):
         state resynchronization, or to notify Felix of a new endpoint to
         manage.
         """
+        # TODO: Throughout these message handling, we can fail if mandatory
+        # fields are missing. Better to catch and return an error response.
         log.debug("Received endpoint create: %s", message.fields)
 
         endpoint_id = message.fields['endpoint_id']
@@ -253,15 +259,24 @@ class FelixAgent(object):
         elif endpoint is None:
             endpoint = self._create_endpoint(endpoint_id, mac)
 
-        # Update the endpoint state.
-        self._update_endpoint(endpoint, message.fields)
+        try:
+            # Update the endpoint state; this can fail.
+            self._update_endpoint(endpoint, message.fields)
 
-        # Now we can send a response indicating our success.
+            fields = {
+                "rc": RC_SUCCESS,
+                "message": "",
+            }
+
+        except InvalidRequest as error:
+            # Invalid request fields. Return an error.
+            fields = {
+                "rc": RC_INVALID,
+                "message": error.value,
+            }
+            
+        # Now we send the response.
         sock = self.sockets[Socket.TYPE_EP_REP]
-        fields = {
-            "rc": "SUCCESS",
-            "message": "",
-        }
         sock.send(Message(Message.TYPE_EP_CR, fields))
 
         # Finally, if this was part of our current resync then increment the
@@ -291,18 +306,37 @@ class FelixAgent(object):
 
         # Get the endpoint data from the message.
         endpoint_id = message.fields['endpoint_id']
-        issued = message.fields['issued']
+        issued      = message.fields['issued']
 
-        # Update the endpoint
-        endpoint = self.endpoints[endpoint_id]
-        self._update_endpoint(endpoint, message.fields)
+        try:
+            # Update the endpoint
+            endpoint = self.endpoints[endpoint_id]
 
-        # Send a message indicating our success.
+            # Update the endpoint state; this can fail.
+            self._update_endpoint(endpoint, message.fields)
+
+            fields = {
+                "rc": RC_SUCCESS,
+                "message": "",
+            }
+
+        except KeyError:
+            log.error("Received update for absent endpoint %s", endpoint_id)
+
+            fields = {
+                "rc": RC_NOTEXIST,
+                "message": "Endpoint %s does not exist" % endpoint_id,
+            }
+
+        except InvalidRequest as error:
+            # Invalid request fields. Return an error.
+            fields = {
+                "rc": RC_INVALID,
+                "message": error.value,
+            }
+            
+        # Now we send the response.
         sock = self.sockets[Socket.TYPE_EP_REP]
-        fields = {
-            "rc": "SUCCESS",
-            "message": "",
-        }
         sock.send(Message(Message.TYPE_EP_UP, fields))
 
         return
@@ -317,7 +351,7 @@ class FelixAgent(object):
         log.debug("Received endpoint destroy: %s", message.fields)
 
         delete_id = message.fields['endpoint_id']
-        issued = message.fields['issued']
+        issued    = message.fields['issued']
 
         try:
             endpoint = self.endpoints.pop(delete_id)
@@ -334,7 +368,7 @@ class FelixAgent(object):
         # Send a message indicating our success.
         sock = self.sockets[Socket.TYPE_EP_REP]
         fields = {
-            "rc": "SUCCESS",
+            "rc": RC_SUCCESS,
             "message": "",
         }
         sock.send(Message(Message.TYPE_EP_RM, fields))
@@ -366,9 +400,8 @@ class FelixAgent(object):
         return_code = message.fields['rc']
         return_str = message.fields['message']
 
-        # TODO(CB2): Magic string!
-        if return_code != 'SUCCESS':
-            log.error('Resync request refused: %s', return_str)
+        if return_code != RC_SUCCESS:
+            log.error('Resync request refused with rc : %s, %s', return_code, return_str)
             self.complete_endpoint_resync(False)
             return
 
@@ -393,8 +426,8 @@ class FelixAgent(object):
         return_code = message.fields['rc']
         return_str = message.fields['message']
 
-        if return_code != 'SUCCESS':
-            log.error("ACL state request refused: %s", return_str)
+        if return_code != RC_SUCCESS:
+            log.error("ACL state request refused with rc : %s, %s", return_code, return_str)
 
         return
 
@@ -462,9 +495,15 @@ class FelixAgent(object):
             addresses.add(Address(addr))
         endpoint.addresses = addresses
 
-        # TODO(CB2): Currently we're only using part of the information coming
-        # over this interface. Extend to use it all.
-        endpoint.mac = mac
+        endpoint.mac   = mac
+        if state in Endpoint.STATES:
+            endpoint.state = state
+        else:
+            # Invalid state. For now, we assume that the endpoint is disabled,
+            # even it it was not before.
+            log.error("Invalid state for endpoint %s : %s" % (endpoint.uuid, state))
+            endpoint.state = ENDPOINT.DISABLED
+            raise InvalidRequest("Invalid state for endpoint %s" % state)
 
         # Program the endpoint - i.e. set things up for it.
         log.debug("Program %s" % endpoint.suffix)
@@ -639,3 +678,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+class InvalidRequest(Exception):
+    """
+    Exception that allows us to report an invalid request.
+    """
+    pass
+
