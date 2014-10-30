@@ -65,7 +65,7 @@ class Endpoint(object):
 
     def remove(self):
         # Delete a programmed endpoint. Remove the rules only, since the routes will vanish
-        # due course.
+        # due course when the tap interface goes.
         futils.del_rules(self.suffix, futils.IPV4)
         futils.del_rules(self.suffix, futils.IPV6)
 
@@ -74,10 +74,12 @@ class Endpoint(object):
         #
         # Note that if acl_data is none, the ACLs are "do not allow any traffic except
         # DHCP"
+        #
+        # Returns True if the endpoint needs to be retried.
         if not futils.tap_exists(self.tap):
             # TODO: need to retry at some point, not just give up until next resync
             log.error("Unable to configure non-existent interface %s" % self.tap)
-            return
+            return True
 
         ipv4_routes   = futils.list_routes(futils.IPV4, self.tap)
         ipv6_routes   = futils.list_routes(futils.IPV6, self.tap)
@@ -119,14 +121,17 @@ class Endpoint(object):
         futils.set_rules(self.suffix, self.tap, futils.IPV4, ipv4_intended, self.mac)
         futils.set_rules(self.suffix, self.tap, futils.IPV6, ipv6_intended, self.mac)
 
-    def update_acls(self, acls):
+        return False
+
+    def update_acls(self):
         """
         Updates the ACL state of a machine.
         """
-        self.need_acls = False
-        self.acl_data = acls
+        acls = self.acl_data
 
-        log.debug("Update ACLs for endpoint %s" % self.suffix)
+        if acls is None:
+            log.debug("No ACLs available yet for %s" % (self.suffix))
+            return
 
         log.debug("ACLs for %s are %s" % (self.suffix, acls))
 

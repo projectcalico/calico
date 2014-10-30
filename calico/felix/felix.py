@@ -64,6 +64,16 @@ class FelixAgent(object):
         #: All the endpoints managed by this Felix, keyed off their UUID.
         self.endpoints = {}
 
+        # Set of UUIDs of endpoints that need to be retried (the tap interface
+        # did not exist when the ENDPOINTCREATED was received).
+        self.ep_retry = set()
+
+        # Set of suffices of endpoints that need to be retried (the tap
+        # interface still exists, so we cannot get rid of all of the
+        # programming).
+        # TODO: This is not currently used, but probably should be.
+        self.ep_tidy  = set()
+
         # Properties for handling resynchronization.
         self.resync_id = None
         self.resync_recd = None
@@ -199,6 +209,7 @@ class FelixAgent(object):
         if successful:
             for ep in self.endpoints.values():
                 if ep.pending_resync:
+                    log.info("Remove endpoint %s that is no longer being managed" % ep.uuid)
                     ep.remove()
 
         # Now remove rules for any endpoints that should no longer exist. This
@@ -208,15 +219,11 @@ class FelixAgent(object):
         for type in [ futils.IPV4, futils.IPV6 ]:
             rule_ids  = futils.list_eps_with_rules(type)
 
-            for id in rule_ids:
-                if id not in known_ids:
-                    # Found rules which we own for an endpoint which does not exist.
-                    # Remove those rules.
-                    if type == futils.IPV4:
-                        log.warning("Removing IPv4 rules for removed object %s" % id)
-                    else:
-                        log.warning("Removing IPv6 rules for removed object %s" % id)
-                    futils.del_rules(id, type)
+            for id in [ id for id in rule_ids if id not in known_ids ]:
+                # Found rules which we own for an endpoint which does not
+                # exist.  Remove those rules.
+                log.warning("Removing %s rules for removed object %s" % (type, id))
+                futils.del_rules(id, type)
 
     def handle_endpointcreated(self, message):
         """
@@ -236,11 +243,13 @@ class FelixAgent(object):
         # First, check whether we know about this endpoint already. If we do,
         # we should raise a warning log unless we're in the middle of a resync.
         endpoint = self.endpoints.get(endpoint_id)
-        if endpoint is not None and resync_id is not None:
+        if endpoint is not None and resync_id is None:
             log.warning(
                 "Received endpoint creation for existing endpoint %s",
                 endpoint_id
             )
+        elif endpoint is not None and resync_id is not None:
+            endpoint.pending_resync = False
         elif endpoint is None:
             endpoint = self._create_endpoint(endpoint_id, mac)
 
@@ -400,7 +409,14 @@ class FelixAgent(object):
 
         endpoint_id = message.endpoint_id
         endpoint = self.endpoints[endpoint_id]
-        endpoint.update_acls(message.fields['acls'])
+
+        endpoint.need_acls = False
+        endpoint.acl_data  = message.fields['acls']
+
+        if endpoint.uuid in self.ep_retry:
+            log.debug("Holding ACLs for endpoint %s that is pending retry" % endpoint.suffix)
+        else:
+            endpoint.update_acls()
 
         return
 
@@ -438,7 +454,7 @@ class FelixAgent(object):
         """
         Updates an endpoint's data.
         """
-        mac = fields['mac'].encode('ascii')
+        mac   = fields['mac'].encode('ascii')
         state = fields['state'].encode('ascii')
 
         addresses = set()
@@ -451,7 +467,10 @@ class FelixAgent(object):
         endpoint.mac = mac
 
         # Program the endpoint - i.e. set things up for it.
-        endpoint.program_endpoint()
+        log.debug("Program %s" % endpoint.suffix)
+        if endpoint.program_endpoint():
+            # Failed to program this endpoint - put on the retry list.
+            self.ep_retry.add(endpoint.uuid)
 
         return
 
@@ -484,7 +503,7 @@ class FelixAgent(object):
                 # Easiest just to poll on all sockets, even if we expect no activity
                 lPoller.register(sock._zmq, zmq.POLLIN)
 
-            polled_sockets = dict(lPoller.poll(2000))
+            polled_sockets = dict(lPoller.poll(Config.EP_RETRY_INT_MS))
 
             # Get all the sockets with activity.
             active_sockets = (
@@ -550,6 +569,21 @@ class FelixAgent(object):
                 # connection).
                 self.resync_acls()
 
+            # Finally, retry any endpoints which need retrying.
+            retry_list = list(self.ep_retry)
+            self.ep_retry.clear()
+            for uuid in retry_list:
+                if uuid in self.endpoints:
+                    endpoint = self.endpoints[uuid]
+                    log.debug("Retry program of %s" % endpoint.suffix)
+                    if endpoint.program_endpoint():
+                        # Failed again - put back on list
+                        self.ep_retry.add(uuid)
+                    else:
+                        # Programmed OK, so we should apply any ACLs we might have.
+                        endpoint.update_acls()
+                else:
+                    log.debug("No retry programming %s - no longer exists" % uuid)
 
 def initialise_logging():
     """

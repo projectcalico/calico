@@ -54,9 +54,14 @@ IPSET_TMP_NOPORT          = "felix-tmp-noport"
 IPSET6_TMP_PORT           = "felix-6-tmp-port"
 IPSET6_TMP_NOPORT         = "felix-6-tmp-noport"
 
-# Flag to indicate "IP v4" or "IP v6"; just a boolean but more readable.
-IPV4 = True
-IPV6 = False
+# Flag to indicate "IP v4" or "IP v6"; format that can be printed in logs.
+IPV4 = "IPv4"
+IPV6 = "IPv6"
+
+# Load the conntrack tables. This is a workaround for this issue
+# https://github.com/ldx/python-iptables/issues/112
+iptc.Rule().create_match("conntrack")
+iptc.Rule6().create_match("conntrack")
 
 def tap_exists(tap):
     """
@@ -257,8 +262,8 @@ def set_rules(id,iface,type,localips,mac):
         from_ipset_noport = IPSET6_FROM_NOPORT_PREFIX + id
         family            = "inet6"
 
-    # TODO: refactor to avoid typing the /dev/null stuff over and over.
     # Create ipsets if they do not already exist.
+    # TODO: refactor to avoid typing the /dev/null stuff over and over.
     if subprocess.call(["ipset", "list", to_ipset_port],
                        stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT) != 0:
         subprocess.check_call(["ipset", "create", to_ipset_port, "hash:net,port",
@@ -315,31 +320,23 @@ def set_rules(id,iface,type,localips,mac):
             rule.create_target("RETURN")
             rule.protocol = "icmpv6"
             match = iptc.Match(rule, "icmp6")
-            match.icmpv6_type = icmp
+            match.icmpv6_type = [ icmp ]
             rule.add_match(match)
             insert_rule(rule,to_chain,index)
             index += 1
 
     rule = get_rule(type)
     rule.create_target("DROP")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "INVALID"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["INVALID"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["INVALID"]
     insert_rule(rule,to_chain,index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
     rule = get_rule(type)
     rule.create_target("RETURN")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "RELATED,ESTABLISHED"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["RELATED", "ESTABLISHED"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["RELATED,ESTABLISHED"]
     insert_rule(rule,to_chain,index)
     index += 1
 
@@ -385,24 +382,16 @@ def set_rules(id,iface,type,localips,mac):
     # "Drop if state INVALID".
     rule = get_rule(type)
     rule.create_target("DROP")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "INVALID"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["INVALID"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["INVALID"]
     insert_rule(rule,from_chain,index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
     rule = get_rule(type)
     rule.create_target("RETURN")
-    if type == IPV4:
-        match = rule.create_match("state")
-        match.state = "RELATED,ESTABLISHED"
-    else:
-        match = rule.create_match("conntrack")
-        match.ctstate = ["RELATED,ESTABLISHED"]
+    match = rule.create_match("conntrack")
+    match.ctstate = ["RELATED,ESTABLISHED"]
     insert_rule(rule, from_chain, index)
     index += 1
 
@@ -480,12 +469,12 @@ def set_rules(id,iface,type,localips,mac):
                                       (CHAIN_INPUT,iface),shell=True)
 
     if rules_check == 0:
-        log.debug("Rules for interface %s already exist" % iface)
+        log.debug("%s rules for interface %s already exist" % (type, iface))
     else:
         # We have created the chains and rules that control input and output for
         # the interface but not routed traffic through them. Add the input rule
         # detecting packets arriving for the endpoint.
-        log.debug("Rules for interface %s do not already exist" % iface)
+        log.debug("%s rules for interface %s do not already exist" % (type, iface))
         chain = iptc.Chain(table,CHAIN_INPUT)
         rule  = get_rule(type)
         target        = iptc.Target(rule, from_chain_name)
@@ -528,6 +517,7 @@ def del_rules(id,type):
     """
     Remove the rules for an endpoint which is no longer managed.
     """
+    log.debug("Delete %s rules for %s" % (type, id))
     to_chain   = CHAIN_TO_PREFIX + id
     from_chain = CHAIN_FROM_PREFIX + id
 
@@ -557,13 +547,16 @@ def del_rules(id,type):
     # iterate through.
     #
     # TODO: Think if there is a good way to tidy this up.
+    #       (using autocommit flag on the table will help)
+    # TODO: Actually, we could leave these rules to vanish with the tap interface,
+    #       so that we do not have two ways for them to disappear. In other words,
+    #       only delete rules when the tap interface is gone - see ep_tidy
     chain = iptc.Chain(table, CHAIN_INPUT)
     done  = False
     while not done:
         done = True
         for rule in chain.rules:
             if rule.target.name in (to_chain, from_chain):
-                log.debug("Delete rule %s from %s" % (rule.target.name, chain.name))
                 chain.delete_rule(rule)
                 done = False
                 break
@@ -574,14 +567,12 @@ def del_rules(id,type):
         done = True
         for rule in chain.rules:
             if rule.target.name in (to_chain, from_chain):
-                log.debug("Delete rule %s from %s" % (rule.target.name, chain.name))
                 chain.delete_rule(rule)
                 done = False
                 break
 
     for rule in chain.rules[:]:
         if rule.target.name in (to_chain, from_chain):
-            log.debug("Delete rule %s from %s" % (rule.target.name, chain.name))
             chain.delete_rule(rule)
 
     # Delete the from and to chains for this endpoint.
@@ -619,10 +610,11 @@ def set_acls(id,type,inbound,in_default,outbound,out_default):
         family            = "inet6"
 
     if subprocess.call(["ipset", "list", tmp_ipset_port]) != 0:
-        subprocess.check_call(["ipset", "create", tmp_ipset_port, "hash:net,port"])
-
+        subprocess.check_call(["ipset", "create", tmp_ipset_port,
+                               "hash:net,port", "family", family])
     if subprocess.call(["ipset", "list", tmp_ipset_noport]) != 0:
-        subprocess.check_call(["ipset", "create", tmp_ipset_noport, "hash:net"])
+        subprocess.check_call(["ipset", "create", tmp_ipset_noport,
+                               "hash:net", "family", family])
 
     subprocess.check_call(["ipset", "flush", tmp_ipset_port])
     subprocess.check_call(["ipset", "flush", tmp_ipset_noport])
@@ -632,32 +624,27 @@ def set_acls(id,type,inbound,in_default,outbound,out_default):
     #   10.11.1.0/24
     #   10.11.1.0/24,tcp
     #   10.11.1.0/24,80
-    for iter in [ "to", "from" ]:
-        if iter == "to":
-            list         = inbound
-            if type == IPV4:
-                descr        = "inbound IPv4"
-            else:
-                descr        = "inbound IPv4"
+    for loop in [ "to", "from" ]:
+        if loop == "to":
+            rule_list     = inbound
+            descr        = "inbound " + type
             ipset_port   = to_ipset_port
             ipset_noport = to_ipset_noport
         else:
-            list         = outbound
-            if type == IPV4:
-                descr        = "outbound IPv4"
-            else:
-                descr        = "outbound IPv4"
+            rule_list    = outbound
+            descr        = "outbound " + type
             ipset_port   = from_ipset_port
             ipset_noport = from_ipset_noport
 
-        for rule in list:
+        for rule in rule_list:
             if rule['cidr'] is None:
                 # No cidr - give up.
                 log.error("Invalid %s rule without cidr for %s : %s", (descr, id, rule))
                 continue
             if rule['protocol'] is None and rule['port'] is not None:
                 # No protocol - must also be no port.
-                log.error("Invalid %s rule without port but no protocol for %s : %s", (descr, id, rule))
+                log.error("Invalid %s rule without port but no protocol for %s : %s",
+                          (descr, id, rule))
                 continue
 
             if rule['port'] is not None:

@@ -50,8 +50,8 @@ class _Config(object):
         for section in self._parser.sections():
             self._items[section] = dict(self._parser.items(section))
 
-        self.EP_RETRY_INT_MS = self.get_cfg_entry("global", "EndpointRetryTimeMillis", 500)
-        self.RESYNC_INT_SEC  = self.get_cfg_entry("global", "ResyncIntervalSecs", 1800)
+        self.EP_RETRY_INT_MS = int(self.get_cfg_entry("global", "EndpointRetryTimeMillis", 500))
+        self.RESYNC_INT_SEC  = int(self.get_cfg_entry("global", "ResyncIntervalSecs", 1800))
         self.PLUGIN_ADDR     = self.get_cfg_entry("global", "PluginAddress", None)
         self.ACL_ADDR        = self.get_cfg_entry("global", "ACLAddress", None)
 
@@ -60,15 +60,12 @@ class _Config(object):
         self.LOGLEVSYS       = self.get_cfg_entry("log", "LogSeveritySys", "ERROR")
         self.LOGLEVSCR       = self.get_cfg_entry("log", "LogSeverityScreen", "DEBUG")
 
-        self.CONN_TIMEOUT_MS   = self.get_cfg_entry("connection",
-                                                    "ConnectionTimeoutMillis",
-                                                    30000)
-        self.CONN_KEEPALIVE_MS = self.get_cfg_entry("connection",
-                                                    "ConnectionKeepaliveIntervalMillis",
-                                                    2000)
-        self.CONN_RETRY_MS     = self.get_cfg_entry("connection",
-                                                    "ConnectionRetryIntervalMillis",
-                                                    15000)
+        self.CONN_TIMEOUT_MS   = int(self.get_cfg_entry("connection",
+                                                        "ConnectionTimeoutMillis",
+                                                        30000))
+        self.CONN_KEEPALIVE_MS = int(self.get_cfg_entry("connection",
+                                                        "ConnectionKeepaliveIntervalMillis",
+                                                        2000))
 
         # Firewall that no unexpected items in the config file - i.e. ones we
         # have not used.
@@ -100,6 +97,7 @@ class _Config(object):
         if name.lower() in item:
             value = item[name.lower()]
             del item[name.lower()]
+
         elif default is None:
             raise Exception("Variable %s is not defined in section %s" % (name, section))
         else:
