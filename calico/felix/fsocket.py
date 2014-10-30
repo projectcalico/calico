@@ -93,6 +93,7 @@ class Socket(object):
 
         if self.type == Socket.TYPE_ACL_SUB:
             self._zmq.setsockopt(zmq.IDENTITY, hostname)
+            self._zmq.setsockopt(zmq.SUBSCRIBE, 'aclheartbeat')
 
         # The socket connection event is always the time of last activity.
         self.last_activity = int(time.time() * 1000)
