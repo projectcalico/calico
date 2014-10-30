@@ -94,7 +94,7 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, ipset, python-pip, python-zmq
+Requires:       calico-common, ipset, python-devel, python-pip, python-zmq
 
 %description felix
 This package provides the Felix component.
