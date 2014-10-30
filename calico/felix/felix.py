@@ -72,12 +72,6 @@ class FelixAgent(object):
         # did not exist when the ENDPOINTCREATED was received).
         self.ep_retry = set()
 
-        # Set of suffices of endpoints that need to be retried (the tap
-        # interface still exists, so we cannot get rid of all of the
-        # programming).
-        # TODO: This is not currently used, but probably should be.
-        self.ep_tidy  = set()
-
         # Properties for handling resynchronization.
         self.resync_id = None
         self.resync_recd = None
