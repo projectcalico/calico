@@ -72,12 +72,6 @@ class FelixAgent(object):
         # did not exist when the ENDPOINTCREATED was received).
         self.ep_retry = set()
 
-        # Set of suffices of endpoints that need to be retried (the tap
-        # interface still exists, so we cannot get rid of all of the
-        # programming).
-        # TODO: This is not currently used, but probably should be.
-        self.ep_tidy  = set()
-
         # Properties for handling resynchronization.
         self.resync_id = None
         self.resync_recd = None
@@ -237,8 +231,6 @@ class FelixAgent(object):
         state resynchronization, or to notify Felix of a new endpoint to
         manage.
         """
-        # TODO: Throughout these message handling, we can fail if mandatory
-        # fields are missing. Better to catch and return an error response.
         log.debug("Received endpoint create: %s", message.fields)
 
         endpoint_id = message.fields['endpoint_id']

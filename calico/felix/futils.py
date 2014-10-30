@@ -98,7 +98,6 @@ def add_route(type,ip,tap):
     Add a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
-    # TODO: Improve logging of errors here
     if type == IPV4:
         subprocess.check_call(['arp', '-Ds', ip, tap, '-i', tap])
         subprocess.check_call(["ip", "route", "add", ip, "dev", tap])
@@ -110,7 +109,6 @@ def del_route(type, ip,tap):
     Delete a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
-    # TODO: Improve logging of errors here
     if type == IPV4:
         subprocess.check_call(['arp', '-d', ip, '-i', tap])
         subprocess.check_call(["ip", "route", "del", ip, "dev", tap])
@@ -263,27 +261,22 @@ def set_rules(id,iface,type,localips,mac):
         family            = "inet6"
 
     # Create ipsets if they do not already exist.
-    # TODO: refactor to avoid typing the /dev/null stuff over and over.
-    if subprocess.call(["ipset", "list", to_ipset_port],
-                       stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT) != 0:
+    if call_silent(["ipset", "list", to_ipset_port]) != 0:
         subprocess.check_call(["ipset", "create", to_ipset_port, "hash:net,port",
                                "family", family],
                               stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT)
 
-    if subprocess.call(["ipset", "list", to_ipset_noport],
-                       stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT) != 0:
+    if call_silent(["ipset", "list", to_ipset_noport]) != 0:
         subprocess.check_call(["ipset", "create", to_ipset_noport, "hash:net",
                                "family", family],
                               stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT)
 
-    if subprocess.call(["ipset", "list", from_ipset_port],
-                       stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT) != 0:
+    if call_silent(["ipset", "list", from_ipset_port]) != 0:
         subprocess.check_call(["ipset", "create", from_ipset_port, "hash:net,port",
                                "family", family],
                               stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT)
 
-    if subprocess.call(["ipset", "list", from_ipset_noport],
-                       stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT) != 0:
+    if call_silent(["ipset", "list", from_ipset_noport]) != 0:
         subprocess.check_call(["ipset", "create", from_ipset_noport, "hash:net",
                                "family", family],
                               stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT)
@@ -438,7 +431,26 @@ def set_rules(id,iface,type,localips,mac):
     insert_rule(rule, from_chain, index)
     index += 1
 
-    # Now allow through packets from the correct MAC and IP address.
+    # Now allow through packets from the correct MAC and IP address. There may
+    # be rules here from addresses that this endpoint no longer has - in which
+    # case we must remove them.
+    #
+    # This code is rather ugly - better to turn off table autocommit, but as
+    # commented elsewhere, that appears buggy.
+    done  = False
+    while not done:
+        done = True
+        for rule in from_chain.rules:
+            if (rule.target.name == "RETURN" and rule.match.name == "mac" and
+               (rule.src not in localips or rule.match.mac_source != mac)):
+                # We have a rule that we should not have; either the MAC or the
+                # IP has changed. Toss the rule.
+                log.info("Removing old IP %s, MAC %s from endpoint %s" %
+                         (rule.src, rule.match.mac_source, id))
+                chain.delete_rule(rule)
+                done = False
+                break
+
     for ip in localips:
         rule = get_rule(type)
         rule.create_target("RETURN")
@@ -449,9 +461,6 @@ def set_rules(id,iface,type,localips,mac):
         insert_rule(rule,from_chain,index)
         index += 1
 
-    # TODO: If you remove an IP from an instance, we do not tidy it up here.
-    # We ought to run through all such rules and tidy them up.
-       
     # Last rule (at end) says drop unconditionally.
     rule = get_rule(type)
     rule.create_target("DROP")
@@ -546,46 +555,31 @@ def del_rules(id,type):
     # etc. Hence each time we remove a rule we rebuild the list of rules to
     # iterate through.
     #
-    # TODO: Think if there is a good way to tidy this up.
-    #       (using autocommit flag on the table will help)
-    # TODO: Actually, we could leave these rules to vanish with the tap interface,
-    #       so that we do not have two ways for them to disappear. In other words,
-    #       only delete rules when the tap interface is gone - see ep_tidy
-    chain = iptc.Chain(table, CHAIN_INPUT)
-    done  = False
-    while not done:
-        done = True
-        for rule in chain.rules:
-            if rule.target.name in (to_chain, from_chain):
-                chain.delete_rule(rule)
-                done = False
-                break
-
-    chain = iptc.Chain(table, CHAIN_FORWARD)
-    done  = False
-    while not done:
-        done = True
-        for rule in chain.rules:
-            if rule.target.name in (to_chain, from_chain):
-                chain.delete_rule(rule)
-                done = False
-                break
-
-    for rule in chain.rules[:]:
-        if rule.target.name in (to_chain, from_chain):
-            chain.delete_rule(rule)
+    # In principle we could use autocommit to make this much nicer, but 
+    # in practice it seems a bit buggy, and leads to errors elsewhere.
+    for name in (CHAIN_INPUT, CHAIN_FORWARD):
+        chain = iptc.Chain(table, name)
+        done  = False
+        while not done:
+            done = True
+            for rule in chain.rules:
+                if rule.target.name in (to_chain, from_chain):
+                    chain.delete_rule(rule)
+                    done = False
+                    break
 
     # Delete the from and to chains for this endpoint.
-    for name in [ from_chain, to_chain ]:
+    for name in (from_chain, to_chain):
         if table.is_chain(name):
             chain = iptc.Chain(table, name)
+            log.debug("Flush chain %s", name)
             chain.flush()
-            chain = table.delete_chain(name)
+            log.debug("Delete chain %s", name)
+            table.delete_chain(name)
 
     # Delete the ipsets for this endpoint.
     for ipset in [ from_ipset_noport, from_ipset_port, to_ipset_noport, to_ipset_port ]:
-        if subprocess.call(["ipset", "list", ipset],
-                           stdout=open('/dev/null', 'w'), stderr=subprocess.STDOUT) == 0:
+        if call_silent(["ipset", "list", ipset]) == 0:
             subprocess.check_call(["ipset", "destroy", ipset])
 
 def set_acls(id,type,inbound,in_default,outbound,out_default):
@@ -609,10 +603,10 @@ def set_acls(id,type,inbound,in_default,outbound,out_default):
         tmp_ipset_noport  = IPSET6_TMP_NOPORT
         family            = "inet6"
 
-    if subprocess.call(["ipset", "list", tmp_ipset_port]) != 0:
+    if call_silent(["ipset", "list", tmp_ipset_port]) != 0:
         subprocess.check_call(["ipset", "create", tmp_ipset_port,
                                "hash:net,port", "family", family])
-    if subprocess.call(["ipset", "list", tmp_ipset_noport]) != 0:
+    if call_silent(["ipset", "list", tmp_ipset_noport]) != 0:
         subprocess.check_call(["ipset", "create", tmp_ipset_noport,
                                "hash:net", "family", family])
 
@@ -694,3 +688,24 @@ def list_eps_with_rules(type):
             
     return eps
 
+def mkdir_p(path):
+    """http://stackoverflow.com/a/600612/190597 (tzot)"""
+    try:
+        os.makedirs(path, exist_ok=True)  # Python>3.2
+    except TypeError:
+        try:
+            os.makedirs(path)
+        except OSError as exc: # Python >2.5
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else: raise
+
+def call_silent(args):
+    """
+    Wrapper round subprocess_call that discards all of the output. *args* must
+    be a list.
+    """
+    retcode = subprocess.call(args,
+                              stdout=open('/dev/null', 'w'),
+                              stderr=subprocess.STDOUT)
+    return retcode
