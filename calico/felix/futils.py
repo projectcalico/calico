@@ -98,7 +98,6 @@ def add_route(type,ip,tap):
     Add a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
-    # TODO: Improve logging of errors here
     if type == IPV4:
         subprocess.check_call(['arp', '-Ds', ip, tap, '-i', tap])
         subprocess.check_call(["ip", "route", "add", ip, "dev", tap])
@@ -110,7 +109,6 @@ def del_route(type, ip,tap):
     Delete a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
-    # TODO: Improve logging of errors here
     if type == IPV4:
         subprocess.check_call(['arp', '-d', ip, '-i', tap])
         subprocess.check_call(["ip", "route", "del", ip, "dev", tap])
@@ -433,7 +431,26 @@ def set_rules(id,iface,type,localips,mac):
     insert_rule(rule, from_chain, index)
     index += 1
 
-    # Now allow through packets from the correct MAC and IP address.
+    # Now allow through packets from the correct MAC and IP address. There may
+    # be rules here from addresses that this endpoint no longer has - in which
+    # case we must remove them.
+    #
+    # This code is rather ugly - better to turn off table autocommit, but as
+    # commented elsewhere, that appears buggy.
+    done  = False
+    while not done:
+        done = True
+        for rule in from_chain.rules:
+            if (rule.target.name == "RETURN" and rule.match.name == "mac") and
+               (rule.src not in localips or rule.match.mac_source != mac):
+                # We have a rule that we should not have; either the MAC or the
+                # IP has changed. Toss the rule.
+                log.info("Removing old IP %s, MAC %s from endpoint %s" %
+                         (rule.src, rule.match.mac_source, id))
+                chain.delete_rule(rule)
+                done = False
+                break
+
     for ip in localips:
         rule = get_rule(type)
         rule.create_target("RETURN")
@@ -444,9 +461,6 @@ def set_rules(id,iface,type,localips,mac):
         insert_rule(rule,from_chain,index)
         index += 1
 
-    # TODO: If you remove an IP from an instance, we do not tidy it up here.
-    # We ought to run through all such rules and tidy them up.
-       
     # Last rule (at end) says drop unconditionally.
     rule = get_rule(type)
     rule.create_target("DROP")

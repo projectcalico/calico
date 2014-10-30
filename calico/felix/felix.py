@@ -231,8 +231,6 @@ class FelixAgent(object):
         state resynchronization, or to notify Felix of a new endpoint to
         manage.
         """
-        # TODO: Throughout these message handling, we can fail if mandatory
-        # fields are missing. Better to catch and return an error response.
         log.debug("Received endpoint create: %s", message.fields)
 
         endpoint_id = message.fields['endpoint_id']
