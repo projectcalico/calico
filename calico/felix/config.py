@@ -62,7 +62,7 @@ class _Config(object):
 
         self.CONN_TIMEOUT_MS   = int(self.get_cfg_entry("connection",
                                                         "ConnectionTimeoutMillis",
-                                                        30000))
+                                                        40000))
         self.CONN_KEEPALIVE_MS = int(self.get_cfg_entry("connection",
                                                         "ConnectionKeepaliveIntervalMillis",
                                                         2000))

@@ -132,7 +132,7 @@ class Socket(object):
         self.last_activity = int(time.time() * 1000)
 
         # A special case: heartbeat messages on the subscription interface are
-        # swallowed, the application code has no use for them.
+        # swallowed; the application code has no use for them.
         if (self.type == Socket.TYPE_ACL_SUB and
             message.type == Message.TYPE_HEARTBEAT):
 
