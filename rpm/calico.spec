@@ -100,7 +100,25 @@ Requires:       calico-common, ipset, python-pip, python-zmq
 This package provides the Felix component.
 
 %post felix
-pip install python-iptables
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    pip install python-iptables
+    /sbin/chkconfig --add calico-felix
+    /sbin/service calico-felix start >/dev/null 2>&1
+fi
+
+%preun felix
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+    /sbin/service calico-felix stop >/dev/null 2>&1
+    /sbin/chkconfig --del calico-felix
+fi
+
+%postun felix
+if [ $1 -ge 1 ] ; then
+    # Package upgrade, not uninstall
+    /sbin/service calico-felix condrestart >/dev/null 2>&1 || :
+fi
 
 
 %package acl-manager
@@ -110,6 +128,26 @@ Requires:       calico-common, python-zmq
 
 %description acl-manager
 This package provides the ACL Manager component.
+
+%post acl-manager
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    /sbin/chkconfig --add calico-acl-manager
+    /sbin/service calico-acl-manager start >/dev/null 2>&1
+fi
+
+%preun acl-manager
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+    /sbin/service calico-acl-manager stop >/dev/null 2>&1
+    /sbin/chkconfig --del calico-acl-manager
+fi
+
+%postun acl-manager
+if [ $1 -ge 1 ] ; then
+    # Package upgrade, not uninstall
+    /sbin/service calico-acl-manager condrestart >/dev/null 2>&1 || :
+fi
 
 
 %prep
