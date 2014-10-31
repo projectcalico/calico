@@ -441,13 +441,15 @@ def set_rules(id,iface,type,localips,mac):
     while not done:
         done = True
         for rule in from_chain.rules:
-            if (rule.target.name == "RETURN" and rule.match.name == "mac" and
-               (rule.src not in localips or rule.match.mac_source != mac)):
+            if (rule.target.name == "RETURN" and
+                len(rule.matches) == 1 and
+                rule.matches[0].name == "mac" and
+                (rule.src not in localips or rule.match.mac_source != mac)):
                 # We have a rule that we should not have; either the MAC or the
                 # IP has changed. Toss the rule.
                 log.info("Removing old IP %s, MAC %s from endpoint %s" %
-                         (rule.src, rule.match.mac_source, id))
-                chain.delete_rule(rule)
+                         (rule.src, rule.matches[0].mac_source, id))
+                from_chain.delete_rule(rule)
                 done = False
                 break
 
