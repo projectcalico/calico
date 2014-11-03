@@ -112,14 +112,14 @@ class Endpoint(object):
         for ipv4 in ipv4_intended:
             if ipv4 not in ipv4_routes:
                 log.info("Add route to IPv4 address %s for tap %s" % (ipv4, self.tap))
-                futils.add_route(futils.IPV4, ipv4, self.tap)
+                futils.add_route(futils.IPV4, ipv4, self.tap, self.mac)
             else:
                 log.debug("Already got route to address %s for tap %s" % (ipv4, self.tap))
 
         for ipv6 in ipv6_intended:
             if ipv6 not in ipv6_routes:
                 log.info("Add route to IPv6 address %s for tap %s" % (ipv6, self.tap))
-                futils.add_route(futils.IPV6, ipv6, self.tap)
+                futils.add_route(futils.IPV6, ipv6, self.tap, self.mac)
             else:
                 log.debug("Already got route to address %s for tap %s" % (ipv4, self.tap))
 

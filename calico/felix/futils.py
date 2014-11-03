@@ -93,13 +93,13 @@ def list_routes(type, tap):
 
     return routes
 
-def add_route(type,ip,tap):
+def add_route(type,ip,tap,mac):
     """
     Add a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
     if type == IPV4:
-        subprocess.check_call(['arp', '-Ds', ip, tap, '-i', tap])
+        subprocess.check_call(['arp', '-s', ip, mac, '-i', tap])
         subprocess.check_call(["ip", "route", "add", ip, "dev", tap])
     else:
         subprocess.check_call(["ip", "-6", "route", "add", ip, "dev", tap])
