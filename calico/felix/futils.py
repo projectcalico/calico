@@ -60,8 +60,27 @@ IPV6 = "IPv6"
 
 # Load the conntrack tables. This is a workaround for this issue
 # https://github.com/ldx/python-iptables/issues/112
-iptc.Rule().create_match("conntrack")
-iptc.Rule6().create_match("conntrack")
+#
+# It forces all extensions to be loaded at start of day then stored so they
+# cannot be unloaded (and hence reloaded).
+global_rule  = iptc.Rule()
+global_rule6 = iptc.Rule6()
+global_rule.create_match("conntrack")
+global_rule6.create_match("conntrack")
+global_rule.create_match("tcp")
+global_rule6.create_match("tcp")
+global_rule6.create_match("icmp6")
+global_rule.create_match("udp")
+global_rule6.create_match("udp")
+global_rule.create_match("mac")
+global_rule6.create_match("mac")
+global_rule.create_match("physdev")
+global_rule6.create_match("physdev")
+
+# Attach some targets.
+global_rule.create_target("RETURN")
+global_rule6.create_target("RETURN")
+global_target = iptc.Target(global_rule, "DNAT")
 
 def tap_exists(tap):
     """
