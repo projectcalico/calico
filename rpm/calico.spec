@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.5
+Version:        0.6
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -224,7 +224,37 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Mon Oct 27 2014 Neil Jerram <nj@metaswitch.com> 0.4.1
+* Fri Nov 07 2014 Neil Jerram <nj@metaswitch.com> 0.6
+- Many fixes and enhancements to Felix (the new Calico agent)
+  - IP v6 support and minor bug fixes.
+  - Minor logging enhancement.
+  - Fix dull bug where we never left long enough for resync responses to return on a slow system, ignoring the config values.
+  - Many more updates. Apart from intermittent iptables issues, mostly working well. Next action is to fix those.
+  - Finally fix dull issue with python-iptables, state and IPv6.
+  - Add ep_retry code.
+  - Fix small bugette in handling of endpoint retry.
+  - Stop using "state" completely - "conntrack" seems more reliable.
+  - Fix up bug where we created IPv6 sets as IPv4, then crashed.
+  - GETACLUPDATE response may arrive before tap interface created; handle it.
+  - Speculative fix for problem with icmp ip6tables rules.
+  - Do not get confused during second resync and delete endpoints.
+  - Allow for the state of endpoints to be disabled.
+  - Subscribe to ACL heartbeats to avoid timing it out continuously.
+  - Minor cosmetic edits.
+  - More minor refactoring and code tidy up.
+  - Remove IPs from an endpoint when they are removed by the API. Also, some minor code tidies.
+  - Clean up logic when removing unused IPs.
+  - Fix up dull typo in IP removal code.
+  - Fix bug where tap address got wrong MAC address.
+  - Put in candidate workaround for looping in iptables configuration.
+- Packaging: calico-felix needs dependency on python-dev(el)
+- RPM packaging fixes
+  - Start and stop Calico services on install/uninstall
+  - Run Calico services as root, not as 'neutron'
+- ACL Manager fix
+  - ACL manager was sending a three part message for keepalives. Make it a two part message like the others.
+
+* Mon Oct 27 2014 Neil Jerram <nj@metaswitch.com> 0.5
 - New Calico architecture
 
 * Fri Sep 26 2014 Neil Jerram <nj@metaswitch.com> 0.4.1
