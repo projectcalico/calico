@@ -45,15 +45,15 @@ class Socket(object):
     ACL_TYPES = set((TYPE_ACL_REQ, TYPE_ACL_SUB))
     EP_TYPES = set((TYPE_EP_REQ, TYPE_EP_REP))
 
-    PORT = { TYPE_EP_REQ  : 9901,
-             TYPE_EP_REP  : 9902,
-             TYPE_ACL_REQ : 9905,
-             TYPE_ACL_SUB : 9906 }
+    PORT = {TYPE_EP_REQ:  9901,
+            TYPE_EP_REP:  9902,
+            TYPE_ACL_REQ: 9905,
+            TYPE_ACL_SUB: 9906}
 
-    ZTYPE = { TYPE_EP_REQ  : zmq.REQ,
-              TYPE_EP_REP  : zmq.REP,
-              TYPE_ACL_REQ : zmq.REQ,
-              TYPE_ACL_SUB : zmq.SUB }
+    ZTYPE = {TYPE_EP_REQ:  zmq.REQ,
+             TYPE_EP_REP:  zmq.REP,
+             TYPE_ACL_REQ: zmq.REQ,
+             TYPE_ACL_SUB: zmq.SUB}
 
     def __init__(self, type):
         self.type = type
@@ -72,7 +72,7 @@ class Socket(object):
         """
         Close this connection cleanly.
         """
-        if self._zmq != None:
+        if self._zmq is not None:
             self._zmq.close()
             self._zmq = None
 
@@ -89,7 +89,7 @@ class Socket(object):
         if self.type == Socket.TYPE_EP_REP:
             self._zmq.bind("tcp://*:%s" % self.port)
         else:
-            self._zmq.connect("tcp://%s:%s" % (self.remote_addr,self.port))
+            self._zmq.connect("tcp://%s:%s" % (self.remote_addr, self.port))
 
         if self.type == Socket.TYPE_ACL_SUB:
             self._zmq.setsockopt(zmq.IDENTITY, hostname)
@@ -104,10 +104,21 @@ class Socket(object):
         """
         log.info("Sent %s on socket %s" % (msg.descr, self.type))
         self.last_activity = int(time.time() * 1000)
-        self._zmq.send(msg.zmq_msg)
 
-        if self.type in Socket.REQUEST_TYPES:
-            self.request_outstanding = True
+        #*********************************************************************#
+        #* We never expect any type of socket that we use to block since we  *#
+        #* use only REQ or REP sockets - so if we get blocking then we       *#
+        #* consider that something is wrong, and let the exception take down *#
+        #* Felix.                                                            *#
+        #*********************************************************************#
+        try:
+            self._zmq.send(msg.zmq_msg, zmq.NOBLOCK)
+
+            if self.type in Socket.REQUEST_TYPES:
+                self.request_outstanding = True
+        except:
+            log.exception("Socket %s blocked on send", sock.type)
+            raise
 
     def receive(self):
         """
@@ -116,13 +127,24 @@ class Socket(object):
         """
         log.debug("Received something on %s", self.type)
 
-        if self.type != Socket.TYPE_ACL_SUB:
-            message = Message.parse_message(self._zmq.recv())
-        else:
-            uuid, fields = self._zmq.recv_multipart()
-            message = Message.parse_message(fields, uuid)
+        #*********************************************************************#
+        #* We never expect any type of socket that we use to block since we  *#
+        #* just polled to check - so if we get blocking then we consider     *#
+        #* that something is wrong, and let the exception take down Felix.   *#
+        #*********************************************************************#
+        try:
+            if self.type != Socket.TYPE_ACL_SUB:
+                data = self._zmq.recv(zmq.NOBLOCK)
+                uuid = None
+            else:
+                uuid, data = self._zmq.recv_multipart(zmq.NOBLOCK)
+        except:
+            log.exception("Socket %s blocked on receive", self.type)
+            raise
 
-        # Log the message.
+        message = Message.parse_message(data, uuid)
+
+        # Log that we received the message.
         log.info("Received %s on socket %s" % (message.descr, self.type))
 
         # If this is a response, we're no longer waiting for one.
@@ -134,35 +156,18 @@ class Socket(object):
         # A special case: heartbeat messages on the subscription interface are
         # swallowed; the application code has no use for them.
         if (self.type == Socket.TYPE_ACL_SUB and
-            message.type == Message.TYPE_HEARTBEAT):
-
+                message.type == Message.TYPE_HEARTBEAT):
             return None
 
         return message
 
-    @property
     def timed_out(self):
         """
-        Returns True if a socket has timed out for any reason.
-
-        The timeout criteria are:
-
-        - for a REQ socket, if a request has been outstanding for more than the
-          connection timeout;
-        - for a SUB or REP socket, if a heartbeat has not been received for
-          more than the connection timeout.
+        Returns True if the socket has been inactive for at least the timeout;
+        all sockets must have heartbeats on them.
         """
-        if self.type in Socket.REQUEST_TYPES:
-            return (self.request_outstanding and self._inactive_for(Config.CONN_TIMEOUT_MS))
-        else:
-            return self._inactive_for(Config.CONN_TIMEOUT_MS)
-
-    def _inactive_for(self, dur):
-        """
-        Returns True if the socket has been inactive for at least dur
-        milliseconds.
-        """
-        return (int(time.time() * 1000) - self.last_activity) > dur
+        return ((int(time.time() * 1000) - self.last_activity) >
+                Config.CONN_TIMEOUT_MS)
 
 
 class Message(object):
@@ -180,14 +185,16 @@ class Message(object):
         #: The type of the message.
         self.type = type
 
-        #: The description of the message, used for logging only. Default to type.
+        #: The description of the message, used for logging only.
         if type == Message.TYPE_RESYNC and 'resync_id' in fields:
             self.descr = "%s(%s)" % (type, fields['resync_id'])
         elif endpoint_id is not None:
             self.descr = "%s(%s)" % (type, endpoint_id)
         elif 'endpoint_id' in fields:
             self.descr = "%s(%s)" % (type, fields['endpoint_id'])
-        elif type in (Message.TYPE_EP_CR, Message.TYPE_EP_UP, Message.TYPE_EP_RM):
+        elif type in (Message.TYPE_EP_CR,
+                      Message.TYPE_EP_UP,
+                      Message.TYPE_EP_RM):
             self.descr = "%s response" % (type)
         else:
             self.descr = type
@@ -213,5 +220,5 @@ class Message(object):
         """Parse a received message."""
         data = json.loads(text)
         type = data.pop('type')
-        msg = cls(type, data,endpoint_id)
+        msg = cls(type, data, endpoint_id)
         return msg
