@@ -1,3 +1,11 @@
+calico (0.7) trusty; urgency=medium
+
+  * Update packaging to support source package creation and upload.
+    - Stop using python-pbr.
+    - Implement install steps in setup.py and debian/rules, instead of setup.cfg.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Tue, 11 Nov 2014 15:47:22 +0000
+
 calico (0.6.4) trusty; urgency=medium
 
   * Update version number in setup.cfg

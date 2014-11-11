@@ -5,3 +5,14 @@
 
 %:
 	dh $@  --with python2
+
+override_dh_install:
+	install -d debian/tmp/usr/etc/calico
+	install etc/*.cfg debian/tmp/usr/etc/calico
+	install -d debian/tmp/usr/etc/neutron
+	install etc/*.ini debian/tmp/usr/etc/neutron
+	install -d debian/tmp/usr/share/calico/bird
+	install etc/bird/*.template debian/tmp/usr/share/calico/bird
+	install -d debian/tmp/usr/bin
+	install -m 755 etc/*.sh debian/tmp/usr/bin
+	dh_install

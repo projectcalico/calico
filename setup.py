@@ -18,5 +18,14 @@
 import setuptools
 
 setuptools.setup(
-    setup_requires=['pbr'],
-    pbr=True)
+    name = "calico",
+    version = "0.7",
+    packages = setuptools.find_packages(),
+    entry_points = {
+        'console_scripts': [
+            'calico-acl-manager = calico.acl_manager.acl_manager:main',
+            'calico-felix = calico.felix.felix:main',
+            'neutron-calico-agent = calico.agent.calico_neutron_agent:main',
+        ]
+    },
+)
