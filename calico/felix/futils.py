@@ -726,7 +726,7 @@ def update_ipsets(type,
             if type == IPV4:
                 cidrs = ["0.0.0.0/1", "128.0.0.0/1"]
             else:
-                cidrs = ["0::/1", "8000::/1"]
+                cidrs = ["::/1", "8000::/1"]
         else:
             cidrs = [rule['cidr']]
 
