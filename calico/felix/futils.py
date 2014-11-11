@@ -683,16 +683,16 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
     subprocess.check_call(["ipset", "flush", tmp_ipset_port])
     subprocess.check_call(["ipset", "flush", tmp_ipset_addr])
 
-    update_ipsets(inbound, "inbound " + type,
+    update_ipsets(type, inbound,
                   to_ipset_addr, to_ipset_port,
                   tmp_ipset_addr, tmp_ipset_port)
-    update_ipsets(outbound, "outbound " + type,
+    update_ipsets(type, outbound,
                   from_ipset_addr, from_ipset_port,
                   tmp_ipset_addr, tmp_ipset_port)
 
 
-def update_ipsets(rule_list,
-                  description,
+def update_ipsets(type,
+                  rule_list,
                   ipset_addr,
                   ipset_port,
                   tmp_ipset_addr,
@@ -715,19 +715,34 @@ def update_ipsets(rule_list,
         #*   10.11.1.0/24                                                    *#
         #*   10.11.1.0/24,tcp                                                *#
         #*   10.11.1.0/24,80                                                 *#
+        #*                                                                   *#
         #*********************************************************************#
-        if rule['port'] is not None:
-            value = "%s,%s:%s" % (rule['cidr'], rule['protocol'], rule['port'])
-            subprocess.check_call(
-                ["ipset", "add", tmp_ipset_port, value, "-exist"])
-        elif rule['protocol'] is not None:
-            value = "%s,%s:0" % (rule['cidr'], rule['protocol'])
-            subprocess.check_call(
-                ["ipset", "add", tmp_ipset_port, value, "-exist"])
+        if rule['cidr'].endswith("/0"):
+            #*****************************************************************#
+            #* We have to handle any CIDR with a "/0" specially, since we    *#
+            #* split it into two ipsets entries; ipsets cannot have zero     *#
+            #* CIDR length in bits.                                          *#
+            #*****************************************************************#
+            if type == IPV4:
+                cidrs = ["0.0.0.0/1", "255.0.0.0/1"]
+            else:
+                cidrs = ["0::/1", "ffff::/1"]
         else:
-            value = rule['cidr']
-            subprocess.check_call(
-                ["ipset", "add", tmp_ipset_addr, value, "-exist"])
+            cidrs = [rule['cidr']]
+
+        for cidr in cidrs:
+            if rule['port'] is not None:
+                value = "%s,%s:%s" % (cidr, rule['protocol'], rule['port'])
+                ipset = tmp_ipset_port
+            elif rule['protocol'] is not None:
+                value = "%s,%s:0" % (cidr, rule['protocol'])
+                ipset = tmp_ipset_port
+            else:
+                value = cidr
+                ipset = tmp_ipset_addr
+
+            subprocess.check_call(["ipset", "add", ipset, value, "-exist"])
+
 
     # Now that we have filled the tmp ipset, swap it with the real one.
     subprocess.check_call(["ipset", "swap", tmp_ipset_addr, ipset_addr])
