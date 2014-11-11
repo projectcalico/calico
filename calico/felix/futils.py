@@ -393,7 +393,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     rule = get_rule(type)
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
-    match.match_set = [to_ipset_port, "src"]
+    match.match_set = [to_ipset_port, "src,dst"]
     rule.add_match(match)
     insert_rule(rule, to_chain, index)
     index += 1
@@ -462,7 +462,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     rule = get_rule(type)
     rule.create_target("DROP")
     match = iptc.Match(rule, "set")
-    match.match_set = [from_ipset_port, "dst"]
+    match.match_set = [from_ipset_port, "dst,dst"]
     rule.add_match(match)
     insert_rule(rule, from_chain, index)
     index += 1
