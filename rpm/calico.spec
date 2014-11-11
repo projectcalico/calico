@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.6
+Version:        0.7
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -167,9 +167,6 @@ install -d -m 755 %{buildroot}%{_datadir}/calico
 install -d -m 755 %{buildroot}%{_initrddir}
 install -d -m 755 %{buildroot}%{_sysconfdir}
 
-# Move /usr/etc/* to /etc/*
-mv %{buildroot}/usr/etc/* %{buildroot}%{_sysconfdir}/
-
 # Install sysv init scripts
 install -p -D -m 755 %{SOURCE15} %{buildroot}%{_initrddir}/calico-compute
 install -p -D -m 755 %{SOURCE35} %{buildroot}%{_initrddir}/calico-felix
@@ -179,6 +176,16 @@ install -p -D -m 755 %{SOURCE55} %{buildroot}%{_initrddir}/calico-acl-manager
 install -p -m 644 %{SOURCE25} %{buildroot}%{_datadir}/calico/
 install -p -m 644 %{SOURCE45} %{buildroot}%{_datadir}/calico/
 install -p -m 644 %{SOURCE65} %{buildroot}%{_datadir}/calico/
+
+# Install config and other non-Python files
+install -d %{buildroot}%{_sysconfdir}/calico
+install etc/*.cfg %{buildroot}%{_sysconfdir}/calico
+install -d %{buildroot}%{_sysconfdir}/neutron
+install etc/*.ini %{buildroot}%{_sysconfdir}/neutron
+install -d %{buildroot}%{_datadir}/calico/bird
+install etc/bird/*.template %{buildroot}%{_datadir}/calico/bird
+install -d %{buildroot}%{_bindir}
+install -m 755 etc/*.sh %{buildroot}%{_bindir}
 
 
 %clean
@@ -224,6 +231,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Nov 11 2014 Neil Jerram <nj@metaswitch.com> 0.7
+- Update packaging to support source package creation and upload.
+  - Implement install steps in setup.py and debian/rules, instead of setup.cfg.
+
 * Fri Nov 07 2014 Neil Jerram <nj@metaswitch.com> 0.6
 - Many fixes and enhancements to Felix (the new Calico agent)
   - IP v6 support and minor bug fixes.
