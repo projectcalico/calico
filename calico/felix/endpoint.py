@@ -94,24 +94,19 @@ class Endpoint(object):
         futils.del_rules(self.suffix, futils.IPV6)
 
     def program_endpoint(self):
-        # Given an endpoint, make the programmed state match the desired state.
-        #
-        # Note that if acl_data is none, the ACLs are "do not allow any traffic
-        # except DHCP".
-        #
-        # Returns True if the endpoint needs to be retried.
-        if (not futils.tap_exists(self.tap) and
-                self.state == Endpoint.STATE_ENABLED):
-            log.error("Unable to configure non-existent interface %s" %
-                      self.tap)
-            return True
-        elif not futils.tap_exists(self.tap):
-            # No tap interface, but disabled. This is not an error, and there
-            # is nothing to do.
-            log.debug("Tap interface missing when disabling endpoint %s" %
-                      self.uuid)
-            return False
-
+        """
+        Given an endpoint, make the programmed state match the desired state,
+        setting up rules and creating chains and ipsets, but not putting
+        content into the ipsets.
+        
+        Note that if acl_data is none, we have not received any ACLs, and so
+        we just leave the ACLs in place until we do. If there are none because
+        this is a new endpoint, then we leave the endpoint with all routing
+        disabled until we know better.
+        
+        Returns True if the endpoint needs to be retried (because the tap
+        interface does not exist yet).
+        """
         if not futils.tap_exists(self.tap):
             if self.state == Endpoint.STATE_ENABLED:
                 log.error("Unable to configure non-existent interface %s" %
