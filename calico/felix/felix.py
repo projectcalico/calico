@@ -16,7 +16,7 @@
 felix.felix
 ~~~~~~~~~~~
 
-The main logic for Felix, including the Felix Agent.
+The main logic for Felix.
 """
 import collections
 import logging
@@ -44,28 +44,27 @@ RC_SUCCESS  = "SUCCESS"
 RC_INVALID  = "INVALID"
 RC_NOTEXIST = "NOTEXIST"
 
+
 class FelixAgent(object):
     """
     A single Felix agent for a Calico network.
 
     The Felix agent is responsible for communicating with the other components
     in a Calico network, using information passed to it to program the
-    networking state on an individual compute host. Felix is primarily
-    responsible programming network state for virtual machines running on a
-    Linux host.
+    networking state for a set of endpoints; for example for a set of virtual
+    machines or containers on an individual compute host.
     """
     def __init__(self):
-        #: The ZeroMQ context for this Felix.
+        # The ZeroMQ context for this Felix.
         self.zmq_context = zmq.Context()
 
-        #: The hostname of the machine on which this Felix is running.
+        # The hostname of the machine on which this Felix is running.
         self.hostname = socket.gethostname()
 
-        #: All the felix sockets owned by this Felix, keyed off their socket
-        #: type.
+        # The sockets owned by this Felix, keyed off their socket type.
         self.sockets = {}
 
-        #: All the endpoints managed by this Felix, keyed off their UUID.
+        # The endpoints managed by this Felix, keyed off their UUID.
         self.endpoints = {}
 
         # Set of UUIDs of endpoints that need to be retried (the tap interface
@@ -73,9 +72,28 @@ class FelixAgent(object):
         self.ep_retry = set()
 
         # Properties for handling resynchronization.
+        #
+        # resync_id is a UUID for the resync, passed on the API. It ensures
+        # that we can correlate ENDPOINTCREATED requests with resyncs. If this
+        # field is None, then no resync is in progress, and neither resync_recd
+        # nor resync_expected is meaningful.
         self.resync_id = None
+
+        # resync_recd counts all of the ENDPOINTCREATED requests received for
+        # this resync, so we know when they have all arrived.
         self.resync_recd = None
+
+        # resync_expected is the number of ENDPOINTCREATED requests that are
+        # going to be sent for this resync, as reported in the resync
+        # response. This is None if that response has not yet been received.
         self.resync_expected = None
+
+        # resync_time is always defined once the first resync has been sent. It
+        # is the time, in integer milliseconds since the epoch, of the sending
+        # of the last resync. This is used to detect when it is time for
+        # another resync.  Note that integers in python automatically convert
+        # from 32 to 64 bits when they are too large, and so we do not have to
+        # worry about overflowing for many thousands of years yet.
         self.resync_time = None
 
         # Build a dispatch table for handling various messages.
@@ -151,8 +169,10 @@ class FelixAgent(object):
         """
         self.resync_id       = str(uuid.uuid4())
         self.resync_recd     = 0
-        self.resync_expected = 0
+        self.resync_expected = None
+
         log.info("Do total resync - ID : %s" % self.resync_id)
+
         # Mark all the endpoints as expecting to be resynchronized.
         for ep in self.endpoints.values():
             ep.pending_resync = True
@@ -183,8 +203,6 @@ class FelixAgent(object):
         self.acl_queue.clear()
 
         for endpoint_id, endpoint in self.endpoints.iteritems():
-            endpoint.need_acls = True
-
             fields = {
                 'endpoint_id': endpoint_id,
                 'issued': time.time() * 1000,
@@ -202,26 +220,34 @@ class FelixAgent(object):
         self.resync_id       = None
         self.resync_recd     = None
         self.resync_expected = None
-        self.resync_time     = time.time() * 1000
+        self.resync_time     = int(time.time() * 1000)
 
         if successful:
-            for ep in self.endpoints.values():
+            for uuid in self.endpoints.keys():
+                ep = self.endpoints[uuid]
                 if ep.pending_resync:
-                    log.info("Remove endpoint %s that is no longer being managed" % ep.uuid)
+                    log.info(
+                        "Remove endpoint %s that is no longer being managed" %
+                        ep.uuid)
                     ep.remove()
+                    del self.endpoints[ep]
 
-        # Now remove rules for any endpoints that should no longer exist. This
-        # method returns a set of endpoint suffices.
-        known_ids = { ep.suffix for ep in self.endpoints.values() }
+        #*********************************************************************#
+        #* Now remove rules for any endpoints that should no longer          *#
+        #* exist. This method returns a set of endpoint suffices.            *#
+        #*********************************************************************#
+        known_ids = {ep.suffix for ep in self.endpoints.values()}
 
-        for type in [ futils.IPV4, futils.IPV6 ]:
+        for type in [futils.IPV4, futils.IPV6]:
             rule_ids  = futils.list_eps_with_rules(type)
 
-            for id in [ id for id in rule_ids if id not in known_ids ]:
-                # Found rules which we own for an endpoint which does not
-                # exist.  Remove those rules.
-                log.warning("Removing %s rules for removed object %s" % (type, id))
-                futils.del_rules(id, type)
+            for id in rule_ids:
+                if id not in known_ids:
+                    # Found rules which we own for an endpoint which does not
+                    # exist.  Remove those rules.
+                    log.warning("Removing %s rules for removed object %s" %
+                                (type, id))
+                    futils.del_rules(id, type)
 
     def handle_endpointcreated(self, message):
         """
@@ -266,15 +292,30 @@ class FelixAgent(object):
                 "rc": RC_INVALID,
                 "message": error.value,
             }
-            
+
         # Now we send the response.
         sock = self.sockets[Socket.TYPE_EP_REP]
         sock.send(Message(Message.TYPE_EP_CR, fields))
 
-        # Finally, if this was part of our current resync then increment the
-        # count of received resyncs. If we know how many are coming and this is
-        # the last one, complete the resync.
-        resync_in_progress = (resync_id and resync_id == self.resync_id)
+        #*********************************************************************#
+        #* Finally, if this was part of our current resync then increment    *#
+        #* the count of received resyncs. If we know how many are coming and *#
+        #* this is the last one, complete the resync.                        *#
+        #*********************************************************************#
+        resync_in_progress = False
+        if resync_id:
+            if resync_id == self.resync_id:
+                resync_in_progress = True
+            else:
+                #*************************************************************#
+                #* We just got an ENDPOINTCREATED for the wrong resync. This *#
+                #* can happen (perhaps we restarted during a resync and are  *#
+                #* seeing messages from that old resync).  Log it though,    *#
+                #* since this is very unusual and strange.                   *#
+                #*************************************************************#
+                log.warning(
+                    "Received ENDPOINTCREATED for %s for invalid resync %s" %
+                    (endpoint_id, resync_id))
 
         if resync_in_progress:
             self.resync_recd += 1
@@ -326,7 +367,7 @@ class FelixAgent(object):
                 "rc": RC_INVALID,
                 "message": error.value,
             }
-            
+
         # Now we send the response.
         sock = self.sockets[Socket.TYPE_EP_REP]
         sock.send(Message(Message.TYPE_EP_UP, fields))
@@ -393,7 +434,9 @@ class FelixAgent(object):
         return_str = message.fields['message']
 
         if return_code != RC_SUCCESS:
-            log.error('Resync request refused with rc : %s, %s', return_code, return_str)
+            log.error('Resync request refused with rc : %s, %s',
+                      return_code,
+                      return_str)
             self.complete_endpoint_resync(False)
             return
 
@@ -419,7 +462,14 @@ class FelixAgent(object):
         return_str = message.fields['message']
 
         if return_code != RC_SUCCESS:
-            log.error("ACL state request refused with rc : %s, %s", return_code, return_str)
+            #*****************************************************************#
+            #* It's hard to see what errors we might get other than a timing *#
+            #* window one of "never heard of that endpoint". We just log it  *#
+            #* and continue onwards.                                         *#
+            #*****************************************************************#
+            log.error("ACL state request refused with rc : %s, %s",
+                      return_code,
+                      return_str)
 
         return
 
@@ -430,16 +480,16 @@ class FelixAgent(object):
         This provides the ACL state to the endpoint in question.
         """
         log.debug("Received ACL update message for %s: %s" %
-                  (message.endpoint_id,message.fields))
+                  (message.endpoint_id, message.fields))
 
         endpoint_id = message.endpoint_id
         endpoint = self.endpoints[endpoint_id]
 
-        endpoint.need_acls = False
         endpoint.acl_data  = message.fields['acls']
 
         if endpoint.uuid in self.ep_retry:
-            log.debug("Holding ACLs for endpoint %s that is pending retry" % endpoint.suffix)
+            log.debug("Holding ACLs for endpoint %s that is pending retry" %
+                      endpoint.suffix)
         else:
             endpoint.update_acls()
 
@@ -450,6 +500,9 @@ class FelixAgent(object):
         Creates an endpoint after having been informed about it over the API.
         Does the state programming required to get future updates for this
         endpoint, and issues a request for its ACL state.
+
+        This routine must only be called if the endpoint is not already known
+        to Felix.
         """
 
         log.debug("Create endpoint %s" % endpoint_id)
@@ -479,23 +532,35 @@ class FelixAgent(object):
         """
         Updates an endpoint's data.
         """
-        mac   = fields['mac'].encode('ascii')
-        state = fields['state'].encode('ascii')
-
+        mac   = fields.get('mac')
+        state = fields.get('state')
         addresses = set()
-        for addr in fields.get('addrs',None):
-            addresses.add(Address(addr))
+        try:
+            for addr in fields.get('addrs', None):
+                addresses.add(Address(addr))
+        except KeyError:
+            log.error("Missing addrs or IP in addrs for endpoint %s, data %s",
+                      self.uuid, fields)
+            raise InvalidRequest("No valid address for endpoint %s")
+
+        if mac is None:
+            log.error("No mac address for endpoint %s")
+            raise InvalidRequest("No mac address for endpoint %s")
+
+        if state is None:
+            log.error("No state for endpoint %s")
+            raise InvalidRequest("No state for endpoint %s")
+
+        if state not in Endpoint.STATES:
+            log.error("Invalid state %s for endpoint %s : %s" %
+                      (state, endpoint.uuid))
+            raise InvalidRequest("Invalid state %s for endpoint %s" %
+                                 (state, endpoint.uuid))
+
         endpoint.addresses = addresses
 
-        endpoint.mac   = mac
-        if state in Endpoint.STATES:
-            endpoint.state = state
-        else:
-            # Invalid state. For now, we assume that the endpoint is disabled,
-            # even it it was not before.
-            log.error("Invalid state for endpoint %s : %s" % (endpoint.uuid, state))
-            endpoint.state = ENDPOINT.DISABLED
-            raise InvalidRequest("Invalid state for endpoint %s" % state)
+        endpoint.mac   = mac.encode('ascii')
+        endpoint.state = state.encode('ascii')
 
         # Program the endpoint - i.e. set things up for it.
         log.debug("Program %s" % endpoint.suffix)
@@ -505,33 +570,18 @@ class FelixAgent(object):
 
         return
 
-    def read_programmed_state(self):
-        """This function reads the programmed state, figuring out which endpoints and rules
-        exist (as opposed to which endpoints and rules Felix has been told to make exist.
-        """
-        futils.set_global_rules()
-
-    def initialise(self):
-        """
-        Initialise agent structures
-        """
-        # Read the programmed state, i.e. what rules are there.
-        self.read_programmed_state()
-
     def run(self):
         """
         Executes the main agent loop.
         """
-        self.initialise()
-
         while True:
-            # Issue a poll request on all active sockets
+            # Issue a poll request on all active sockets.
             endpoint_resync_needed = False
             acl_resync_needed = False
 
             lPoller = zmq.Poller()
             for sock in self.sockets.values():
-                # Easiest just to poll on all sockets, even if we expect no activity
+                # Easier just to poll all sockets, even if we expect nothing.
                 lPoller.register(sock._zmq, zmq.POLLIN)
 
             polled_sockets = dict(lPoller.poll(Config.EP_RETRY_INT_MS))
@@ -555,14 +605,20 @@ class FelixAgent(object):
                 # whether any have timed out.
                 # A timed out socket needs to be reconnected. Also, whatever
                 # API it belongs to needs to be resynchronised.
-                if sock.timed_out:
+                if sock.timed_out():
                     log.warning("Socket %s timed out", sock.type)
                     sock.close()
-                    sock.communicate(self.hostname, self.zmq_context)
 
-                    if sock.type in Socket.EP_TYPES:
+                    #*********************************************************#
+                    #* If we lost the connection on which we would receive   *#
+                    #* ENDPOINTCREATED messages, we need to trigger a total  *#
+                    #* endpoint resync, and similarly for ACLs if we have    *#
+                    #* lost the connection on which we would receive         *#
+                    #* ACLUPDATE messages.                                   *#
+                    #*********************************************************#
+                    if sock.type == Socket.TYPE_EP_REP:
                         endpoint_resync_needed = True
-                    else:
+                    elif sock.type == Socket.TYPE_ACL_SUB:
                         acl_resync_needed = True
 
                     # Flush the message queue.
@@ -571,13 +627,15 @@ class FelixAgent(object):
                     elif sock.type == Socket.TYPE_ACL_REQ:
                         self.acl_queue.clear()
 
+                    # Finally, recreate the socket.
+                    sock.communicate(self.hostname, self.zmq_context)
+
             # If we have any queued messages to send, we should do so.
             endpoint_socket = self.sockets[Socket.TYPE_EP_REQ]
             acl_socket = self.sockets[Socket.TYPE_ACL_REQ]
 
             if (len(self.endpoint_queue) and
-                not endpoint_socket.request_outstanding):
-
+                    not endpoint_socket.request_outstanding):
                 message = self.endpoint_queue.pop()
                 endpoint_socket.send(message)
 
@@ -586,21 +644,29 @@ class FelixAgent(object):
                 acl_socket.send(message)
 
             # Now, check if we need to resynchronize and do it.
-            if self.resync_id == None and (time.time() - self.resync_time > Config.RESYNC_INT_SEC):
+            if (self.resync_id is None and
+                    (time.time() - self.resync_time > Config.RESYNC_INT_SEC)):
                 # Time for a total resync of all endpoints
                 endpoint_resync_needed = True
 
             if endpoint_resync_needed:
                 self.resync_endpoints()
             elif acl_resync_needed:
-                # Note that an endpoint resync implicitly involves an ACL
-                # resync, so there is no point in triggering one when an
-                # endpoint resync has just started (as opposed to when we are
-                # in the middle of an endpoint resync and just lost our
-                # connection).
+                #*************************************************************#
+                #* Note that an endpoint resync implicitly involves an ACL   *#
+                #* resync, so there is no point in triggering one when an    *#
+                #* endpoint resync has just started (as opposed to when we   *#
+                #* are in the middle of an endpoint resync and just lost our *#
+                #* connection).                                              *#
+                #*************************************************************#
                 self.resync_acls()
 
-            # Finally, retry any endpoints which need retrying.
+            #*****************************************************************#
+            #* Finally, retry any endpoints which need retrying. We remove   *#
+            #* them from ep_retry if they no longer exist or if the retry    *#
+            #* succeeds; the simplest way to do this is to copy the list,    *#
+            #* clear ep_retry then add them back if necessary.               *#
+            #*****************************************************************#
             retry_list = list(self.ep_retry)
             self.ep_retry.clear()
             for uuid in retry_list:
@@ -611,26 +677,34 @@ class FelixAgent(object):
                         # Failed again - put back on list
                         self.ep_retry.add(uuid)
                     else:
-                        # Programmed OK, so we should apply any ACLs we might have.
+                        # Programmed OK, so apply any ACLs we might have.
                         endpoint.update_acls()
                 else:
-                    log.debug("No retry programming %s - no longer exists" % uuid)
+                    log.debug("No retry programming %s - no longer exists" %
+                              uuid)
+
 
 def initialise_logging():
     """
-    Sets up the full logging configuration. This applies to the felix log and
-    hence to all children.
+    Sets up the full logging configuration. This is applied to a top level
+    (above this package) and hence to all the loggers for packages which are
+    peers of this package.
     """
-    # Here we want to set fields in the logger of the parent, so remove the
-    # last dot and all after it from __name__.
+    #*************************************************************************#
+    #* Here we want to set fields in the logger of the parent, so remove the *#
+    #* last dot and all after it from __name__.                              *#
+    #*************************************************************************#
     name = __name__
     log  = logging.getLogger(name[:name.rfind(".")])
 
     log.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
     common.mkdir_p(os.path.dirname(Config.LOGFILE))
-    handler = logging.handlers.TimedRotatingFileHandler(Config.LOGFILE, when='D', backupCount=10)
+    handler = logging.handlers.TimedRotatingFileHandler(Config.LOGFILE,
+                                                        when='D',
+                                                        backupCount=10)
     handler.setLevel(Config.LOGLEVFILE)
     handler.setFormatter(formatter)
     log.addHandler(handler)
@@ -644,10 +718,6 @@ def initialise_logging():
     handler.setFormatter(formatter)
     log.addHandler(handler)
 
-def set_global_state():
-    """This function sets up global state, such as IP forwarding or global IP tables.
-    CB2: not terribly well defined yet, but might be worth you doing some of this.
-    """
 
 def main():
     try:
@@ -655,25 +725,24 @@ def main():
         initialise_logging()
 
         # We have restarted - tell the world.
-        log.error("Felix started")
+        log.error("Felix starting")
 
-        # Read and set up global state
-        set_global_state()
+        # Set up the global rules.
+        futils.set_global_rules()
 
         # Create an instance of the Felix agent and start it running.
         agent = FelixAgent()
         agent.run()
-    except:
-        e = sys.exc_info()[0]
-        log.exception(e)
 
+    except:
+        log.exception("Felix exiting after uncaught exception")
 
 if __name__ == "__main__":
     main()
+
 
 class InvalidRequest(Exception):
     """
     Exception that allows us to report an invalid request.
     """
     pass
-
