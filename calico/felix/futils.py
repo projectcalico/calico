@@ -342,11 +342,12 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     to_chain = create_chain(table, to_chain_name)
 
     #*************************************************************************#
-    #* Put rules into that chain. Note that we never ACCEPT, but always      *#
-    #* RETURN if we want to accept this packet. This is because the rules    *#
-    #* here are for this endpoint only - we cannot (for example) ACCEPT a    *#
-    #* packet which would be rejected by the rules for another endpoint on   *#
-    #* the same host to which it is addressed.                               *#
+    #* Put rules into that "to" chain, i.e. the chain traversed by outbound  *#
+    #* packets. Note that we never ACCEPT, but always RETURN if we want to   *#
+    #* accept this packet. This is because the rules here are for this       *#
+    #* endpoint only - we cannot (for example) ACCEPT a packet which would   *#
+    #* be rejected by the rules for another endpoint on the same host to     *#
+    #* which it is addressed.                                                *#
     #*************************************************************************#
     index = 0
 
@@ -389,7 +390,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, to_chain, index)
     index += 1
 
-    # "Return anything whose sources matches this ipset" (for two ipsets)
+    # "Return anything whose source matches this ipset" (for two ipsets)
     rule = get_rule(type)
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
@@ -410,6 +411,10 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     rule = get_rule(type)
     rule.create_target("DROP")
     insert_rule(rule, to_chain, index)
+    index += 1
+
+    # Delete from the end of the chain.
+    truncate_rules(to_chain, index)
 
     #*************************************************************************#
     #* Now the chain that manages packets from the interface, and the rules  *#
@@ -458,27 +463,10 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         insert_rule(rule, from_chain, index)
         index += 1
 
-    # "Drop packets whose destination matches the supplied ipset."
-    rule = get_rule(type)
-    rule.create_target("DROP")
-    match = iptc.Match(rule, "set")
-    match.match_set = [from_ipset_port, "dst,dst"]
-    rule.add_match(match)
-    insert_rule(rule, from_chain, index)
-    index += 1
-
-    rule = get_rule(type)
-    rule.create_target("DROP")
-    match = iptc.Match(rule, "set")
-    match.match_set = [from_ipset_addr, "dst"]
-    rule.add_match(match)
-    insert_rule(rule, from_chain, index)
-    index += 1
-
     #*************************************************************************#
-    #* Now allow through packets from the correct MAC and IP address. There  *#
-    #* may be rules here from addresses that this endpoint no longer has -   *#
-    #* in which case we must remove them.                                    *#
+    #* Now only allow through packets from the correct MAC and IP            *#
+    #* address. There may be rules here from addresses that this endpoint no *#
+    #* longer has - in which case we must remove them.                       *#
     #*                                                                       *#
     #* This code is rather ugly - better to turn off table autocommit, but   *#
     #* as commented elsewhere, that appears buggy.                           *#
@@ -501,20 +489,56 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
                 done = False
                 break
 
+    #*************************************************************************#
+    #* We are now adding the rules for each IP address that this endpoint    *#
+    #* has, to enforce that it cannot use IPs it does not own. We do this by *#
+    #* first setting a mark if it matches any of the IPs, then dropping the  *#
+    #* packets if that mark is not set.                                      *#
+    #*************************************************************************#
     for ip in localips:
         rule = get_rule(type)
-        rule.create_target("RETURN")
-        rule.src         = ip
-        match            = iptc.Match(rule, "mac")
+        target = iptc.Target(rule, "MARK")
+        target.set_mark = "1"
+        rule.target = target
+        rule.src = ip
+        match = iptc.Match(rule, "mac")
         match.mac_source = mac
         rule.add_match(match)
         insert_rule(rule, from_chain, index)
         index += 1
 
+    rule = get_rule(type)
+    rule.create_target("DROP")
+    match = rule.create_match("mark")
+    match.mark = "!1"
+    insert_rule(rule, from_chain, index)
+    index += 1
+  
+    # "Permit packets whose destination matches the supplied ipset."
+    rule = get_rule(type)
+    rule.create_target("RETURN")
+    match = iptc.Match(rule, "set")
+    match.match_set = [from_ipset_port, "dst,dst"]
+    rule.add_match(match)
+    insert_rule(rule, from_chain, index)
+    index += 1
+
+    rule = get_rule(type)
+    rule.create_target("RETURN")
+    match = iptc.Match(rule, "set")
+    match.match_set = [from_ipset_addr, "dst"]
+    rule.add_match(match)
+    insert_rule(rule, from_chain, index)
+    index += 1
+
     # Last rule (at end) says drop unconditionally.
     rule = get_rule(type)
     rule.create_target("DROP")
-    insert_rule(rule, from_chain, RULE_POSN_LAST)
+    insert_rule(rule, from_chain, index)
+    index += 1
+
+    # Delete from the end of the chain.
+    truncate_rules(to_chain, index)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
@@ -549,13 +573,11 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         log.debug("%s rules for interface %s do not already exist" %
                   (type, iface))
         chain = create_chain(table, CHAIN_INPUT)
-        rule  = get_rule(type)
-        target        = iptc.Target(rule, from_chain_name)
-        rule.target   = target
-        match = iptc.Match(rule, "physdev")
-        match.physdev_in = iface
-        match.physdev_is_bridged = ""
-        rule.add_match(match)
+
+        rule              = get_rule(type)
+        target            = iptc.Target(rule, from_chain_name)
+        rule.target       = target
+        rule.in_interface = iface
         insert_rule(rule, chain, RULE_POSN_LAST)
 
         #*********************************************************************#
@@ -564,28 +586,17 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         #* "to" or "from" chains as appropriate.                             *#
         #*********************************************************************#
         chain = create_chain(table, CHAIN_FORWARD)
-        rule  = get_rule(type)
-        target        = iptc.Target(rule, from_chain_name)
-        rule.target   = target
-        match = iptc.Match(rule, "physdev")
-        match.physdev_in = iface
-        match.physdev_is_bridged = ""
-        rule.add_match(match)
-        insert_rule(rule, chain, RULE_POSN_LAST)
-
-        rule          = get_rule(type)
-        target        = iptc.Target(rule, to_chain_name)
-        rule.target   = target
-        match = iptc.Match(rule, "physdev")
-        match.physdev_out = iface
-        match.physdev_is_bridged = ""
-        rule.add_match(match)
-        insert_rule(rule, chain, RULE_POSN_LAST)
 
         rule               = get_rule(type)
-        target             = iptc.Target(rule, to_chain_name)
+        target             = iptc.Target(rule, from_chain_name)
         rule.target        = target
         rule.out_interface = iface
+        insert_rule(rule, chain, RULE_POSN_LAST)
+
+        rule              = get_rule(type)
+        target            = iptc.Target(rule, to_chain_name)
+        rule.target       = target
+        rule.in_interface = iface
         insert_rule(rule, chain, RULE_POSN_LAST)
 
 
@@ -675,6 +686,17 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
         tmp_ipset_port  = IPSET6_TMP_PORT
         tmp_ipset_addr  = IPSET6_TMP_ADDR
         family          = "inet6"
+
+    if in_default != "deny" or out_default != "deny":
+        #*********************************************************************#
+        #* Only default deny rules are implemented. When we implement        *#
+        #* default accept rules, it will be necessary for                    *#
+        #* set_ep_specific_rules to at least know what the default policy    *#
+        #* is. That implies that set_ep_specific_rules probably ought to be  *#
+        #* moved to be called here rather than where it is now. This issue   *#
+        #* is covered by https://github.com/Metaswitch/calico/issues/39      *#
+        #*********************************************************************#
+        log.critical("Only default deny rules are implemented")
 
     # Verify that the tmp ipsets exist and are empty.
     create_ipset(tmp_ipset_port, "hash:net,port", family)
@@ -832,3 +854,17 @@ def create_chain(table, name):
         chain = iptc.Chain(table, name)
 
     return chain
+
+
+def truncate_rules(chain, count):
+    """
+    This is a utility function to remove any excess rules from a chain. After
+    we have carefully inserted all the rules we want at the start, we want to
+    get rid of any legacy rules from the end.
+
+    It takes a chain object, and a count for how many of the rules should be
+    left in place.
+    """
+    while len(chain.rules) > count:
+        rule = chain.rules[-1]
+        chain.delete_rule(rule)
