@@ -97,13 +97,21 @@ class Endpoint(object):
         """
         Given an endpoint, make the programmed state match the desired state,
         setting up rules and creating chains and ipsets, but not putting
-        content into the ipsets.
-        
+        content into the ipsets (leaving that for futils.update_acls).
+    
         Note that if acl_data is none, we have not received any ACLs, and so
         we just leave the ACLs in place until we do. If there are none because
         this is a new endpoint, then we leave the endpoint with all routing
         disabled until we know better.
-        
+
+        The logic here is that we should create the routes and basic rules, but
+        not the ACLs - leaving the ACLs as they were or with no access
+        permitted if none. That is because we have the information for the
+        former (routes and IP addresses for the endpoint) but not the latter
+        (ACLs). However this split only makes sense at the point where the ACLs
+        must have a default rule of "deny", so when issue39 is fully resolved
+        this method should only be called when the ACLs are available too.
+       
         Returns True if the endpoint needs to be retried (because the tap
         interface does not exist yet).
         """

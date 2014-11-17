@@ -413,7 +413,10 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, to_chain, index)
     index += 1
 
-    # Delete from the end of the chain.
+    #*************************************************************************#
+    #* Delete all rules from here to the end of the chain, in case there     *#
+    #* were rules present which should not have been.                        *#
+    #*************************************************************************#
     truncate_rules(to_chain, index)
 
     #*************************************************************************#
@@ -537,8 +540,11 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, from_chain, index)
     index += 1
 
-    # Delete from the end of the chain.
-    truncate_rules(to_chain, index)
+    #*************************************************************************#
+    #* Delete all rules from here to the end of the chain, in case there     *#
+    #* were rules present which should not have been.                        *#
+    #*************************************************************************#
+    truncate_rules(from_chain, index)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
