@@ -553,7 +553,7 @@ class FelixAgent(object):
 
         if state not in Endpoint.STATES:
             log.error("Invalid state %s for endpoint %s : %s" %
-                      (state, endpoint.uuid))
+                      (state, endpoint.uuid, state))
             raise InvalidRequest("Invalid state %s for endpoint %s" %
                                  (state, endpoint.uuid))
 
