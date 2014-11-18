@@ -41,10 +41,33 @@ CHAIN_TO_PREFIX          = "felix-to-"
 CHAIN_FROM_PREFIX        = "felix-from-"
 
 #*****************************************************************************#
-#* ipset names. An ipset can either have a port and protocol or not - it     *#
-#* cannot have a mix of members with and without them. The "to" ipsets are   *#
-#* referenced from the "to" chains, and the "from" ipsets from the "from"    *#
-#* chains.                                                                   *#
+#* ipset names. The "to" ipsets are referenced from the "to" chains, and the *#
+#* "from" ipsets from the "from" chains. There are separate ipsets for IPv4  *#
+#* and IPv6, and as explained below, three in each of these categories for a *#
+#* total of 12 ipsets.                                                       *#
+#*                                                                           *#
+#* The three types of ipsets are as follows. Note that an ipset can either   *#
+#* have a port and protocol or not - it cannot have a mix of members with    *#
+#* and without them.                                                         *#
+#*                                                                           *#
+#* - The "addr" ipsets contain just a CIDR. These are for rules such as      *#
+#*   "allow all traffic from this network" (all ports and protocols).        *#
+#*                                                                           *#
+#* - The "port" ipsets contain a CIDR / protocol / port triple, and allow    *#
+#*   matching such as the following examples.                                *#
+#*   - outbound UDP to 1.2.3.4/32:0 (port 0, i.e. any port)                  *#
+#*   - inbound TCP on port 80 from 0.0.0.0/0                                 *#
+#*   - outbound ICMP with type 1, code 2 to 10.0.0.0/8                       *#
+#*   - outbound ICMP (neighbor-discover) to 10.0.0.0/8                       *#
+#*   - inbound requests of IP protocol type 17 (port 0, i.e. any port)       *#
+#*   It does not allow for certain things.                                   *#
+#*   - there must be a protocol type                                         *#
+#*   - you cannot have a non-zero port except for tcp / udp / sctp           *#
+#*   - you cannot have ICMP unless there is either a type plus code or an    *#
+#*     ICMP type name (which maps to type plus code)                         *#
+#*                                                                           *#
+#* - Finally, the "icmp" ipset is to work around the odd final restriction   *#
+#*   above, and allows rules such as "allow all ICMP to network X".          *#
 #*****************************************************************************#
 IPSET_TO_ADDR_PREFIX    = "felix-to-addr-"
 IPSET_TO_PORT_PREFIX    = "felix-to-port-"
@@ -404,7 +427,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, to_chain, index)
     index += 1
 
-    # "Return anything whose sources matches this ipset" (for three ipsets)
+    # "Return anything whose source matches this ipset" (for three ipsets)
     rule = get_rule(type)
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
@@ -822,7 +845,7 @@ def update_ipsets(type,
 
         if protocol is None:
             if rule.get('port') is not None:
-                # No protocol - must also be no port.
+                # No protocol, so port is not allowed.
                 log.error(
                     "Invalid %s rule with port but no protocol for %s : %s",
                     descr, id, rule)
@@ -831,13 +854,18 @@ def update_ipsets(type,
             ipset  = tmp_ipset_addr
         elif protocol in ("tcp", "sctp", "udp", "udplite"):
             if port is None:
+                # ipsets use port 0 to mean "any port"
                 suffix = ",%s:0" % (protocol)
                 ipset = tmp_ipset_port
             else:
                 if not PORT_REGEX.match(str(port)):
+                    # Port was supplied but was not an integer.
                     log.error(
                         "Invalid port in %s rule for %s : %s",
                         (descr, id, rule))
+                    continue
+
+                # An integer port was specified.
                 suffix = ",%s:%s" % (protocol, port)
                 ipset = tmp_ipset_port
         elif protocol in ("icmp", "icmpv6"):
@@ -848,6 +876,7 @@ def update_ipsets(type,
                     descr, id, rule)
                 continue
             if icmp_type is None:
+                # No type - all ICMP to / from the cidr, so use the ICMP ipset.
                 suffix = ""
                 ipset  = tmp_ipset_icmp
             elif INT_REGEX.match(str(icmp_type)):
@@ -862,11 +891,12 @@ def update_ipsets(type,
                 ipset  = tmp_ipset_port
         else:
             if port is not None:
-                # Protocol does not allow ports.
+                # The supplied protocol does not allow ports.
                 log.error(
                     "Invalid %s rule with port but no protocol for %s : %s",
                     descr, id, rule)
                 continue
+            # ipsets use port 0 to mean "any port"
             suffix = ",%s:0" % (protocol)
             ipset = tmp_ipset_port
 
