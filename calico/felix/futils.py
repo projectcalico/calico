@@ -557,13 +557,13 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     #* https://github.com/Metaswitch/calico/issues/35                        *#
     #*************************************************************************#
     if type == IPV4:
-        rules_check = subprocess.call("iptables -L %s | grep %s > /dev/null" %
-                                      (CHAIN_INPUT, iface),
-                                      shell=True)
+        rules_check = subprocess.call(
+            "iptables -v -L %s | grep %s > /dev/null" %
+            (CHAIN_INPUT, iface), shell=True)
     else:
-        rules_check = subprocess.call("ip6tables -L %s | grep %s > /dev/null" %
-                                      (CHAIN_INPUT, iface),
-                                      shell=True)
+        rules_check = subprocess.call(
+            "ip6tables -v -L %s | grep %s > /dev/null" %
+            (CHAIN_INPUT, iface), shell=True)
 
     if rules_check == 0:
         log.debug("%s rules for interface %s already exist" % (type, iface))
@@ -630,7 +630,7 @@ def del_rules(id, type):
         table = iptc.Table6(iptc.Table6.FILTER)
 
     #*************************************************************************#
-    #* Remove the rules routing to the chain we are about to remove The      *#
+    #* Remove the rules routing to the chain we are about to remove. The     *#
     #* baroque structure is caused by the python-iptables interface.         *#
     #* chain.rules returns a list of rules, each of which contains its index *#
     #* (i.e. position). If we get rules 7 and 8 and try to remove them in    *#
