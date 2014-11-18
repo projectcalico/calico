@@ -500,12 +500,23 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     index += 1
 
     if type == IPV4:
+        # Allow outgoing DHCP packets.
+        rule = iptc.Rule()
+        rule.protocol = "udp"
+        rule.create_target("RETURN")
+        match = iptc.Match(rule, "udp")
+        match.sport = "68"
+        match.dport = "67"
+        rule.add_match(match)
+        insert_rule(rule, from_chain, index)
+        index += 1
+
         #*********************************************************************#
         #* Drop UDP that would allow this server to act as a DHCP server.    *#
         #* This may be unnecessary - see                                     *#
         #* https://github.com/Metaswitch/calico/issues/36                    *#
         #*********************************************************************#
-        rule          = iptc.Rule()
+        rule = iptc.Rule()
         rule.protocol = "udp"
         rule.create_target("DROP")
         match = iptc.Match(rule, "udp")
