@@ -41,31 +41,62 @@ CHAIN_TO_PREFIX          = "felix-to-"
 CHAIN_FROM_PREFIX        = "felix-from-"
 
 #*****************************************************************************#
-#* ipset names. An ipset can either have a port and protocol or not - it     *#
-#* cannot have a mix of members with and without them. The "to" ipsets are   *#
-#* referenced from the "to" chains, and the "from" ipsets from the "from"    *#
-#* chains.                                                                   *#
+#* ipset names. The "to" ipsets are referenced from the "to" chains, and the *#
+#* "from" ipsets from the "from" chains. There are separate ipsets for IPv4  *#
+#* and IPv6, and as explained below, three in each of these categories for a *#
+#* total of 12 ipsets.                                                       *#
+#*                                                                           *#
+#* The three types of ipsets are as follows. Note that an ipset can either   *#
+#* have a port and protocol or not - it cannot have a mix of members with    *#
+#* and without them.                                                         *#
+#*                                                                           *#
+#* - The "addr" ipsets contain just a CIDR. These are for rules such as      *#
+#*   "allow all traffic from this network" (all ports and protocols).        *#
+#*                                                                           *#
+#* - The "port" ipsets contain a CIDR / protocol / port triple, and allow    *#
+#*   matching such as the following examples.                                *#
+#*   - outbound UDP to 1.2.3.4/32:0 (port 0, i.e. any port)                  *#
+#*   - inbound TCP on port 80 from 0.0.0.0/0                                 *#
+#*   - outbound ICMP with type 1, code 2 to 10.0.0.0/8                       *#
+#*   - outbound ICMP (neighbor-discover) to 10.0.0.0/8                       *#
+#*   - inbound requests of IP protocol type 17 (port 0, i.e. any port)       *#
+#*   It does not allow for certain things.                                   *#
+#*   - there must be a protocol type                                         *#
+#*   - you cannot have a non-zero port except for tcp / udp / sctp           *#
+#*   - you cannot have ICMP unless there is either a type plus code or an    *#
+#*     ICMP type name (which maps to type plus code)                         *#
+#*                                                                           *#
+#* - Finally, the "icmp" ipset is to work around the odd final restriction   *#
+#*   above, and allows rules such as "allow all ICMP to network X".          *#
 #*****************************************************************************#
 IPSET_TO_ADDR_PREFIX    = "felix-to-addr-"
 IPSET_TO_PORT_PREFIX    = "felix-to-port-"
+IPSET_TO_ICMP_PREFIX    = "felix-to-icmp-"
 IPSET_FROM_ADDR_PREFIX  = "felix-from-addr-"
 IPSET_FROM_PORT_PREFIX  = "felix-from-port-"
+IPSET_FROM_ICMP_PREFIX  = "felix-from-icmp-"
 IPSET6_TO_ADDR_PREFIX   = "felix-6-to-addr-"
 IPSET6_TO_PORT_PREFIX   = "felix-6-to-port-"
+IPSET6_TO_ICMP_PREFIX   = "felix-6-to-icmp-"
 IPSET6_FROM_ADDR_PREFIX = "felix-6-from-addr-"
 IPSET6_FROM_PORT_PREFIX = "felix-6-from-port-"
+IPSET6_FROM_ICMP_PREFIX = "felix-6-from-icmp-"
 IPSET_TMP_PORT          = "felix-tmp-port"
 IPSET_TMP_ADDR          = "felix-tmp-addr"
+IPSET_TMP_ICMP          = "felix-tmp-icmp"
 IPSET6_TMP_PORT         = "felix-6-tmp-port"
 IPSET6_TMP_ADDR         = "felix-6-tmp-addr"
+IPSET6_TMP_ICMP         = "felix-6-tmp-icmp"
 
 # Flag to indicate "IP v4" or "IP v6"; format that can be printed in logs.
 IPV4 = "IPv4"
 IPV6 = "IPv6"
 
 # Regexes for IP addresses.
-IPV4_REGEX = re.compile("\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
-IPV6_REGEX = re.compile("[a-f0-9]+:[:a-f0-9]+")
+IPV4_REGEX = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
+PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
+INT_REGEX  = re.compile("^[0-9]+$")
 
 #*****************************************************************************#
 #* Load the conntrack tables. This is a workaround for this issue            *#
@@ -314,23 +345,29 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
 
     # Set up all the ipsets.
     if type == IPV4:
-        to_ipset_port     = IPSET_TO_PORT_PREFIX + id
+        to_ipset_port   = IPSET_TO_PORT_PREFIX + id
         to_ipset_addr   = IPSET_TO_ADDR_PREFIX + id
-        from_ipset_port   = IPSET_FROM_PORT_PREFIX + id
+        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + id
+        from_ipset_port = IPSET_FROM_PORT_PREFIX + id
         from_ipset_addr = IPSET_FROM_ADDR_PREFIX + id
-        family            = "inet"
+        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + id
+        family          = "inet"
     else:
-        to_ipset_port     = IPSET6_TO_PORT_PREFIX + id
+        to_ipset_port   = IPSET6_TO_PORT_PREFIX + id
         to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + id
-        from_ipset_port   = IPSET6_FROM_PORT_PREFIX + id
+        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + id
+        from_ipset_port = IPSET6_FROM_PORT_PREFIX + id
         from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + id
+        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + id
         family            = "inet6"
 
     # Create ipsets if they do not already exist.
     create_ipset(to_ipset_port, "hash:net,port", family)
     create_ipset(to_ipset_addr, "hash:net", family)
+    create_ipset(to_ipset_icmp, "hash:net", family)
     create_ipset(from_ipset_port, "hash:net,port", family)
     create_ipset(from_ipset_addr, "hash:net", family)
+    create_ipset(from_ipset_icmp, "hash:net", family)
 
     # Get the table.
     if type == IPV4:
@@ -342,12 +379,12 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     to_chain = create_chain(table, to_chain_name)
 
     #*************************************************************************#
-    #* Put rules into that "to" chain, i.e. the chain traversed by outbound  *#
-    #* packets. Note that we never ACCEPT, but always RETURN if we want to   *#
-    #* accept this packet. This is because the rules here are for this       *#
-    #* endpoint only - we cannot (for example) ACCEPT a packet which would   *#
-    #* be rejected by the rules for another endpoint on the same host to     *#
-    #* which it is addressed.                                                *#
+    #* Put rules into that "from" chain, i.e. the chain traversed by         *#
+    #* outbound packets. Note that we never ACCEPT, but always RETURN if we  *#
+    #* want to accept this packet. This is because the rules here are for    *#
+    #* this endpoint only - we cannot (for example) ACCEPT a packet which    *#
+    #* would be rejected by the "to" rules for another endpoint to which it  *#
+    #* is addressed which happens to exist on the same host.                 *#
     #*************************************************************************#
     index = 0
 
@@ -366,7 +403,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         #*    ip6tables -A plw -j RETURN --protocol icmpv6 --icmpv6-type 130    *#
         #************************************************************************#
         for icmp in ["130", "131", "132", "134", "135", "136"]:
-            rule          = iptc.Rule6()
+            rule = iptc.Rule6()
             rule.create_target("RETURN")
             rule.protocol = "icmpv6"
             match = iptc.Match(rule, "icmp6")
@@ -390,7 +427,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, to_chain, index)
     index += 1
 
-    # "Return anything whose source matches this ipset" (for two ipsets)
+    # "Return anything whose source matches this ipset" (for three ipsets)
     rule = get_rule(type)
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
@@ -407,7 +444,19 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, to_chain, index)
     index += 1
 
-    # Finally, "DROP unconditionally"
+    rule = get_rule(type)
+    rule.create_target("RETURN")
+    if type is IPV4:
+        rule.protocol = "icmp"
+    else:
+        rule.protocol = "icmpv6"
+    match = iptc.Match(rule, "set")
+    match.match_set = [to_ipset_icmp, "src"]
+    rule.add_match(match)
+    insert_rule(rule, to_chain, index)
+    index += 1
+
+    # If we get here, drop the packet.
     rule = get_rule(type)
     rule.create_target("DROP")
     insert_rule(rule, to_chain, index)
@@ -517,7 +566,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, from_chain, index)
     index += 1
   
-    # "Permit packets whose destination matches the supplied ipset."
+    # "Permit packets whose destination matches the supplied ipsets."
     rule = get_rule(type)
     rule.create_target("RETURN")
     match = iptc.Match(rule, "set")
@@ -534,7 +583,19 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     insert_rule(rule, from_chain, index)
     index += 1
 
-    # Last rule (at end) says drop unconditionally.
+    rule = get_rule(type)
+    rule.create_target("RETURN")
+    if type is IPV4:
+        rule.protocol = "icmp"
+    else:
+        rule.protocol = "icmpv6"
+    match = iptc.Match(rule, "set")
+    match.match_set = [from_ipset_icmp, "dst"]
+    rule.add_match(match)
+    insert_rule(rule, from_chain, index)
+    index += 1
+
+    # If we get here, drop the packet.
     rule = get_rule(type)
     rule.create_target("DROP")
     insert_rule(rule, from_chain, index)
@@ -679,18 +740,24 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
     if type == IPV4:
         to_ipset_port   = IPSET_TO_PORT_PREFIX + id
         to_ipset_addr   = IPSET_TO_ADDR_PREFIX + id
+        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + id
         from_ipset_port = IPSET_FROM_PORT_PREFIX + id
         from_ipset_addr = IPSET_FROM_ADDR_PREFIX + id
+        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + id
         tmp_ipset_port  = IPSET_TMP_PORT
         tmp_ipset_addr  = IPSET_TMP_ADDR
+        tmp_ipset_icmp  = IPSET_TMP_ICMP
         family          = "inet"
     else:
         to_ipset_port   = IPSET6_TO_PORT_PREFIX + id
         to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + id
+        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + id
         from_ipset_port = IPSET6_FROM_PORT_PREFIX + id
         from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + id
+        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + id
         tmp_ipset_port  = IPSET6_TMP_PORT
         tmp_ipset_addr  = IPSET6_TMP_ADDR
+        tmp_ipset_icmp  = IPSET6_TMP_ICMP
         family          = "inet6"
 
     if in_default != "deny" or out_default != "deny":
@@ -707,33 +774,38 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
     # Verify that the tmp ipsets exist and are empty.
     create_ipset(tmp_ipset_port, "hash:net,port", family)
     create_ipset(tmp_ipset_addr, "hash:net", family)
+    create_ipset(tmp_ipset_icmp, "hash:net", family)
 
     subprocess.check_call(["ipset", "flush", tmp_ipset_port])
     subprocess.check_call(["ipset", "flush", tmp_ipset_addr])
+    subprocess.check_call(["ipset", "flush", tmp_ipset_icmp])
 
-    update_ipsets(type, inbound,
-                  to_ipset_addr, to_ipset_port,
-                  tmp_ipset_addr, tmp_ipset_port)
-    update_ipsets(type, outbound,
-                  from_ipset_addr, from_ipset_port,
-                  tmp_ipset_addr, tmp_ipset_port)
+    update_ipsets(type, type + " inbound",
+                  inbound,
+                  to_ipset_addr, to_ipset_port, to_ipset_icmp,
+                  tmp_ipset_addr, tmp_ipset_port, tmp_ipset_icmp)
+    update_ipsets(type, type + " outbound",
+                  outbound,
+                  from_ipset_addr, from_ipset_port, from_ipset_icmp,
+                  tmp_ipset_addr, tmp_ipset_port, tmp_ipset_icmp)
 
 
 def update_ipsets(type,
+                  descr,
                   rule_list,
                   ipset_addr,
                   ipset_port,
+                  ipset_icmp,
                   tmp_ipset_addr,
-                  tmp_ipset_port):
+                  tmp_ipset_port,
+                  tmp_ipset_icmp):
+    """
+    Update the ipsets with a given set of rules. If a rule is invalid we do
+    not throw an exception or give up, but just log an error and continue.
+    """
     for rule in rule_list:
-        if rule['cidr'] is None:
-            # No cidr - give up.
+        if rule.get('cidr') is None:
             log.error("Invalid %s rule without cidr for %s : %s",
-                      (descr, id, rule))
-            continue
-        if rule['protocol'] is None and rule['port'] is not None:
-            # No protocol - must also be no port.
-            log.error("Invalid %s rule with port but no protocol for %s : %s",
                       (descr, id, rule))
             continue
 
@@ -758,27 +830,98 @@ def update_ipsets(type,
         else:
             cidrs = [rule['cidr']]
 
-        for cidr in cidrs:
-            if rule['port'] is not None:
-                value = "%s,%s:%s" % (cidr, rule['protocol'], rule['port'])
-                ipset = tmp_ipset_port
-            elif rule['protocol'] is not None:
-                value = "%s,%s:0" % (cidr, rule['protocol'])
+        #*********************************************************************#
+        #* Now handle the protocol. There are three types of protocol. tcp / *#
+        #* sctp /udp / udplite have an optional port. icmp / icmpv6 have an  *#
+        #* optional type and code. Anything else doesn't have ports.         *#
+        #*                                                                   *#
+        #* We build the value to insert without the CIDR, then prepend the   *#
+        #* CIDR later (since we may need to use two CIDRs).                  *#
+        #*********************************************************************#
+        protocol  = rule.get('protocol')
+        port      = rule.get('port')
+        icmp_type = rule.get('icmp_type')
+        icmp_code = rule.get('icmp_code')
+
+        if protocol is None:
+            if rule.get('port') is not None:
+                # No protocol, so port is not allowed.
+                log.error(
+                    "Invalid %s rule with port but no protocol for %s : %s",
+                    descr, id, rule)
+                continue
+            suffix = ""
+            ipset  = tmp_ipset_addr
+        elif protocol in ("tcp", "sctp", "udp", "udplite"):
+            if port is None:
+                # ipsets use port 0 to mean "any port"
+                suffix = ",%s:0" % (protocol)
                 ipset = tmp_ipset_port
             else:
-                value = cidr
-                ipset = tmp_ipset_addr
+                if not PORT_REGEX.match(str(port)):
+                    # Port was supplied but was not an integer.
+                    log.error(
+                        "Invalid port in %s rule for %s : %s",
+                        (descr, id, rule))
+                    continue
 
-            subprocess.check_call(["ipset", "add", ipset, value, "-exist"])
+                # An integer port was specified.
+                suffix = ",%s:%s" % (protocol, port)
+                ipset = tmp_ipset_port
+        elif protocol in ("icmp", "icmpv6"):
+            if (icmp_type is None and icmp_code is not None):
+                # A code but no type - not allowed.
+                log.error(
+                    "Invalid %s rule with ICMP code but no type for %s : %s",
+                    descr, id, rule)
+                continue
+            if icmp_type is None:
+                # No type - all ICMP to / from the cidr, so use the ICMP ipset.
+                suffix = ""
+                ipset  = tmp_ipset_icmp
+            elif INT_REGEX.match(str(icmp_type)):
+                if icmp_code is None:
+                    # Code defaults to 0 if not supplied.
+                    icmp_code = 0
+                suffix = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
+                ipset  = tmp_ipset_port
+            else:
+                # Not an integer ICMP type - must be a string code name.
+                suffix = ",%s:%s" % (protocol, icmp_type)
+                ipset  = tmp_ipset_port
+        else:
+            if port is not None:
+                # The supplied protocol does not allow ports.
+                log.error(
+                    "Invalid %s rule with port but no protocol for %s : %s",
+                    descr, id, rule)
+                continue
+            # ipsets use port 0 to mean "any port"
+            suffix = ",%s:0" % (protocol)
+            ipset = tmp_ipset_port
 
+        # Now add those values to the ipsets.
+        for cidr in cidrs:
+            args = ["ipset", "add", ipset, cidr + suffix, "-exist"]
+            proc = subprocess.Popen(args,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT)
+            output = proc.communicate()[0]
+            retcode = proc.returncode
+            if retcode:
+                log.error("Failed to add %s rule for %s : %s. " \
+                          "Call was %s, returning %d, output: %s",
+                          descr, id, rule, args, retcode, output)
 
     # Now that we have filled the tmp ipset, swap it with the real one.
     subprocess.check_call(["ipset", "swap", tmp_ipset_addr, ipset_addr])
     subprocess.check_call(["ipset", "swap", tmp_ipset_port, ipset_port])
+    subprocess.check_call(["ipset", "swap", tmp_ipset_icmp, ipset_icmp])
 
     # Get the temporary ipsets clean again - we leave them existing but empty.
     subprocess.check_call(["ipset", "flush", tmp_ipset_port])
     subprocess.check_call(["ipset", "flush", tmp_ipset_addr])
+    subprocess.check_call(["ipset", "flush", tmp_ipset_icmp])
 
 
 def list_eps_with_rules(type):
