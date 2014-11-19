@@ -526,6 +526,18 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         insert_rule(rule, from_chain, index)
         index += 1
 
+    else:
+        # Allow outgoing DHCP packets.
+        rule = iptc.Rule6()
+        rule.protocol = "udp"
+        rule.create_target("RETURN")
+        match = iptc.Match(rule, "udp")
+        match.sport = "546"
+        match.dport = "547"
+        rule.add_match(match)
+        insert_rule(rule, from_chain, index)
+        index += 1
+
     #*************************************************************************#
     #* Now only allow through packets from the correct MAC and IP            *#
     #* address. There may be rules here from addresses that this endpoint no *#
@@ -668,13 +680,13 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         rule               = get_rule(type)
         target             = iptc.Target(rule, from_chain_name)
         rule.target        = target
-        rule.out_interface = iface
+        rule.in_interface = iface
         insert_rule(rule, chain, RULE_POSN_LAST)
 
         rule              = get_rule(type)
         target            = iptc.Target(rule, to_chain_name)
         rule.target       = target
-        rule.in_interface = iface
+        rule.out_interface = iface
         insert_rule(rule, chain, RULE_POSN_LAST)
 
 
