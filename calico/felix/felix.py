@@ -483,7 +483,13 @@ class FelixAgent(object):
                   (message.endpoint_id, message.fields))
 
         endpoint_id = message.endpoint_id
-        endpoint = self.endpoints[endpoint_id]
+        try:
+            endpoint = self.endpoints[endpoint_id]
+        except KeyError:
+            # Endpoint deleted under our feet. Log and ignore.
+            log.info("ACLUPDATE for endpoint %s which does not exist" %
+                      endpoint_id)
+            return
 
         endpoint.acl_data  = message.fields['acls']
 
