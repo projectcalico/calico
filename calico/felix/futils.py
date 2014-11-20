@@ -294,7 +294,6 @@ def set_global_rules():
         match.dport = "80"
         rule.add_match(match)
         insert_rule(rule, chain, 0)
-
         truncate_rules(chain, 1)
 
     if rules_check == 0:
@@ -532,7 +531,6 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         rule.add_match(match)
         insert_rule(rule, from_chain, index)
         index += 1
-
     else:
         # Allow outgoing DHCP packets.
         rule = iptc.Rule6()
@@ -595,6 +593,29 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     match.mark = "!1"
     insert_rule(rule, from_chain, index)
     index += 1
+
+    if type == IPV4:
+        #*********************************************************************#
+        #* Do not allow packets to the loopback address from this address,   *#
+        #* unless they are tcp to the address and port being used for        *#
+        #* metadata (if any).                                                *#
+        #*********************************************************************#
+        if Config.METADATA_IP is not None and Config.METADATA_IP.startswith("127."):
+            rule = iptc.Rule()
+            rule.dst = Config.METADATA_IP
+            rule.protocol = "tcp"
+            rule.create_target("RETURN")
+            match = iptc.Match(rule, "tcp")
+            match.dport = Config.METADATA_PORT
+            rule.add_match(match)
+            insert_rule(rule, from_chain, index)
+            index += 1
+
+        rule = iptc.Rule()
+        rule.dst = "127.0.0.0/8"
+        rule.create_target("DROP")
+        insert_rule(rule, from_chain, index)
+        index += 1
   
     # "Permit packets whose destination matches the supplied ipsets."
     rule = get_rule(type)
