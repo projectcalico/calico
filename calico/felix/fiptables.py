@@ -62,11 +62,15 @@ global_rule.create_target("RETURN")
 global_rule6.create_target("RETURN")
 global_target = iptc.Target(global_rule, "DNAT")
 
-def insert_rule(rule, chain, position=0):
+def insert_rule(rule, chain, position=0, force_position=True):
     """
     Add an iptables rule to a chain if it does not already exist. Position is
     the position for the insert as an offset; if set to RULE_POSN_LAST then the
     rule is appended.
+
+    If force_position is True, then the rule is added at the specified point
+    unless it already exists there. If force_position is False, then the rule
+    is added only if it does not exist anywhere in the list of rules.
     """
     found = False
     rules = chain.rules
@@ -74,13 +78,21 @@ def insert_rule(rule, chain, position=0):
     if position == RULE_POSN_LAST:
         position = len(rules)
 
-    # The python-iptables code to compare rules does a comparison on all the
-    # relevant rule parameters (target, match, etc.) excluding the offset into
-    # the chain. Hence the test below finds whether there is a rule with the
-    # same parameters anywhere in the chain.
-    if rule not in chain.rules:
-        chain.insert_rule(rule, position)
+    if force_position:
+        if (len(rules) <= position) or (rule != chain.rules[position]):
+            # Either adding after existing rules, or replacing an existing rule.
+            chain.insert_rule(rule, position)
+    else:
+        #*********************************************************************#
+        #* The python-iptables code to compare rules does a comparison on    *#
+        #* all the relevant rule parameters (target, match, etc.) excluding  *#
+        #* the offset into the chain. Hence the test below finds whether     *#
+        #* there is a rule with the same parameters anywhere in the chain.   *#
+        #*********************************************************************#
+        if rule not in chain.rules:
+            chain.insert_rule(rule, position)
 
+    return
 
 def get_rule(type):
     """

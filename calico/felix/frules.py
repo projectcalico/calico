@@ -103,13 +103,13 @@ def set_global_rules():
     rule          = fiptables.get_rule(futils.IPV4)
     rule.dst      = "169.254.169.254"
     rule.protocol = "tcp"
-    target        = iptc.Target(rule, "DNAT")
-    target.to_destination = "127.0.0.1:9697"
-    rule.target = target
+    rule.create_target("DNAT")
+    rule.target.to_destination = "127.0.0.1:9697"
     match = iptc.Match(rule, "tcp")
     match.dport = "80"
     rule.add_match(match)
     fiptables.insert_rule(rule, chain)
+    fiptables.truncate_rules(chain, 1)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
@@ -374,42 +374,17 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         index += 1
 
     #*************************************************************************#
-    #* Now only allow through packets from the correct MAC and IP            *#
-    #* address. There may be rules here from addresses that this endpoint no *#
-    #* longer has - in which case we must remove them.                       *#
-    #*                                                                       *#
-    #* This code is rather ugly - better to turn off table autocommit, but   *#
-    #* as commented elsewhere, that appears buggy.                           *#
-    #*************************************************************************#
-    done = False
-    while not done:
-        done = True
-        for rule in from_chain.rules:
-            if (rule.target.name == "RETURN" and
-                    len(rule.matches) == 1 and
-                    rule.matches[0].name == "mac" and
-                    (rule.src not in localips or rule.match.mac_source != mac)):
-                #*************************************************************#
-                #* We have a rule that we should not have; either the MAC or *#
-                #* the IP has changed. Toss the rule.                        *#
-                #*************************************************************#
-                log.info("Removing old IP %s, MAC %s from endpoint %s" %
-                         (rule.src, rule.matches[0].mac_source, id))
-                from_chain.delete_rule(rule)
-                done = False
-                break
-
-    #*************************************************************************#
-    #* We are now adding the rules for each IP address that this endpoint    *#
-    #* has, to enforce that it cannot use IPs it does not own. We do this by *#
-    #* first setting a mark if it matches any of the IPs, then dropping the  *#
-    #* packets if that mark is not set.                                      *#
+    #* Now only allow through packets from the correct MAC and IP address.   *#
+    #* We do this by first setting a mark if it matches any of the IPs, then *#
+    #* dropping the packets if that mark is not set.  There may be rules     *#
+    #* here from addresses that this endpoint no longer has - in which case  *#
+    #* we insert before them and they get tidied up when we truncate the     *#
+    #* chain.                                                                *#
     #*************************************************************************#
     for ip in localips:
         rule = fiptables.get_rule(type)
-        target = iptc.Target(rule, "MARK")
-        target.set_mark = "1"
-        rule.target = target
+        rule.create_target("MARK")
+        rule.target.set_mark = "1"
         rule.src = ip
         match = iptc.Match(rule, "mac")
         match.mac_source = mac
@@ -500,8 +475,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         chain = fiptables.get_chain(table, CHAIN_INPUT)
 
         rule              = fiptables.get_rule(type)
-        target            = iptc.Target(rule, from_chain_name)
-        rule.target       = target
+        rule.create_target(from_chain_name)
         rule.in_interface = iface
         fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
 
@@ -513,14 +487,12 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         chain = fiptables.get_chain(table, CHAIN_FORWARD)
 
         rule               = fiptables.get_rule(type)
-        target             = iptc.Target(rule, from_chain_name)
-        rule.target        = target
+        rule.create_target(from_chain_name)
         rule.in_interface = iface
         fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
 
         rule              = fiptables.get_rule(type)
-        target            = iptc.Target(rule, to_chain_name)
-        rule.target       = target
+        rule.create_target(to_chain_name)
         rule.out_interface = iface
         fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
     return
