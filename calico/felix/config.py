@@ -26,6 +26,7 @@ import argparse
 import ConfigParser
 import logging
 import re
+import socket
 
 #*****************************************************************************#
 #* This is the default configuration path - we expect in most cases that the *#
@@ -38,7 +39,6 @@ CONFIG_FILE_PATH = 'felix.cfg'
 #* definitions (we cannot import futils since it imports this module;        *#
 #* ideally we should have this regex in a common global location).           *#
 #*****************************************************************************#
-IPV4_REGEX = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 INT_REGEX  = re.compile("^[0-9]+$")
 
 class _Config(object):
@@ -66,7 +66,7 @@ class _Config(object):
         self.ACL_ADDR        = self.get_cfg_entry("global",
                                                   "ACLAddress")
         self.METADATA_IP     = self.get_cfg_entry("global",
-                                                  "MetadataIP",
+                                                  "MetadataAddr",
                                                   "127.0.0.1")
         self.METADATA_PORT   = self.get_cfg_entry("global",
                                                   "MetadataPort",
@@ -151,8 +151,13 @@ class _Config(object):
             self.METADATA_IP = None
             self.METADATA_PORT = None
         else:
-            if not IPV4_REGEX.match(self.METADATA_IP):
-                raise Exception("Invalid MetadataIP value : %s" %
+            # Metadata can be supplied as IP or address, but we store as IP
+            try:
+                metadata_ip = socket.gethostbyname(self.METADATA_IP)
+                self.METADATA_IP = metadata_ip
+            except socket.gaierror:
+                # Cannot resolve metadata_ip; neither an IP nor resolvable.
+                raise Exception("Invalid MetadataAddr value : %s" %
                                 self.METADATA_IP)
             if not INT_REGEX.match(self.METADATA_PORT):
                 raise Exception("Invalid MetadataPort value : %s" %
