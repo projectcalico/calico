@@ -35,6 +35,7 @@ import zmq
 from calico.felix.config import Config
 from calico.felix.endpoint import Address, Endpoint
 from calico.felix.fsocket import Socket, Message
+from calico.felix import frules
 from calico.felix import futils
 from calico import common
 
@@ -242,7 +243,7 @@ class FelixAgent(object):
         known_ids = {ep.suffix for ep in self.endpoints.values()}
 
         for type in [futils.IPV4, futils.IPV6]:
-            rule_ids  = futils.list_eps_with_rules(type)
+            rule_ids  = frules.list_eps_with_rules(type)
 
             for id in rule_ids:
                 if id not in known_ids:
@@ -250,7 +251,7 @@ class FelixAgent(object):
                     # exist.  Remove those rules.
                     log.warning("Removing %s rules for removed object %s" %
                                 (type, id))
-                    futils.del_rules(id, type)
+                    frules.del_rules(id, type)
 
     def handle_endpointcreated(self, message):
         """
@@ -737,7 +738,7 @@ def main():
         log.error("Felix starting")
 
         # Set up the global rules.
-        futils.set_global_rules()
+        frules.set_global_rules()
 
         # Create an instance of the Felix agent and start it running.
         agent = FelixAgent()

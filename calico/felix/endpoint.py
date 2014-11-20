@@ -21,6 +21,8 @@ felix.endpoint
 
 Contains Felix logic to manage endpoints and their configuration.
 """
+from calico.felix import finterface
+from calico.felix import frules
 from calico.felix import futils
 import logging
 import subprocess
@@ -93,14 +95,14 @@ class Endpoint(object):
     def remove(self):
         # Delete a programmed endpoint. Remove the rules only, since the routes
         # will vanish in due course when the tap interface goes.
-        futils.del_rules(self.suffix, futils.IPV4)
-        futils.del_rules(self.suffix, futils.IPV6)
+        frules.del_rules(self.suffix, futils.IPV4)
+        frules.del_rules(self.suffix, futils.IPV6)
 
     def program_endpoint(self):
         """
         Given an endpoint, make the programmed state match the desired state,
         setting up rules and creating chains and ipsets, but not putting
-        content into the ipsets (leaving that for futils.update_acls).
+        content into the ipsets (leaving that for frules.update_acls).
 
         Note that if acl_data is none, we have not received any ACLs, and so		
         we just leave the ACLs in place until we do. If there are none because		
@@ -118,7 +120,7 @@ class Endpoint(object):
         Returns True if the endpoint needs to be retried (because the tap
         interface does not exist yet).
         """
-        if not futils.tap_exists(self.tap):
+        if not finterface.tap_exists(self.tap):
             if self.state == Endpoint.STATE_ENABLED:
                 log.error("Unable to configure non-existent interface %s" %
                           self.tap)
@@ -132,7 +134,7 @@ class Endpoint(object):
 
         # Configure the tap interface.
         if self.state == Endpoint.STATE_ENABLED:
-            futils.configure_tap(self.tap)
+            finterface.configure_tap(self.tap)
 
             # Build up list of addresses that should be present
             ipv4_intended = set([addr.ip.encode('ascii')
@@ -146,14 +148,14 @@ class Endpoint(object):
             ipv4_intended = set()
             ipv6_intended = set()
 
-        ipv4_existing   = futils.list_tap_ips(futils.IPV4, self.tap)
-        ipv6_existing   = futils.list_tap_ips(futils.IPV6, self.tap)
+        ipv4_existing   = finterface.list_tap_ips(futils.IPV4, self.tap)
+        ipv6_existing   = finterface.list_tap_ips(futils.IPV6, self.tap)
 
         for ipv4 in ipv4_intended:
             if ipv4 not in ipv4_existing:
                 log.info("Add route to IPv4 address %s for tap %s" %
                          (ipv4, self.tap))
-                futils.add_route(futils.IPV4, ipv4, self.tap, self.mac)
+                finterface.add_route(futils.IPV4, ipv4, self.tap, self.mac)
             else:
                 log.debug("Already got route to address %s for tap %s" %
                           (ipv4, self.tap))
@@ -162,7 +164,7 @@ class Endpoint(object):
             if ipv6 not in ipv6_existing:
                 log.info("Add route to IPv6 address %s for tap %s" %
                          (ipv6, self.tap))
-                futils.add_route(futils.IPV6, ipv6, self.tap, self.mac)
+                finterface.add_route(futils.IPV6, ipv6, self.tap, self.mac)
             else:
                 log.debug("Already got route to address %s for tap %s" %
                           (ipv4, self.tap))
@@ -171,22 +173,22 @@ class Endpoint(object):
             if ipv4 not in ipv4_intended:
                 log.info("Remove extra IPv4 route to address %s for tap %s" %
                          (ipv4, self.tap))
-                futils.del_route(futils.IPV4, ipv4, self.tap)
+                finterface.del_route(futils.IPV4, ipv4, self.tap)
 
         for ipv6 in ipv6_existing:
             if ipv6 not in ipv6_intended:
                 log.info("Remove extra IPv6 route to address %s for tap %s" %
                          (ipv6, self.tap))
-                futils.del_route(futils.IPV6, ipv6, self.tap)
+                finterface.del_route(futils.IPV6, ipv6, self.tap)
 
         #*********************************************************************#
         #* Set up the rules for this endpoint, not including ACLs. Note that *#
         #* if the endpoint is disabled, then it has no permitted addresses,  *#
         #* so it cannot send any data.                                       *#
         #*********************************************************************#
-        futils.set_ep_specific_rules(self.suffix, self.tap, futils.IPV4,
+        frules.set_ep_specific_rules(self.suffix, self.tap, futils.IPV4,
                                      ipv4_intended, self.mac)
-        futils.set_ep_specific_rules(self.suffix, self.tap, futils.IPV6,
+        frules.set_ep_specific_rules(self.suffix, self.tap, futils.IPV6,
                                      ipv6_intended, self.mac)
 
         #*********************************************************************#
@@ -224,7 +226,7 @@ class Endpoint(object):
         outbound    = acls['v4']['outbound']
         out_default = acls['v4']['outbound_default']
 
-        futils.set_acls(self.suffix, futils.IPV4,
+        frules.set_acls(self.suffix, futils.IPV4,
                         inbound, in_default,
                         outbound, out_default)
 
@@ -233,6 +235,6 @@ class Endpoint(object):
         outbound    = acls['v6']['outbound']
         out_default = acls['v6']['outbound_default']
 
-        futils.set_acls(self.suffix, futils.IPV6,
+        frules.set_acls(self.suffix, futils.IPV6,
                         inbound, in_default,
                         outbound, out_default)
