@@ -1,3 +1,19 @@
+calico (0.8~1) trusty; urgency=medium
+
+  * New fixes and enhancements to Felix
+    - Clean up code and tidy up ready so that accept default rules can work.
+    - Some trivial code tidy left over from the merges.
+    - Minor typo fixes.
+    - Code review markups.
+    - Fix bug where duplicate rules created.
+    - Fix up ICMP rules for all ICMP.
+    - Various code review markups ready for merging.
+    - Unblock outgoing DHCP. Bug in fix to issue38.
+    - Fix more issues with issue38 code.  Allow DHCP for IPv6 too Fix up
+      getting in / out interfaces backwards
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Thu, 20 Nov 2014 13:05:58 +0000
+
 calico (0.7) trusty; urgency=medium
 
   * Update packaging to support source package creation and upload.
