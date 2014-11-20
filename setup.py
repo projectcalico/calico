@@ -19,7 +19,7 @@ import setuptools
 
 setuptools.setup(
     name = "calico",
-    version = "0.7",
+    version = "0.8",
     packages = setuptools.find_packages(),
     entry_points = {
         'console_scripts': [

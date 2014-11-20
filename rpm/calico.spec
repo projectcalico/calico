@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.7
+Version:        0.8
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -231,6 +231,19 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Nov 20 2014 Neil Jerram <nj@metaswitch.com> 0.8
+- New fixes and enhancements to Felix
+  - Clean up code and tidy up ready so that accept default rules can work.
+  - Some trivial code tidy left over from the merges.
+  - Minor typo fixes.
+  - Code review markups.
+  - Fix bug where duplicate rules created.
+  - Fix up ICMP rules for all ICMP.
+  - Various code review markups ready for merging.
+  - Unblock outgoing DHCP. Bug in fix to issue38.
+  - Fix more issues with issue38 code.  Allow DHCP for IPv6 too Fix up
+    getting in / out interfaces backwards
+
 * Wed Nov 11 2014 Neil Jerram <nj@metaswitch.com> 0.7
 - Update packaging to support source package creation and upload.
   - Implement install steps in setup.py and debian/rules, instead of setup.cfg.
