@@ -259,23 +259,6 @@ def set_global_rules():
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change - but they must be present.
     """
-    # The nat tables first. This must have a felix-PREROUTING chain.
-    table = iptc.Table(iptc.Table.NAT)
-    chain = create_chain(table, CHAIN_PREROUTING)
-
-    # Now add the single rule to that chain. It looks like this.
-    #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
-    rule          = iptc.Rule()
-    rule.dst      = "169.254.169.254"
-    rule.protocol = "tcp"
-    target        = iptc.Target(rule, "DNAT")
-    target.to_destination = "127.0.0.1:9697"
-    rule.target = target
-    match = iptc.Match(rule, "tcp")
-    match.dport = "80"
-    rule.add_match(match)
-    insert_rule(rule, chain)
-
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
     #* correctly match some rules; see                                       *#
@@ -289,6 +272,29 @@ def set_global_rules():
     rules_check = subprocess.call("iptables -L %s | grep %s" %
                                   ("INPUT", CHAIN_INPUT),
                                   shell=True)
+
+
+    # The nat tables first. This must have a felix-PREROUTING chain.
+    table = iptc.Table(iptc.Table.NAT)
+    chain = create_chain(table, CHAIN_PREROUTING)
+
+    if Config.METADATA_IP is None:
+        # No metadata IP. The chain should be empty - if not, clean it out.
+        chain.flush()
+    else:
+        # Now add the single rule to that chain. It looks like this.
+        #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
+        rule          = iptc.Rule()
+        rule.dst      = "169.254.169.254"
+        rule.protocol = "tcp"
+        target        = iptc.Target(rule, "DNAT")
+        target.to_destination = "%s:%s" % (Config.METADATA_IP, Config.METADATA_PORT)
+        rule.target = target
+        match = iptc.Match(rule, "tcp")
+        match.dport = "80"
+        rule.add_match(match)
+        insert_rule(rule, chain, 0)
+        truncate_rules(chain, 1)
 
     if rules_check == 0:
         log.debug("Static rules already exist")
@@ -525,7 +531,6 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         rule.add_match(match)
         insert_rule(rule, from_chain, index)
         index += 1
-
     else:
         # Allow outgoing DHCP packets.
         rule = iptc.Rule6()
@@ -588,6 +593,29 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     match.mark = "!1"
     insert_rule(rule, from_chain, index)
     index += 1
+
+    if type == IPV4:
+        #*********************************************************************#
+        #* Do not allow packets to the loopback address from this address,   *#
+        #* unless they are tcp to the address and port being used for        *#
+        #* metadata (if any).                                                *#
+        #*********************************************************************#
+        if Config.METADATA_IP is not None and Config.METADATA_IP.startswith("127."):
+            rule = iptc.Rule()
+            rule.dst = Config.METADATA_IP
+            rule.protocol = "tcp"
+            rule.create_target("RETURN")
+            match = iptc.Match(rule, "tcp")
+            match.dport = Config.METADATA_PORT
+            rule.add_match(match)
+            insert_rule(rule, from_chain, index)
+            index += 1
+
+        rule = iptc.Rule()
+        rule.dst = "127.0.0.0/8"
+        rule.create_target("DROP")
+        insert_rule(rule, from_chain, index)
+        index += 1
   
     # "Permit packets whose destination matches the supplied ipsets."
     rule = get_rule(type)
@@ -1038,5 +1066,6 @@ def truncate_rules(chain, count):
     left in place.
     """
     while len(chain.rules) > count:
+        log.debug("Deleting rule %d from chain %s" % (len(chain.rules), chain.name))
         rule = chain.rules[-1]
         chain.delete_rule(rule)

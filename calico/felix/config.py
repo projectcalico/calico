@@ -22,10 +22,11 @@ On instantiation, this module automatically parses the configuration file and
 builds a singleton configuration object. Other modules should just import the
 Config object and use the fields within it.
 """
+import argparse
 import ConfigParser
 import logging
-import argparse
-
+import re
+import socket
 
 #*****************************************************************************#
 #* This is the default configuration path - we expect in most cases that the *#
@@ -33,6 +34,12 @@ import argparse
 #*****************************************************************************#
 CONFIG_FILE_PATH = 'felix.cfg'
 
+#*****************************************************************************#
+#* TODO: It would be nice to refactor so we did not have two identical       *#
+#* definitions (we cannot import futils since it imports this module;        *#
+#* ideally we should have this regex in a common global location).           *#
+#*****************************************************************************#
+INT_REGEX  = re.compile("^[0-9]+$")
 
 class _Config(object):
     def __init__(self):
@@ -58,6 +65,12 @@ class _Config(object):
                                                   "PluginAddress")
         self.ACL_ADDR        = self.get_cfg_entry("global",
                                                   "ACLAddress")
+        self.METADATA_IP     = self.get_cfg_entry("global",
+                                                  "MetadataAddr",
+                                                  "127.0.0.1")
+        self.METADATA_PORT   = self.get_cfg_entry("global",
+                                                  "MetadataPort",
+                                                  "9697")
         self.LOGFILE         = self.get_cfg_entry("log",
                                                   "LogFilePath",
                                                   "felix.log")
@@ -79,6 +92,8 @@ class _Config(object):
             self.get_cfg_entry("connection",
                                "ConnectionKeepaliveIntervalMillis",
                                2000))
+
+        self.validate_cfg()
 
         self.warn_unused_cfg()
 
@@ -126,6 +141,27 @@ class _Config(object):
             value = default
 
         return value
+
+    def validate_cfg(self):
+        #*********************************************************************#
+        #* Firewall that the config is not invalid.                          *#
+        #*********************************************************************#
+        if self.METADATA_IP.lower() == "none":
+            # Metadata is not required.
+            self.METADATA_IP = None
+            self.METADATA_PORT = None
+        else:
+            # Metadata can be supplied as IP or address, but we store as IP
+            try:
+                metadata_ip = socket.gethostbyname(self.METADATA_IP)
+                self.METADATA_IP = metadata_ip
+            except socket.gaierror:
+                # Cannot resolve metadata_ip; neither an IP nor resolvable.
+                raise Exception("Invalid MetadataAddr value : %s" %
+                                self.METADATA_IP)
+            if not INT_REGEX.match(self.METADATA_PORT):
+                raise Exception("Invalid MetadataPort value : %s" %
+                                self.METADATA_PORT)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
