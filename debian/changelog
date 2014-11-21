@@ -1,3 +1,14 @@
+calico (0.8~2) trusty; urgency=medium
+
+  * Further fixes and enhancements to Felix
+    - Handle ACLUPDATE for deleted endpoint.
+    - Config file tweaks. Comment out values matching defaults.
+    - Add Metadata IP and Port configuration to Felix
+    - Allow address as well as IP for metadata.
+    - Ban traffic to the loopback address from VMs (unless for metadata)
+    
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Fri, 21 Nov 2014 11:59:45 +0000
+
 calico (0.8~1) trusty; urgency=medium
 
   * New fixes and enhancements to Felix

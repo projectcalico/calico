@@ -231,7 +231,7 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Thu Nov 20 2014 Neil Jerram <nj@metaswitch.com> 0.8
+* Fri Nov 21 2014 Neil Jerram <nj@metaswitch.com> 0.8
 - New fixes and enhancements to Felix
   - Clean up code and tidy up ready so that accept default rules can work.
   - Some trivial code tidy left over from the merges.
@@ -243,6 +243,11 @@ rm -rf $RPM_BUILD_ROOT
   - Unblock outgoing DHCP. Bug in fix to issue38.
   - Fix more issues with issue38 code.  Allow DHCP for IPv6 too Fix up
     getting in / out interfaces backwards
+  - Handle ACLUPDATE for deleted endpoint.
+  - Config file tweaks. Comment out values matching defaults.
+  - Add Metadata IP and Port configuration to Felix
+  - Allow address as well as IP for metadata.
+  - Ban traffic to the loopback address from VMs (unless for metadata)
 
 * Wed Nov 11 2014 Neil Jerram <nj@metaswitch.com> 0.7
 - Update packaging to support source package creation and upload.
