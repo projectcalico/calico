@@ -1,3 +1,9 @@
+calico (0.8) trusty; urgency=medium
+
+  * New announced release.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Fri, 21 Nov 2014 19:28:34 +0000
+
 calico (0.8~2) trusty; urgency=medium
 
   * Further fixes and enhancements to Felix
