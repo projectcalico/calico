@@ -18,13 +18,46 @@ felix.test.test_config
 
 Top level tests for Felix configuration.
 """
+import logging
+import sys
 import unittest
-# TODO: Importing config breaks things, so for now do nothing.
-#import calico.felix.config
+from calico.felix.config import Config, ConfigException
 
 class TestConfig(unittest.TestCase):
-    def test_basic1(self):
-        self.assertEquals(True, True)
+    def setUp(self):
+        # Set up logging. For now, we just throw away any logs we get.
+        log  = logging.getLogger("calico.felix")
+        handler = logging.NullHandler()
+        log.addHandler(handler)
+
+    def test_simple_good_config(self):
+        config = Config("calico/felix/data/felix_basic.cfg")
+        self.assertEquals(config.PLUGIN_ADDR, "controller")
+
+    def test_invalid_config(self):
+        try:
+            config = Config("calico/felix/data/felix_invalid.cfg")
+            raise Exception("Failed to trigger exception")
+        except ConfigException as exc:
+            self.assertIn("not defined in section", str(exc))
+
+    def test_bad_dns_config(self):
+        try:
+            config = Config("calico/felix/data/felix_bad_dns.cfg")
+            raise Exception("Failed to trigger exception")
+        except ConfigException as exc:
+            self.assertIn("Invalid MetadataAddr", str(exc))
+
+    def test_bad_port_config(self):
+        try:
+            config = Config("calico/felix/data/felix_bad_port.cfg")
+            raise Exception("Failed to trigger exception")
+        except ConfigException as exc:
+            self.assertIn("Invalid MetadataPort", str(exc))
+
+    def test_extra_config(self):
+        # Extra data is not an error, but does log.
+        config = Config("calico/felix/data/felix_extra.cfg")
 
 if __name__ == "__main__":
     unittest.main()

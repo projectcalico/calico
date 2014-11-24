@@ -30,12 +30,21 @@ import logging
 import re
 import socket
 
+# Logger
+log = logging.getLogger(__name__)
+
 #*****************************************************************************#
 #* TODO: It would be nice to refactor so we did not have two identical       *#
 #* definitions (we cannot import futils since it imports this module;        *#
 #* ideally we should have this regex in a common global location).           *#
 #*****************************************************************************#
 INT_REGEX  = re.compile("^[0-9]+$")
+
+class ConfigException(Exception):
+    """
+    Class of configuration exceptions.
+    """
+    pass
 
 class Config(object):
     def __init__(self, config_path):
@@ -117,16 +126,15 @@ class Config(object):
         section = section.lower()
 
         if section not in self._items:
-            raise Exception("Section %s missing from config file" % (section))
+            raise ConfigException("Section %s missing from config file" % (section))
 
         item = self._items[section]
 
         if name in item:
             value = item[name]
             del item[name]
-
         elif default is None:
-            raise Exception("Variable %s is not defined in section %s" %
+            raise ConfigException("Variable %s is not defined in section %s" %
                             (name, section))
         else:
             value = default
@@ -148,21 +156,18 @@ class Config(object):
                 self.METADATA_IP = metadata_ip
             except socket.gaierror:
                 # Cannot resolve metadata_ip; neither an IP nor resolvable.
-                raise Exception("Invalid MetadataAddr value : %s" %
+                raise ConfigException("Invalid MetadataAddr value : %s" %
                                 self.METADATA_IP)
             if not INT_REGEX.match(self.METADATA_PORT):
-                raise Exception("Invalid MetadataPort value : %s" %
+                raise ConfigException("Invalid MetadataPort value : %s" %
                                 self.METADATA_PORT)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
         #* Firewall that no unexpected items in the config file - i.e. ones  *#
         #* we have not used.                                                 *#
-        #*                                                                   *#
-        #* TODO: No logging initialised yet, so really just have to print    *#
-        #* for now.                                                          *#
         #*********************************************************************#
         for section in self._items.keys():
             for lKey in self._items[section].keys():
-                print ("Got unexpected item %s=%s" %
-                      (lKey, self._items[section][lKey]))
+                log.warning("Got unexpected item %s=%s" %
+                             (lKey, self._items[section][lKey]))
