@@ -24,15 +24,3 @@ class TestBasic(unittest.TestCase):
     def test_basic1(self):
         self.assertEquals(True, True)
 
-def suite():
-    suite_basic = unittest.TestLoader().loadTestsFromTestCase(TestBasic)
-    return unittest.TestSuite([suite_basic])
-
-def run_tests():
-    result = unittest.TextTestRunner(verbosity=2).run(suite())
-    if result.errors or result.failures:
-        return 1
-    return 0
-
-if __name__ == "__main__":
-    unittest.main()

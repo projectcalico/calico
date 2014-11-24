@@ -19,12 +19,10 @@ calico.felix_test
 Calico tests
 """
 import sys
+import unittest
 import calico.felix.test.test_felix as test_felix
 import calico.felix.test.test_config as test_config
 
-results = [test_felix.run_tests(),
-           test_felix.run_tests()]
-
-for res in results:
-    if res:
-        sys.exit(1)
+for module in test_config, test_felix:
+    suite = unittest.TestLoader().loadTestsFromModule(module)
+    unittest.TextTestRunner(verbosity=2).run(suite)

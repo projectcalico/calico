@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-felix.test.test_felix
+felix.test.test_config
 ~~~~~~~~~~~
 
-Top level tests for Felix.
+Top level tests for Felix configuration.
 """
 import unittest
 # TODO: Importing config breaks things, so for now do nothing.
@@ -25,16 +25,6 @@ import unittest
 class TestConfig(unittest.TestCase):
     def test_basic1(self):
         self.assertEquals(True, True)
-
-def suite():
-    suite_config = unittest.TestLoader().loadTestsFromTestCase(TestConfig)
-    return unittest.TestSuite([suite_config])
-
-def run_tests():
-    result = unittest.TextTestRunner(verbosity=2).run(suite())
-    if result.errors or result.failures:
-        return 1
-    return 0
 
 if __name__ == "__main__":
     unittest.main()
