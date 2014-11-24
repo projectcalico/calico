@@ -32,7 +32,14 @@ class TestConfig(unittest.TestCase):
 
     def test_simple_good_config(self):
         config = Config("calico/felix/data/felix_basic.cfg")
-        self.assertEquals(config.PLUGIN_ADDR, "controller")
+        self.assertEqual(config.PLUGIN_ADDR, "controller")
+
+    def test_missing_section(self):
+        try:
+            config = Config("calico/felix/data/felix_missing_section.cfg")
+            raise Exception("Failed to trigger exception")
+        except ConfigException as exc:
+            self.assertIn("Section log missing from config file", str(exc))
 
     def test_invalid_config(self):
         try:
@@ -58,6 +65,12 @@ class TestConfig(unittest.TestCase):
     def test_extra_config(self):
         # Extra data is not an error, but does log.
         config = Config("calico/felix/data/felix_extra.cfg")
+
+    def test_no_metadata(self):
+        # Not an error.
+        config = Config("calico/felix/data/felix_no_metadata.cfg")
+        self.assertEqual(config.METADATA_IP, None)
+        self.assertEqual(config.METADATA_PORT, None)
 
 if __name__ == "__main__":
     unittest.main()

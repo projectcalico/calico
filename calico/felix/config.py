@@ -121,7 +121,6 @@ class Config(object):
             self._items[section] = dict(self._parser.items(section))
 
     def get_cfg_entry(self, section, name, default=None):
-
         name    = name.lower()
         section = section.lower()
 
