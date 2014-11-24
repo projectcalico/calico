@@ -27,7 +27,6 @@ import time
 from calico.felix import fiptables
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6
-from calico.felix.config import Config
 
 # Logger
 log = logging.getLogger(__name__)
@@ -88,7 +87,7 @@ IPSET6_TMP_ADDR         = "felix-6-tmp-addr"
 IPSET6_TMP_ICMP         = "felix-6-tmp-icmp"
 
 
-def set_global_rules():
+def set_global_rules(config):
     """
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change - but they must be present.
@@ -97,15 +96,22 @@ def set_global_rules():
     table = fiptables.get_table(futils.IPV4, "nat")
     chain = fiptables.get_chain(table, CHAIN_PREROUTING)
 
-    # Now add the single rule to that chain. It looks like this.
-    #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
-    rule          = fiptables.Rule(futils.IPV4)
-    rule.dst      = "169.254.169.254"
-    rule.protocol = "tcp"
-    rule.create_target("DNAT", {"to_destination": "127.0.0.1:9697"})
-    rule.create_tcp_match("80")
-    fiptables.insert_rule(rule, chain)
-    fiptables.truncate_rules(chain, 1)
+    if config.METADATA_IP is None:
+        # No metadata IP. The chain should be empty - if not, clean it out.
+        chain.flush()
+    else:
+        # Now add the single rule to that chain. It looks like this.
+        #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
+        rule          = fiptables.Rule(futils.IPV4)
+        rule.dst      = "169.254.169.254"
+        rule.protocol = "tcp"
+        rule.create_target("DNAT", {"to_destination": 
+                                    "%s:%s" % (config.METADATA_IP,
+                                               config.METADATA_PORT)})
+
+        rule.create_tcp_match("80")
+        fiptables.insert_rule(rule, chain)
+        fiptables.truncate_rules(chain, 1)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#

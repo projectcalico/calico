@@ -27,7 +27,6 @@ import re
 import subprocess
 import time
 
-from calico.felix.config import Config
 
 # Logger
 log = logging.getLogger(__name__)

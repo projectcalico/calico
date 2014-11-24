@@ -27,7 +27,6 @@ import time
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6
-from calico.felix.config import Config
 
 # Logger
 log = logging.getLogger(__name__)

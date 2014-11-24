@@ -25,17 +25,10 @@ On instantiation, this module automatically parses the configuration file and
 builds a singleton configuration object. Other modules should just import the
 Config object and use the fields within it.
 """
-import argparse
 import ConfigParser
 import logging
 import re
 import socket
-
-#*****************************************************************************#
-#* This is the default configuration path - we expect in most cases that the *#
-#* configuration file path is passed in on the command line.                 *#
-#*****************************************************************************#
-CONFIG_FILE_PATH = 'felix.cfg'
 
 #*****************************************************************************#
 #* TODO: It would be nice to refactor so we did not have two identical       *#
@@ -44,17 +37,12 @@ CONFIG_FILE_PATH = 'felix.cfg'
 #*****************************************************************************#
 INT_REGEX  = re.compile("^[0-9]+$")
 
-class _Config(object):
-    def __init__(self):
+class Config(object):
+    def __init__(self, config_path):
         self._KnownSections = set()
         self._KnownObjects  = set()
 
-        # Parse command line args.
-        parser = argparse.ArgumentParser(description='Felix (Calico agent)')
-        parser.add_argument('-c', '--config-file', dest='config_file')
-        args = parser.parse_args()
-
-        self.read_cfg_file(args.config_file or CONFIG_FILE_PATH)
+        self.read_cfg_file(config_path)
 
         self.EP_RETRY_INT_MS = int(
             self.get_cfg_entry("global",
@@ -178,5 +166,3 @@ class _Config(object):
             for lKey in self._items[section].keys():
                 print ("Got unexpected item %s=%s" %
                       (lKey, self._items[section][lKey]))
-
-Config = _Config()

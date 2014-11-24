@@ -21,6 +21,7 @@ felix.felix
 
 The main logic for Felix.
 """
+import argparse
 import collections
 import logging
 import logging.handlers
@@ -37,7 +38,6 @@ from calico.felix.fsocket import Socket, Message
 from calico.felix import frules
 from calico.felix import futils
 from calico import common
-
 
 # Logger
 log = logging.getLogger(__name__)
@@ -57,7 +57,16 @@ class FelixAgent(object):
     networking state for a set of endpoints; for example for a set of virtual
     machines or containers on an individual compute host.
     """
-    def __init__(self):
+    def __init__(self, config_path):
+        # Get some configuration.
+        self.config = Config(config_path)
+
+        # Complete logging initialisation, now we have config.
+        self.complete_logging()
+
+        # We have restarted and set up logs - tell the world.
+        log.error("Felix starting")
+
         # The ZeroMQ context for this Felix.
         self.zmq_context = zmq.Context()
 
@@ -130,7 +139,7 @@ class FelixAgent(object):
         This method creates the sockets needed for connecting to the plugin.
         """
         for type in Socket.EP_TYPES:
-            sock = Socket(type)
+            sock = Socket(type, self.config)
             sock.communicate(self.hostname, self.zmq_context)
             self.sockets[type] = sock
 
@@ -140,7 +149,7 @@ class FelixAgent(object):
         manager.
         """
         for type in Socket.ACL_TYPES:
-            sock = Socket(type)
+            sock = Socket(type, self.config)
             sock.communicate(self.hostname, self.zmq_context)
             self.sockets[type] = sock
 
@@ -583,6 +592,9 @@ class FelixAgent(object):
         """
         Executes the main agent loop.
         """
+        # Set up the global rules.
+        frules.set_global_rules(self.config)
+
         while True:
             # Issue a poll request on all active sockets.
             endpoint_resync_needed = False
@@ -593,7 +605,7 @@ class FelixAgent(object):
                 # Easier just to poll all sockets, even if we expect nothing.
                 lPoller.register(sock._zmq, zmq.POLLIN)
 
-            polled_sockets = dict(lPoller.poll(Config.EP_RETRY_INT_MS))
+            polled_sockets = dict(lPoller.poll(self.config.EP_RETRY_INT_MS))
 
             # Get all the sockets with activity.
             active_sockets = (
@@ -654,7 +666,7 @@ class FelixAgent(object):
 
             # Now, check if we need to resynchronize and do it.
             if (self.resync_id is None and
-                    (time.time() - self.resync_time > Config.RESYNC_INT_SEC)):
+                    (time.time() - self.resync_time > self.config.RESYNC_INT_SEC)):
                 # Time for a total resync of all endpoints
                 endpoint_resync_needed = True
 
@@ -693,13 +705,39 @@ class FelixAgent(object):
                               uuid)
 
 
-def initialise_logging():
-    """
-    Sets up the full logging configuration. This is applied to a top level
-    (above this package) and hence to all the loggers for packages which are
-    peers of this package.
-    """
+    def complete_logging(self):
+        """
+        Updates the logging severities based on configuration.
+        """
+        name = __name__
+        log  = logging.getLogger(name[:name.rfind(".")])
+
+        # Check the log levels of the handlers we created.
+        for handler in log.handlers:
+            if isinstance(handler, logging.handlers.SysLogHandler):
+                handler.setLevel(self.config.LOGLEVSYS)
+            elif isinstance(handler, logging.StreamHandler):
+                handler.setLevel(self.config.LOGLEVSCR)
+
+        formatter = logging.Formatter(
+            '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+
+        common.mkdir_p(os.path.dirname(self.config.LOGFILE))
+        handler = logging.handlers.TimedRotatingFileHandler(self.config.LOGFILE,
+                                                            when='D',
+                                                            backupCount=10)
+        handler.setLevel(self.config.LOGLEVFILE)
+        handler.setFormatter(formatter)
+        log.addHandler(handler)
+
+
+
+def default_logging():
     #*************************************************************************#
+    #* This sets up default logging, with default severities.  When config   *#
+    #* has been read, the severities are updated, and a log to file is       *#
+    #* added.                                                                *#
+    #*                                                                       *#
     #* Here we want to set fields in the logger of the parent, so remove the *#
     #* last dot and all after it from __name__.                              *#
     #*************************************************************************#
@@ -710,37 +748,35 @@ def initialise_logging():
     formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
-    common.mkdir_p(os.path.dirname(Config.LOGFILE))
-    handler = logging.handlers.TimedRotatingFileHandler(Config.LOGFILE,
-                                                        when='D',
-                                                        backupCount=10)
-    handler.setLevel(Config.LOGLEVFILE)
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-
     handler = logging.handlers.SysLogHandler()
-    handler.setLevel(Config.LOGLEVSYS)
+    handler.setLevel(logging.ERROR)
     log.addHandler(handler)
 
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(Config.LOGLEVSCR)
+    handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
     log.addHandler(handler)
 
 
 def main():
     try:
-        # Initialise the logging.
-        initialise_logging()
+        # Initialise the logging with default parameters.
+        default_logging()
 
-        # We have restarted - tell the world.
-        log.error("Felix starting")
+        #*********************************************************************#
+        #* This is the default configuration path - we expect in most cases  *#
+        #* that the configuration file path is passed in on the command      *#
+        #* line.                                                             *#
+        #*********************************************************************#
+        CONFIG_FILE_PATH = 'felix.cfg'
+        parser = argparse.ArgumentParser(description='Felix (Calico agent)')
+        parser.add_argument('-c', '--config-file', dest='config_file')
+        args = parser.parse_args()
 
-        # Set up the global rules.
-        frules.set_global_rules()
+        config_path = args.config_file or CONFIG_FILE_PATH
 
         # Create an instance of the Felix agent and start it running.
-        agent = FelixAgent()
+        agent = FelixAgent(config_path)
         agent.run()
 
     except:
