@@ -21,7 +21,6 @@ Utility functions for managing interfaces in Felix.
 import logging
 import os
 import re
-import subprocess
 import time
 
 from calico.felix import futils
@@ -44,11 +43,11 @@ def list_tap_ips(type, tap):
     ips = set()
 
     if type == futils.IPV4:
-        data = subprocess.check_output(
-            ["ip", "route", "list", "dev", tap])
+        data = futils.check_call(
+            ["ip", "route", "list", "dev", tap])[1]
     else:
-        data = subprocess.check_output(
-            ["ip", "-6", "route", "list", "dev", tap])
+        data = futils.check_call(
+            ["ip", "-6", "route", "list", "dev", tap])[1]
 
     lines = data.split("\n")
 
@@ -95,10 +94,10 @@ def add_route(type, ip, tap, mac):
     Errors lead to exceptions that are not handled here.
     """
     if type == futils.IPV4:
-        subprocess.check_call(['arp', '-s', ip, mac, '-i', tap])
-        subprocess.check_call(["ip", "route", "add", ip, "dev", tap])
+        futils.check_call(['arp', '-s', ip, mac, '-i', tap])
+        futils.check_call(["ip", "route", "add", ip, "dev", tap])
     else:
-        subprocess.check_call(["ip", "-6", "route", "add", ip, "dev", tap])
+        futils.check_call(["ip", "-6", "route", "add", ip, "dev", tap])
 
 
 def del_route(type, ip, tap):
@@ -107,11 +106,8 @@ def del_route(type, ip, tap):
     Errors lead to exceptions that are not handled here.
     """
     if type == futils.IPV4:
-        subprocess.check_call(['arp', '-d', ip, '-i', tap])
-        subprocess.check_call(["ip", "route", "del", ip, "dev", tap])
+        futils.check_call(['arp', '-d', ip, '-i', tap])
+        futils.check_call(["ip", "route", "del", ip, "dev", tap])
     else:
-        subprocess.check_call(["ip", "-6", "route", "del", ip, "dev", tap])
-
-
-
+        futils.check_call(["ip", "-6", "route", "del", ip, "dev", tap])
 

@@ -497,7 +497,7 @@ def del_rules(id, type):
     for ipset in [from_ipset_addr, from_ipset_port,
                   to_ipset_addr, to_ipset_port]:
         if futils.call_silent(["ipset", "list", ipset]) == 0:
-            subprocess.check_call(["ipset", "destroy", ipset])
+            futils.check_call(["ipset", "destroy", ipset])
 
 
 def set_acls(id, type, inbound, in_default, outbound, out_default):
@@ -543,9 +543,9 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
     create_ipset(tmp_ipset_addr, "hash:net", family)
     create_ipset(tmp_ipset_icmp, "hash:net", family)
 
-    subprocess.check_call(["ipset", "flush", tmp_ipset_port])
-    subprocess.check_call(["ipset", "flush", tmp_ipset_addr])
-    subprocess.check_call(["ipset", "flush", tmp_ipset_icmp])
+    futils.check_call(["ipset", "flush", tmp_ipset_port])
+    futils.check_call(["ipset", "flush", tmp_ipset_addr])
+    futils.check_call(["ipset", "flush", tmp_ipset_icmp])
 
     update_ipsets(type, type + " inbound",
                   inbound,
@@ -670,25 +670,21 @@ def update_ipsets(type,
         # Now add those values to the ipsets.
         for cidr in cidrs:
             args = ["ipset", "add", ipset, cidr + suffix, "-exist"]
-            proc = subprocess.Popen(args,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT)
-            output = proc.communicate()[0]
-            retcode = proc.returncode
+            retcode, stdout, stderr = futils.check_call(args, False)
             if retcode:
                 log.error("Failed to add %s rule for %s : %s. " \
-                          "Call was %s, returning %d, output: %s",
-                          descr, id, rule, args, retcode, output)
+                          "Call was %s, returning %d, output: %s, stderr: %s",
+                          descr, id, rule, args, retcode, stdout, stderr)
 
     # Now that we have filled the tmp ipset, swap it with the real one.
-    subprocess.check_call(["ipset", "swap", tmp_ipset_addr, ipset_addr])
-    subprocess.check_call(["ipset", "swap", tmp_ipset_port, ipset_port])
-    subprocess.check_call(["ipset", "swap", tmp_ipset_icmp, ipset_icmp])
+    futils.check_call(["ipset", "swap", tmp_ipset_addr, ipset_addr])
+    futils.check_call(["ipset", "swap", tmp_ipset_port, ipset_port])
+    futils.check_call(["ipset", "swap", tmp_ipset_icmp, ipset_icmp])
 
     # Get the temporary ipsets clean again - we leave them existing but empty.
-    subprocess.check_call(["ipset", "flush", tmp_ipset_port])
-    subprocess.check_call(["ipset", "flush", tmp_ipset_addr])
-    subprocess.check_call(["ipset", "flush", tmp_ipset_icmp])
+    futils.check_call(["ipset", "flush", tmp_ipset_port])
+    futils.check_call(["ipset", "flush", tmp_ipset_addr])
+    futils.check_call(["ipset", "flush", tmp_ipset_icmp])
 
 
 def list_eps_with_rules(type):
@@ -716,7 +712,7 @@ def list_eps_with_rules(type):
             for chain in table.chains
             if chain.name.startswith(CHAIN_TO_PREFIX)}
 
-    data  = subprocess.check_output(["ipset", "list"])
+    data  = futils.check_call(["ipset", "list"])[1]
     lines = data.split("\n")
 
     for line in lines:
@@ -741,9 +737,6 @@ def create_ipset(name, typename, family):
     if futils.call_silent(["ipset", "list", name]) != 0:
         # ipset list failed - either does not exist, or an error. Either way,
         # try creation, throwing an error if it does not work.
-        subprocess.check_call(
-            ["ipset", "create", name, typename, "family", family],
-            stdout=open('/dev/null', 'w'),
-            stderr=subprocess.STDOUT)
-
+        futils.check_call(
+            ["ipset", "create", name, typename, "family", family])
 

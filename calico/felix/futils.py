@@ -42,6 +42,12 @@ IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
 PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
 INT_REGEX  = re.compile("^[0-9]+$")
 
+class FailedSystemCall(Exception):
+    """
+    Failed system call exception.
+    """
+    pass
+
 def call_silent(args):
     """
     Wrapper round subprocess_call that discards all of the output to both
@@ -52,3 +58,28 @@ def call_silent(args):
                               stderr=subprocess.STDOUT)
 
     return retcode
+
+
+def check_call(args, fatal=True):
+    """
+    Substitute for the subprocess.check_call funtion. It has the following useful
+    characteristics.
+
+    - If fatal is set to True, then it throws an exception on error (and
+      expects the caller to handle it). That exception contains the command
+      output.
+    - It returns a list with return code, stdout and stderr.
+    """
+    log.debug("Calling out to system : %s" % args)
+
+    proc = subprocess.Popen(args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    retcode = proc.returncode
+    if retcode and fatal:
+        raise FailedSystemCall("Failed system call\n  Args: %s\n  Return: %s\n"
+                               "  Stdout: %s\n  Stderr: %s" %
+                               (args, retcode, stdout, stderr))
+
+    return retcode, stdout, stderr

@@ -26,7 +26,6 @@ import logging
 import logging.handlers
 import os
 import socket
-import subprocess
 import sys
 import time
 import uuid

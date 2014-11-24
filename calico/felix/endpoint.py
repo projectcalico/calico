@@ -25,7 +25,6 @@ from calico.felix import finterface
 from calico.felix import frules
 from calico.felix import futils
 import logging
-import subprocess
 
 log = logging.getLogger(__name__)
 

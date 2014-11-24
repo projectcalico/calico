@@ -23,7 +23,6 @@ import iptc
 import logging
 import os
 import re
-import subprocess
 import time
 
 from calico.felix import futils
