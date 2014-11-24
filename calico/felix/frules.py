@@ -417,7 +417,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
 
         rule = fiptables.Rule(type, from_chain_name)
         rule.in_interface = iface
-        fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
+        fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
 
         #*********************************************************************#
         #* Similarly, create the rules that direct packets that are          *#
@@ -428,11 +428,11 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
 
         rule = fiptables.Rule(type, from_chain_name)
         rule.in_interface = iface
-        fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
+        fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
 
         rule = fiptables.Rule(type, to_chain_name)
         rule.out_interface = iface
-        fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
+        fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
     return
 
 
