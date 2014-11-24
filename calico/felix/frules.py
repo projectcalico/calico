@@ -18,7 +18,6 @@ felix.frules
 
 Felix rule management, including iptables and ipsets.
 """
-import iptc
 import logging
 import os
 import re
@@ -100,14 +99,11 @@ def set_global_rules():
 
     # Now add the single rule to that chain. It looks like this.
     #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
-    rule          = fiptables.get_rule(futils.IPV4)
+    rule          = fiptables.Rule(futils.IPV4)
     rule.dst      = "169.254.169.254"
     rule.protocol = "tcp"
-    rule.create_target("DNAT")
-    rule.target.to_destination = "127.0.0.1:9697"
-    match = iptc.Match(rule, "tcp")
-    match.dport = "80"
-    rule.add_match(match)
+    rule.create_target("DNAT", {"to_destination": "127.0.0.1:9697"})
+    rule.create_tcp_match("80")
     fiptables.insert_rule(rule, chain)
     fiptables.truncate_rules(chain, 1)
 
@@ -130,8 +126,7 @@ def set_global_rules():
     else:
         # Add a rule that forces us through the chain we just created.
         chain = fiptables.get_chain(table, "PREROUTING")
-        rule = fiptables.get_rule(futils.IPV4)
-        rule.create_target(CHAIN_PREROUTING)
+        rule = fiptables.Rule(futils.IPV4, CHAIN_PREROUTING)
         fiptables.insert_rule(rule, chain)
 
     #*************************************************************************#
@@ -140,20 +135,18 @@ def set_global_rules():
     #* rules that send to them.                                              *#
     #*************************************************************************#
     for type in (IPV4, IPV6):
-        table = fiptables.get_table(type, iptc.Table.FILTER)
+        table = fiptables.get_table(type, "filter")
         fiptables.get_chain(table, CHAIN_FORWARD)
         fiptables.get_chain(table, CHAIN_INPUT)
 
         if rules_check != 0:
             # Add rules that forces us through the chain we just created.
             chain = fiptables.get_chain(table, "FORWARD")
-            rule  = fiptables.get_rule(type)
-            rule.create_target(CHAIN_FORWARD)
+            rule  = fiptables.Rule(type, CHAIN_FORWARD)
             fiptables.insert_rule(rule, chain)
 
             chain = fiptables.get_chain(table, "INPUT")
-            rule  = fiptables.get_rule(type)
-            rule.create_target(CHAIN_INPUT)
+            rule  = fiptables.Rule(type, CHAIN_INPUT)
             fiptables.insert_rule(rule, chain)
 
 
@@ -205,10 +198,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     create_ipset(from_ipset_icmp, "hash:net", family)
 
     # Get the table.
-    if type == IPV4:
-        table  = iptc.Table(iptc.Table.FILTER)
-    else:
-        table  = iptc.Table6(iptc.Table6.FILTER)
+    table = fiptables.get_table(type, "filter")
 
     # Create the chains for packets to the interface
     to_chain = fiptables.get_chain(table, to_chain_name)
@@ -238,62 +228,45 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         #*    ip6tables -A plw -j RETURN --protocol icmpv6 --icmpv6-type 130    *#
         #************************************************************************#
         for icmp in ["130", "131", "132", "134", "135", "136"]:
-            rule = fiptables.get_rule(futils.IPV6)
-            rule.create_target("RETURN")
+            rule = fiptables.Rule(futils.IPV6, "RETURN")
             rule.protocol = "icmpv6"
-            match = iptc.Match(rule, "icmp6")
-            match.icmpv6_type = [icmp]
-            rule.add_match(match)
+            rule.create_icmp6_match([icmp])
             fiptables.insert_rule(rule, to_chain, index)
             index += 1
 
-    rule = fiptables.get_rule(type)
-    rule.create_target("DROP")
-    match = rule.create_match("conntrack")
-    match.ctstate = ["INVALID"]
+    rule = fiptables.Rule(type, "DROP")
+    rule.create_conntrack_match(["INVALID"])
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
-    match = rule.create_match("conntrack")
-    match.ctstate = ["RELATED,ESTABLISHED"]
+    rule = fiptables.Rule(type, "RETURN")
+    rule.create_conntrack_match(["RELATED,ESTABLISHED"])
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
     # "Return anything whose source matches this ipset" (for three ipsets)
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
-    match = iptc.Match(rule, "set")
-    match.match_set = [to_ipset_port, "src,dst"]
-    rule.add_match(match)
+    rule = fiptables.Rule(type, "RETURN")
+    rule.create_set_match([to_ipset_port, "src,dst"])
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
-    match = iptc.Match(rule, "set")
-    match.match_set = [to_ipset_addr, "src"]
-    rule.add_match(match)
+    rule = fiptables.Rule(type, "RETURN")
+    rule.create_set_match([to_ipset_addr, "src"])
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
+    rule = fiptables.Rule(type, "RETURN")
     if type is IPV4:
         rule.protocol = "icmp"
     else:
         rule.protocol = "icmpv6"
-    match = iptc.Match(rule, "set")
-    match.match_set = [to_ipset_icmp, "src"]
-    rule.add_match(match)
+    rule.create_set_match([to_ipset_icmp, "src"])
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
     # If we get here, drop the packet.
-    rule = fiptables.get_rule(type)
-    rule.create_target("DROP")
+    rule = fiptables.Rule(type, "DROP")
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
@@ -312,37 +285,28 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     index = 0
     if type == IPV6:
         # In ipv6 only, allows all ICMP traffic from this endpoint to anywhere.
-        rule = fiptables.get_rule(type)
-        rule.create_target("RETURN")
+        rule = fiptables.Rule(type, "RETURN")
         rule.protocol = "icmpv6"
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
 
     # "Drop if state INVALID".
-    rule = fiptables.get_rule(type)
-    rule.create_target("DROP")
-    match = rule.create_match("conntrack")
-    match.ctstate = ["INVALID"]
+    rule = fiptables.Rule(type, "DROP")
+    rule.create_conntrack_match(["INVALID"])
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
-    match = rule.create_match("conntrack")
-    match.ctstate = ["RELATED,ESTABLISHED"]
+    rule = fiptables.Rule(type, "RETURN")
+    rule.create_conntrack_match(["RELATED,ESTABLISHED"])
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
     if type == IPV4:
         # Allow outgoing DHCP packets.
-        rule = fiptables.get_rule(type)
+        rule = fiptables.Rule(type, "RETURN")
         rule.protocol = "udp"
-        rule.create_target("RETURN")
-        match = iptc.Match(rule, "udp")
-        match.sport = "68"
-        match.dport = "67"
-        rule.add_match(match)
+        rule.create_udp_match("68", "67")
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
 
@@ -351,25 +315,17 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         #* This may be unnecessary - see                                     *#
         #* https://github.com/Metaswitch/calico/issues/36                    *#
         #*********************************************************************#
-        rule = fiptables.get_rule(type)
+        rule = fiptables.Rule(type, "DROP")
         rule.protocol = "udp"
-        rule.create_target("DROP")
-        match = iptc.Match(rule, "udp")
-        match.sport = "67"
-        match.dport = "68"
-        rule.add_match(match)
+        rule.create_udp_match("67", "68")
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
 
     else:
         # Allow outgoing DHCP packets.
-        rule = fiptables.get_rule(type)
+        rule = fiptables.Rule(type, "RETURN")
         rule.protocol = "udp"
-        rule.create_target("RETURN")
-        match = iptc.Match(rule, "udp")
-        match.sport = "546"
-        match.dport = "547"
-        rule.add_match(match)
+        rule.create_udp_match("546", "547")
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
 
@@ -382,55 +338,40 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     #* chain.                                                                *#
     #*************************************************************************#
     for ip in localips:
-        rule = fiptables.get_rule(type)
-        rule.create_target("MARK")
-        rule.target.set_mark = "1"
+        rule = fiptables.Rule(type)
+        rule.create_target("MARK", {"set_mark": "1"})
         rule.src = ip
-        match = iptc.Match(rule, "mac")
-        match.mac_source = mac
-        rule.add_match(match)
+        rule.create_mac_match(mac)
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
 
-    rule = fiptables.get_rule(type)
-    rule.create_target("DROP")
-    match = rule.create_match("mark")
-    match.mark = "!1"
+    rule = fiptables.Rule(type, "DROP")
+    rule.create_mark_match("!1")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
   
     # "Permit packets whose destination matches the supplied ipsets."
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
-    match = iptc.Match(rule, "set")
-    match.match_set = [from_ipset_port, "dst,dst"]
-    rule.add_match(match)
+    rule = fiptables.Rule(type, "RETURN")
+    rule.create_set_match([from_ipset_port, "dst,dst"])
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
-    match = iptc.Match(rule, "set")
-    match.match_set = [from_ipset_addr, "dst"]
-    rule.add_match(match)
+    rule = fiptables.Rule(type, "RETURN")
+    rule.create_set_match([from_ipset_addr, "dst"])
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
-    rule = fiptables.get_rule(type)
-    rule.create_target("RETURN")
+    rule = fiptables.Rule(type, "RETURN")
     if type is IPV4:
         rule.protocol = "icmp"
     else:
         rule.protocol = "icmpv6"
-    match = iptc.Match(rule, "set")
-    match.match_set = [from_ipset_icmp, "dst"]
-    rule.add_match(match)
+    rule.create_set_match([from_ipset_icmp, "dst"])
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
     # If we get here, drop the packet.
-    rule = fiptables.get_rule(type)
-    rule.create_target("DROP")
+    rule = fiptables.Rule(type, "DROP")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
@@ -474,8 +415,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
                   (type, iface))
         chain = fiptables.get_chain(table, CHAIN_INPUT)
 
-        rule              = fiptables.get_rule(type)
-        rule.create_target(from_chain_name)
+        rule = fiptables.Rule(type, from_chain_name)
         rule.in_interface = iface
         fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
 
@@ -486,13 +426,11 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         #*********************************************************************#
         chain = fiptables.get_chain(table, CHAIN_FORWARD)
 
-        rule               = fiptables.get_rule(type)
-        rule.create_target(from_chain_name)
+        rule = fiptables.Rule(type, from_chain_name)
         rule.in_interface = iface
         fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
 
-        rule              = fiptables.get_rule(type)
-        rule.create_target(to_chain_name)
+        rule = fiptables.Rule(type, to_chain_name)
         rule.out_interface = iface
         fiptables.insert_rule(rule, chain, RULE_POSN_LAST)
     return
@@ -505,21 +443,19 @@ def del_rules(id, type):
     log.debug("Delete %s rules for %s" % (type, id))
     to_chain   = CHAIN_TO_PREFIX + id
     from_chain = CHAIN_FROM_PREFIX + id
+    table = get_table(type, "filter")
 
     if type == IPV4:
         to_ipset_port   = IPSET_TO_PORT_PREFIX + id
         to_ipset_addr   = IPSET_TO_ADDR_PREFIX + id
         from_ipset_port = IPSET_FROM_PORT_PREFIX + id
         from_ipset_addr = IPSET_FROM_ADDR_PREFIX + id
-
-        table = iptc.Table(iptc.Table.FILTER)
     else:
         to_ipset_port   = IPSET6_TO_PORT_PREFIX + id
         to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + id
         from_ipset_port = IPSET6_FROM_PORT_PREFIX + id
         from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + id
 
-        table = iptc.Table6(iptc.Table6.FILTER)
 
     #*************************************************************************#
     #* Remove the rules routing to the chain we are about to remove. The     *#
