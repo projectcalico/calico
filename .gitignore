@@ -3,3 +3,4 @@ env/
 *.egg-info/
 tmp/
 *.log
+.coverage
