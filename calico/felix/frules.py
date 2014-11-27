@@ -676,11 +676,10 @@ def update_ipsets(type,
         # Now add those values to the ipsets.
         for cidr in cidrs:
             args = ["ipset", "add", ipset, cidr + suffix, "-exist"]
-            retcode, stdout, stderr = futils.check_call(args, False)
-            if retcode:
-                log.error("Failed to add %s rule for %s : %s. " \
-                          "Call was %s, returning %d, output: %s, stderr: %s",
-                          descr, id, rule, args, retcode, stdout, stderr)
+            try:
+                stdout, stderr = futils.check_call(args)
+            except FailedSystemCall:
+                log.exception("Failed to add %s rule for %s" % (descr, id))
 
     # Now that we have filled the tmp ipset, swap it with the real one.
     futils.check_call(["ipset", "swap", tmp_ipset_addr, ipset_addr])
@@ -718,7 +717,7 @@ def list_eps_with_rules(type):
             for chain in table.chains
             if chain.name.startswith(CHAIN_TO_PREFIX)}
 
-    data  = futils.check_call(["ipset", "list"])[1]
+    data  = futils.check_call(["ipset", "list"]).stdout
     lines = data.split("\n")
 
     for line in lines:

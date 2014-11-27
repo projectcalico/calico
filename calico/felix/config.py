@@ -41,15 +41,19 @@ log = logging.getLogger(__name__)
 INT_REGEX  = re.compile("^[0-9]+$")
 
 class ConfigException(Exception):
-    """
-    Class of configuration exceptions.
-    """
-    pass
+    def __init__(self, message, path):
+        super(ConfigException, self).__init__(message)
+        self.file_path = path
+
+    def __str__(self):
+        return "%s (file path : %s)" % (self.message, self.file_path)
 
 class Config(object):
     def __init__(self, config_path):
         self._KnownSections = set()
         self._KnownObjects  = set()
+
+        self._config_path   = config_path
 
         self.read_cfg_file(config_path)
 
@@ -125,7 +129,8 @@ class Config(object):
         section = section.lower()
 
         if section not in self._items:
-            raise ConfigException("Section %s missing from config file" % (section))
+            raise ConfigException("Section %s missing from config file" %
+                                  section, self._config_path)
 
         item = self._items[section]
 
@@ -133,8 +138,8 @@ class Config(object):
             value = item[name]
             del item[name]
         elif default is None:
-            raise ConfigException("Variable %s is not defined in section %s" %
-                            (name, section))
+            raise ConfigException("Variable %s not defined in section %s" %
+                                  (name, section), self._config_path)
         else:
             value = default
 
@@ -156,10 +161,10 @@ class Config(object):
             except socket.gaierror:
                 # Cannot resolve metadata_ip; neither an IP nor resolvable.
                 raise ConfigException("Invalid MetadataAddr value : %s" %
-                                self.METADATA_IP)
+                                      self.METADATA_IP, self._config_path)
             if not INT_REGEX.match(self.METADATA_PORT):
                 raise ConfigException("Invalid MetadataPort value : %s" %
-                                self.METADATA_PORT)
+                                      self.METADATA_PORT, self._config_path)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
@@ -168,5 +173,5 @@ class Config(object):
         #*********************************************************************#
         for section in self._items.keys():
             for lKey in self._items[section].keys():
-                log.warning("Got unexpected item %s=%s" %
-                             (lKey, self._items[section][lKey]))
+                log.warning("Got unexpected item %s=%s in %s" %
+                             (lKey, self._items[section][lKey], self._config_path))

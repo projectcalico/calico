@@ -31,44 +31,34 @@ class TestConfig(unittest.TestCase):
         log.addHandler(handler)
 
     def test_simple_good_config(self):
-        config = Config("calico/felix/data/felix_basic.cfg")
+        config = Config("calico/felix/test/data/felix_basic.cfg")
         self.assertEqual(config.PLUGIN_ADDR, "controller")
 
     def test_missing_section(self):
-        try:
-            config = Config("calico/felix/data/felix_missing_section.cfg")
-            raise Exception("Failed to trigger exception")
-        except ConfigException as exc:
-            self.assertIn("Section log missing from config file", str(exc))
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Section log missing from config file"):
+            config = Config("calico/felix/test/data/felix_missing_section.cfg")
 
     def test_invalid_config(self):
-        try:
-            config = Config("calico/felix/data/felix_invalid.cfg")
-            raise Exception("Failed to trigger exception")
-        except ConfigException as exc:
-            self.assertIn("not defined in section", str(exc))
+        with self.assertRaisesRegexp(ConfigException,
+                                     "not defined in section"):
+            config = Config("calico/felix/test/data/felix_invalid.cfg")
 
     def test_bad_dns_config(self):
-        try:
-            config = Config("calico/felix/data/felix_bad_dns.cfg")
-            raise Exception("Failed to trigger exception")
-        except ConfigException as exc:
-            self.assertIn("Invalid MetadataAddr", str(exc))
+        with self.assertRaisesRegexp(ConfigException, "Invalid MetadataAddr"):
+            config = Config("calico/felix/test/data/felix_bad_dns.cfg")
 
     def test_bad_port_config(self):
-        try:
-            config = Config("calico/felix/data/felix_bad_port.cfg")
-            raise Exception("Failed to trigger exception")
-        except ConfigException as exc:
-            self.assertIn("Invalid MetadataPort", str(exc))
+        with self.assertRaisesRegexp(ConfigException, "Invalid MetadataPort"):
+            config = Config("calico/felix/test/data/felix_bad_port.cfg")
 
     def test_extra_config(self):
         # Extra data is not an error, but does log.
-        config = Config("calico/felix/data/felix_extra.cfg")
+        config = Config("calico/felix/test/data/felix_extra.cfg")
 
     def test_no_metadata(self):
         # Not an error.
-        config = Config("calico/felix/data/felix_no_metadata.cfg")
+        config = Config("calico/felix/test/data/felix_no_metadata.cfg")
         self.assertEqual(config.METADATA_IP, None)
         self.assertEqual(config.METADATA_PORT, None)
 

@@ -44,10 +44,10 @@ def list_tap_ips(type, tap):
 
     if type == futils.IPV4:
         data = futils.check_call(
-            ["ip", "route", "list", "dev", tap])[1]
+            ["ip", "route", "list", "dev", tap]).stdout
     else:
         data = futils.check_call(
-            ["ip", "-6", "route", "list", "dev", tap])[1]
+            ["ip", "-6", "route", "list", "dev", tap]).stdout
 
     lines = data.split("\n")
 

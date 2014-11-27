@@ -113,14 +113,8 @@ class Rule(object):
     def create_target(self, name, parameters=None):
         target = self._rule.create_target(name)
         if parameters is not None:
-            for name in parameters:
-                value = parameters[name]
-                if name == "to_destination":
-                    target.to_destination = value
-                elif name == "set_mark":
-                    target.set_mark = value
-                else:
-                    assert("Invalid target type : %s" % name)
+            for name, value in parameters.iteritems():
+                setattr(target, name, value)
 
     def create_tcp_match(self, dport):
         match = self._rule.create_match("tcp")

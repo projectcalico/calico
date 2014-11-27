@@ -27,6 +27,8 @@ import re
 import subprocess
 import time
 
+from collections import namedtuple
+CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
 
 # Logger
 log = logging.getLogger(__name__)
@@ -42,10 +44,19 @@ PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
 INT_REGEX  = re.compile("^[0-9]+$")
 
 class FailedSystemCall(Exception):
-    """
-    Failed system call exception.
-    """
-    pass
+    def __init__(message, args, retcode, stdout, stderr):
+        super(FailedSystemCall, self).__init__(message)
+        self.args = args
+        self.retcode = retcode
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def __str__(self):
+        return "%s (retcode : %s, args : %s)\n"  \
+            "  stdout  : %s\n" \
+            "  stderr  : %s\n" % \
+        (self.message, self.retcode, self.args, self.stdout, self.stderr)
+
 
 def call_silent(args):
     """
@@ -59,15 +70,15 @@ def call_silent(args):
     return retcode
 
 
-def check_call(args, fatal=True):
+def check_call(args):
     """
     Substitute for the subprocess.check_call funtion. It has the following useful
     characteristics.
 
-    - If fatal is set to True, then it throws an exception on error (and
+    - If the return code is non-zero, it throws an exception on error (and
       expects the caller to handle it). That exception contains the command
       output.
-    - It returns a list with return code, stdout and stderr.
+    - It returns a tuple with stdout and stderr.
     """
     log.debug("Calling out to system : %s" % args)
 
@@ -76,9 +87,7 @@ def check_call(args, fatal=True):
                             stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
     retcode = proc.returncode
-    if retcode and fatal:
-        raise FailedSystemCall("Failed system call\n  Args: %s\n  Return: %s\n"
-                               "  Stdout: %s\n  Stderr: %s" %
-                               (args, retcode, stdout, stderr))
+    if retcode:
+        raise FailedSystemCall("Failed system call" % (args, retcode, stdout, stderr))
 
-    return retcode, stdout, stderr
+    return CommandOutput(stdout, stderr)

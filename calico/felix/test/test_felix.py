@@ -34,7 +34,10 @@ import calico.felix.felix as felix
 
 class TestBasic(unittest.TestCase):
     def test_startup(self):
-        config_path = "calico/felix/data/felix_debug.cfg"
+        config_path = "calico/felix/test/data/felix_debug.cfg"
 
         felix.default_logging()
         agent = felix.FelixAgent(config_path)
+
+if __name__ == "__main__":
+    unittest.main()
