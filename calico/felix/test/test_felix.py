@@ -18,9 +18,23 @@ felix.test.test_felix
 
 Top level tests for Felix.
 """
+import sys
 import unittest
 
-class TestBasic(unittest.TestCase):
-    def test_basic1(self):
-        self.assertEquals(True, True)
+# Hide iptc, since we do not have it.
+sys.modules['iptc'] = __import__('calico.felix.test.stub_empty')
 
+# Replace calico.felix.fiptables with calico.felix.test.stub_fiptables
+import calico.felix.test.stub_fiptables
+sys.modules['calico.felix.fiptables'] = __import__('calico.felix.test.stub_fiptables')
+calico.felix.fiptables = calico.felix.test.stub_fiptables
+
+# Now import felix, and away we go.
+import calico.felix.felix as felix
+
+class TestBasic(unittest.TestCase):
+    def test_startup(self):
+        config_path = "calico/felix/data/felix_debug.cfg"
+
+        felix.default_logging()
+        agent = felix.FelixAgent(config_path)
