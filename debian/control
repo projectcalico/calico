@@ -10,8 +10,8 @@ Package: calico-compute
 Architecture: all
 Depends:
  bird,
- calico-common,
- calico-felix,
+ calico-common (= ${binary:Version}),
+ calico-felix (= ${binary:Version}),
  neutron-dhcp-agent,
  iptables-persistent,
  ${misc:Depends},
@@ -31,8 +31,8 @@ Description: Project Calico virtual networking for cloud data centers.
 Package: calico-control
 Architecture: all
 Depends:
- calico-common,
- calico-acl-manager,
+ calico-common (= ${binary:Version}),
+ calico-acl-manager (= ${binary:Version}),
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico virtual networking for cloud data centers.
@@ -66,7 +66,7 @@ Description: Project Calico virtual networking for cloud data centers.
 Package: calico-felix
 Architecture: all
 Depends:
- calico-common,
+ calico-common (= ${binary:Version}),
  ipset,
  python-dev,
  python-pip,
@@ -88,7 +88,7 @@ Description: Project Calico virtual networking for cloud data centers.
 Package: calico-acl-manager
 Architecture: all
 Depends:
- calico-common,
+ calico-common (= ${binary:Version}),
  python-zmq,
  ${misc:Depends},
  ${python:Depends},
