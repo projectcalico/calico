@@ -44,7 +44,7 @@ PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
 INT_REGEX  = re.compile("^[0-9]+$")
 
 class FailedSystemCall(Exception):
-    def __init__(message, args, retcode, stdout, stderr):
+    def __init__(self, message, args, retcode, stdout, stderr):
         super(FailedSystemCall, self).__init__(message)
         self.args = args
         self.retcode = retcode
@@ -52,10 +52,10 @@ class FailedSystemCall(Exception):
         self.stderr = stderr
 
     def __str__(self):
-        return "%s (retcode : %s, args : %s)\n"  \
-            "  stdout  : %s\n" \
-            "  stderr  : %s\n" % \
-        (self.message, self.retcode, self.args, self.stdout, self.stderr)
+        return ("%s (retcode : %s, args : %s)\n"  \
+                "  stdout  : %s\n" \
+                "  stderr  : %s\n" % \
+                (self.message, self.retcode, self.args, self.stdout, self.stderr))
 
 
 def call_silent(args):
@@ -79,6 +79,8 @@ def check_call(args):
       expects the caller to handle it). That exception contains the command
       output.
     - It returns a tuple with stdout and stderr.
+
+    If the command supplied does not exist, then an OSError is thrown.
     """
     log.debug("Calling out to system : %s" % args)
 
@@ -88,6 +90,6 @@ def check_call(args):
     stdout, stderr = proc.communicate()
     retcode = proc.returncode
     if retcode:
-        raise FailedSystemCall("Failed system call" % (args, retcode, stdout, stderr))
+        raise FailedSystemCall("Failed system call", args, retcode, stdout, stderr)
 
     return CommandOutput(stdout, stderr)

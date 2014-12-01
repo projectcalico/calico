@@ -26,6 +26,7 @@ import time
 
 from calico.felix import fiptables
 from calico.felix import futils
+from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4, IPV6
 
 # Logger
