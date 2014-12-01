@@ -203,7 +203,7 @@ rm -rf $RPM_BUILD_ROOT
 /usr/bin/calico-gen-bird-conf.sh
 /usr/bin/calico-gen-bird6-conf.sh
 /etc/neutron/calico_agent.ini
-/usr/share/calico/*
+/usr/share/calico/bird/*
 %{_initrddir}/calico-compute
 %{_datadir}/calico/calico-compute.upstart
 %doc
