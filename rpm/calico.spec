@@ -194,7 +194,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %files common
 %defattr(-,root,root,-)
-/usr/lib/python2.6/site-packages/calico*
+/usr/lib/python2.7/site-packages/calico*
 %doc
 
 %files compute
@@ -249,7 +249,7 @@ rm -rf $RPM_BUILD_ROOT
   - Allow address as well as IP for metadata.
   - Ban traffic to the loopback address from VMs (unless for metadata)
 
-* Wed Nov 11 2014 Neil Jerram <nj@metaswitch.com> 0.7
+* Tue Nov 11 2014 Neil Jerram <nj@metaswitch.com> 0.7
 - Update packaging to support source package creation and upload.
   - Implement install steps in setup.py and debian/rules, instead of setup.cfg.
 
