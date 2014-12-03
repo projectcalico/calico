@@ -38,6 +38,3 @@ class TestBasic(unittest.TestCase):
 
         felix.default_logging()
         agent = felix.FelixAgent(config_path)
-
-if __name__ == "__main__":
-    unittest.main()

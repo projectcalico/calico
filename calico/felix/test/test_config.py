@@ -61,6 +61,3 @@ class TestConfig(unittest.TestCase):
         config = Config("calico/felix/test/data/felix_no_metadata.cfg")
         self.assertEqual(config.METADATA_IP, None)
         self.assertEqual(config.METADATA_PORT, None)
-
-if __name__ == "__main__":
-    unittest.main()

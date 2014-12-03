@@ -52,9 +52,9 @@ class FailedSystemCall(Exception):
         self.stderr = stderr
 
     def __str__(self):
-        return ("%s (retcode : %s, args : %s)\n"  \
-                "  stdout  : %s\n" \
-                "  stderr  : %s\n" % \
+        return ("%s (retcode : %s, args : %s)\n"
+                "  stdout  : %s\n"
+                "  stderr  : %s\n" %
                 (self.message, self.retcode, self.args, self.stdout, self.stderr))
 
 
