@@ -17,7 +17,6 @@ import zmq
 import logging
 import argparse
 import ConfigParser
-import os
 from calico.acl_manager.net_subscriber import NetworkSubscriber
 from calico.acl_manager.net_store import NetworkStore
 from calico.acl_manager.acl_publisher import ACLPublisher
@@ -40,23 +39,23 @@ def main():
     log_file_path = config.get('log', 'LogFilePath')
 
     # Configure logging.
-    common.mkdir_p(os.path.dirname(log_file_path))
-    logging.basicConfig(filename=log_file_path, level=logging.DEBUG)
-    
+    common.default_logging()
+    common.complete_logging(log_file_path)
+
     # Create ZeroMQ context.
     context = zmq.Context()
     log.info("pyzmq version is %s" % zmq.pyzmq_version())
-    
+
     # Create and start components.
     acl_store = ACLStore()
     network_store = NetworkStore()
-    
+
     publisher = ACLPublisher(context, acl_store)
     acl_store.start(publisher)
 
     processor = RuleProcessor(acl_store, network_store)
     network_store.add_processor(processor)
-    
+
     subscriber = NetworkSubscriber(context, network_store, plugin_address)
 
 if __name__ == "__main__":
