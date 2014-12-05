@@ -26,8 +26,6 @@ import logging
 import time
 import zmq
 
-from calico.felix.config import Config
-
 log = logging.getLogger(__name__)
 
 
@@ -58,7 +56,8 @@ class Socket(object):
              TYPE_ACL_REQ: zmq.REQ,
              TYPE_ACL_SUB: zmq.SUB}
 
-    def __init__(self, type):
+    def __init__(self, type, config):
+        self.config = config
         self.type = type
         self.remote_addr = None
         self.port = Socket.PORT[type]
@@ -67,9 +66,9 @@ class Socket(object):
         self.request_outstanding = False
 
         if type in Socket.EP_TYPES:
-            self.remote_addr = Config.PLUGIN_ADDR
+            self.remote_addr = self.config.PLUGIN_ADDR
         else:
-            self.remote_addr = Config.ACL_ADDR
+            self.remote_addr = self.config.ACL_ADDR
 
     def close(self):
         """
@@ -170,7 +169,7 @@ class Socket(object):
         all sockets must have heartbeats on them.
         """
         return ((int(time.time() * 1000) - self.last_activity) >
-                Config.CONN_TIMEOUT_MS)
+                self.config.CONN_TIMEOUT_MS)
 
 
 class Message(object):

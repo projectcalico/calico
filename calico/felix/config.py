@@ -25,17 +25,13 @@ On instantiation, this module automatically parses the configuration file and
 builds a singleton configuration object. Other modules should just import the
 Config object and use the fields within it.
 """
-import argparse
 import ConfigParser
 import logging
 import re
 import socket
 
-#*****************************************************************************#
-#* This is the default configuration path - we expect in most cases that the *#
-#* configuration file path is passed in on the command line.                 *#
-#*****************************************************************************#
-CONFIG_FILE_PATH = 'felix.cfg'
+# Logger
+log = logging.getLogger(__name__)
 
 #*****************************************************************************#
 #* TODO: It would be nice to refactor so we did not have two identical       *#
@@ -44,17 +40,22 @@ CONFIG_FILE_PATH = 'felix.cfg'
 #*****************************************************************************#
 INT_REGEX  = re.compile("^[0-9]+$")
 
-class _Config(object):
-    def __init__(self):
+class ConfigException(Exception):
+    def __init__(self, message, path):
+        super(ConfigException, self).__init__(message)
+        self.file_path = path
+
+    def __str__(self):
+        return "%s (file path : %s)" % (self.message, self.file_path)
+
+class Config(object):
+    def __init__(self, config_path):
         self._KnownSections = set()
         self._KnownObjects  = set()
 
-        # Parse command line args.
-        parser = argparse.ArgumentParser(description='Felix (Calico agent)')
-        parser.add_argument('-c', '--config-file', dest='config_file')
-        args = parser.parse_args()
+        self._config_path   = config_path
 
-        self.read_cfg_file(args.config_file or CONFIG_FILE_PATH)
+        self.read_cfg_file(config_path)
 
         self.EP_RETRY_INT_MS = int(
             self.get_cfg_entry("global",
@@ -124,22 +125,21 @@ class _Config(object):
             self._items[section] = dict(self._parser.items(section))
 
     def get_cfg_entry(self, section, name, default=None):
-
         name    = name.lower()
         section = section.lower()
 
         if section not in self._items:
-            raise Exception("Section %s missing from config file" % (section))
+            raise ConfigException("Section %s missing from config file" %
+                                  section, self._config_path)
 
         item = self._items[section]
 
         if name in item:
             value = item[name]
             del item[name]
-
         elif default is None:
-            raise Exception("Variable %s is not defined in section %s" %
-                            (name, section))
+            raise ConfigException("Variable %s not defined in section %s" %
+                                  (name, section), self._config_path)
         else:
             value = default
 
@@ -160,23 +160,18 @@ class _Config(object):
                 self.METADATA_IP = metadata_ip
             except socket.gaierror:
                 # Cannot resolve metadata_ip; neither an IP nor resolvable.
-                raise Exception("Invalid MetadataAddr value : %s" %
-                                self.METADATA_IP)
+                raise ConfigException("Invalid MetadataAddr value : %s" %
+                                      self.METADATA_IP, self._config_path)
             if not INT_REGEX.match(self.METADATA_PORT):
-                raise Exception("Invalid MetadataPort value : %s" %
-                                self.METADATA_PORT)
+                raise ConfigException("Invalid MetadataPort value : %s" %
+                                      self.METADATA_PORT, self._config_path)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
         #* Firewall that no unexpected items in the config file - i.e. ones  *#
         #* we have not used.                                                 *#
-        #*                                                                   *#
-        #* TODO: No logging initialised yet, so really just have to print    *#
-        #* for now.                                                          *#
         #*********************************************************************#
         for section in self._items.keys():
             for lKey in self._items[section].keys():
-                print ("Got unexpected item %s=%s" %
-                      (lKey, self._items[section][lKey]))
-
-Config = _Config()
+                log.warning("Got unexpected item %s=%s in %s" %
+                             (lKey, self._items[section][lKey], self._config_path))
