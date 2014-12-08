@@ -458,7 +458,7 @@ class FelixAgent(object):
             self.complete_endpoint_resync(True)
             return
 
-        self.resync_expected = endpoint_count
+        self.resync_expected = int(endpoint_count)
         return
 
     def handle_getaclstate(self, message):
