@@ -32,7 +32,7 @@ class TestConfig(unittest.TestCase):
 
     def test_simple_good_config(self):
         config = Config("calico/felix/test/data/felix_basic.cfg")
-        self.assertEqual(config.PLUGIN_ADDR, "controller")
+        self.assertEqual(config.PLUGIN_ADDR, "localhost")
 
     def test_missing_section(self):
         with self.assertRaisesRegexp(ConfigException,
@@ -45,7 +45,7 @@ class TestConfig(unittest.TestCase):
             config = Config("calico/felix/test/data/felix_invalid.cfg")
 
     def test_bad_dns_config(self):
-        with self.assertRaisesRegexp(ConfigException, "Invalid MetadataAddr"):
+        with self.assertRaisesRegexp(ConfigException, "Invalid or unresolvable MetadataAddr"):
             config = Config("calico/felix/test/data/felix_bad_dns.cfg")
 
     def test_bad_port_config(self):
@@ -61,3 +61,11 @@ class TestConfig(unittest.TestCase):
         config = Config("calico/felix/test/data/felix_no_metadata.cfg")
         self.assertEqual(config.METADATA_IP, None)
         self.assertEqual(config.METADATA_PORT, None)
+
+    def test_blank_plugin(self):
+        with self.assertRaisesRegexp(ConfigException, "Blank PluginAddr"):
+            config = Config("calico/felix/test/data/felix_blank_plugin.cfg")
+
+    def test_invalid_acl(self):
+        with self.assertRaisesRegexp(ConfigException, "Invalid or unresolvable ACLAddr"):
+            config = Config("calico/felix/test/data/felix_invalid_acl.cfg")

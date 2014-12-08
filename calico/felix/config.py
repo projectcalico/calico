@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # Copyright (c) 2014 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -39,6 +38,7 @@ log = logging.getLogger(__name__)
 #* ideally we should have this regex in a common global location).           *#
 #*****************************************************************************#
 INT_REGEX  = re.compile("^[0-9]+$")
+
 
 class ConfigException(Exception):
     def __init__(self, message, path):
@@ -154,17 +154,20 @@ class Config(object):
             self.METADATA_IP = None
             self.METADATA_PORT = None
         else:
-            # Metadata can be supplied as IP or address, but we store as IP
-            try:
-                metadata_ip = socket.gethostbyname(self.METADATA_IP)
-                self.METADATA_IP = metadata_ip
-            except socket.gaierror:
-                # Cannot resolve metadata_ip; neither an IP nor resolvable.
-                raise ConfigException("Invalid MetadataAddr value : %s" %
-                                      self.METADATA_IP, self._config_path)
+            # Metadata must be supplied as IP or address, but we store as IP
+            self.METADATA_IP = self.validate_addr("MetadataAddr",
+                                                  self.METADATA_IP)
+
             if not INT_REGEX.match(self.METADATA_PORT):
                 raise ConfigException("Invalid MetadataPort value : %s" %
                                       self.METADATA_PORT, self._config_path)
+
+        #*********************************************************************#
+        #* Now the plugin and ACL manager addresses. These are allowed to be *#
+        #* IP addresses, or DNS resolvable hostnames.                        *#
+        #*********************************************************************#
+        self.validate_addr("PluginAddress", self.PLUGIN_ADDR)
+        self.validate_addr("ACLAddress", self.ACL_ADDR)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
@@ -175,3 +178,27 @@ class Config(object):
             for lKey in self._items[section].keys():
                 log.warning("Got unexpected item %s=%s in %s" %
                              (lKey, self._items[section][lKey], self._config_path))
+
+    def validate_addr(self, name, addr):
+        """
+        Validate an address, returning the IP address it resolves to. If the
+        address cannot be resolved then an exception is returned.
+
+        Parameters :
+        - name of the field, for use in logging
+        - address to resolve
+        """
+        try:
+            stripped_addr = addr.strip()
+            if not stripped_addr:
+                raise ConfigException("Blank %s value" % name,
+                                      self._config_path)
+
+            return socket.gethostbyname(addr)
+        except socket.gaierror:
+            raise ConfigException("Invalid or unresolvable %s value : %s" %
+                                  (name, addr),
+                                  self._config_path)
+
+
+
