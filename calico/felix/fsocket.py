@@ -119,7 +119,7 @@ class Socket(object):
             if self.type in Socket.REQUEST_TYPES:
                 self.request_outstanding = True
         except:
-            log.exception("Socket %s blocked on send", sock.type)
+            log.exception("Socket %s blocked on send", self.type)
             raise
 
     def receive(self):
