@@ -31,10 +31,11 @@ calico.felix.fiptables = calico.felix.test.stub_fiptables
 
 # Now import felix, and away we go.
 import calico.felix.felix as felix
+import calico.common as common
 
 class TestBasic(unittest.TestCase):
     def test_startup(self):
         config_path = "calico/felix/test/data/felix_debug.cfg"
 
-        felix.default_logging()
+        common.default_logging()
         agent = felix.FelixAgent(config_path)
