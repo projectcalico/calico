@@ -309,15 +309,21 @@ class FelixAgent(object):
         sock = self.sockets[Socket.TYPE_EP_REP]
         sock.send(Message(Message.TYPE_EP_CR, fields))
 
-        #*********************************************************************#
-        #* Finally, if this was part of our current resync then increment    *#
-        #* the count of received resyncs. If we know how many are coming and *#
-        #* this is the last one, complete the resync.                        *#
-        #*********************************************************************#
-        resync_in_progress = False
         if resync_id:
+            # This endpoint created was part of a resync.
             if resync_id == self.resync_id:
-                resync_in_progress = True
+                #*************************************************************#
+                #* It was part of the most recent resync.  Increment how     *#
+                #* many ENDPOINTCREATED requests we have received, and if    *#
+                #* this is the last one expected, complete the resync.       *#
+                #*************************************************************#
+                self.resync_recd += 1
+                log.debug("Received ENDPOINTCREATED for resync, %d out of %d" %
+                          (self.resync_recd, self.resync_expected))
+
+                if (self.resync_expected and
+                    self.resync_recd == self.resync_expected):
+                    self.complete_endpoint_resync(True)
             else:
                 #*************************************************************#
                 #* We just got an ENDPOINTCREATED for the wrong resync. This *#
@@ -328,15 +334,6 @@ class FelixAgent(object):
                 log.warning(
                     "Received ENDPOINTCREATED for %s for invalid resync %s" %
                     (endpoint_id, resync_id))
-
-        if resync_in_progress:
-            self.resync_recd += 1
-
-        last_resync = (self.resync_expected and
-                       self.resync_recd == self.resync_expected)
-
-        if resync_in_progress and last_resync:
-            self.complete_endpoint_resync(True)
 
         return
 
