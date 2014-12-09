@@ -200,7 +200,7 @@ class FelixAgent(object):
         # Send the RESYNCSTATE message.
         fields = {
             'resync_id': self.resync_id,
-            'issued': time.time() * 1000,
+            'issued': futils.time_ms(),
             'hostname': self.hostname,
         }
         self.send_request(
@@ -219,7 +219,7 @@ class FelixAgent(object):
         for endpoint_id, endpoint in self.endpoints.iteritems():
             fields = {
                 'endpoint_id': endpoint_id,
-                'issued': time.time() * 1000,
+                'issued': futils.time_ms()
             }
             self.send_request(
                 Message(Message.TYPE_GET_ACL, fields),
@@ -234,7 +234,7 @@ class FelixAgent(object):
         self.resync_id       = None
         self.resync_recd     = None
         self.resync_expected = None
-        self.resync_time     = int(time.time() * 1000)
+        self.resync_time     = futils.time_ms()
 
         if successful:
             for uuid in self.endpoints.keys():
@@ -535,7 +535,7 @@ class FelixAgent(object):
         # Having subscribed, we can now request ACL state for this endpoint.
         fields = {
             'endpoint_id': endpoint_id,
-            'issued': time.time() * 1000,
+            'issued': futils.time_ms()
         }
         self.send_request(
             Message(Message.TYPE_GET_ACL, fields),
@@ -664,7 +664,7 @@ class FelixAgent(object):
 
             # Now, check if we need to resynchronize and do it.
             if (self.resync_id is None and
-                    (time.time() - self.resync_time > self.config.RESYNC_INT_SEC)):
+                    (futils.time_ms() - self.resync_time > self.config.RESYNC_INT_SEC)):
                 # Time for a total resync of all endpoints
                 endpoint_resync_needed = True
 

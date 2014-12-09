@@ -20,9 +20,14 @@ Top level tests for Felix.
 """
 import sys
 import unittest
+import time
+import calico.felix.futils as futils
+
+# Import our stub utils module which replaces time.
+import calico.felix.test.stub_utils as stub_utils
+futils.time_ms = stub_utils.get_time
 
 # Replace zmq with our stub zmq.
-
 import calico.felix.test.stub_zmq as stub_zmq
 sys.modules['zmq'] = stub_zmq
 
@@ -33,14 +38,28 @@ sys.modules['iptc'] = __import__('calico.felix.test.stub_empty')
 import calico.felix.test.stub_fiptables
 sys.modules['calico.felix.fiptables'] = __import__('calico.felix.test.stub_fiptables')
 calico.felix.fiptables = calico.felix.test.stub_fiptables
+stub_fiptables = calico.felix.test.stub_fiptables
 
 # Now import felix, and away we go.
 import calico.felix.felix as felix
 import calico.common as common
 
 class TestBasic(unittest.TestCase):
+    def setUp(self):
+        stub_utils.set_time(0)
+        stub_zmq.clear_poll_results()
+        stub_fiptables.clear_state()
+
     def test_startup(self):
         config_path = "calico/felix/test/data/felix_debug.cfg"
 
         common.default_logging()
         agent = felix.FelixAgent(config_path)
+
+    def test_no_work(self):
+        config_path = "calico/felix/test/data/felix_debug.cfg"
+
+        common.default_logging()
+        agent = felix.FelixAgent(config_path)
+        with self.assertRaises(stub_utils.TestOverException):
+            agent.run()

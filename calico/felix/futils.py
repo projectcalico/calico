@@ -93,3 +93,10 @@ def check_call(args):
         raise FailedSystemCall("Failed system call", args, retcode, stdout, stderr)
 
     return CommandOutput(stdout, stderr)
+
+def time_ms():
+    """
+    Return the time in ms. We use this rather than directly calling time.time
+    mostly because it makes it easier to mock out for test purposes.
+    """
+    return(int(time.time()))

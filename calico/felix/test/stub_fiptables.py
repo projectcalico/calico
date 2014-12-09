@@ -27,6 +27,17 @@ RULE_POSN_LAST = -1
 tables_v4 = dict()
 tables_v6 = dict()
 
+# These definitions are not exposed to production code.
+def clear_state():
+    tables_v4.clear()
+    tables_v4["filter"] = Table(IPV4, "filter")
+    tables_v4["nat"] = Table(IPV4, "nat")
+    tables_v6.clear()
+    tables_v6["filter"] = Table(IPV6, "filter")
+
+#*****************************************************************************#
+#* From here onwards, the definitions are publicly visible.                  *#
+#*****************************************************************************#
 class Rule(object):
     """
     Fake rule object.
@@ -49,7 +60,7 @@ class Rule(object):
         self.target_name = name
         if parameters is not None:
             for key in parameters:
-                self.target_args[key] = value
+                self.target_args[key] = parameters[key]
 
     def create_tcp_match(self, dport):
         self.match_name = "tcp"
@@ -103,7 +114,7 @@ class Rule(object):
         return True
 
     def __ne__(self, other):
-        return not self.__eq__(self,other)
+        return not self.__eq__(other)
 
 class Chain(object):
     """
@@ -146,9 +157,9 @@ def get_table(type, name):
     an IP v4 or an IP v6 table according to type.
     """
     if type == IPV4:
-        table = table_v4(name)
+        table = tables_v4[name]
     else:
-        table = table_v6(name)
+        table = tables_v6[name]
 
     return table
 
@@ -160,7 +171,7 @@ def get_chain(table, name):
         chain = self.chains[name]
     else:
         chain = Chain(name)
-        self.chains[name] = chain
+        table.chains[name] = chain
 
     return chain
 
@@ -198,9 +209,9 @@ def insert_rule(rule, chain, position=0, force_position=True):
         position = len(rules)
 
     if force_position:
-        if (len(rules) <= position) or (rule._rule != chain.rules[position]):
+        if (len(rules) <= position) or (rule != chain.rules[position]):
             # Either adding after existing rules, or replacing an existing rule.
-            chain.insert_rule(rule._rule, position)
+            chain.rules.insert(position, rule)
     else:
         #*********************************************************************#
         #* The python-iptables code to compare rules does a comparison on    *#
@@ -208,13 +219,8 @@ def insert_rule(rule, chain, position=0, force_position=True):
         #* the offset into the chain. Hence the test below finds whether     *#
         #* there is a rule with the same parameters anywhere in the chain.   *#
         #*********************************************************************#
-        if rule._rule not in chain.rules:
-            chain.insert_rule(rule._rule, position)
+        if rule not in chain.rules:
+            chain.rules.insert(position, rule)
 
     return
-
-def init_state():
-    tables_v4["filter"] = Table("filter")
-    tables_v4["nat"] = Table("nat")
-    tables_v6["filter"] = Table("filter")
 
