@@ -24,10 +24,7 @@ The main logic for Felix.
 import argparse
 import collections
 import logging
-import logging.handlers
-import os
 import socket
-import sys
 import time
 import uuid
 import zmq
@@ -62,7 +59,12 @@ class FelixAgent(object):
         self.config = Config(config_path)
 
         # Complete logging initialisation, now we have config.
-        self.complete_logging()
+        common.complete_logging(
+            self.config.LOGFILE,
+            self.config.LOGLEVFILE,
+            self.config.LOGLEVSYS,
+            self.config.LOGLEVSCR
+        )
 
         # We have restarted and set up logs - tell the world.
         log.error("Felix starting")
@@ -701,63 +703,10 @@ class FelixAgent(object):
                               uuid)
 
 
-    def complete_logging(self):
-        """
-        Updates the logging severities based on configuration.
-        """
-        name = __name__
-        log  = logging.getLogger(name[:name.rfind(".")])
-
-        # Check the log levels of the handlers we created.
-        for handler in log.handlers:
-            if isinstance(handler, logging.handlers.SysLogHandler):
-                handler.setLevel(self.config.LOGLEVSYS)
-            elif isinstance(handler, logging.StreamHandler):
-                handler.setLevel(self.config.LOGLEVSCR)
-
-        formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
-
-        common.mkdir_p(os.path.dirname(self.config.LOGFILE))
-        handler = logging.handlers.TimedRotatingFileHandler(self.config.LOGFILE,
-                                                            when='D',
-                                                            backupCount=10)
-        handler.setLevel(self.config.LOGLEVFILE)
-        handler.setFormatter(formatter)
-        log.addHandler(handler)
-
-
-
-def default_logging():
-    #*************************************************************************#
-    #* This sets up default logging, with default severities.  When config   *#
-    #* has been read, the severities are updated, and a log to file is       *#
-    #* added.                                                                *#
-    #*                                                                       *#
-    #* Here we want to set fields in the logger of the parent, so remove the *#
-    #* last dot and all after it from __name__.                              *#
-    #*************************************************************************#
-    name = __name__
-    log  = logging.getLogger(name[:name.rfind(".")])
-
-    log.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
-
-    handler = logging.handlers.SysLogHandler()
-    handler.setLevel(logging.ERROR)
-    log.addHandler(handler)
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-
-
 def main():
     try:
         # Initialise the logging with default parameters.
-        default_logging()
+        common.default_logging()
 
         #*********************************************************************#
         #* This is the default configuration path - we expect in most cases  *#
