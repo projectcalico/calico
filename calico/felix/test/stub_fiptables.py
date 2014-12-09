@@ -16,8 +16,7 @@
 felix.test.stub_fiptables
 ~~~~~~~~~~~~
 
-IP tables management functions. This is a wrapper round python-iptables that
-allows us to mock it out for testing.
+Stub version of the fiptables module.
 """
 from calico.felix.futils import IPV4, IPV6
 

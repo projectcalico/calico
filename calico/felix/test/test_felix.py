@@ -21,6 +21,11 @@ Top level tests for Felix.
 import sys
 import unittest
 
+# Replace zmq with our stub zmq.
+
+import calico.felix.test.stub_zmq as stub_zmq
+sys.modules['zmq'] = stub_zmq
+
 # Hide iptc, since we do not have it.
 sys.modules['iptc'] = __import__('calico.felix.test.stub_empty')
 
