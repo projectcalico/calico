@@ -22,11 +22,13 @@ calico.common
 Calico common utilities.
 """
 import logging
+import logging.handlers
 import os
 import sys
 import errno
 
 AGENT_TYPE_CALICO = 'Calico agent'
+FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
 
 def mkdir_p(path):
     """http://stackoverflow.com/a/600612/190597 (tzot)"""
@@ -53,7 +55,7 @@ def default_logging():
     - attaching a StreamHandler with the Calico formatter, to log to stdout,
       with DEBUG level
 
-    This default explicitly excludes adding a log to file. This is because
+    This default explicitly excludes adding logging to file. This is because
     working out what file to log to requires reading the configuration file,
     and doing that may cause errors that we want to log! To add a file logger,
     call :meth:`complete_logging() <calico.common.complete_logging>` after
@@ -66,10 +68,7 @@ def default_logging():
     syslog_handler.setLevel(logging.ERROR)
     root_logger.addHandler(syslog_handler)
 
-    formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
-    )
-
+    formatter = logging.Formatter(FORMAT_STRING)
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(formatter)
@@ -88,6 +87,10 @@ def complete_logging(logfile=None,
     separate step to the initial logging configuration in order to ensure that
     logging is available as early in execution as possible, i.e. before the
     config file has been parsed.
+
+    This function must only be called once, after 
+    :meth:`default_logging() <calico.common.default_logging>`
+    has been called.
     """
     root_logger = logging.getLogger()
 
@@ -103,10 +106,7 @@ def complete_logging(logfile=None,
     if logfile is not None:
         mkdir_p(os.path.dirname(logfile))
 
-        formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
-        )
-
+        formatter = logging.Formatter(FORMAT_STRING)
         file_handler = logging.handlers.TimedRotatingFileHandler(
             logfile, when="D", backupCount=10
         )

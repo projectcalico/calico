@@ -24,7 +24,6 @@ The main logic for Felix.
 import argparse
 import collections
 import logging
-import logging.handlers
 import socket
 import time
 import uuid
