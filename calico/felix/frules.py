@@ -450,7 +450,7 @@ def del_rules(id, type):
     log.debug("Delete %s rules for %s" % (type, id))
     to_chain   = CHAIN_TO_PREFIX + id
     from_chain = CHAIN_FROM_PREFIX + id
-    table = get_table(type, "filter")
+    table = fiptables.get_table(type, "filter")
 
     if type == IPV4:
         to_ipset_port   = IPSET_TO_PORT_PREFIX + id
