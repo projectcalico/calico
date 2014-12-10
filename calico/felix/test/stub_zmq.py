@@ -107,10 +107,16 @@ class Poller(object):
             raise stub_utils.TestOverException
 
         poll_result = poll_results.pop(0)
-        stub_test.set_time(time)
+        stub_utils.set_time(poll_result.time)
+
+        retval = dict();
+
         for socket in self.sockets:
-            if socket._type in poll_results.events:
-                socket._msg = poll_results.events[socket._type]
+            if socket._type in poll_result.events:
+                socket._msg = poll_result.events[socket._type]
+                retval[socket] = "POLLIN"
+
+        return retval
 
 
 class Context(object):

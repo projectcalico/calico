@@ -101,6 +101,20 @@ class Rule(object):
 
         return True
 
+    def __str__(self):
+        output = self.target_name
+        if self.target_args:
+            output += " " + str(self.target_args)
+        output += " " + (self.protocol if self.protocol else "all")
+        output += " " + (self.src if self.src else "anywhere")
+        output += " " + (self.in_interface if self.in_interface else "any_in")
+        output += " " + (self.out_interface if self.out_interface else "any_out")
+        if self.match_name:
+            output += " " + self.match_name
+        output += ((" " + str(self.match_args)) if self.match_args else "")
+
+        return output
+
     def __ne__(self, other):
         return not self.__eq__(other)
 
@@ -108,14 +122,15 @@ class Chain(object):
     """
     Mimic of an IPTC chain. Rules must be a list (not a set).
     """
-    def __init__(self, name, rules=[]):
+    def __init__(self, name):
         self.name = name
-        self.rules = rules
+        self.rules = []
+        self.type = None # Not known until put in table.
 
     def flush(self):
         self.rules = []
 
-    def delete_rule(rule):
+    def delete_rule(self, rule):
         # The rule must exist or it is an error.
         self.rules.remove(rule)
 
@@ -144,10 +159,13 @@ def get_table(type, name):
     Gets a table. This is a simple helper method that returns either
     an IP v4 or an IP v6 table according to type.
     """
+    
     if type == IPV4:
         table = current_state.tables_v4[name]
-    else:
+    elif type == IPV6:
         table = current_state.tables_v6[name]
+    else:
+        raise ValueError("Invalid type %s for table" % type)
 
     return table
 
@@ -160,6 +178,7 @@ def get_chain(table, name):
     else:
         chain = Chain(name)
         table.chains[name] = chain
+        chain.type = table.type
 
     return chain
 
@@ -189,9 +208,13 @@ def insert_rule(rule, chain, position=0, force_position=True):
     unless it already exists there. If force_position is False, then the rule
     is added only if it does not exist anywhere in the list of rules.
     """
-    # TODO: Function identical to value in production code.
     found = False
     rules = chain.rules
+
+    # Check the type - python iptables would do this for us.
+    if rule.type != chain.type:
+        raise ValueError("Type of rule (%s) does not match chain (%s)" %
+                         (rule.type, chain.type))
 
     if position == RULE_POSN_LAST:
         position = len(rules)
@@ -219,8 +242,9 @@ def reset_current_state():
     current_state.reset()
 
 class UnexpectedStateException(Exception):
-    def __init__(self, message, actual, expected):
-        super(UnexpectedStateException, self).__init__(message)
+    def __init__(self, actual, expected):
+        super(UnexpectedStateException, self).__init__(
+            "iptables state does not match")
         self.actual = actual
         self.expected = expected
 
@@ -294,7 +318,8 @@ class TableState(object):
         for table in self.tables:
             output += "TABLE %s (%s)\n" % (table.name, table.type)
             for chain_name in sorted(table.chains.keys()):
-                output += "  Chain %s\n" % chain.name
+                output += "  Chain %s\n" % chain_name
+                chain = table.chains[chain_name]
                 for rule in chain.rules:
                     output += "    %s\n" % rule
                 output += "\n"

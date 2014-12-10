@@ -43,9 +43,13 @@ stub_fiptables = calico.felix.test.stub_fiptables
 # Now import felix, and away we go.
 import calico.felix.felix as felix
 import calico.common as common
+from calico.felix.futils import IPV4, IPV6
 
 # IPtables state.
 expected_state = stub_fiptables.TableState()
+
+# Default config path.
+config_path = "calico/felix/test/data/felix_debug.cfg"
 
 class TestBasic(unittest.TestCase):
     def setUp(self):
@@ -55,15 +59,50 @@ class TestBasic(unittest.TestCase):
         expected_state.reset()
 
     def test_startup(self):
-        config_path = "calico/felix/test/data/felix_debug.cfg"
-
         common.default_logging()
         agent = felix.FelixAgent(config_path)
+        set_global_rules()
+        stub_fiptables.check_state(expected_state)
 
     def test_no_work(self):
-        config_path = "calico/felix/test/data/felix_debug.cfg"
+        poll_result = stub_zmq.PollResult(0)
 
         common.default_logging()
         agent = felix.FelixAgent(config_path)
-        with self.assertRaises(stub_utils.TestOverException):
-            agent.run()
+        agent.run()
+
+        set_global_rules()
+        stub_fiptables.check_state(expected_state)
+
+
+def set_global_rules():
+    """
+    Sets up the minimal global rules we expect to have.
+    """
+    table = expected_state.tables_v4["filter"]
+    chain = table.chains["FORWARD"]
+    chain.rules.append(stub_fiptables.Rule(IPV4, "felix-FORWARD"))
+    chain = table.chains["INPUT"]
+    chain.rules.append(stub_fiptables.Rule(IPV4, "felix-INPUT"))
+    stub_fiptables.get_chain(table, "felix-FORWARD")
+    stub_fiptables.get_chain(table, "felix-INPUT")
+
+    table = expected_state.tables_v4["nat"]
+    chain = table.chains["PREROUTING"]
+    chain.rules.append(stub_fiptables.Rule(IPV4, "felix-PREROUTING"))
+
+    chain = stub_fiptables.get_chain(table, "felix-PREROUTING")
+    rule = stub_fiptables.Rule(IPV4)
+    rule.protocol = "tcp"
+    rule.create_tcp_match("80")
+    rule.create_target("DNAT", {'to_destination': '127.0.0.1:9697'})
+    chain.rules.append(rule)
+
+    table = expected_state.tables_v6["filter"]
+    chain = table.chains["FORWARD"]
+    chain.rules.append(stub_fiptables.Rule(IPV6, "felix-FORWARD"))
+    chain = table.chains["INPUT"]
+    chain.rules.append(stub_fiptables.Rule(IPV6, "felix-INPUT"))
+    stub_fiptables.get_chain(table, "felix-FORWARD")
+    stub_fiptables.get_chain(table, "felix-INPUT")
+
