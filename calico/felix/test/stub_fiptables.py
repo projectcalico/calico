@@ -23,20 +23,8 @@ from calico.felix.futils import IPV4, IPV6
 # Special value to mean "put this rule at the end".
 RULE_POSN_LAST = -1
 
-# Global variables for current state.
-tables_v4 = dict()
-tables_v6 = dict()
-
-# These definitions are not exposed to production code.
-def clear_state():
-    tables_v4.clear()
-    tables_v4["filter"] = Table(IPV4, "filter")
-    tables_v4["nat"] = Table(IPV4, "nat")
-    tables_v6.clear()
-    tables_v6["filter"] = Table(IPV6, "filter")
-
 #*****************************************************************************#
-#* From here onwards, the definitions are publicly visible.                  *#
+#* The range of definitions below mimic fiptables.                           *#
 #*****************************************************************************#
 class Rule(object):
     """
@@ -157,9 +145,9 @@ def get_table(type, name):
     an IP v4 or an IP v6 table according to type.
     """
     if type == IPV4:
-        table = tables_v4[name]
+        table = current_state.tables_v4[name]
     else:
-        table = tables_v6[name]
+        table = current_state.tables_v6[name]
 
     return table
 
@@ -168,7 +156,7 @@ def get_chain(table, name):
     Gets a chain, creating it first if it does not exist.
     """
     if name in table.chains:
-        chain = self.chains[name]
+        chain = table.chains[name]
     else:
         chain = Chain(name)
         table.chains[name] = chain
@@ -223,4 +211,97 @@ def insert_rule(rule, chain, position=0, force_position=True):
             chain.rules.insert(position, rule)
 
     return
+
+#*****************************************************************************#
+#* The next few definitions are not exposed to production code.              *#
+#*****************************************************************************#
+def reset_current_state():
+    current_state.reset()
+
+class UnexpectedStateException(Exception):
+    def __init__(self, message, actual, expected):
+        super(UnexpectedStateException, self).__init__(message)
+        self.actual = actual
+        self.expected = expected
+
+    def __str__(self):
+        return ("%s\nACTUAL:\n%s\nEXPECTED\n%s" %
+                (self.message, self.actual, self.expected))
+
+
+def check_state(expected_state):
+    """
+    Checks that the current state matches the expected state. Throws an
+    exception if it does not.
+    """
+    actual = str(current_state)
+    expected = str(expected_state)
+
+    if actual != expected:
+        raise UnexpectedStateException(actual, expected)
+
+class TableState(object):
+    """
+    Defines the current state of iptables - which rules exist in which
+    tables. Normally there will be two - the state that the test generates, and
+    the state that the test expects to have at the end. At the end of the test,
+    these are compared.
+    """
+    def __init__(self):
+        self.tables_v4 = dict()
+        self.tables_v6 = dict()
+
+        self.reset()
+
+
+    def reset(self):
+        """
+        Clear the state of the tables, getting them back to being empty.
+        """
+        self.tables_v4.clear()
+        self.tables = []
+
+        table = Table(IPV4, "filter")
+        get_chain(table, "INPUT")
+        get_chain(table, "OUTPUT")
+        get_chain(table, "FORWARD")
+        self.tables_v4["filter"] = table
+        self.tables.append(table)
+
+        table = Table(IPV4, "nat")
+        get_chain(table, "PREROUTING")
+        get_chain(table, "POSTROUTING")
+        get_chain(table, "INPUT")
+        get_chain(table, "OUTPUT")
+        self.tables_v4["nat"] = table
+        self.tables.append(table)
+
+        self.tables_v6.clear()
+        table = Table(IPV6, "filter")
+        get_chain(table, "INPUT")
+        get_chain(table, "OUTPUT")
+        get_chain(table, "FORWARD")
+        self.tables_v6["filter"] = table
+        self.tables.append(table)
+
+
+    def __str__(self):
+        """
+        Convert a full state to a readable string to use in matches and compare
+        for final testing.
+        """
+        output = ""
+        for table in self.tables:
+            output += "TABLE %s (%s)\n" % (table.name, table.type)
+            for chain_name in sorted(table.chains.keys()):
+                output += "  Chain %s\n" % chain.name
+                for rule in chain.rules:
+                    output += "    %s\n" % rule
+                output += "\n"
+            output += "\n"
+
+        return output
+
+# Current state.
+current_state = TableState()
 

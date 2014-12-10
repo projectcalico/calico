@@ -44,11 +44,15 @@ stub_fiptables = calico.felix.test.stub_fiptables
 import calico.felix.felix as felix
 import calico.common as common
 
+# IPtables state.
+expected_state = stub_fiptables.TableState()
+
 class TestBasic(unittest.TestCase):
     def setUp(self):
         stub_utils.set_time(0)
         stub_zmq.clear_poll_results()
-        stub_fiptables.clear_state()
+        stub_fiptables.reset_current_state()
+        expected_state.reset()
 
     def test_startup(self):
         config_path = "calico/felix/test/data/felix_debug.cfg"
