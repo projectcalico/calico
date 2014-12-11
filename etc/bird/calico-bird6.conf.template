@@ -1,6 +1,13 @@
 
 router id @MY_IPV4_ADDRESS@;
 
+filter export_bgp {
+  if ( net != ::/0 ) then {
+     accept;
+   }
+   reject;
+}
+
 # Configure synchronization between BIRD's routing tables and the
 # kernel.
 protocol kernel {
@@ -8,6 +15,7 @@ protocol kernel {
   persist;        # Don't remove routes on bird shutdown
   scan time 2;    # Scan kernel routing table every 2 seconds
   device routes;
+  import all;
   export all;     # Default is export none
 }
 
@@ -28,7 +36,7 @@ protocol bgp N1 {
   neighbor @RR_IPV6_ADDRESS@ as @AS_NUMBER@;
   multihop;
   import all;
-  export all;
+  export filter export_bgp;
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
   source address @MY_IPV6_ADDRESS@;  # The local address we use for the TCP connection
