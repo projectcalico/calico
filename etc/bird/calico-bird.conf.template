@@ -1,7 +1,7 @@
 
 router id @MY_IP_ADDRESS@;
 
-filter import_kernel {
+filter export_bgp {
 if ( net != 0.0.0.0/0 ) then {
    accept;
    }
@@ -15,7 +15,7 @@ protocol kernel {
   persist;        # Don't remove routes on bird shutdown
   scan time 2;    # Scan kernel routing table every 2 seconds
   device routes;
-  import filter import_kernel;
+  import all;
   export all;     # Default is export none
 }
 
@@ -36,7 +36,7 @@ protocol bgp N1 {
   neighbor @RR_IP_ADDRESS@ as @AS_NUMBER@;
   multihop;
   import all;
-  export all;
+  export filter export_bgp;
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
   source address @MY_IP_ADDRESS@;  # The local address we use for the TCP connection
