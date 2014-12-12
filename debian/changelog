@@ -1,3 +1,45 @@
+calico (0.9~rc1) trusty; urgency=medium
+
+  * Felix unit testing, restructuring and fixes
+    - Initial test infrastructure - no real tests yet.
+    - Basic restructuring - start reorg of futils
+    - Move iptables specific stuff into its own module. Not complete, but works in this state, so committing now!
+    - Remove some iptc knowledge from frules.
+    - More refactoring to allow mocking out of iptables code.
+    - Minor fix after some testing of the new code.
+    - Tidy up Felix use of system calls.
+    - Simplify test framework. Still no actual tests...
+    - Move config logic around so it can be tested.
+    - Add some config file tests
+    - Having got coverage working, a couple of tests.
+    - Add .coverage to .gitignore
+    - Stub out fiptables properly. Can now do minimal test of felix init.
+    - Code review markups.
+    - More minor code markups.
+    - Force the resync count to be an integer.
+    - Tidy up some confusing code relating to resync counts.
+    - Simplify the if test by removing extra duplicate test.
+    - Firewall against bad plugin or ACL addresses
+    - Updated config code to firewall against invalid addresses.
+    - Fix incorrect function path causing Felix crash
+    - Ensure BIRD gets all kernel routes in its table.
+    - Ensure BIRD6 can make correct routing decisions.
+    - More code tidies (including a real bug).
+  * Packaging tidy-up
+    - Harmonize content and presentation of copyright notices
+    - Pin Calico package versions to each other
+    - RPM packaging fixes
+    - Don't include upstart jobs for Felix and ACL manage in calico-compute RPM
+    - Move CalicoMechanismDriver back here (i.e. out of Neutron tree)
+    - Move CalicoMechanismDriver back here (i.e. out of Neutron tree)
+  * Logging improvements
+    - Add common logging setup functions.
+    - Replace Felix logging with common log functions.
+    - Replace ACL manager logging with common code.
+    - Fix import statements for logging.
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com> Fri, 12 Dec 2014 11:15:31 +0000
+
 calico (0.8) trusty; urgency=medium
 
   * New announced release.
