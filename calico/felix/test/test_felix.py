@@ -26,11 +26,8 @@ import uuid
 
 import calico.felix.futils as futils
 
-# Import our stub utils module which replaces time.
+# Import our stub utils module which replaces time etc.
 import calico.felix.test.stub_utils as stub_utils
-futils.time_ms = stub_utils.get_time
-futils.check_call = stub_utils.check_call
-futils.call_silent = stub_utils.call_silent
 
 # Replace zmq with our stub zmq.
 import calico.felix.test.stub_zmq as stub_zmq
@@ -77,9 +74,19 @@ class TestBasic(unittest.TestCase):
         cls.real_finterface = calico.felix.finterface
         endpoint.finterface = stub_finterface
 
+        cls.real_time_ms = futils.time_ms
+        cls.real_check_call = futils.check_call
+        cls.real_call_silent = futils.call_silent
+        futils.time_ms = stub_utils.get_time
+        futils.check_call = stub_utils.check_call
+        futils.call_silent = stub_utils.call_silent
+
     @classmethod
     def tearDownClass(cls):
         endpoint.finterface = cls.real_finterface
+        futils.time_ms = cls.real_time_ms
+        futils.check_call = cls.real_check_call
+        futils.call_silent = cls.real_call_silent
 
     def setUp(self):
         stub_utils.set_time(0)
