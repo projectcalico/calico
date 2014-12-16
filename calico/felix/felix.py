@@ -54,7 +54,7 @@ class FelixAgent(object):
     networking state for a set of endpoints; for example for a set of virtual
     machines or containers on an individual compute host.
     """
-    def __init__(self, config_path):
+    def __init__(self, config_path, context):
         # Get some configuration.
         self.config = Config(config_path)
 
@@ -70,7 +70,7 @@ class FelixAgent(object):
         log.error("Felix starting")
 
         # The ZeroMQ context for this Felix.
-        self.zmq_context = zmq.Context()
+        self.zmq_context = context
 
         # The hostname of the machine on which this Felix is running.
         self.hostname = socket.gethostname()
@@ -278,7 +278,6 @@ class FelixAgent(object):
 
         endpoint_id = message.fields['endpoint_id']
         resync_id   = message.fields['resync_id']
-        issued      = message.fields['issued']
         mac         = message.fields['mac']
 
         # First, check whether we know about this endpoint already. If we do,
@@ -352,7 +351,6 @@ class FelixAgent(object):
 
         # Get the endpoint data from the message.
         endpoint_id = message.fields['endpoint_id']
-        issued      = message.fields['issued']
 
         try:
             # Update the endpoint
@@ -397,7 +395,6 @@ class FelixAgent(object):
         log.debug("Received endpoint destroy: %s", message.fields)
 
         delete_id = message.fields['endpoint_id']
-        issued    = message.fields['issued']
 
         try:
             endpoint = self.endpoints.pop(delete_id)
@@ -555,7 +552,7 @@ class FelixAgent(object):
         state = fields.get('state')
         addresses = set()
         try:
-            for addr in fields.get('addrs', None):
+            for addr in fields['addrs']:
                 addresses.add(Address(addr))
         except KeyError:
             log.error("Missing addrs or IP in addrs for endpoint %s, data %s",
@@ -722,7 +719,7 @@ def main():
         config_path = args.config_file or CONFIG_FILE_PATH
 
         # Create an instance of the Felix agent and start it running.
-        agent = FelixAgent(config_path)
+        agent = FelixAgent(config_path, zmq.Context())
         while True:
             agent.run()
 
