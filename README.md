@@ -67,9 +67,10 @@ interested in getting involved and contributing to the project.
 
 It's great that you're interested! In additional to being able to install
 Calico from packages, you can install the source directly. If you want to work
-on the code, we recommend installing the source directly in a Python virtual
-environment. In your virtual environment, switch to the directory containing
-the code and type:
+on the code, we recommend installing the source directly in a Python
+[virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/).
+In your virtual environment, switch to the directory containing the code and
+type:
 
     pip install -e .
 
