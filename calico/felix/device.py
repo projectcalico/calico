@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-felix.finterface
+felix.device
 ~~~~~~~~~~~~
 
-Utility functions for managing interfaces in Felix.
+Utility functions for managing devices in Felix.
 """
 import logging
 import os

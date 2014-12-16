@@ -46,12 +46,12 @@ calico.felix.fiptables = calico.felix.test.stub_fiptables
 stub_fiptables = calico.felix.test.stub_fiptables
 
 #*****************************************************************************#
-#* Load calico.felix.finterface and calico.felix.test.stub_finterface; we do *#
-#* not blindly override as we need to avoid getting into a state where tests *#
-#* of finterface cannot be made to work.                                     *#
+#* Load calico.felix.device and calico.felix.test.stub_device; we do not     *#
+#* blindly override as we need to avoid getting into a state where tests of  *#
+#* device cannot be made to work.                                            *#
 #*****************************************************************************#
-import calico.felix.finterface
-import calico.felix.test.stub_finterface as stub_finterface
+import calico.felix.device
+import calico.felix.test.stub_device as stub_device
 
 # Now import felix, and away we go.
 import calico.felix.felix as felix
@@ -72,13 +72,13 @@ log = logging.getLogger(__name__)
 class TestBasic(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Completely replace the finterface module.
-        cls.real_finterface = calico.felix.finterface
-        endpoint.finterface = stub_finterface
+        # Completely replace the device module.
+        cls.real_device = calico.felix.device
+        endpoint.device = stub_device
 
     @classmethod
     def tearDownClass(cls):
-        endpoint.finterface = cls.real_finterface
+        endpoint.device = cls.real_device
 
     def create_patch(self, name):
         return thing
@@ -100,7 +100,7 @@ class TestBasic(unittest.TestCase):
         stub_utils.set_time(0)
         stub_fiptables.reset_current_state()
         expected_state.reset()
-        stub_finterface.reset()
+        stub_device.reset()
 
     def tearDown(self):
         pass
@@ -169,8 +169,8 @@ class TestBasic(unittest.TestCase):
         agent.run()
 
         log.debug("Create tap interface %s" % tap)
-        tap_obj = stub_finterface.TapInterface(tap)
-        stub_finterface.add_tap(tap_obj)
+        tap_obj = stub_device.TapInterface(tap)
+        stub_device.add_tap(tap_obj)
         poll_result = context.add_poll_result(150)
         agent.run()
 
@@ -232,8 +232,8 @@ class TestBasic(unittest.TestCase):
 
         poll_result = context.add_poll_result(250)
         poll_result.add(TYPE_EP_REP, endpoint_created_req)
-        tap_obj2 = stub_finterface.TapInterface(tap2)
-        stub_finterface.add_tap(tap_obj2)
+        tap_obj2 = stub_device.TapInterface(tap2)
+        stub_device.add_tap(tap_obj2)
         agent.run()
 
         # Check that we got what we expected - i.e. a success response, a GETACLSTATE,
@@ -255,7 +255,7 @@ class TestBasic(unittest.TestCase):
 
         poll_result = context.add_poll_result(300)
         poll_result.add(TYPE_EP_REP, endpoint_destroyed_req)
-        stub_finterface.del_tap(tap2)
+        stub_device.del_tap(tap2)
         agent.run()
 
         # Rebuild and recheck the state.
