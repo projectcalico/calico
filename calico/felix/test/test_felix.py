@@ -47,14 +47,17 @@ sys.modules['calico.felix.fiptables'] = __import__('calico.felix.test.stub_fipta
 calico.felix.fiptables = calico.felix.test.stub_fiptables
 stub_fiptables = calico.felix.test.stub_fiptables
 
-# Replace calico.felix.finterface with calico.felix.test.stub_finterface
-import calico.felix.test.stub_finterface
-sys.modules['calico.felix.finterface'] = __import__('calico.felix.test.stub_finterface')
-calico.felix.finterface = calico.felix.test.stub_finterface
-stub_finterface = calico.felix.test.stub_finterface
+#*****************************************************************************#
+#* Load calico.felix.finterface and calico.felix.test.stub_finterface; we do *#
+#* not blindly override as we need to avoid getting into a state where tests *#
+#* of finterface cannot be made to work.                                     *#
+#*****************************************************************************#
+import calico.felix.finterface
+import calico.felix.test.stub_finterface as stub_finterface
 
 # Now import felix, and away we go.
 import calico.felix.felix as felix
+import calico.felix.endpoint as endpoint
 import calico.common as common
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.endpoint import Address, Endpoint
@@ -69,11 +72,23 @@ config_path = "calico/felix/test/data/felix_debug.cfg"
 log = logging.getLogger(__name__)
 
 class TestBasic(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.real_finterface = calico.felix.finterface
+        endpoint.finterface = stub_finterface
+
+    @classmethod
+    def tearDownClass(cls):
+        endpoint.finterface = cls.real_finterface
+
     def setUp(self):
         stub_utils.set_time(0)
         stub_fiptables.reset_current_state()
         expected_state.reset()
         stub_finterface.reset()
+
+    def tearDown(self):
+        pass
 
     def test_startup(self):
         common.default_logging()
