@@ -45,10 +45,10 @@ class TestFutils(unittest.TestCase):
         # Test a command. Result must include "calico" given where it is run from.
         args = ["ls"]
         result = futils.check_call(args)
-        self.assertNotEquals(result.stdout, None)
-        self.assertNotEquals(result.stderr, None)
+        self.assertNotEqual(result.stdout, None)
+        self.assertNotEqual(result.stderr, None)
         self.assertTrue("calico" in result.stdout)
-        self.assertEquals(result.stderr, "")
+        self.assertEqual(result.stderr, "")
 
     def test_bad_check_call(self):
         # Test an invalid command - must parse but not return anything.
@@ -57,21 +57,21 @@ class TestFutils(unittest.TestCase):
             futils.check_call(args)
             self.assertTrue(False)
         except futils.FailedSystemCall as e:
-            self.assertNotEquals(e.retcode, 0)
-            self.assertEquals(list(e.args), args)
-            self.assertNotEquals(e.stdout, None)
-            self.assertNotEquals(e.stderr, None)
+            self.assertNotEqual(e.retcode, 0)
+            self.assertEqual(list(e.args), args)
+            self.assertNotEqual(e.stdout, None)
+            self.assertNotEqual(e.stderr, None)
             self.assertTrue("wibble_wobble" in str(e))
 
     def test_good_call_silent(self):
         # Test a command. Result must include "calico" given where it is run from.
         args = ["ls"]
         retcode = futils.call_silent(args)
-        self.assertEquals(retcode, 0)
+        self.assertEqual(retcode, 0)
 
     def test_bad_check_call(self):
         # Test an invalid command - must parse but not return anything.
         args = ["ls", "wibble_wobble"]
         retcode = futils.call_silent(args)
-        self.assertNotEquals(retcode, 0)
+        self.assertNotEqual(retcode, 0)
 

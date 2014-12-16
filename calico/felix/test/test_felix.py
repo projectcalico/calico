@@ -184,7 +184,7 @@ class TestBasic(unittest.TestCase):
 
         acl_req = context.sent_data[TYPE_ACL_REQ].pop()
         self.assertFalse(context.sent_data_present())
-        self.assertEquals(acl_req['endpoint_id'], endpoint_id)
+        self.assertEqual(acl_req['endpoint_id'], endpoint_id)
 
         acl_rsp = { 'type': "GETACLSTATE",
                     'rc': "SUCCESS",
@@ -242,7 +242,7 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
 
         acl_req = context.sent_data[TYPE_ACL_REQ].pop()
-        self.assertEquals(acl_req['endpoint_id'], endpoint_id2)
+        self.assertEqual(acl_req['endpoint_id'], endpoint_id2)
         self.assertFalse(context.sent_data_present())
 
         add_endpoint_rules(suffix2, tap2, addr2, None, mac2)
