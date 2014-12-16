@@ -678,7 +678,7 @@ def update_ipsets(type,
         for cidr in cidrs:
             args = ["ipset", "add", ipset, cidr + suffix, "-exist"]
             try:
-                stdout, stderr = futils.check_call(args)
+                futils.check_call(args)
             except FailedSystemCall:
                 log.exception("Failed to add %s rule for %s" % (descr, id))
 
