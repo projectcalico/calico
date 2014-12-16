@@ -62,14 +62,15 @@ def call_silent(args):
     """
     Wrapper round subprocess_call that discards all of the output to both
     stdout and stderr. *args* must be a list.
+
+    An exceptions is thrown if the command fails.
     """
-    retcode = subprocess.call(args,
-                              stdout=open('/dev/null', 'w'),
-                              stderr=subprocess.STDOUT)
-
-    return retcode
-
-
+    try:
+        check_call(args)
+        return 0
+    except FailedSystemCall as e:
+        return e.retcode
+        
 def check_call(args):
     """
     Substitute for the subprocess.check_call funtion. It has the following useful

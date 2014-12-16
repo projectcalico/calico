@@ -19,6 +19,7 @@ felix.test.test_felix
 Top level tests for Felix.
 """
 import logging
+import mock
 import sys
 import time
 import unittest
@@ -71,24 +72,31 @@ log = logging.getLogger(__name__)
 class TestBasic(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Completely replace the finterface module.
         cls.real_finterface = calico.felix.finterface
         endpoint.finterface = stub_finterface
-
-        cls.real_time_ms = futils.time_ms
-        cls.real_check_call = futils.check_call
-        cls.real_call_silent = futils.call_silent
-        futils.time_ms = stub_utils.get_time
-        futils.check_call = stub_utils.check_call
-        futils.call_silent = stub_utils.call_silent
 
     @classmethod
     def tearDownClass(cls):
         endpoint.finterface = cls.real_finterface
-        futils.time_ms = cls.real_time_ms
-        futils.check_call = cls.real_check_call
-        futils.call_silent = cls.real_call_silent
+
+    def create_patch(self, name):
+        return thing
 
     def setUp(self):
+        # Mock out some functions
+        patcher = mock.patch('calico.felix.futils.time_ms')
+        patcher.start().side_effect = stub_utils.get_time
+        self.addCleanup(patcher.stop)
+        
+        patcher = mock.patch('calico.felix.futils.check_call')
+        patcher.start().side_effect = stub_utils.check_call
+        self.addCleanup(patcher.stop)
+        
+        patcher = mock.patch('calico.felix.futils.call_silent')
+        patcher.start().side_effect = stub_utils.call_silent       
+        self.addCleanup(patcher.stop)
+
         stub_utils.set_time(0)
         stub_fiptables.reset_current_state()
         expected_state.reset()
