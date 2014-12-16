@@ -71,6 +71,8 @@ def list_tap_ips(type, tap):
                 log.warning("No IP address found in line %s for %s" %
                             (line, tap))
 
+    log.debug("Found existing IP addresses : %s" % ips)
+
     return ips
 
 
@@ -110,4 +112,3 @@ def del_route(type, ip, tap):
         futils.check_call(["ip", "route", "del", ip, "dev", tap])
     else:
         futils.check_call(["ip", "-6", "route", "del", ip, "dev", tap])
-
