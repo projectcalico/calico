@@ -19,6 +19,15 @@ felix.test.stub_fiptables
 Stub version of the fiptables module.
 """
 from calico.felix.futils import IPV4, IPV6
+import difflib
+
+from collections import namedtuple
+#*****************************************************************************#
+#* The following is so that rule.target.name can be used to identify rules;  *#
+#* this is the subset of the Target object from iptc that is actually        *#
+#* required by calling code.                                                 *#
+#*****************************************************************************#
+RuleTarget = namedtuple('RuleTarget', ['name'])
 
 # Special value to mean "put this rule at the end".
 RULE_POSN_LAST = -1
@@ -34,6 +43,7 @@ class Rule(object):
         self.type = type
 
         self.target_name = target_name
+        self.target = RuleTarget(target_name)
         self.target_args = dict()
 
         self.match_name = None
@@ -45,6 +55,7 @@ class Rule(object):
         self.out_interface = None
 
     def create_target(self, name, parameters=None):
+        self.target = RuleTarget(name)
         self.target_name = name
         if parameters is not None:
             for key in parameters:
@@ -78,7 +89,6 @@ class Rule(object):
         self.match_name = "udp"
         self.match_args["sport"] = sport
         self.match_args["dport"] = dport
-
 
     def __eq__(self, other):
         if (self.protocol != other.protocol or
@@ -152,14 +162,24 @@ class Table(object):
     def __init__(self, type, name):
         self.type = type
         self.name = name
-        self.chains = dict()
+        self.chains = []
+        self.chains_dict = dict()
+
+    def is_chain(self, name):
+        return (name in self.chains_dict)
+
+    def delete_chain(self, name):
+        del self.chains_dict[name]
+        for chain in self.chains:
+            if chain.name == name:
+                self.chains.remove(chain)
+                
 
 def get_table(type, name):
     """
     Gets a table. This is a simple helper method that returns either
     an IP v4 or an IP v6 table according to type.
-    """
-    
+    """  
     if type == IPV4:
         table = current_state.tables_v4[name]
     elif type == IPV6:
@@ -173,11 +193,12 @@ def get_chain(table, name):
     """
     Gets a chain, creating it first if it does not exist.
     """
-    if name in table.chains:
-        chain = table.chains[name]
+    if name in table.chains_dict:
+        chain = table.chains_dict[name]
     else:
         chain = Chain(name)
-        table.chains[name] = chain
+        table.chains_dict[name] = chain
+        table.chains.append(chain)
         chain.type = table.type
 
     return chain
@@ -245,12 +266,16 @@ class UnexpectedStateException(Exception):
     def __init__(self, actual, expected):
         super(UnexpectedStateException, self).__init__(
             "iptables state does not match")
+        self.diff = "\n".join(difflib.unified_diff(
+            expected.split("\n"),
+            actual.split("\n")))
+
         self.actual = actual
         self.expected = expected
 
     def __str__(self):
-        return ("%s\nACTUAL:\n%s\nEXPECTED\n%s" %
-                (self.message, self.actual, self.expected))
+        return ("%s\nDIFF:\n%s\nACTUAL:\n%s\nEXPECTED\n%s" %
+                (self.message, self.diff, self.actual, self.expected))
 
 
 def check_state(expected_state):
@@ -317,9 +342,9 @@ class TableState(object):
         output = ""
         for table in self.tables:
             output += "TABLE %s (%s)\n" % (table.name, table.type)
-            for chain_name in sorted(table.chains.keys()):
+            for chain_name in sorted(table.chains_dict.keys()):
                 output += "  Chain %s\n" % chain_name
-                chain = table.chains[chain_name]
+                chain = table.chains_dict[chain_name]
                 for rule in chain.rules:
                     output += "    %s\n" % rule
                 output += "\n"

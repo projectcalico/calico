@@ -276,9 +276,10 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint create: %s", message.fields)
 
+        # TODO: Ought to firewall missing mandatory fields here.
         endpoint_id = message.fields['endpoint_id']
-        resync_id   = message.fields['resync_id']
         mac         = message.fields['mac']
+        resync_id   = message.fields.get('resync_id')
 
         # First, check whether we know about this endpoint already. If we do,
         # we should raise a warning log unless we're in the middle of a resync.

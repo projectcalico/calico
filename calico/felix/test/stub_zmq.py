@@ -18,6 +18,8 @@ felix.test.stub_zmq
 
 Stub version of the 0MQ interface.
 """
+import json
+import logging
 import calico.felix.test.stub_utils as stub_utils
 
 # Globals defined by 0MQ
@@ -31,9 +33,18 @@ SUB = "SUB"
 # Socket option types
 IDENTITY = "IDENTITY"
 SUBSCRIBE = "SUBSCRIBE"
+UNSUBSCRIBE = "UNSUBSCRIBE"
 NOBLOCK = "NOBLOCK"
 
-poll_results = []
+# Socket types - matching the values in fsocket, but arbitrary.
+TYPE_EP_REQ  = "EP REQ"
+TYPE_EP_REP  = "EP REP"
+TYPE_ACL_REQ = "ACL REQ"
+TYPE_ACL_SUB = "ACL SUB"
+TYPE_UNKNOWN = "Unknown"
+
+# Logger
+log = logging.getLogger(__name__)
 
 #*****************************************************************************#
 #* The next few methods are not exposed to production code, but are called   *#
@@ -48,16 +59,13 @@ class PollResult(object):
     def __init__(self, time, socket_type=None, msg=None):
         self.time = time
         self.events = dict()
+        self.uuid = dict()
         if socket_type is not None:
-            self.events[socket_type] = msg
-        poll_results.append(self)
+            self.add(socket_type, msg)
 
-    def add(socket_type, msg):
-        self.events[socket_type] = msg
-
-def clear_poll_results():
-    global poll_results
-    poll_results = []
+    def add(self, socket_type, msg, uuid=None):
+        self.events[socket_type] = json.dumps(msg)
+        self.uuid[socket_type] = uuid
 
 class ZmqStubException(Exception):
     pass
@@ -71,59 +79,119 @@ class StubSocket(object):
     This is called a stub socket because there are two other things called a
     socket, and this particular class is not exposed on the interface.
     """
-
-    # xxx Ouch. This has the type of the ZMQ socket, not of the blasted Felix socket
-
-    def __init__(self, type):
-        self._type = type
-        self._msg = None
+    def __init__(self, context, zmq_type):
+        self.zmq_type = zmq_type
+        self.type = TYPE_UNKNOWN
+        self.msg = None
+        self.uuid = None # uuid corresponding to msg above for recv_multipart
+        self.context = context
 
     def bind(self, addr):
-        if self._type != REP:
-            raise ZmqStubException("Cannot bind to non-REP socket")
-        pass
+        if self.zmq_type != REP:
+            raise ZmqStubException("Cannot bind to non-REP socket (%s)" %
+                                   self.zmq_type)
+        if addr.endswith(":9902"):
+            self.type = TYPE_EP_REP
+        else:
+            raise ZmqStubException("Unexpected port in bind : %s" % addr)
 
     def connect(self, addr):
-        if self._type == REP:
-            raise ZmqStubException("Cannot bind to REP socket")
-        pass
+        if self.zmq_type == REP:
+            raise ZmqStubException("Cannot connect to REP socket")
+        if addr.endswith(":9901"):
+            self.type = TYPE_EP_REQ
+        elif addr.endswith(":9905"):
+            self.type = TYPE_ACL_REQ
+        elif addr.endswith(":9906"):
+            self.type = TYPE_ACL_SUB
+        else:
+            raise ZmqStubException("Unexpected port in connect : %s" % addr)
 
     def setsockopt(self, option_type, option_value):
         pass
 
-    def send(self, msg, option=None):
-        pass
+    def send(self, msg, options=None):
+        self.context.sent_data[self.type].append(json.loads(msg))
+
+    def recv(self, options=None):
+        if self.msg is None:
+            raise ZmqStubException("No message available")
+        return self.msg
+
+    def recv_multipart(self, options=None):
+        if self.msg is None:
+            raise ZmqStubException("No message available")
+        elif self.uuid is None:
+            raise ZmqStubException("No uuid available")
+        return (self.uuid, self.msg)
 
 class Poller(object):
     def __init__(self):
         self.sockets = set()
+        self.context = None
 
     def register(self, socket, poll_type):
         self.sockets.add(socket)
+        self.context = socket.context
 
     def poll(self, timeout):
-        if not poll_results:
+        if not self.context.poll_results:
             # No poll results left - end test
             raise stub_utils.TestOverException
 
-        poll_result = poll_results.pop(0)
+        poll_result = self.context.poll_results.pop(0)
+        log.debug("Got poll request, returning new time %d, events : %s" %
+                  (poll_result.time, poll_result.events))
+
         stub_utils.set_time(poll_result.time)
 
         retval = dict();
 
         for socket in self.sockets:
-            if socket._type in poll_result.events:
-                socket._msg = poll_result.events[socket._type]
-                retval[socket] = "POLLIN"
+            if socket.type in poll_result.events:
+                socket.msg = poll_result.events[socket.type]
+                socket.uuid = poll_result.uuid[socket.type]
+                retval[socket] = POLLIN
+                del poll_result.events[socket.type]
+
+        if poll_result.events:
+            # Make sure that all the events have been assigned to a socket
+            raise ZmqStubException("Got event for socket not polled on : %s" %
+                                   poll_result.events)
 
         return retval
 
 
 class Context(object):
     def __init__(self):
-        pass
+        # Array of PollResults, created and passed in by the tests.
+        self.poll_results = []
+
+        # Data sent by Felix - a dictionary, of which each element is a list.
+        self.sent_data = dict()
+        self.sent_data[TYPE_EP_REQ] = []
+        self.sent_data[TYPE_EP_REP] = []
+        self.sent_data[TYPE_ACL_REQ] = []
+        self.sent_data[TYPE_ACL_SUB] = []
 
     def socket(self, type):
-        sock = StubSocket(type)
+        sock = StubSocket(self, type)
         return sock
+
+    def add_poll_result(self, time, socket_type=None, msg=None):
+        poll_result = PollResult(time, socket_type, msg)
+        self.poll_results.append(poll_result)
+        return poll_result
+
+    def sent_data_present(self):
+        """
+        Return True if any sent_data is present. Used to validate that only
+        expected data is there.
+        """
+        for socket_type in self.sent_data:
+            if self.sent_data[socket_type]:
+                log.debug("Got data to send for socket type : %s" %
+                          socket_type)
+                return True
+        return False
 

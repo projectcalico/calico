@@ -23,12 +23,12 @@ import sys
 import unittest
 from calico.felix.config import Config, ConfigException
 
+# Logger
+log = logging.getLogger(__name__)
+
 class TestConfig(unittest.TestCase):
     def setUp(self):
-        # Set up logging. For now, we just throw away any logs we get.
-        log  = logging.getLogger("calico.felix")
-        handler = logging.NullHandler()
-        log.addHandler(handler)
+        pass
 
     def test_simple_good_config(self):
         config = Config("calico/felix/test/data/felix_basic.cfg")
