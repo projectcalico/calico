@@ -339,4 +339,3 @@ class TableState(object):
 
 # Current state.
 current_state = TableState()
-

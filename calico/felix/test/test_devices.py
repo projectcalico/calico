@@ -16,7 +16,7 @@
 felix.test.test_devices
 ~~~~~~~~~~~
 
-Test the interface handling code.
+Test the device handling code.
 """
 import logging
 import mock

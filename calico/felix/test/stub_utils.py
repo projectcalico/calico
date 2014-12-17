@@ -82,15 +82,6 @@ def check_call(args):
             return CommandOutput("", "")
         elif args[1] == "swap":
             return CommandOutput("", "")
-    elif args[0] == "ip" and args[1] == "-6":
-        # IP route management - IP v6. For now, just return success and no data.
-        return CommandOutput("", "")
-    elif args[0] == "ip":
-        # IP route management - IP v4. For now, just return success and no data.
-        return CommandOutput("", "")
-    elif args[0] == "arp":
-        # arp configuration
-        return CommandOutput("", "")
     else:
         raise UnexpectedSystemCall("Unexpected system call : %s" % args)
     
