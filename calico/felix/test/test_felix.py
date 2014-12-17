@@ -64,7 +64,8 @@ from calico.felix.futils import IPV4, IPV6
 from calico.felix.endpoint import Endpoint
 
 # IPtables state.
-expected_state = stub_fiptables.TableState()
+expected_iptables = stub_fiptables.TableState()
+expected_ipsets = stub_ipsets.IpsetState()
 
 # Default config path.
 config_path = "calico/felix/test/data/felix_debug.cfg"
@@ -98,9 +99,11 @@ class TestBasic(unittest.TestCase):
         
         stub_utils.set_time(0)
         stub_fiptables.reset_current_state()
-        expected_state.reset()
         stub_devices.reset()
         stub_ipsets.reset()
+
+        expected_iptables.reset()
+        expected_ipsets.reset()
 
     def tearDown(self):
         pass
@@ -109,8 +112,10 @@ class TestBasic(unittest.TestCase):
         common.default_logging()
         context = stub_zmq.Context()
         agent = felix.FelixAgent(config_path, context)
+
         set_expected_global_rules()
-        stub_fiptables.check_state(expected_state)
+        stub_fiptables.check_state(expected_iptables)
+        stub_ipsets.check_state(expected_ipsets)
 
     def test_no_work(self):
         """
@@ -123,11 +128,12 @@ class TestBasic(unittest.TestCase):
         agent.run()
 
         set_expected_global_rules()
-        stub_fiptables.check_state(expected_state)
+        stub_fiptables.check_state(expected_iptables)
+        stub_ipsets.check_state(expected_ipsets)
 
-    def test_create_endpoint(self):
+    def test_main_flow(self):
         """
-        Test starting up and receiving a single ENDPOINTCREATED request.
+        Test starting up and going through some of the basic flow.
         """
         common.default_logging()
         context = stub_zmq.Context()
@@ -195,7 +201,9 @@ class TestBasic(unittest.TestCase):
         # Check the rules are what we expect.
         set_expected_global_rules()
         add_endpoint_rules(suffix, tap, addr, None, mac)
-        stub_fiptables.check_state(expected_state)
+        stub_fiptables.check_state(expected_iptables)
+        add_endpoint_ipsets(suffix)
+        stub_ipsets.check_state(expected_ipsets)
 
         # OK - now try giving it some ACLs, and see if they get applied correctly.
         # TODO: Need to check ipset content too.
@@ -203,7 +211,7 @@ class TestBasic(unittest.TestCase):
         acls['v4']['outbound'].append({ 'cidr': "0.0.0.0/0", 'protocol': "icmp" })
         acls['v4']['outbound'].append({ 'cidr': "1.2.3.0/24", 'protocol': "tcp" })
         acls['v4']['outbound'].append({ 'cidr': "0.0.0.0/0", 'protocol': "tcp", 'port': "80" })
-        acls['v4']['inbound'].append({ 'cidr': "1.2.3.0/24", 'protocol': "icmp" })
+        acls['v4']['inbound'].append({ 'cidr': "1.2.2.0/24", 'protocol': "icmp" })
         acls['v4']['inbound'].append({ 'cidr': "0.0.0.0/0", 'protocol': "tcp", 'port': "8080" })
         acls['v4']['inbound'].append({ 'cidr': "2.4.6.8/32", 'protocol': "udp", 'port': "8080" })
         acls['v4']['inbound'].append({ 'cidr': "1.2.3.3/32" })
@@ -214,7 +222,20 @@ class TestBasic(unittest.TestCase):
         poll_result.add(TYPE_ACL_SUB, acl_req, endpoint_id)
         agent.run()
 
-        stub_fiptables.check_state(expected_state)
+        stub_fiptables.check_state(expected_iptables)
+        expected_ipsets.add("felix-from-icmp-" + suffix, "0.0.0.0/1")
+        expected_ipsets.add("felix-from-icmp-" + suffix, "128.0.0.0/1")
+        expected_ipsets.add("felix-from-port-" + suffix, "1.2.3.0/24,tcp:0")
+        expected_ipsets.add("felix-from-port-" + suffix, "0.0.0.0/1,tcp:80")
+        expected_ipsets.add("felix-from-port-" + suffix, "128.0.0.0/1,tcp:80")
+
+        expected_ipsets.add("felix-to-icmp-" + suffix, "1.2.2.0/24")
+        expected_ipsets.add("felix-to-port-" + suffix, "0.0.0.0/1,tcp:8080")
+        expected_ipsets.add("felix-to-port-" + suffix, "128.0.0.0/1,tcp:8080")
+        expected_ipsets.add("felix-to-port-" + suffix, "2.4.6.8/32,udp:8080")
+        expected_ipsets.add("felix-to-addr-" + suffix, "1.2.3.3/32")
+
+        stub_ipsets.check_state(expected_ipsets)
 
         # Add another endpoint, and check the state.
         endpoint_id2 = str(uuid.uuid4())
@@ -246,7 +267,9 @@ class TestBasic(unittest.TestCase):
         self.assertFalse(context.sent_data_present())
 
         add_endpoint_rules(suffix2, tap2, addr2, None, mac2)
-        stub_fiptables.check_state(expected_state)
+        stub_fiptables.check_state(expected_iptables)
+        add_endpoint_ipsets(suffix2)
+        stub_ipsets.check_state(expected_ipsets)
 
         # OK, finally wind down with an ENDPOINTDESTROYED message for that second endpoint.
         endpoint_destroyed_req = { 'type': "ENDPOINTDESTROYED",
@@ -261,7 +284,7 @@ class TestBasic(unittest.TestCase):
         # Rebuild and recheck the state.
         set_expected_global_rules()
         add_endpoint_rules(suffix, tap, addr, None, mac)
-        stub_fiptables.check_state(expected_state)
+        stub_fiptables.check_state(expected_iptables)
 
     def test_rule_reordering(self):
         # TODO: Want to check that with extra rules, the extras get tidied up.
@@ -294,9 +317,9 @@ def set_expected_global_rules():
     """
     Sets up the minimal global rules we expect to have.
     """
-    expected_state.reset()
+    expected_iptables.reset()
 
-    table = expected_state.tables_v4["filter"]
+    table = expected_iptables.tables_v4["filter"]
     chain = table.chains_dict["FORWARD"]
     chain.rules.append(stub_fiptables.Rule(IPV4, "felix-FORWARD"))
     chain = table.chains_dict["INPUT"]
@@ -304,7 +327,7 @@ def set_expected_global_rules():
     stub_fiptables.get_chain(table, "felix-FORWARD")
     stub_fiptables.get_chain(table, "felix-INPUT")
 
-    table = expected_state.tables_v4["nat"]
+    table = expected_iptables.tables_v4["nat"]
     chain = table.chains_dict["PREROUTING"]
     chain.rules.append(stub_fiptables.Rule(IPV4, "felix-PREROUTING"))
 
@@ -315,7 +338,7 @@ def set_expected_global_rules():
     rule.create_target("DNAT", {'to_destination': '127.0.0.1:9697'})
     chain.rules.append(rule)
 
-    table = expected_state.tables_v6["filter"]
+    table = expected_iptables.tables_v6["filter"]
     chain = table.chains_dict["FORWARD"]
     chain.rules.append(stub_fiptables.Rule(IPV6, "felix-FORWARD"))
     chain = table.chains_dict["INPUT"]
@@ -329,7 +352,7 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     a clean state to allow us to test that the state is correct, even after
     it starts with extra rules etc.
     """
-    table = expected_state.tables_v4["filter"]
+    table = expected_iptables.tables_v4["filter"]
     chain = table.chains_dict["felix-FORWARD"]
     rule = stub_fiptables.Rule(IPV4, "felix-from-%s" % suffix)
     rule.in_interface = tap
@@ -415,7 +438,7 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     rule = stub_fiptables.Rule(IPV4, "DROP")
     chain.rules.append(rule)
 
-    table = expected_state.tables_v6["filter"]
+    table = expected_iptables.tables_v6["filter"]
     chain = table.chains_dict["felix-FORWARD"]
     rule = stub_fiptables.Rule(IPV6, "felix-from-%s" % suffix)
     rule.in_interface = tap
@@ -505,4 +528,25 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
 
     rule = stub_fiptables.Rule(IPV6, "DROP")
     chain.rules.append(rule)
+
+
+def add_endpoint_ipsets(suffix):
+    """
+    Sets up the ipsets for a given endpoint. Actual entries in these endpoints
+    must then be added manually.
+    """
+    # Create ipsets if they do not already exist.
+    expected_ipsets.create("felix-to-port-" + suffix, "hash:net,port", "inet")
+    expected_ipsets.create("felix-to-addr-" + suffix, "hash:net", "inet")
+    expected_ipsets.create("felix-to-icmp-" + suffix, "hash:net", "inet")
+    expected_ipsets.create("felix-from-port-" + suffix, "hash:net,port", "inet")
+    expected_ipsets.create("felix-from-addr-" + suffix, "hash:net", "inet")
+    expected_ipsets.create("felix-from-icmp-" + suffix, "hash:net", "inet")
+
+    expected_ipsets.create("felix-6-to-port-" + suffix, "hash:net,port", "inet6")
+    expected_ipsets.create("felix-6-to-addr-" + suffix, "hash:net", "inet6")
+    expected_ipsets.create("felix-6-to-icmp-" + suffix, "hash:net", "inet6")
+    expected_ipsets.create("felix-6-from-port-" + suffix, "hash:net,port", "inet6")
+    expected_ipsets.create("felix-6-from-addr-" + suffix, "hash:net", "inet6")
+    expected_ipsets.create("felix-6-from-icmp-" + suffix, "hash:net", "inet6")
 
