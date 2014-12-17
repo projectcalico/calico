@@ -46,19 +46,22 @@ calico.felix.fiptables = calico.felix.test.stub_fiptables
 stub_fiptables = calico.felix.test.stub_fiptables
 
 #*****************************************************************************#
-#* Load calico.felix.devices and calico.felix.test.stub_devices; we do not   *#
-#* blindly override as we need to avoid getting into a state where tests of  *#
-#* devices cannot be made to work.                                           *#
+#* Load calico.felix.devices and calico.felix.test.stub_devices, and the     *#
+#* same for ipsets; we do not blindly override as we need to avoid getting   *#
+#* into a state where tests of these modules cannot be made to work.         *#
 #*****************************************************************************#
 import calico.felix.devices
 import calico.felix.test.stub_devices as stub_devices
+import calico.felix.ipsets
+import calico.felix.test.stub_ipsets as stub_ipsets
 
 # Now import felix, and away we go.
 import calico.felix.felix as felix
 import calico.felix.endpoint as endpoint
+import calico.felix.frules as frules
 import calico.common as common
 from calico.felix.futils import IPV4, IPV6
-from calico.felix.endpoint import Address, Endpoint
+from calico.felix.endpoint import Endpoint
 
 # IPtables state.
 expected_state = stub_fiptables.TableState()
@@ -72,35 +75,32 @@ log = logging.getLogger(__name__)
 class TestBasic(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Completely replace the devices module.
+        # Completely replace the devices and ipsets modules.
         cls.real_devices = calico.felix.devices
         endpoint.devices = stub_devices
+        cls.real_ipsets = calico.felix.ipsets
+        frules.ipsets = stub_ipsets
 
     @classmethod
     def tearDownClass(cls):
+        # Reinstate the modules we overwrote
         endpoint.devices = cls.real_devices
+        frules.ipsets = cls.real_ipsets
 
     def create_patch(self, name):
         return thing
 
     def setUp(self):
-        # Mock out some functions
+        # Mock out time
         patcher = mock.patch('calico.felix.futils.time_ms')
         patcher.start().side_effect = stub_utils.get_time
         self.addCleanup(patcher.stop)
         
-        patcher = mock.patch('calico.felix.futils.check_call')
-        patcher.start().side_effect = stub_utils.check_call
-        self.addCleanup(patcher.stop)
-        
-        patcher = mock.patch('calico.felix.futils.call_silent')
-        patcher.start().side_effect = stub_utils.call_silent       
-        self.addCleanup(patcher.stop)
-
         stub_utils.set_time(0)
         stub_fiptables.reset_current_state()
         expected_state.reset()
         stub_devices.reset()
+        stub_ipsets.reset()
 
     def tearDown(self):
         pass

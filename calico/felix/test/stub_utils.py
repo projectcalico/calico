@@ -58,30 +58,3 @@ class TestOverException(Exception):
 class UnexpectedSystemCall(Exception):
     pass
 
-def call_silent(args):
-    """
-    This is a stub version of the call_silent function from futils, that always
-    returns 0.
-    TODO: We should do better here.
-    """
-    return 0
-
-def check_call(args):
-    """
-    This is a stub version of the check_calls function from futils, that does
-    some minimal version of that function - see the function for arguments.
-    TODO: We should do better here.
-    """
-    if args[0] == "ipset":
-        # IP set management
-        if args[1] == "list":
-            return CommandOutput("", "")
-        elif args[1] == "flush":
-            return CommandOutput("", "")
-        elif args[1] == "create":
-            return CommandOutput("", "")
-        elif args[1] == "swap":
-            return CommandOutput("", "")
-    else:
-        raise UnexpectedSystemCall("Unexpected system call : %s" % args)
-    

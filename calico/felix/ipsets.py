@@ -18,11 +18,7 @@ felix.ipsets
 
 IP sets management functions.
 """
-import iptc
 import logging
-import os
-import re
-import time
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6

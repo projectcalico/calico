@@ -23,7 +23,7 @@ As of now, the tests are not complete. For Felix, there are a number of `TODO` m
 ### Felix
 The Felix code splits into several categories.
 
-* There is a certain amount of utility code. The testing of this is straightforward; there are classes of unit tests that exercise all the code and function in that utility code. Since some of this code calls out to OS specific function, we use mocks as you might expect to get full coverage. This covers `futils`, `config`, and `devices`.
+* There is a certain amount of utility code. The testing of this is straightforward; there are classes of unit tests that exercise all the code and function in that utility code. Since some of this code calls out to OS specific function, we use mocks as you might expect to get full coverage. This covers `futils`, `config`, `ipsets` and `devices`.
 
 * There is the core Felix logic, contained in the modules `felix`, `endpoint`, `frules`, and `fsocket`. This is tested for the most part as a whole, ensuring that the overall Felix behaviour end-to-end is as expected (i.e. that Felix turns messages on the `0MQ` interface and events reported by the system and gets the system into the correctly configured state). When doing so, there are some elements controlling the interface to the outside world, including both `zmq` for `0MQ` and `iptc` for `python-iptables`. We aren't interested in testing third party code in our UTs, and we have to run in any environment, so our approach is as follows.
 
