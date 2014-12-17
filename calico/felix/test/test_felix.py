@@ -206,7 +206,6 @@ class TestBasic(unittest.TestCase):
         stub_ipsets.check_state(expected_ipsets)
 
         # OK - now try giving it some ACLs, and see if they get applied correctly.
-        # TODO: Need to check ipset content too.
         acls = get_blank_acls()
         acls['v4']['outbound'].append({ 'cidr': "0.0.0.0/0", 'protocol': "icmp" })
         acls['v4']['outbound'].append({ 'cidr': "1.2.3.0/24", 'protocol': "tcp" })
@@ -320,15 +319,15 @@ def set_expected_global_rules():
     expected_iptables.reset()
 
     table = expected_iptables.tables_v4["filter"]
-    chain = table.chains_dict["FORWARD"]
+    chain = table._chains_dict["FORWARD"]
     chain.rules.append(stub_fiptables.Rule(IPV4, "felix-FORWARD"))
-    chain = table.chains_dict["INPUT"]
+    chain = table._chains_dict["INPUT"]
     chain.rules.append(stub_fiptables.Rule(IPV4, "felix-INPUT"))
     stub_fiptables.get_chain(table, "felix-FORWARD")
     stub_fiptables.get_chain(table, "felix-INPUT")
 
     table = expected_iptables.tables_v4["nat"]
-    chain = table.chains_dict["PREROUTING"]
+    chain = table._chains_dict["PREROUTING"]
     chain.rules.append(stub_fiptables.Rule(IPV4, "felix-PREROUTING"))
 
     chain = stub_fiptables.get_chain(table, "felix-PREROUTING")
@@ -339,9 +338,9 @@ def set_expected_global_rules():
     chain.rules.append(rule)
 
     table = expected_iptables.tables_v6["filter"]
-    chain = table.chains_dict["FORWARD"]
+    chain = table._chains_dict["FORWARD"]
     chain.rules.append(stub_fiptables.Rule(IPV6, "felix-FORWARD"))
-    chain = table.chains_dict["INPUT"]
+    chain = table._chains_dict["INPUT"]
     chain.rules.append(stub_fiptables.Rule(IPV6, "felix-INPUT"))
     stub_fiptables.get_chain(table, "felix-FORWARD")
     stub_fiptables.get_chain(table, "felix-INPUT")
@@ -353,7 +352,7 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     it starts with extra rules etc.
     """
     table = expected_iptables.tables_v4["filter"]
-    chain = table.chains_dict["felix-FORWARD"]
+    chain = table._chains_dict["felix-FORWARD"]
     rule = stub_fiptables.Rule(IPV4, "felix-from-%s" % suffix)
     rule.in_interface = tap
     chain.rules.append(rule)
@@ -362,7 +361,7 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     rule.out_interface = tap
     chain.rules.append(rule)
 
-    chain = table.chains_dict["felix-INPUT"]
+    chain = table._chains_dict["felix-INPUT"]
     rule = stub_fiptables.Rule(IPV4, "felix-from-%s" % suffix)
     rule.in_interface = tap
     chain.rules.append(rule)
@@ -439,7 +438,7 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     chain.rules.append(rule)
 
     table = expected_iptables.tables_v6["filter"]
-    chain = table.chains_dict["felix-FORWARD"]
+    chain = table._chains_dict["felix-FORWARD"]
     rule = stub_fiptables.Rule(IPV6, "felix-from-%s" % suffix)
     rule.in_interface = tap
     chain.rules.append(rule)
@@ -448,7 +447,7 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     rule.out_interface = tap
     chain.rules.append(rule)
 
-    chain = table.chains_dict["felix-INPUT"]
+    chain = table._chains_dict["felix-INPUT"]
     rule = stub_fiptables.Rule(IPV6, "felix-from-%s" % suffix)
     rule.in_interface = tap
     chain.rules.append(rule)
@@ -549,4 +548,3 @@ def add_endpoint_ipsets(suffix):
     expected_ipsets.create("felix-6-from-port-" + suffix, "hash:net,port", "inet6")
     expected_ipsets.create("felix-6-from-addr-" + suffix, "hash:net", "inet6")
     expected_ipsets.create("felix-6-from-icmp-" + suffix, "hash:net", "inet6")
-

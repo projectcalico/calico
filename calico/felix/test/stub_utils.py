@@ -55,6 +55,3 @@ def get_mac():
 class TestOverException(Exception):
     pass
 
-class UnexpectedSystemCall(Exception):
-    pass
-

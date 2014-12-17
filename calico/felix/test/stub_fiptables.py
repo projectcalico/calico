@@ -138,7 +138,7 @@ class Chain(object):
         self.type = None # Not known until put in table.
 
     def flush(self):
-        self.rules = []
+        del self.rules[:]
 
     def delete_rule(self, rule):
         # The rule must exist or it is an error.
@@ -163,13 +163,13 @@ class Table(object):
         self.type = type
         self.name = name
         self.chains = []
-        self.chains_dict = dict()
+        self._chains_dict = dict()
 
     def is_chain(self, name):
-        return (name in self.chains_dict)
+        return (name in self._chains_dict)
 
     def delete_chain(self, name):
-        del self.chains_dict[name]
+        del self._chains_dict[name]
         for chain in self.chains:
             if chain.name == name:
                 self.chains.remove(chain)
@@ -193,11 +193,11 @@ def get_chain(table, name):
     """
     Gets a chain, creating it first if it does not exist.
     """
-    if name in table.chains_dict:
-        chain = table.chains_dict[name]
+    if name in table._chains_dict:
+        chain = table._chains_dict[name]
     else:
         chain = Chain(name)
-        table.chains_dict[name] = chain
+        table._chains_dict[name] = chain
         table.chains.append(chain)
         chain.type = table.type
 
@@ -279,14 +279,13 @@ class TableState(object):
     Defines the current state of iptables - which rules exist in which
     tables. Normally there will be two - the state that the test generates, and
     the state that the test expects to have at the end. At the end of the test,
-    these are compared.
+    these can be compared.
     """
     def __init__(self):
         self.tables_v4 = dict()
         self.tables_v6 = dict()
 
         self.reset()
-
 
     def reset(self):
         """
@@ -318,7 +317,6 @@ class TableState(object):
         self.tables_v6["filter"] = table
         self.tables.append(table)
 
-
     def __str__(self):
         """
         Convert a full state to a readable string to use in matches and compare
@@ -327,9 +325,9 @@ class TableState(object):
         output = ""
         for table in self.tables:
             output += "TABLE %s (%s)\n" % (table.name, table.type)
-            for chain_name in sorted(table.chains_dict.keys()):
+            for chain_name in sorted(table._chains_dict.keys()):
                 output += "  Chain %s\n" % chain_name
-                chain = table.chains_dict[chain_name]
+                chain = table._chains_dict[chain_name]
                 for rule in chain.rules:
                     output += "    %s\n" % rule
                 output += "\n"
@@ -337,5 +335,5 @@ class TableState(object):
 
         return output
 
-# Current state.
+# Current state - store in a global.
 current_state = TableState()

@@ -163,6 +163,11 @@ class Poller(object):
 
 
 class Context(object):
+    """
+    In production code, a ZMQ context is passed around all over the place.
+    In test code, we replace that ZMQ context with this structure, allowing us
+    to track which sockets exist and what state they are in.
+    """
     def __init__(self):
         # Array of PollResults, created and passed in by the tests.
         self.poll_results = []
