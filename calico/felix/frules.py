@@ -20,10 +20,10 @@ Felix rule management, including iptables and ipsets.
 """
 import logging
 import os
-import re
 import subprocess
 import time
 
+from calico import common
 from calico.felix import fiptables
 from calico.felix import futils
 from calico.felix.futils import FailedSystemCall
@@ -632,7 +632,7 @@ def update_ipsets(type,
                 suffix = ",%s:0" % (protocol)
                 ipset = tmp_ipset_port
             else:
-                if not futils.PORT_REGEX.match(str(port)):
+                if not common.PORT_REGEX.match(str(port)):
                     # Port was supplied but was not an integer.
                     log.error(
                         "Invalid port in %s rule for %s : %s",
@@ -653,7 +653,7 @@ def update_ipsets(type,
                 # No type - all ICMP to / from the cidr, so use the ICMP ipset.
                 suffix = ""
                 ipset  = tmp_ipset_icmp
-            elif futils.INT_REGEX.match(str(icmp_type)):
+            elif common.INT_REGEX.match(str(icmp_type)):
                 if icmp_code is None:
                     # Code defaults to 0 if not supplied.
                     icmp_code = 0

@@ -21,7 +21,7 @@ felix.endpoint
 
 Contains Felix logic to manage endpoints and their configuration.
 """
-from calico.felix import device
+from calico.felix import devices
 from calico.felix import frules
 from calico.felix import futils
 import logging
@@ -119,7 +119,7 @@ class Endpoint(object):
         Returns True if the endpoint needs to be retried (because the tap
         interface does not exist yet).
         """
-        if not device.tap_exists(self.tap):
+        if not devices.tap_exists(self.tap):
             if self.state == Endpoint.STATE_ENABLED:
                 log.error("Unable to configure non-existent interface %s" %
                           self.tap)
@@ -133,7 +133,7 @@ class Endpoint(object):
 
         # Configure the tap interface.
         if self.state == Endpoint.STATE_ENABLED:
-            device.configure_tap(self.tap)
+            devices.configure_tap(self.tap)
 
             # Build up list of addresses that should be present
             ipv4_intended = set([addr.ip.encode('ascii')
@@ -147,14 +147,14 @@ class Endpoint(object):
             ipv4_intended = set()
             ipv6_intended = set()
 
-        ipv4_existing   = device.list_tap_ips(futils.IPV4, self.tap)
-        ipv6_existing   = device.list_tap_ips(futils.IPV6, self.tap)
+        ipv4_existing   = devices.list_tap_ips(futils.IPV4, self.tap)
+        ipv6_existing   = devices.list_tap_ips(futils.IPV6, self.tap)
 
         for ipv4 in ipv4_intended:
             if ipv4 not in ipv4_existing:
                 log.info("Add route to IPv4 address %s for tap %s" %
                          (ipv4, self.tap))
-                device.add_route(futils.IPV4, ipv4, self.tap, self.mac)
+                devices.add_route(futils.IPV4, ipv4, self.tap, self.mac)
             else:
                 log.debug("Already got route to address %s for tap %s" %
                           (ipv4, self.tap))
@@ -163,7 +163,7 @@ class Endpoint(object):
             if ipv6 not in ipv6_existing:
                 log.info("Add route to IPv6 address %s for tap %s" %
                          (ipv6, self.tap))
-                device.add_route(futils.IPV6, ipv6, self.tap, self.mac)
+                devices.add_route(futils.IPV6, ipv6, self.tap, self.mac)
             else:
                 log.debug("Already got route to address %s for tap %s" %
                           (ipv4, self.tap))
@@ -172,13 +172,13 @@ class Endpoint(object):
             if ipv4 not in ipv4_intended:
                 log.info("Remove extra IPv4 route to address %s for tap %s" %
                          (ipv4, self.tap))
-                device.del_route(futils.IPV4, ipv4, self.tap)
+                devices.del_route(futils.IPV4, ipv4, self.tap)
 
         for ipv6 in ipv6_existing:
             if ipv6 not in ipv6_intended:
                 log.info("Remove extra IPv6 route to address %s for tap %s" %
                          (ipv6, self.tap))
-                device.del_route(futils.IPV6, ipv6, self.tap)
+                devices.del_route(futils.IPV6, ipv6, self.tap)
 
         #*********************************************************************#
         #* Set up the rules for this endpoint, not including ACLs. Note that *#

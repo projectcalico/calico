@@ -37,11 +37,6 @@ log = logging.getLogger(__name__)
 IPV4 = "IPv4"
 IPV6 = "IPv6"
 
-# Regexes for IP addresses.
-IPV4_REGEX = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
-PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
-INT_REGEX  = re.compile("^[0-9]+$")
 
 class FailedSystemCall(Exception):
     def __init__(self, message, args, retcode, stdout, stderr):

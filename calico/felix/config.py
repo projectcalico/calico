@@ -26,19 +26,12 @@ Config object and use the fields within it.
 """
 import ConfigParser
 import logging
-import re
 import socket
+
+from calico import common
 
 # Logger
 log = logging.getLogger(__name__)
-
-#*****************************************************************************#
-#* TODO: It would be nice to refactor so we did not have two identical       *#
-#* definitions (we cannot import futils since it imports this module;        *#
-#* ideally we should have this regex in a common global location).           *#
-#*****************************************************************************#
-INT_REGEX  = re.compile("^[0-9]+$")
-
 
 class ConfigException(Exception):
     def __init__(self, message, path):
@@ -158,7 +151,7 @@ class Config(object):
             self.METADATA_IP = self.validate_addr("MetadataAddr",
                                                   self.METADATA_IP)
 
-            if not INT_REGEX.match(self.METADATA_PORT):
+            if not common.INT_REGEX.match(self.METADATA_PORT):
                 raise ConfigException("Invalid MetadataPort value : %s" %
                                       self.METADATA_PORT, self._config_path)
 

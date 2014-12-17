@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-felix.test.stub_device
+felix.test.stub_devices
 ~~~~~~~~~~~~
 
-Stub version of the device module.
+Stub version of the devices module.
 """
 import logging
 from calico.felix import futils

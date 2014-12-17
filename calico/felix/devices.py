@@ -13,16 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-felix.device
+felix.devices
 ~~~~~~~~~~~~
 
 Utility functions for managing devices in Felix.
 """
 import logging
 import os
-import re
 import time
 
+from calico import common
 from calico.felix import futils
 
 # Logger
@@ -63,7 +63,7 @@ def list_tap_ips(type, tap):
 
         if len(words) > 1:
             ip = words[0]
-            if futils.IPV4_REGEX.match(ip) or futils.IPV6_REGEX.match(ip):
+            if common.IPV4_REGEX.match(ip) or common.IPV6_REGEX.match(ip):
                 # Looks like an IP address to me
                 ips.add(words[0])
             else:

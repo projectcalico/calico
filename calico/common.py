@@ -24,8 +24,16 @@ Calico common utilities.
 import logging
 import logging.handlers
 import os
+import re
 import sys
 import errno
+
+# Various useful regular expressions.
+IPV4_REGEX = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
+PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
+INT_REGEX  = re.compile("^[0-9]+$")
+
 
 AGENT_TYPE_CALICO = 'Calico agent'
 FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
