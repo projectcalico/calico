@@ -204,17 +204,3 @@ def get_chain(table, name):
 
     return chain
 
-
-def truncate_rules(chain, count):
-    """
-    This is a utility function to remove any excess rules from a chain. After
-    we have carefully inserted all the rules we want at the start, we want to
-    get rid of any legacy rules from the end.
-
-    It takes a chain object, and a count for how many of the rules should be
-    left in place.
-    """
-    while len(chain.rules) > count:
-        rule = chain.rules[-1]
-        chain.delete_rule(rule)
-

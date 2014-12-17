@@ -112,7 +112,7 @@ def set_global_rules(config):
 
         rule.create_tcp_match("80")
         fiptables.insert_rule(rule, chain)
-        fiptables.truncate_rules(chain, 1)
+        truncate_rules(chain, 1)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
@@ -281,7 +281,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     #* Delete all rules from here to the end of the chain, in case there     *#
     #* were rules present which should not have been.                        *#
     #*************************************************************************#
-    fiptables.truncate_rules(to_chain, index)
+    truncate_rules(to_chain, index)
 
     #*************************************************************************#
     #* Now the chain that manages packets from the interface, and the rules  *#
@@ -386,7 +386,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     #* Delete all rules from here to the end of the chain, in case there     *#
     #* were rules present which should not have been.                        *#
     #*************************************************************************#
-    fiptables.truncate_rules(from_chain, index)
+    truncate_rules(from_chain, index)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
@@ -745,4 +745,20 @@ def create_ipset(name, typename, family):
         # try creation, throwing an error if it does not work.
         futils.check_call(
             ["ipset", "create", name, typename, "family", family])
+
+def truncate_rules(chain, count):
+    """
+    This is a utility function to remove any excess rules from a chain. After
+    we have carefully inserted all the rules we want at the start, we want to
+    get rid of any legacy rules from the end.
+
+    It takes a chain object, and a count for how many of the rules should be
+    left in place.
+
+    Arguably, it should be in fiptables, but we put it here because it's easier
+    to test it here.
+    """
+    while len(chain.rules) > count:
+        rule = chain.rules[-1]
+        chain.delete_rule(rule)
 

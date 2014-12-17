@@ -204,21 +204,6 @@ def get_chain(table, name):
     return chain
 
 
-def truncate_rules(chain, count):
-    """
-    This is a utility function to remove any excess rules from a chain. After
-    we have carefully inserted all the rules we want at the start, we want to
-    get rid of any legacy rules from the end.
-
-    It takes a chain object, and a count for how many of the rules should be
-    left in place.
-    """
-    # TODO: Function identical to value in production code.
-    while len(chain.rules) > count:
-        rule = chain.rules[-1]
-        chain.delete_rule(rule)
-
-
 def insert_rule(rule, chain, position=0, force_position=True):
     """
     Add an iptables rule to a chain if it does not already exist. Position is
