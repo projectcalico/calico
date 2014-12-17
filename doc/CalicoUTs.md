@@ -10,9 +10,9 @@ You can then run the tests from your repository as follows.
 
 * Change to the top level directory of the repository (the one with subdirectories `calico`, `doc`, `etc`, ...).
 
-* Run the following command.
+* Run the following command (coverage is turned on by default).
 
-        nosetests --with-coverage
+        nosetests
 
 * The tests pass if `nose` reports success, and there is full code coverage of all new and modified code. *Note that in due course we shall have reached 100% code coverage, at which point the requirement becomes 100% code coverage).*
 
