@@ -1,3 +1,9 @@
+calico (0.9.1) trusty; urgency=medium
+
+  * Remove python-dev dependency.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Thu, 18 Dec 2014 10:17:58 +0000
+
 calico (0.9) trusty; urgency=medium
 
   * New announced release.
