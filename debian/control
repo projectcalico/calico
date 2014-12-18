@@ -68,7 +68,6 @@ Architecture: all
 Depends:
  calico-common (= ${binary:Version}),
  ipset,
- python-dev,
  python-pip,
  python-zmq,
  ${misc:Depends},
