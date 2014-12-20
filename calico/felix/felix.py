@@ -25,6 +25,7 @@ import argparse
 import collections
 import logging
 import socket
+import sys
 import time
 import uuid
 import zmq
@@ -726,6 +727,7 @@ def main():
 
     except:
         log.exception("Felix exiting after uncaught exception")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
