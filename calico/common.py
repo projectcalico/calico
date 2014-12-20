@@ -34,8 +34,15 @@ IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
 INT_REGEX  = re.compile("^[0-9]+$")
 
 
+
 AGENT_TYPE_CALICO = 'Calico agent'
 FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
+
+# This format string deliberately uses two different styles of format
+# specifier. The %()s form is used by the logging module: the {} form is used
+# by the code in this module. This allows us to dynamically generate the format
+# string used by the logger.
+SYSLOG_FORMAT_STRING = '{excname}: %(message)s'
 
 def validate_port(port):
     """
@@ -106,14 +113,18 @@ def default_logging():
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
 
+    executable_name = os.path.basename(sys.argv[0])
+    syslog_format = SYSLOG_FORMAT_STRING.format(excname=executable_name)
+    syslog_formatter = logging.Formatter(syslog_format)
     syslog_handler = logging.handlers.SysLogHandler()
     syslog_handler.setLevel(logging.ERROR)
+    syslog_handler.setFormatter(syslog_formatter)
     root_logger.addHandler(syslog_handler)
 
-    formatter = logging.Formatter(FORMAT_STRING)
+    file_formatter = logging.Formatter(FORMAT_STRING)
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.DEBUG)
-    stream_handler.setFormatter(formatter)
+    stream_handler.setFormatter(file_formatter)
     root_logger.addHandler(stream_handler)
 
 
