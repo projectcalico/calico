@@ -29,7 +29,7 @@ def reset():
 
 class IpsetState(object):
     def __init__(self):
-        self.ipsets = dict()
+        self.ipsets = {}
 
     def reset(self):
         self.ipsets.clear()

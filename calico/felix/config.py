@@ -151,7 +151,7 @@ class Config(object):
             self.METADATA_IP = self.validate_addr("MetadataAddr",
                                                   self.METADATA_IP)
 
-            if not common.INT_REGEX.match(self.METADATA_PORT):
+            if not common.validate_port(self.METADATA_PORT):
                 raise ConfigException("Invalid MetadataPort value : %s" %
                                       self.METADATA_PORT, self._config_path)
 

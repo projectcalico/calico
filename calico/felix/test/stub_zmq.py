@@ -58,8 +58,8 @@ class PollResult(object):
     """
     def __init__(self, time, socket_type=None, msg=None):
         self.time = time
-        self.events = dict()
-        self.uuid = dict()
+        self.events = {}
+        self.uuid = {}
         if socket_type is not None:
             self.add(socket_type, msg)
 
@@ -145,7 +145,7 @@ class Poller(object):
 
         stub_utils.set_time(poll_result.time)
 
-        retval = dict();
+        retval = {}
 
         for socket in self.sockets:
             if socket.type in poll_result.events:
@@ -173,7 +173,7 @@ class Context(object):
         self.poll_results = []
 
         # Data sent by Felix - a dictionary, of which each element is a list.
-        self.sent_data = dict()
+        self.sent_data = {}
         self.sent_data[TYPE_EP_REQ] = []
         self.sent_data[TYPE_EP_REP] = []
         self.sent_data[TYPE_ACL_REQ] = []

@@ -298,9 +298,9 @@ def get_blank_acls():
     """
     Return a blank set of ACLs, with nothing permitted.
     """
-    acls = dict()
-    acls['v4'] = dict()
-    acls['v6'] = dict()
+    acls = {}
+    acls['v4'] = {}
+    acls['v6'] = {}
 
     acls['v4']['inbound_default'] = "deny"
     acls['v4']['outbound_default'] = "deny"

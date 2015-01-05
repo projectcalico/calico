@@ -34,9 +34,12 @@ the native networking implementation – but with higher security,
 
 To get started, you first need a working installation of
 [OpenStack](http://www.openstack.org/). Then download and install the latest
-stable build of Calico following the instructions [here](http://www.projectcalico.org/download/).
+stable build of Calico following the instructions
+[here](http://www.projectcalico.org/download/).
 
-Technical documentation is [here](https://github.com/Metaswitch/calico-docs/wiki); if you are going to contribute to the project, you'll also need to run the
+Technical documentation is
+[here](https://github.com/Metaswitch/calico-docs/wiki);
+if you are going to contribute to the project, you'll also need to run the
 [tests](doc/CalicoUTs.md).
 
 ## How can I get support for Project Calico?

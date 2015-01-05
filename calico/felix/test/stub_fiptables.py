@@ -44,10 +44,10 @@ class Rule(object):
 
         self.target_name = target_name
         self.target = RuleTarget(target_name)
-        self.target_args = dict()
+        self.target_args = {}
 
         self.match_name = None
-        self.match_args = dict()
+        self.match_args = {}
 
         self.protocol = None
         self.src = None
@@ -163,7 +163,7 @@ class Table(object):
         self.type = type
         self.name = name
         self.chains = []
-        self._chains_dict = dict()
+        self._chains_dict = {}
 
     def is_chain(self, name):
         return (name in self._chains_dict)
@@ -179,7 +179,7 @@ def get_table(type, name):
     """
     Gets a table. This is a simple helper method that returns either
     an IP v4 or an IP v6 table according to type.
-    """  
+    """
     if type == IPV4:
         table = current_state.tables_v4[name]
     elif type == IPV6:
@@ -188,6 +188,7 @@ def get_table(type, name):
         raise ValueError("Invalid type %s for table" % type)
 
     return table
+
 
 def get_chain(table, name):
     """
@@ -247,6 +248,7 @@ def insert_rule(rule, chain, position=0, force_position=True):
 def reset_current_state():
     current_state.reset()
 
+
 class UnexpectedStateException(Exception):
     def __init__(self, actual, expected):
         super(UnexpectedStateException, self).__init__(
@@ -282,8 +284,8 @@ class TableState(object):
     these can be compared.
     """
     def __init__(self):
-        self.tables_v4 = dict()
-        self.tables_v6 = dict()
+        self.tables_v4 = {}
+        self.tables_v6 = {}
 
         self.reset()
 

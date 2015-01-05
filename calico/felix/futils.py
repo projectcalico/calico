@@ -58,7 +58,7 @@ def call_silent(args):
     Wrapper round subprocess_call that discards all of the output to both
     stdout and stderr. *args* must be a list.
 
-    An exceptions is thrown if the command fails.
+    Returns the return code of the system call.
     """
     try:
         check_call(args)

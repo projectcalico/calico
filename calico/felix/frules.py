@@ -632,7 +632,7 @@ def update_ipsets(type,
                 suffix = ",%s:0" % (protocol)
                 ipset = tmp_ipset_port
             else:
-                if not common.PORT_REGEX.match(str(port)):
+                if not common.validate_port(str(port)):
                     # Port was supplied but was not an integer.
                     log.error(
                         "Invalid port in %s rule for %s : %s",
@@ -653,16 +653,19 @@ def update_ipsets(type,
                 # No type - all ICMP to / from the cidr, so use the ICMP ipset.
                 suffix = ""
                 ipset  = tmp_ipset_icmp
-            elif common.INT_REGEX.match(str(icmp_type)):
-                if icmp_code is None:
-                    # Code defaults to 0 if not supplied.
-                    icmp_code = 0
-                suffix = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
-                ipset  = tmp_ipset_port
             else:
-                # Not an integer ICMP type - must be a string code name.
-                suffix = ",%s:%s" % (protocol, icmp_type)
-                ipset  = tmp_ipset_port
+                try:
+                    # Assume integer ICMP type.
+                    int(str(icmp_type))
+                    if icmp_code is None:
+                        # Code defaults to 0 if not supplied.
+                        icmp_code = 0
+                    suffix = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
+                    ipset  = tmp_ipset_port
+                except ValueError:
+                    # Not an integer ICMP type - must be a string code name.
+                    suffix = ",%s:%s" % (protocol, icmp_type)
+                    ipset  = tmp_ipset_port
         else:
             if port is not None:
                 # The supplied protocol does not allow ports.

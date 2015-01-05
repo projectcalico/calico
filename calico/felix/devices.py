@@ -63,7 +63,7 @@ def list_tap_ips(type, tap):
 
         if len(words) > 1:
             ip = words[0]
-            if common.IPV4_REGEX.match(ip) or common.IPV6_REGEX.match(ip):
+            if common.validate_ipv4_addr(ip) or common.validate_ipv6_addr(ip):
                 # Looks like an IP address to me
                 ips.add(words[0])
             else:
