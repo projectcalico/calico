@@ -42,6 +42,7 @@ def main():
     config.read(args.config_file or 'acl_manager.cfg')
 
     plugin_address = config.get('global', 'PluginAddress')
+    bind_address = config.get('global', 'BindAddr')
     log_file_path = config.get('log', 'LogFilePath')
     log_file_level = config.get('log', 'LogSeverityFile')
     log_syslog_level = config.get('log', 'LogSeveritySys')
@@ -77,7 +78,7 @@ def main():
     acl_store = ACLStore()
     network_store = NetworkStore()
 
-    publisher = ACLPublisher(context, acl_store)
+    publisher = ACLPublisher(context, acl_store, bind_address)
     acl_store.start(publisher)
 
     processor = RuleProcessor(acl_store, network_store)
