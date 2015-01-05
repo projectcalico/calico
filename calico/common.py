@@ -88,7 +88,7 @@ def complete_logging(logfile=None,
     logging is available as early in execution as possible, i.e. before the
     config file has been parsed.
 
-    This function must only be called once, after 
+    This function must only be called once, after
     :meth:`default_logging() <calico.common.default_logging>`
     has been called.
     """
@@ -96,14 +96,20 @@ def complete_logging(logfile=None,
 
     # If default_logging got called already, we'll have some loggers in place.
     # Update their levels.
-    for handler in root_logger.handlers:
+    for handler in root_logger.handlers[:]:
         if isinstance(handler, logging.handlers.SysLogHandler):
-            handler.setLevel(syslog_level)
+            if syslog_level is None:
+                root_logger.removeHandler(handler)
+            else:
+                handler.setLevel(syslog_level)
         elif isinstance(handler, logging.StreamHandler):
-            handler.setLevel(stream_level)
+            if stream_level is None:
+                root_logger.removeHandler(handler)
+            else:
+                handler.setLevel(stream_level)
 
     # If we've been given a log file, log to file as well.
-    if logfile is not None:
+    if not logfile and file_level is not None:
         mkdir_p(os.path.dirname(logfile))
 
         formatter = logging.Formatter(FORMAT_STRING)

@@ -77,7 +77,7 @@ class Config(object):
                                                   "9697")
         self.LOGFILE         = self.get_cfg_entry("log",
                                                   "LogFilePath",
-                                                  "felix.log")
+                                                  None)
         self.LOGLEVFILE      = self.get_cfg_entry("log",
                                                   "LogSeverityFile",
                                                   "INFO")
@@ -102,7 +102,8 @@ class Config(object):
         self.warn_unused_cfg()
 
         # Finally, convert log level names into python log levels.
-        loglevels = {"debug":     logging.DEBUG,
+        loglevels = {"none":      None,
+                     "debug":     logging.DEBUG,
                      "info":      logging.INFO,
                      "warn":      logging.WARNING,
                      "warning":   logging.WARNING,
