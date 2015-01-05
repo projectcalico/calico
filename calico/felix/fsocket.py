@@ -90,7 +90,7 @@ class Socket(object):
         self._zmq = context.socket(Socket.ZTYPE[self.type])
 
         if self.type == Socket.TYPE_EP_REP:
-            self._zmq.bind("tcp://*:%s" % self.port)
+            self._zmq.bind("tcp://%s:%s" % (self.config.BIND_ADDR, self.port))
         else:
             self._zmq.connect("tcp://%s:%s" % (self.remote_addr, self.port))
 

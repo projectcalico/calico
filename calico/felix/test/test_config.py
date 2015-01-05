@@ -72,3 +72,18 @@ class TestConfig(unittest.TestCase):
     def test_invalid_acl(self):
         with self.assertRaisesRegexp(ConfigException, "Invalid or unresolvable ACLAddr"):
             config = Config("calico/felix/test/data/felix_invalid_acl.cfg")
+
+    def test_bindaddr_all(self):
+        # Not an error.
+        config = Config("calico/felix/test/data/felix_bindaddr_all.cfg")
+        self.assertEqual(config.BIND_ADDR, "*")
+
+    def test_bindaddr_specific(self):
+        # Not an error.
+        config = Config("calico/felix/test/data/felix_bindaddr_specific.cfg")
+        self.assertEqual(config.BIND_ADDR, "1.2.3.4")
+
+    def test_bad_bind_addr(self):
+        with self.assertRaisesRegexp(ConfigException, "Invalid BindAddr"):
+            config = Config("calico/felix/test/data/felix_bad_bindaddr.cfg")
+

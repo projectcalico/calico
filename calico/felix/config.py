@@ -73,6 +73,9 @@ class Config(object):
         self.METADATA_PORT   = self.get_cfg_entry("global",
                                                   "MetadataPort",
                                                   "9697")
+        self.BIND_ADDR       = self.get_cfg_entry("global",
+                                                  "BindAddr",
+                                                  "*")
         self.LOGFILE         = self.get_cfg_entry("log",
                                                   "LogFilePath",
                                                   None)
@@ -168,6 +171,14 @@ class Config(object):
         self.validate_addr("PluginAddress", self.PLUGIN_ADDR)
         self.validate_addr("ACLAddress", self.ACL_ADDR)
 
+        #*********************************************************************#
+        #* Bind address must be * or an IP address.                          *#
+        #*********************************************************************#
+        if (self.BIND_ADDR != "*" and
+                not common.validate_ipv4_addr(self.BIND_ADDR)):
+            raise ConfigException("Invalid BindAddr value : %s" %
+                                  self.BIND_ADDR, self._config_path)
+
     def warn_unused_cfg(self):
         #*********************************************************************#
         #* Firewall that no unexpected items in the config file - i.e. ones  *#
@@ -198,6 +209,5 @@ class Config(object):
             raise ConfigException("Invalid or unresolvable %s value : %s" %
                                   (name, addr),
                                   self._config_path)
-
 
 
