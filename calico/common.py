@@ -116,7 +116,7 @@ def default_logging():
     executable_name = os.path.basename(sys.argv[0])
     syslog_format = SYSLOG_FORMAT_STRING.format(excname=executable_name)
     syslog_formatter = logging.Formatter(syslog_format)
-    syslog_handler = logging.handlers.SysLogHandler()
+    syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
     syslog_handler.setLevel(logging.ERROR)
     syslog_handler.setFormatter(syslog_formatter)
     root_logger.addHandler(syslog_handler)
