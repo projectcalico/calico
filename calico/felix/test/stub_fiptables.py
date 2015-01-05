@@ -162,7 +162,6 @@ class Table(object):
     def __init__(self, type, name):
         self.type = type
         self.name = name
-        self.chains = []
         self._chains_dict = {}
 
     def is_chain(self, name):
@@ -174,6 +173,10 @@ class Table(object):
             if chain.name == name:
                 self.chains.remove(chain)
                 
+    @property
+    def chains(self):
+        # The python-iptables code exposes the list of chains directly.
+        return self._chains_dict.values()
 
 def get_table(type, name):
     """
@@ -199,7 +202,6 @@ def get_chain(table, name):
     else:
         chain = Chain(name)
         table._chains_dict[name] = chain
-        table.chains.append(chain)
         chain.type = table.type
 
     return chain
