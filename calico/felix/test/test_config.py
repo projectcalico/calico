@@ -48,7 +48,8 @@ class TestConfig(unittest.TestCase):
             config = Config("calico/felix/test/data/felix_invalid.cfg")
 
     def test_bad_dns_config(self):
-        with self.assertRaisesRegexp(ConfigException, "Invalid or unresolvable MetadataAddr"):
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Invalid or unresolvable MetadataAddr"):
             config = Config("calico/felix/test/data/felix_bad_dns.cfg")
 
     def test_bad_port_config(self):
@@ -70,7 +71,8 @@ class TestConfig(unittest.TestCase):
             config = Config("calico/felix/test/data/felix_blank_plugin.cfg")
 
     def test_invalid_acl(self):
-        with self.assertRaisesRegexp(ConfigException, "Invalid or unresolvable ACLAddr"):
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Invalid or unresolvable ACLAddr"):
             config = Config("calico/felix/test/data/felix_invalid_acl.cfg")
 
     def test_bindaddr_all(self):
@@ -83,7 +85,14 @@ class TestConfig(unittest.TestCase):
         config = Config("calico/felix/test/data/felix_bindaddr_specific.cfg")
         self.assertEqual(config.BIND_ADDR, "1.2.3.4")
 
+    def test_bindaddr_host(self):
+        # Not an error.
+        config = Config("calico/felix/test/data/felix_bindaddr_host.cfg")
+        self.assertIn("127.", config.BIND_ADDR)
+
+
     def test_bad_bind_addr(self):
-        with self.assertRaisesRegexp(ConfigException, "Invalid BindAddr"):
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Invalid or unresolvable BindAddr"):
             config = Config("calico/felix/test/data/felix_bad_bindaddr.cfg")
 

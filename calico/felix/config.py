@@ -172,12 +172,12 @@ class Config(object):
         self.validate_addr("ACLAddress", self.ACL_ADDR)
 
         #*********************************************************************#
-        #* Bind address must be * or an IP address.                          *#
+        #* Bind address must be * or an IPv4 address. We allow hostnames,    *#
+        #* but resolve them before use.                                      *#
         #*********************************************************************#
-        if (self.BIND_ADDR != "*" and
-                not common.validate_ipv4_addr(self.BIND_ADDR)):
-            raise ConfigException("Invalid BindAddr value : %s" %
-                                  self.BIND_ADDR, self._config_path)
+        if self.BIND_ADDR != "*":
+            self.BIND_ADDR = self.validate_addr("BindAddr",
+                                                self.BIND_ADDR)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
@@ -209,5 +209,4 @@ class Config(object):
             raise ConfigException("Invalid or unresolvable %s value : %s" %
                                   (name, addr),
                                   self._config_path)
-
 
