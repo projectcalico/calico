@@ -37,11 +37,6 @@ log = logging.getLogger(__name__)
 IPV4 = "IPv4"
 IPV6 = "IPv6"
 
-# Regexes for IP addresses.
-IPV4_REGEX = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
-PORT_REGEX = re.compile("^(([0-9]+)|([0-9]+-[0-9]+))$")
-INT_REGEX  = re.compile("^[0-9]+$")
 
 class FailedSystemCall(Exception):
     def __init__(self, message, args, retcode, stdout, stderr):
@@ -62,14 +57,15 @@ def call_silent(args):
     """
     Wrapper round subprocess_call that discards all of the output to both
     stdout and stderr. *args* must be a list.
+
+    Returns the return code of the system call.
     """
-    retcode = subprocess.call(args,
-                              stdout=open('/dev/null', 'w'),
-                              stderr=subprocess.STDOUT)
-
-    return retcode
-
-
+    try:
+        check_call(args)
+        return 0
+    except FailedSystemCall as e:
+        return e.retcode
+        
 def check_call(args):
     """
     Substitute for the subprocess.check_call funtion. It has the following useful
@@ -93,3 +89,10 @@ def check_call(args):
         raise FailedSystemCall("Failed system call", args, retcode, stdout, stderr)
 
     return CommandOutput(stdout, stderr)
+
+def time_ms():
+    """
+    Return the time in ms. We use this rather than directly calling time.time
+    mostly because it makes it easier to mock out for test purposes.
+    """
+    return(int(time.time()))

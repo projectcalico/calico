@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # Copyright (c) 2014 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -25,6 +24,8 @@ import json
 import logging
 import time
 import zmq
+
+from calico.felix import futils
 
 log = logging.getLogger(__name__)
 
@@ -98,14 +99,14 @@ class Socket(object):
             self._zmq.setsockopt(zmq.SUBSCRIBE, 'aclheartbeat')
 
         # The socket connection event is always the time of last activity.
-        self.last_activity = int(time.time() * 1000)
+        self.last_activity = futils.time_ms()
 
     def send(self, msg):
         """
         Send a specified message on a socket.
         """
         log.info("Sent %s on socket %s" % (msg.descr, self.type))
-        self.last_activity = int(time.time() * 1000)
+        self.last_activity = futils.time_ms()
 
         #*********************************************************************#
         #* We never expect any type of socket that we use to block since we  *#
@@ -119,7 +120,7 @@ class Socket(object):
             if self.type in Socket.REQUEST_TYPES:
                 self.request_outstanding = True
         except:
-            log.exception("Socket %s blocked on send", sock.type)
+            log.exception("Socket %s blocked on send", self.type)
             raise
 
     def receive(self):
@@ -153,7 +154,7 @@ class Socket(object):
         if self.type in Socket.REQUEST_TYPES:
             self.request_outstanding = False
 
-        self.last_activity = int(time.time() * 1000)
+        self.last_activity = futils.time_ms()
 
         # A special case: heartbeat messages on the subscription interface are
         # swallowed; the application code has no use for them.
@@ -168,7 +169,7 @@ class Socket(object):
         Returns True if the socket has been inactive for at least the timeout;
         all sockets must have heartbeats on them.
         """
-        return ((int(time.time() * 1000) - self.last_activity) >
+        return ((futils.time_ms() - self.last_activity) >
                 self.config.CONN_TIMEOUT_MS)
 
 

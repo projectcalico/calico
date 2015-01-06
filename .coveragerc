@@ -1,0 +1,4 @@
+[run]
+include = *felix*
+omit = *stub_*
+branch = True

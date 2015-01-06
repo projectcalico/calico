@@ -20,12 +20,13 @@ Felix rule management, including iptables and ipsets.
 """
 import logging
 import os
-import re
 import subprocess
 import time
 
+from calico import common
 from calico.felix import fiptables
 from calico.felix import futils
+from calico.felix import ipsets
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4, IPV6
 
@@ -112,7 +113,7 @@ def set_global_rules(config):
 
         rule.create_tcp_match("80")
         fiptables.insert_rule(rule, chain)
-        fiptables.truncate_rules(chain, 1)
+        truncate_rules(chain, 1)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
@@ -197,12 +198,12 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
         family            = "inet6"
 
     # Create ipsets if they do not already exist.
-    create_ipset(to_ipset_port, "hash:net,port", family)
-    create_ipset(to_ipset_addr, "hash:net", family)
-    create_ipset(to_ipset_icmp, "hash:net", family)
-    create_ipset(from_ipset_port, "hash:net,port", family)
-    create_ipset(from_ipset_addr, "hash:net", family)
-    create_ipset(from_ipset_icmp, "hash:net", family)
+    ipsets.create(to_ipset_port, "hash:net,port", family)
+    ipsets.create(to_ipset_addr, "hash:net", family)
+    ipsets.create(to_ipset_icmp, "hash:net", family)
+    ipsets.create(from_ipset_port, "hash:net,port", family)
+    ipsets.create(from_ipset_addr, "hash:net", family)
+    ipsets.create(from_ipset_icmp, "hash:net", family)
 
     # Get the table.
     table = fiptables.get_table(type, "filter")
@@ -281,7 +282,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     #* Delete all rules from here to the end of the chain, in case there     *#
     #* were rules present which should not have been.                        *#
     #*************************************************************************#
-    fiptables.truncate_rules(to_chain, index)
+    truncate_rules(to_chain, index)
 
     #*************************************************************************#
     #* Now the chain that manages packets from the interface, and the rules  *#
@@ -386,7 +387,7 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     #* Delete all rules from here to the end of the chain, in case there     *#
     #* were rules present which should not have been.                        *#
     #*************************************************************************#
-    fiptables.truncate_rules(from_chain, index)
+    truncate_rules(from_chain, index)
 
     #*************************************************************************#
     #* This is a hack, because of a bug in python-iptables where it fails to *#
@@ -503,8 +504,7 @@ def del_rules(id, type):
     # Delete the ipsets for this endpoint.
     for ipset in [from_ipset_addr, from_ipset_port,
                   to_ipset_addr, to_ipset_port]:
-        if futils.call_silent(["ipset", "list", ipset]) == 0:
-            futils.check_call(["ipset", "destroy", ipset])
+        ipsets.destroy(ipset)
 
 
 def set_acls(id, type, inbound, in_default, outbound, out_default):
@@ -546,13 +546,13 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
         log.critical("Only default deny rules are implemented")
 
     # Verify that the tmp ipsets exist and are empty.
-    create_ipset(tmp_ipset_port, "hash:net,port", family)
-    create_ipset(tmp_ipset_addr, "hash:net", family)
-    create_ipset(tmp_ipset_icmp, "hash:net", family)
+    ipsets.create(tmp_ipset_port, "hash:net,port", family)
+    ipsets.create(tmp_ipset_addr, "hash:net", family)
+    ipsets.create(tmp_ipset_icmp, "hash:net", family)
 
-    futils.check_call(["ipset", "flush", tmp_ipset_port])
-    futils.check_call(["ipset", "flush", tmp_ipset_addr])
-    futils.check_call(["ipset", "flush", tmp_ipset_icmp])
+    ipsets.flush(tmp_ipset_port)
+    ipsets.flush(tmp_ipset_addr)
+    ipsets.flush(tmp_ipset_icmp)
 
     update_ipsets(type, type + " inbound",
                   inbound,
@@ -632,7 +632,7 @@ def update_ipsets(type,
                 suffix = ",%s:0" % (protocol)
                 ipset = tmp_ipset_port
             else:
-                if not futils.PORT_REGEX.match(str(port)):
+                if not common.validate_port(str(port)):
                     # Port was supplied but was not an integer.
                     log.error(
                         "Invalid port in %s rule for %s : %s",
@@ -653,16 +653,19 @@ def update_ipsets(type,
                 # No type - all ICMP to / from the cidr, so use the ICMP ipset.
                 suffix = ""
                 ipset  = tmp_ipset_icmp
-            elif futils.INT_REGEX.match(str(icmp_type)):
-                if icmp_code is None:
-                    # Code defaults to 0 if not supplied.
-                    icmp_code = 0
-                suffix = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
-                ipset  = tmp_ipset_port
             else:
-                # Not an integer ICMP type - must be a string code name.
-                suffix = ",%s:%s" % (protocol, icmp_type)
-                ipset  = tmp_ipset_port
+                try:
+                    # Assume integer ICMP type first.
+                    int(icmp_type)
+                    if icmp_code is None:
+                        # Code defaults to 0 if not supplied.
+                        icmp_code = 0
+                    suffix = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
+                    ipset  = tmp_ipset_port
+                except ValueError:
+                    # Not an integer ICMP type - must be a string code name.
+                    suffix = ",%s:%s" % (protocol, icmp_type)
+                    ipset  = tmp_ipset_port
         else:
             if port is not None:
                 # The supplied protocol does not allow ports.
@@ -676,21 +679,20 @@ def update_ipsets(type,
 
         # Now add those values to the ipsets.
         for cidr in cidrs:
-            args = ["ipset", "add", ipset, cidr + suffix, "-exist"]
             try:
-                stdout, stderr = futils.check_call(args)
+                ipsets.add(ipset, cidr + suffix)
             except FailedSystemCall:
                 log.exception("Failed to add %s rule for %s" % (descr, id))
 
     # Now that we have filled the tmp ipset, swap it with the real one.
-    futils.check_call(["ipset", "swap", tmp_ipset_addr, ipset_addr])
-    futils.check_call(["ipset", "swap", tmp_ipset_port, ipset_port])
-    futils.check_call(["ipset", "swap", tmp_ipset_icmp, ipset_icmp])
+    ipsets.swap(tmp_ipset_addr, ipset_addr)
+    ipsets.swap(tmp_ipset_port, ipset_port)
+    ipsets.swap(tmp_ipset_icmp, ipset_icmp)
 
     # Get the temporary ipsets clean again - we leave them existing but empty.
-    futils.check_call(["ipset", "flush", tmp_ipset_port])
-    futils.check_call(["ipset", "flush", tmp_ipset_addr])
-    futils.check_call(["ipset", "flush", tmp_ipset_icmp])
+    ipsets.flush(tmp_ipset_port)
+    ipsets.flush(tmp_ipset_addr)
+    ipsets.flush(tmp_ipset_icmp)
 
 
 def list_eps_with_rules(type):
@@ -718,31 +720,28 @@ def list_eps_with_rules(type):
             for chain in table.chains
             if chain.name.startswith(CHAIN_TO_PREFIX)}
 
-    data  = futils.check_call(["ipset", "list"]).stdout
-    lines = data.split("\n")
-
-    for line in lines:
-        words = line.split()
-        if (len(words) > 1 and words[0] == "Name:" and
-                words[1].startswith(IPSET_TO_PORT_PREFIX)):
-            eps.add(words[1].replace(IPSET_TO_PORT_PREFIX, ""))
-        elif (len(words) > 1 and words[0] == "Name:" and
-              words[1].startswith(IPSET6_TO_PORT_PREFIX)):
-            eps.add(words[1].replace(IPSET6_TO_PORT_PREFIX, ""))
+    names = ipsets.list_names()
+    for name in names:
+        if name.startswith(IPSET_TO_PORT_PREFIX):
+            eps.add(name.replace(IPSET_TO_PORT_PREFIX, ""))
+        elif name.startswith(IPSET6_TO_PORT_PREFIX):
+            eps.add(name.replace(IPSET6_TO_PORT_PREFIX, ""))
 
     return eps
 
-def create_ipset(name, typename, family):
+def truncate_rules(chain, count):
     """
-    Create an ipset. If it already exists, do nothing.
+    This is a utility function to remove any excess rules from a chain. After
+    we have carefully inserted all the rules we want at the start, we want to
+    get rid of any legacy rules from the end.
 
-    *name* is the name of the ipset.
-    *typename* must be a valid type, such as "hash:net" or "hash:net,port"
-    *family* must be *inet* or *inet6*
+    It takes a chain object, and a count for how many of the rules should be
+    left in place.
+
+    Arguably, it should be in fiptables, but we put it here because it's easier
+    to test it here.
     """
-    if futils.call_silent(["ipset", "list", name]) != 0:
-        # ipset list failed - either does not exist, or an error. Either way,
-        # try creation, throwing an error if it does not work.
-        futils.check_call(
-            ["ipset", "create", name, typename, "family", family])
+    while len(chain.rules) > count:
+        rule = chain.rules[-1]
+        chain.delete_rule(rule)
 

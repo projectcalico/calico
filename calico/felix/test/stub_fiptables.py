@@ -16,18 +16,25 @@
 felix.test.stub_fiptables
 ~~~~~~~~~~~~
 
-IP tables management functions. This is a wrapper round python-iptables that
-allows us to mock it out for testing.
+Stub version of the fiptables module.
 """
 from calico.felix.futils import IPV4, IPV6
+import difflib
+
+from collections import namedtuple
+#*****************************************************************************#
+#* The following is so that rule.target.name can be used to identify rules;  *#
+#* this is the subset of the Target object from iptc that is actually        *#
+#* required by calling code.                                                 *#
+#*****************************************************************************#
+RuleTarget = namedtuple('RuleTarget', ['name'])
 
 # Special value to mean "put this rule at the end".
 RULE_POSN_LAST = -1
 
-# Global variables for current state.
-tables_v4 = dict()
-tables_v6 = dict()
-
+#*****************************************************************************#
+#* The range of definitions below mimic fiptables.                           *#
+#*****************************************************************************#
 class Rule(object):
     """
     Fake rule object.
@@ -36,10 +43,11 @@ class Rule(object):
         self.type = type
 
         self.target_name = target_name
-        self.target_args = dict()
+        self.target = RuleTarget(target_name)
+        self.target_args = {}
 
         self.match_name = None
-        self.match_args = dict()
+        self.match_args = {}
 
         self.protocol = None
         self.src = None
@@ -47,10 +55,11 @@ class Rule(object):
         self.out_interface = None
 
     def create_target(self, name, parameters=None):
+        self.target = RuleTarget(name)
         self.target_name = name
         if parameters is not None:
             for key in parameters:
-                self.target_args[key] = value
+                self.target_args[key] = parameters[key]
 
     def create_tcp_match(self, dport):
         self.match_name = "tcp"
@@ -81,7 +90,6 @@ class Rule(object):
         self.match_args["sport"] = sport
         self.match_args["dport"] = dport
 
-
     def __eq__(self, other):
         if (self.protocol != other.protocol or
             self.src != other.src or
@@ -103,21 +111,36 @@ class Rule(object):
 
         return True
 
+    def __str__(self):
+        output = self.target_name
+        if self.target_args:
+            output += " " + str(self.target_args)
+        output += " " + (self.protocol if self.protocol else "all")
+        output += " " + (self.src if self.src else "anywhere")
+        output += " " + (self.in_interface if self.in_interface else "any_in")
+        output += " " + (self.out_interface if self.out_interface else "any_out")
+        if self.match_name:
+            output += " " + self.match_name
+        output += ((" " + str(self.match_args)) if self.match_args else "")
+
+        return output
+
     def __ne__(self, other):
-        return not self.__eq__(self,other)
+        return not self.__eq__(other)
 
 class Chain(object):
     """
     Mimic of an IPTC chain. Rules must be a list (not a set).
     """
-    def __init__(self, name, rules=[]):
+    def __init__(self, name):
         self.name = name
-        self.rules = rules
+        self.rules = []
+        self.type = None # Not known until put in table.
 
     def flush(self):
-        self.rules = []
+        del self.rules[:]
 
-    def delete_rule(rule):
+    def delete_rule(self, rule):
         # The rule must exist or it is an error.
         self.rules.remove(rule)
 
@@ -139,7 +162,21 @@ class Table(object):
     def __init__(self, type, name):
         self.type = type
         self.name = name
-        self.chains = dict()
+        self._chains_dict = {}
+
+    def is_chain(self, name):
+        return (name in self._chains_dict)
+
+    def delete_chain(self, name):
+        del self._chains_dict[name]
+        for chain in self.chains:
+            if chain.name == name:
+                self.chains.remove(chain)
+                
+    @property
+    def chains(self):
+        # The python-iptables code exposes the list of chains directly.
+        return self._chains_dict.values()
 
 def get_table(type, name):
     """
@@ -147,38 +184,27 @@ def get_table(type, name):
     an IP v4 or an IP v6 table according to type.
     """
     if type == IPV4:
-        table = table_v4(name)
+        table = current_state.tables_v4[name]
+    elif type == IPV6:
+        table = current_state.tables_v6[name]
     else:
-        table = table_v6(name)
+        raise ValueError("Invalid type %s for table" % type)
 
     return table
+
 
 def get_chain(table, name):
     """
     Gets a chain, creating it first if it does not exist.
     """
-    if name in table.chains:
-        chain = self.chains[name]
+    if name in table._chains_dict:
+        chain = table._chains_dict[name]
     else:
         chain = Chain(name)
-        self.chains[name] = chain
+        table._chains_dict[name] = chain
+        chain.type = table.type
 
     return chain
-
-
-def truncate_rules(chain, count):
-    """
-    This is a utility function to remove any excess rules from a chain. After
-    we have carefully inserted all the rules we want at the start, we want to
-    get rid of any legacy rules from the end.
-
-    It takes a chain object, and a count for how many of the rules should be
-    left in place.
-    """
-    # TODO: Function identical to value in production code.
-    while len(chain.rules) > count:
-        rule = chain.rules[-1]
-        chain.delete_rule(rule)
 
 
 def insert_rule(rule, chain, position=0, force_position=True):
@@ -191,17 +217,21 @@ def insert_rule(rule, chain, position=0, force_position=True):
     unless it already exists there. If force_position is False, then the rule
     is added only if it does not exist anywhere in the list of rules.
     """
-    # TODO: Function identical to value in production code.
     found = False
     rules = chain.rules
+
+    # Check the type - python iptables would do this for us.
+    if rule.type != chain.type:
+        raise ValueError("Type of rule (%s) does not match chain (%s)" %
+                         (rule.type, chain.type))
 
     if position == RULE_POSN_LAST:
         position = len(rules)
 
     if force_position:
-        if (len(rules) <= position) or (rule._rule != chain.rules[position]):
+        if (len(rules) <= position) or (rule != chain.rules[position]):
             # Either adding after existing rules, or replacing an existing rule.
-            chain.insert_rule(rule._rule, position)
+            chain.rules.insert(position, rule)
     else:
         #*********************************************************************#
         #* The python-iptables code to compare rules does a comparison on    *#
@@ -209,13 +239,105 @@ def insert_rule(rule, chain, position=0, force_position=True):
         #* the offset into the chain. Hence the test below finds whether     *#
         #* there is a rule with the same parameters anywhere in the chain.   *#
         #*********************************************************************#
-        if rule._rule not in chain.rules:
-            chain.insert_rule(rule._rule, position)
+        if rule not in chain.rules:
+            chain.rules.insert(position, rule)
 
     return
 
-def init_state():
-    tables_v4["filter"] = Table("filter")
-    tables_v4["nat"] = Table("nat")
-    tables_v6["filter"] = Table("filter")
+#*****************************************************************************#
+#* The next few definitions are not exposed to production code.              *#
+#*****************************************************************************#
+def reset_current_state():
+    current_state.reset()
 
+
+class UnexpectedStateException(Exception):
+    def __init__(self, actual, expected):
+        super(UnexpectedStateException, self).__init__(
+            "iptables state does not match")
+        self.diff = "\n".join(difflib.unified_diff(
+            expected.split("\n"),
+            actual.split("\n")))
+
+        self.actual = actual
+        self.expected = expected
+
+    def __str__(self):
+        return ("%s\nDIFF:\n%s\nACTUAL:\n%s\nEXPECTED\n%s" %
+                (self.message, self.diff, self.actual, self.expected))
+
+
+def check_state(expected_state):
+    """
+    Checks that the current state matches the expected state. Throws an
+    exception if it does not.
+    """
+    actual = str(current_state)
+    expected = str(expected_state)
+
+    if actual != expected:
+        raise UnexpectedStateException(actual, expected)
+
+class TableState(object):
+    """
+    Defines the current state of iptables - which rules exist in which
+    tables. Normally there will be two - the state that the test generates, and
+    the state that the test expects to have at the end. At the end of the test,
+    these can be compared.
+    """
+    def __init__(self):
+        self.tables_v4 = {}
+        self.tables_v6 = {}
+
+        self.reset()
+
+    def reset(self):
+        """
+        Clear the state of the tables, getting them back to being empty.
+        """
+        self.tables_v4.clear()
+        self.tables = []
+
+        table = Table(IPV4, "filter")
+        get_chain(table, "INPUT")
+        get_chain(table, "OUTPUT")
+        get_chain(table, "FORWARD")
+        self.tables_v4["filter"] = table
+        self.tables.append(table)
+
+        table = Table(IPV4, "nat")
+        get_chain(table, "PREROUTING")
+        get_chain(table, "POSTROUTING")
+        get_chain(table, "INPUT")
+        get_chain(table, "OUTPUT")
+        self.tables_v4["nat"] = table
+        self.tables.append(table)
+
+        self.tables_v6.clear()
+        table = Table(IPV6, "filter")
+        get_chain(table, "INPUT")
+        get_chain(table, "OUTPUT")
+        get_chain(table, "FORWARD")
+        self.tables_v6["filter"] = table
+        self.tables.append(table)
+
+    def __str__(self):
+        """
+        Convert a full state to a readable string to use in matches and compare
+        for final testing.
+        """
+        output = ""
+        for table in self.tables:
+            output += "TABLE %s (%s)\n" % (table.name, table.type)
+            for chain_name in sorted(table._chains_dict.keys()):
+                output += "  Chain %s\n" % chain_name
+                chain = table._chains_dict[chain_name]
+                for rule in chain.rules:
+                    output += "    %s\n" % rule
+                output += "\n"
+            output += "\n"
+
+        return output
+
+# Current state - store in a global.
+current_state = TableState()

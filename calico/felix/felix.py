@@ -55,7 +55,7 @@ class FelixAgent(object):
     networking state for a set of endpoints; for example for a set of virtual
     machines or containers on an individual compute host.
     """
-    def __init__(self, config_path):
+    def __init__(self, config_path, context):
         # Get some configuration.
         self.config = Config(config_path)
 
@@ -71,7 +71,7 @@ class FelixAgent(object):
         log.error("Felix starting")
 
         # The ZeroMQ context for this Felix.
-        self.zmq_context = zmq.Context()
+        self.zmq_context = context
 
         # The hostname of the machine on which this Felix is running.
         self.hostname = socket.gethostname()
@@ -137,6 +137,9 @@ class FelixAgent(object):
         # would just be a noop anyway).
         self.resync_endpoints()
 
+        # Set up the global rules.
+        frules.set_global_rules(self.config)
+
     def connect_to_plugin(self):
         """
         This method creates the sockets needed for connecting to the plugin.
@@ -201,7 +204,7 @@ class FelixAgent(object):
         # Send the RESYNCSTATE message.
         fields = {
             'resync_id': self.resync_id,
-            'issued': time.time() * 1000,
+            'issued': futils.time_ms(),
             'hostname': self.hostname,
         }
         self.send_request(
@@ -220,7 +223,7 @@ class FelixAgent(object):
         for endpoint_id, endpoint in self.endpoints.iteritems():
             fields = {
                 'endpoint_id': endpoint_id,
-                'issued': time.time() * 1000,
+                'issued': futils.time_ms()
             }
             self.send_request(
                 Message(Message.TYPE_GET_ACL, fields),
@@ -235,7 +238,7 @@ class FelixAgent(object):
         self.resync_id       = None
         self.resync_recd     = None
         self.resync_expected = None
-        self.resync_time     = int(time.time() * 1000)
+        self.resync_time     = futils.time_ms()
 
         if successful:
             for uuid in self.endpoints.keys():
@@ -274,10 +277,10 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint create: %s", message.fields)
 
+        # TODO: Ought to firewall missing mandatory fields here.
         endpoint_id = message.fields['endpoint_id']
-        resync_id   = message.fields['resync_id']
-        issued      = message.fields['issued']
         mac         = message.fields['mac']
+        resync_id   = message.fields.get('resync_id')
 
         # First, check whether we know about this endpoint already. If we do,
         # we should raise a warning log unless we're in the middle of a resync.
@@ -350,7 +353,6 @@ class FelixAgent(object):
 
         # Get the endpoint data from the message.
         endpoint_id = message.fields['endpoint_id']
-        issued      = message.fields['issued']
 
         try:
             # Update the endpoint
@@ -395,7 +397,6 @@ class FelixAgent(object):
         log.debug("Received endpoint destroy: %s", message.fields)
 
         delete_id = message.fields['endpoint_id']
-        issued    = message.fields['issued']
 
         try:
             endpoint = self.endpoints.pop(delete_id)
@@ -536,7 +537,7 @@ class FelixAgent(object):
         # Having subscribed, we can now request ACL state for this endpoint.
         fields = {
             'endpoint_id': endpoint_id,
-            'issued': time.time() * 1000,
+            'issued': futils.time_ms()
         }
         self.send_request(
             Message(Message.TYPE_GET_ACL, fields),
@@ -553,7 +554,7 @@ class FelixAgent(object):
         state = fields.get('state')
         addresses = set()
         try:
-            for addr in fields.get('addrs', None):
+            for addr in fields['addrs']:
                 addresses.add(Address(addr))
         except KeyError:
             log.error("Missing addrs or IP in addrs for endpoint %s, data %s",
@@ -589,119 +590,117 @@ class FelixAgent(object):
 
     def run(self):
         """
-        Executes the main agent loop.
+        Executes one iteration of the main agent loop.
         """
-        # Set up the global rules.
-        frules.set_global_rules(self.config)
+        # Issue a poll request on all active sockets.
+        endpoint_resync_needed = False
+        acl_resync_needed = False
 
-        while True:
-            # Issue a poll request on all active sockets.
-            endpoint_resync_needed = False
-            acl_resync_needed = False
+        lPoller = zmq.Poller()
+        for sock in self.sockets.values():
+            # Easier just to poll all sockets, even if we expect nothing.
+            lPoller.register(sock._zmq, zmq.POLLIN)
 
-            lPoller = zmq.Poller()
-            for sock in self.sockets.values():
-                # Easier just to poll all sockets, even if we expect nothing.
-                lPoller.register(sock._zmq, zmq.POLLIN)
+        polled_sockets = dict(lPoller.poll(self.config.EP_RETRY_INT_MS))
 
-            polled_sockets = dict(lPoller.poll(self.config.EP_RETRY_INT_MS))
+        # Get all the sockets with activity.
+        active_sockets = (
+            s for s in self.sockets.values()
+            if s._zmq in polled_sockets
+            and polled_sockets[s._zmq] == zmq.POLLIN
+        )
 
-            # Get all the sockets with activity.
-            active_sockets = (
-                s for s in self.sockets.values()
-                if s._zmq in polled_sockets
-                and polled_sockets[s._zmq] == zmq.POLLIN
-            )
+        # For each active socket, pull the message off and handle it.
+        for sock in active_sockets:
+            message = sock.receive()
 
-            # For each active socket, pull the message off and handle it.
-            for sock in active_sockets:
-                message = sock.receive()
+            if message is not None:
+                self.handlers[message.type](message)
 
-                if message is not None:
-                    self.handlers[message.type](message)
-
-            for sock in self.sockets.values():
-                # See if anything else is required on this socket. First, check
-                # whether any have timed out.
-                # A timed out socket needs to be reconnected. Also, whatever
-                # API it belongs to needs to be resynchronised.
-                if sock.timed_out():
-                    log.warning("Socket %s timed out", sock.type)
-                    sock.close()
-
-                    #*********************************************************#
-                    #* If we lost the connection on which we would receive   *#
-                    #* ENDPOINTCREATED messages, we need to trigger a total  *#
-                    #* endpoint resync, and similarly for ACLs if we have    *#
-                    #* lost the connection on which we would receive         *#
-                    #* ACLUPDATE messages.                                   *#
-                    #*********************************************************#
-                    if sock.type == Socket.TYPE_EP_REP:
-                        endpoint_resync_needed = True
-                    elif sock.type == Socket.TYPE_ACL_SUB:
-                        acl_resync_needed = True
-
-                    # Flush the message queue.
-                    if sock.type == Socket.TYPE_EP_REQ:
-                        self.endpoint_queue.clear()
-                    elif sock.type == Socket.TYPE_ACL_REQ:
-                        self.acl_queue.clear()
-
-                    # Finally, recreate the socket.
-                    sock.communicate(self.hostname, self.zmq_context)
-
-            # If we have any queued messages to send, we should do so.
-            endpoint_socket = self.sockets[Socket.TYPE_EP_REQ]
-            acl_socket = self.sockets[Socket.TYPE_ACL_REQ]
-
-            if (len(self.endpoint_queue) and
-                    not endpoint_socket.request_outstanding):
-                message = self.endpoint_queue.pop()
-                endpoint_socket.send(message)
-
-            if len(self.acl_queue) and not acl_socket.request_outstanding:
-                message = self.acl_queue.pop()
-                acl_socket.send(message)
-
-            # Now, check if we need to resynchronize and do it.
-            if (self.resync_id is None and
-                    (time.time() - self.resync_time > self.config.RESYNC_INT_SEC)):
-                # Time for a total resync of all endpoints
-                endpoint_resync_needed = True
-
-            if endpoint_resync_needed:
-                self.resync_endpoints()
-            elif acl_resync_needed:
-                #*************************************************************#
-                #* Note that an endpoint resync implicitly involves an ACL   *#
-                #* resync, so there is no point in triggering one when an    *#
-                #* endpoint resync has just started (as opposed to when we   *#
-                #* are in the middle of an endpoint resync and just lost our *#
-                #* connection).                                              *#
-                #*************************************************************#
-                self.resync_acls()
-
+        for sock in self.sockets.values():
             #*****************************************************************#
-            #* Finally, retry any endpoints which need retrying. We remove   *#
-            #* them from ep_retry if they no longer exist or if the retry    *#
-            #* succeeds; the simplest way to do this is to copy the list,    *#
-            #* clear ep_retry then add them back if necessary.               *#
+            #* See if anything else is required on this socket. First, check *#
+            #* whether any have timed out.  A timed out socket needs to be   *#
+            #* reconnected. Also, whatever API it belongs to needs to be     *#
+            #* resynchronised.                                               *#
             #*****************************************************************#
-            retry_list = list(self.ep_retry)
-            self.ep_retry.clear()
-            for uuid in retry_list:
-                if uuid in self.endpoints:
-                    endpoint = self.endpoints[uuid]
-                    log.debug("Retry program of %s" % endpoint.suffix)
-                    if endpoint.program_endpoint():
-                        # Failed again - put back on list
-                        self.ep_retry.add(uuid)
-                    else:
-                        # Programmed OK, so apply any ACLs we might have.
-                        endpoint.update_acls()
+            if sock.timed_out():
+                log.warning("Socket %s timed out", sock.type)
+                sock.close()
+
+                #*************************************************************#
+                #* If we lost the connection on which we would receive       *#
+                #* ENDPOINTCREATED messages, we need to trigger a total      *#
+                #* endpoint resync, and similarly for ACLs if we have lost   *#
+                #* the connection on which we would receive ACLUPDATE        *#
+                #* messages.                                                 *#
+                #*************************************************************#
+                if sock.type == Socket.TYPE_EP_REP:
+                    endpoint_resync_needed = True
+                elif sock.type == Socket.TYPE_ACL_SUB:
+                    acl_resync_needed = True
+
+                # Flush the message queue.
+                if sock.type == Socket.TYPE_EP_REQ:
+                    self.endpoint_queue.clear()
+                elif sock.type == Socket.TYPE_ACL_REQ:
+                    self.acl_queue.clear()
+
+                # Finally, recreate the socket.
+                sock.communicate(self.hostname, self.zmq_context)
+
+        # If we have any queued messages to send, we should do so.
+        endpoint_socket = self.sockets[Socket.TYPE_EP_REQ]
+        acl_socket = self.sockets[Socket.TYPE_ACL_REQ]
+
+        if (len(self.endpoint_queue) and
+                not endpoint_socket.request_outstanding):
+            message = self.endpoint_queue.pop()
+            endpoint_socket.send(message)
+
+        if len(self.acl_queue) and not acl_socket.request_outstanding:
+            message = self.acl_queue.pop()
+            acl_socket.send(message)
+
+        # Now, check if we need to resynchronize and do it.
+        if (self.resync_id is None and
+                (futils.time_ms() - self.resync_time > self.config.RESYNC_INT_SEC)):
+            # Time for a total resync of all endpoints
+            endpoint_resync_needed = True
+
+        if endpoint_resync_needed:
+            self.resync_endpoints()
+        elif acl_resync_needed:
+            #*****************************************************************#
+            #* Note that an endpoint resync implicitly involves an ACL       *#
+            #* resync, so there is no point in triggering one when an        *#
+            #* endpoint resync has just started (as opposed to when we are   *#
+            #* in the middle of an endpoint resync and just lost our         *#
+            #* connection).                                                  *#
+            #*****************************************************************#
+            self.resync_acls()
+
+        #*********************************************************************#
+        #* Finally, retry any endpoints which need retrying. We remove them  *#
+        #* from ep_retry if they no longer exist or if the retry succeeds;   *#
+        #* the simplest way to do this is to copy the list, clear ep_retry   *#
+        #* then add them back if necessary.                                  *#
+        #*********************************************************************#
+        retry_list = list(self.ep_retry)
+        self.ep_retry.clear()
+        for uuid in retry_list:
+            if uuid in self.endpoints:
+                endpoint = self.endpoints[uuid]
+                log.debug("Retry program of %s" % endpoint.suffix)
+                if endpoint.program_endpoint():
+                    # Failed again - put back on list
+                    self.ep_retry.add(uuid)
                 else:
-                    log.debug("No retry programming %s - no longer exists" %
-                              uuid)
+                    # Programmed OK, so apply any ACLs we might have.
+                    endpoint.update_acls()
+            else:
+                log.debug("No retry programming %s - no longer exists" %
+                          uuid)
 
 
 def main():
@@ -722,8 +721,9 @@ def main():
         config_path = args.config_file or CONFIG_FILE_PATH
 
         # Create an instance of the Felix agent and start it running.
-        agent = FelixAgent(config_path)
-        agent.run()
+        agent = FelixAgent(config_path, zmq.Context())
+        while True:
+            agent.run()
 
     except:
         log.exception("Felix exiting after uncaught exception")

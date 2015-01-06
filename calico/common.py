@@ -24,11 +24,53 @@ Calico common utilities.
 import logging
 import logging.handlers
 import os
+import re
 import sys
 import errno
 
+# Various useful regular expressions.
+IPV4_REGEX = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
+INT_REGEX  = re.compile("^[0-9]+$")
+
+
 AGENT_TYPE_CALICO = 'Calico agent'
 FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
+
+def validate_port(port):
+    """
+    Validates that a port is valid. Returns true if valid, false if not.
+    """
+    try:
+        port_int = int(port)
+        if port_int <= 0 or port_int > 65535:
+            return False
+        else:
+            return True
+
+    except ValueError:
+        return False
+
+
+def validate_ipv4_addr(addr):
+    """
+    Validates that an IP v4 address is valid. Returns true if valid, false if
+    not.
+
+    Does a fairly basic check, so can be fooled by some addresses.
+    """
+    return IPV4_REGEX.match(addr)
+
+
+def validate_ipv6_addr(addr):
+    """
+    Validates that an IP v6 address is valid. Returns true if valid, false if
+    not.
+
+    Does a fairly basic check, so can be fooled by some addresses.
+    """
+    return IPV6_REGEX.match(addr)
+
 
 def mkdir_p(path):
     """http://stackoverflow.com/a/600612/190597 (tzot)"""
