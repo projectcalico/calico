@@ -44,7 +44,6 @@ def main():
 
     plugin_address = config.get('global', 'PluginAddress')
     local_address = config.get('global', 'LocalAddress')
-    except ConfigParser.NoOptionError:
     log_file_path = config.get('log', 'LogFilePath')
     log_file_level = config.get('log', 'LogSeverityFile')
     log_syslog_level = config.get('log', 'LogSeveritySys')
