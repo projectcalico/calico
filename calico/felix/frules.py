@@ -655,8 +655,8 @@ def update_ipsets(type,
                 ipset  = tmp_ipset_icmp
             else:
                 try:
-                    # Assume integer ICMP type.
-                    int(str(icmp_type))
+                    # Assume integer ICMP type first.
+                    int(icmp_type)
                     if icmp_code is None:
                         # Code defaults to 0 if not supplied.
                         icmp_code = 0
