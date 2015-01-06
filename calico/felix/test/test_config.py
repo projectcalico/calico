@@ -75,24 +75,23 @@ class TestConfig(unittest.TestCase):
                                      "Invalid or unresolvable ACLAddr"):
             config = Config("calico/felix/test/data/felix_invalid_acl.cfg")
 
-    def test_bindaddr_all(self):
+    def test_localaddr_all(self):
         # Not an error.
-        config = Config("calico/felix/test/data/felix_bindaddr_all.cfg")
-        self.assertEqual(config.BIND_ADDR, "*")
+        config = Config("calico/felix/test/data/felix_localaddr_all.cfg")
+        self.assertEqual(config.LOCAL_ADDR, "*")
 
-    def test_bindaddr_specific(self):
+    def test_localaddr_specific(self):
         # Not an error.
-        config = Config("calico/felix/test/data/felix_bindaddr_specific.cfg")
-        self.assertEqual(config.BIND_ADDR, "1.2.3.4")
+        config = Config("calico/felix/test/data/felix_localaddr_specific.cfg")
+        self.assertEqual(config.LOCAL_ADDR, "1.2.3.4")
 
-    def test_bindaddr_host(self):
+    def test_localaddr_host(self):
         # Not an error.
-        config = Config("calico/felix/test/data/felix_bindaddr_host.cfg")
-        self.assertIn("127.", config.BIND_ADDR)
+        config = Config("calico/felix/test/data/felix_localaddr_host.cfg")
+        self.assertIn("127.", config.LOCAL_ADDR)
 
-
-    def test_bad_bind_addr(self):
+    def test_bad_localaddr(self):
         with self.assertRaisesRegexp(ConfigException,
-                                     "Invalid or unresolvable BindAddr"):
-            config = Config("calico/felix/test/data/felix_bad_bindaddr.cfg")
+                                     "Invalid or unresolvable LocalAddress"):
+            config = Config("calico/felix/test/data/felix_bad_localaddr.cfg")
 

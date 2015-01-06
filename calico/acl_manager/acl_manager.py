@@ -35,14 +35,16 @@ def main():
     log_defaults = {'LogFilePath': None,
                     'LogSeverityFile': 'INFO',
                     'LogSeveritySys': 'ERROR',
-                    'LogSeverityScreen': 'ERROR'}
+                    'LogSeverityScreen': 'ERROR',
+                    'LocalAddress': '*'   }
 
     # Read config file.
     config = ConfigParser.ConfigParser(log_defaults)
     config.read(args.config_file or 'acl_manager.cfg')
 
     plugin_address = config.get('global', 'PluginAddress')
-    bind_address = config.get('global', 'BindAddr')
+    local_address = config.get('global', 'LocalAddress')
+    except ConfigParser.NoOptionError:
     log_file_path = config.get('log', 'LogFilePath')
     log_file_level = config.get('log', 'LogSeverityFile')
     log_syslog_level = config.get('log', 'LogSeveritySys')
@@ -78,7 +80,7 @@ def main():
     acl_store = ACLStore()
     network_store = NetworkStore()
 
-    publisher = ACLPublisher(context, acl_store, bind_address)
+    publisher = ACLPublisher(context, acl_store, local_address)
     acl_store.start(publisher)
 
     processor = RuleProcessor(acl_store, network_store)

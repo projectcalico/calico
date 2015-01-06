@@ -73,8 +73,8 @@ class Config(object):
         self.METADATA_PORT   = self.get_cfg_entry("global",
                                                   "MetadataPort",
                                                   "9697")
-        self.BIND_ADDR       = self.get_cfg_entry("global",
-                                                  "BindAddr",
+        self.LOCAL_ADDR      = self.get_cfg_entry("global",
+                                                  "LocalAddress",
                                                   "*")
         self.LOGFILE         = self.get_cfg_entry("log",
                                                   "LogFilePath",
@@ -175,9 +175,9 @@ class Config(object):
         #* Bind address must be * or an IPv4 address. We allow hostnames,    *#
         #* but resolve them before use.                                      *#
         #*********************************************************************#
-        if self.BIND_ADDR != "*":
-            self.BIND_ADDR = self.validate_addr("BindAddr",
-                                                self.BIND_ADDR)
+        if self.LOCAL_ADDR != "*":
+            self.LOCAL_ADDR = self.validate_addr("LocalAddress",
+                                                 self.LOCAL_ADDR)
 
     def warn_unused_cfg(self):
         #*********************************************************************#
