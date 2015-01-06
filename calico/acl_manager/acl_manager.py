@@ -32,15 +32,42 @@ def main():
     parser.add_argument('-c', '--config-file', dest='config_file')
     args = parser.parse_args()
 
+    log_defaults = {'LogFilePath': None,
+                    'LogSeverityFile': 'INFO',
+                    'LogSeveritySys': 'ERROR',
+                    'LogSeverityScreen': 'ERROR'}
+
     # Read config file.
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser.ConfigParser(log_defaults)
     config.read(args.config_file or 'acl_manager.cfg')
+
     plugin_address = config.get('global', 'PluginAddress')
     log_file_path = config.get('log', 'LogFilePath')
+    log_file_level = config.get('log', 'LogSeverityFile')
+    log_syslog_level = config.get('log', 'LogSeveritySys')
+    log_stream_level = config.get('log', 'LogSeverityScreen')
+
+    # Convert log level names into python log levels.
+    loglevels = {"none":      None,
+                 "debug":     logging.DEBUG,
+                 "info":      logging.INFO,
+                 "warn":      logging.WARNING,
+                 "warning":   logging.WARNING,
+                 "err":       logging.ERROR,
+                 "error":     logging.ERROR,
+                 "crit":      logging.CRITICAL,
+                 "critical":  logging.CRITICAL}
+
+    file_level = loglevels[log_file_level.lower()]
+    syslog_level = loglevels[log_syslog_level.lower()]
+    stream_level = loglevels[log_stream_level.lower()]
 
     # Configure logging.
     common.default_logging()
-    common.complete_logging(log_file_path)
+    common.complete_logging(logfile=log_file_path,
+                            file_level=file_level,
+                            syslog_level=syslog_level,
+                            stream_level=stream_level)
 
     # Create ZeroMQ context.
     context = zmq.Context()
