@@ -34,7 +34,6 @@ IPV6_REGEX = re.compile("^[a-f0-9]+:[:a-f0-9]+$")
 INT_REGEX  = re.compile("^[0-9]+$")
 
 
-
 AGENT_TYPE_CALICO = 'Calico agent'
 FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
 
@@ -43,6 +42,7 @@ FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
 # by the code in this module. This allows us to dynamically generate the format
 # string used by the logger.
 SYSLOG_FORMAT_STRING = '{excname}: %(message)s'
+
 
 def validate_port(port):
     """
