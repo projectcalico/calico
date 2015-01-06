@@ -1,0 +1,2 @@
+pyzmq
+python-iptables>=0.5.0

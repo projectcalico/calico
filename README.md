@@ -68,3 +68,32 @@ management of the project. However, it is open to any members of the community
 
 Please [contact us](http://www.projectcalico.org/contact-us/) if you are
 interested in getting involved and contributing to the project.
+
+## How do I hack on Calico?
+
+It's great that you're interested! In additional to being able to install
+Calico from packages, you can install the source directly. If you want to work
+on the code, we recommend installing the source directly in a Python
+[virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/).
+In your virtual environment, switch to the directory containing the code and
+type:
+
+    pip install -e .
+
+This will install the code and all its dependencies, *except for Neutron*. This
+is all you need to work on Felix or the ACL Manager. If you want to work on our
+OpenStack plugin, you'll also need to install Neutron: doing that is outside
+the scope of this article.
+
+### Fewer dependencies
+
+If you only want to hack on one or two components you may not want to install
+the dependencies for the others. To do that, you can set the `$CALICODEPS`
+environment variable before installing the code. Set the variable to a
+comma-separated list of the names of the components you want to install the
+dependencies for.
+
+For example, if you want to work on Felix and the ACL manager, you will want to
+set it to `felix,acl_manager`. With that set, you can then run
+`pip install -e .`, which will install the subset of the dependencies needed
+for those components.
