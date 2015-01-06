@@ -33,7 +33,7 @@ class ACLPublisher:
     The ACL Publisher owns the ZeroMQ sockets that transport the API.
     """
 
-    def __init__(self, context, acl_store):
+    def __init__(self, context, acl_store, local_address):
         log.debug("Creating ACL Publisher")
         
         self.acl_store = acl_store
@@ -41,12 +41,14 @@ class ACLPublisher:
         # Create REP socket, used to receive ACL state requests from Felix.
         log.debug("Creating Publisher REP socket")
         self.router_socket = context.socket(zmq.ROUTER)
-        self.router_socket.bind("tcp://*:%s" % MANAGER_ACLGET_PORT)
+        self.router_socket.bind("tcp://%s:%s" %
+                                (local_address, MANAGER_ACLGET_PORT))
 
         # Create PUB socket, used to publish ACL updates to Felix.
         log.debug("Creating Publisher PUB socket")
         self.pub_socket = context.socket(zmq.PUB)
-        self.pub_socket.bind("tcp://*:%s" % MANAGER_ACLPUB_PORT)
+        self.pub_socket.bind("tcp://%s:%s" %
+                             (local_address, MANAGER_ACLPUB_PORT))
         
         # Create a lock to protect the PUB socket.
         self.pub_lock = Lock()
