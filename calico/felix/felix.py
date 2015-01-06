@@ -74,7 +74,7 @@ class FelixAgent(object):
         self.zmq_context = context
 
         # The hostname of the machine on which this Felix is running.
-        self.hostname = socket.gethostname()
+        self.hostname = self.config.HOSTNAME
 
         # The sockets owned by this Felix, keyed off their socket type.
         self.sockets = {}

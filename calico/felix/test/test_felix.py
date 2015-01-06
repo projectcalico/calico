@@ -20,6 +20,7 @@ Top level tests for Felix.
 """
 import logging
 import mock
+import socket
 import sys
 import time
 import unittest
@@ -116,6 +117,8 @@ class TestBasic(unittest.TestCase):
         set_expected_global_rules()
         stub_fiptables.check_state(expected_iptables)
         stub_ipsets.check_state(expected_ipsets)
+
+        self.assertEqual(agent.hostname, "test_hostname")
 
     def test_no_work(self):
         """

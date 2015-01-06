@@ -58,6 +58,11 @@ class Config(object):
             self.get_cfg_entry("global",
                                "ResyncIntervalSecs",
                                1800))
+
+        self.HOSTNAME        = self.get_cfg_entry("global",
+                                                  "FelixHostname",
+                                                  socket.gethostname())
+
         self.PLUGIN_ADDR     = self.get_cfg_entry("global",
                                                   "PluginAddress")
         self.ACL_ADDR        = self.get_cfg_entry("global",

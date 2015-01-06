@@ -19,6 +19,7 @@ felix.test.test_config
 Top level tests for Felix configuration.
 """
 import logging
+import socket
 import sys
 import unittest
 from calico.felix.config import Config, ConfigException
@@ -33,6 +34,8 @@ class TestConfig(unittest.TestCase):
     def test_simple_good_config(self):
         config = Config("calico/felix/test/data/felix_basic.cfg")
         self.assertEqual(config.PLUGIN_ADDR, "localhost")
+        # We did not explicitly set HOSTNAME in this config - check defaulting.
+        self.assertEqual(config.HOSTNAME, socket.gethostname())
 
     def test_missing_section(self):
         with self.assertRaisesRegexp(ConfigException,
