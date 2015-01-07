@@ -294,26 +294,14 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     index += 1
 
     if type == IPV4:
-        # Allow outgoing DHCP packets.
+        # Allow outgoing v4 DHCP packets.
         rule = fiptables.Rule(type, "RETURN")
         rule.protocol = "udp"
         rule.create_udp_match("68", "67")
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
-
-        #*********************************************************************#
-        #* Drop UDP that would allow this server to act as a DHCP server.    *#
-        #* This may be unnecessary - see                                     *#
-        #* https://github.com/Metaswitch/calico/issues/36                    *#
-        #*********************************************************************#
-        rule = fiptables.Rule(type, "DROP")
-        rule.protocol = "udp"
-        rule.create_udp_match("67", "68")
-        fiptables.insert_rule(rule, from_chain, index)
-        index += 1
-
     else:
-        # Allow outgoing DHCP packets.
+        # Allow outgoing v6 DHCP packets.
         rule = fiptables.Rule(type, "RETURN")
         rule.protocol = "udp"
         rule.create_udp_match("546", "547")
