@@ -102,7 +102,8 @@ def set_global_rules(config):
         # No metadata IP. The chain should be empty - if not, clean it out.
         chain.flush()
     else:
-        # Now add the single rule to that chain. It looks like this.
+        # Now set the chain to have a single rule by adding it at the start,
+        # then truncating. The rule looks like this.
         #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
         rule          = fiptables.Rule(futils.IPV4)
         rule.dst      = "169.254.169.254"
@@ -112,7 +113,7 @@ def set_global_rules(config):
                                                config.METADATA_PORT)})
 
         rule.create_tcp_match("80")
-        fiptables.insert_rule(rule, chain)
+        fiptables.insert_rule(rule, chain, 0)
         truncate_rules(chain, 1)
 
     #*************************************************************************#

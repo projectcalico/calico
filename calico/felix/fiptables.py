@@ -95,6 +95,14 @@ class Rule(object):
         self._rule.src = value
 
     @property
+    def dst(self):
+        return self._rule.dst
+
+    @dst.setter
+    def dst(self, value):
+        self._rule.dst = value
+
+    @property
     def in_interface(self):
         return self._rule.in_interface
 
