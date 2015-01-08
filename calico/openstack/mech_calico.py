@@ -106,6 +106,19 @@ HEARTBEAT_SEND_INTERVAL_SECS = 10
 #*****************************************************************************#
 AGENT_TYPE_FELIX = 'Felix (Calico agent)'
 
+class FelixUnavailable(Exception):
+    """
+    Exception raised when a Felix instance cannot be contacted.
+    """
+    def __init__(self, op, port, hostname):
+        action = {'CREATED': "create",
+                  'UPDATED': "update",
+                  'DESTROYED': "destroy"}
+
+        super(FelixUnavailable, self).__init__(
+            "Failed to %s port %s because unable to contact Felix at %s" %
+            (action[op], port, hostname))
+
 
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     """Neutron/ML2 mechanism driver for Project Calico.
@@ -355,8 +368,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         #*********************************************************************#
         sock = self._get_socket_for_felix_peer(hostname)
         if not sock:
-            LOG.info("No connection to this host, bail out")
-            return
+            LOG.error("No connection to host %s, bail out" % hostname)
+            raise FelixUnavailable(op, port['id'], hostname)
 
         #*********************************************************************#
         #* Prepare the fields that are common to all ENDPOINT* requests.     *#
@@ -423,7 +436,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         except:
             LOG.exception("Exception receiving ENDPOINT* response from Felix")
             self._clear_socket_to_felix_peer(hostname)
-            return
+            raise FelixUnavailable(op, port['id'], hostname)
 
     def _get_subnet_gw(self, subnet_id, db_context):
         assert self.db
@@ -748,3 +761,4 @@ class CalicoNotifierProxy(object):
         LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
         self.calico_driver.send_sg_updates(sgids, context)
         self.ml2_notifier.security_groups_member_updated(context, sgids)
+
