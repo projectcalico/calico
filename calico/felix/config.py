@@ -78,7 +78,7 @@ class Config(object):
                                                   "*")
         self.LOGFILE         = self.get_cfg_entry("log",
                                                   "LogFilePath",
-                                                  None)
+                                                  "None")
         self.LOGLEVFILE      = self.get_cfg_entry("log",
                                                   "LogSeverityFile",
                                                   "INFO")
@@ -178,6 +178,14 @@ class Config(object):
         if self.LOCAL_ADDR != "*":
             self.LOCAL_ADDR = self.validate_addr("LocalAddress",
                                                  self.LOCAL_ADDR)
+
+        #*********************************************************************#
+        #* Log file may be "None" (the literal string, either provided or as *#
+        #* default). In this case no log file should be written.             *#
+        #*********************************************************************#
+        if self.LOGFILE.lower() == "none":
+            # Metadata is not required.
+            self.LOGFILE = None
 
     def warn_unused_cfg(self):
         #*********************************************************************#

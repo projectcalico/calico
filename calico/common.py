@@ -166,7 +166,7 @@ def complete_logging(logfile=None,
                 handler.setLevel(stream_level)
 
     # If we've been given a log file, log to file as well.
-    if not logfile and file_level is not None:
+    if logfile and file_level is not None:
         mkdir_p(os.path.dirname(logfile))
 
         formatter = logging.Formatter(FORMAT_STRING)

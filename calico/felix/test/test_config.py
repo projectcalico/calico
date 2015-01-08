@@ -95,3 +95,11 @@ class TestConfig(unittest.TestCase):
                                      "Invalid or unresolvable LocalAddress"):
             config = Config("calico/felix/test/data/felix_bad_localaddr.cfg")
 
+    def test_nologfile(self):
+        config = Config("calico/felix/test/data/felix_nologfile.cfg")
+        self.assertIs(config.LOGFILE, None)
+
+    def test_nologfile2(self):
+        config = Config("calico/felix/test/data/felix_nologfile2.cfg")
+        self.assertIs(config.LOGFILE, None)
+
