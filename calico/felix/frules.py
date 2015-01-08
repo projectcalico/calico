@@ -457,14 +457,17 @@ def del_rules(suffix, type):
     if type == IPV4:
         to_ipset_port   = IPSET_TO_PORT_PREFIX + suffix
         to_ipset_addr   = IPSET_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + suffix
         from_ipset_port = IPSET_FROM_PORT_PREFIX + suffix
         from_ipset_addr = IPSET_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + suffix
     else:
         to_ipset_port   = IPSET6_TO_PORT_PREFIX + suffix
         to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + suffix
         from_ipset_port = IPSET6_FROM_PORT_PREFIX + suffix
         from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + suffix
-
+        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + suffix
 
     #*************************************************************************#
     #* Remove the rules routing to the chain we are about to remove. The     *#
@@ -503,8 +506,8 @@ def del_rules(suffix, type):
             table.delete_chain(name)
 
     # Delete the ipsets for this endpoint.
-    for ipset in [from_ipset_addr, from_ipset_port,
-                  to_ipset_addr, to_ipset_port]:
+    for ipset in (from_ipset_addr, from_ipset_icmp, from_ipset_port,
+                  to_ipset_addr, to_ipset_icmp, to_ipset_port):
         ipsets.destroy(ipset)
 
 
