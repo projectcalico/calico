@@ -159,9 +159,9 @@ def set_global_rules(config):
             fiptables.insert_rule(rule, chain)
 
 
-def set_ep_specific_rules(id, iface, type, localips, mac):
+def set_ep_specific_rules(suffix, iface, type, localips, mac):
     """
-    Add (or modify) the rules for a particular endpoint, whose id is
+    Add (or modify) the rules for a particular endpoint, whose suffix is
     supplied. This routine :
     - ensures that the chains specific to this endpoint exist, where there is
       a chain for packets leaving and a chain for packets arriving at the
@@ -177,25 +177,25 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     Note however that this routine handles IPv4 or IPv6 not both; it is
     normally called twice in succession (once for each).
     """
-    to_chain_name   = CHAIN_TO_PREFIX + id
-    from_chain_name = CHAIN_FROM_PREFIX + id
+    to_chain_name   = CHAIN_TO_PREFIX + suffix
+    from_chain_name = CHAIN_FROM_PREFIX + suffix
 
     # Set up all the ipsets.
     if type == IPV4:
-        to_ipset_port   = IPSET_TO_PORT_PREFIX + id
-        to_ipset_addr   = IPSET_TO_ADDR_PREFIX + id
-        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + id
-        from_ipset_port = IPSET_FROM_PORT_PREFIX + id
-        from_ipset_addr = IPSET_FROM_ADDR_PREFIX + id
-        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + id
+        to_ipset_port   = IPSET_TO_PORT_PREFIX + suffix
+        to_ipset_addr   = IPSET_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + suffix
+        from_ipset_port = IPSET_FROM_PORT_PREFIX + suffix
+        from_ipset_addr = IPSET_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + suffix
         family          = "inet"
     else:
-        to_ipset_port   = IPSET6_TO_PORT_PREFIX + id
-        to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + id
-        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + id
-        from_ipset_port = IPSET6_FROM_PORT_PREFIX + id
-        from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + id
-        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + id
+        to_ipset_port   = IPSET6_TO_PORT_PREFIX + suffix
+        to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + suffix
+        from_ipset_port = IPSET6_FROM_PORT_PREFIX + suffix
+        from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + suffix
         family            = "inet6"
 
     # Create ipsets if they do not already exist.
@@ -445,26 +445,29 @@ def set_ep_specific_rules(id, iface, type, localips, mac):
     return
 
 
-def del_rules(id, type):
+def del_rules(suffix, type):
     """
     Remove the rules for an endpoint which is no longer managed.
     """
-    log.debug("Delete %s rules for %s" % (type, id))
-    to_chain   = CHAIN_TO_PREFIX + id
-    from_chain = CHAIN_FROM_PREFIX + id
+    log.debug("Delete %s rules for %s" % (type, suffix))
+    to_chain   = CHAIN_TO_PREFIX + suffix
+    from_chain = CHAIN_FROM_PREFIX + suffix
     table = fiptables.get_table(type, "filter")
 
     if type == IPV4:
-        to_ipset_port   = IPSET_TO_PORT_PREFIX + id
-        to_ipset_addr   = IPSET_TO_ADDR_PREFIX + id
-        from_ipset_port = IPSET_FROM_PORT_PREFIX + id
-        from_ipset_addr = IPSET_FROM_ADDR_PREFIX + id
+        to_ipset_port   = IPSET_TO_PORT_PREFIX + suffix
+        to_ipset_addr   = IPSET_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + suffix
+        from_ipset_port = IPSET_FROM_PORT_PREFIX + suffix
+        from_ipset_addr = IPSET_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + suffix
     else:
-        to_ipset_port   = IPSET6_TO_PORT_PREFIX + id
-        to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + id
-        from_ipset_port = IPSET6_FROM_PORT_PREFIX + id
-        from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + id
-
+        to_ipset_port   = IPSET6_TO_PORT_PREFIX + suffix
+        to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + suffix
+        from_ipset_port = IPSET6_FROM_PORT_PREFIX + suffix
+        from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + suffix
 
     #*************************************************************************#
     #* Remove the rules routing to the chain we are about to remove. The     *#
@@ -503,33 +506,33 @@ def del_rules(id, type):
             table.delete_chain(name)
 
     # Delete the ipsets for this endpoint.
-    for ipset in [from_ipset_addr, from_ipset_port,
-                  to_ipset_addr, to_ipset_port]:
+    for ipset in (from_ipset_addr, from_ipset_icmp, from_ipset_port,
+                  to_ipset_addr, to_ipset_icmp, to_ipset_port):
         ipsets.destroy(ipset)
 
 
-def set_acls(id, type, inbound, in_default, outbound, out_default):
+def set_acls(suffix, type, inbound, in_default, outbound, out_default):
     """
     Set up the ACLs, making sure that they match.
     """
     if type == IPV4:
-        to_ipset_port   = IPSET_TO_PORT_PREFIX + id
-        to_ipset_addr   = IPSET_TO_ADDR_PREFIX + id
-        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + id
-        from_ipset_port = IPSET_FROM_PORT_PREFIX + id
-        from_ipset_addr = IPSET_FROM_ADDR_PREFIX + id
-        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + id
+        to_ipset_port   = IPSET_TO_PORT_PREFIX + suffix
+        to_ipset_addr   = IPSET_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET_TO_ICMP_PREFIX + suffix
+        from_ipset_port = IPSET_FROM_PORT_PREFIX + suffix
+        from_ipset_addr = IPSET_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET_FROM_ICMP_PREFIX + suffix
         tmp_ipset_port  = IPSET_TMP_PORT
         tmp_ipset_addr  = IPSET_TMP_ADDR
         tmp_ipset_icmp  = IPSET_TMP_ICMP
         family          = "inet"
     else:
-        to_ipset_port   = IPSET6_TO_PORT_PREFIX + id
-        to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + id
-        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + id
-        from_ipset_port = IPSET6_FROM_PORT_PREFIX + id
-        from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + id
-        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + id
+        to_ipset_port   = IPSET6_TO_PORT_PREFIX + suffix
+        to_ipset_addr   = IPSET6_TO_ADDR_PREFIX + suffix
+        to_ipset_icmp   = IPSET6_TO_ICMP_PREFIX + suffix
+        from_ipset_port = IPSET6_FROM_PORT_PREFIX + suffix
+        from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + suffix
+        from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + suffix
         tmp_ipset_port  = IPSET6_TMP_PORT
         tmp_ipset_addr  = IPSET6_TMP_ADDR
         tmp_ipset_icmp  = IPSET6_TMP_ICMP
@@ -555,11 +558,11 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
     ipsets.flush(tmp_ipset_addr)
     ipsets.flush(tmp_ipset_icmp)
 
-    update_ipsets(type, type + " inbound",
+    update_ipsets(type, type + " inbound", suffix,
                   inbound,
                   to_ipset_addr, to_ipset_port, to_ipset_icmp,
                   tmp_ipset_addr, tmp_ipset_port, tmp_ipset_icmp)
-    update_ipsets(type, type + " outbound",
+    update_ipsets(type, type + " outbound", suffix,
                   outbound,
                   from_ipset_addr, from_ipset_port, from_ipset_icmp,
                   tmp_ipset_addr, tmp_ipset_port, tmp_ipset_icmp)
@@ -567,6 +570,7 @@ def set_acls(id, type, inbound, in_default, outbound, out_default):
 
 def update_ipsets(type,
                   descr,
+                  suffix,
                   rule_list,
                   ipset_addr,
                   ipset_port,
@@ -581,7 +585,7 @@ def update_ipsets(type,
     for rule in rule_list:
         if rule.get('cidr') is None:
             log.error("Invalid %s rule without cidr for %s : %s",
-                      (descr, id, rule))
+                      (descr, suffix, rule))
             continue
 
         #*********************************************************************#
@@ -623,7 +627,7 @@ def update_ipsets(type,
                 # No protocol, so port is not allowed.
                 log.error(
                     "Invalid %s rule with port but no protocol for %s : %s",
-                    descr, id, rule)
+                    descr, suffix, rule)
                 continue
             suffix = ""
             ipset  = tmp_ipset_addr
@@ -637,7 +641,7 @@ def update_ipsets(type,
                     # Port was supplied but was not an integer.
                     log.error(
                         "Invalid port in %s rule for %s : %s",
-                        (descr, id, rule))
+                        descr, suffix, rule)
                     continue
 
                 # An integer port was specified.
@@ -648,7 +652,7 @@ def update_ipsets(type,
                 # A code but no type - not allowed.
                 log.error(
                     "Invalid %s rule with ICMP code but no type for %s : %s",
-                    descr, id, rule)
+                    descr, suffix, rule)
                 continue
             if icmp_type is None:
                 # No type - all ICMP to / from the cidr, so use the ICMP ipset.
@@ -672,7 +676,7 @@ def update_ipsets(type,
                 # The supplied protocol does not allow ports.
                 log.error(
                     "Invalid %s rule with port but no protocol for %s : %s",
-                    descr, id, rule)
+                    descr, suffix, rule)
                 continue
             # ipsets use port 0 to mean "any port"
             suffix = ",%s:0" % (protocol)
@@ -683,7 +687,7 @@ def update_ipsets(type,
             try:
                 ipsets.add(ipset, cidr + suffix)
             except FailedSystemCall:
-                log.exception("Failed to add %s rule for %s" % (descr, id))
+                log.exception("Failed to add %s rule for %s", descr, suffix)
 
     # Now that we have filled the tmp ipset, swap it with the real one.
     ipsets.swap(tmp_ipset_addr, ipset_addr)
@@ -727,6 +731,8 @@ def list_eps_with_rules(type):
             eps.add(name.replace(IPSET_TO_PORT_PREFIX, ""))
         elif name.startswith(IPSET6_TO_PORT_PREFIX):
             eps.add(name.replace(IPSET6_TO_PORT_PREFIX, ""))
+
+    log.debug("Current list of managed %s endpoints : %s" % (type, eps))
 
     return eps
 

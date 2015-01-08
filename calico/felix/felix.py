@@ -254,18 +254,18 @@ class FelixAgent(object):
         #* Now remove rules for any endpoints that should no longer          *#
         #* exist. This method returns a set of endpoint suffices.            *#
         #*********************************************************************#
-        known_ids = {ep.suffix for ep in self.endpoints.values()}
+        known_suffices = {ep.suffix for ep in self.endpoints.values()}
 
         for type in [futils.IPV4, futils.IPV6]:
-            rule_ids  = frules.list_eps_with_rules(type)
+            found_suffices  = frules.list_eps_with_rules(type)
 
-            for id in rule_ids:
-                if id not in known_ids:
+            for found_suffix in found_suffices:
+                if found_suffix not in known_suffices:
                     # Found rules which we own for an endpoint which does not
                     # exist.  Remove those rules.
                     log.warning("Removing %s rules for removed object %s" %
-                                (type, id))
-                    frules.del_rules(id, type)
+                                (type, found_suffix))
+                    frules.del_rules(found_suffix, type)
 
     def handle_endpointcreated(self, message):
         """
@@ -337,8 +337,9 @@ class FelixAgent(object):
                 #* since this is very unusual and strange.                   *#
                 #*************************************************************#
                 log.warning(
-                    "Received ENDPOINTCREATED for %s for invalid resync %s" %
-                    (endpoint_id, resync_id))
+                    "Received ENDPOINTCREATED for %s with invalid " + 
+                    "resync %s (expected %s)" %
+                    (endpoint_id, resync_id, self.resync_id))
 
         return
 
