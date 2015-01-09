@@ -69,7 +69,6 @@ setuptools.setup(
         'console_scripts': [
             'calico-acl-manager = calico.acl_manager.acl_manager:main',
             'calico-felix = calico.felix.felix:main',
-            'neutron-calico-agent = calico.agent.calico_neutron_agent:main',
         ],
         'neutron.ml2.mechanism_drivers': [
             'calico = calico.openstack.mech_calico:CalicoMechanismDriver',

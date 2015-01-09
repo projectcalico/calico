@@ -1,5 +1,3 @@
-usr/bin/neutron-calico-agent usr/bin
-usr/etc/neutron/calico_agent.ini etc/neutron
 usr/bin/calico-gen-bird-conf.sh usr/bin
 usr/bin/calico-gen-bird6-conf.sh usr/bin
 usr/share/calico/* usr/share/calico
