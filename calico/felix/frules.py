@@ -119,7 +119,7 @@ def set_global_rules(config):
     # Add a rule that forces us through the chain we just created.
     chain = fiptables.get_chain(table, "PREROUTING")
     rule = fiptables.Rule(futils.IPV4, CHAIN_PREROUTING)
-    fiptables.insert_rule(rule, chain)
+    fiptables.insert_rule(rule, chain, force_position=False)
 
     #*************************************************************************#
     #* Now the filter table. This needs to have calico-filter-FORWARD and    *#
@@ -134,11 +134,11 @@ def set_global_rules(config):
         # Add rules that force us through the chain we just created.
         chain = fiptables.get_chain(table, "FORWARD")
         rule  = fiptables.Rule(type, CHAIN_FORWARD)
-        fiptables.insert_rule(rule, chain)
+        fiptables.insert_rule(rule, chain, force_position=False)
 
         chain = fiptables.get_chain(table, "INPUT")
         rule  = fiptables.Rule(type, CHAIN_INPUT)
-        fiptables.insert_rule(rule, chain)
+        fiptables.insert_rule(rule, chain, force_position=False)
 
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
@@ -384,7 +384,10 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
 
     rule = fiptables.Rule(type, from_chain_name)
     rule.in_interface = iface
-    fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
+    fiptables.insert_rule(rule,
+                          chain,
+                          fiptables.RULE_POSN_LAST,
+                          force_position=False)
 
     #*************************************************************************#
     #* Similarly, create the rules that direct packets that are forwarded    *#
@@ -395,11 +398,17 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
 
     rule = fiptables.Rule(type, from_chain_name)
     rule.in_interface = iface
-    fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
+    fiptables.insert_rule(rule,
+                          chain,
+                          fiptables.RULE_POSN_LAST,
+                          force_position=False)
 
     rule = fiptables.Rule(type, to_chain_name)
     rule.out_interface = iface
-    fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
+    fiptables.insert_rule(rule,
+                          chain,
+                          fiptables.RULE_POSN_LAST,
+                          force_position=False)
 
 
 def del_rules(suffix, type):
