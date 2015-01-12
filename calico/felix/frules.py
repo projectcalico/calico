@@ -116,27 +116,10 @@ def set_global_rules(config):
         fiptables.insert_rule(rule, chain, 0)
         truncate_rules(chain, 1)
 
-    #*************************************************************************#
-    #* This is a hack, because of a bug in python-iptables where it fails to *#
-    #* correctly match some rules; see                                       *#
-    #* https://github.com/ldx/python-iptables/issues/111 If any of the rules *#
-    #* relating to this tap device already exist, assume that they all do so *#
-    #* as not to recreate them.                                              *#
-    #*                                                                       *#
-    #* This is Calico issue #35,                                             *#
-    #* https://github.com/Metaswitch/calico/issues/35                        *#
-    #*************************************************************************#
-    rules_check = subprocess.call("iptables -L %s | grep %s" %
-                                  ("INPUT", CHAIN_INPUT),
-                                  shell=True)
-
-    if rules_check == 0:
-        log.debug("Static rules already exist")
-    else:
-        # Add a rule that forces us through the chain we just created.
-        chain = fiptables.get_chain(table, "PREROUTING")
-        rule = fiptables.Rule(futils.IPV4, CHAIN_PREROUTING)
-        fiptables.insert_rule(rule, chain)
+    # Add a rule that forces us through the chain we just created.
+    chain = fiptables.get_chain(table, "PREROUTING")
+    rule = fiptables.Rule(futils.IPV4, CHAIN_PREROUTING)
+    fiptables.insert_rule(rule, chain)
 
     #*************************************************************************#
     #* Now the filter table. This needs to have calico-filter-FORWARD and    *#
@@ -148,15 +131,14 @@ def set_global_rules(config):
         fiptables.get_chain(table, CHAIN_FORWARD)
         fiptables.get_chain(table, CHAIN_INPUT)
 
-        if rules_check != 0:
-            # Add rules that forces us through the chain we just created.
-            chain = fiptables.get_chain(table, "FORWARD")
-            rule  = fiptables.Rule(type, CHAIN_FORWARD)
-            fiptables.insert_rule(rule, chain)
+        # Add rules that force us through the chain we just created.
+        chain = fiptables.get_chain(table, "FORWARD")
+        rule  = fiptables.Rule(type, CHAIN_FORWARD)
+        fiptables.insert_rule(rule, chain)
 
-            chain = fiptables.get_chain(table, "INPUT")
-            rule  = fiptables.Rule(type, CHAIN_INPUT)
-            fiptables.insert_rule(rule, chain)
+        chain = fiptables.get_chain(table, "INPUT")
+        rule  = fiptables.Rule(type, CHAIN_INPUT)
+        fiptables.insert_rule(rule, chain)
 
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
@@ -391,58 +373,33 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     truncate_rules(from_chain, index)
 
     #*************************************************************************#
-    #* This is a hack, because of a bug in python-iptables where it fails to *#
-    #* correctly match some rules; see                                       *#
-    #* https://github.com/ldx/python-iptables/issues/111 If any of the rules *#
-    #* relating to this tap device already exist, assume that they all do so *#
-    #* as not to recreate them.                                              *#
-    #*                                                                       *#
-    #* This is Calico issue #35,                                             *#
-    #* https://github.com/Metaswitch/calico/issues/35                        *#
+    #* We have created the chains and rules that control input and output    *#
+    #* for the interface but not routed traffic through them. Add the input  *#
+    #* rule detecting packets arriving for the endpoint.  Note that these    *#
+    #* rules should perhaps be restructured and simplified given that this   *#
+    #* is not a bridged network -                                            *#
+    #* https://github.com/Metaswitch/calico/issues/36                        *#
     #*************************************************************************#
-    if type == IPV4:
-        rules_check = subprocess.call(
-            "iptables -v -L %s | grep %s > /dev/null" %
-            (CHAIN_INPUT, iface), shell=True)
-    else:
-        rules_check = subprocess.call(
-            "ip6tables -v -L %s | grep %s > /dev/null" %
-            (CHAIN_INPUT, iface), shell=True)
+    chain = fiptables.get_chain(table, CHAIN_INPUT)
 
-    if rules_check == 0:
-        log.debug("%s rules for interface %s already exist" % (type, iface))
-    else:
-        #*********************************************************************#
-        #* We have created the chains and rules that control input and       *#
-        #* output for the interface but not routed traffic through them. Add *#
-        #* the input rule detecting packets arriving for the endpoint.  Note *#
-        #* that these rules should perhaps be restructured and simplified    *#
-        #* given that this is not a bridged network -                        *#
-        #* https://github.com/Metaswitch/calico/issues/36                    *#
-        #*********************************************************************#
-        log.debug("%s rules for interface %s do not already exist" %
-                  (type, iface))
-        chain = fiptables.get_chain(table, CHAIN_INPUT)
+    rule = fiptables.Rule(type, from_chain_name)
+    rule.in_interface = iface
+    fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
 
-        rule = fiptables.Rule(type, from_chain_name)
-        rule.in_interface = iface
-        fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
+    #*************************************************************************#
+    #* Similarly, create the rules that direct packets that are forwarded    *#
+    #* either to or from the endpoint, sending them to the "to" or "from"    *#
+    #* chains as appropriate.                                                *#
+    #*************************************************************************#
+    chain = fiptables.get_chain(table, CHAIN_FORWARD)
 
-        #*********************************************************************#
-        #* Similarly, create the rules that direct packets that are          *#
-        #* forwarded either to or from the endpoint, sending them to the     *#
-        #* "to" or "from" chains as appropriate.                             *#
-        #*********************************************************************#
-        chain = fiptables.get_chain(table, CHAIN_FORWARD)
+    rule = fiptables.Rule(type, from_chain_name)
+    rule.in_interface = iface
+    fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
 
-        rule = fiptables.Rule(type, from_chain_name)
-        rule.in_interface = iface
-        fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
-
-        rule = fiptables.Rule(type, to_chain_name)
-        rule.out_interface = iface
-        fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
-    return
+    rule = fiptables.Rule(type, to_chain_name)
+    rule.out_interface = iface
+    fiptables.insert_rule(rule, chain, fiptables.RULE_POSN_LAST)
 
 
 def del_rules(suffix, type):

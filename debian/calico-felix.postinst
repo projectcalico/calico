@@ -2,6 +2,6 @@
 
 set -e
 
-pip install python-iptables
+pip install "python-iptables>=0.7.0"
 
 #DEBHELPER#
