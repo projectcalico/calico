@@ -102,7 +102,7 @@ This package provides the Felix component.
 %post felix
 if [ $1 -eq 1 ] ; then
     # Initial installation
-    pip install python-iptables
+    pip install "python-iptables>=0.7.0"
     /sbin/chkconfig --add calico-felix
     /sbin/service calico-felix start >/dev/null 2>&1
 fi
