@@ -383,11 +383,6 @@ def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
     rule.create_udp_match("68", "67")
     chain.rules.append(rule)
 
-    rule = stub_fiptables.Rule(IPV4, "DROP")
-    rule.protocol = "udp"
-    rule.create_udp_match("67", "68")
-    chain.rules.append(rule)
-
     if ipv4 is not None:
         rule = stub_fiptables.Rule(IPV4)
         rule.create_target("MARK", {"set_mark": "1"})
