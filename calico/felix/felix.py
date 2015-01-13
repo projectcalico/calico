@@ -24,8 +24,8 @@ The main logic for Felix.
 import argparse
 import collections
 import logging
+import os
 import socket
-import sys
 import time
 import uuid
 import zmq
@@ -727,8 +727,14 @@ def main():
             agent.run()
 
     except:
+        #*********************************************************************#
+        #* Log the exception then terminate. We cannot call sys.exit here    *#
+        #* because sometimes we hang on exit processing deep inside zmq      *#
+        #* (when the exception that causes termination was caused by a       *#
+        #* socket error).                                                    *#
+        #*********************************************************************#
         log.exception("Felix exiting after uncaught exception")
-        sys.exit(1)
+        os._exit(1)
 
 if __name__ == "__main__":
     main()
