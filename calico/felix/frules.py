@@ -35,8 +35,9 @@ log = logging.getLogger(__name__)
 
 # Chain names
 CHAIN_PREROUTING         = "felix-PREROUTING"
-CHAIN_INPUT              = "felix-INPUT"
-CHAIN_FORWARD            = "felix-FORWARD"
+CHAIN_FELIX_MAIN         = "felix-MAIN"
+CHAIN_TO_ENDPOINT        = "felix-TO-ENDPOINT"
+CHAIN_FROM_ENDPOINT      = "felix-FROM-ENDPOINT"
 CHAIN_TO_PREFIX          = "felix-to-"
 CHAIN_FROM_PREFIX        = "felix-from-"
 
@@ -128,17 +129,38 @@ def set_global_rules(config):
     #*************************************************************************#
     for type in (IPV4, IPV6):
         table = fiptables.get_table(type, "filter")
-        fiptables.get_chain(table, CHAIN_FORWARD)
-        fiptables.get_chain(table, CHAIN_INPUT)
+        fiptables.get_chain(table, CHAIN_FROM_ENDPOINT)
+        fiptables.get_chain(table, CHAIN_TO_ENDPOINT)
+        fiptables.get_chain(table, CHAIN_FELIX_MAIN)
 
-        # Add rules that force us through the chain we just created.
+        # Add rules that force us through the main Felix chain.
         chain = fiptables.get_chain(table, "FORWARD")
-        rule  = fiptables.Rule(type, CHAIN_FORWARD)
+        rule  = fiptables.Rule(type, CHAIN_FELIX_MAIN)
         fiptables.insert_rule(rule, chain, force_position=False)
 
         chain = fiptables.get_chain(table, "INPUT")
-        rule  = fiptables.Rule(type, CHAIN_INPUT)
+        rule  = fiptables.Rule(type, CHAIN_FELIX_MAIN)
         fiptables.insert_rule(rule, chain, force_position=False)
+
+        # The main felix chain tests traffic to and from endpoints
+        chain = fiptables.get_chain(table, CHAIN_FELIX_MAIN)
+        rule  = fiptables.Rule(type, CHAIN_FROM_ENDPOINT)
+        rule.in_interface = "tap+"
+        fiptables.insert_rule(rule, chain, 0)
+
+        rule  = fiptables.Rule(type, CHAIN_TO_ENDPOINT)
+        rule.out_interface = "tap+"
+        fiptables.insert_rule(rule, chain, 1)
+
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.in_interface = "tap+"
+        fiptables.insert_rule(rule, chain, 2)
+
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.out_interface = "tap+"
+        fiptables.insert_rule(rule, chain, 3)
+
+        truncate_rules(chain, 4)
 
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
@@ -362,13 +384,10 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
 
     #*************************************************************************#
     #* We have created the chains and rules that control input and output    *#
-    #* for the interface but not routed traffic through them. Add the input  *#
-    #* rule detecting packets arriving for the endpoint.  Note that these    *#
-    #* rules should perhaps be restructured and simplified given that this   *#
-    #* is not a bridged network -                                            *#
-    #* https://github.com/Metaswitch/calico/issues/36                        *#
+    #* for the interface but not routed traffic through them. First a rule   *#
+    #* for traffic arriving to the endpoint.                                 *#
     #*************************************************************************#
-    chain = fiptables.get_chain(table, CHAIN_INPUT)
+    chain = fiptables.get_chain(table, CHAIN_FROM_ENDPOINT)
 
     rule = fiptables.Rule(type, from_chain_name)
     rule.in_interface = iface
@@ -382,14 +401,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     #* either to or from the endpoint, sending them to the "to" or "from"    *#
     #* chains as appropriate.                                                *#
     #*************************************************************************#
-    chain = fiptables.get_chain(table, CHAIN_FORWARD)
-
-    rule = fiptables.Rule(type, from_chain_name)
-    rule.in_interface = iface
-    fiptables.insert_rule(rule,
-                          chain,
-                          fiptables.RULE_POSN_LAST,
-                          force_position=False)
+    chain = fiptables.get_chain(table, CHAIN_TO_ENDPOINT)
 
     rule = fiptables.Rule(type, to_chain_name)
     rule.out_interface = iface
@@ -439,7 +451,7 @@ def del_rules(suffix, type):
     #* and leads to errors elsewhere. Reversing the list sounds like it      *#
     #* should work too, but in practice does not.                            *#
     #*************************************************************************#
-    for name in (CHAIN_INPUT, CHAIN_FORWARD):
+    for name in (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT):
         chain = fiptables.get_chain(table, name)
         done  = False
         while not done:

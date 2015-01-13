@@ -324,7 +324,13 @@ class FelixAgent(object):
                 #* this is the last one expected, complete the resync.       *#
                 #*************************************************************#
                 self.resync_recd += 1
-                log.debug("Received ENDPOINTCREATED for resync, %d out of %d" %
+                if self.resync_expected is None:
+                    # resync_expected not set - resync response pending
+                    log.debug("Received ENDPOINTCREATED number %d for resync " +
+                              "before resync response" %
+                              (self.resync_recd))
+                else:
+                    log.debug("Received ENDPOINTCREATED for resync, %d out of %d" %
                           (self.resync_recd, self.resync_expected))
 
                 if self.resync_recd == self.resync_expected:
