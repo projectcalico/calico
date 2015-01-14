@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 
 # Chain names
 CHAIN_PREROUTING         = "felix-PREROUTING"
-CHAIN_FELIX_MAIN         = "felix-MAIN"
+CHAIN_INPUT              = "felix-INPUT"
+CHAIN_FORWARD            = "felix-FORWARD"
 CHAIN_TO_ENDPOINT        = "felix-TO-ENDPOINT"
 CHAIN_FROM_ENDPOINT      = "felix-FROM-ENDPOINT"
 CHAIN_TO_PREFIX          = "felix-to-"
@@ -131,19 +132,20 @@ def set_global_rules(config):
         table = fiptables.get_table(type, "filter")
         fiptables.get_chain(table, CHAIN_FROM_ENDPOINT)
         fiptables.get_chain(table, CHAIN_TO_ENDPOINT)
-        fiptables.get_chain(table, CHAIN_FELIX_MAIN)
+        fiptables.get_chain(table, CHAIN_INPUT)
+        fiptables.get_chain(table, CHAIN_FORWARD)
 
         # Add rules that force us through the main Felix chain.
         chain = fiptables.get_chain(table, "FORWARD")
-        rule  = fiptables.Rule(type, CHAIN_FELIX_MAIN)
+        rule  = fiptables.Rule(type, CHAIN_FORWARD)
         fiptables.insert_rule(rule, chain, force_position=False)
 
         chain = fiptables.get_chain(table, "INPUT")
-        rule  = fiptables.Rule(type, CHAIN_FELIX_MAIN)
+        rule  = fiptables.Rule(type, CHAIN_INPUT)
         fiptables.insert_rule(rule, chain, force_position=False)
 
-        # The main felix chain tests traffic to and from endpoints
-        chain = fiptables.get_chain(table, CHAIN_FELIX_MAIN)
+        # The felix forward chain tests traffic to and from endpoints
+        chain = fiptables.get_chain(table, CHAIN_FORWARD)
         rule  = fiptables.Rule(type, CHAIN_FROM_ENDPOINT)
         rule.in_interface = "tap+"
         fiptables.insert_rule(rule, chain, 0)
@@ -161,6 +163,18 @@ def set_global_rules(config):
         fiptables.insert_rule(rule, chain, 3)
 
         truncate_rules(chain, 4)
+
+        # The felix INPUT chain tests traffic from endpoints
+        chain = fiptables.get_chain(table, CHAIN_INPUT)
+        rule  = fiptables.Rule(type, CHAIN_FROM_ENDPOINT)
+        rule.in_interface = "tap+"
+        fiptables.insert_rule(rule, chain, 0)
+
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.in_interface = "tap+"
+        fiptables.insert_rule(rule, chain, 1)
+
+        truncate_rules(chain, 2)
 
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
