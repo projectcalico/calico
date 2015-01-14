@@ -217,7 +217,46 @@ class TestBasic(unittest.TestCase):
         acls['v4']['inbound'].append({ 'cidr': "0.0.0.0/0", 'protocol': "tcp", 'port': "8080" })
         acls['v4']['inbound'].append({ 'cidr': "2.4.6.8/32", 'protocol': "udp", 'port': "8080" })
         acls['v4']['inbound'].append({ 'cidr': "1.2.3.3/32" })
-                                        
+        acls['v4']['inbound'].append({ 'cidr': "3.6.9.12/32",
+                                       'protocol': "tcp",
+                                       'port': ['10', '50'] })
+
+        acls['v4']['inbound'].append({ 'cidr': "5.4.3.2/32",
+                                       'protocol': "icmp",
+                                       'icmp_type': "3",
+                                       'icmp_code': "2" })
+
+        acls['v4']['inbound'].append({ 'cidr': "5.4.3.2/32",
+                                       'protocol': "icmp",
+                                       'icmp_type': "9" })
+
+        acls['v4']['inbound'].append({ 'cidr': "5.4.3.2/32",
+                                       'protocol': "icmp",
+                                       'icmp_type': "blah" })
+
+        # We include a couple of invalid rules that Felix will just ignore (and log).
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'protocol': "tcp",
+                                       'port': ['blah', 'blah'] })
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'protocol': "tcp",
+                                       'port': ['1', '2', '3'] })
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'protocol': "tcp",
+                                       'port': 'flibble' })
+        acls['v4']['inbound'].append({ 'protocol': "tcp" })
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'port': "123" })
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'protocol': "icmp",
+                                       'icmp_code': "blah" })
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'protocol': "icmp",
+                                       'port': "1" })
+        acls['v4']['inbound'].append({ 'cidr': "4.3.2.1/32",
+                                       'protocol': "rsvp",
+                                       'port': "1" })
+
         acl_req = { 'type': "ACLUPDATE",
                     'acls': acls }
 
@@ -236,6 +275,10 @@ class TestBasic(unittest.TestCase):
         expected_ipsets.add("felix-to-port-" + suffix, "128.0.0.0/1,tcp:8080")
         expected_ipsets.add("felix-to-port-" + suffix, "2.4.6.8/32,udp:8080")
         expected_ipsets.add("felix-to-addr-" + suffix, "1.2.3.3/32")
+        expected_ipsets.add("felix-to-port-" + suffix, "3.6.9.12/32,tcp:10-50")
+        expected_ipsets.add("felix-to-port-" + suffix, "5.4.3.2/32,icmp:3/2")
+        expected_ipsets.add("felix-to-port-" + suffix, "5.4.3.2/32,icmp:9/0")
+        expected_ipsets.add("felix-to-port-" + suffix, "5.4.3.2/32,icmp:blah")
 
         stub_ipsets.check_state(expected_ipsets)
 
