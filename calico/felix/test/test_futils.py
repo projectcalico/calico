@@ -69,7 +69,7 @@ class TestFutils(unittest.TestCase):
         retcode = futils.call_silent(args)
         self.assertEqual(retcode, 0)
 
-    def test_bad_check_call(self):
+    def test_bad_call_silent(self):
         # Test an invalid command - must parse but not return anything.
         args = ["ls", "wibble_wobble"]
         retcode = futils.call_silent(args)
