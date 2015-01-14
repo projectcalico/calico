@@ -1,4 +1,5 @@
 [run]
 include = *felix*
-omit = *stub_*
+omit = *stub_* 
+       *test*
 branch = True
