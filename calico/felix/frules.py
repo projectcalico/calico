@@ -538,7 +538,7 @@ def update_ipsets(type,
     """
     for rule in rule_list:
         if rule.get('cidr') is None:
-            log.error("Invalid %s rule without cidr for %s : %s",
+            log.error("Invalid %s rule without cidr for %s : %s" %
                       (descr, suffix, rule))
             continue
 
@@ -583,25 +583,43 @@ def update_ipsets(type,
                     "Invalid %s rule with port but no protocol for %s : %s",
                     descr, suffix, rule)
                 continue
-            suffix = ""
+            ipset_value = ""
             ipset  = tmp_ipset_addr
         elif protocol in ("tcp", "sctp", "udp", "udplite"):
             if port is None:
                 # ipsets use port 0 to mean "any port"
-                suffix = ",%s:0" % (protocol)
+                ipset_value = ",%s:0" % (protocol)
+                ipset = tmp_ipset_port
+            elif isinstance(port, list) and len(port) == 2:
+                # List of two ports - port range
+                if (not common.validate_port(str(port[0])) or
+                    not common.validate_port(str(port[1]))    ):
+                    # Port range was not two valid ports.
+                    log.error(
+                        "Invalid port range in %s rule for %s : %s",
+                        descr, suffix, rule)
+                    continue
+                ipset_value = ",%s:%s-%s" % (protocol, port[0], port[1])
                 ipset = tmp_ipset_port
             else:
                 if not common.validate_port(str(port)):
-                    # Port was supplied but was not an integer.
+                    # Port was supplied but was not an integer or range.
                     log.error(
                         "Invalid port in %s rule for %s : %s",
                         descr, suffix, rule)
                     continue
 
                 # An integer port was specified.
-                suffix = ",%s:%s" % (protocol, port)
+                ipset_value = ",%s:%s" % (protocol, port)
                 ipset = tmp_ipset_port
         elif protocol in ("icmp", "icmpv6"):
+            if rule.get('port') is not None:
+                # No protocol, so port is not allowed.
+                log.error(
+                    "Invalid %s rule for %s with port for protocol %s : %s",
+                    descr, suffix, protocol, rule)
+                continue
+
             if (icmp_type is None and icmp_code is not None):
                 # A code but no type - not allowed.
                 log.error(
@@ -610,7 +628,7 @@ def update_ipsets(type,
                 continue
             if icmp_type is None:
                 # No type - all ICMP to / from the cidr, so use the ICMP ipset.
-                suffix = ""
+                ipset_value = ""
                 ipset  = tmp_ipset_icmp
             else:
                 try:
@@ -619,11 +637,11 @@ def update_ipsets(type,
                     if icmp_code is None:
                         # Code defaults to 0 if not supplied.
                         icmp_code = 0
-                    suffix = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
+                    ipset_value = ",%s:%s/%s" % (protocol, icmp_type, icmp_code)
                     ipset  = tmp_ipset_port
                 except ValueError:
                     # Not an integer ICMP type - must be a string code name.
-                    suffix = ",%s:%s" % (protocol, icmp_type)
+                    ipset_value = ",%s:%s" % (protocol, icmp_type)
                     ipset  = tmp_ipset_port
         else:
             if port is not None:
@@ -633,15 +651,18 @@ def update_ipsets(type,
                     descr, suffix, rule)
                 continue
             # ipsets use port 0 to mean "any port"
-            suffix = ",%s:0" % (protocol)
+            ipset_value = ",%s:0" % (protocol)
             ipset = tmp_ipset_port
 
         # Now add those values to the ipsets.
         for cidr in cidrs:
             try:
-                ipsets.add(ipset, cidr + suffix)
+                ipsets.add(ipset, cidr + ipset_value)
             except FailedSystemCall:
-                log.exception("Failed to add %s rule for %s", descr, suffix)
+                log.exception("Failed to add %s rule (%s) for %s",
+                              descr,
+                              cidr + ipset_value,
+                              suffix)
 
     # Now that we have filled the tmp ipset, swap it with the real one.
     ipsets.swap(tmp_ipset_addr, ipset_addr)
