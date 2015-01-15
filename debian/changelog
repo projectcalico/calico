@@ -1,3 +1,35 @@
+calico (0.10) trusty; urgency=medium
+
+  * Code fixes and improvements
+    - Felix now exits with non-zero status code on error.
+    - Allow a new log level: NONE which disables that log handler.
+    - Broadened check of logfile
+    - Log out daemon name to syslog.
+    - Set up syslog better - so works on ubuntu.
+    - Allow explicit configuration of Felix hostname.
+    - Made acl_manager logging config work like felix config
+    - Allow the IP address of Felix to be explicitly specified.
+    - Add bind address to ACL manager.
+    - Review markups - allow hostnames as well as IP addresses.
+    - Handle errors from failure to connect to Felix
+    - Tell BIRD to run on "br-mgmt" interface, for setups migrated from OVS to Calico
+    - Do not leak ipsets for endpoints which have been removed.
+    - Remove workaround for (now fixed) python-iptables bug.
+    - Improve last fix to avoid duplicate rules.
+    - Retire unneeded dropping of DHCP packets.
+    - Do not hang in termination in zmq.
+    - Restructure rules so that DROP default still works.
+    - Add support for port ranges Includes some extra tests to get better coverage of area changed.
+    - Split felix-MAIN into felix-INPUT and felix-FORWARD
+  * Packaging improvements
+    - Add basic requirements files for Felix and ACL Mgr
+    - Conditionally install extra dependencies.
+    - Add plugin requirements.
+    - Add eventlet dependency.
+    - Set minimum python-iptables version.
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Wed, 14 Jan 2015 19:18:23 +0000
+
 calico (0.9.1) trusty; urgency=medium
 
   * Remove python-dev dependency.
@@ -8,7 +40,7 @@ calico (0.9) trusty; urgency=medium
 
   * New announced release.
 
- -- Matt Dupre <matthew.dupre@metaswitch.com> Mon, 15 Dec 2014 12:05:34 +0000
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Mon, 15 Dec 2014 12:05:34 +0000
 
 calico (0.9~rc1) trusty; urgency=medium
 
@@ -50,7 +82,7 @@ calico (0.9~rc1) trusty; urgency=medium
     - Replace ACL manager logging with common code.
     - Fix import statements for logging.
 
- -- Matt Dupre <matthew.dupre@metaswitch.com> Fri, 12 Dec 2014 11:15:31 +0000
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Fri, 12 Dec 2014 11:15:31 +0000
 
 calico (0.8) trusty; urgency=medium
 
@@ -66,7 +98,7 @@ calico (0.8~2) trusty; urgency=medium
     - Add Metadata IP and Port configuration to Felix
     - Allow address as well as IP for metadata.
     - Ban traffic to the loopback address from VMs (unless for metadata)
-    
+
  -- Neil Jerram <Neil.Jerram@metaswitch.com>  Fri, 21 Nov 2014 11:59:45 +0000
 
 calico (0.8~1) trusty; urgency=medium
