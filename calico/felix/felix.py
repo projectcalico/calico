@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # Copyright (c) 2014 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -267,7 +266,7 @@ class FelixAgent(object):
                                 (type, found_suffix))
                     frules.del_rules(found_suffix, type)
 
-    def handle_endpointcreated(self, message):
+    def handle_endpointcreated(self, message, sock):
         """
         Handles an ENDPOINTCREATED message.
 
@@ -349,7 +348,7 @@ class FelixAgent(object):
 
         return
 
-    def handle_endpointupdated(self, message):
+    def handle_endpointupdated(self, message, sock):
         """
         Handles an ENDPOINTUPDATED message.
 
@@ -394,7 +393,7 @@ class FelixAgent(object):
 
         return
 
-    def handle_endpointdestroyed(self, message):
+    def handle_endpointdestroyed(self, message, sock):
         """
         Handles an ENDPOINTDESTROYED message.
 
@@ -427,18 +426,19 @@ class FelixAgent(object):
 
         return
 
-    def handle_heartbeat(self, message):
+    def handle_heartbeat(self, message, sock):
         """
-        Handles a HEARTBEAT request.
-
-        We respond to HEARTBEATs immediately.
+        Handles a HEARTBEAT request or response.
         """
-        log.debug("Received heartbeat message on EP REP socket.")
-        sock = self.sockets[Socket.TYPE_EP_REP]
-        sock.send(Message(Message.TYPE_HEARTBEAT, {}))
+        if sock.type == Socket.TYPE_EP_REQ or sock.type == Socket.TYPE_ACL_REQ:
+            log.debug("Received heartbeat response on %s socket", sock.type)
+        else:
+            assert(sock.type == Socket.TYPE_EP_REP)
+            log.debug("Received heartbeat message on EP REP socket")
+            sock.send(Message(Message.TYPE_HEARTBEAT, {}))
         return
 
-    def handle_resyncstate(self, message):
+    def handle_resyncstate(self, message, sock):
         """
         Handles a RESYNCSTATE response.
 
@@ -468,7 +468,7 @@ class FelixAgent(object):
         self.resync_expected = int(endpoint_count)
         return
 
-    def handle_getaclstate(self, message):
+    def handle_getaclstate(self, message, sock):
         """
         Handles a GETACLSTATE response.
 
@@ -492,7 +492,7 @@ class FelixAgent(object):
 
         return
 
-    def handle_aclupdate(self, message):
+    def handle_aclupdate(self, message, sock):
         """
         Handles ACLUPDATE publications.
 
@@ -622,7 +622,7 @@ class FelixAgent(object):
             message = sock.receive()
 
             if message is not None:
-                self.handlers[message.type](message)
+                self.handlers[message.type](message, sock)
 
         for sock in self.sockets.values():
             #*****************************************************************#
@@ -664,14 +664,21 @@ class FelixAgent(object):
                 not endpoint_socket.request_outstanding):
             message = self.endpoint_queue.pop()
             endpoint_socket.send(message)
+        elif (endpoint_socket.keepalive_due() and
+              not endpoint_socket.request_outstanding):
+            endpoint_socket.send(Message(Message.TYPE_HEARTBEAT, {}))
 
         if len(self.acl_queue) and not acl_socket.request_outstanding:
             message = self.acl_queue.pop()
             acl_socket.send(message)
+        elif (acl_socket.keepalive_due() and
+              not acl_socket.request_outstanding):
+            acl_socket.send(Message(Message.TYPE_HEARTBEAT, {}))
 
         # Now, check if we need to resynchronize and do it.
         if (self.resync_id is None and
-                (futils.time_ms() - self.resync_time > self.config.RESYNC_INT_SEC)):
+                (futils.time_ms() - self.resync_time >
+                 self.config.RESYNC_INT_SEC * 1000)):
             # Time for a total resync of all endpoints
             endpoint_resync_needed = True
 

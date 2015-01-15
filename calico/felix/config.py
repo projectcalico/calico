@@ -96,7 +96,7 @@ class Config(object):
         self.CONN_KEEPALIVE_MS = int(
             self.get_cfg_entry("connection",
                                "ConnectionKeepaliveIntervalMillis",
-                               2000))
+                               5000))
 
         self.validate_cfg()
 

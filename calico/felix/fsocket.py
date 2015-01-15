@@ -172,10 +172,18 @@ class Socket(object):
         return ((futils.time_ms() - self.last_activity) >
                 self.config.CONN_TIMEOUT_MS)
 
+    def keepalive_due(self):
+        """
+        Returns True if we are due to send a keepalive on the socket.
+
+        The caller is responsible for deciding which sockets need keepalives.
+        """
+        return ((futils.time_ms() - self.last_activity) >
+                self.config.CONN_KEEPALIVE_MS)
+
 
 class Message(object):
     """This represents a message either sent or received by Felix."""
-    TYPE_KEEPALIVE = "KEEPALIVE"
     TYPE_RESYNC    = "RESYNCSTATE"
     TYPE_EP_CR     = "ENDPOINTCREATED"
     TYPE_EP_UP     = "ENDPOINTUPDATED"
