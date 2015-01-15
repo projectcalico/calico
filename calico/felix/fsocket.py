@@ -101,6 +101,9 @@ class Socket(object):
         # The socket connection event is always the time of last activity.
         self.last_activity = futils.time_ms()
 
+        # We do not have a request outstanding.
+        self.request_outstanding = False
+
     def send(self, msg):
         """
         Send a specified message on a socket.
