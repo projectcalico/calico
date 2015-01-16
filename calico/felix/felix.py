@@ -325,7 +325,7 @@ class FelixAgent(object):
                 self.resync_recd += 1
                 if self.resync_expected is None:
                     # resync_expected not set - resync response pending
-                    log.debug("Received ENDPOINTCREATED number %d for resync " +
+                    log.debug("Received ENDPOINTCREATED number %d for resync "
                               "before resync response" %
                               (self.resync_recd))
                 else:
@@ -342,7 +342,7 @@ class FelixAgent(object):
                 #* since this is very unusual and strange.                   *#
                 #*************************************************************#
                 log.warning(
-                    "Received ENDPOINTCREATED for %s with invalid " + 
+                    "Received ENDPOINTCREATED for %s with invalid "
                     "resync %s (expected %s)" %
                     (endpoint_id, resync_id, self.resync_id))
 
