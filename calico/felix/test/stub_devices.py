@@ -68,3 +68,6 @@ def del_route(type, ip, tap_id):
         taps[tap_id].v4_ips.remove(ip)
     else:
         taps[tap_id].v6_ips.remove(ip)
+
+def interface_up(if_name):
+    return True

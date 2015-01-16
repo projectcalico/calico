@@ -103,11 +103,11 @@ class Endpoint(object):
         setting up rules and creating chains and ipsets, but not putting
         content into the ipsets (leaving that for frules.update_acls).
 
-        Note that if acl_data is none, we have not received any ACLs, and so		
-        we just leave the ACLs in place until we do. If there are none because		
-        this is a new endpoint, then we leave the endpoint with all routing		
+        Note that if acl_data is none, we have not received any ACLs, and so
+        we just leave the ACLs in place until we do. If there are none because
+        this is a new endpoint, then we leave the endpoint with all routing
         disabled until we know better.
-    
+
         The logic here is that we should create the routes and basic rules, but
         not the ACLs - leaving the ACLs as they were or with no access
         permitted if none. That is because we have the information for the
@@ -115,7 +115,7 @@ class Endpoint(object):
         (ACLs). However this split only makes sense at the point where the ACLs
         must have a default rule of "deny", so when issue39 is fully resolved
         this method should only be called when the ACLs are available too.
-       
+
         Returns True if the endpoint needs to be retried (because the tap
         interface does not exist yet).
         """
@@ -130,6 +130,12 @@ class Endpoint(object):
                 log.debug("Tap interface missing when disabling endpoint %s" %
                           self.uuid)
                 return False
+
+        # If the interface is down, we can't configure it.
+        if not devices.interface_up(self.tap):
+            log.error("Unable to configure interface %s: interface is down." %
+                      self.tap)
+            return True
 
         # Configure the tap interface.
         if self.state == Endpoint.STATE_ENABLED:
@@ -150,35 +156,37 @@ class Endpoint(object):
         ipv4_existing   = devices.list_tap_ips(futils.IPV4, self.tap)
         ipv6_existing   = devices.list_tap_ips(futils.IPV6, self.tap)
 
-        for ipv4 in ipv4_intended:
-            if ipv4 not in ipv4_existing:
-                log.info("Add route to IPv4 address %s for tap %s" %
-                         (ipv4, self.tap))
-                devices.add_route(futils.IPV4, ipv4, self.tap, self.mac)
-            else:
-                log.debug("Already got route to address %s for tap %s" %
-                          (ipv4, self.tap))
+        # Determine the addresses to add, remove and that won't be changed.
+        # These are rapid operations because we're using sets.
+        ipv4_add = ipv4_intended - ipv4_existing
+        ipv6_add = ipv6_intended - ipv6_existing
+        ipv4_remove = ipv4_existing - ipv4_intended
+        ipv6_remove = ipv6_existing - ipv6_intended
 
-        for ipv6 in ipv6_intended:
-            if ipv6 not in ipv6_existing:
-                log.info("Add route to IPv6 address %s for tap %s" %
-                         (ipv6, self.tap))
-                devices.add_route(futils.IPV6, ipv6, self.tap, self.mac)
-            else:
-                log.debug("Already got route to address %s for tap %s" %
-                          (ipv4, self.tap))
+        unchanged = ((ipv4_intended & ipv4_existing) |
+                     (ipv6_intended & ipv6_existing))
 
-        for ipv4 in ipv4_existing:
-            if ipv4 not in ipv4_intended:
-                log.info("Remove extra IPv4 route to address %s for tap %s" %
-                         (ipv4, self.tap))
-                devices.del_route(futils.IPV4, ipv4, self.tap)
+        log.debug("Already got routes for %s for tap %s", unchanged, self.tap)
 
-        for ipv6 in ipv6_existing:
-            if ipv6 not in ipv6_intended:
-                log.info("Remove extra IPv6 route to address %s for tap %s" %
-                         (ipv6, self.tap))
-                devices.del_route(futils.IPV6, ipv6, self.tap)
+        for ipv4 in ipv4_add:
+            log.info("Add route to IPv4 address %s for tap %s" %
+                     (ipv4, self.tap))
+            devices.add_route(futils.IPV4, ipv4, self.tap, self.mac)
+
+        for ipv6 in ipv6_add:
+            log.info("Add route to IPv6 address %s for tap %s" %
+                     (ipv6, self.tap))
+            devices.add_route(futils.IPV6, ipv6, self.tap, self.mac)
+
+        for ipv4 in ipv4_remove:
+            log.info("Remove extra IPv4 route to address %s for tap %s" %
+                     (ipv4, self.tap))
+            devices.del_route(futils.IPV4, ipv4, self.tap)
+
+        for ipv6 in ipv6_remove:
+            log.info("Remove extra IPv6 route to address %s for tap %s" %
+                     (ipv6, self.tap))
+            devices.del_route(futils.IPV6, ipv6, self.tap)
 
         #*********************************************************************#
         #* Set up the rules for this endpoint, not including ACLs. Note that *#
