@@ -98,7 +98,7 @@ HEARTBEAT_RESPONSE_TIMEOUT = 2000
 #*****************************************************************************#
 #* Time between heartbeats, in seconds.                                      *#
 #*****************************************************************************#
-HEARTBEAT_SEND_INTERVAL_SECS = 10
+HEARTBEAT_SEND_INTERVAL_SECS = 30
 
 #*****************************************************************************#
 #* An OpenStack agent type name for Felix, the Calico agent component in the *#
