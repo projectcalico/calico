@@ -18,17 +18,20 @@ import zmq
 from threading import Thread
 import time
 import json
+import os
 
 log = logging.getLogger(__name__)
 
 PLUGIN_ACLGET_PORT = "9903"
 PLUGIN_ACLPUB_PORT = "9904"
 
+HEARTBEAT_TIMEOUT = 65000  # Timeout for plugin heartbeats, in milliseconds
+
 
 class NetworkSubscriber(object):
     """
     Implements the Calico Network API.
-    
+
     Responsible for learning network information (rules and security groups)
     from the Plugin, and passing it to a Network Store.  The Network Subscriber
     owns the ZeroMQ sockets that transport the Network API.
@@ -44,12 +47,12 @@ class NetworkSubscriber(object):
 
     def subscribe_thread_func(self, context, network_store):
         """
-        Create the sockets, perform start of day Network API synchronization 
+        Create the sockets, perform start of day Network API synchronization
         and then listen for published updates and pass them to the Network
         Store.
         """
         self.network_store = network_store
-        
+
         # Create the SUB socket that receives updates to the network state.
         # Do this before start-of-day synchronization so that there's no window
         # during which the ACL Manager could miss updates.
@@ -93,7 +96,10 @@ class NetworkSubscriber(object):
         the Netork Store.
         """
         while True:
-            raw_message = self.sub_socket.recv_multipart()
+            if not self.sub_socket.poll(timeout=HEARTBEAT_TIMEOUT):
+                log.error("ACL Manager plugin heartbeat timed out - exiting")
+                os._exit(1)
+            raw_message = self.sub_socket.recv_multipart(zmq.NOBLOCK)
             log.debug("Received message %s" % raw_message)
             subscription = raw_message[0].decode("utf-8")
             message = json.loads(raw_message[1].decode("utf-8"))
