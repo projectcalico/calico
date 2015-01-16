@@ -101,6 +101,9 @@ class Socket(object):
         # The socket connection event is always the time of last activity.
         self.last_activity = futils.time_ms()
 
+        # We do not have a request outstanding.
+        self.request_outstanding = False
+
     def send(self, msg):
         """
         Send a specified message on a socket.
@@ -172,10 +175,18 @@ class Socket(object):
         return ((futils.time_ms() - self.last_activity) >
                 self.config.CONN_TIMEOUT_MS)
 
+    def keepalive_due(self):
+        """
+        Returns True if we are due to send a keepalive on the socket.
+
+        The caller is responsible for deciding which sockets need keepalives.
+        """
+        return ((futils.time_ms() - self.last_activity) >
+                self.config.CONN_KEEPALIVE_MS)
+
 
 class Message(object):
     """This represents a message either sent or received by Felix."""
-    TYPE_KEEPALIVE = "KEEPALIVE"
     TYPE_RESYNC    = "RESYNCSTATE"
     TYPE_EP_CR     = "ENDPOINTCREATED"
     TYPE_EP_UP     = "ENDPOINTUPDATED"

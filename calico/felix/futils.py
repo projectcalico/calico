@@ -95,4 +95,4 @@ def time_ms():
     Return the time in ms. We use this rather than directly calling time.time
     mostly because it makes it easier to mock out for test purposes.
     """
-    return(int(time.time()))
+    return(int(time.time() * 1000))

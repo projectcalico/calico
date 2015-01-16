@@ -299,9 +299,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     #*********************************************************#
                     LOG.info("HEARTBEAT")
                     self.felix_router_socket.send_multipart(
-                        peer,
-                        '',
-                        json.dumps(rq).encode('utf-8'))
+                        [peer,
+                         '',
+                         json.dumps(rq).encode('utf-8')])
 
                 else:
                     #*********************************************************#
@@ -310,9 +310,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     #*********************************************************#
                     LOG.warn("Unexpected request type")
                     self.felix_router_socket.send_multipart(
-                        peer,
-                        '',
-                        json.dumps(rq).encode('utf-8'))
+                        [peer,
+                         '',
+                         json.dumps(rq).encode('utf-8')])
             except:
                 LOG.exception("Exception in Felix-facing ROUTER socket thread")
 
@@ -635,9 +635,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     #*********************************************************#
                     LOG.info("HEARTBEAT")
                     self.acl_get_socket.send_multipart(
-                        peer,
-                        '',
-                        json.dumps(rq).encode('utf-8'))
+                        [peer,
+                         '',
+                         json.dumps(rq).encode('utf-8')])
 
                 else:
                     #*********************************************************#
@@ -646,9 +646,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     #*********************************************************#
                     LOG.warn("Unexpected request type")
                     self.acl_get_socket.send_multipart(
-                        peer,
-                        '',
-                        json.dumps(rq).encode('utf-8'))
+                        [peer,
+                         '',
+                         json.dumps(rq).encode('utf-8')])
             except:
                 LOG.exception("Exception in ACL Manager-facing ROUTER thread")
 
