@@ -172,8 +172,6 @@ install -p -m 644 %{SOURCE65} %{buildroot}%{_datadir}/calico/
 # Install config and other non-Python files
 install -d %{buildroot}%{_sysconfdir}/calico
 install etc/*.cfg %{buildroot}%{_sysconfdir}/calico
-install -d %{buildroot}%{_sysconfdir}/neutron
-install etc/*.ini %{buildroot}%{_sysconfdir}/neutron
 install -d %{buildroot}%{_datadir}/calico/bird
 install etc/bird/*.template %{buildroot}%{_datadir}/calico/bird
 install -d %{buildroot}%{_bindir}
