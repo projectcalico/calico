@@ -1,3 +1,20 @@
+calico (0.10.2) trusty; urgency=medium
+
+  * Code fixes and improvements
+    - Version number now correctly reported by Python.
+    - Felix now correctly sends keepalives.
+    - Substantial myriad heartbeat fixes in all components.
+    - Fixed Felix crash when building certain error logs.
+    - Fixed Felix crash when asked to program an interface that is not up yet.
+
+ -- Cory Benfield <cory.benfield@metaswitch.com>  Fri, 16 Jan 2015 13:45:01 +0000
+
+calico (0.10.1) trusty; urgency=medium
+
+  * Increment version number to replace PPA build with proper requirements
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Thu, 15 Jan 2015 17:40:23 +0000
+
 calico (0.10) trusty; urgency=medium
 
   * Code fixes and improvements
