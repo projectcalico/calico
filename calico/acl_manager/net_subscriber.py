@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 PLUGIN_ACLGET_PORT = "9903"
 PLUGIN_ACLPUB_PORT = "9904"
 
-HEARTBEAT_TIMEOUT = 20000  # Timeout for plugin heartbeats, in milliseconds
+HEARTBEAT_TIMEOUT = 65000  # Timeout for plugin heartbeats, in milliseconds
 
 
 class NetworkSubscriber(object):
@@ -96,7 +96,7 @@ class NetworkSubscriber(object):
         the Netork Store.
         """
         while True:
-            if not self.sub_socket.poll(timeout = HEARTBEAT_TIMEOUT):
+            if not self.sub_socket.poll(timeout=HEARTBEAT_TIMEOUT):
                 log.error("ACL Manager plugin heartbeat timed out - exiting")
                 os._exit(1)
             raw_message = self.sub_socket.recv_multipart(zmq.NOBLOCK)
