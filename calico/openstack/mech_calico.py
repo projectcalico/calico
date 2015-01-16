@@ -187,6 +187,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         #*********************************************************************#
         self.acl_pub_socket = self.zmq_context.socket(zmq.PUB)
         self.acl_pub_socket.bind("tcp://*:%s" % PLUGIN_ACLPUB_PORT)
+        eventlet.spawn_n(self.acl_heartbeat_thread)
 
         #*********************************************************************#
         #* Spawn green thread for handling RESYNCSTATE requests on the       *#
@@ -559,6 +560,30 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                             'binary': '',
                                             'host': hostname,
                                             'topic': constants.L2_AGENT_TOPIC})
+
+    def acl_heartbeat_thread(self):
+
+        while True:
+
+            #*****************************************************************#
+            #* Sleep until time for next heartbeat.                          *#
+            #*****************************************************************#
+            LOG.info("Network-HEARTBEAT: sleep until next heartbeat")
+            eventlet.sleep(HEARTBEAT_SEND_INTERVAL_SECS)
+
+            #*****************************************************************#
+            #* Send a heartbeat.                                             *#
+            #*****************************************************************#
+            try:
+                pub = {'type': 'HEARTBEAT',
+                       'issued': time.time() * 1000}
+                self.acl_pub_socket.send_multipart(
+                    ['networkheartbeat'.encode('utf-8'),
+                     json.dumps(pub).encode('utf-8')])
+                LOG.info("Heartbeat sent")
+            except:
+                LOG.exception("Exception sending HEARTBEAT to ACL managers")
+                return
 
     def acl_get_thread(self):
 
