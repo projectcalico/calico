@@ -7,8 +7,6 @@ Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
-Source15:	calico-compute.init
-Source25:	calico-compute.upstart
 Source35:	calico-felix.init
 Source45:	calico-felix.upstart
 Source55:	calico-acl-manager.init
@@ -56,22 +54,18 @@ if [ $1 -eq 1 ] ; then
     echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
     sysctl -p
-
-    /sbin/chkconfig --add calico-compute
-    /sbin/service calico-compute start >/dev/null 2>&1
 fi
 
 %preun compute
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
-    /sbin/service calico-compute stop >/dev/null 2>&1
-    /sbin/chkconfig --del calico-compute
+    :
 fi
 
 %postun compute
 if [ $1 -ge 1 ] ; then
     # Package upgrade, not uninstall
-    /sbin/service calico-compute condrestart >/dev/null 2>&1 || :
+    :
 fi
 
 %package control
@@ -168,12 +162,10 @@ install -d -m 755 %{buildroot}%{_initrddir}
 install -d -m 755 %{buildroot}%{_sysconfdir}
 
 # Install sysv init scripts
-install -p -D -m 755 %{SOURCE15} %{buildroot}%{_initrddir}/calico-compute
 install -p -D -m 755 %{SOURCE35} %{buildroot}%{_initrddir}/calico-felix
 install -p -D -m 755 %{SOURCE55} %{buildroot}%{_initrddir}/calico-acl-manager
 
 # Install upstart jobs examples
-install -p -m 644 %{SOURCE25} %{buildroot}%{_datadir}/calico/
 install -p -m 644 %{SOURCE45} %{buildroot}%{_datadir}/calico/
 install -p -m 644 %{SOURCE65} %{buildroot}%{_datadir}/calico/
 
@@ -199,13 +191,9 @@ rm -rf $RPM_BUILD_ROOT
 
 %files compute
 %defattr(-,root,root,-)
-/usr/bin/neutron-calico-agent
 /usr/bin/calico-gen-bird-conf.sh
 /usr/bin/calico-gen-bird6-conf.sh
-/etc/neutron/calico_agent.ini
 /usr/share/calico/bird/*
-%{_initrddir}/calico-compute
-%{_datadir}/calico/calico-compute.upstart
 %doc
 
 %files control

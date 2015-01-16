@@ -1,7 +1,0 @@
-/var/log/neutron/calico-agent.log {
-    daily
-    missingok
-    compress
-    delaycompress
-    notifempty
-}
