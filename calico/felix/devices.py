@@ -112,3 +112,13 @@ def del_route(type, ip, tap):
         futils.check_call(["ip", "route", "del", ip, "dev", tap])
     else:
         futils.check_call(["ip", "-6", "route", "del", ip, "dev", tap])
+
+
+def interface_up(if_name):
+    """
+    Checks whether a given interface is up.
+    """
+    with open('/sys/class/net/%s/operstate' % if_name, 'r') as f:
+        state = f.read()
+
+    return 'up' in state
