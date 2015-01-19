@@ -95,21 +95,21 @@ class TestDevices(unittest.TestCase):
             ips = devices.list_tap_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertFalse(ips)
-            
+
         stdout = "10.11.9.90  scope link"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             ips = devices.list_tap_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["10.11.9.90"]))
-            
+
         stdout = "10.11.9.90  scope link\nblah-di-blah not valid\nx\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             ips = devices.list_tap_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["10.11.9.90"]))
-            
+
         type = futils.IPV6
         stdout = "2001:: scope link\n"
         retcode = futils.CommandOutput(stdout, "")
@@ -117,7 +117,7 @@ class TestDevices(unittest.TestCase):
             ips = devices.list_tap_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
-            
+
         stdout = "2001:: scope link\n\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
@@ -136,3 +136,41 @@ class TestDevices(unittest.TestCase):
             # TODO: We don't test that the write calls happened, which is deeply annoying...
             devices.configure_tap(tap)
             open_mock.assert_has_calls(calls, any_order=True)
+
+    def test_interface_up1(self):
+        """
+        Test that the interface_up returns True when an interface is up.
+        """
+        tap = "tap" + str(uuid.uuid4())[:11]
+
+        with mock.patch('__builtin__.open') as open_mock:
+            open_mock.return_value = mock.MagicMock(spec=file)
+            file_handle = open_mock.return_value.__enter__.return_value
+            file_handle.read.return_value = 'up\n'
+
+            is_up = devices.interface_up(tap)
+
+            open_mock.assert_called_with(
+                '/sys/class/net/%s/operstate' % tap, 'r'
+            )
+            self.assertTrue(file_handle.read.called)
+            self.assertTrue(is_up)
+
+    def test_tap_interface_up2(self):
+        """
+        Test that the interface_up returns False when an interface is down.
+        """
+        tap = "tap" + str(uuid.uuid4())[:11]
+
+        with mock.patch('__builtin__.open') as open_mock:
+            open_mock.return_value = mock.MagicMock(spec=file)
+            file_handle = open_mock.return_value.__enter__.return_value
+            file_handle.read.return_value = 'down\n'
+
+            is_up = devices.interface_up(tap)
+
+            open_mock.assert_called_with(
+                '/sys/class/net/%s/operstate' % tap, 'r'
+            )
+            self.assertTrue(file_handle.read.called)
+            self.assertFalse(is_up)
