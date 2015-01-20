@@ -1,3 +1,14 @@
+calico (0.10.3~rc1) trusty; urgency=medium
+
+  * More code fixes and improvements
+    - Delete old (pre-Felix) Calico agent
+    - There are no more *.ini files to install.
+    - Felix unit testing and refactoring
+    - Add initial diags collection file
+    - Ensure that Felix handles resyncs with 0 endpoints
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Tue, 20 Jan 2015 17:45:32 +0000
+
 calico (0.10.2) trusty; urgency=medium
 
   * Code fixes and improvements
