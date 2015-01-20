@@ -132,7 +132,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def __init__(self):
         super(CalicoMechanismDriver, self).__init__(
             constants.AGENT_TYPE_DHCP,
-            portbindings.VIF_TYPE_ROUTED,
+            portbindings.VIF_TYPE_TAP,
             {portbindings.CAP_PORT_FILTER: True})
 
         #*********************************************************************#
