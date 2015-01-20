@@ -1,6 +1,11 @@
 #! /bin/bash
 
-BIRD_CONF=/etc/bird/bird6.conf
+if [ -f /etc/redhat-release ]; then
+    BIRD_CONF=/etc/bird.conf
+else
+    BIRD_CONF=/etc/bird/bird.conf
+fi
+
 BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird6.conf.template
 
 # Require 4 arguments.

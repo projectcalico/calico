@@ -1,6 +1,12 @@
 #! /bin/bash
 
-BIRD_CONF=/etc/bird/bird.conf
+# The bird config file path is different for Red Hat and Debian/Ubuntu.
+if [ -f /etc/redhat-release ]; then
+    BIRD_CONF=/etc/bird.conf
+else
+    BIRD_CONF=/etc/bird/bird.conf
+fi
+
 BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird.conf.template
 
 # Require 3 arguments.
