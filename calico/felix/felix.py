@@ -326,11 +326,11 @@ class FelixAgent(object):
                 if self.resync_expected is None:
                     # resync_expected not set - resync response pending
                     log.debug("Received ENDPOINTCREATED number %d for resync "
-                              "before resync response" %
-                              (self.resync_recd))
+                              "before resync response" ,
+                              self.resync_recd)
                 else:
-                    log.debug("Received ENDPOINTCREATED for resync, %d out of %d" %
-                          (self.resync_recd, self.resync_expected))
+                    log.debug("Received ENDPOINTCREATED for resync, %d out of %d",
+                              self.resync_recd, self.resync_expected)
 
                 if self.resync_recd == self.resync_expected:
                     self.complete_endpoint_resync(True)
@@ -343,8 +343,8 @@ class FelixAgent(object):
                 #*************************************************************#
                 log.warning(
                     "Received ENDPOINTCREATED for %s with invalid "
-                    "resync %s (expected %s)" %
-                    (endpoint_id, resync_id, self.resync_id))
+                    "resync %s (expected %s)" ,
+                    endpoint_id, resync_id, self.resync_id)
 
         return
 
@@ -448,7 +448,7 @@ class FelixAgent(object):
         """
         log.debug("Received resync response: %s", message.fields)
 
-        endpoint_count = message.fields['endpoint_count']
+        endpoint_count = int(message.fields['endpoint_count'])
         return_code = message.fields['rc']
         return_str = message.fields['message']
 
@@ -461,11 +461,11 @@ class FelixAgent(object):
 
         # If there are no endpoints to expect, or we got this after all the
         # resyncs, then we're done.
-        if not endpoint_count or endpoint_count == self.resync_recd:
+        if endpoint_count == 0 or endpoint_count == self.resync_recd:
             self.complete_endpoint_resync(True)
             return
 
-        self.resync_expected = int(endpoint_count)
+        self.resync_expected = endpoint_count
         return
 
     def handle_getaclstate(self, message, sock):
@@ -676,6 +676,8 @@ class FelixAgent(object):
             acl_socket.send(Message(Message.TYPE_HEARTBEAT, {}))
 
         # Now, check if we need to resynchronize and do it.
+        if self.resync_id is None:
+            log.debug("Times %d, %d, %d", futils.time_ms(), self.resync_time, self.config.RESYNC_INT_SEC)
         if (self.resync_id is None and
                 (futils.time_ms() - self.resync_time >
                  self.config.RESYNC_INT_SEC * 1000)):
