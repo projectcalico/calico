@@ -340,6 +340,159 @@ class TestBasic(unittest.TestCase):
         pass
 
 
+class TestTimings(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Completely replace the devices and ipsets modules.
+        cls.real_devices = calico.felix.devices
+        endpoint.devices = stub_devices
+        cls.real_ipsets = calico.felix.ipsets
+        frules.ipsets = stub_ipsets
+
+    @classmethod
+    def tearDownClass(cls):
+        # Reinstate the modules we overwrote
+        endpoint.devices = cls.real_devices
+        frules.ipsets = cls.real_ipsets
+
+    def setUp(self):
+        # Mock out time
+        patcher = mock.patch('calico.felix.futils.time_ms')
+        patcher.start().side_effect = stub_utils.get_time
+        self.addCleanup(patcher.stop)
+        
+        stub_utils.set_time(0)
+        stub_fiptables.reset_current_state()
+        stub_devices.reset()
+        stub_ipsets.reset()
+
+        expected_iptables.reset()
+        expected_ipsets.reset()
+
+    def tearDown(self):
+        pass
+
+    def test_resync(self):
+        """
+        Test the resync flows.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        agent = felix.FelixAgent(config_path, context)
+
+        #*********************************************************************#
+        #* Set the resync timeout to 5 seconds, and the KEEPALIVE timeout to *#
+        #* much more.                                                        *#
+        #*********************************************************************#
+        agent.config.RESYNC_INT_SEC = 5
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 50000
+
+        # Get started.
+        context.add_poll_result(0)
+        agent.run()
+
+        # Now we should have got a resync request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "0",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result = context.add_poll_result(1000)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+        # nothing yet
+        self.assertFalse(context.sent_data_present())
+
+        poll_result = context.add_poll_result(5999)
+        agent.run()
+        # nothing yet - 4999 ms since last request
+        self.assertFalse(context.sent_data_present())
+
+        poll_result = context.add_poll_result(6001)
+        agent.run()
+
+        # We should have got another resync request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "2",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        # No more resyncs until enough data has arrived.
+        poll_result = context.add_poll_result(15000)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+        self.assertFalse(context.sent_data_present())
+       
+        # Send an endpoint created message to Felix.
+        endpoint_id = str(uuid.uuid4())
+        log.debug("Build first endpoint created : %s" % endpoint_id)
+        mac = stub_utils.get_mac()
+        suffix = endpoint_id[:11]
+        tap = "tap" + suffix
+        addr = '1.2.3.4'
+        endpoint_created_req = { 'type': "ENDPOINTCREATED",
+                                 'endpoint_id': endpoint_id,
+                                 'resync_id': resync_id,
+                                 'issued': futils.time_ms(),
+                                 'mac': mac,
+                                 'state': Endpoint.STATE_ENABLED,
+                                 'addrs': [ {'gateway': "1.2.3.1", 'addr': addr} ] }
+
+        poll_result = context.add_poll_result(15001)
+        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        agent.run()
+
+        # We stop using sent_data_present, since there are ACL requests around.
+        endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+        self.assertFalse(context.sent_data[TYPE_EP_REQ])
+
+        # Send a second endpoint created message to Felix - triggers another resync.
+        endpoint_id = str(uuid.uuid4())
+        log.debug("Build second endpoint created : %s" % endpoint_id)
+        mac = stub_utils.get_mac()
+        suffix = endpoint_id[:11]
+        tap = "tap" + suffix
+        addr = '1.2.3.5'
+        endpoint_created_req = { 'type': "ENDPOINTCREATED",
+                                 'endpoint_id': endpoint_id,
+                                 'resync_id': resync_id,
+                                 'issued': futils.time_ms(),
+                                 'mac': mac,
+                                 'state': Endpoint.STATE_ENABLED,
+                                 'addrs': [ {'gateway': "1.2.3.1", 'addr': addr} ] }
+
+        poll_result = context.add_poll_result(15002)
+        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        agent.run()
+
+        endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+        self.assertFalse(context.sent_data[TYPE_EP_REQ])
+
+        # No more resyncs until enough 5000 ms after last rsp.
+        poll_result = context.add_poll_result(20000)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+        self.assertFalse(context.sent_data[TYPE_EP_REQ])
+
+        # We should have got another resync request.
+        poll_result = context.add_poll_result(20003)
+        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        agent.run()
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data[TYPE_EP_REQ])
+
 def get_blank_acls():
     """
     Return a blank set of ACLs, with nothing permitted.
