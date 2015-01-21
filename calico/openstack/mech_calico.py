@@ -27,7 +27,6 @@
 #* It is implemented as a Neutron/ML2 mechanism driver.                      *#
 #*****************************************************************************#
 
-from nova.network import model
 from neutron.common import constants
 from neutron.openstack.common import log
 from neutron.plugins.ml2 import driver_api as api
@@ -132,8 +131,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def __init__(self):
         super(CalicoMechanismDriver, self).__init__(
             constants.AGENT_TYPE_DHCP,
-            model.VIF_TYPE_TAP,
-            {model.VIF_DETAILS_PORT_FILTER: True})
+            'tap',
+            {'port_filter': True})
 
         #*********************************************************************#
         #* Initialize dictionary mapping Felix hostnames to corresponding    *#
