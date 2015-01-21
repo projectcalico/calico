@@ -1,7 +1,7 @@
 #! /bin/bash
 
 # The bird config file path is different for Red Hat and Debian/Ubuntu.
-if [ -f /etc/redhat-release ]; then
+if [ -f /etc/bird.conf ]; then
     BIRD_CONF=/etc/bird.conf
 else
     BIRD_CONF=/etc/bird/bird.conf
@@ -41,4 +41,4 @@ s/@AS_NUMBER@/$as_number/;
 echo BIRD configuration generated at $BIRD_CONF
 
 service bird restart
-echo BIRD started
+echo BIRD restarted
