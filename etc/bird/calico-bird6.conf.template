@@ -26,7 +26,7 @@ protocol device {
 
 protocol direct {
    debug all;
-   interface "-dummy0", "dummy1", "eth*", "em*";
+   interface "-dummy0", "dummy1", "eth*", "em*", "en*";
 }
 
 # Peer with route reflector.

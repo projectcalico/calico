@@ -1,6 +1,11 @@
 #! /bin/bash
 
-BIRD_CONF=/etc/bird/bird6.conf
+if [ -f /etc/bird6.conf ]; then
+    BIRD_CONF=/etc/bird6.conf
+else
+    BIRD_CONF=/etc/bird/bird6.conf
+fi
+
 BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird6.conf.template
 
 # Require 4 arguments.
@@ -37,15 +42,5 @@ s/@AS_NUMBER@/$as_number/;
 
 echo BIRD6 configuration generated at $BIRD_CONF
 
-if [ -f /etc/redhat-release ]; then
-    # On a Red Hat system, we assume that BIRD6 is locally built and
-    # installed, as it is not available for RHEL 6.5 in packaged form.
-    # Run this now.
-    /usr/local/sbin/bird6 -c /etc/bird/bird6.conf
-    echo BIRD6 started
-else
-    # On a Debian/Ubuntu system, BIRD6 is packaged and already running,
-    # so just restart it.
-    service bird6 restart
-    echo BIRD6 restarted
-fi
+service bird6 restart
+echo BIRD6 restarted
