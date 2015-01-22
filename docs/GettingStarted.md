@@ -1,6 +1,6 @@
 # Getting started with Calico on Docker
 
-Calico can run in a Docker environment with L2 routed compute hosts. This brief guide shows you
+Calico can run in a Docker environment and provide networking connectivity with security policy enforcement for Docker containers. This brief guide shows you
 how to get up and running using Vagrant and VirtualBox.
 
 ## How to install and run it.
@@ -23,7 +23,7 @@ So, to get started, install Vagrant, Virtualbox and GIt for your OS.
 Clone this repo so the Vagrant file is available.
 * `git clone https://github.com/metaswitch/calico-docker.git`
 
-From your git checkout, use Vagrant to start the CoreOS servers
+From the git checkout directory ("calico-docker"), use Vagrant to start the CoreOS servers (all the Vagrant commands should be run from the git checkout directory)
 * `vagrant up`
 
 Congratulations, you now have two CoreOS servers with the Calico code checked out on them. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
@@ -46,8 +46,8 @@ At this point, it's worth checking that your two servers can ping each other.
 * From core-02
    * `ping core-01`
 
-### Using Calico
-Calico currently requires that some components are run only on a single host. For these instructions, we'll designate core-01 our "master" node and core-02 will be a secondary node.
+### Installing Calico
+In a real deployment Calico has some components that would normally run co-located with the cloud orchestrator.  In these instructions we are installing them on `core-01` just for convenience. This makes `core-01` our master node, but we'll also use it as a standard compute node too.
 
 * Start the master on `core-01`
   * `sudo ./calico master --peer=core-02`
@@ -97,21 +97,20 @@ Hit enter a few times to get a prompt. To get back out of the container and leav
 
 So, go ahead and start a few of containers on each host.
 * On core-01
-   * `A=$(sudo ./calico run 192.168.1.1 --master=core-01 --group=ONLY_A -- -ti busybox)`
+   * `A=$(sudo ./calico run 192.168.1.1 --master=core-01 --group=GROUP_A -- -ti busybox)`
    * `B=$(sudo ./calico run 192.168.1.2 --master=core-01 -- -ti busybox)`
    * `C=$(sudo ./calico run 192.168.1.3 --master=core-01 -- -ti busybox)`
 
 * On core-02
-   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=ONLY_D -- -ti busybox)`
+   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=GROUP_A -- -ti busybox)`
    * `E=$(sudo ./calico run 192.168.1.5 --master=core-01 -- -ti busybox)`
 
 B,C and E are created without passing in an explicit group name so they are all in the `DEFAULT` group.
 
-At this point, it should be possible to attach to B (`docker attach $B`) and check that it can ping C (192.168.1.3) and E (192.168.1.5) but not A or D. A and D are in their own groups so shouldn't be able to ping anyone else.
+At this point, it should be possible to attach to B (`docker attach $B`) and check that it can ping C (192.168.1.3) and E (192.168.1.5) but not A or D. A and D are both in GROUP_A so they can ping each other but shouldn't be able to ping anyone else.
 
 
-Finally, to clean everything up (without doing a `vagrant destroy`), you can run
-* `sudo ./calico reset`
+Finally, to clean everything up (if you want to avoid doing a `vagrant destroy`), you can run `sudo ./calico reset`. This deletes any config that's been created, stops all the Calico containers and cleans up any network interfaces that were created. It won't stop any containers that were run using `./calico run`.
 
 ## Troubleshooting
 
