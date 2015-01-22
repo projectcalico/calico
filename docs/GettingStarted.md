@@ -54,9 +54,9 @@ Calico currently requires that some components are run only on a single host. Fo
 
 Now start calico on both nodes.
 * On core-01
-   * ` sudo ./calico launch --master=core-01 --peer=core-01`
-* On core-02
    * ` sudo ./calico launch --master=core-01 --peer=core-02`
+* On core-02
+   * ` sudo ./calico launch --master=core-01 --peer=core-01`
 
 This will start a number of Docker containers. Check they are running
 * `sudo docker ps`
