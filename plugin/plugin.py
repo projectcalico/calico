@@ -61,6 +61,7 @@ class Endpoint:
 eps_by_host = dict()
 felix_ip    = dict()
 all_groups  = dict()
+last_resync = dict()
 
 def strip(data):
     # Remove all from the first dot onwards
@@ -158,6 +159,7 @@ def do_ep_api():
                    "endpoint_count": str(len(get_eps_for_host(host)))}
             resync_socket.send(json.dumps(rsp))
             log.debug("Sending %s EP msg : %s" % (fields['type'], rsp))
+            last_resync[host] = int(time.time())
 
             #*****************************************************************#
             #* Sleep for a second while that response gets through.  This is *#
@@ -173,21 +175,25 @@ def do_ep_api():
             # Keepalive. We are still here.
             rsp = {"rc": "SUCCESS", "message": "Hooray", "type": fields['type']}
             resync_socket.send(json.dumps(rsp))
-        else:
-            # Nothing happened.
-            log.debug("Nothing happened - send lots of ENDPOINTCREATED messages to make sure")
-            for host in eps_by_host.keys():
-                send_all_eps(create_sockets, host, None)
+
 
         # Send a keepalive on each EP REQ socket.
         for host in create_sockets.keys():
-            create_socket = create_sockets[host]
-            msg = {"type": "HEARTBEAT",
-                   "issued": int(time.time()* 1000)}
-            log.debug("Sending KEEPALIVE to %s : %s" % (host, msg))
-            create_socket.send(json.dumps(msg))
-            create_socket.recv()
-            log.debug("Got response from host %s" % host)
+            last_time = last_resync.get(host, 0)
+            log.debug("Last resync from %s was at %d", host, last_time)
+            if time.time() - last_time > 15:
+                log.error("Host %s has not sent a resync - "
+                          "send lots of ENDPOINTCREATEDs to make sure", host)
+                send_all_eps(create_sockets, host, None)
+                last_resync[host] = int(time.time())
+            else:
+                create_socket = create_sockets[host]
+                msg = {"type": "HEARTBEAT",
+                       "issued": int(time.time()* 1000)}
+                log.debug("Sending KEEPALIVE to %s : %s" % (host, msg))
+                create_socket.send(json.dumps(msg))
+                create_socket.recv()
+                log.debug("Got response from host %s" % host)
 
 
 def send_all_eps(create_sockets, host, resync_id):
