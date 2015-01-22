@@ -102,7 +102,7 @@ So, go ahead and start a few of containers on each host.
    * `C=$(sudo ./calico run 192.168.1.3 --master=core-01 -- -ti busybox)`
 
 * On core-02
-   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=ONLY_D-- -ti busybox)`
+   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=ONLY_D -- -ti busybox)`
    * `E=$(sudo ./calico run 192.168.1.5 --master=core-01 -- -ti busybox)`
 
 B,C and E are created without passing in an explicit group name so they are all in the `DEFAULT` group.
