@@ -201,7 +201,7 @@ rm -rf $RPM_BUILD_ROOT
 %files felix
 %defattr(-,root,root,-)
 /usr/bin/calico-felix
-/etc/calico/felix.cfg
+/etc/calico/felix.cfg.example
 %{_initrddir}/calico-felix
 %{_datadir}/calico/calico-felix.upstart
 %doc
@@ -209,7 +209,7 @@ rm -rf $RPM_BUILD_ROOT
 %files acl-manager
 %defattr(-,root,root,-)
 /usr/bin/calico-acl-manager
-/etc/calico/acl_manager.cfg
+/etc/calico/acl_manager.cfg.example
 %{_initrddir}/calico-acl-manager
 %{_datadir}/calico/calico-acl-manager.upstart
 %doc

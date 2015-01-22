@@ -14,4 +14,8 @@ pre-start script
   chown root:root /var/run/calico
 end script
 
-exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-felix -- --config-file=/etc/calico/felix.cfg
+script
+  if [ -f /etc/calico/felix.cfg ]; then
+    exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-felix -- --config-file=/etc/calico/felix.cfg
+  fi
+end script
