@@ -226,7 +226,7 @@ def run(ip, group, master, docker_options):
 
     # Get the MAC address.
     mac = check_output("ip netns exec %s ip link show eth0 | grep ether | awk '{print $2}'" % cpid, shell=True).strip()
-
+    name = ip.replace('.', '_')
     base_config = """
 [endpoint %s]
 id=%s
@@ -234,12 +234,12 @@ ip=%s
 mac=%s
 host=%s
 group=%s
-""" % (ip.replace('.', '_'), cid, ip, mac, HOSTNAME, group)
+""" % (name, cid, ip, mac, HOSTNAME, group)
 
     #copy the file to master
     command = "echo '{config}' | ssh -o 'StrictHostKeyChecking no' {host} 'cat " \
               ">/home/core/config/data/{" \
-    "filename}.txt'".format(config=base_config, host=master, filename=HOSTNAME)
+    "filename}.txt'".format(config=base_config, host=master, filename=name)
     check_call(command, shell=True)
 
 
