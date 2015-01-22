@@ -1,0 +1,18 @@
+bird:
+    build: bird
+    volumes:
+     - config:/config
+    net: "host"
+    privileged: true
+    restart: "always"
+    command:  bird -s bird.ctl -d -c /config/bird.conf
+
+felix:
+    build: felix
+    volumes:
+     - config:/config
+    net: "host"
+    privileged: true
+    restart: "always"
+    command: calico-felix --config-file=/config/felix.cfg
+
