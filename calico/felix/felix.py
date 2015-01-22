@@ -653,8 +653,15 @@ class FelixAgent(object):
                 elif sock.type == Socket.TYPE_ACL_REQ:
                     self.acl_queue.clear()
 
-                # Finally, recreate the socket.
+                # Recreate the socket.
                 sock.communicate(self.hostname, self.zmq_context)
+
+                # If this is the ACL SUB socket, then subscribe for all
+                # endpoints.
+                if sock.type == Socket.TYPE_ACL_SUB:
+                    for endpoint_id in self.endpoints:
+                        sock._zmq.setsockopt(zmq.SUBSCRIBE,
+                                             endpoint_id.encode('utf-8'))
 
         # If we have any queued messages to send, we should do so.
         endpoint_socket = self.sockets[Socket.TYPE_EP_REQ]
@@ -676,8 +683,6 @@ class FelixAgent(object):
             acl_socket.send(Message(Message.TYPE_HEARTBEAT, {}))
 
         # Now, check if we need to resynchronize and do it.
-        if self.resync_id is None:
-            log.debug("Times %d, %d, %d", futils.time_ms(), self.resync_time, self.config.RESYNC_INT_SEC)
         if (self.resync_id is None and
                 (futils.time_ms() - self.resync_time >
                  self.config.RESYNC_INT_SEC * 1000)):
