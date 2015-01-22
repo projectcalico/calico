@@ -1,3 +1,10 @@
+calico (0.10.3~rc2) trusty; urgency=medium
+
+  * Further Felix code fixes:
+    - If we recreate the ACL SUB connection, resubscribe to everything.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Thu, 22 Jan 2015 11:02:01 +0000
+
 calico (0.10.3~rc1) trusty; urgency=medium
 
   * More code fixes and improvements
