@@ -6,12 +6,11 @@ how to get up and running using Vagrant and VirtualBox.
 ## How to install and run it.
 
 You can run these instructions on a Windows, Mac or Linux computer. You'll be guided through
-setting up a two node CoreOS cluster, creating some Calico enabled endpoints and pinging between
- them.
+setting up a two node CoreOS cluster, creating some Calico enabled endpoints and pinging between them.
 
-Although Vagrant/Virtualbox/CoreOS is used, the environmental requirements are minimal. You'll
+Although Vagrant/Virtualbox/CoreOS is used in these instruction, if you want to run in a different environment the requirements are minimal. You'll
 obviously need Docker and Git and we currently rely on some SSH keys and host file settings -
-see XXX for more details. If you want to get started quickly and easily then we recommend just
+see [provision.sh](https://github.com/Metaswitch/calico-docker/blob/master/provision.sh) for more details. If you want to get started quickly and easily then we recommend just
 using Vagrant.
 
 
@@ -48,7 +47,7 @@ At this point, it's worth checking that your two servers can ping each other.
    * `ping core-01`
 
 ### Using Calico
-Calico currently requires that some components are run only on a single host. For this prototype, we'll designate core-01 our "master" node and core-02 will be a secondary node.
+Calico currently requires that some components are run only on a single host. For these instructions, we'll designate core-01 our "master" node and core-02 will be a secondary node.
 
 * Start the master on `core-01`
   * `sudo ./calico master --peer=core-02`
@@ -62,6 +61,9 @@ Now start calico on both nodes.
 This will start a number of Docker containers. Check they are running
 * `sudo docker ps`
 
+You should see output like this
+
+```
     core@core-01 ~ $ docker ps
     CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
     96ccc60e25ef        calico_bird:latest         "bird -s bird.ctl -d   2 minutes ago       Up 2 minutes                            calico_bird_1
@@ -69,13 +71,13 @@ This will start a number of Docker containers. Check they are running
     46132f56423b        calico_pluginep:latest     "python plugin.py ne   6 minutes ago       Up 6 minutes                            calico_pluginnetwork_1
     5235f9168feb        calico_aclmanager:latest   "calico-acl-manager    6 minutes ago       Up 6 minutes                            calico_aclmanager_1
     e14b53b79962        calico_pluginep:latest     "python plugin.py ep   6 minutes ago       Up 6 minutes                            calico_pluginep_1
-
-
+```
+```
     core@core-02 ~ $ docker ps
     CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
     37f41d95e69d        calico_bird:latest    "bird -s bird.ctl -d   4 minutes ago       Up 4 minutes                            calico_bird_1
     bb14fc3f8dce        calico_felix:latest   "calico-felix --conf   4 minutes ago       Up 4 minutes                            calico_felix_1
-
+```
 
 #### Creating networked endpoints
 All containers need to be assigned IPs in the `192.168.0.0/16` range.
@@ -100,7 +102,7 @@ So, go ahead and start a few of containers on each host.
    * `C=$(sudo ./calico run 192.168.1.3 --master=core-01 -- -ti busybox)`
 
 * On core-02
-   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=ONLY_E-- -ti busybox)`
+   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=ONLY_D-- -ti busybox)`
    * `E=$(sudo ./calico run 192.168.1.5 --master=core-01 -- -ti busybox)`
 
 B,C and E are created without passing in an explicit group name so they are all in the `DEFAULT` group.
