@@ -14,4 +14,10 @@ pre-start script
   chown root:root /var/run/calico
 end script
 
-exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-acl-manager -- --config-file=/etc/calico/acl_manager.cfg
+script
+  if [ -f /etc/calico/acl_manager.cfg ]; then
+    exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-acl-manager -- --config-file=/etc/calico/acl_manager.cfg
+  else
+    echo "Calico ACL Manager: not starting because /etc/calico/acl_manager.cfg does not exist"
+  fi
+end script
