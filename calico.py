@@ -40,10 +40,23 @@ Options:
 # alias docker_kill_all='sudo docker kill $(docker ps -q)'
 # alias docker_rm_all='sudo docker rm -v `docker ps -a -q -f status=exited`'
 
-from docopt import docopt
 from subprocess import call, check_output, check_call, CalledProcessError
 from string import Template
 import socket
+import os
+from docopt import docopt
+import shlex
+import sh
+from sh import mkdir
+from sh import docker
+from sh import modprobe
+from sh import rm
+
+docker_run = docker.bake("run", "-d", "--net=none")
+mkdir_p = mkdir.bake('-p')
+fig = sh.Command("./fig")
+fig_master = fig.bake("-p calico", "-f", "master.yml")
+fig_node = fig.bake("-p calico", "-f", "node.yml")
 
 HOSTNAME = socket.gethostname()
 
@@ -152,7 +165,7 @@ def validate_arguments(arguments):
     return True
 
 def configure_bird(peers):
-    # TODO Config -p calico shouldn't live here. Bird config should live with bird and another process in the
+    # TODO Config shouldn't live here. Bird config should live with bird and another process in the
     # bird container (which should process felix.txt)
     neighbours = ""
     for peer in peers:
@@ -185,37 +198,37 @@ def configure_master_components(peers):
     with open('config/acl_manager.cfg', 'w') as f:
         f.write(aclmanager_config)
 
-
 def create_dirs():
-    call("mkdir -p config/data", shell=True)
-    call("mkdir -p /var/log/calico", shell=True)
-
+    mkdir_p("config/data")
+    mkdir_p("/var/log/calico")
 
 def launch(master, peers):
     create_dirs()
-    call("modprobe ip6_tables", shell=True)
-    call("modprobe xt_set", shell=True)
+    modprobe("ip6_tables")
+    modprobe("xt_set")
 
     configure_bird(peers)
     configure_felix(master)
 
-    call("./fig -p calico -f node.yml up -d", shell=True)
+    fig_master("up", "-d")
 
 def status():
-    call("docker ps", shell=True)
+    docker("ps")
 
 def run(ip, group, master, docker_options):
-    # TODO need to tidy up after all this messy networking...
-    docker_command = 'docker run -d --net=none %s' % docker_options
-    cid = check_output(docker_command, shell=True).strip()
+    cid = docker_run(shlex.split(docker_options)).strip()
+
     #Important to print this, since that's what docker run does when running a detached container.
     print cid
-    cpid = check_output("docker inspect -f '{{.State.Pid}}' %s" % cid, shell=True).strip()
+
+    cpid = docker("inspect", "-f", "'{{.State.Pid}}'", cid).strip()
+
     # TODO - need to handle containers exiting straight away...
     iface = "tap" + cid[:11]
     iface_tmp = "tap" + "%s-" % cid[:10]
+
     # Provision the networking
-    call("mkdir -p /var/run/netns", shell=True)
+    mkdir_p("/var/run/netns")
     check_call("ln -s /proc/%s/ns/net /var/run/netns/%s" % (cpid, cpid), shell=True)
 
     # Create the veth pair and move one end into container as eth0 :
@@ -247,25 +260,21 @@ group=%s
     "filename}.txt'".format(config=base_config, host=master, filename=name)
     check_call(command, shell=True)
 
-
 def reset(delete_images):
-    call("./fig -p calico -f master.yml stop", shell=True)
-    call("./fig -p calico -f node.yml stop", shell=True)
+    fig_master("kill")
+    fig_node("kill")
 
-    call("./fig -p calico -f master.yml kill", shell=True)
-    call("./fig -p calico -f node.yml kill", shell=True)
+    fig_master("rm", "--force")
+    fig_node("rm", "--force")
 
-    call("./fig -p calico -f master.yml rm", shell=True)
-    call("./fig -p calico -f node.yml rm", shell=True)
-
-    call("rm -rf config", shell=True)
+    rm("-rf", "config")
 
     if (delete_images):
-        call("docker rmi calico_pluginep", shell=True)
-        call("docker rmi calico_pluginnetwork", shell=True)
-        call("docker rmi calico_bird", shell=True)
-        call("docker rmi calico_felix", shell=True)
-        call("docker rmi calico_aclmanager", shell=True)
+        docker("rmi", "calico_pluginep")
+        docker("rmi", "calico_pluginnetwork")
+        docker("rmi", "calico_bird")
+        docker("rmi", "calico_felix")
+        docker("rmi", "calico_aclmanager")
 
     try:
         interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'", shell=True)
@@ -279,15 +288,15 @@ def reset(delete_images):
 
 def version():
     #TODO call a fig -p calico build here too.
-    call('docker run --rm  -ti calico_felix  apt-cache policy calico-felix', shell=True)
+    print(docker("run", "--rm", "calico_felix", "apt-cache", "policy", "calico-felix"))
+
 
 def master(peers):
     create_dirs()
     configure_master_components(peers)
-    call("./fig -p calico -f master.yml up -d", shell=True)
+    fig_master("up", "-d")
 
 if __name__ == '__main__':
-    import os
     if os.geteuid() != 0:
         print "Calico must be run as root"
     else:
