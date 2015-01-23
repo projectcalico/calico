@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.8
+Version:        0.10.3~rc3
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -217,6 +217,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Jan 23 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.10.3~rc3
+- Add Red Hat 7 support
+- Many code fixes and enhancements
+
 * Fri Nov 21 2014 Neil Jerram <nj@metaswitch.com> 0.8
 - New fixes and enhancements to Felix
   - Clean up code and tidy up ready so that accept default rules can work.

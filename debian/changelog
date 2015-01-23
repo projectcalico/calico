@@ -1,3 +1,13 @@
+calico (0.10.3~rc3) trusty; urgency=medium
+
+  * Add support for Red Hat 7
+  * Fixes and improvements
+    - Change from VIF_TYPE_ROUTED to VIF_TYPE_TAP
+    - Require explicit configuration before starting Felix or ACL Manager
+    - Correct installation of *.cfg example files
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Fri, 23 Jan 2015 11:20:14 +0000
+
 calico (0.10.3~rc2) trusty; urgency=medium
 
   * Further Felix code fixes:
