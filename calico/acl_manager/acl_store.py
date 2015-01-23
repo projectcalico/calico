@@ -25,7 +25,7 @@ class ACLStore(object):
     def __init__(self):
         """
         Create a new ACL Store.
-        
+
         An ACL Store stores a set of ACL rules, and publishes those rules when
         they change or it is queried.
         """
@@ -38,32 +38,32 @@ class ACLStore(object):
         self.worker_thread = Thread(target = self.worker_thread_loop)
         self.acl_publisher = acl_publisher
         self.worker_thread.start()
-        
+
     def stop(self):
         """Stop the ACL Store.  start() must have been called previously."""
         self.queue.put(("terminate",))
         self.worker_thread.join()
-        
+
     def query_endpoint_rules(self, endpoint_uuid):
         """
         Notify the ACL Store that a query has been received for an endpoint.
-        
+
         The ACL Store will respond asynchronously by publishing an update for
         that endpoint.  This method is thread-safe.
         """
         log.debug("Query received for endpoint UUID %s" % endpoint_uuid)
         self.queue.put(("query_endpoint", endpoint_uuid))
-        
+
     def update_endpoint_rules(self, endpoint_uuid, rules):
         """
         Pass updated rules information to the ACL Store.
-        
+
         The ACL Store will update its stored state for that endpoint, and
         publish an update for it.  This method is thread-safe.
         """
         # At present there is no way to remove a deleted endpoint.
         self.queue.put(("update_endpoint", endpoint_uuid, rules))
-        
+
     def worker_thread_loop(self):
         continue_working = True
         while continue_working:
@@ -77,15 +77,15 @@ class ACLStore(object):
                 self.worker_publish_update(work_params[1])
             elif work_type == "update_endpoint":
                 self.worker_update_endpoint(work_params[1], work_params[2])
-            else:
+            else:  # pragma: no cover
                 log.error("Exception: invalid ACLStore work type %s" %
                           work_type)
                 raise Exception("Invalid ACLStore work type",
                                 work_type,
                                 params)
-            
+
             self.queue.task_done()
-            
+
     def worker_publish_update(self, endpoint_uuid):
         log.debug("ACL Store work: publish ACLs for endpoint %s" %
                   endpoint_uuid)
@@ -104,5 +104,5 @@ class ACLStore(object):
                   endpoint_uuid)
 
         self.endpoint_acls[endpoint_uuid] = rules
-        
+
         self.worker_publish_update(endpoint_uuid)

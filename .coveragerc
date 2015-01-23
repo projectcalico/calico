@@ -1,4 +1,4 @@
 [run]
-include = *felix*
-omit = calico/felix/test/*
+include = *felix*,*acl_manager*
+omit = calico/felix/test/*,calico/acl_manager/test/*
 branch = True
