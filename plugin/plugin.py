@@ -19,10 +19,12 @@ if sys.argv[1].startswith("e") or sys.argv[0].startswith("E"):
     endpoint = True
     name = "endpoint"
     print "Doing endpoint API only"
+    logfile = "/var/log/calico/plugin_ep.log"
 elif sys.argv[1].startswith("n") or sys.argv[0].startswith("N"):
     endpoint = False
     name = "network"
     print "Doing network API only"
+    logfile = "/var/log/calico/plugin_net.log"
 else:
     print "Need one arg, endpoint or network"
     exit(1)
@@ -36,11 +38,19 @@ log.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
 handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.ERROR)
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
+handler = logging.handlers.TimedRotatingFileHandler(logfile,
+                                                    when='D',
+                                                    backupCount=10)
 handler.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
 log.addHandler(handler)
 
 log.error("Starting up Docker demo %s plugin", name)
+
 config_path = "/config/data"
 
 

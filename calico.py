@@ -48,7 +48,7 @@ import socket
 HOSTNAME = socket.gethostname()
 
 BIRD_TEMPLATE = Template("""router id $ip;
-#log "/var/log/bird/bird.log" all;
+log "/var/log/calico/bird.log" all;
 
 # Configure synchronization between routing tables and kernel.
 protocol kernel {
@@ -112,13 +112,13 @@ MetadataAddr  = None
 
 [log]
 # Log file path. If LogFilePath is not set, felix will not log to file.
-#LogFilePath = /var/log/calico/felix.log
+LogFilePath = /var/log/calico/felix.log
 
 # Log severities for the Felix log and for syslog.
 #   Valid levels: NONE (no logging), DEBUG, INFO, WARNING, ERROR, CRITICAL
-#LogSeverityFile   = INFO
+LogSeverityFile   = DEBUG
 #LogSeveritySys    = ERROR
-LogSeverityScreen = DEBUG
+LogSeverityScreen = CRITICAL
 
 [connection]
 # Time with no data on a connection after which we give up on the
@@ -138,13 +138,13 @@ PluginAddress = $ip
 [log]
 # Log file path.
 # Log file path. If LogFilePath is not set, acl_manager will not log to file.
-#LogFilePath = /var/log/calico/acl_manager.log
+LogFilePath = /var/log/calico/acl_manager.log
 
 # Log severities for the Felix log and for syslog.
 #   Valid levels: NONE (no logging), DEBUG, INFO, WARNING, ERROR, CRITICAL
-#LogSeverityFile   = INFO
+LogSeverityFile   = DEBUG
 #LogSeveritySys    = ERROR
-LogSeverityScreen = DEBUG
+LogSeverityScreen = CRITICAL
 """)
 
 def validate_arguments(arguments):
@@ -186,8 +186,13 @@ def configure_master_components(peers):
         f.write(aclmanager_config)
 
 
-def launch(master, peers):
+def create_dirs():
     call("mkdir -p config/data", shell=True)
+    call("mkdir -p /var/log/calico", shell=True)
+
+
+def launch(master, peers):
+    create_dirs()
     call("modprobe ip6_tables", shell=True)
     call("modprobe xt_set", shell=True)
 
@@ -277,7 +282,7 @@ def version():
     call('docker run --rm  -ti calico_felix  apt-cache policy calico-felix', shell=True)
 
 def master(peers):
-    call("mkdir -p config/data", shell=True)
+    create_dirs()
     configure_master_components(peers)
     call("./fig -p calico -f master.yml up -d", shell=True)
 

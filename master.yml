@@ -1,7 +1,7 @@
 pluginnetwork:
     build: plugin 
     volumes:
-     - /var/log/calico
+     - /var/log/calico:/var/log/calico
      - config:/config
     net: "host"
     privileged: true
@@ -11,7 +11,7 @@ pluginnetwork:
 pluginep:
     build: plugin
     volumes:
-     - /var/log/calico
+     - /var/log/calico:/var/log/calico
      - config:/config
     net: "host"
     privileged: true
@@ -22,6 +22,7 @@ pluginep:
 aclmanager:
     build: felix
     volumes:
+     - /var/log/calico:/var/log/calico
      - config:/config
     net: "host"
     privileged: true
