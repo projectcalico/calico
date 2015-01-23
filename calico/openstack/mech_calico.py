@@ -510,7 +510,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             #* Sleep until time for next heartbeat.                          *#
             #*****************************************************************#
-            LOG.info("Felix-HEARTBEAT [%s]: sleep until next heartbeat"
+            LOG.info("Felix-HEARTBEAT [%s]: sleep till time for next heartbeat"
                      % hostname)
             eventlet.sleep(HEARTBEAT_SEND_INTERVAL_SECS)
 
@@ -527,9 +527,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             try:
                 sock.send_json({'type': 'HEARTBEAT'}, zmq.NOBLOCK)
-                LOG.info("Heartbeat sent")
+                LOG.info("HEARTBEAT sent to Felix on %s" % hostname)
             except:
-                LOG.exception("Exception sending ENDPOINT* request to Felix")
+                LOG.exception("Exception sending HEARTBEAT to Felix on %s"
+                              % hostname)
                 self._clear_socket_to_felix_peer(hostname)
                 return
 
@@ -543,11 +544,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 sock.poll(HEARTBEAT_RESPONSE_TIMEOUT)
                 rsp = sock.recv_json(zmq.NOBLOCK)
                 if rsp['type'] == 'HEARTBEAT':
-                    LOG.info("Heartbeat response: %s" % rsp)
+                    LOG.info("HEARTBEAT response from Felix on %s: %s"
+                             % (hostname, rsp))
                 else:
-                    LOG.error("Unexpected response: %s" % rsp)
+                    LOG.error("Unexpected response from Felix on %s: %s"
+                              % (hostname, rsp))
             except:
-                LOG.exception("Exception receiving heartbeat from Felix")
+                LOG.exception("Exception receiving HEARTBEAT from Felix on %s"
+                              % hostname)
                 self._clear_socket_to_felix_peer(hostname)
                 return
 
@@ -567,7 +571,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             #* Sleep until time for next heartbeat.                          *#
             #*****************************************************************#
-            LOG.info("Network-HEARTBEAT: sleep until next heartbeat")
+            LOG.info("Network-HEARTBEAT: sleep till time for next heartbeat")
             eventlet.sleep(HEARTBEAT_SEND_INTERVAL_SECS)
 
             #*****************************************************************#
@@ -579,9 +583,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.acl_pub_socket.send_multipart(
                     ['networkheartbeat'.encode('utf-8'),
                      json.dumps(pub).encode('utf-8')])
-                LOG.info("Heartbeat sent")
+                LOG.info("HEARTBEAT published to ACL managers")
             except:
-                LOG.exception("Exception sending HEARTBEAT to ACL managers")
+                LOG.exception("Exception publishing HEARTBEAT to ACL managers")
                 return
 
     def acl_get_thread(self):
