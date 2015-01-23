@@ -10,7 +10,7 @@ export CALICODEPS = none
 
 override_dh_install:
 	install -d debian/tmp/usr/etc/calico
-	install etc/*.cfg debian/tmp/usr/etc/calico
+	install etc/*.cfg.example debian/tmp/usr/etc/calico
 	install -d debian/tmp/usr/share/calico/bird
 	install etc/bird/*.template debian/tmp/usr/share/calico/bird
 	install -d debian/tmp/usr/bin
