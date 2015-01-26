@@ -195,8 +195,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         eventlet.spawn_n(self.felix_router_thread)
 
         #*********************************************************************#
-        #* Spawn green thread for handling GETGROUPS and GETRULES requests   *#
-        #* on the ACL-GET socket.                                            *#
+        #* Spawn green thread for handling GETGROUPS requests on the ACL-GET *#
+        #* socket.                                                           *#
         #*********************************************************************#
         eventlet.spawn_n(self.acl_get_thread)
 
