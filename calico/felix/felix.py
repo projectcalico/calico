@@ -614,6 +614,10 @@ class FelixAgent(object):
                     endpoint_resync_needed = True
                 elif sock.type == Socket.TYPE_ACL_SUB:
                     acl_resync_needed = True
+                elif sock.type == Socket.TYPE_EP_REQ:
+                    if self.resync_id is not None:
+                        # The resync we were doing has officially failed.
+                        self.complete_endpoint_resync(False)
 
                 # Recreate the socket.
                 sock.communicate(self.hostname, self.zmq_context)
