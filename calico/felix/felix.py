@@ -600,8 +600,7 @@ class FelixAgent(object):
             #* resynchronised.                                               *#
             #*****************************************************************#
             if sock.timed_out():
-                log.warning("Socket %s timed out", sock.type)
-                sock.close()
+                log.error("Lost connection to remote entity : %s", sock.desc)
 
                 #*************************************************************#
                 #* If we lost the connection on which we would receive       *#
@@ -620,7 +619,7 @@ class FelixAgent(object):
                         self.complete_endpoint_resync(False)
 
                 # Recreate the socket.
-                sock.communicate(self.hostname, self.zmq_context)
+                sock.restart(self.hostname, self.zmq_context)
 
         # Now, check if we need to resynchronize and do it.
         if (self.resync_id is None and

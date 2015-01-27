@@ -47,6 +47,7 @@ class Socket(object):
     REQUEST_TYPES = set((TYPE_EP_REQ, TYPE_ACL_REQ))
     ACL_TYPES = set((TYPE_ACL_REQ, TYPE_ACL_SUB))
     EP_TYPES = set((TYPE_EP_REQ, TYPE_EP_REP))
+    RESTART_TYPES = set((TYPE_EP_REQ, TYPE_ACL_REQ, TYPE_ACL_SUB))
 
     PORT = {TYPE_EP_REQ:  9901,
             TYPE_EP_REP:  9902,
@@ -81,6 +82,15 @@ class Socket(object):
 
         self._subscriptions = set()
 
+        if type == Socket.TYPE_EP_REQ:
+            self.descr = "endpoint API RESYNCSTATE to plugin %s" % self._remote_addr
+        elif type == Socket.TYPE_EP_REP:
+            self.descr = "endpoint API ENDPOINTCREATED connection from plugin"
+        elif type == Socket.TYPE_ACL_REQ:
+            self.descr = "network API GETACLSTATE connection to ACL Manager %s" % self._remote_addr
+        else:
+            self.descr = "network API subscription connection to ACL Manager %s" % self._remote_addr
+
     def subscribe(self, ep_id):
         """
         Subscribe to an endpoint
@@ -102,7 +112,8 @@ class Socket(object):
         if self._zmq is not None:
             self._zmq.close()
             self._zmq = None
-        
+
+        # We do this again in communicate, but no harm in doing it here too.
         if self._send_queue is not None:
             self._send_queue.clear()
 
@@ -219,10 +230,20 @@ class Socket(object):
     def timed_out(self):
         """
         Returns True if the socket has been inactive for at least the timeout;
-        all sockets must have heartbeats on them.
+        all sockets must have keepalives on them.
         """
         return ((futils.time_ms() - self._last_activity) >
                 self.config.CONN_TIMEOUT_MS)
+
+    def restart(self, hostname, context):
+        """
+        Restart the socket. This only restarts the underlying socket if it is
+        valid to do so; we should restart connections on which we connect, not
+        to which we bind.
+        """
+        if self in Socket.RESTART_TYPES:
+            self.close()
+            self.communicate(hostname, context)
 
     def keepalive(self):
         """
@@ -234,7 +255,6 @@ class Socket(object):
                           self.config.CONN_KEEPALIVE_MS)     ):
             # Time for a keepalive
             self.send(Message(Message.TYPE_HEARTBEAT, {}))
-
 
 class Message(object):
     """This represents a message either sent or received by Felix."""
