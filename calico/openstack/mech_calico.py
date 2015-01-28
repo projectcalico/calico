@@ -789,4 +789,3 @@ class CalicoNotifierProxy(object):
         LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
         self.calico_driver.send_sg_updates(sgids, context)
         self.ml2_notifier.security_groups_member_updated(context, sgids)
-
