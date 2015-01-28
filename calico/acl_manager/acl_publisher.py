@@ -26,7 +26,7 @@ MANAGER_ACLGET_PORT = "9905"
 MANAGER_ACLPUB_PORT = "9906"
 
 
-class ACLPublisher:
+class ACLPublisher(object):
     """
     Implements the Calico ACL API.
 
