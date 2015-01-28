@@ -232,7 +232,7 @@ class Socket(object):
         Returns True if the socket has been inactive for at least the timeout;
         all sockets must have keepalives on them.
         """
-        return ((futils.time_ms() - self._last_activity) >
+        return ((futils.time_ms() - self._last_activity) >=
                 self.config.CONN_TIMEOUT_MS)
 
     def restart(self, hostname, context):
@@ -249,11 +249,12 @@ class Socket(object):
         """
         Send a keepalive if and only if we need to send one.
         """
-        if ((type in Socket.REQUEST_TYPES              ) and
+        if ((self.type in Socket.REQUEST_TYPES         ) and
             (not self._request_outstanding             ) and
             (futils.time_ms() - self._last_activity >
                           self.config.CONN_KEEPALIVE_MS)     ):
             # Time for a keepalive
+            log.debug("Sending keepalive on socket %s", self.type)
             self.send(Message(Message.TYPE_HEARTBEAT, {}))
 
 class Message(object):

@@ -190,8 +190,8 @@ class Context(object):
 
     def sent_data_present(self):
         """
-        Return True if any sent_data is present. Used to validate that only
-        expected data is there.
+        Return a True result if any sent_data is present. Used to validate that
+        only expected data is there.
         """
         for socket_type in self.sent_data:
             if self.sent_data[socket_type]:
