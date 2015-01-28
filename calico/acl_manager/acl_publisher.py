@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import binascii
 import logging
 import zmq
 import time
@@ -92,7 +93,10 @@ class ACLPublisher:
             query = json.loads(message[2].decode('utf-8'))
             peer = message[0]
             assert ("type" in query)
-            log.info("ACL Manager received packet %s from %s", query, peer)
+            log.info(
+                "ACL Manager received packet %s from %s",
+                query, binascii.hexlify(peer)
+            )
 
             if query["type"] == "GETACLSTATE":
                 endpoint = query["endpoint_id"]
