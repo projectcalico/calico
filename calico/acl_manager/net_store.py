@@ -17,21 +17,21 @@ import logging
 
 log = logging.getLogger(__name__)
 
-    
+
 class NetworkStore(object):
 
     def __init__(self):
         """
         Create a new Network Store.
-        
+
         None of the Network Store's methods are thread-safe.
         """
         log.debug("Creating Network Store object")
         self.groups = []
         self.group_members = {}
         self.group_rules = {}
-        self.rule_processors = []
-        
+        self.rule_processor = None
+
     def get_groups(self):
         """
         Returns the list of group UUIDs known to the Network Store.
@@ -41,12 +41,12 @@ class NetworkStore(object):
         # recalculating those.  In this release, efficiency is not a concern,
         # so just recalculate everything whenever anything changes.
         return self.groups
-    
+
     def get_group_members(self, group_uuid):
         """
         Returns a dictionary mapping the group's members' UUIDs to the IP
         addresses that endpoint has.
-        
+
         This method is safe to call even for non-existent groups, in which case
         it will return an empty dictionary.
         """
@@ -59,7 +59,7 @@ class NetworkStore(object):
             # rules.
             log.debug("Group %s contains no members" % group_uuid)
             return {}
-    
+
     def get_group_rules(self, group_uuid):
         """
         Returns a rules object for the group, as specified on the Calico
@@ -69,19 +69,23 @@ class NetworkStore(object):
         assert group_uuid in self.group_rules
         assert group_uuid in self.group_members
         return self.group_rules[group_uuid]
-        
+
     def add_processor(self, rule_processor):
         """
         Associate a Rule Processor with a Network Store.  The Network Store
         will call into the Rule Processor every time the network state changes.
+
+        The Network Store only supports a single Rule Processor, and one must
+        be provided before update_group is called.
         """
-        self.rule_processors.append(rule_processor)
-        
+        assert self.rule_processor is None
+        self.rule_processor = rule_processor
+
     def update_group(self, group_uuid, members, rules):
         """
         Update the Network information for a group.  Updating a group to have
         no members deletes the group.
-        
+
         - group_uuid: The UUID of the group to update
         - members: A dictionary of endpoint_uuid => [that endpoint's IPs]
         - rules: A rules object, as defined on the Calico Network API
@@ -97,11 +101,11 @@ class NetworkStore(object):
             if group_uuid not in self.group_members:
                 log.info("Storing new group %s" % group_uuid)
                 self.groups.append(group_uuid)
-            
+
             self.group_members[group_uuid] = members
             self.group_rules[group_uuid] = rules
-            
+
         # Now reprocess all the group information.  In the current
         # implementation no indication of what has changed is provided.
-        for proc in self.rule_processors:
-            proc.recalc_rules()
+        assert self.rule_processor is not None
+        self.rule_processor.recalc_rules()

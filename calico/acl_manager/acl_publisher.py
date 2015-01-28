@@ -28,16 +28,16 @@ MANAGER_ACLPUB_PORT = "9906"
 class ACLPublisher:
     """
     Implements the Calico ACL API.
-    
+
     Responsible for transmitting ACL information from an ACL Store to Felixes.
     The ACL Publisher owns the ZeroMQ sockets that transport the API.
     """
 
     def __init__(self, context, acl_store, local_address):
         log.debug("Creating ACL Publisher")
-        
+
         self.acl_store = acl_store
-        
+
         # Create REP socket, used to receive ACL state requests from Felix.
         log.debug("Creating Publisher REP socket")
         self.router_socket = context.socket(zmq.ROUTER)
@@ -49,15 +49,15 @@ class ACLPublisher:
         self.pub_socket = context.socket(zmq.PUB)
         self.pub_socket.bind("tcp://%s:%s" %
                              (local_address, MANAGER_ACLPUB_PORT))
-        
+
         # Create a lock to protect the PUB socket.
         self.pub_lock = Lock()
-        
+
         # Start publish heartbeat worker thread.
         log.debug("Starting ACL heartbeat sending loop")
         self.heartbeat_thread = Thread(target = self.heartbeat_thread_func)
         self.heartbeat_thread.start()
-        
+
         # Start query worker thread.
         log.debug("Starting Publisher query receive loop")
         self.query_thread = Thread(target = self.query_thread_func)
@@ -65,7 +65,7 @@ class ACLPublisher:
 
     def publish_endpoint_acls(self, endpoint_uuid, acls):
         """Publish a set of ACL rules for an endpoint.
-        
+
         This method is thread-safe.
         """
         log.info("Publishing ACL Update %s for %s" % (acls, endpoint_uuid))
@@ -76,11 +76,11 @@ class ACLPublisher:
         self.pub_socket.send_multipart([endpoint_uuid.encode("utf-8"),
                                         json.dumps(update).encode("utf-8")])
         self.pub_lock.release()
-        
+
     def query_thread_func(self):
         """Query receive loop.
-        
-        Monitors the ROUTER socket for incoming queries and passes them on to 
+
+        Monitors the ROUTER socket for incoming queries and passes them on to
         the ACL Store, which will asynchronously respond by calling back into
         publish_endpoint_acls() to send the update containing the ACL state.
         """
@@ -105,7 +105,7 @@ class ACLPublisher:
                 log.warning("Received query %s of unknown type" % query)
                 query["rc"] = "FAILURE"
                 query["message"] = "Unknown message type: expected GETACLSTATE"
-            
+
             log.debug("Sending response message: %s, %s" %
                                      (peer, json.dumps(query).encode("utf-8")))
             self.router_socket.send_multipart(
@@ -113,10 +113,10 @@ class ACLPublisher:
                  "",
                  json.dumps(query).encode("utf-8"))
             )
-            
+
     def heartbeat_thread_func(self):
         """ACL update socket heartbeat publishing loop.
-        
+
         Sends a heartbeat to the aclheartbeat subscription on the PUB socket
         every 30 seconds.
         """
@@ -129,7 +129,7 @@ class ACLPublisher:
                                             heartbeat.encode("utf-8")])
             self.pub_lock.release()
             log.debug("Sent ACL heartbeat")
-            
+
             # In a perfect world this should subtract the time spent waiting
             # for the lock and sending the packet.  For the moment, in normal
             # operation this will suffice.
