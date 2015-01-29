@@ -444,7 +444,6 @@ class TestTimings(unittest.TestCase):
         log.debug("Resync request : %s" % resync_req)
         self.assertFalse(context.sent_data[TYPE_EP_REQ])
 
-
     def test_keepalives(self):
         """
         Test that keepalives are sent.
@@ -694,6 +693,38 @@ class TestTimings(unittest.TestCase):
             acl_req = context.sent_data[TYPE_ACL_REQ].pop()
             self.assertEqual(acl_req['type'], "GETACLSTATE")
 
+
+        #*********************************************************************#
+        #* There should be no more messages - i.e. just the 5.               *#
+        #*********************************************************************#
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+        self.assertFalse(context.sent_data_present())
+
+        #*********************************************************************#
+        #* Make the ACL REQ connection go away, with similar results.        *#
+        #*********************************************************************#
+        agent.sockets[TYPE_ACL_REQ]._last_activity = 0
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            if sock.type == TYPE_ACL_REQ:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        for i in range(1,6):
+            acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+            self.assertEqual(acl_req['type'], "GETACLSTATE")
+
+            poll_result = context.add_poll_result(120000)
+            poll_result.add(TYPE_ACL_REQ,
+                            {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': ""})
+
+            agent.run()      
+
     def test_queues(self):
         """
         Test queuing.
@@ -806,9 +837,74 @@ class TestTimings(unittest.TestCase):
         """
         Test timeouts during resyncs
         """
-        pass
-        # xxx
-        # include time out with keepalive outstanding, time out with resync outstanding
+        common.default_logging()
+        context = stub_zmq.Context()
+        stub_utils.set_time(100000)
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        sock_zmq = {}
+        for sock in agent.sockets.values():
+            sock_zmq[sock] = sock._zmq
+
+        # Get started.
+        context.add_poll_result(100000)
+        agent.run()
+
+        # Check resync is there, throw it away.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(resync_req['type'], "RESYNCSTATE")
+        resync_id = resync_req['resync_id']
+        self.assertFalse(context.sent_data_present())
+
+        # Force resync to be replaced by tearing down EP_REQ when outstanding.
+        agent.sockets[TYPE_EP_REQ]._last_activity = 0
+        context.add_poll_result(100000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            log.debug("Check socket %s", sock.type)
+            if sock.type == TYPE_EP_REQ:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # As if by magic, another resync has appeared.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(resync_req['type'], "RESYNCSTATE")
+        self.assertNotEqual(resync_req['resync_id'], resync_id)
+        resync_id = resync_req['resync_id']
+        self.assertFalse(context.sent_data_present())
+
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': 0,
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result = context.add_poll_result(100000)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        # Force another resync by timing out the EP_REP connection.
+        agent.sockets[TYPE_EP_REP]._last_activity = 0
+        context.add_poll_result(100000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # As if by magic, another resync has appeared.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(resync_req['type'], "RESYNCSTATE")
+        self.assertNotEqual(resync_req['resync_id'], resync_id)
+        resync_id = resync_req['resync_id']
+        self.assertFalse(context.sent_data_present())
+
 
 def get_blank_acls():
     """

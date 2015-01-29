@@ -616,17 +616,24 @@ class FelixAgent(object):
                     #* need a total endpoint update.                         *#
                     #*********************************************************#
                     endpoint_resync_needed = True
-                elif sock.type == Socket.TYPE_ACL_SUB:
+                elif (sock.type == Socket.TYPE_ACL_SUB or
+                      sock.type == Socket.TYPE_ACL_REQ):
                     #*********************************************************#
                     #* We lost the connection on which we would receive      *#
-                    #* ACLUPDATE messages. We may be out of step, so we need *#
-                    #* a total ACL resync.                                   *#
+                    #* ACLUPDATE messages, or might have lost some queued    *#
+                    #* GETACLSTATE messages. We may be out of step, so we    *#
+                    #* need a total ACL resync.                              *#
                     #*********************************************************#
                     acl_resync_needed = True
                 elif sock.type == Socket.TYPE_EP_REQ:
                     if self.resync_id is not None:
-                        # The resync we were doing has officially failed.
+                        #*****************************************************#
+                        #* The resync we were doing has officially           *#
+                        #* failed. We'll retry when the connection comes     *#
+                        #* back.                                             *#
+                        #*****************************************************#
                         self.complete_endpoint_resync(False)
+                        endpoint_resync_needed = True
 
                 # Recreate the socket.
                 sock.restart(self.hostname, self.zmq_context)

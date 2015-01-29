@@ -127,7 +127,7 @@ class StubSocket(object):
         return (self.uuid, self.msg)
 
     def close(self):
-        pass
+        del self.context.sent_data[self.type][:]
 
 class Poller(object):
     def __init__(self):
