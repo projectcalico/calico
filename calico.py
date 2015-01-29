@@ -51,6 +51,7 @@ from sh import mkdir
 from sh import docker
 from sh import modprobe
 from sh import rm
+import requests
 
 docker_run = docker.bake("run", "-d", "--net=none")
 mkdir_p = mkdir.bake('-p')
@@ -202,6 +203,10 @@ def create_dirs():
     mkdir_p("config/data")
     mkdir_p("/var/log/calico")
 
+import sys
+def process_output(line):
+    sys.stdout.write(line)
+
 def launch(master, peers):
     create_dirs()
     modprobe("ip6_tables")
@@ -209,11 +214,11 @@ def launch(master, peers):
 
     configure_bird(peers)
     configure_felix(master)
-
-    fig_master("up", "-d")
+    p = fig_node("up", "-d", _err=process_output, _out=process_output)
+    p.wait()
 
 def status():
-    docker("ps")
+    print(docker("ps"))
 
 def run(ip, group, master, docker_options):
     cid = docker_run(shlex.split(docker_options)).strip()
@@ -254,22 +259,25 @@ host=%s
 group=%s
 """ % (name, cid, ip, mac, HOSTNAME, group)
 
-    #copy the file to master
-    command = "echo '{config}' | ssh -o 'StrictHostKeyChecking no' {host} 'cat " \
-              ">/home/core/config/data/{" \
-    "filename}.txt'".format(config=base_config, host=master, filename=name)
-    check_call(command, shell=True)
+    # Send the file to master
+    headers = {'content-type': 'application/json'}
+    r = requests.post("http://{host}:5000/upload/{filename}.txt".format(host=master,
+                                                                        filename=name),
+                      data=base_config, headers=headers)
 
 def reset(delete_images):
+    print "Killing and removing Calico containers"
     fig_master("kill")
     fig_node("kill")
 
     fig_master("rm", "--force")
     fig_node("rm", "--force")
 
+    print "Deleting all config"
     rm("-rf", "config")
 
     if (delete_images):
+        print "Deleting images"
         docker("rmi", "calico_pluginep")
         docker("rmi", "calico_pluginnetwork")
         docker("rmi", "calico_bird")
@@ -294,7 +302,8 @@ def version():
 def master(peers):
     create_dirs()
     configure_master_components(peers)
-    fig_master("up", "-d")
+    p = fig_master("up", "-d", _err=process_output, _out=process_output)
+    p.wait()
 
 if __name__ == '__main__':
     if os.geteuid() != 0:

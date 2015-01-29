@@ -1,5 +1,14 @@
-# This is a dummy plugin. It takes a file, loads it all up, then throws it over
-# the interfaces.
+"""plugin.py
+
+Usage:
+  plugin.py [options] endpoint
+  plugin.py [options] network
+
+Options:
+    --config-dir=DIR   Config directory [default: /config/data]
+    --log-dir=DIR      Log directory [default: /var/log/calico]
+
+"""
 import ConfigParser
 import json
 import logging
@@ -8,56 +17,33 @@ import os
 import sys
 import time
 import zmq
+from docopt import docopt
 
-args = sys.argv
-
-if len(sys.argv) != 2:
-    print "Not enough command line args - need one arg, endpoint or network"
-    exit(1)
-
-if sys.argv[1].startswith("e") or sys.argv[0].startswith("E"):
-    endpoint = True
-    name = "endpoint"
-    print "Doing endpoint API only"
-    logfile = "/var/log/calico/plugin_ep.log"
-elif sys.argv[1].startswith("n") or sys.argv[0].startswith("N"):
-    endpoint = False
-    name = "network"
-    print "Doing network API only"
-    logfile = "/var/log/calico/plugin_net.log"
-else:
-    print "Need one arg, endpoint or network"
-    exit(1)
 
 zmq_context = zmq.Context()
-
-# Logging
 log = logging.getLogger(__name__)
 
-log.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
 
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.ERROR)
-handler.setFormatter(formatter)
-log.addHandler(handler)
-
-handler = logging.handlers.TimedRotatingFileHandler(logfile,
-                                                    when='D',
-                                                    backupCount=10)
-handler.setLevel(logging.DEBUG)
-handler.setFormatter(formatter)
-log.addHandler(handler)
-
-log.error("Starting up Docker demo %s plugin", name)
-
-config_path = "/config/data"
+def setup_logging(logfile):
+    log.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.ERROR)
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+    handler = logging.handlers.TimedRotatingFileHandler(logfile,
+                                                        when='D',
+                                                        backupCount=10)
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
 
 
 class Endpoint:
     """
     Endpoint as seen by the plugin. Enough to know what to put in an endpoint created message.
     """
+
     def __init__(self, id, mac, ip, group):
         self.id = id
         self.mac = mac
@@ -65,13 +51,12 @@ class Endpoint:
         self.group = group
 
 
-#*****************************************************************************#
-#* Global variables for system state. These will be set up in load_files.    *#
-#*****************************************************************************#
+# Global variables for system state. These will be set up in load_files.
 eps_by_host = dict()
-felix_ip    = dict()
-all_groups  = dict()
+felix_ip = dict()
+all_groups = dict()
 last_resync = dict()
+
 
 def strip(data):
     # Remove all from the first dot onwards
@@ -79,6 +64,7 @@ def strip(data):
     if index > 0:
         data = data[0:index]
     return data
+
 
 def load_files(config_path):
     """
@@ -100,10 +86,7 @@ def load_files(config_path):
     for section in parser.sections():
         items = dict(parser.items(section))
         if section.lower().startswith("endpoint"):
-            #*****************************************************************#
-            #* Endpoint. Note that we just fall over if there are missing    *#
-            #* lines.                                                        *#
-            #*****************************************************************#
+            # Endpoint. Note that we just fall over if there are missing lines.
             id = items['id']
             mac = items['mac']
             ip = items['ip']
@@ -131,6 +114,7 @@ def load_files(config_path):
 
     return
 
+
 def do_ep_api():
     # Create the EP REP socket
     resync_socket = zmq_context.socket(zmq.REP)
@@ -143,14 +127,12 @@ def do_ep_api():
     # host.
     create_sockets = {}
 
-    #*************************************************************************#
-    #* Wait for a resync request, and send the response. Note that Felix is  *#
-    #* expected to just send us a resync every now and then; it will do this *#
-    #* because it keeps timing out our connections.                          *#
-    #*************************************************************************#
+    # Wait for a resync request, and send the response. Note that Felix is
+    # expected to just send us a resync every now and then; it will do this 
+    # because it keeps timing out our connections.                          
     while True:
         try:
-            data   = resync_socket.recv()
+            data = resync_socket.recv()
             fields = json.loads(data)
             log.debug("Got %s EP msg : %s" % (fields['type'], fields))
         except zmq.error.Again:
@@ -158,7 +140,7 @@ def do_ep_api():
             fields = {'type': ""}
 
         # Reload config files.
-        load_files(config_path)
+        load_files(config_dir)
 
         if fields['type'] == "RESYNCSTATE":
             resync_id = fields['resync_id']
@@ -171,12 +153,10 @@ def do_ep_api():
             log.debug("Sending %s EP msg : %s" % (fields['type'], rsp))
             last_resync[host] = int(time.time())
 
-            #*****************************************************************#
-            #* Sleep for a second while that response gets through.  This is *#
-            #* not required with the latest Felix, but avoids a bug (now     *#
-            #* fixed) where the RESYNC response must arrive before the       *#
-            #* ENDPOINTCREATED.                                              *#
-            #*****************************************************************#
+            # Sleep for a second while that response gets through.  This is 
+            # not required with the latest Felix, but avoids a bug (now     
+            # fixed) where the RESYNC response must arrive before the       
+            # ENDPOINTCREATED.                                              
             time.sleep(1)
 
             send_all_eps(create_sockets, host, resync_id)
@@ -199,7 +179,7 @@ def do_ep_api():
             else:
                 create_socket = create_sockets[host]
                 msg = {"type": "HEARTBEAT",
-                       "issued": int(time.time()* 1000)}
+                       "issued": int(time.time() * 1000)}
                 log.debug("Sending KEEPALIVE to %s : %s" % (host, msg))
                 create_socket.send(json.dumps(msg))
                 create_socket.recv()
@@ -225,7 +205,7 @@ def send_all_eps(create_sockets, host, resync_id):
                "mac": ep.mac,
                "endpoint_id": ep.id,
                "resync_id": resync_id,
-               "issued": int(time.time()* 1000),
+               "issued": int(time.time() * 1000),
                "state": "enabled",
                "addrs": [{"addr": ep.ip}]}
         log.debug("Sending ENDPOINTCREATED to %s : %s" % (host, msg))
@@ -253,16 +233,14 @@ def do_network_api():
     pub_socket.bind("tcp://*:9904")
 
     while True:
-        #*********************************************************************#
-        #* We just hang around waiting until we get a request for all        *#
-        #* groups. If we do not get one within 15 seconds, we just send the  *#
-        #* data anyway. If we never receive anything (even a keepalive)      *#
-        #* we'll never send anything but that doesn't matter; if the ACL     *#
-        #* manager is there it will be sending either GETGROUPS or           *#
-        #* HEARTBEATs.                                                       *#
-        #*********************************************************************#
+        # We just hang around waiting until we get a request for all
+        # groups. If we do not get one within 15 seconds, we just send the  
+        # data anyway. If we never receive anything (even a keepalive)      
+        # we'll never send anything but that doesn't matter; if the ACL     
+        # manager is there it will be sending either GETGROUPS or           
+        # HEARTBEATs.                                                       
         try:
-            data   = rep_socket.recv()
+            data = rep_socket.recv()
             fields = json.loads(data)
             log.debug("Got %s network msg : %s" % (fields['type'], fields))
             if fields['type'] == "GETGROUPS":
@@ -281,7 +259,7 @@ def do_network_api():
             log.debug("No data received")
 
         # Reload config file just in case, before we send all the data.
-        load_files(config_path)
+        load_files(CONFIG_PATH)
 
         # Now send all the data we have on the PUB socket.
         log.debug("Build data to publish")
@@ -290,11 +268,10 @@ def do_network_api():
             # No groups to send; send a keepalive instead so ACL Manager
             # doesn't think we have gone away.
             msg = {"type": "HEARTBEAT",
-                   "issued": int(time.time()* 1000)}
+                   "issued": int(time.time() * 1000)}
             log.debug("Sending network heartbeat %s", msg)
             pub_socket.send_multipart(['networkheartbeat'.encode('utf-8'),
                                        json.dumps(msg).encode('utf-8')])
-
 
         for group in all_groups:
             members = all_groups[group]
@@ -318,8 +295,8 @@ def do_network_api():
 
             data = {"type": "GROUPUPDATE",
                     "group": group,
-                    "rules": rules, # all outbound, inbound from group
-                    "members": members, # all endpoints
+                    "rules": rules,  # all outbound, inbound from group
+                    "members": members,  # all endpoints
                     "issued": int(time.time() * 1000)}
 
             # Send the data to the ACL manager.
@@ -327,20 +304,16 @@ def do_network_api():
             pub_socket.send_multipart(['groups'.encode('utf-8'),
                                        json.dumps(data).encode('utf-8')])
 
+config_dir = ""
 
-def main():
-    # Load files.
-    load_files(config_path)
+if __name__ == '__main__':
+    arguments = docopt(__doc__)
+    config_dir = arguments["--config-dir"]
+    load_files(config_dir)
 
-    if endpoint:
-        # Do what we need to over the endpoint API.
+    if arguments["endpoint"]:
+        setup_logging("%s/plugin_ep.log" % arguments["--log-dir"])
         do_ep_api()
-    else:
-        # Do what we need to over the network API.
+    if arguments["network"]:
+        setup_logging("%s/plugin_net.log" % arguments["--log-dir"])
         do_network_api()
-
-try:
-    main()
-except:
-    log.exception("Terminating on exception")
-    os._exit(1)

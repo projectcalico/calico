@@ -1,3 +1,4 @@
 pyinstaller
 docopt
 sh
+requests
