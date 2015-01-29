@@ -447,7 +447,7 @@ class TestTimings(unittest.TestCase):
 
     def test_keepalives(self):
         """
-        Test that keepalives are sent and connections time out.
+        Test that keepalives are sent.
         """
         common.default_logging()
         context = stub_zmq.Context()
@@ -488,12 +488,10 @@ class TestTimings(unittest.TestCase):
         agent.run()
         self.assertFalse(context.sent_data_present())
 
-        keepalive_rsp = { 'type': "HEARTBEAT",
-                          'rc': "SUCCESS" }
-
         # At time 9000, send the ACL response.
         poll_result = context.add_poll_result(9000)
-        poll_result.add(TYPE_ACL_REQ, keepalive_rsp)
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
         agent.run()
         self.assertFalse(context.sent_data_present())
       
@@ -511,8 +509,190 @@ class TestTimings(unittest.TestCase):
         self.assertTrue(keepalive['type'] == "HEARTBEAT")
         self.assertFalse(context.sent_data_present())
 
-        # OK, send responses then let a timeout occur.
-        # xxx both with and without an outstanding keepalive...
+    def test_timeouts(self):
+        """
+        Test that connections time out correctly.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        # Get started.
+        context.add_poll_result(0)
+        agent.run()
+
+        sock_zmq = {}
+        for sock in agent.sockets.values():
+            sock_zmq[sock] = sock._zmq
+
+        # Now we should have got a resync request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "0",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        # Send keepalives on the connections that expect them
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+        agent.run()
+
+        # Give EP REQ a chance to send a keepalive.
+        context.add_poll_result(10000)
+        agent.run()
+
+        # OK, so now we have some live connections. We let the EP REQ fail
+        # first.
+        context.add_poll_result(10000)
+        agent.run()
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        msg = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        msg = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # And another 20 seconds
+        poll_result = context.add_poll_result(40000)
+        poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+        for sock in agent.sockets.values():
+            # Assert no connections have been restarted.
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # And another - which should lead to EP REQ going pop, and keepalives.
+        context.add_poll_result(60000)
+        agent.run()
+        for sock in agent.sockets.values():
+            if sock.type == TYPE_EP_REQ:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        msg = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        msg = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # That connection that came up should be sending keepalives
+        context.add_poll_result(70000)
+        agent.run()
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # OK, so now time out the EP REP socket. This triggers a resync.
+        poll_result = context.add_poll_result(80000)
+        poll_result.add(TYPE_EP_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+
+        # This is the point where the EP REP socket is going to die.
+        log.debug("EP REP should now trigger resync")
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "RESYNCSTATE")
+        resync_id = msg['resync_id']
+        msg = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+
+        for sock in agent.sockets.values():
+            # Assert no connections have been restarted.
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # OK, so send some messages in response.
+        poll_request = context.add_poll_result(120000)
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "5",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        addrs = [ "2001::%s" + str(i) for i in range(1,6) ]
+        endpoints = []
+        for addr in addrs:
+            endpoint = CreatedEndpoint([addr], resync_id)
+            endpoints.append(endpoint)
+
+            poll_result = context.add_poll_result(120000)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+
+            log.debug("Messages now : %s", context.sent_data)
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        # OK, so get the first two ACL state messages, blocked behind the heartbeat.
+        poll_result = context.add_poll_result(120000)
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+
+        acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(acl_req['type'], "GETACLSTATE")
+        self.assertEqual(acl_req['endpoint_id'], endpoints[0].id)
+
+        poll_result = context.add_poll_result(120000)
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': "" })
+        agent.run()
+
+        acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(acl_req['type'], "GETACLSTATE")
+        self.assertEqual(acl_req['endpoint_id'], endpoints[1].id)
+
+        #*********************************************************************#
+        #* OK, so let's pretend that the ACL SUB connection has gone away.   *#
+        #* We've done keepalives to the Nth degree, so are about to start    *#
+        #* cheating a bit, and will tweak _last_activity in the socket to    *#
+        #* force timeouts to make the test (much) simpler.                   *#
+        #*********************************************************************#
+        agent.sockets[TYPE_ACL_SUB]._last_activity = 0
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            if sock.type == TYPE_ACL_SUB:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        #*********************************************************************#
+        #* The ACL request connection is up, and it should send us 5         *#
+        #* messages. Recall that there is already one outstanding            *#
+        #* GETACLSTATE, so acknowledge that first.                           *#
+        #*********************************************************************#
+        for i in range(1,6):
+            poll_result = context.add_poll_result(120000)
+            poll_result.add(TYPE_ACL_REQ,
+                            {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': ""})
+
+            agent.run()
+
+            acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+            self.assertEqual(acl_req['type'], "GETACLSTATE")
 
     def test_queues(self):
         """

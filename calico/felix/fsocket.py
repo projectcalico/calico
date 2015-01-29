@@ -83,13 +83,17 @@ class Socket(object):
         self._subscriptions = set()
 
         if type == Socket.TYPE_EP_REQ:
-            self.descr = "endpoint API RESYNCSTATE to plugin %s" % self._remote_addr
+            self.descr = ("plugin %s:%s (request connection %s)" %
+                          (self._remote_addr, self._port, self.type))
         elif type == Socket.TYPE_EP_REP:
-            self.descr = "endpoint API ENDPOINTCREATED connection from plugin"
+            self.descr = ("plugin (bound socket %s:%s, %s)" %
+                          (self.config.LOCAL_ADDR, self._port, self.type))
         elif type == Socket.TYPE_ACL_REQ:
-            self.descr = "network API GETACLSTATE connection to ACL Manager %s" % self._remote_addr
+            self.descr = ("ACL Manager %s:%s (request connection %s)" %
+                          (self._remote_addr, self._port, self.type))
         else:
-            self.descr = "network API subscription connection to ACL Manager %s" % self._remote_addr
+            self.descr = ("ACL Manager %s:%s (subscription connection %s)" %
+                          (self._remote_addr, self._port, self.type))
 
     def subscribe(self, ep_id):
         """
@@ -162,10 +166,11 @@ class Socket(object):
         """
         if self._request_outstanding:
             # Request socket with outstanding message; queue it.
+            log.info("Queuing %s on socket %s", msg.descr, self.type)
             self._send_queue.appendleft(msg)
             return
 
-        log.info("Sent %s on socket %s" % (msg.descr, self.type))
+        log.info("Sent %s on socket %s", msg.descr, self.type)
         self._last_activity = futils.time_ms()
 
         #*********************************************************************#
@@ -240,10 +245,16 @@ class Socket(object):
         Restart the socket. This only restarts the underlying socket if it is
         valid to do so; we should restart connections on which we connect, not
         to which we bind.
+
+        The point of calling this method for sockets that it just resets the
+        timer (so that the application layer is not continually being told
+        about a failed connection).
         """
-        if self in Socket.RESTART_TYPES:
+        if self.type in Socket.RESTART_TYPES:
             self.close()
             self.communicate(hostname, context)
+        else:
+            self._last_activity = futils.time_ms()
 
     def keepalive(self):
         """

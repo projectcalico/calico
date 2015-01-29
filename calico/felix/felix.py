@@ -600,7 +600,7 @@ class FelixAgent(object):
             #* resynchronised.                                               *#
             #*****************************************************************#
             if sock.timed_out():
-                log.error("Lost connection to remote entity : %s", sock.desc)
+                log.error("Timed out remote entity : %s", sock.descr)
 
                 #*************************************************************#
                 #* If we lost the connection on which we would receive       *#
@@ -610,8 +610,18 @@ class FelixAgent(object):
                 #* messages.                                                 *#
                 #*************************************************************#
                 if sock.type == Socket.TYPE_EP_REP:
+                    #*********************************************************#
+                    #* We lost the connection on which we would receive      *#
+                    #* ENDPOINTCREATED messages. We may be out of step, so   *#
+                    #* need a total endpoint update.                         *#
+                    #*********************************************************#
                     endpoint_resync_needed = True
                 elif sock.type == Socket.TYPE_ACL_SUB:
+                    #*********************************************************#
+                    #* We lost the connection on which we would receive      *#
+                    #* ACLUPDATE messages. We may be out of step, so we need *#
+                    #* a total ACL resync.                                   *#
+                    #*********************************************************#
                     acl_resync_needed = True
                 elif sock.type == Socket.TYPE_EP_REQ:
                     if self.resync_id is not None:
