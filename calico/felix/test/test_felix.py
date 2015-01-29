@@ -638,7 +638,6 @@ class TestTimings(unittest.TestCase):
             poll_result.add(TYPE_EP_REP, endpoint.create_req)
             agent.run()
 
-            log.debug("Messages now : %s", context.sent_data)
             endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
             self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
 
@@ -837,6 +836,7 @@ class TestTimings(unittest.TestCase):
         """
         Test timeouts during resyncs
         """
+        #TODO: Should include rules and ipsets too.
         common.default_logging()
         context = stub_zmq.Context()
         stub_utils.set_time(100000)
@@ -905,7 +905,120 @@ class TestTimings(unittest.TestCase):
         resync_id = resync_req['resync_id']
         self.assertFalse(context.sent_data_present())
 
+    def test_resync_tidy_up(self):
+        """
+        Check that endpoints are removed where required.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        stub_utils.set_time(100000)
+        agent = felix.FelixAgent(config_path, context)
 
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        poll_result = context.add_poll_result(0)
+        agent.run()
+
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "RESYNCSTATE")
+        resync_id = msg['resync_id']
+
+        # OK, so send some messages in response.
+        poll_result = context.add_poll_result(0)
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "5",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        addrs = [ "2001::%s" + str(i) for i in range(1,6) ]
+        ep_ids = set()
+        endpoints = []
+        for addr in addrs:
+            endpoint = CreatedEndpoint([addr], resync_id)
+            endpoints.append(endpoint)
+            ep_ids.add(endpoint.id)
+
+            poll_result = context.add_poll_result(0)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        # Check that the endpoints are as expected.
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+
+        # Now delete an endpoint.
+        endpoint = endpoints.pop()
+        ep_ids.remove(endpoint.id)
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REP, endpoint.destroy_req)
+        agent.run()
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+
+        # Now force another resync, with different data.
+        agent.sockets[TYPE_EP_REP]._last_activity = -100000
+        poll_result = context.add_poll_result(0)
+        agent.run()
+
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "RESYNCSTATE")
+        resync_id = msg['resync_id']
+
+        # OK, so now we create two more endpoint.
+        new_endpoint = CreatedEndpoint(["1.2.3.4"])
+        ep_ids.add(new_endpoint.id)
+
+        rm_endpoint = endpoints.pop()
+                              
+        poll_result = context.add_poll_result(0)
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "4",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        for endpoint in endpoints:
+            endpoint.create_req['resync_id'] = resync_id
+            poll_result = context.add_poll_result(0)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REP, new_endpoint.create_req)
+        agent.run()
+        endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        #*********************************************************************#
+        #* We have added 4 pre-existing endpoints, and a new endpoint. The   *#
+        #* new endpoint does not count (not part of the resync), so does not *#
+        #* trigger tidy up of rm_endpoint.                                   *#
+        #*********************************************************************#
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+
+        #*********************************************************************#
+        #* Add one more endpoint in the resync, and tidy up will occur.      *#
+        #*********************************************************************#
+        ep_ids.remove(rm_endpoint.id)
+
+        log.debug("Add a new endpoint to complete resync")
+        new_endpoint2 = CreatedEndpoint(["1.2.3.5"], resync_id)
+        ep_ids.add(new_endpoint2.id)
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REP, new_endpoint2.create_req)
+        agent.run()
+        endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+       
 def get_blank_acls():
     """
     Return a blank set of ACLs, with nothing permitted.
@@ -1228,5 +1341,8 @@ class CreatedEndpoint(object):
                              'endpoint_id': self.id,
                              'issued': futils.time_ms() }
 
+        log.debug("Create test endpoint %s", self.id)
+
         tap_obj = stub_devices.TapInterface(self.tap)
         stub_devices.add_tap(tap_obj)
+

@@ -229,7 +229,7 @@ class FelixAgent(object):
                         "Remove endpoint %s that is no longer being managed" %
                         ep.uuid)
                     ep.remove()
-                    del self.endpoints[ep]
+                    del self.endpoints[uuid]
 
         #*********************************************************************#
         #* Now remove rules for any endpoints that should no longer          *#
