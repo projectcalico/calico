@@ -235,5 +235,25 @@ class TestProcessor(unittest.TestCase):
                           'outbound_default': 'deny'}}
         self.acl_store.test_assert_endpoint_acls('e1', 1, e1_acls)
 
+    def test_case4(self):
+        """
+        Test rule which refers to an unknown group.
+        """
+        # Rules can target another group, but that group may have no members.
+        self.network_store.test_set_groups(['g1'])
+        self.network_store.test_set_group_members('g1', {'e1': '10.1.1.1'})
+        self.network_store.test_set_group_rules('g1',
+                                                {'inbound': [{'group': 'g2',
+                                                              'cidr': None,
+                                                              'protocol': None,
+                                                              'port': None}],
+                                                 'outbound': [],
+                                                 'inbound_default': 'deny',
+                                                 'outbound_default': 'deny'})
+        self.processor.recalc_rules()
+        self.acl_store.test_assert_endpoints(['e1'])
+        self.acl_store.test_assert_endpoint_acls('e1', 1, self.empty_acls)
+
+
 if __name__ == '__main__':
     unittest.main()
