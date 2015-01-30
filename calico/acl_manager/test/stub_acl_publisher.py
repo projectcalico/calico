@@ -28,9 +28,12 @@ class StubACLPublisher(object):
         self.acl_store = acl_store
         self.queue = Queue()
         self.expected_acls = {}
+        self.raise_exception = False
 
     def publish_endpoint_acls(self, endpoint_uuid, acls):
         self.queue.put((endpoint_uuid, acls))
+        if self.raise_exception:
+            raise Exception("Test exception")
 
     def test_query_endpoint_acls(self, endpoint_uuid):
         """
@@ -45,6 +48,9 @@ class StubACLPublisher(object):
     def test_set_expected_acls(self, endpoint_uuid, acls):
         assert endpoint_uuid not in self.expected_acls
         self.expected_acls[endpoint_uuid] = acls
+
+    def test_raise_exception(self):
+        self.raise_exception = True
 
     def test_wait_assert_all_acls_received(self):
         """

@@ -13,12 +13,15 @@
 # limitations under the License.
 
 import unittest
+import time
+import threading
 from copy import deepcopy
 
 from stub_acl_publisher import StubACLPublisher
 from stub_processor import StubRuleProcessor
 
 from calico.acl_manager.acl_store import ACLStore
+import calico.acl_manager.utils as utils
 
 
 class TestACLStore(unittest.TestCase):
@@ -94,6 +97,25 @@ class TestACLStore(unittest.TestCase):
         # Query an unknown endpoint
         self.acl_pub.test_query_endpoint_acls('e5')
         self.acl_pub.test_wait_assert_all_acls_received()
+
+    def test_case3(self):
+        """
+        Clean shutdown of ACL Manager on ACL Store worker thread crash
+        """
+        # Patch the terminate function so the tests don't exit
+        terminate_called = threading.Event()
+        def _terminate(exit_code=1):
+            terminate_called.set()
+        utils.terminate = _terminate
+
+        self.processor.test_update_endpoint_acls('e1', self.acls)
+        self.acl_pub.test_set_expected_acls('e1', self.acls)
+        self.acl_pub.test_raise_exception()
+
+        # Allow three seconds for the worker thread to call terminate
+        terminate_called.wait(3)
+        self.acl_pub.test_wait_assert_all_acls_received()
+
 
 if __name__ == '__main__':
     unittest.main()
