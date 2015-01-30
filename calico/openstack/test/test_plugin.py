@@ -66,25 +66,16 @@ class TestPlugin(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    def setUp(self):
+    #*************************************************************************#
+    #* Setup for explicit test code control of all operations on 0MQ         *#
+    #* sockets.                                                              *#
+    #*************************************************************************#
+    def setUp_sockets(self):
 
         #*********************************************************************#
         #* Set of addresses that we have sockets bound to.                   *#
         #*********************************************************************#
         self.sockets = set()
-
-        #*********************************************************************#
-        #* The simulated time (in seconds) that has passed since the         *#
-        #* beginning of the test.                                            *#
-        #*********************************************************************#
-        self.current_time = 0
-
-        #*********************************************************************#
-        #* Dict of current sleepers.  In each dict entry, the key is an      *#
-        #* eventlet.Queue object and the value is the time at which the      *#
-        #* sleep should complete.                                            *#
-        #*********************************************************************#
-        self.sleepers = {}
 
         #*********************************************************************#
         #* When a socket is created, print a message to say so, and hook its *#
@@ -211,6 +202,19 @@ class TestPlugin(unittest.TestCase):
             return poll
 
         #*********************************************************************#
+        #* Intercept 0MQ socket creations, so that we can hook all of the    *#
+        #* operations on sockets, using the methods above.                   *#
+        #*********************************************************************#
+        mech_calico.zmq.Context = mock.Mock()
+        self.zmq_context = mech_calico.zmq.Context.return_value
+        self.zmq_context.socket.side_effect = socket_created
+
+    #*************************************************************************#
+    #* Setup to intercept and display logging by the code under test.        *#
+    #*************************************************************************#
+    def setUp_logging(self):
+
+        #*********************************************************************#
         #* Print logs to stdout.                                             *#
         #*********************************************************************#
         def log_info(msg):
@@ -226,6 +230,36 @@ class TestPlugin(unittest.TestCase):
             print ">>EXCEPTION %s" % msg
             traceback.print_exc()
             return None
+
+        #*********************************************************************#
+        #* Hook logging.                                                     *#
+        #*********************************************************************#
+        mech_calico.LOG = mock.Mock()
+        mech_calico.LOG.info.side_effect = log_info
+        mech_calico.LOG.debug.side_effect = log_debug
+        mech_calico.LOG.warn.side_effect = log_warn
+        mech_calico.LOG.exception.side_effect = log_exception
+
+    #*************************************************************************#
+    #* Setup to intercept sleep calls made by the code under test, and hence *#
+    #* to (i) control when those expire, and (ii) allow time to appear to    *#
+    #* pass (to the code under test) without actually having to wait for     *#
+    #* that time.                                                            *#
+    #*************************************************************************#
+    def setUp_time(self):
+
+        #*********************************************************************#
+        #* The simulated time (in seconds) that has passed since the         *#
+        #* beginning of the test.                                            *#
+        #*********************************************************************#
+        self.current_time = 0
+
+        #*********************************************************************#
+        #* Dict of current sleepers.  In each dict entry, the key is an      *#
+        #* eventlet.Queue object and the value is the time at which the      *#
+        #* sleep should complete.                                            *#
+        #*********************************************************************#
+        self.sleepers = {}
 
         #*********************************************************************#
         #* Sleep for some simulated time.                                    *#
@@ -262,36 +296,17 @@ class TestPlugin(unittest.TestCase):
             return None
 
         #*********************************************************************#
-        #* Hook logging.                                                     *#
-        #*********************************************************************#
-        mech_calico.LOG = mock.Mock()
-        mech_calico.LOG.info.side_effect = log_info
-        mech_calico.LOG.debug.side_effect = log_debug
-        mech_calico.LOG.warn.side_effect = log_warn
-        mech_calico.LOG.exception.side_effect = log_exception
-
-        #*********************************************************************#
-        #* Create an instance of CalicoMechanismDriver.                      *#
-        #*********************************************************************#
-        self.driver = mech_calico.CalicoMechanismDriver()
-
-        #*********************************************************************#
-        #* Hook socket creation and binding.                                 *#
-        #*********************************************************************#
-        mech_calico.zmq.Context = mock.Mock()
-        self.zmq_context = mech_calico.zmq.Context.return_value
-        self.zmq_context.socket.side_effect = socket_created
-
-        #*********************************************************************#
         #* Hook sleeping.                                                    *#
         #*********************************************************************#
         self.real_eventlet_sleep = eventlet.sleep
         mech_calico.eventlet.sleep = simulated_time_sleep
 
     #*************************************************************************#
-    #* Advance the simulated time.                                           *#
+    #* Method for the test code to call when it wants to advance the         *#
+    #* simulated time.                                                       *#
     #*************************************************************************#
     def simulated_time_advance(self, secs):
+
         while (secs > 0):
             print "Time %s, want to advance by %s" % (self.current_time,
                                                       secs)
@@ -330,6 +345,32 @@ class TestPlugin(unittest.TestCase):
             #* Allow woken (and possibly other) threads to run.              *#
             #*****************************************************************#
             self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+    #*************************************************************************#
+    #* Setup before each test case (= each method below whose name begins    *#
+    #* with "test").                                                         *#
+    #*************************************************************************#
+    def setUp(self):
+
+        #*********************************************************************#
+        #* Setup to control 0MQ socket operations.                           *#
+        #*********************************************************************#
+        self.setUp_sockets()
+
+        #*********************************************************************#
+        #* Setup to control logging.                                         *#
+        #*********************************************************************#
+        self.setUp_logging()
+
+        #*********************************************************************#
+        #* Setup to control the passage of time.                             *#
+        #*********************************************************************#
+        self.setUp_time()
+
+        #*********************************************************************#
+        #* Create an instance of CalicoMechanismDriver.                      *#
+        #*********************************************************************#
+        self.driver = mech_calico.CalicoMechanismDriver()
 
     def tearDown(self):
         pass
