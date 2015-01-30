@@ -85,6 +85,14 @@ is all you need to work on Felix or the ACL Manager. If you want to work on our
 OpenStack plugin, you'll also need to install Neutron: doing that is outside
 the scope of this article.
 
+To run the unit tests, you'll also need to type:
+    
+    pip install nose mock
+
+Then, still at the root of the calico directory, run:
+
+    nosetests
+
 ### Fewer dependencies
 
 If you only want to hack on one or two components you may not want to install
