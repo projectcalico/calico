@@ -63,7 +63,7 @@ def collect_requirements():
 
 setuptools.setup(
     name = "calico",
-    version = "0.10.3~rc3",
+    version = "0.11",
     packages = setuptools.find_packages(),
     entry_points = {
         'console_scripts': [

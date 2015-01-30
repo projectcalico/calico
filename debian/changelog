@@ -1,3 +1,14 @@
+calico (0.11) trusty; urgency=medium
+
+  * Logging improvements and additional unit tests
+  * ACL Manager fixes
+    - Support multiple security groups on a single endpoint
+    - ACL Manager stops listening for network updates silently when a rule
+      references an empty security group
+    - Ensure ACL Manager exits cleanly with a log when worker threads crash
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Fri, 30 Jan 2015 16:07:22 +0000
+
 calico (0.10.3~rc3) trusty; urgency=medium
 
   * Add support for Red Hat 7

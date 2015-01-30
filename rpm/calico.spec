@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.10.3~rc3
+Version:        0.11
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -217,6 +217,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Jan 30 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.11
+- Logging improvements and additional unit tests
+- ACL Manager fixes
+  - Support multiple security groups on a single endpoint
+  - ACL Manager stops listening for network updates silently when a rule
+    references an empty security group
+  - Ensure ACL Manager exits cleanly with a log when worker threads crash
+
 * Fri Jan 23 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.10.3~rc3
 - Add Red Hat 7 support
 - Many code fixes and enhancements
