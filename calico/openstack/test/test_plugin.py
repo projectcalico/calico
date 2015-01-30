@@ -58,13 +58,62 @@ import calico.openstack.mech_calico as mech_calico
 REAL_EVENTLET_SLEEP_TIME = 0.2
 
 class TestPlugin(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
-        pass
+
+        global real_eventlet_sleep
+
+        #*********************************************************************#
+        #* Replacement for eventlet.sleep: sleep for some simulated passage  *#
+        #* of time (as directed by simulated_time_advance), instead of for   *#
+        #* real elapsed time.                                                *#
+        #*********************************************************************#
+        def simulated_time_sleep(secs):
+
+            #*****************************************************************#
+            #* Do a zero time real sleep, to allow other threads to run.     *#
+            #*****************************************************************#
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+            #*****************************************************************#
+            #* Create a new queue.                                           *#
+            #*****************************************************************#
+            queue = eventlet.Queue(1)
+            queue.stack = inspect.stack()[1][3]
+
+            print "%s: Start sleep for %ss" % (queue.stack, secs)
+
+            #*****************************************************************#
+            #* Add it to the dict of sleepers, together with the waking up   *#
+            #* time.                                                         *#
+            #*****************************************************************#
+            sleepers[queue] = current_time + secs
+
+            #*****************************************************************#
+            #* Block until something is posted to the queue.                 *#
+            #*****************************************************************#
+            ignored = queue.get(True)
+
+            #*****************************************************************#
+            #* Wake up.                                                      *#
+            #*****************************************************************#
+            return None
+
+        #*********************************************************************#
+        #* Hook sleeping.  We must only do this once; hence it is in         *#
+        #* setUpClass rather than in setUp.                                  *#
+        #*********************************************************************#
+        real_eventlet_sleep = eventlet.sleep
+        mech_calico.eventlet.sleep = simulated_time_sleep
 
     @classmethod
     def tearDownClass(cls):
-        pass
+
+        #*********************************************************************#
+        #* Restore the real eventlet.sleep.                                  *#
+        #*********************************************************************#
+        mech_calico.eventlet.sleep = real_eventlet_sleep
 
     #*************************************************************************#
     #* Setup for explicit test code control of all operations on 0MQ         *#
@@ -192,7 +241,7 @@ class TestPlugin(unittest.TestCase):
                 #* receive call.                                             *#
                 #*************************************************************#
                 socket.rcv_queue.put_nowait(msg)
-                self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+                real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
                 #*************************************************************#
                 #* Return nothing.                                           *#
@@ -248,58 +297,21 @@ class TestPlugin(unittest.TestCase):
     #*************************************************************************#
     def setUp_time(self):
 
+        global current_time
+        global sleepers
+
         #*********************************************************************#
-        #* The simulated time (in seconds) that has passed since the         *#
+        #* Reset the simulated time (in seconds) that has passed since the   *#
         #* beginning of the test.                                            *#
         #*********************************************************************#
-        self.current_time = 0
+        current_time = 0
 
         #*********************************************************************#
-        #* Dict of current sleepers.  In each dict entry, the key is an      *#
-        #* eventlet.Queue object and the value is the time at which the      *#
-        #* sleep should complete.                                            *#
+        #* Reset the dict of current sleepers.  In each dict entry, the key  *#
+        #* is an eventlet.Queue object and the value is the time at which    *#
+        #* the sleep should complete.                                        *#
         #*********************************************************************#
-        self.sleepers = {}
-
-        #*********************************************************************#
-        #* Sleep for some simulated time.                                    *#
-        #*********************************************************************#
-        def simulated_time_sleep(secs):
-
-            #*****************************************************************#
-            #* Do a zero time real sleep, to allow other threads to run.     *#
-            #*****************************************************************#
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            #*****************************************************************#
-            #* Create a new queue.                                           *#
-            #*****************************************************************#
-            queue = eventlet.Queue(1)
-            queue.stack = inspect.stack()[1][3]
-
-            print "%s: Start sleep for %ss" % (queue.stack, secs)
-
-            #*****************************************************************#
-            #* Add it to the dict of sleepers, together with the waking up   *#
-            #* time.                                                         *#
-            #*****************************************************************#
-            self.sleepers[queue] = self.current_time  + secs
-
-            #*****************************************************************#
-            #* Block until something is posted to the queue.                 *#
-            #*****************************************************************#
-            ignored = queue.get(True)
-
-            #*****************************************************************#
-            #* Wake up.                                                      *#
-            #*****************************************************************#
-            return None
-
-        #*********************************************************************#
-        #* Hook sleeping.                                                    *#
-        #*********************************************************************#
-        self.real_eventlet_sleep = eventlet.sleep
-        mech_calico.eventlet.sleep = simulated_time_sleep
+        sleepers = {}
 
     #*************************************************************************#
     #* Method for the test code to call when it wants to advance the         *#
@@ -307,9 +319,10 @@ class TestPlugin(unittest.TestCase):
     #*************************************************************************#
     def simulated_time_advance(self, secs):
 
+        global current_time
+
         while (secs > 0):
-            print "Time %s, want to advance by %s" % (self.current_time,
-                                                      secs)
+            print "Time %s, want to advance by %s" % (current_time, secs)
 
             #*****************************************************************#
             #* Determine the time to advance to in this iteration: either    *#
@@ -317,34 +330,34 @@ class TestPlugin(unittest.TestCase):
             #* the next sleeper should wake up, whichever of those is        *#
             #* earlier.                                                      *#
             #*****************************************************************#
-            wake_up_time = self.current_time + secs
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] < wake_up_time:
+            wake_up_time = current_time + secs
+            for queue in sleepers.keys():
+                if sleepers[queue] < wake_up_time:
                     #*********************************************************#
                     #* This sleeper will wake up before the time that we've  *#
                     #* been asked to advance to.                             *#
                     #*********************************************************#
-                    wake_up_time = self.sleepers[queue]
+                    wake_up_time = sleepers[queue]
 
             #*****************************************************************#
             #* Advance to the determined time.                               *#
             #*****************************************************************#
-            secs -= (wake_up_time - self.current_time)
-            self.current_time = wake_up_time
+            secs -= (wake_up_time - current_time)
+            current_time = wake_up_time
 
             #*****************************************************************#
             #* Wake up all sleepers that should now wake up.                 *#
             #*****************************************************************#
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] >= self.current_time:
+            for queue in sleepers.keys():
+                if sleepers[queue] >= current_time:
                     print "Wake up one sleeper: %s" % queue.stack
-                    del self.sleepers[queue]
+                    del sleepers[queue]
                     queue.put_nowait('Wake up!')
                     
             #*****************************************************************#
             #* Allow woken (and possibly other) threads to run.              *#
             #*****************************************************************#
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
     #*************************************************************************#
     #* Setup before each test case (= each method below whose name begins    *#
@@ -427,7 +440,7 @@ class TestPlugin(unittest.TestCase):
             ['felix-1',
              '',
              json.dumps(resync).encode('utf-8')])
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         #*********************************************************************#
         #* Check DB got create_or_update_agent call.                         *#
@@ -459,7 +472,7 @@ class TestPlugin(unittest.TestCase):
             ['felix-1',
              '',
              json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
         self.felix_router_socket.send_multipart.assert_called_once_with(
             ['felix-1',
              '',
@@ -479,7 +492,7 @@ class TestPlugin(unittest.TestCase):
         #* Need another yield here, apparently, to allow                     *#
         #* felix_heartbeat_thread to start running.                          *#
         #*********************************************************************#
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         #*********************************************************************#
         #* Receive HEARTBEAT to Felix from the plugin, and send response.    *#
@@ -491,13 +504,13 @@ class TestPlugin(unittest.TestCase):
         self.felix_endpoint_socket.send_json.reset_mock()
         self.felix_endpoint_socket.rcv_queue.put_nowait(
             {'type': 'HEARTBEAT'})
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         #*********************************************************************#
         #* Yield to allow anything pending on other threads to come out.     *#
         #*********************************************************************#
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         #*********************************************************************#
         #* ACL Manager connection.                                           *#
