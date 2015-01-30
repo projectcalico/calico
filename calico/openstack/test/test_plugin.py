@@ -30,7 +30,7 @@ import traceback
 import json
 import inspect
 
-del sys.modules['zmq']
+if 'zmq' in sys.modules: del sys.modules['zmq']
 sys.modules['neutron'] = m_neutron = mock.Mock()
 sys.modules['neutron.common'] = m_neutron.common
 sys.modules['neutron.openstack'] = m_neutron.openstack
