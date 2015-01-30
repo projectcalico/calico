@@ -38,17 +38,20 @@ sys.modules['neutron.plugins'] = m_neutron.plugins
 sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 
+#*****************************************************************************#
+#* Define a stub class, that we will use as the base class for               *#
+#* CalicoMechanismDriver.                                                    *#
+#*****************************************************************************#
 class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
         pass
 
+#*****************************************************************************#
+#* Replace Neutron's SimpleAgentMechanismDriverBase - which is the base      *#
+#* class that CalicoMechanismDriver inherits from - with this stub class.    *#
+#*****************************************************************************#
 m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = DriverBase
 
-#*****************************************************************************#
-#* Load calico.felix.devices and calico.felix.test.stub_devices, and the     *#
-#* same for ipsets; we do not blindly override as we need to avoid getting   *#
-#* into a state where tests of these modules cannot be made to work.         *#
-#*****************************************************************************#
 import calico.openstack.mech_calico as mech_calico
 
 REAL_EVENTLET_SLEEP_TIME = 0.2
@@ -63,12 +66,6 @@ class TestPlugin(unittest.TestCase):
         pass
 
     def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
-    def test_startup(self):
 
         #*********************************************************************#
         #* Set of addresses that we have sockets bound to.                   *#
@@ -264,49 +261,6 @@ class TestPlugin(unittest.TestCase):
             return None
 
         #*********************************************************************#
-        #* Advance the simulated time.                                       *#
-        #*********************************************************************#
-        def simulated_time_advance(secs):
-            while (secs > 0):
-                print "Time %s, want to advance by %s" % (self.current_time,
-                                                          secs)
-
-                #*************************************************************#
-                #* Determine the time to advance to in this iteration:       *#
-                #* either the full time that we've been asked for, or the    *#
-                #* time at which the next sleeper should wake up, whichever  *#
-                #* of those is earlier.                                      *#
-                #*************************************************************#
-                wake_up_time = self.current_time + secs
-                for queue in self.sleepers.keys():
-                    if self.sleepers[queue] < wake_up_time:
-                        #*****************************************************#
-                        #* This sleeper will wake up before the time that    *#
-                        #* we've been asked to advance to.                   *#
-                        #*****************************************************#
-                        wake_up_time = self.sleepers[queue]
-
-                #*************************************************************#
-                #* Advance to the determined time.                           *#
-                #*************************************************************#
-                secs -= (wake_up_time - self.current_time)
-                self.current_time = wake_up_time
-
-                #*************************************************************#
-                #* Wake up all sleepers that should now wake up.             *#
-                #*************************************************************#
-                for queue in self.sleepers.keys():
-                    if self.sleepers[queue] >= self.current_time:
-                        print "Wake up one sleeper: %s" % queue.stack
-                        del self.sleepers[queue]
-                        queue.put_nowait('Wake up!')
-
-                #*************************************************************#
-                #* Allow woken (and possibly other) threads to run.          *#
-                #*************************************************************#
-                self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-        #*********************************************************************#
         #* Hook logging.                                                     *#
         #*********************************************************************#
         mech_calico.LOG = mock.Mock()
@@ -333,6 +287,54 @@ class TestPlugin(unittest.TestCase):
         self.real_eventlet_sleep = eventlet.sleep
         mech_calico.eventlet.sleep = simulated_time_sleep
 
+    #*************************************************************************#
+    #* Advance the simulated time.                                           *#
+    #*************************************************************************#
+    def simulated_time_advance(self, secs):
+        while (secs > 0):
+            print "Time %s, want to advance by %s" % (self.current_time,
+                                                      secs)
+
+            #*****************************************************************#
+            #* Determine the time to advance to in this iteration: either    *#
+            #* the full time that we've been asked for, or the time at which *#
+            #* the next sleeper should wake up, whichever of those is        *#
+            #* earlier.                                                      *#
+            #*****************************************************************#
+            wake_up_time = self.current_time + secs
+            for queue in self.sleepers.keys():
+                if self.sleepers[queue] < wake_up_time:
+                    #*********************************************************#
+                    #* This sleeper will wake up before the time that we've  *#
+                    #* been asked to advance to.                             *#
+                    #*********************************************************#
+                    wake_up_time = self.sleepers[queue]
+
+            #*****************************************************************#
+            #* Advance to the determined time.                               *#
+            #*****************************************************************#
+            secs -= (wake_up_time - self.current_time)
+            self.current_time = wake_up_time
+
+            #*****************************************************************#
+            #* Wake up all sleepers that should now wake up.                 *#
+            #*****************************************************************#
+            for queue in self.sleepers.keys():
+                if self.sleepers[queue] >= self.current_time:
+                    print "Wake up one sleeper: %s" % queue.stack
+                    del self.sleepers[queue]
+                    queue.put_nowait('Wake up!')
+                    
+            #*****************************************************************#
+            #* Allow woken (and possibly other) threads to run.              *#
+            #*****************************************************************#
+            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+    def tearDown(self):
+        pass
+
+    def test_startup(self):
+
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
         #*********************************************************************#
@@ -343,7 +345,7 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         bound_sockets = {socket for socket in self.sockets
                          if socket.bound_address == "tcp://*:9901"}
-        assert len(bound_sockets) == 1
+        self.assertEqual(len(bound_sockets), 1)
         self.felix_router_socket = bound_sockets.pop()
         print "Felix router socket is %s" % self.felix_router_socket
 
@@ -352,7 +354,7 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         bound_sockets = {socket for socket in self.sockets
                          if socket.bound_address == "tcp://*:9903"}
-        assert len(bound_sockets) == 1
+        self.assertEqual(len(bound_sockets), 1)
         self.acl_get_socket = bound_sockets.pop()
         print "ACL GET socket is %s" % self.acl_get_socket
 
@@ -361,7 +363,7 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         bound_sockets = {socket for socket in self.sockets
                          if socket.bound_address == "tcp://*:9904"}
-        assert len(bound_sockets) == 1
+        self.assertEqual(len(bound_sockets), 1)
         self.acl_pub_socket = bound_sockets.pop()
         print "ACL PUB socket is %s" % self.acl_pub_socket
 
@@ -427,7 +429,7 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         connected_sockets = {socket for socket in self.sockets
                              if socket.connected_address == "tcp://felix-host-1:9902"}
-        assert len(connected_sockets) == 1
+        self.assertEqual(len(connected_sockets), 1)
         self.felix_endpoint_socket = connected_sockets.pop()
         print "Felix endpoint socket is %s" % self.felix_endpoint_socket
 
@@ -440,7 +442,7 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         #* Receive HEARTBEAT to Felix from the plugin, and send response.    *#
         #*********************************************************************#
-        simulated_time_advance(30)
+        self.simulated_time_advance(30)
         self.felix_endpoint_socket.send_json.assert_called_once_with(
             {'type': 'HEARTBEAT'},
             mech_calico.zmq.NOBLOCK)
@@ -450,9 +452,7 @@ class TestPlugin(unittest.TestCase):
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
-        print "Mainline test code finished"
-
         #*********************************************************************#
-        #* Yield to allow anything pending on other friends to come out.     *#
+        #* Yield to allow anything pending on other threads to come out.     *#
         #*********************************************************************#
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
