@@ -69,6 +69,16 @@ management of the project. However, it is open to any members of the community
 Please [contact us](http://www.projectcalico.org/contact-us/) if you are
 interested in getting involved and contributing to the project.
 
+## Contributing
+
+Thanks for thinking about contributing to Project Calico! The success of an
+open source project is entirely down to the efforts of its contributors, so we
+do genuinely want to thank you for even thinking of contributing.
+
+Before you do so, you should check out our contributing guidelines in the
+`CONTRIBUTING.md` file, to make sure it's as easy as possible for us to accept
+your contribution.
+
 ## How do I hack on Calico?
 
 It's great that you're interested! In additional to being able to install
