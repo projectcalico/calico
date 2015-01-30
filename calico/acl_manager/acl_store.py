@@ -17,6 +17,8 @@ import logging
 from threading import Thread
 from Queue import Queue
 
+import calico.acl_manager.utils as utils
+
 log = logging.getLogger(__name__)
 
 
@@ -65,26 +67,29 @@ class ACLStore(object):
         self.queue.put(("update_endpoint", endpoint_uuid, rules))
 
     def worker_thread_loop(self):
-        continue_working = True
-        while continue_working:
-            work_params = self.queue.get()
-            work_type = work_params[0]
-            log.debug("ACL Store worker thread received work item type %s" %
-                      work_type)
-            if work_type == "terminate":
-                continue_working = False
-            elif work_type == "query_endpoint":
-                self.worker_publish_update(work_params[1])
-            elif work_type == "update_endpoint":
-                self.worker_update_endpoint(work_params[1], work_params[2])
-            else:  # pragma: no cover
-                log.error("Exception: invalid ACLStore work type %s" %
+        try:
+            continue_working = True
+            while continue_working:
+                work_params = self.queue.get()
+                work_type = work_params[0]
+                log.debug("ACL Store worker thread received work item type %s" %
                           work_type)
-                raise Exception("Invalid ACLStore work type",
-                                work_type,
-                                params)
+                if work_type == "terminate":
+                    continue_working = False
+                elif work_type == "query_endpoint":
+                    self.worker_publish_update(work_params[1])
+                elif work_type == "update_endpoint":
+                    self.worker_update_endpoint(work_params[1], work_params[2])
+                else:  # pragma: no cover
+                    log.error("Exception: invalid ACLStore work type %s" %
+                              work_type)
+                    raise Exception("Invalid ACLStore work type",
+                                    work_type,
+                                    params)
 
-            self.queue.task_done()
+                self.queue.task_done()
+        except:
+            utils.terminate()
 
     def worker_publish_update(self, endpoint_uuid):
         log.debug("ACL Store work: publish ACLs for endpoint %s" %
