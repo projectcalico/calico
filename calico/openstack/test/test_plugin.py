@@ -16,7 +16,7 @@
 openstack.test.test_plugin
 ~~~~~~~~~~~
 
-Top level tests for the Calico/OpenStack Plugin.
+Unit test for the Calico/OpenStack Plugin.
 """
 import logging
 import mock
