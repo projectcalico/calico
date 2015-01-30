@@ -14,7 +14,7 @@
 
 import unittest
 import time
-from mock import Mock
+import threading
 from copy import deepcopy
 
 from stub_acl_publisher import StubACLPublisher
@@ -26,8 +26,6 @@ import calico.acl_manager.utils as utils
 
 class TestACLStore(unittest.TestCase):
     """Unit tests for the ACLStore class."""
-
-
 
     def setUp(self):
         self.acl_store = ACLStore()
@@ -104,17 +102,20 @@ class TestACLStore(unittest.TestCase):
         """
         Clean shutdown of ACL Manager on ACL Store worker thread crash
         """
-        # Mock the terminate function so the UT process doesn't exit
-        utils.terminate = Mock()
+        # Patch the terminate function so the tests don't exit
+        terminate_called = threading.Event()
+        def _terminate(exit_code=1):
+            terminate_called.set()
+        utils.terminate = _terminate
 
         self.processor.test_update_endpoint_acls('e1', self.acls)
         self.acl_pub.test_set_expected_acls('e1', self.acls)
         self.acl_pub.test_raise_exception()
 
-        # Allow a second for the worker thread to call the mocked terminate
-        time.sleep(1)
+        # Allow three seconds for the worker thread to call terminate
+        terminate_called.wait(3)
         self.acl_pub.test_wait_assert_all_acls_received()
-        utils.terminate.assert_called_once_with()
+
 
 if __name__ == '__main__':
     unittest.main()

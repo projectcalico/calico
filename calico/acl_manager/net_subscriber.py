@@ -20,6 +20,8 @@ import time
 import json
 import os
 
+import calico.acl_manager.utils as utils
+
 log = logging.getLogger(__name__)
 
 PLUGIN_ACLGET_PORT = "9903"
@@ -51,36 +53,39 @@ class NetworkSubscriber(object):
         and then listen for published updates and pass them to the Network
         Store.
         """
-        self.network_store = network_store
+        try:
+            self.network_store = network_store
 
-        # Create the SUB socket that receives updates to the network state.
-        # Do this before start-of-day synchronization so that there's no window
-        # during which the ACL Manager could miss updates.
-        log.debug("Creating Network API subscriber socket")
-        self.sub_socket = context.socket(zmq.SUB)
-        self.sub_socket.connect("tcp://%(address)s:%(port)s" %
-                                {"address": self.plugin_address,
-                                 "port": PLUGIN_ACLPUB_PORT})
-        self.sub_socket.setsockopt(zmq.SUBSCRIBE, "groups")
-        self.sub_socket.setsockopt(zmq.SUBSCRIBE, "networkheartbeat")
+            # Create the SUB socket that receives updates to the network state.
+            # Do this before start-of-day synchronization so that there's no window
+            # during which the ACL Manager could miss updates.
+            log.debug("Creating Network API subscriber socket")
+            self.sub_socket = context.socket(zmq.SUB)
+            self.sub_socket.connect("tcp://%(address)s:%(port)s" %
+                                    {"address": self.plugin_address,
+                                     "port": PLUGIN_ACLPUB_PORT})
+            self.sub_socket.setsockopt(zmq.SUBSCRIBE, "groups")
+            self.sub_socket.setsockopt(zmq.SUBSCRIBE, "networkheartbeat")
 
-        # Create the REQ socket used for start of day synchronization with the
-        # plugin.
-        log.debug("Creating Network API synchronization socket")
-        self.req_socket = context.socket(zmq.REQ)
-        self.req_socket.connect("tcp://%(address)s:%(port)s" %
-                                {"address": self.plugin_address,
-                                 "port": PLUGIN_ACLGET_PORT})
+            # Create the REQ socket used for start of day synchronization with the
+            # plugin.
+            log.debug("Creating Network API synchronization socket")
+            self.req_socket = context.socket(zmq.REQ)
+            self.req_socket.connect("tcp://%(address)s:%(port)s" %
+                                    {"address": self.plugin_address,
+                                     "port": PLUGIN_ACLGET_PORT})
 
-        # Perform the start of day synchronization.  Published updates are
-        # queued during this, so none are lost.
-        log.debug("Begin start of day synchronization")
-        self.start_of_day_sync()
-        log.debug("End start of day synchronization")
+            # Perform the start of day synchronization.  Published updates are
+            # queued during this, so none are lost.
+            log.debug("Begin start of day synchronization")
+            self.start_of_day_sync()
+            log.debug("End start of day synchronization")
 
-        # Listen for published updates to network state.
-        log.debug("Begin listening for updates to network state")
-        self.subscribe_loop()
+            # Listen for published updates to network state.
+            log.debug("Begin listening for updates to network state")
+            self.subscribe_loop()
+        except:
+            utils.terminate()
 
     def start_of_day_sync(self):
         """Perform start of day synchronization over the Network API."""

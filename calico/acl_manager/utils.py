@@ -13,16 +13,16 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import traceback
 import os
 import logging
 
 log = logging.getLogger(__name__)
 
-def terminate():  # pragma: nocover
+def terminate(exit_code=1):  # pragma: nocover
     """
     Log an Exception and terminate ACL Manager
+
+    This MUST only be called from inside an exception handler.
     """
-    log.critical("ACL Manager terminating - exception %s",
-                 traceback.format_exc())
-    os._exit(1)
+    log.exception("ACL Manager terminating")
+    os._exit(exit_code)

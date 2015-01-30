@@ -20,6 +20,8 @@ import time
 from threading import Thread, Lock
 import json
 
+import calico.acl_manager.utils as utils
+
 log = logging.getLogger(__name__)
 
 MANAGER_ACLGET_PORT = "9905"
@@ -85,38 +87,41 @@ class ACLPublisher(object):
         the ACL Store, which will asynchronously respond by calling back into
         publish_endpoint_acls() to send the update containing the ACL state.
         """
-        while True:
-            # Receive and parse the query message.
-            message = self.router_socket.recv_multipart()
-            assert (len(message) == 3)
-            assert not message[1]
-            query = json.loads(message[2].decode('utf-8'))
-            peer = message[0]
-            assert ("type" in query)
-            log.info(
-                "ACL Manager received packet %s from %s",
-                query, binascii.hexlify(peer)
-            )
+        try:
+            while True:
+                # Receive and parse the query message.
+                message = self.router_socket.recv_multipart()
+                assert (len(message) == 3)
+                assert not message[1]
+                query = json.loads(message[2].decode('utf-8'))
+                peer = message[0]
+                assert ("type" in query)
+                log.info(
+                    "ACL Manager received packet %s from %s",
+                    query, binascii.hexlify(peer)
+                )
 
-            if query["type"] == "GETACLSTATE":
-                endpoint = query["endpoint_id"]
-                log.info("Received query message %s from Felix" % message)
-                self.acl_store.query_endpoint_rules(endpoint)
-                query["rc"] = "SUCCESS"
-                query["message"] = ""
-            else:
-                # Received unexpected message.  Log and return it.
-                log.warning("Received query %s of unknown type" % query)
-                query["rc"] = "FAILURE"
-                query["message"] = "Unknown message type: expected GETACLSTATE"
+                if query["type"] == "GETACLSTATE":
+                    endpoint = query["endpoint_id"]
+                    log.info("Received query message %s from Felix" % message)
+                    self.acl_store.query_endpoint_rules(endpoint)
+                    query["rc"] = "SUCCESS"
+                    query["message"] = ""
+                else:
+                    # Received unexpected message.  Log and return it.
+                    log.warning("Received query %s of unknown type" % query)
+                    query["rc"] = "FAILURE"
+                    query["message"] = "Unknown message type: expected GETACLSTATE"
 
-            log.debug("Sending response message: %s, %s" %
-                                     (peer, json.dumps(query).encode("utf-8")))
-            self.router_socket.send_multipart(
-                (peer,
-                 "",
-                 json.dumps(query).encode("utf-8"))
-            )
+                log.debug("Sending response message: %s, %s" %
+                                         (peer, json.dumps(query).encode("utf-8")))
+                self.router_socket.send_multipart(
+                    (peer,
+                     "",
+                     json.dumps(query).encode("utf-8"))
+                )
+        except:
+            utils.terminate()
 
     def heartbeat_thread_func(self):
         """ACL update socket heartbeat publishing loop.
