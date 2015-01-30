@@ -375,7 +375,7 @@ class TestPlugin(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_startup(self):
+    def test_mainline(self):
 
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
@@ -498,3 +498,327 @@ class TestPlugin(unittest.TestCase):
         #* Yield to allow anything pending on other threads to come out.     *#
         #*********************************************************************#
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        #*********************************************************************#
+        #* ACL Manager connection.                                           *#
+        #*                                                                   *#
+        #* - sim-ACLM: Connect to PLUGIN_ACLPUB_PORT, make normal            *#
+        #*  subscriptions, wait a bit to ensure that Plugin's 0MQ layer has  *#
+        #*  processed these.                                                 *#
+        #*                                                                   *#
+        #* - sim-DB: Prep response to next get_security_groups query,        *#
+        #*  returning the default SG.  Prep null response to next            *#
+        #*  _get_port_security_group_bindings call.                          *#
+        #*                                                                   *#
+        #* - sim-ACLM: Connect to PLUGIN_ACLGET_PORT, send GETGROUPS, check  *#
+        #*  get GETGROUPS response.  Check get GROUPUPDATE publication       *#
+        #*  describing default SG.                                           *#
+        #*                                                                   *#
+        #* - sim-ACLM: Send HEARTBEAT, check get HEARTBEAT response.         *#
+        #*                                                                   *#
+        #* - sim-ACLM: Wait for HEARTBEAT_SEND_INTERVAL_SECS, check get      *#
+        #*   HEARTBEAT, send HEARTBEAT response.                             *#
+        #*********************************************************************#
+
+        #*********************************************************************#
+        #* Mechanism driver entry points that are currently implemented as   *#
+        #* no-ops (because Calico function does not need them).              *#
+        #*                                                                   *#
+        #* - sim-ML2: Call update_subnet_postcommit,                         *#
+        #*   update_network_postcommit, delete_subnet_postcommit,            *#
+        #*   delete_network_postcommit, create_network_postcommit,           *#
+        #*   create_subnet_postcommit, update_network_postcommit,            *#
+        #*   update_subnet_postcommit.                                       *#
+        #*********************************************************************#
+
+        #*********************************************************************#
+        #* New endpoint processing.                                          *#
+        #*                                                                   *#
+        #* - sim-ML2: Call check_segment_for_agent with params so that it    *#
+        #*   should return True.  Check get True.                            *#
+        #*                                                                   *#
+        #* - sim-DB: Prep response to next get_subnet call.                  *#
+        #*                                                                   *#
+        #* - sim-ML2: Call create_port_postcommit for an endpoint port with  *#
+        #*   host_id matching sim-Felix.                                     *#
+        #*                                                                   *#
+        #* - sim-Felix: Check get ENDPOINTCREATED.  Send successful          *#
+        #*   response.                                                       *#
+        #*                                                                   *#
+        #* - sim-DB: Check get update_port_status call, indicating port      *#
+        #*   active.                                                         *#
+        #*                                                                   *#
+        #* - sim-DB: Prep appropriate responses for next get_security_group, *#
+        #*   _get_port_security_group_bindings and get_port calls.           *#
+        #*                                                                   *#
+        #* - sim-ML2: Call security_groups_member_updated with default SG    *#
+        #*   ID.                                                             *#
+        #*                                                                   *#
+        #* - sim-ACLM: Check get GROUPUPDATE publication indicating port     *#
+        #*   added to default SG ID.                                         *#
+        #*********************************************************************#
+
+        #*********************************************************************#
+        #* Endpoint update processing.                                       *#
+        #*                                                                   *#
+        #* - sim-DB: Prep response to next get_subnet call.                  *#
+        #*                                                                   *#
+        #* - sim-ML2: Call update_port_postcommit for an endpoint port with  *#
+        #*   host_id matching sim-Felix.                                     *#
+        #*                                                                   *#
+        #* - sim-Felix: Check get ENDPOINTUPDATED.  Send successful          *#
+        #*   response.                                                       *#
+        #*********************************************************************#
+
+        #*********************************************************************#
+        #* SG rules update processing.                                       *#
+        #*                                                                   *#
+        #* - sim-DB: Prep appropriate responses for next get_security_group, *#
+        #*   _get_port_security_group_bindings and get_port calls.           *#
+        #*                                                                   *#
+        #* - sim-ML2: Call security_groups_rule_updated with default SG ID.  *#
+        #*                                                                   *#
+        #* - sim-ACLM: Check get GROUPUPDATE publication indicating updated  *#
+        #*   rules.                                                          *#
+        #*********************************************************************#
+
+        #*********************************************************************#
+        #* Endpoint deletion processing.                                     *#
+        #*                                                                   *#
+        #* - sim-ML2: Call delete_port_postcommit for an endpoint port with  *#
+        #*   host_id matching sim-Felix.                                     *#
+        #*                                                                   *#
+        #* - sim-Felix: Check get ENDPOINTDESTROYED.  Send successful        *#
+        #*   response.                                                       *#
+        #*                                                                   *#
+        #* - sim-DB: Prep appropriate responses for next get_security_group, *#
+        #*   _get_port_security_group_bindings and get_port calls.           *#
+        #*                                                                   *#
+        #* - sim-ML2: Call security_groups_member_updated with default SG    *#
+        #*   ID.                                                             *#
+        #*                                                                   *#
+        #* - sim-ACLM: Check get GROUPUPDATE publication indicating port     *#
+        #*   removed from default SG ID.                                     *#
+        #*********************************************************************#
+
+    def test_timing_new_endpoint(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Repeat mainline test with variation: for a new endpoint, sim-ML2  *#
+        #* calls security_groups_member_updated before                       *#
+        #* create_port_postcommit, instead of after it.                      *#
+        #*********************************************************************#
+
+    def test_timing_endpoint_deletion(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Repeat mainline test with variation: for an endpoint being        *#
+        #* deleted, sim-ML2 calls security_groups_member_updated before      *#
+        #* delete_port_postcommit, instead of after it.                      *#
+        #*********************************************************************#
+
+    def test_multiple_2(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Connect two Felix instances.  Create multiple endpoints, with     *#
+        #* host-id selecting one of the available Felices.                   *#
+        #*                                                                   *#
+        #* Check plugin sends HEARTBEATs to both instances and correctly     *#
+        #* processes HEARTBEATs from both instances.                         *#
+        #*                                                                   *#
+        #* Create lots of endpoints, spread across the two instances.  Then  *#
+        #* get both instances to send RESYNCSTATE at the same time.          *#
+        #*********************************************************************#
+
+    def test_multiple_10(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Connect 10 Felix instances.  Create 100 endpoints, 10 for each    *#
+        #* instance.  Put each endpoint into one of 10 SGs, so that each     *#
+        #* Felix has one endpoint in each of the 10 SGs.  Get all 10         *#
+        #* instances to send RESYNCSTATE in series (without any delay        *#
+        #* between them).  Send GETGROUPS from ACL manager, check that all   *#
+        #* SGs are correctly resent to ACL manager.                          *#
+        #*********************************************************************#
+
+    #*************************************************************************#
+    #* Tests of partners disconnecting and/or connectivity trouble...        *#
+    #*                                                                       *#
+    #* Test the following possible errors to various socket                  *#
+    #* operations. These all represent different manifestations of           *#
+    #* networking connectivity trouble.                                      *#
+    #*************************************************************************#
+ 
+    def test_felix_router_addr_in_use(self):
+
+        #*********************************************************************#
+        #* Operations on the PLUGIN_ENDPOINT_PORT ROUTER socket.             *#
+        #*                                                                   *#
+        #* : self.felix_router_socket = self.zmq_context.socket(zmq.ROUTER)  *#
+        #*                                                                   *#
+        #* - 'Address in use' error when binding to PLUGIN_ENDPOINT_PORT.    *#
+        #*********************************************************************#
+        pass
+
+    def test_acl_get_addr_in_use(self):
+
+        #*********************************************************************#
+        #* Operations on the PLUGIN_ACLGET_PORT ROUTER socket.               *#
+        #*                                                                   *#
+        #* : self.acl_get_socket = self.zmq_context.socket(zmq.ROUTER)       *#
+        #*                                                                   *#
+        #* - 'Address in use' error when binding to PLUGIN_ACLGET_PORT.      *#
+        #*********************************************************************#
+        pass
+
+    def test_acl_pub_addr_in_use(self):
+
+        #*********************************************************************#
+        #* Operations on the PLUGIN_ACLPUB_PORT PUB socket.                  *#
+        #*                                                                   *#
+        #* : self.acl_pub_socket = self.zmq_context.socket(zmq.PUB)          *#
+        #*                                                                   *#
+        #* - 'Address in use' error when binding to PLUGIN_ACLPUB_PORT.      *#
+        #*********************************************************************#
+        pass
+
+    def test_felix_eagain_snd_endpoint(self):
+
+        #*********************************************************************#
+        #* Operations on the FELIX_ENDPOINT_PORT REQ socket.                 *#
+        #*                                                                   *#
+        #* : sock = self.zmq_context.socket(zmq.REQ) :                       *#
+        #* sock.setsockopt(zmq.LINGER, 0) : sock.connect("tcp://%s:%s" %     *#
+        #* (hostname, FELIX_ENDPOINT_PORT)) :                                *#
+        #* self.felix_peer_sockets[hostname] = sock                          *#
+        #*                                                                   *#
+        #* - 'EWOULDBLOCK' error when sending ENDPOINT* request.             *#
+        #*********************************************************************#
+        pass
+
+    def test_felix_eagain_rcv_endpoint(self):
+
+        #*********************************************************************#
+        #* - 'EWOULDBLOCK' error when receiving ENDPOINT* response.          *#
+        #*********************************************************************#
+        pass
+
+    def test_felix_eagain_snd_heartbeat(self):
+
+        #*********************************************************************#
+        #* - 'EWOULDBLOCK' error when sending HEARTBEAT request.             *#
+        #*********************************************************************#
+        pass
+
+    def test_felix_eagain_rcv_heartbeat(self):
+
+        #*********************************************************************#
+        #* - 'EWOULDBLOCK' error when receiving HEARTBEAT response.          *#
+        #*********************************************************************#
+        pass
+
+    def test_connectivity_blips(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Test the following scenarios, to check that plugin processing is  *#
+        #* continuous and correct across connectivity blips.                 *#
+        #*                                                                   *#
+        #* - Connect a Felix, and process a new endpoint for that Felix.     *#
+        #*   Simulate disconnection and reconnection, in the form of a       *#
+        #*   RESYNCSTATE on new connection but with same hostname.  Check    *#
+        #*   that the existing endpoint is sent on the new connection.       *#
+        #*   Check that heartbeats occur as normal on the new connection.    *#
+        #*                                                                   *#
+        #* - Add another new endpoint for same hostname, and check it is     *#
+        #*   processed normally and notified on the new connection.          *#
+        #*                                                                   *#
+        #* - Simulate disconnect and reconnect again, and check that both    *#
+        #*   existing endpoints are notified on the new active connection    *#
+        #*   (#3), after the new RESYNCSTATE.                                *#
+        #*********************************************************************#
+
+    def test_no_felix_new_endpoint(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* ** Error cases                                                    *#
+        #*                                                                   *#
+        #* Do new endpoint processing when required Felix is not available.  *#
+        #* Check that sim-ML2 sees a FelixUnavailable exception from its     *#
+        #* create_port_postcommit call.                                      *#
+        #*                                                                   *#
+        #* Call create_port_postcommit again with host-id changed to match a *#
+        #* Felix that _is_ available.  Check that new endpoint processing    *#
+        #* then proceeds normally.                                           *#
+        #*********************************************************************#
+
+    def test_no_felix_endpoint_update(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Do endpoint update processing when required Felix is not          *#
+        #* available.  Check that sim-ML2 sees a FelixUnavailable exception  *#
+        #* from its update_port_postcommit call.                             *#
+        #*********************************************************************#
+
+    def test_no_felix_endpoint_deleted(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* Do endpoint deletion processing when required Felix is not        *#
+        #* available.  Check that sim-ML2 sees a FelixUnavailable exception  *#
+        #* from its delete_port_postcommit call.                             *#
+        #*********************************************************************#
+
+    def test_code_coverage(self):
+
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
+
+        #*********************************************************************#
+        #* ** Code coverage                                                  *#
+        #*                                                                   *#
+        #* After implementing and executing all of the above, review code    *#
+        #* coverage and add further tests for any mech_calico.py lines that  *#
+        #* have not yet been covered.  (Or else persuade ourselves that we   *#
+        #* don't actually need those lines, and delete them.)                *#
+        #*********************************************************************#
