@@ -313,6 +313,8 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         sleepers = {}
 
+        print "\nTEST CASE: %s" % self.id()
+
     #*************************************************************************#
     #* Method for the test code to call when it wants to advance the         *#
     #* simulated time.                                                       *#
