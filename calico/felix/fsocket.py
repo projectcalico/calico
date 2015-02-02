@@ -91,9 +91,11 @@ class Socket(object):
         elif type == Socket.TYPE_ACL_REQ:
             self.descr = ("ACL Manager %s:%s (request connection %s)" %
                           (self._remote_addr, self._port, self.type))
-        else:
+        elif type == Socket.TYPE_ACL_SUB:
             self.descr = ("ACL Manager %s:%s (subscription connection %s)" %
                           (self._remote_addr, self._port, self.type))
+        else:
+            raise ValueError("Invalid type for socket : %s", type)
 
     def subscribe(self, ep_id):
         """
@@ -118,8 +120,7 @@ class Socket(object):
             self._zmq = None
 
         # We do this again in communicate, but no harm in doing it here too.
-        if self._send_queue is not None:
-            self._send_queue.clear()
+        self.clear_queue()
 
     def clear_queue(self):
         """
@@ -157,8 +158,7 @@ class Socket(object):
         self._request_outstanding = False
 
         # Whatever is on the queues is gone.
-        if self._send_queue is not None:
-            self._send_queue.clear()
+        self.clear_queue()
 
     def send(self, msg):
         """
@@ -278,7 +278,7 @@ class Message(object):
     TYPE_ACL_UPD   = "ACLUPDATE"
     TYPE_HEARTBEAT = "HEARTBEAT"
 
-    def __init__(self, type, fields, endpoint_id=None, keepalive=False):
+    def __init__(self, type, fields, endpoint_id=None):
         #: The type of the message.
         self.type = type
 
@@ -295,9 +295,6 @@ class Message(object):
             self.descr = "%s response" % (type)
         else:
             self.descr = type
-
-        #: Whether this is a keepalive
-        self.keepalive = keepalive
 
         #: A dictionary containing the other dynamic fields on the message.
         self.fields = fields

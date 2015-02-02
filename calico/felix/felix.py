@@ -393,7 +393,9 @@ class FelixAgent(object):
             return
 
         # Unsubscribe endpoint.
-        self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(delete_id.encode('utf-8'))
+        self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
+            delete_id.encode('utf-8')
+        )
         endpoint.remove()
 
         # Send a message indicating our success.
@@ -518,7 +520,9 @@ class FelixAgent(object):
         self.endpoints[endpoint_id] = endpoint
 
         # Start listening to the subscription for this endpoint.
-        self.sockets[Socket.TYPE_ACL_SUB].subscribe(endpoint_id.encode('utf-8'))
+        self.sockets[Socket.TYPE_ACL_SUB].subscribe(
+            endpoint_id.encode('utf-8')
+        )
 
         # Having subscribed, we can now request ACL state for this endpoint.
         fields = {
@@ -625,15 +629,18 @@ class FelixAgent(object):
                     #* need a total ACL resync.                              *#
                     #*********************************************************#
                     acl_resync_needed = True
-                elif sock.type == Socket.TYPE_EP_REQ:
-                    if self.resync_id is not None:
-                        #*****************************************************#
-                        #* The resync we were doing has officially           *#
-                        #* failed. We'll retry when the connection comes     *#
-                        #* back.                                             *#
-                        #*****************************************************#
-                        self.complete_endpoint_resync(False)
-                        endpoint_resync_needed = True
+
+                if (self.resync_id is not None and
+                    sock.type in (Socket.TYPE_EP_REQ, Socket.TYPE_EP_REP)):
+                    #*********************************************************#
+                    #* A resync was in progress, but we may have lost the    *#
+                    #* RESYNCSTATE request or response or (potentially) an   *#
+                    #* ENDPOINTCREATED message due to a lost                 *#
+                    #* connection. That means we have to give up on this     *#
+                    #* resync, tidy up and retry.                            *#
+                    #*********************************************************#
+                    self.complete_endpoint_resync(False)
+                    endpoint_resync_needed = True
 
                 # Recreate the socket.
                 sock.restart(self.hostname, self.zmq_context)
