@@ -2,3 +2,5 @@ pyinstaller
 docopt
 sh
 requests
+etcd
+simplejson

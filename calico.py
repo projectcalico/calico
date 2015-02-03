@@ -52,6 +52,7 @@ from sh import docker
 from sh import modprobe
 from sh import rm
 import requests
+# from etcd.client import Client
 
 docker_run = docker.bake("run", "-d", "--net=none")
 mkdir_p = mkdir.bake('-p')
@@ -61,85 +62,15 @@ fig_node = fig.bake("-p calico", "-f", "node.yml")
 
 HOSTNAME = socket.gethostname()
 
-BIRD_TEMPLATE = Template("""router id $ip;
-log "/var/log/calico/bird.log" all;
+import etcd
 
-# Configure synchronization between routing tables and kernel.
-protocol kernel {
-  learn;          # Learn all alien routes from the kernel
-  persist;        # Don't remove routes on bird shutdown
-  scan time 2;    # Scan kernel routing table every 2 seconds
-  import all;
-  device routes;
-  export all;     # Default is export none
-}
-
-# Watch interface up/down events.
-protocol device {
-  scan time 2;    # Scan interfaces every 2 seconds
-}
-
-protocol direct {
-   debug all;
-   interface "eth*", "em*", "ens*";
-}
-
-# Peer with all neighbours
-protocol bgp bgppeer {
-  debug all;
-  description "Connection to BGP peer";
-  local as 64511;
-$neighbours
-  multihop;
-  gateway recursive; # This should be the default, but just in case.
-  import where net ~ 192.168.0.0/16;
-  export where net ~ 192.168.0.0/16;
-  next hop self;    # Disable next hop processing and always advertise our
-                    # local address as nexthop
-  source address $ip;  # The local address we use for the TCP connection
-}
-""")
+client = etcd.Client()
 
 PLUGIN_TEMPLATE = Template("""[felix $name]
 ip=$ip
 host=$name
 
 $peers
-""")
-
-FELIX_TEMPLATE = Template("""
-[global]
-# Time between retries for failed endpoint operations
-#EndpointRetryTimeMillis = 500
-# Time between complete resyncs
-ResyncIntervalSecs = 5
-# Hostname to use in messages - defaults to server hostname
-FelixHostname = $hostname
-# Plugin and ACL manager addresses
-PluginAddress = $ip
-ACLAddress    = $ip
-# Metadata IP (or host) and port. If no metadata configuration, set to None
-MetadataAddr  = None
-#MetadataPort  = 9697
-# Address to bind to - either "*" or an IPv4 address (or hostname)
-#LocalAddress = *
-
-[log]
-# Log file path. If LogFilePath is not set, felix will not log to file.
-LogFilePath = /var/log/calico/felix.log
-
-# Log severities for the Felix log and for syslog.
-#   Valid levels: NONE (no logging), DEBUG, INFO, WARNING, ERROR, CRITICAL
-LogSeverityFile   = DEBUG
-#LogSeveritySys    = ERROR
-LogSeverityScreen = CRITICAL
-
-[connection]
-# Time with no data on a connection after which we give up on the
-# remote entity
-#ConnectionTimeoutMillis = 40000
-# Time between sending of keepalives
-#ConnectionKeepaliveIntervalMillis = 5000
 """)
 
 ACL_TEMPLATE = Template("""
@@ -212,10 +143,15 @@ def launch(master, peers):
     modprobe("ip6_tables")
     modprobe("xt_set")
 
-    configure_bird(peers)
-    configure_felix(master)
-    p = fig_node("up", "-d", _err=process_output, _out=process_output)
-    p.wait()
+    # configure_bird(peers)
+    # configure_felix(master)
+    # p = fig_node("up", "-d", _err=process_output, _out=process_output)
+    # p.wait()
+    # Assume that the image is already built - called calico_node
+    docker("run", "-d", "calico/node")
+    # TODO pass in the master as an env var?
+    # I don't want to calico to run until it has the
+
 
 def status():
     print(docker("ps"))
@@ -260,10 +196,12 @@ group=%s
 """ % (name, cid, ip, mac, HOSTNAME, group)
 
     # Send the file to master
-    headers = {'content-type': 'application/json'}
-    r = requests.post("http://{host}:5000/upload/{filename}.txt".format(host=master,
-                                                                        filename=name),
-                      data=base_config, headers=headers)
+    # headers = {'content-type': 'application/json'}
+    # r = requests.post("http://{host}:5000/upload/{filename}.txt".format(host=master,
+    #                                                                     filename=name),
+    #                   data=base_config, headers=headers)
+    client.write('/calico/endpoints/%s' % name, base_config)
+
 
 def reset(delete_images):
     print "Killing and removing Calico containers"
