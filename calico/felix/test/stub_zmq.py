@@ -111,6 +111,7 @@ class StubSocket(object):
         pass
 
     def send(self, msg, options=None):
+        log.debug("Sending message %s to %s", msg, self.type)
         self.context.sent_data[self.type].append(json.loads(msg))
 
     def recv(self, options=None):
@@ -124,6 +125,9 @@ class StubSocket(object):
         elif self.uuid is None:
             raise ZmqStubException("No uuid available")
         return (self.uuid, self.msg)
+
+    def close(self):
+        del self.context.sent_data[self.type][:]
 
 class Poller(object):
     def __init__(self):
@@ -140,8 +144,10 @@ class Poller(object):
             raise stub_utils.TestOverException
 
         poll_result = self.context.poll_results.pop(0)
-        log.debug("Got poll request, returning new time %d, events : %s" %
-                  (poll_result.time, poll_result.events))
+        log.debug("Got poll request (%d left), returning new time %d, events : %s" %
+                  (len(self.context.poll_results),
+                   poll_result.time,
+                   poll_result.events))
 
         stub_utils.set_time(poll_result.time)
 
@@ -190,8 +196,8 @@ class Context(object):
 
     def sent_data_present(self):
         """
-        Return True if any sent_data is present. Used to validate that only
-        expected data is there.
+        Return a True result if any sent_data is present. Used to validate that
+        only expected data is there.
         """
         for socket_type in self.sent_data:
             if self.sent_data[socket_type]:

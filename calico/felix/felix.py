@@ -21,7 +21,6 @@ felix.felix
 The main logic for Felix.
 """
 import argparse
-import collections
 import logging
 import os
 import socket
@@ -32,6 +31,7 @@ import zmq
 from calico.felix.config import Config
 from calico.felix.endpoint import Address, Endpoint
 from calico.felix.fsocket import Socket, Message
+from calico.felix import fsocket
 from calico.felix import frules
 from calico.felix import futils
 from calico import common
@@ -121,11 +121,6 @@ class FelixAgent(object):
             Message.TYPE_ACL_UPD: self.handle_aclupdate,
         }
 
-        # Message queues for our request sockets. These exist because we can
-        # only ever have one request outstanding.
-        self.endpoint_queue = collections.deque()
-        self.acl_queue = collections.deque()
-
         # Initiate our connections.
         self.connect_to_plugin()
         self.connect_to_acl_manager()
@@ -161,21 +156,9 @@ class FelixAgent(object):
     def send_request(self, message, socket_type):
         """
         Sends a request on a given socket type.
-
-        This is used to handle the fact that we cannot have multiple
-        outstanding requests on a given socket. It attempts to send the message
-        immediately, and if it cannot it queues it.
         """
         assert socket_type in Socket.REQUEST_TYPES
-
-        socket = self.sockets[socket_type]
-        if socket.request_outstanding:
-            if socket_type == Socket.TYPE_EP_REQ:
-                self.endpoint_queue.appendleft(message)
-            else:
-                self.acl_queue.appendleft(message)
-        else:
-            socket.send(message)
+        self.sockets[socket_type].send(message)
 
         return
 
@@ -194,11 +177,9 @@ class FelixAgent(object):
         for ep in self.endpoints.values():
             ep.pending_resync = True
 
-        # If we had anything queued up to send, clear the queue - it is
-        # superseded. Since we are about to ask for ACLs for all endpoints too,
-        # we want to clear that queue as well.
-        self.endpoint_queue.clear()
-        self.acl_queue.clear()
+        # Since we are about to ask for ACLs for all endpoints too, we want to
+        # clear that queue.
+        self.sockets[Socket.TYPE_ACL_REQ].clear_queue()
 
         # Send the RESYNCSTATE message.
         fields = {
@@ -216,8 +197,9 @@ class FelixAgent(object):
         Initiates a full ACL resynchronisation procedure.
         """
         # ACL resynchronization involves requesting ACLs for all endpoints
-        # for which we have an ID.
-        self.acl_queue.clear()
+        # for which we have an ID. That means any queued requests are really
+        # no longer relevant as they are duplicates.
+        self.sockets[Socket.TYPE_ACL_REQ].clear_queue()
 
         for endpoint_id, endpoint in self.endpoints.iteritems():
             fields = {
@@ -247,7 +229,7 @@ class FelixAgent(object):
                         "Remove endpoint %s that is no longer being managed" %
                         ep.uuid)
                     ep.remove()
-                    del self.endpoints[ep]
+                    del self.endpoints[uuid]
 
         #*********************************************************************#
         #* Now remove rules for any endpoints that should no longer          *#
@@ -411,9 +393,9 @@ class FelixAgent(object):
             return
 
         # Unsubscribe endpoint.
-        sock = self.sockets[Socket.TYPE_ACL_SUB]
-        sock._zmq.setsockopt(zmq.UNSUBSCRIBE, delete_id.encode('utf-8'))
-
+        self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
+            delete_id.encode('utf-8')
+        )
         endpoint.remove()
 
         # Send a message indicating our success.
@@ -538,8 +520,9 @@ class FelixAgent(object):
         self.endpoints[endpoint_id] = endpoint
 
         # Start listening to the subscription for this endpoint.
-        sock = self.sockets[Socket.TYPE_ACL_SUB]
-        sock._zmq.setsockopt(zmq.SUBSCRIBE, endpoint_id.encode('utf-8'))
+        self.sockets[Socket.TYPE_ACL_SUB].subscribe(
+            endpoint_id.encode('utf-8')
+        )
 
         # Having subscribed, we can now request ACL state for this endpoint.
         fields = {
@@ -603,19 +586,8 @@ class FelixAgent(object):
         endpoint_resync_needed = False
         acl_resync_needed = False
 
-        lPoller = zmq.Poller()
-        for sock in self.sockets.values():
-            # Easier just to poll all sockets, even if we expect nothing.
-            lPoller.register(sock._zmq, zmq.POLLIN)
-
-        polled_sockets = dict(lPoller.poll(self.config.EP_RETRY_INT_MS))
-
-        # Get all the sockets with activity.
-        active_sockets = (
-            s for s in self.sockets.values()
-            if s._zmq in polled_sockets
-            and polled_sockets[s._zmq] == zmq.POLLIN
-        )
+        active_sockets = fsocket.poll(self.sockets.values(),
+                                      self.config.EP_RETRY_INT_MS)
 
         # For each active socket, pull the message off and handle it.
         for sock in active_sockets:
@@ -632,8 +604,7 @@ class FelixAgent(object):
             #* resynchronised.                                               *#
             #*****************************************************************#
             if sock.timed_out():
-                log.warning("Socket %s timed out", sock.type)
-                sock.close()
+                log.error("Timed out remote entity : %s", sock.descr)
 
                 #*************************************************************#
                 #* If we lost the connection on which we would receive       *#
@@ -643,44 +614,36 @@ class FelixAgent(object):
                 #* messages.                                                 *#
                 #*************************************************************#
                 if sock.type == Socket.TYPE_EP_REP:
+                    #*********************************************************#
+                    #* We lost the connection on which we would receive      *#
+                    #* ENDPOINTCREATED messages. We may be out of step, so   *#
+                    #* need a total endpoint update.                         *#
+                    #*********************************************************#
                     endpoint_resync_needed = True
-                elif sock.type == Socket.TYPE_ACL_SUB:
+                elif (sock.type == Socket.TYPE_ACL_SUB or
+                      sock.type == Socket.TYPE_ACL_REQ):
+                    #*********************************************************#
+                    #* We lost the connection on which we would receive      *#
+                    #* ACLUPDATE messages, or might have lost some queued    *#
+                    #* GETACLSTATE messages. We may be out of step, so we    *#
+                    #* need a total ACL resync.                              *#
+                    #*********************************************************#
                     acl_resync_needed = True
 
-                # Flush the message queue.
-                if sock.type == Socket.TYPE_EP_REQ:
-                    self.endpoint_queue.clear()
-                elif sock.type == Socket.TYPE_ACL_REQ:
-                    self.acl_queue.clear()
+                if (self.resync_id is not None and
+                    sock.type in (Socket.TYPE_EP_REQ, Socket.TYPE_EP_REP)):
+                    #*********************************************************#
+                    #* A resync was in progress, but we may have lost the    *#
+                    #* RESYNCSTATE request or response or (potentially) an   *#
+                    #* ENDPOINTCREATED message due to a lost                 *#
+                    #* connection. That means we have to give up on this     *#
+                    #* resync, tidy up and retry.                            *#
+                    #*********************************************************#
+                    self.complete_endpoint_resync(False)
+                    endpoint_resync_needed = True
 
                 # Recreate the socket.
-                sock.communicate(self.hostname, self.zmq_context)
-
-                # If this is the ACL SUB socket, then subscribe for all
-                # endpoints.
-                if sock.type == Socket.TYPE_ACL_SUB:
-                    for endpoint_id in self.endpoints:
-                        sock._zmq.setsockopt(zmq.SUBSCRIBE,
-                                             endpoint_id.encode('utf-8'))
-
-        # If we have any queued messages to send, we should do so.
-        endpoint_socket = self.sockets[Socket.TYPE_EP_REQ]
-        acl_socket = self.sockets[Socket.TYPE_ACL_REQ]
-
-        if (len(self.endpoint_queue) and
-                not endpoint_socket.request_outstanding):
-            message = self.endpoint_queue.pop()
-            endpoint_socket.send(message)
-        elif (endpoint_socket.keepalive_due() and
-              not endpoint_socket.request_outstanding):
-            endpoint_socket.send(Message(Message.TYPE_HEARTBEAT, {}))
-
-        if len(self.acl_queue) and not acl_socket.request_outstanding:
-            message = self.acl_queue.pop()
-            acl_socket.send(message)
-        elif (acl_socket.keepalive_due() and
-              not acl_socket.request_outstanding):
-            acl_socket.send(Message(Message.TYPE_HEARTBEAT, {}))
+                sock.restart(self.hostname, self.zmq_context)
 
         # Now, check if we need to resynchronize and do it.
         if (self.resync_id is None and
@@ -700,6 +663,11 @@ class FelixAgent(object):
             #* connection).                                                  *#
             #*****************************************************************#
             self.resync_acls()
+
+        # We are not about to send any more messages; send any required
+        # keepalives.
+        for sock in self.sockets.values():
+            sock.keepalive()
 
         #*********************************************************************#
         #* Finally, retry any endpoints which need retrying. We remove them  *#

@@ -63,6 +63,7 @@ import calico.felix.frules as frules
 import calico.common as common
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.endpoint import Endpoint
+from calico.felix.fsocket import Socket 
 
 # IPtables state.
 expected_iptables = stub_fiptables.TableState()
@@ -159,27 +160,14 @@ class TestBasic(unittest.TestCase):
         agent.run()
 
         # Felix expects one endpoint created message - give it what it wants
-        endpoint_id = str(uuid.uuid4())
-        log.debug("Build first endpoint created : %s" % endpoint_id)
-        mac = stub_utils.get_mac()
-        suffix = endpoint_id[:11]
-        tap = "tap" + suffix
-        addr = '1.2.3.4'
-        endpoint_created_req = { 'type': "ENDPOINTCREATED",
-                                 'endpoint_id': endpoint_id,
-                                 'resync_id': resync_id,
-                                 'issued': futils.time_ms(),
-                                 'mac': mac,
-                                 'state': Endpoint.STATE_ENABLED,
-                                 'addrs': [ {'gateway': "1.2.3.1", 'addr': addr} ] }
-
+        addr = "1.2.3.4"
+        endpoint = CreatedEndpoint([addr])
+        log.debug("Build first endpoint created : %s", endpoint.id)
         poll_result = context.add_poll_result(100)
-        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        poll_result.add(TYPE_EP_REP, endpoint.create_req)
         agent.run()
 
-        log.debug("Create tap interface %s" % tap)
-        tap_obj = stub_devices.TapInterface(tap)
-        stub_devices.add_tap(tap_obj)
+        log.debug("Create tap interface %s", endpoint.tap)
         poll_result = context.add_poll_result(150)
         agent.run()
 
@@ -193,7 +181,7 @@ class TestBasic(unittest.TestCase):
 
         acl_req = context.sent_data[TYPE_ACL_REQ].pop()
         self.assertFalse(context.sent_data_present())
-        self.assertEqual(acl_req['endpoint_id'], endpoint_id)
+        self.assertEqual(acl_req['endpoint_id'], endpoint.id)
 
         acl_rsp = { 'type': "GETACLSTATE",
                     'rc': "SUCCESS",
@@ -203,9 +191,9 @@ class TestBasic(unittest.TestCase):
 
         # Check the rules are what we expect.
         set_expected_global_rules()
-        add_endpoint_rules(suffix, tap, addr, None, mac)
+        add_endpoint_rules(endpoint.suffix, endpoint.tap, addr, None, endpoint.mac)
         stub_fiptables.check_state(expected_iptables)
-        add_endpoint_ipsets(suffix)
+        add_endpoint_ipsets(endpoint.suffix)
         stub_ipsets.check_state(expected_ipsets)
 
         # OK - now try giving it some ACLs, and see if they get applied correctly.
@@ -260,46 +248,34 @@ class TestBasic(unittest.TestCase):
         acl_req = { 'type': "ACLUPDATE",
                     'acls': acls }
 
-        poll_result.add(TYPE_ACL_SUB, acl_req, endpoint_id)
+        poll_result.add(TYPE_ACL_SUB, acl_req, endpoint.id)
         agent.run()
 
         stub_fiptables.check_state(expected_iptables)
-        expected_ipsets.add("felix-from-icmp-" + suffix, "0.0.0.0/1")
-        expected_ipsets.add("felix-from-icmp-" + suffix, "128.0.0.0/1")
-        expected_ipsets.add("felix-from-port-" + suffix, "1.2.3.0/24,tcp:0")
-        expected_ipsets.add("felix-from-port-" + suffix, "0.0.0.0/1,tcp:80")
-        expected_ipsets.add("felix-from-port-" + suffix, "128.0.0.0/1,tcp:80")
+        expected_ipsets.add("felix-from-icmp-" + endpoint.suffix, "0.0.0.0/1")
+        expected_ipsets.add("felix-from-icmp-" + endpoint.suffix, "128.0.0.0/1")
+        expected_ipsets.add("felix-from-port-" + endpoint.suffix, "1.2.3.0/24,tcp:0")
+        expected_ipsets.add("felix-from-port-" + endpoint.suffix, "0.0.0.0/1,tcp:80")
+        expected_ipsets.add("felix-from-port-" + endpoint.suffix, "128.0.0.0/1,tcp:80")
 
-        expected_ipsets.add("felix-to-icmp-" + suffix, "1.2.2.0/24")
-        expected_ipsets.add("felix-to-port-" + suffix, "0.0.0.0/1,tcp:8080")
-        expected_ipsets.add("felix-to-port-" + suffix, "128.0.0.0/1,tcp:8080")
-        expected_ipsets.add("felix-to-port-" + suffix, "2.4.6.8/32,udp:8080")
-        expected_ipsets.add("felix-to-addr-" + suffix, "1.2.3.3/32")
-        expected_ipsets.add("felix-to-port-" + suffix, "3.6.9.12/32,tcp:10-50")
-        expected_ipsets.add("felix-to-port-" + suffix, "5.4.3.2/32,icmp:3/2")
-        expected_ipsets.add("felix-to-port-" + suffix, "5.4.3.2/32,icmp:9/0")
-        expected_ipsets.add("felix-to-port-" + suffix, "5.4.3.2/32,icmp:blah")
+        expected_ipsets.add("felix-to-icmp-" + endpoint.suffix, "1.2.2.0/24")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "0.0.0.0/1,tcp:8080")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "128.0.0.0/1,tcp:8080")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "2.4.6.8/32,udp:8080")
+        expected_ipsets.add("felix-to-addr-" + endpoint.suffix, "1.2.3.3/32")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "3.6.9.12/32,tcp:10-50")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "5.4.3.2/32,icmp:3/2")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "5.4.3.2/32,icmp:9/0")
+        expected_ipsets.add("felix-to-port-" + endpoint.suffix, "5.4.3.2/32,icmp:blah")
 
         stub_ipsets.check_state(expected_ipsets)
 
         # Add another endpoint, and check the state.
-        endpoint_id2 = str(uuid.uuid4())
-        log.debug("Build second endpoint created : %s" % endpoint_id2)
-        mac2 = stub_utils.get_mac()
-        suffix2 = endpoint_id2[:11]
-        tap2 = "tap" + suffix2
-        addr2 = '1.2.3.5'
-        endpoint_created_req = { 'type': "ENDPOINTCREATED",
-                                 'endpoint_id': endpoint_id2,
-                                 'issued': futils.time_ms(),
-                                 'mac': mac2,
-                                 'state': Endpoint.STATE_ENABLED,
-                                 'addrs': [ {'gateway': "1.2.3.1", 'addr': addr2} ] }
-
+        addr2 = "1.2.3.5"
+        endpoint2 = CreatedEndpoint([addr2])
+        log.debug("Build second endpoint created : %s", endpoint2.id)
         poll_result = context.add_poll_result(250)
-        poll_result.add(TYPE_EP_REP, endpoint_created_req)
-        tap_obj2 = stub_devices.TapInterface(tap2)
-        stub_devices.add_tap(tap_obj2)
+        poll_result.add(TYPE_EP_REP, endpoint2.create_req)
         agent.run()
 
         # Check that we got what we expected - i.e. a success response, a GETACLSTATE,
@@ -308,27 +284,23 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
 
         acl_req = context.sent_data[TYPE_ACL_REQ].pop()
-        self.assertEqual(acl_req['endpoint_id'], endpoint_id2)
+        self.assertEqual(acl_req['endpoint_id'], endpoint2.id)
         self.assertFalse(context.sent_data_present())
 
-        add_endpoint_rules(suffix2, tap2, addr2, None, mac2)
+        add_endpoint_rules(endpoint2.suffix, endpoint2.tap, addr2, None, endpoint2.mac)
         stub_fiptables.check_state(expected_iptables)
-        add_endpoint_ipsets(suffix2)
+        add_endpoint_ipsets(endpoint2.suffix)
         stub_ipsets.check_state(expected_ipsets)
 
         # OK, finally wind down with an ENDPOINTDESTROYED message for that second endpoint.
-        endpoint_destroyed_req = { 'type': "ENDPOINTDESTROYED",
-                                   'endpoint_id': endpoint_id2,
-                                   'issued': futils.time_ms() }
-
         poll_result = context.add_poll_result(300)
-        poll_result.add(TYPE_EP_REP, endpoint_destroyed_req)
-        stub_devices.del_tap(tap2)
+        poll_result.add(TYPE_EP_REP, endpoint2.destroy_req)
+        stub_devices.del_tap(endpoint2.tap)
         agent.run()
 
-        # Rebuild and recheck the state.
+        # Rebuild and recheck the state. Only the first endpoint still exists.
         set_expected_global_rules()
-        add_endpoint_rules(suffix, tap, addr, None, mac)
+        add_endpoint_rules(endpoint.suffix, endpoint.tap, addr, None, endpoint.mac)
         stub_fiptables.check_state(expected_iptables)
 
     def test_rule_reordering(self):
@@ -433,22 +405,11 @@ class TestTimings(unittest.TestCase):
         self.assertFalse(context.sent_data_present())
        
         # Send an endpoint created message to Felix.
-        endpoint_id = str(uuid.uuid4())
-        log.debug("Build first endpoint created : %s" % endpoint_id)
-        mac = stub_utils.get_mac()
-        suffix = endpoint_id[:11]
-        tap = "tap" + suffix
         addr = '1.2.3.4'
-        endpoint_created_req = { 'type': "ENDPOINTCREATED",
-                                 'endpoint_id': endpoint_id,
-                                 'resync_id': resync_id,
-                                 'issued': futils.time_ms(),
-                                 'mac': mac,
-                                 'state': Endpoint.STATE_ENABLED,
-                                 'addrs': [ {'gateway': "1.2.3.1", 'addr': addr} ] }
-
+        endpoint = CreatedEndpoint([addr], resync_id)
+        log.debug("Build first endpoint created : %s", endpoint.id)
         poll_result = context.add_poll_result(15001)
-        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        poll_result.add(TYPE_EP_REP, endpoint.create_req)
         agent.run()
 
         # We stop using sent_data_present, since there are ACL requests around.
@@ -457,22 +418,12 @@ class TestTimings(unittest.TestCase):
         self.assertFalse(context.sent_data[TYPE_EP_REQ])
 
         # Send a second endpoint created message to Felix - triggers another resync.
-        endpoint_id = str(uuid.uuid4())
-        log.debug("Build second endpoint created : %s" % endpoint_id)
-        mac = stub_utils.get_mac()
-        suffix = endpoint_id[:11]
-        tap = "tap" + suffix
         addr = '1.2.3.5'
-        endpoint_created_req = { 'type': "ENDPOINTCREATED",
-                                 'endpoint_id': endpoint_id,
-                                 'resync_id': resync_id,
-                                 'issued': futils.time_ms(),
-                                 'mac': mac,
-                                 'state': Endpoint.STATE_ENABLED,
-                                 'addrs': [ {'gateway': "1.2.3.1", 'addr': addr} ] }
+        endpoint2 = CreatedEndpoint([addr], resync_id)
+        log.debug("Build second endpoint created : %s" % endpoint2.id)
 
         poll_result = context.add_poll_result(15002)
-        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        poll_result.add(TYPE_EP_REP, endpoint2.create_req)
         agent.run()
 
         endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
@@ -487,12 +438,587 @@ class TestTimings(unittest.TestCase):
 
         # We should have got another resync request.
         poll_result = context.add_poll_result(20003)
-        poll_result.add(TYPE_EP_REP, endpoint_created_req)
+        poll_result.add(TYPE_EP_REP, endpoint2.create_req)
         agent.run()
         resync_req = context.sent_data[TYPE_EP_REQ].pop()
         log.debug("Resync request : %s" % resync_req)
         self.assertFalse(context.sent_data[TYPE_EP_REQ])
 
+    def test_keepalives(self):
+        """
+        Test that keepalives are sent.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        # Get started.
+        context.add_poll_result(0)
+        agent.run()
+
+        # Now we should have got a resync request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "0",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        # We should send keepalives on the 5 second boundary.
+        poll_result = context.add_poll_result(4999)
+        agent.run()
+        self.assertFalse(context.sent_data_present())
+
+        poll_result = context.add_poll_result(5001)
+        agent.run()
+        keepalive = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertTrue(keepalive['type'] == "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # Send the resync response now
+        poll_result = context.add_poll_result(6000)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+        self.assertFalse(context.sent_data_present())
+
+        # At time 9000, send the ACL response.
+        poll_result = context.add_poll_result(9000)
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+        self.assertFalse(context.sent_data_present())
+      
+        # Now we should get another keepalive sent at 14 seconds on ACL_REQ,
+        # and 11 on EP_REQ
+        poll_result = context.add_poll_result(11001)
+        agent.run()
+        keepalive = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertTrue(keepalive['type'] == "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        poll_result = context.add_poll_result(14001)
+        agent.run()
+        keepalive = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertTrue(keepalive['type'] == "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+    def test_timeouts(self):
+        """
+        Test that connections time out correctly.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        # Get started.
+        context.add_poll_result(0)
+        agent.run()
+
+        sock_zmq = {}
+        for sock in agent.sockets.values():
+            sock_zmq[sock] = sock._zmq
+
+        # Now we should have got a resync request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "0",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        # Send keepalives on the connections that expect them
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+        agent.run()
+
+        # Give EP REQ a chance to send a keepalive.
+        context.add_poll_result(10000)
+        agent.run()
+
+        # OK, so now we have some live connections. We let the EP REQ fail
+        # first.
+        context.add_poll_result(10000)
+        agent.run()
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        msg = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        msg = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # And another 20 seconds
+        poll_result = context.add_poll_result(40000)
+        poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+        for sock in agent.sockets.values():
+            # Assert no connections have been restarted.
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # And another - which should lead to EP REQ going pop, and keepalives.
+        context.add_poll_result(60000)
+        agent.run()
+        for sock in agent.sockets.values():
+            if sock.type == TYPE_EP_REQ:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        msg = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        msg = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # That connection that came up should be sending keepalives
+        context.add_poll_result(70000)
+        agent.run()
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+        self.assertFalse(context.sent_data_present())
+
+        # OK, so now time out the EP REP socket. This triggers a resync.
+        poll_result = context.add_poll_result(80000)
+        poll_result.add(TYPE_EP_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+
+        # This is the point where the EP REP socket is going to die.
+        log.debug("EP REP should now trigger resync")
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "RESYNCSTATE")
+        resync_id = msg['resync_id']
+        msg = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(msg['type'], "HEARTBEAT")
+
+        for sock in agent.sockets.values():
+            # Assert no connections have been restarted.
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # OK, so send some messages in response.
+        poll_request = context.add_poll_result(120000)
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "5",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        addrs = [ "2001::%s" + str(i) for i in range(1,6) ]
+        endpoints = []
+        for addr in addrs:
+            endpoint = CreatedEndpoint([addr], resync_id)
+            endpoints.append(endpoint)
+
+            poll_result = context.add_poll_result(120000)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        # OK, so get the first two ACL state messages, blocked behind the heartbeat.
+        poll_result = context.add_poll_result(120000)
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+        agent.run()
+
+        acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(acl_req['type'], "GETACLSTATE")
+        self.assertEqual(acl_req['endpoint_id'], endpoints[0].id)
+
+        poll_result = context.add_poll_result(120000)
+        poll_result.add(TYPE_ACL_REQ,
+                        {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': "" })
+        agent.run()
+
+        acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(acl_req['type'], "GETACLSTATE")
+        self.assertEqual(acl_req['endpoint_id'], endpoints[1].id)
+
+        #*********************************************************************#
+        #* OK, so let's pretend that the ACL SUB connection has gone away.   *#
+        #* We've done keepalives to the Nth degree, so are about to start    *#
+        #* cheating a bit, and will tweak _last_activity in the socket to    *#
+        #* force timeouts to make the test (much) simpler.                   *#
+        #*********************************************************************#
+        agent.sockets[TYPE_ACL_SUB]._last_activity = 0
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            if sock.type == TYPE_ACL_SUB:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        #*********************************************************************#
+        #* The ACL request connection is up, and it should send us 5         *#
+        #* messages. Recall that there is already one outstanding            *#
+        #* GETACLSTATE, so acknowledge that first.                           *#
+        #*********************************************************************#
+        for i in range(1,6):
+            poll_result = context.add_poll_result(120000)
+            poll_result.add(TYPE_ACL_REQ,
+                            {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': ""})
+
+            agent.run()
+
+            acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+            self.assertEqual(acl_req['type'], "GETACLSTATE")
+
+
+        #*********************************************************************#
+        #* There should be no more messages - i.e. just the 5.               *#
+        #*********************************************************************#
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+        self.assertFalse(context.sent_data_present())
+
+        #*********************************************************************#
+        #* Make the ACL REQ connection go away, with similar results.        *#
+        #*********************************************************************#
+        agent.sockets[TYPE_ACL_REQ]._last_activity = 0
+        poll_result = context.add_poll_result(120000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            if sock.type == TYPE_ACL_REQ:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        for i in range(1,6):
+            acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+            self.assertEqual(acl_req['type'], "GETACLSTATE")
+
+            poll_result = context.add_poll_result(120000)
+            poll_result.add(TYPE_ACL_REQ,
+                            {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': ""})
+
+            agent.run()      
+
+    def test_queues(self):
+        """
+        Test queuing.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        # Get started.
+        context.add_poll_result(0)
+        agent.run()
+
+        # Who cares about the resync request - just reply right away.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertFalse(context.sent_data_present())
+
+        context.add_poll_result(0)
+        agent.run()
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "0",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        # OK, so let's just trigger a bunch of endpoint creations. Each of
+        # these does some work that we don't care about. What we do care about
+        # is that the queues get managed.
+        addrs = [ "192.168.0." + str(i) for i in range(1,11) ]
+        endpoints = []
+        for addr in addrs:
+            endpoint = CreatedEndpoint([addr])
+            endpoints.append(endpoint)
+
+            poll_result = context.add_poll_result(1)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        #*********************************************************************#
+        #* OK, we just threw 10 ENDPOINTCREATED requests in. There should be *#
+        #* 10 ACLUPDATE requests out there for those endpoints, in           *#
+        #* order. Grab them, spinning things out long enough that keepalives *#
+        #* would be sent and connections torn down if there was no other     *#
+        #* activity.                                                         *#
+        #*********************************************************************#
+        sock_zmq = {}
+        for sock in agent.sockets.values():
+            sock_zmq[sock] = sock._zmq
+
+        poll_result = context.add_poll_result(6000)
+        poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
+        poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+
+        acl_req_sock = agent.sockets[TYPE_ACL_REQ]
+
+        for i in range(1,11):
+            log.debug("Check status; iteration %d", i)
+
+            agent.run()
+
+            self.assertEqual(len(acl_req_sock._send_queue), 10 - i)
+
+            poll_result = context.add_poll_result(20000 * i)
+
+            acl_req = context.sent_data[TYPE_ACL_REQ].pop()
+            self.assertEqual(acl_req['type'], "GETACLSTATE")
+            self.assertEqual(acl_req['endpoint_id'], endpoints[i - 1].id)
+            poll_result.add(TYPE_ACL_REQ,
+                            {'type': "GETACLSTATE", 'rc': "SUCCESS", 'message': "" })
+ 
+            # Heartbeats for the other connections.
+            keepalive_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(keepalive_rsp['type'], "HEARTBEAT")
+            poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
+
+            keepalive = context.sent_data[TYPE_EP_REQ].pop()
+            self.assertEqual(keepalive['type'], "HEARTBEAT")
+            poll_result.add(TYPE_EP_REQ, {'type': "HEARTBEAT", 'rc': "SUCCESS"})
+
+            # ACL SUB does not need responses.
+            poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
+
+            self.assertFalse(context.sent_data_present())
+
+            # We now wait long enough that a keepalive will appear.
+            agent.run()
+            poll_result = context.add_poll_result(20000 * i + 10000)
+
+        # Check the ACL_REQ keepalives have started.
+        poll_result = context.add_poll_result(20000 * i + 10000)
+        agent.run()
+
+        keepalive = context.sent_data[TYPE_ACL_REQ].pop()
+        self.assertEqual(keepalive['type'], "HEARTBEAT")
+
+        for sock in agent.sockets.values():
+            # Assert no connections have been restarted.
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+    def test_resync_timeouts(self):
+        """
+        Test timeouts during resyncs
+        """
+        #TODO: Should include rules and ipsets too.
+        common.default_logging()
+        context = stub_zmq.Context()
+        stub_utils.set_time(100000)
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        sock_zmq = {}
+        for sock in agent.sockets.values():
+            sock_zmq[sock] = sock._zmq
+
+        # Get started.
+        context.add_poll_result(100000)
+        agent.run()
+
+        # Check resync is there, throw it away.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(resync_req['type'], "RESYNCSTATE")
+        resync_id = resync_req['resync_id']
+        self.assertFalse(context.sent_data_present())
+
+        # Force resync to be replaced by tearing down EP_REQ when outstanding.
+        agent.sockets[TYPE_EP_REQ]._last_activity = 0
+        context.add_poll_result(100000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            log.debug("Check socket %s", sock.type)
+            if sock.type == TYPE_EP_REQ:
+                self.assertIsNot(sock_zmq[sock], sock._zmq)
+                sock_zmq[sock] = sock._zmq
+            else:
+                self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # As if by magic, another resync has appeared.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(resync_req['type'], "RESYNCSTATE")
+        self.assertNotEqual(resync_req['resync_id'], resync_id)
+        resync_id = resync_req['resync_id']
+        self.assertFalse(context.sent_data_present())
+
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': 0,
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result = context.add_poll_result(100000)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        # Force another resync by timing out the EP_REP connection.
+        agent.sockets[TYPE_EP_REP]._last_activity = 0
+        context.add_poll_result(100000)
+        agent.run()
+
+        for sock in agent.sockets.values():
+            self.assertIs(sock_zmq[sock], sock._zmq)
+
+        # As if by magic, another resync has appeared.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(resync_req['type'], "RESYNCSTATE")
+        self.assertNotEqual(resync_req['resync_id'], resync_id)
+        resync_id = resync_req['resync_id']
+        self.assertFalse(context.sent_data_present())
+
+    def test_resync_tidy_up(self):
+        """
+        Check that endpoints are removed where required.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        stub_utils.set_time(100000)
+        agent = felix.FelixAgent(config_path, context)
+
+        agent.config.RESYNC_INT_SEC = 500
+        agent.config.CONN_TIMEOUT_MS = 50000
+        agent.config.CONN_KEEPALIVE_MS = 5000
+
+        poll_result = context.add_poll_result(0)
+        agent.run()
+
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "RESYNCSTATE")
+        resync_id = msg['resync_id']
+
+        # OK, so send some messages in response.
+        poll_result = context.add_poll_result(0)
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "5",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        addrs = [ "2001::%s" + str(i) for i in range(1,6) ]
+        ep_ids = set()
+        endpoints = []
+        for addr in addrs:
+            endpoint = CreatedEndpoint([addr], resync_id)
+            endpoints.append(endpoint)
+            ep_ids.add(endpoint.id)
+
+            poll_result = context.add_poll_result(0)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        # Check that the endpoints are as expected.
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+
+        # Now delete an endpoint.
+        endpoint = endpoints.pop()
+        ep_ids.remove(endpoint.id)
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REP, endpoint.destroy_req)
+        agent.run()
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+
+        # Now force another resync, with different data.
+        agent.sockets[TYPE_EP_REP]._last_activity = -100000
+        poll_result = context.add_poll_result(0)
+        agent.run()
+
+        msg = context.sent_data[TYPE_EP_REQ].pop()
+        self.assertEqual(msg['type'], "RESYNCSTATE")
+        resync_id = msg['resync_id']
+
+        # OK, so now we create two more endpoint.
+        new_endpoint = CreatedEndpoint(["1.2.3.4"])
+        ep_ids.add(new_endpoint.id)
+
+        rm_endpoint = endpoints.pop()
+                              
+        poll_result = context.add_poll_result(0)
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': "4",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        for endpoint in endpoints:
+            endpoint.create_req['resync_id'] = resync_id
+            poll_result = context.add_poll_result(0)
+            poll_result.add(TYPE_EP_REP, endpoint.create_req)
+            agent.run()
+            endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+            self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REP, new_endpoint.create_req)
+        agent.run()
+        endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+
+        #*********************************************************************#
+        #* We have added 4 pre-existing endpoints, and a new endpoint. The   *#
+        #* new endpoint does not count (not part of the resync), so does not *#
+        #* trigger tidy up of rm_endpoint.                                   *#
+        #*********************************************************************#
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+
+        #*********************************************************************#
+        #* Add one more endpoint in the resync, and tidy up will occur.      *#
+        #*********************************************************************#
+        ep_ids.remove(rm_endpoint.id)
+
+        log.debug("Add a new endpoint to complete resync")
+        new_endpoint2 = CreatedEndpoint(["1.2.3.5"], resync_id)
+        ep_ids.add(new_endpoint2.id)
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REP, new_endpoint2.create_req)
+        agent.run()
+        endpoint_created_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_created_rsp['rc'], "SUCCESS")
+        self.assertEqual(ep_ids, set(agent.endpoints.keys()))
+       
 def get_blank_acls():
     """
     Return a blank set of ACLs, with nothing permitted.
@@ -783,3 +1309,40 @@ def add_endpoint_ipsets(suffix):
     expected_ipsets.create("felix-6-from-port-" + suffix, "hash:net,port", "inet6")
     expected_ipsets.create("felix-6-from-addr-" + suffix, "hash:net", "inet6")
     expected_ipsets.create("felix-6-from-icmp-" + suffix, "hash:net", "inet6")
+
+class CreatedEndpoint(object):
+    """
+    Builds an object which contains all the information we might need. Useful
+    if we want to just create one for test purposes.
+
+    addresses is a list or set of addresses; we just need to iterate over it.
+    """
+    def __init__(self, addresses, resync_id=""):
+        self.id = str(uuid.uuid4())
+        self.mac = stub_utils.get_mac()
+        self.suffix = self.id[:11]
+        self.tap = "tap" + self.suffix
+        addrs = []
+        for addr in addresses:
+            if "." in addr:
+                addrs.append({'gateway': "1.2.3.1", 'addr': addr})
+            else:
+                addrs.append({'gateway': "2001::1234", 'addr': addr})
+                
+        self.create_req = { 'type': "ENDPOINTCREATED",
+                     'endpoint_id': self.id,
+                     'resync_id': resync_id,
+                     'issued': str(futils.time_ms()),
+                     'mac': self.mac,
+                     'state': Endpoint.STATE_ENABLED,
+                     'addrs': addrs }
+
+        self.destroy_req = { 'type': "ENDPOINTDESTROYED",
+                             'endpoint_id': self.id,
+                             'issued': futils.time_ms() }
+
+        log.debug("Create test endpoint %s", self.id)
+
+        tap_obj = stub_devices.TapInterface(self.tap)
+        stub_devices.add_tap(tap_obj)
+
