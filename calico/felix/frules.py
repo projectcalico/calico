@@ -116,7 +116,7 @@ def set_global_rules(config):
 
         rule.create_tcp_match("80")
         fiptables.insert_rule(rule, chain, 0)
-        truncate_rules(chain, 1)
+        chain.truncate_rules(1)
 
     # Add a rule that forces us through the chain we just created.
     chain = fiptables.get_chain(table, "PREROUTING")
@@ -162,7 +162,7 @@ def set_global_rules(config):
         rule.out_interface = "tap+"
         fiptables.insert_rule(rule, chain, 3)
 
-        truncate_rules(chain, 4)
+        chain.truncate_rules(4)
 
         # The felix INPUT chain tests traffic from endpoints
         chain = fiptables.get_chain(table, CHAIN_INPUT)
@@ -174,7 +174,7 @@ def set_global_rules(config):
         rule.in_interface = "tap+"
         fiptables.insert_rule(rule, chain, 1)
 
-        truncate_rules(chain, 2)
+        chain.truncate_rules(2)
 
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
@@ -252,11 +252,11 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
         #*                                                                      *#
         #* These rules are ICMP types 130, 131, 132, 134, 135 and 136, and can  *#
         #* be created on the command line with something like :                 *#
-        #*    ip6tables -A plw -j RETURN --protocol icmpv6 --icmpv6-type 130    *#
+        #*    ip6tables -A plw -j RETURN --protocol ipv6-icmp --icmpv6-type 130 *#
         #************************************************************************#
         for icmp in ["130", "131", "132", "134", "135", "136"]:
             rule = fiptables.Rule(futils.IPV6, "RETURN")
-            rule.protocol = "icmpv6"
+            rule.protocol = "ipv6-icmp"
             rule.create_icmp6_match([icmp])
             fiptables.insert_rule(rule, to_chain, index)
             index += 1
@@ -287,7 +287,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     if type is IPV4:
         rule.protocol = "icmp"
     else:
-        rule.protocol = "icmpv6"
+        rule.protocol = "ipv6-icmp"
     rule.create_set_match([to_ipset_icmp, "src"])
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
@@ -301,7 +301,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     #* Delete all rules from here to the end of the chain, in case there     *#
     #* were rules present which should not have been.                        *#
     #*************************************************************************#
-    truncate_rules(to_chain, index)
+    to_chain.truncate_rules(index)
 
     #*************************************************************************#
     #* Now the chain that manages packets from the interface, and the rules  *#
@@ -313,7 +313,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     if type == IPV6:
         # In ipv6 only, allows all ICMP traffic from this endpoint to anywhere.
         rule = fiptables.Rule(type, "RETURN")
-        rule.protocol = "icmpv6"
+        rule.protocol = "ipv6-icmp"
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
 
@@ -380,7 +380,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     if type is IPV4:
         rule.protocol = "icmp"
     else:
-        rule.protocol = "icmpv6"
+        rule.protocol = "ipv6-icmp"
     rule.create_set_match([from_ipset_icmp, "dst"])
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
@@ -394,7 +394,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     #* Delete all rules from here to the end of the chain, in case there     *#
     #* were rules present which should not have been.                        *#
     #*************************************************************************#
-    truncate_rules(from_chain, index)
+    from_chain.truncate_rules(index)
 
     #*************************************************************************#
     #* We have created the chains and rules that control input and output    *#
@@ -471,7 +471,7 @@ def del_rules(suffix, type):
         while not done:
             done = True
             for rule in chain.rules:
-                if rule.target.name in (to_chain, from_chain):
+                if rule.target in (to_chain, from_chain):
                     chain.delete_rule(rule)
                     done = False
                     break
@@ -591,8 +591,8 @@ def update_ipsets(type,
 
         #*********************************************************************#
         #* Now handle the protocol. There are three types of protocol. tcp / *#
-        #* sctp /udp / udplite have an optional port. icmp / icmpv6 have an  *#
-        #* optional type and code. Anything else doesn't have ports.         *#
+        #* sctp /udp / udplite have an optional port. icmp / ipv6-icmp have  *#
+        #* an optional type and code. Anything else doesn't have ports.      *#
         #*                                                                   *#
         #* We build the value to insert without the CIDR, then prepend the   *#
         #* CIDR later (since we may need to use two CIDRs).                  *#
@@ -638,7 +638,7 @@ def update_ipsets(type,
                 # An integer port was specified.
                 ipset_value = ",%s:%s" % (protocol, port)
                 ipset = tmp_ipset_port
-        elif protocol in ("icmp", "icmpv6"):
+        elif protocol in ("icmp", "ipv6-icmp"):
             if rule.get('port') is not None:
                 # No protocol, so port is not allowed.
                 log.error(
@@ -723,7 +723,7 @@ def list_eps_with_rules(type):
     table = fiptables.get_table(type, "filter")
 
     eps  = {chain.name.replace(CHAIN_TO_PREFIX, "")
-            for chain in table.chains
+            for chain in table.chains.values()
             if chain.name.startswith(CHAIN_TO_PREFIX)}
 
     names = ipsets.list_names()
@@ -736,20 +736,4 @@ def list_eps_with_rules(type):
     log.debug("Current list of managed %s endpoints : %s" % (type, eps))
 
     return eps
-
-def truncate_rules(chain, count):
-    """
-    This is a utility function to remove any excess rules from a chain. After
-    we have carefully inserted all the rules we want at the start, we want to
-    get rid of any legacy rules from the end.
-
-    It takes a chain object, and a count for how many of the rules should be
-    left in place.
-
-    Arguably, it should be in fiptables, but we put it here because it's easier
-    to test it here.
-    """
-    while len(chain.rules) > count:
-        rule = chain.rules[-1]
-        chain.delete_rule(rule)
 

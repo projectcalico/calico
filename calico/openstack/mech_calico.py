@@ -87,15 +87,15 @@ PLUGIN_ACLPUB_PORT = 9904
 #*****************************************************************************#
 #* Time (ms) to allow for Felix to send us an ENDPOINT* response.            *#
 #*****************************************************************************#
-ENDPOINT_RESPONSE_TIMEOUT = 2000
+ENDPOINT_RESPONSE_TIMEOUT = 10000
 
 #*****************************************************************************#
 #* Time (ms) to allow for Felix to send us a HEARTBEAT response.             *#
 #*****************************************************************************#
-HEARTBEAT_RESPONSE_TIMEOUT = 2000
+HEARTBEAT_RESPONSE_TIMEOUT = 10000
 
 #*****************************************************************************#
-#* Time between heartbeats, in seconds.                                      *#
+#* TIME between heartbeats, in seconds.                                      *#
 #*****************************************************************************#
 HEARTBEAT_SEND_INTERVAL_SECS = 30
 

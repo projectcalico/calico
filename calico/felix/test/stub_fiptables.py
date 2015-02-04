@@ -21,14 +21,6 @@ Stub version of the fiptables module.
 from calico.felix.futils import IPV4, IPV6
 import difflib
 
-from collections import namedtuple
-#*****************************************************************************#
-#* The following is so that rule.target.name can be used to identify rules;  *#
-#* this is the subset of the Target object from iptc that is actually        *#
-#* required by calling code.                                                 *#
-#*****************************************************************************#
-RuleTarget = namedtuple('RuleTarget', ['name'])
-
 # Special value to mean "put this rule at the end".
 RULE_POSN_LAST = -1
 
@@ -42,8 +34,7 @@ class Rule(object):
     def __init__(self, type, target_name=None):
         self.type = type
 
-        self.target_name = target_name
-        self.target = RuleTarget(target_name)
+        self.target = target_name
         self.target_args = {}
 
         self.match_name = None
@@ -55,8 +46,7 @@ class Rule(object):
         self.out_interface = None
 
     def create_target(self, name, parameters=None):
-        self.target = RuleTarget(name)
-        self.target_name = name
+        self.target = name
         if parameters is not None:
             for key in parameters:
                 self.target_args[key] = parameters[key]
@@ -95,7 +85,7 @@ class Rule(object):
             self.src != other.src or
             self.in_interface != other.in_interface or
             self.out_interface != other.out_interface or
-            self.target_name != other.target_name or
+            self.target != other.target or
             self.match_name != other.match_name):
             return False
 
@@ -112,7 +102,7 @@ class Rule(object):
         return True
 
     def __str__(self):
-        output = self.target_name
+        output = self.target
         if self.target_args:
             output += " " + str(self.target_args)
         output += " " + (self.protocol if self.protocol else "all")
@@ -144,6 +134,10 @@ class Chain(object):
         # The rule must exist or it is an error.
         self.rules.remove(rule)
 
+    def truncate_rules(self, count):
+        while len(self.rules) > count:
+            self.rules.pop(count)
+
     def __eq__(self, other):
         # Equality deliberately only cares about name.
         if self.name == other.name:
@@ -162,22 +156,14 @@ class Table(object):
     def __init__(self, type, name):
         self.type = type
         self.name = name
-        self._chains_dict = {}
+        self.chains = {}
 
     def is_chain(self, name):
-        return (name in self._chains_dict)
+        return (name in self.chains)
 
     def delete_chain(self, name):
-        del self._chains_dict[name]
-        for chain in self.chains:
-            if chain.name == name:
-                self.chains.remove(chain)
+        del self.chains[name]
                 
-    @property
-    def chains(self):
-        # The python-iptables code exposes the list of chains directly.
-        return self._chains_dict.values()
-
 def get_table(type, name):
     """
     Gets a table. This is a simple helper method that returns either
@@ -197,11 +183,11 @@ def get_chain(table, name):
     """
     Gets a chain, creating it first if it does not exist.
     """
-    if name in table._chains_dict:
-        chain = table._chains_dict[name]
+    if name in table.chains:
+        chain = table.chains[name]
     else:
         chain = Chain(name)
-        table._chains_dict[name] = chain
+        table.chains[name] = chain
         chain.type = table.type
 
     return chain
@@ -329,9 +315,9 @@ class TableState(object):
         output = ""
         for table in self.tables:
             output += "TABLE %s (%s)\n" % (table.name, table.type)
-            for chain_name in sorted(table._chains_dict.keys()):
+            for chain_name in sorted(table.chains.keys()):
                 output += "  Chain %s\n" % chain_name
-                chain = table._chains_dict[chain_name]
+                chain = table.chains[chain_name]
                 for rule in chain.rules:
                     output += "    %s\n" % rule
                 output += "\n"
