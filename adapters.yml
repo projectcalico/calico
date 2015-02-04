@@ -1,0 +1,8 @@
+version: 1
+endpoints:
+  "POST /*/containers/create":
+    pre: [calico]
+  "POST /*/containers/*/start":
+    post: [calico]
+adapters:
+  calico: http://calico/calico-adapter
