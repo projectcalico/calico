@@ -1,9 +1,0 @@
-[global]
-# Time between retries for failed endpoint operations
-#EndpointRetryTimeMillis = 500
-# Time between complete resyncs
-ResyncIntervalSecs = 5
-# Hostname to use in messages - defaults to server hostname
-#FelixHostname = $hostname
-# Plugin and ACL manager addresses
-PluginAddress = 

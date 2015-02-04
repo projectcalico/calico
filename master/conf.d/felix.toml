@@ -1,6 +1,0 @@
-[template]
-src = "felix.cfg.template"
-dest = "felix.cfg"
-keys = [
-    "/calico/master/IP"
-]
