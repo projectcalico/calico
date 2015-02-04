@@ -3,96 +3,147 @@
 
 
 from twisted.internet import reactor
-from twisted.internet.task import deferLater
 from twisted.web import server, resource
 import calico
 import json
 import logging
-import time
+import logging.handlers
+import sys
 from docker import Client
 
 _log = logging.getLogger(__name__)
-_log.addHandler(logging.StreamHandler())
-_log.setLevel(logging.INFO)
 
-ENV_IP = "CALICO_IP_ADDR"
-ENV_MASTER = "CALICO_MASTER"
+ENV_IP = "CALICO_IP"
 ENV_GROUP = "CALICO_GROUP"
 
-class AdapterResource(resource.Resource):
 
+def setup_logging(logfile):
+    _log.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    _log.addHandler(handler)
+    handler = logging.handlers.TimedRotatingFileHandler(logfile,
+                                                        when='D',
+                                                        backupCount=10)
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    _log.addHandler(handler)
+
+
+class AdapterResource(resource.Resource):
     isLeaf = True
+
+    def __init__(self):
+        resource.Resource.__init__(self)
+
+        # Init a Docker client, to save having to do so every time a request comes in.
+        self.docker = Client(base_url='unix://var/run/docker.sock')
+
     def render_POST(self, request):
         """
         Handle a pre-hook.
         """
-        requestJson = json.loads(request.content.read())
-        if requestJson["Type"] == "pre-hook":
-            return self._handlePreHook(request, requestJson)
-        elif requestJson["Type"] == "post-hook":
-            return self._handlePostHook(request, requestJson)
+        request_content = json.loads(request.content.read())
+        if request_content["Type"] == "pre-hook":
+            return self._handle_pre_hook(request, request_content)
+        elif request_content["Type"] == "post-hook":
+            return self._handle_post_hook(request, request_content)
         else:
             raise Exception("unsupported hook type %s" %
-                (requestJson["Type"],))
+                            (request_content["Type"],))
 
-    def _handlePreHook(self, request, requestJson):
+    def _handle_pre_hook(self, request, request_content):
 
-        # Modify the request to set net to None.
+        client_request = request_content["ClientRequest"]
+
+        # Only one action at this point, so just plumb directly
+        _client_request_net_none(client_request)
 
         return json.dumps({"PowerstripProtocolVersion": 1,
-                           "ModifiedClientRequest":
-                           requestJson["ClientRequest"]})
+                           "ModifiedClientRequest": client_request})
 
-    def _handlePostHook(self, request, requestJson):
-        # The desired response is the entire client request
-        # payload, unmodified.
-        _log.debug("response: %s", requestJson)
+    def _handle_post_hook(self, request, request_content):
+        _log.debug("Post-hook response: %s", request_content)
 
         # Extract ip, group, master, docker_options
-        client_request = requestJson["ClientRequest"]
-        server_response = requestJson["ServerResponse"]
+        client_request = request_content["ClientRequest"]
+        server_response = request_content["ServerResponse"]
+
+        # Only one action at this point, so just plumb directly.
+        self._install_endpoint(client_request)
+
+        return json.dumps({"PowerstripProtocolVersion": 1,
+                           "ModifiedServerResponse": server_response})
+
+    def _install_endpoint(self, client_request):
+        """
+        Install a Calico endpoint (veth) in the container referenced in the client request object.
+        :param client_request: Powerstrip ClientRequest object as dictionary from JSON.
+        :returns: None
+        """
+
         try:
-            _log.info("Intercepted %s, starting network.", client_request["Request"])
+            uri = client_request["Request"]
+            _log.info("Intercepted %s, starting network.", uri)
+
+            # Get the container ID
             # TODO better URI parsing
             # /*/containers/*/start
-            (_, version, _, cid, _) = client_request["Request"].split("/", 4)
+            (_, version, _, cid, _) = uri.split("/", 4)
             _log.debug("cid %s", cid)
 
-            # Grab the running pid
-            docker = Client(base_url='unix://var/run/docker.sock')
-            cont = docker.inspect_container(cid)
+            # Grab the running pid from Docker
+            cont = self.docker.inspect_container(cid)
             _log.debug("Container info: %s", cont)
-            cpid = cont["State"]["Pid"]
-            _log.debug(cpid)
+            pid = cont["State"]["Pid"]
+            _log.debug(pid)
 
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
             ip = env_dict[ENV_IP]
-            master = env_dict[ENV_MASTER]
             group = env_dict.get(ENV_GROUP, None)
 
             calico.set_up_endpoint(ip=ip,
-                                   master=master,
                                    group=group,
                                    cid=cid,
-                                   cpid=cpid)
+                                   cpid=pid)
+            _log.info("Finished network for container %s, IP=%s", cid, ip)
+
         except KeyError as e:
-            _log.warning("Key error %s, requestJson: %s", e, requestJson)
+            _log.warning("Key error %s, request: %s", e, client_request)
 
-        _log.info("Finished network for container %s, IP=%s", cid, ip)
+        return
 
-        return json.dumps({
-                "PowerstripProtocolVersion": 1,
-                "ModifiedServerResponse":
-                    requestJson["ServerResponse"]})
+def _client_request_net_none(client_request):
+    """
+    Modify the client_request in place to set net=None Docker option.
+
+    :param client_request: Powerstrip ClientRequest object as dictionary from JSON
+    :return: None
+    """
+    try:
+        # Body is passed as a string, so deserialize it to JSON.
+        body = json.loads(client_request["Body"])
+
+        host_config = body["HostConfig"]
+        _log.debug("Original NetworkMode: %s", host_config.get("NetworkMode", "<unset>"))
+        host_config["NetworkMode"] = "none"
+
+        # Re-serialize the updated body.
+        client_request["Body"] = json.dumps(body)
+    except KeyError as e:
+        _log.warning("Error setting net=none: %s, request was %s", e, client_request)
 
 
-def getAdapter():
+def get_adapter():
     root = resource.Resource()
     root.putChild("calico-adapter", AdapterResource())
     site = server.Site(root)
     return site
+
 
 def env_to_dictionary(env_list):
     """
@@ -106,7 +157,9 @@ def env_to_dictionary(env_list):
         env_dict[var] = value
     return env_dict
 
+
 if __name__ == "__main__":
-    reactor.listenTCP(80, getAdapter())
+    setup_logging("/var/log/calico/powerstrip-calico.log")
+    reactor.listenTCP(80, get_adapter())
     reactor.run()
 

@@ -57,7 +57,7 @@ VETH_NAME = "eth1"
 ROOT_NETNS = "1"
 """The pid of the root namespace.  On almost all systems, the init system is pid 1"""
 
-def set_up_endpoint(ip, group, master, cid, cpid):
+def set_up_endpoint(ip, group, cid, cpid):
 
     # TODO - need to handle containers exiting straight away...
     iface = "tap" + cid[:11]
