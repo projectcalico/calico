@@ -81,7 +81,8 @@ def launch(master, peers):
     modprobe("xt_set")
 
     # Assume that the image is already built - called calico_node
-    docker("run", "-d", "calico/node")
+    # --net=host required so BIRD/Felix can manipulate the base networking stack
+    docker("run", "-d", "--net=host", "calico/node")
 
 
 def status():

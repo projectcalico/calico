@@ -30,6 +30,27 @@ RUN chmod +x confd
 RUN mkdir /etc/service/confd
 ADD confd.sh /etc/service/confd/run
 
+# Powerstrip
+RUN apt-get -qy install python-pip
+RUN apt-get -qy install python-dev
+RUN apt-get -qy install python-pyasn1
+RUN apt-get -qy install libyaml-dev
+RUN apt-get -qy install libffi-dev
+RUN apt-get -qy install libssl-dev
+RUN mkdir /powerstrip
+RUN cd /powerstrip
+RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz -o powerstrip.tar.gz
+RUN tar -xzf powerstrip.tar.gz
+RUN python setup.py install
+
+# Powerstrip Calico Adapter
+RUN apt-get -y install -q build-essential
+# Already installed by Powerstrip
+# RUN apt-get -y install -q python-dev libffi-dev libssl-dev python-pip
+RUN mkdir /adapter
+ADD adapter /adapter
+RUN pip install -r /adapter/requirements.txt
+
 # Clean up APT when done.
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

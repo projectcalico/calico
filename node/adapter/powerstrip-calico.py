@@ -4,12 +4,13 @@
 
 from twisted.internet import reactor
 from twisted.web import server, resource
-import calico
 import json
 import logging
 import logging.handlers
 import sys
 from docker import Client
+import netns as calico
+
 
 _log = logging.getLogger(__name__)
 
@@ -160,6 +161,7 @@ def env_to_dictionary(env_list):
 
 if __name__ == "__main__":
     setup_logging("/var/log/calico/powerstrip-calico.log")
-    reactor.listenTCP(80, get_adapter())
+    # Listen only on the loopback so we don't expose the adapter outside the host.
+    reactor.listenTCP(2376, get_adapter(), interface="lo")
     reactor.run()
 
