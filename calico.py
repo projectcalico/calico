@@ -2,8 +2,8 @@
 """Calico..
 
 Usage:
-  calico master --ip=<IP>
-  calico node --ip=<IP>
+  calico master --ip=<IP> [--etcd-ip=<ETCD_IP>]
+  calico node --ip=<IP> [--etcd-ip=<ETCD_IP>]
   calico assignacl <CONTAINER_ID>
   calico status
   calico reset
@@ -11,7 +11,8 @@ Usage:
 
 
 Options:
- --ip=<IP>    The local management address to use.
+ --ip=<IP>              The local management address to use.
+ --etcd-ip=<ETCD_IP>    The IP of an etcd proxy to the cluster [default: "127.0.0.1:4001"]
 """
 #Useful docker aliases
 # alias docker_kill_all='sudo docker kill $(docker ps -q)'
@@ -31,35 +32,43 @@ mkdir_p = mkdir.bake('-p')
 
 client = etcd.Client()
 
+
 def validate_arguments(arguments):
     # print(arguments)
     return True
 
+
 def create_dirs():
     mkdir_p("/var/log/calico")
+
 
 def process_output(line):
     sys.stdout.write(line)
 
-def node(ip):
+
+def node(ip, etcd_ip):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
 
-    cid = docker("run", "-e",  "IP=%s" % ip, "--name=calico-node", "--privileged",
-                                                                "--net=host", "-d", "calico/node")
+    cid = docker("run", "-e",  "IP=%s" % ip, "ETCD_IP=%s" % etcd_ip,
+                 "--name=calico-node", "--privileged", "--net=host", "-d", "calico/node")
+
     print "Calico node is running with id: %s" % cid
 
-def master(ip):
+
+def master(ip, etcd_ip):
     create_dirs()
 
     # update the master IP
     client.write('/calico/master/ip', ip)
 
     # Start the container
-    cid = docker("run", "--name=calico-master", "--privileged", "--net=host", "-d",
-           "calico/master")
+    cid = docker("run", "-e", "ETCD_IP=%s" % etcd_ip,
+                 "--name=calico-master", "--privileged", "--net=host", "-d", "calico/master")
+
     print "Calico master is running with id: %s" % cid
+
 
 def status():
     try:
@@ -75,7 +84,6 @@ def status():
 
     print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
                                                                 "/etc/service/bird/bird.ctl"))
-
 
 
 def reset():
@@ -102,9 +110,9 @@ if __name__ == '__main__':
         arguments = docopt(__doc__)
         if validate_arguments(arguments):
             if arguments["master"]:
-                master(arguments["--ip"])
+                master(arguments["--ip"], arguments["--etcd-ip"])
             if arguments["node"]:
-                node(arguments["--ip"])
+                node(arguments["--ip"], arguments["--etcd-ip"])
             if arguments["status"]:
                 status()
             if arguments["reset"]:
