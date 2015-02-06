@@ -51,8 +51,12 @@ def node(ip):
 
     # Set up the host
     client.write("/calico/host/%s/bird_ip" % hostname, ip)
-    client.write("/calico/host/%s/endpoints" % hostname, "")
-    client.write("/calico/host/%s/workloads" % hostname, "")
+    workload_dir = "/calico/host/%s/workload" % hostname
+    try:
+        client.read(workload_dir)
+    except KeyError:
+        # Didn't exist, create it now.
+        client.write(workload_dir, None, dir=True)
 
     cid = docker("run", "-e",  "IP=%s" % ip,
                  "--name=calico-node",
