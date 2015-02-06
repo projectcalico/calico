@@ -6,3 +6,4 @@ netaddr
 sh
 requests
 docker-py
+python-etcd

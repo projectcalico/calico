@@ -9,14 +9,16 @@ import logging
 import logging.handlers
 import sys
 from docker import Client
-import netns as calico
-
+import netns
+import calico_etcd
+import socket
 
 _log = logging.getLogger(__name__)
 
 ENV_IP = "CALICO_IP"
 ENV_GROUP = "CALICO_GROUP"
 
+hostname = socket.gethostname()
 
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
@@ -32,6 +34,10 @@ def setup_logging(logfile):
     handler.setFormatter(formatter)
     _log.addHandler(handler)
 
+    # Propagate to loaded modules
+    calico_etcd.setup_logging(logfile)
+    netns.setup_logging(logfile)
+
 
 class AdapterResource(resource.Resource):
     isLeaf = True
@@ -41,6 +47,9 @@ class AdapterResource(resource.Resource):
 
         # Init a Docker client, to save having to do so every time a request comes in.
         self.docker = Client(base_url='unix://var/run/docker.sock')
+
+        # Init an etcd client.
+        self.etcd = calico_etcd.CalicoEtcdClient()
 
     def render_POST(self, request):
         """
@@ -105,12 +114,14 @@ class AdapterResource(resource.Resource):
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
             ip = env_dict[ENV_IP]
+
+            # TODO: process groups
             group = env_dict.get(ENV_GROUP, None)
 
-            calico.set_up_endpoint(ip=ip,
-                                   group=group,
-                                   cid=cid,
-                                   cpid=pid)
+            endpoint = netns.set_up_endpoint(ip=ip, cpid=pid)
+            self.etcd.create_container(hostname=hostname,
+                                       container_id=cid,
+                                       endpoint=endpoint)
             _log.info("Finished network for container %s, IP=%s", cid, ip)
 
         except KeyError as e:

@@ -3,24 +3,55 @@
 from subprocess import call, check_output, check_call, CalledProcessError
 import socket
 import logging
+import logging.handlers
+import sys
+from calico_etcd import Endpoint
+import uuid
 
 _log = logging.getLogger(__name__)
-_log.addHandler(logging.StreamHandler())
-_log.setLevel(logging.INFO)
 
 HOSTNAME = socket.gethostname()
 
-VETH_NAME = "eth1"
+VETH_NAME = "eth0"
 """The name to give to the veth in the target container's namespace"""
 
 ROOT_NETNS = "1"
 """The pid of the root namespace.  On almost all systems, the init system is pid 1"""
 
-def set_up_endpoint(ip, group, cid, cpid, in_container=False):
+
+def setup_logging(logfile):
+    _log.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    _log.addHandler(handler)
+    handler = logging.handlers.TimedRotatingFileHandler(logfile,
+                                                        when='D',
+                                                        backupCount=10)
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    _log.addHandler(handler)
+
+
+def set_up_endpoint(ip, cpid, in_container=False):
+    """
+    Set up an endpoint (veth) in the network namespace idenfitied by the PID.
+
+    :param ip: The IP address to assign to the endpoint (veth)
+    :param cpid: The PID of a process currently running in the namespace.
+    :param in_container: When True, we assume this program is itself running in a container
+    namespace, as opposed to the root namespace.  If so, this method also moves the other end of
+    the veth into the root namespace.
+    :return: An Endpoint describing the veth just created.
+    """
+
+    # Generate a new endpoint ID.
+    ep_id = uuid.uuid1().hex
 
     # TODO - need to handle containers exiting straight away...
-    iface = "tap" + cid[:11]
-    iface_tmp = "tmp" + cid[:11]
+    iface = "tap" + ep_id[:11]
+    iface_tmp = "tmp" + ep_id[:11]
 
     # Provision the networking
     check_call("mkdir -p /var/run/netns", shell=True)
@@ -61,18 +92,9 @@ def set_up_endpoint(ip, group, cid, cpid, in_container=False):
     check_call("ip netns exec %s ip route add default dev %s" % (cpid, VETH_NAME), shell=True)
 
     # Get the MAC address.
-    mac = check_output("ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" % (cpid, VETH_NAME), shell=True).strip()
-    name = ip.replace('.', '_')
-    base_config = """
-[endpoint %s]
-id=%s
-ip=%s
-mac=%s
-host=%s
-group=%s
-""" % (name, cid, ip, mac, HOSTNAME, group)
+    mac = check_output("ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" %
+                       (cpid, VETH_NAME), shell=True).strip()
 
-    # Write the config file to the data directory
-    ep_config = open("/config/data/%s.txt" % name, mode="w")
-    ep_config.write(base_config)
-    ep_config.close()
+    # Return an Endpoint
+    return Endpoint(id=ep_id, addrs=[ip], state="enabled", mac=mac)
+
