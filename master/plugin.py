@@ -5,20 +5,19 @@ Usage:
   plugin.py [options] network
 
 Options:
-    --config-dir=DIR   Config directory [default: /config/data]
     --log-dir=DIR      Log directory [default: /var/log/calico]
 
 """
-import ConfigParser
 import json
 import logging
 import logging.handlers
-import os
 import sys
 import time
 import zmq
 from docopt import docopt
 
+import etcd
+client = etcd.Client()
 
 zmq_context = zmq.Context()
 log = logging.getLogger(__name__)
@@ -28,7 +27,8 @@ def setup_logging(logfile):
     log.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.ERROR)
+    # handler.setLevel(logging.ERROR)
+    handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
     log.addHandler(handler)
     handler = logging.handlers.TimedRotatingFileHandler(logfile,
@@ -39,23 +39,22 @@ def setup_logging(logfile):
     log.addHandler(handler)
 
 
-class Endpoint:
-    """
-    Endpoint as seen by the plugin. Enough to know what to put in an endpoint created message.
-    """
+# class Endpoint:
+#     """
+#     Endpoint as seen by the plugin. Enough to know what to put in an endpoint created message.
+#     """
+#
+#     def __init__(self, id, mac, ip, group):
+#         self.id = id
+#         self.mac = mac
+#         self.ip = ip
+#         self.group = group
 
-    def __init__(self, id, mac, ip, group):
-        self.id = id
-        self.mac = mac
-        self.ip = ip
-        self.group = group
 
-
-# Global variables for system state. These will be set up in load_files.
-eps_by_host = dict()
-felix_ip = dict()
-all_groups = dict()
-last_resync = dict()
+# Global variables for system state. These will be set up in load_data.
+eps_by_host = {}
+all_groups = {}
+last_resync = {}
 
 
 def strip(data):
@@ -66,53 +65,72 @@ def strip(data):
     return data
 
 
-def load_files(config_path):
-    """
-    Load a set of config files with the data in it. Each section is an endpoint
-    or host.
-    """
-    files = [os.path.join(config_path, f) for f in os.listdir(config_path)]
-    parser = ConfigParser.ConfigParser()
-    parser.read(files)
 
-    log.debug("Read config from %s (%s)", config_path, files)
 
+def load_data():
+    """
+    Load data from datastore - ccurently just etcd
+    """
     # Clear all of the data structures
+    log.info("Clearing data structures for full resync")
     eps_by_host.clear()
-    felix_ip.clear()
     all_groups.clear()
 
+    result = client.read('/calico/host', recursive=True)
+
+    # Iterate over all the leaves that we get back. For each leave we get the full path,
+    # so we parse that to get the host and endpoint_ids
+    # The goal of this iteration is to get the data into a simple Python data structure,
+    # as opposed to the slightly complicated etcd datastructure.
+    for res in result.leaves:
+        log.debug("Processing key %s", res.key)
+        keyparts = res.key.split("/")
+        if len(keyparts) < 7:
+            log.debug("Skipping non-endpoint related key")
+            continue
+        host = keyparts[3]
+        endpoint_id = keyparts[7]
+        key = keyparts[-1]
+
+        # Container ID is currently unused.
+        # container_id = keyparts[6]
+
+        # Make sure the parent dicts are created since Python has no autovivification.
+        if not host in eps_by_host:
+            eps_by_host[host] = {}
+        if not endpoint_id in eps_by_host[host]:
+            eps_by_host[host][endpoint_id] = {}
+
+        # Try to parse JSON out into a python datastructure, so that when we serialize it back for
+        # zeroMQ we're not doing JSON in JSON.
+        try:
+            eps_by_host[host][endpoint_id][key] = json.loads(res.value)
+            log.debug("Converted key: %s from JSON", key)
+        except ValueError:
+            eps_by_host[host][endpoint_id][key] = res.value
+
     # Build up the list of sections.
-    for section in parser.sections():
-        items = dict(parser.items(section))
-        if section.lower().startswith("endpoint"):
-            # Endpoint. Note that we just fall over if there are missing lines.
-            id = items['id']
-            mac = items['mac']
-            ip = items['ip']
-            group = items.get('group', 'default')
+    # Endpoint. Note that we just fall over if there are missing lines.
+    # group = items.get('group', 'default')
 
-            # Put this endpoint in a group.
-            if group not in all_groups:
-                all_groups[group] = dict()
+    # Put this endpoint in a group.
+    # if group not in all_groups:
+    #     all_groups[group] = dict()
+    #
+    # all_groups[group][id] = [ip]
+    #
+    # # Remove anything after the dot in host.
+    # host = strip(items['host'])
 
-            all_groups[group][id] = [ip]
 
-            # Remove anything after the dot in host.
-            host = strip(items['host'])
 
-            if not host in eps_by_host:
-                eps_by_host[host] = set()
-            eps_by_host[host].add(Endpoint(id, mac, ip, group))
-            log.debug("  Found configured endpoint %s (host=%s, mac=%s, ip=%s, group=%s)" %
-                      (id, host, mac, ip, group))
-        elif section.lower().startswith("felix"):
-            ip = items['ip']
-            host = strip(items['host'])
-            felix_ip[host] = ip
-            log.debug("  Found configured Felix %s at %s" % (host, ip))
-
-    return
+    # log.debug("  Found configured endpoint %s (host=%s, mac=%s, ip=%s, group=%s)" %
+    #           (id, host, mac, ip, group))
+    # # elif section.lower().startswith("felix"):
+    #     ip = items['ip']
+    #     host = strip(items['host'])
+    #     felix_ip[host] = ip
+    #     log.debug("  Found configured Felix %s at %s" % (host, ip))
 
 
 def do_ep_api():
@@ -140,7 +158,7 @@ def do_ep_api():
             fields = {'type': ""}
 
         # Reload config files.
-        load_files(config_dir)
+        load_data()
 
         if fields['type'] == "RESYNCSTATE":
             resync_id = fields['resync_id']
@@ -148,16 +166,10 @@ def do_ep_api():
             rsp = {"rc": "SUCCESS",
                    "message": "Hooray",
                    "type": fields['type'],
-                   "endpoint_count": str(len(get_eps_for_host(host)))}
+                   "endpoint_count": str(len(eps_by_host.get(host, set())))}
             resync_socket.send(json.dumps(rsp))
             log.debug("Sending %s EP msg : %s" % (fields['type'], rsp))
             last_resync[host] = int(time.time())
-
-            # Sleep for a second while that response gets through.  This is 
-            # not required with the latest Felix, but avoids a bug (now     
-            # fixed) where the RESYNC response must arrive before the       
-            # ENDPOINTCREATED.                                              
-            time.sleep(1)
 
             send_all_eps(create_sockets, host, resync_id)
 
@@ -197,27 +209,18 @@ def send_all_eps(create_sockets, host, resync_id):
         create_sockets[host] = create_socket
 
     # Send all of the ENDPOINTCREATED messages.
-    for ep in get_eps_for_host(host):
+    for ep in eps_by_host.get(host, {}):
         msg = {"type": "ENDPOINTCREATED",
-               "mac": ep.mac,
-               "endpoint_id": ep.id,
+               "mac": eps_by_host[host][ep]["mac"],
+               "endpoint_id": ep,
                "resync_id": resync_id,
                "issued": int(time.time() * 1000),
                "state": "enabled",
-               "addrs": [{"addr": ep.ip}]}
+               "addrs": eps_by_host[host][ep]["addrs"]}
         log.debug("Sending ENDPOINTCREATED to %s : %s" % (host, msg))
         create_socket.send(json.dumps(msg))
         create_socket.recv()
         log.debug("Got endpoint created response")
-
-
-def get_eps_for_host(host):
-    if host in eps_by_host:
-        eps = eps_by_host[host]
-    else:
-        eps = set()
-
-    return eps
 
 
 def do_network_api():
@@ -256,7 +259,7 @@ def do_network_api():
             log.debug("No data received")
 
         # Reload config file just in case, before we send all the data.
-        load_files(config_dir)
+        load_data()
 
         # Now send all the data we have on the PUB socket.
         log.debug("Build data to publish")
@@ -301,15 +304,13 @@ def do_network_api():
             pub_socket.send_multipart(['groups'.encode('utf-8'),
                                        json.dumps(data).encode('utf-8')])
 
-config_dir = ""
-
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-    config_dir = arguments["--config-dir"]
-    load_files(config_dir)
+    load_data()
 
     if arguments["endpoint"]:
         setup_logging("%s/plugin_ep.log" % arguments["--log-dir"])
+        print eps_by_host
         do_ep_api()
     if arguments["network"]:
         setup_logging("%s/plugin_net.log" % arguments["--log-dir"])
