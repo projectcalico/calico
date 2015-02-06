@@ -61,5 +61,5 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 ADD rc.local /etc/rc.local
 ADD conf.d conf.d
 ADD templates templates
-#RUN mkdir /config
+RUN mkdir /config
 RUN mkdir -p /var/log/calico

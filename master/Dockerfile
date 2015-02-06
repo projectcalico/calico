@@ -37,7 +37,7 @@ ADD plugin_endpoint.sh /etc/service/pluginendpoint/run
 ADD rc.local /etc/rc.local
 ADD conf.d conf.d
 ADD templates templates
-# RUN mkdir -p /config/data
+RUN mkdir -p /config/data
 RUN mkdir -p /var/log/calico
 
 # Clean up APT when done.
