@@ -189,14 +189,11 @@ def do_ep_api():
 def send_all_eps(create_sockets, host, resync_id):
     create_socket = create_sockets.get(host)
 
-    if host not in felix_ip:
-        raise Exception("Host name %s not recognised", host)
-
     if create_socket is None:
         create_socket = zmq_context.socket(zmq.REQ)
         create_socket.SNDTIMEO = 10000
         create_socket.RCVTIMEO = 10000
-        create_socket.connect("tcp://%s:9902" % felix_ip[host])
+        create_socket.connect("tcp://%s:9902" % host)
         create_sockets[host] = create_socket
 
     # Send all of the ENDPOINTCREATED messages.

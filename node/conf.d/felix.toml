@@ -2,5 +2,5 @@
 src = "felix.cfg.template"
 dest = "/config/felix.cfg"
 keys = [
-    "/calico/master/IP"
+    "/calico/master/ip"
 ]

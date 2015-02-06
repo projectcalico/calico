@@ -22,7 +22,7 @@ protocol direct {
 }
 
 # Peer with all neighbours
-{{range gets "/calico/nodes/*"}}
+{{range gets "/calico/host/*/bird_ip"}}
 # For peer {{.Key}} {{if eq .Value (getenv "IP") }}
 # Skipping ourselves ({{getenv "IP"}}) {{else}}
 protocol bgp {

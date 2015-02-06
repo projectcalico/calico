@@ -26,10 +26,12 @@ from sh import modprobe
 from sh import grep
 import etcd
 import sys
+import socket
 
 mkdir_p = mkdir.bake('-p')
 
 client = etcd.Client()
+hostname = socket.gethostname()
 
 def validate_arguments(arguments):
     # print(arguments)
@@ -37,6 +39,7 @@ def validate_arguments(arguments):
 
 def create_dirs():
     mkdir_p("/var/log/calico")
+    mkdir_p("/tmp/config/data")
 
 def process_output(line):
     sys.stdout.write(line)
@@ -46,9 +49,21 @@ def node(ip):
     modprobe("ip6_tables")
     modprobe("xt_set")
 
-    # --net=host required so BIRD/Felix can manipulate the base networking stack
-    cid = docker("run", "-e",  "IP=%s" % ip, "--name=calico-node", "--privileged",
-                                                                "--net=host", "-d", "calico/node")
+    # Set up the host
+    client.write("/calico/host/%s/bird_ip" % hostname, ip)
+    client.write("/calico/host/%s/endpoints" % hostname, "")
+    client.write("/calico/host/%s/workloads" % hostname, "")
+
+    cid = docker("run", "-e",  "IP=%s" % ip,
+                 "--name=calico-node",
+                 "--privileged",
+                 "--net=host",  # BIRD/Felix can manipulate the base networking stack
+                 "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
+                 "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
+                                            # networking
+                 "-v", "/tmp/config/:/config",  # Shared volume for endpoint config.
+                 "-d",
+                 "calico/node")
     print "Calico node is running with id: %s" % cid
 
 def master(ip):
@@ -58,8 +73,12 @@ def master(ip):
     client.write('/calico/master/ip', ip)
 
     # Start the container
-    cid = docker("run", "--name=calico-master", "--privileged", "--net=host", "-d",
-           "calico/master")
+    cid = docker("run", "--name=calico-master",
+                 "--privileged",
+                 "--net=host",
+                 "-v", "/tmp/config/:/config",  # Shared volume for endpoint config.
+                 "-d",
+                 "calico/master")
     print "Calico master is running with id: %s" % cid
 
 def status():

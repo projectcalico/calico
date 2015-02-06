@@ -162,6 +162,6 @@ def env_to_dictionary(env_list):
 if __name__ == "__main__":
     setup_logging("/var/log/calico/powerstrip-calico.log")
     # Listen only on the loopback so we don't expose the adapter outside the host.
-    reactor.listenTCP(2376, get_adapter(), interface="lo")
+    reactor.listenTCP(2376, get_adapter(), interface="127.0.0.1")
     reactor.run()
 

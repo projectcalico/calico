@@ -6,8 +6,8 @@ ResyncIntervalSecs = 5
 # Hostname to use in messages - defaults to server hostname
 #FelixHostname = $hostname
 # Plugin and ACL manager addresses
-PluginAddress = {{getv "/calico/master/IP"}}
-ACLAddress    = {{getv "/calico/master/IP"}}
+PluginAddress = {{getv "/calico/master/ip"}}
+ACLAddress    = {{getv "/calico/master/ip"}}
 # Metadata IP (or host) and port. If no metadata configuration, set to None
 MetadataAddr  = None
 #MetadataPort  = 9697

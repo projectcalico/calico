@@ -37,11 +37,13 @@ RUN apt-get -qy install python-pyasn1
 RUN apt-get -qy install libyaml-dev
 RUN apt-get -qy install libffi-dev
 RUN apt-get -qy install libssl-dev
-RUN mkdir /powerstrip
-RUN cd /powerstrip
 RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz -o powerstrip.tar.gz
 RUN tar -xzf powerstrip.tar.gz
-RUN python setup.py install
+RUN mv powerstrip-0.0.1 powerstrip
+RUN cd powerstrip && python setup.py install
+ADD adapters.yml /etc/powerstrip/adapters.yml
+RUN mkdir /etc/service/powerstrip
+ADD powerstrip.sh /etc/service/powerstrip/run
 
 # Powerstrip Calico Adapter
 RUN apt-get -y install -q build-essential
@@ -50,6 +52,8 @@ RUN apt-get -y install -q build-essential
 RUN mkdir /adapter
 ADD adapter /adapter
 RUN pip install -r /adapter/requirements.txt
+RUN mkdir /etc/service/powerstrip-calico
+ADD powerstrip-calico.sh /etc/service/powerstrip-calico/run
 
 # Clean up APT when done.
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -57,5 +61,5 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 ADD rc.local /etc/rc.local
 ADD conf.d conf.d
 ADD templates templates
-RUN mkdir /config
+#RUN mkdir /config
 RUN mkdir -p /var/log/calico
