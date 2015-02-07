@@ -62,12 +62,10 @@ class CalicoCmdLineEtcdClient(object):
     def __init__(self):
         self.client = etcd.Client()
 
-
     def create_host(self, bird_ip):
         """
         Create a new Calico host.
 
-        :param hostname: The hostname of the Calico host
         :param bird_ip: The IP address BIRD should listen on.
         :return: nothing.
         """
@@ -92,18 +90,18 @@ class CalicoCmdLineEtcdClient(object):
         self.client.write(MASTER_IP_PATH, ip)
         return
 
-    def create_group(self, id, name):
+    def create_group(self, group_id, name):
         """
         Create a security group.  In this implementation, security groups accept traffic only from
         themselves, but can send traffic anywhere.
 
-        :param id: Group UUID (string)
+        :param group_id: Group UUID (string)
         :param name: Human readable name for the group.
         :return: nothing.
         """
 
         # Create the group directory.
-        group_path = GROUP_PATH % {"group_id": id}
+        group_path = GROUP_PATH % {"group_id": group_id}
         self.client.write(group_path + "name", name)
 
         # Default Rules
@@ -111,14 +109,13 @@ class CalicoCmdLineEtcdClient(object):
         self.client.write(group_path + "rules/outbound_default", "deny")
 
         # Allow traffic inbound from group.
-        allow_group = Rule(group=id, cidr=None, protocol=None, port=None)
+        allow_group = Rule(group=group_id, cidr=None, protocol=None, port=None)
         self.client.write(group_path + "rules/inbound/1", allow_group.to_json())
 
         # Allow traffic outbound to group and any address.
         allow_any_ip = Rule(group=None, cidr="0.0.0.0/0", protocol=None, port=None)
         self.client.write(group_path + "rules/outbound/1", allow_group.to_json())
         self.client.write(group_path + "rules/outbound/2", allow_any_ip.to_json())
-
 
     def get_group_id(self, name):
         """
@@ -269,6 +266,7 @@ def add_group(group_name):
     group_id = uuid.uuid1().hex
     client.create_group(group_id, group_name)
     print "Created group %s with ID %s" % (group_name, group_id)
+
 
 def add_container_to_group(container_id, group_name):
     """
