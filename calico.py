@@ -8,6 +8,8 @@ Usage:
   calico status
   calico reset
   calico version
+  calico addgroup <GROUP>
+  calico addtogroup <CONTAINER_ID> <GROUP>
 
 
 Options:
@@ -27,36 +29,170 @@ from sh import grep
 import etcd
 import sys
 import socket
+import json
+import uuid
+from collections import namedtuple
 
 mkdir_p = mkdir.bake('-p')
-
-client = etcd.Client()
 hostname = socket.gethostname()
+
+# etcd paths for Calico
+HOST_PATH = "/calico/host/%(hostname)s/"
+MASTER_IP_PATH = "/calico/master/ip"
+GROUPS_PATH = "/calico/network/group/"
+GROUP_PATH = "/calico/network/group/%(group_id)s/"
+CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
+ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
+
+
+class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
+    """
+    A Calico inbound or outbound traffic rule.
+    """
+
+    def to_json(self):
+        return json.dumps(self._asdict())
+
+
+class CalicoCmdLineEtcdClient(object):
+    """
+    An etcd client that exposes high level Calico operations needed by the calico CLI.
+    """
+
+    def __init__(self):
+        self.client = etcd.Client()
+
+
+    def create_host(self, bird_ip):
+        """
+        Create a new Calico host.
+
+        :param hostname: The hostname of the Calico host
+        :param bird_ip: The IP address BIRD should listen on.
+        :return: nothing.
+        """
+        host_path = HOST_PATH % {"hostname": hostname}
+        # Set up the host
+        self.client.write(host_path + "bird_ip", bird_ip)
+        workload_dir = host_path + "workload"
+        try:
+            self.client.read(workload_dir)
+        except KeyError:
+            # Didn't exist, create it now.
+            self.client.write(workload_dir, None, dir=True)
+        return
+
+    def set_master(self, ip):
+        """
+        Record the IP address of the Calico Master.
+        :param ip: The IP address to reach Calico Master.
+        :return: nothing.
+        """
+        # update the master IP
+        self.client.write(MASTER_IP_PATH, ip)
+        return
+
+    def create_group(self, id, name):
+        """
+        Create a security group.  In this implementation, security groups accept traffic only from
+        themselves, but can send traffic anywhere.
+
+        :param id: Group UUID (string)
+        :param name: Human readable name for the group.
+        :return: nothing.
+        """
+
+        # Create the group directory.
+        group_path = GROUP_PATH % {"group_id": id}
+        self.client.write(group_path + "name", name)
+
+        # Default Rules
+        self.client.write(group_path + "rules/inbound_default", "deny")
+        self.client.write(group_path + "rules/outbound_default", "deny")
+
+        # Allow traffic inbound from group.
+        allow_group = Rule(group=id, cidr=None, protocol=None, port=None)
+        self.client.write(group_path + "rules/inbound/1", allow_group.to_json())
+
+        # Allow traffic outbound to group and any address.
+        allow_any_ip = Rule(group=None, cidr="0.0.0.0/0", protocol=None, port=None)
+        self.client.write(group_path + "rules/outbound/1", allow_group.to_json())
+        self.client.write(group_path + "rules/outbound/2", allow_any_ip.to_json())
+
+
+    def get_group_id(self, name):
+        """
+        Get the UUID of the named group.  If multiple groups have the same name, the first matching
+        one will be returned.
+        :param name:
+        :return: string UUID for the group, or None if the name was not found.
+        """
+        groups = self.client.read(GROUPS_PATH, recursive=True,).children
+        for child in groups:
+            (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
+            if final_key == "name":
+                if child.value == name:
+                    return group_id
+        return None
+
+    def add_container_to_group(self, container_id, group_name):
+        """
+        Add a container (on this host) to the group with the given name.  This adds the first
+        endpoint on the container to the group.
+
+        :param container_id: The Docker container ID.
+        :param group_name:  The Calico security group name.
+        :return: None.
+        """
+
+        # Get the group UUID.
+        group_id = self.get_group_id(group_name)
+        if not group_id:
+            raise KeyError("Group with name %s was not found." % group_name)
+
+        # Get the endpoints from the container ID.
+        ep_path = ENDPOINTS_PATH % {"hostname": hostname,
+                                    "container_id": container_id}
+        try:
+            endpoints = self.client.read(ep_path).children
+        except KeyError:
+            # Re-raise with better message
+            raise KeyError("Container with ID %s was not found." % container_id)
+
+        # Get the first endpoint & ID
+        endpoint = endpoints.next()
+        (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
+
+        # Add the endpoint to the group.  ./members/ is a keyset of endpoint IDs, so write empty
+        # string as the value.
+        group_path = GROUP_PATH % {"group_id": group_id}
+        self.client.write(group_path + "members/" + endpoint_id, "")
+
+
+client = CalicoCmdLineEtcdClient()
+
 
 def validate_arguments(arguments):
     # print(arguments)
     return True
 
+
 def create_dirs():
     mkdir_p("/var/log/calico")
     mkdir_p("/tmp/config/data")
 
+
 def process_output(line):
     sys.stdout.write(line)
+
 
 def node(ip):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
 
-    # Set up the host
-    client.write("/calico/host/%s/bird_ip" % hostname, ip)
-    workload_dir = "/calico/host/%s/workload" % hostname
-    try:
-        client.read(workload_dir)
-    except KeyError:
-        # Didn't exist, create it now.
-        client.write(workload_dir, None, dir=True)
+    # Set up etcd
+    client.create_host(ip)
 
     cid = docker("run", "-e",  "IP=%s" % ip,
                  "--name=calico-node",
@@ -69,11 +205,12 @@ def node(ip):
                  "calico/node")
     print "Calico node is running with id: %s" % cid
 
+
 def master(ip):
     create_dirs()
 
-    # update the master IP
-    client.write('/calico/master/ip', ip)
+    # Add IP to etcd
+    client.set_master(ip)
 
     # Start the container
     cid = docker("run", "--name=calico-master",
@@ -99,7 +236,6 @@ def status():
                                                                 "/etc/service/bird/bird.ctl"))
 
 
-
 def reset():
     try:
         interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'", shell=True)
@@ -117,6 +253,37 @@ def version():
     print "Unknown"
 
 
+def add_group(group_name):
+    """
+    Create a security group with the given name.
+    :param group_name: The name for the group.
+    :return: None.
+    """
+
+    # Check if the group exists.
+    if client.get_group_id(group_name):
+        print "Group %s already exists." % group_name
+        return
+
+    # Create the group.
+    group_id = uuid.uuid1().hex
+    client.create_group(group_id, group_name)
+    print "Created group %s with ID %s" % (group_name, group_id)
+
+def add_container_to_group(container_id, group_name):
+    """
+    Add the container to the listed group.
+    :param container_id: ID of the container to add.
+    :param group_name: Name of the group.
+    :return: None
+    """
+
+    try:
+        client.add_container_to_group(container_id, group_name)
+    except KeyError as e:
+        print e
+    return
+
 if __name__ == '__main__':
     if os.geteuid() != 0:
         print "Calico must be run as root"
@@ -133,5 +300,10 @@ if __name__ == '__main__':
                 reset(arguments["--delete-images"])
             if arguments["version"]:
                 version()
+            if arguments["addgroup"]:
+                add_group(arguments["<GROUP>"])
+            if arguments["addtogroup"]:
+                add_container_to_group(arguments["<CONTAINER_ID>"],
+                                       arguments["<GROUP>"])
         else:
             print "Not yet"
