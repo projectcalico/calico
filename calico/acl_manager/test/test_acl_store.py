@@ -116,6 +116,23 @@ class TestACLStore(unittest.TestCase):
         terminate_called.wait(3)
         self.acl_pub.test_wait_assert_all_acls_received()
 
+    def test_case4(self):
+        """
+        Check ACL Store suppresses superfluous no-op updates
+        """
+        # Add some ACLs - an update is published
+        self.processor.test_update_endpoint_acls('e1', self.acls)
+        self.acl_pub.test_set_expected_acls('e1', self.acls)
+        self.acl_pub.test_wait_assert_all_acls_received()
+
+        # Update the same ACLs without changing them
+        self.processor.test_update_endpoint_acls('e1', self.acls)
+        self.acl_pub.test_wait_assert_all_acls_received()
+
+        # Now query the ACLs to check they're still returned
+        self.acl_pub.test_query_endpoint_acls('e1')
+        self.acl_pub.test_set_expected_acls('e1', self.acls)
+        self.acl_pub.test_wait_assert_all_acls_received()
 
 if __name__ == '__main__':
     unittest.main()
