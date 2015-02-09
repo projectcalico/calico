@@ -50,13 +50,13 @@ At this point, it's worth checking that your two servers can ping each other.
 Calico currently requires that some components are run only on a single host. For these instructions, we'll designate core-01 our "master" node and core-02 will be a secondary node.
 
 * Start the master on `core-01`
-  * `sudo ./calico master --peer=core-02`
+  * `sudo ./calicoctl master --peer=core-02`
 
 Now start calico on both nodes.
 * On core-01
-   * ` sudo ./calico launch --master=core-01 --peer=core-01`
+   * ` sudo ./calicoctl launch --master=core-01 --peer=core-01`
 * On core-02
-   * ` sudo ./calico launch --master=core-01 --peer=core-02`
+   * ` sudo ./calicoctl launch --master=core-01 --peer=core-02`
 
 This will start a number of Docker containers. Check they are running
 * `sudo docker ps`
@@ -83,7 +83,7 @@ You should see output like this
 All containers need to be assigned IPs in the `192.168.0.0/16` range.
 
 The general way to start a new container:  (Hint: don't run this yet; specific examples to run below.)
-* `CID=$(sudo ./calico run CONTAINER_IP --master=MASTER [--group=GROUP] -- DOCKER_OPTIONS)`
+* `CID=$(sudo ./calicoctl run CONTAINER_IP --master=MASTER [--group=GROUP] -- DOCKER_OPTIONS)`
     * `CONTAINER_IP`, is the IP address to assign to the container; this must be unique address from the 192.168.0.0/16 range.
     * `--master` points at the address of the master node.
     * `GROUP` is the name of the group.  Only containers in the same group can ping each other, groups are created on-demand so you can choose any name here. If you don't supply a group then the `DEFAULT` group is used.
@@ -97,13 +97,13 @@ Hit enter a few times to get a prompt. To get back out of the container and leav
 
 So, go ahead and start a few of containers on each host.
 * On core-01
-   * `A=$(sudo ./calico run 192.168.1.1 --master=core-01 --group=ONLY_A -- -ti busybox)`
-   * `B=$(sudo ./calico run 192.168.1.2 --master=core-01 -- -ti busybox)`
-   * `C=$(sudo ./calico run 192.168.1.3 --master=core-01 -- -ti busybox)`
+   * `A=$(sudo ./calicoctl run 192.168.1.1 --master=core-01 --group=ONLY_A -- -ti busybox)`
+   * `B=$(sudo ./calicoctl run 192.168.1.2 --master=core-01 -- -ti busybox)`
+   * `C=$(sudo ./calicoctl run 192.168.1.3 --master=core-01 -- -ti busybox)`
 
 * On core-02
-   * `D=$(sudo ./calico run 192.168.1.4 --master=core-01 --group=ONLY_D-- -ti busybox)`
-   * `E=$(sudo ./calico run 192.168.1.5 --master=core-01 -- -ti busybox)`
+   * `D=$(sudo ./calicoctl run 192.168.1.4 --master=core-01 --group=ONLY_D-- -ti busybox)`
+   * `E=$(sudo ./calicoctl run 192.168.1.5 --master=core-01 -- -ti busybox)`
 
 B,C and E are created without passing in an explicit group name so they are all in the `DEFAULT` group.
 
@@ -111,7 +111,7 @@ At this point, it should be possible to attach to B (`docker attach $B`) and che
 
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
-* `sudo ./calico reset`
+* `sudo ./calicoctl reset`
 
 ## Troubleshooting
 
@@ -120,6 +120,6 @@ Running `ip route` shows what routes have been programmed. Routes from other hos
 that they are programmed by bird.
 
 If you have rebooted your hosts, then some configuration can get lost. It's best to run a `sudo
-./calico reset` and start again.
+./calicoctl reset` and start again.
 
 If you hit issues, please raise tickets. Diags can be collected with the `diags.sh` command.

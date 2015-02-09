@@ -28,6 +28,6 @@ The `calico-node` service is a worker that configures the network endpoints for 
 + BIRD, the routing process, and
 + a [Powerstrip](https://github.com/clusterhq/powerstrip) adapter to set up networking when Docker containers are created.
 
-Finally, we provide a command line tool, `calico`, which configures and starts the Calico services listed above, and allows you to interact with the Orchestrator Plugin to define and apply network & security policy to the containers you create.
+Finally, we provide a command line tool, `calicoctl`, which configures and starts the Calico services listed above, and allows you to interact with the Orchestrator Plugin to define and apply network & security policy to the containers you create.
 
 The `calico-node` container exposes the Docker API on port 2375 using Powerstrip.  To start and stop containers, either point your Docker tools to this port, or set `DOCKER_HOST=localhost:2375` in your shell and use `docker`.

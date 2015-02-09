@@ -2,14 +2,14 @@
 """Calico..
 
 Usage:
-  calico master --ip=<IP>
-  calico node --ip=<IP>
-  calico assignacl <CONTAINER_ID>
-  calico status
-  calico reset
-  calico version
-  calico addgroup <GROUP>
-  calico addtogroup <CONTAINER_ID> <GROUP>
+  calicoctl master --ip=<IP>
+  calicoctl node --ip=<IP>
+  calicoctl assignacl <CONTAINER_ID>
+  calicoctl status
+  calicoctl reset
+  calicoctl version
+  calicoctl addgroup <GROUP>
+  calicoctl addtogroup <CONTAINER_ID> <GROUP>
 
 
 Options:
@@ -289,7 +289,7 @@ def add_container_to_group(container_id, group_name):
 
 if __name__ == '__main__':
     if os.geteuid() != 0:
-        print "Calico must be run as root"
+        print "calicoctl must be run as root"
     else:
         arguments = docopt(__doc__)
         if validate_arguments(arguments):
