@@ -190,7 +190,10 @@ def node(ip):
 
     # Set up etcd
     client.create_host(ip)
-
+    try:
+        docker("rm", "-f", "calico-node")
+    except Exception:
+        pass
     cid = docker("run", "-e",  "IP=%s" % ip,
                  "--name=calico-node",
                  "--privileged",
@@ -211,7 +214,10 @@ def master(ip):
 
     # Add IP to etcd
     client.set_master(ip)
-
+    try:
+        docker("rm", "-f", "calico-master")
+    except Exception:
+        pass
     # Start the container
     cid = docker("run", "--name=calico-master",
                  "--privileged",
