@@ -108,7 +108,7 @@ def set_global_rules(config):
         # then truncating. The rule looks like this.
         #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
         rule          = fiptables.Rule(futils.IPV4)
-        rule.dst      = "169.254.169.254"
+        rule.dst      = "169.254.169.254/32"
         rule.protocol = "tcp"
         rule.create_target("DNAT", {"to_destination": 
                                     "%s:%s" % (config.METADATA_IP,
@@ -257,29 +257,29 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
         for icmp in ["130", "131", "132", "134", "135", "136"]:
             rule = fiptables.Rule(futils.IPV6, "RETURN")
             rule.protocol = "ipv6-icmp"
-            rule.create_icmp6_match([icmp])
+            rule.create_icmp6_match(icmp)
             fiptables.insert_rule(rule, to_chain, index)
             index += 1
 
     rule = fiptables.Rule(type, "DROP")
-    rule.create_conntrack_match(["INVALID"])
+    rule.create_conntrack_match("INVALID")
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
     rule = fiptables.Rule(type, "RETURN")
-    rule.create_conntrack_match(["RELATED,ESTABLISHED"])
+    rule.create_conntrack_match("RELATED,ESTABLISHED")
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
     # "Return anything whose source matches this ipset" (for three ipsets)
     rule = fiptables.Rule(type, "RETURN")
-    rule.create_set_match([to_ipset_port, "src,dst"])
+    rule.create_set_match(to_ipset_port, "src,dst")
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
     rule = fiptables.Rule(type, "RETURN")
-    rule.create_set_match([to_ipset_addr, "src"])
+    rule.create_set_match(to_ipset_addr, "src")
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
@@ -288,7 +288,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
         rule.protocol = "icmp"
     else:
         rule.protocol = "ipv6-icmp"
-    rule.create_set_match([to_ipset_icmp, "src"])
+    rule.create_set_match(to_ipset_icmp, "src")
     fiptables.insert_rule(rule, to_chain, index)
     index += 1
 
@@ -319,13 +319,13 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
 
     # "Drop if state INVALID".
     rule = fiptables.Rule(type, "DROP")
-    rule.create_conntrack_match(["INVALID"])
+    rule.create_conntrack_match("INVALID")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
     # "Return if state RELATED or ESTABLISHED".
     rule = fiptables.Rule(type, "RETURN")
-    rule.create_conntrack_match(["RELATED,ESTABLISHED"])
+    rule.create_conntrack_match("RELATED,ESTABLISHED")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
@@ -355,7 +355,10 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
     for ip in localips:
         rule = fiptables.Rule(type)
         rule.create_target("MARK", {"set_mark": "1"})
-        rule.src = ip
+        if type == IPV4:
+            rule.src = ip + "/32"
+        else:
+            rule.src = ip + "/64"
         rule.create_mac_match(mac)
         fiptables.insert_rule(rule, from_chain, index)
         index += 1
@@ -367,12 +370,12 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
   
     # "Permit packets whose destination matches the supplied ipsets."
     rule = fiptables.Rule(type, "RETURN")
-    rule.create_set_match([from_ipset_port, "dst,dst"])
+    rule.create_set_match(from_ipset_port, "dst,dst")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
     rule = fiptables.Rule(type, "RETURN")
-    rule.create_set_match([from_ipset_addr, "dst"])
+    rule.create_set_match(from_ipset_addr, "dst")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 
@@ -381,7 +384,7 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
         rule.protocol = "icmp"
     else:
         rule.protocol = "ipv6-icmp"
-    rule.create_set_match([from_ipset_icmp, "dst"])
+    rule.create_set_match(from_ipset_icmp, "dst")
     fiptables.insert_rule(rule, from_chain, index)
     index += 1
 

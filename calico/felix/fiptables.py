@@ -143,18 +143,24 @@ class Table(object):
                            "-X",
                            chain_name])
         del self.chains[chain_name]
-                
+
 class Rule(object):
     """
     Rule object. This contains information about rules.
     """
+    FLAG_TO_FIELD = { "-s": "src",
+                      "-d": "dst",
+                      "-p": "protocol",
+                      "-i": "in_interface",
+                      "-o": "out_interface",
+                      "-j": "target",
+                      "-m": "match" }
+
+    FIELD_TO_FLAG = {field: flag for flag, field in FLAG_TO_FIELD.items()}
+
     def __init__(self, type, target=None):
         self.type = type
 
-        # TODO: This whole lot would be improved if src, dst etc. were all just
-        # fields in a dictionary. But that is for a later phase (when we either
-        # put in a lot of setters or just change the calling code and the
-        # tests).
         self.dst = None
         self.src = None
         self.protocol = None
@@ -178,8 +184,9 @@ class Rule(object):
 
         line is used only for logging.
         """
-        #TODO: The big if test on all the fields is a bit ugly.
         while fields:
+            # For a negative, we just prepend "!" to the value (or the first
+            # value if many).
             negative = False
 
             if fields[0] == "!":
@@ -188,8 +195,6 @@ class Rule(object):
 
             flag = fields.pop(0)
 
-            # TODO: Values can be multiple words, and we just prepend ! for a
-            # negative. We could do this more tidily.
             values = []
             while fields and fields[0][0] != "-":
                 values.append(fields.pop(0)) 
@@ -199,26 +204,8 @@ class Rule(object):
             if negative:
                 value = "!" + value
 
-            if flag == "-s":
-                #TODO: oh my; this is horrible
-                if value.endswith("/32"):
-                    value = value[:-3]
-                self.src = value
-            elif flag == "-d":
-                #TODO: oh my; this is horrible
-                if value.endswith("/32"):
-                    value = value[:-3]
-                self.dst = value
-            elif flag == "-p":
-                self.protocol = value
-            elif flag == "-i":
-                self.in_interface = value
-            elif flag == "-o":
-                self.out_interface = value
-            elif flag == "-j":
-                self.target = value
-            elif flag == "-m":
-                self.match = value
+            if flag in Rule.FLAG_TO_FIELD:
+                setattr(self, Rule.FLAG_TO_FIELD[flag], value)
             elif flag.startswith("--"):
                 self.parameters[flag[2:]] = value
             else:
@@ -230,49 +217,14 @@ class Rule(object):
         Returns an iptables set of fields from a rule; the inverse of
         parse_fields.
         """
-        #TODO: This is ugly and should be tidied up too.
         fields = []
-        if self.src is not None:
-            if self.src[0] == "!":
-                fields.extend(["!", "-s", self.src[1:]])
-            else:
-                fields.extend(["-s", self.src])
 
-        if self.dst is not None:
-            if self.dst[0] == "!":
-                fields.extend(["!", "-d", self.dst[1:]])
-            else:
-                fields.extend(["-d", self.dst])
-
-        if self.protocol is not None:
-            if self.protocol[0] == "!":
-                fields.extend(["!", "-p", self.protocol[1:]])
-            else:
-                fields.extend(["-p", self.protocol])
-
-        if self.in_interface is not None:
-            if self.in_interface[0] == "!":
-                fields.extend(["!", "-i", self.in_interface[1:]])
-            else:
-                fields.extend(["-i", self.in_interface])
-
-        if self.out_interface is not None:
-            if self.out_interface[0] == "!":
-                fields.extend(["!", "-o", self.out_interface[1:]])
-            else:
-                fields.extend(["-o", self.out_interface])
-
-        if self.target is not None:
-            if self.target[0] == "!":
-                fields.extend(["!", "-j", self.target[1:]])
-            else:
-                fields.extend(["-j", self.target])
-
-        if self.match is not None:
-            if self.match[0] == "!":
-                fields.extend(["!", "-m", self.match[1:]])
-            else:
-                fields.extend(["-m", self.match])
+        for field in Rule.FIELD_TO_FLAG:
+            value = getattr(self, field)
+            if value is not None and value[0] == "!":
+                fields.extend(["!", Rule.FIELD_TO_FLAG[field], value[1:]])
+            elif value is not None:
+                fields.extend([Rule.FIELD_TO_FLAG[field], value])
 
         for key in self.parameters:
             value = self.parameters[key]
@@ -296,16 +248,12 @@ class Rule(object):
 
     def create_icmp6_match(self, icmp_type):
         self.match = "icmp6"
-        # TODO: bad interface that this is a list, but because of
-        # python-iptables
-        # And the list must only have one element...
-        self.parameters["icmpv6-type"] = icmp_type[0]
+        self.parameters["icmpv6-type"] = icmp_type
 
     def create_conntrack_match(self, state):
+        # State is a comma separated string
         self.match = "conntrack"
-        # TODO: bad interface that this is a list, but because of
-        # python-iptables
-        self.parameters["ctstate"] = ",".join(state)
+        self.parameters["ctstate"] = state
 
     def create_mark_match(self, mark):
         self.match = "mark"
@@ -316,11 +264,9 @@ class Rule(object):
         # Upper case to allow matching with what iptables returns.
         self.parameters["mac-source"] = mac_source.upper()
 
-    def create_set_match(self, match_set):
+    def create_set_match(self, set_name, direction):
         self.match = "set"
-        # TODO: bad interface that this is a list, but because of
-        # python-iptables
-        self.parameters["match-set"] = " ".join(match_set)
+        self.parameters["match-set"] = set_name + " " + direction
 
     def create_udp_match(self, sport, dport):
         self.match = "udp"
