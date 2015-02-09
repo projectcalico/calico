@@ -25,10 +25,10 @@ RUN chmod +x confd
 RUN mkdir /etc/service/confd
 ADD confd.sh /etc/service/confd/run
 
-
 # Plugin
-RUN apt-get install -y python-zmq python-flask python-docopt
+RUN apt-get -qy install python-zmq python-pip python-dev python-pyasn1 libffi-dev libssl-dev python-docopt
 ADD plugin.py plugin.py
+RUN pip install python-etcd
 RUN mkdir /etc/service/pluginnetwork
 ADD plugin_network.sh /etc/service/pluginnetwork/run
 RUN mkdir /etc/service/pluginendpoint

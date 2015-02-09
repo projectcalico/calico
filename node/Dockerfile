@@ -31,12 +31,7 @@ RUN mkdir /etc/service/confd
 ADD confd.sh /etc/service/confd/run
 
 # Powerstrip
-RUN apt-get -qy install python-pip
-RUN apt-get -qy install python-dev
-RUN apt-get -qy install python-pyasn1
-RUN apt-get -qy install libyaml-dev
-RUN apt-get -qy install libffi-dev
-RUN apt-get -qy install libssl-dev
+RUN apt-get -qy install python-pip python-dev python-pyasn1 libyaml-dev libffi-dev libssl-dev
 RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz -o powerstrip.tar.gz
 RUN tar -xzf powerstrip.tar.gz
 RUN mv powerstrip-0.0.1 powerstrip
