@@ -23,6 +23,7 @@ The main logic for Felix.
 import argparse
 import logging
 import os
+import pkg_resources
 import socket
 import time
 import uuid
@@ -67,7 +68,8 @@ class FelixAgent(object):
         )
 
         # We have restarted and set up logs - tell the world.
-        log.error("Felix starting")
+        log.error("Felix starting (version: %s)",
+                  pkg_resources.get_distribution('calico'))
 
         # The ZeroMQ context for this Felix.
         self.zmq_context = context
@@ -171,7 +173,13 @@ class FelixAgent(object):
         self.resync_recd     = 0
         self.resync_expected = None
 
-        log.info("Do total resync - ID : %s" % self.resync_id)
+        #*********************************************************************#
+        #* Log the version here, ensuring that we log it periodically (in    *#
+        #* case we try to debug with logs that do not cover Felix starting). *#
+        #*********************************************************************#
+        log.info("Do total resync - ID : %s (version: %s)",
+                 self.resync_id,
+                 pkg_resources.get_distribution('calico'))
 
         # Mark all the endpoints as expecting to be resynchronized.
         for ep in self.endpoints.values():

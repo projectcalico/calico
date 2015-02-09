@@ -12,11 +12,11 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
-import zmq
-import logging
 import argparse
 import ConfigParser
+import logging
+import pkg_resources
+import zmq
 from calico.acl_manager.net_subscriber import NetworkSubscriber
 from calico.acl_manager.net_store import NetworkStore
 from calico.acl_manager.acl_publisher import ACLPublisher
@@ -70,6 +70,9 @@ def main():
                             file_level=file_level,
                             syslog_level=syslog_level,
                             stream_level=stream_level)
+
+    log.error("ACL Manager starting (version: %s)",
+              pkg_resources.get_distribution('calico'))
 
     # Create ZeroMQ context.
     context = zmq.Context()
