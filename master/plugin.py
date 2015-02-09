@@ -69,7 +69,7 @@ def parse_json(value):
 
 def process_endpoint_data(res, keyparts):
     host = keyparts[3]
-    endpoint_id = keyparts[7]
+    endpoint_id = keyparts[8]
     key = keyparts[-1]
 
     # Make sure the parent dicts are created since Python has no autovivification.
