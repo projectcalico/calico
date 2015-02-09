@@ -176,6 +176,10 @@ def set_global_rules(config):
 
         chain.truncate_rules(2)
 
+        # Apply the changes to the table itself.
+        table.apply()
+
+
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
     """
@@ -427,6 +431,9 @@ def set_ep_specific_rules(suffix, iface, type, localips, mac):
                           fiptables.RULE_POSN_LAST,
                           force_position=False)
 
+    # Apply the changes that we have been building.
+    table.apply()
+
 
 def del_rules(suffix, type):
     """
@@ -487,6 +494,9 @@ def del_rules(suffix, type):
             chain.flush()
             log.debug("Delete chain %s", name)
             table.delete_chain(name)
+
+    # Apply the changes that we have been building.
+    table.apply()
 
     # Delete the ipsets for this endpoint.
     for ipset in (from_ipset_addr, from_ipset_icmp, from_ipset_port,

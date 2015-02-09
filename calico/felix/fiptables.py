@@ -49,12 +49,12 @@ class Chain(object):
 
     def flush(self):
         log.debug("Flushing chain %s", self.name)
-        futils.check_call([IPTABLES_CMD[self.type],
-                           "-w",
-                           "-t",
-                           self.table.name,
-                           "-F",
-                           self.name])
+        self.table.ops.append([IPTABLES_CMD[self.type],
+                               "-w",
+                               "-t",
+                               self.table.name,
+                               "-F",
+                               self.name])
         del self.rules[:]
 
     def delete_rule(self, rule):
@@ -67,8 +67,8 @@ class Chain(object):
                 "-D",
                 self.name]
         args.extend(rule.generate_fields())
+        self.table.ops.append(args)
         log.debug("Removing rule : %s", args)
-        futils.check_call(args)
 
     def truncate_rules(self, count):
         """
@@ -84,14 +84,13 @@ class Chain(object):
                   count,
                   len(self.rules))
         while len(self.rules) > count:
-            args = [IPTABLES_CMD[self.type],
-                    "-w",
-                    "-t",
-                    self.table.name,
-                    "-D",
-                    self.name,
-                    str(count + 1)]
-            futils.check_call(args)
+            self.table.ops.append([IPTABLES_CMD[self.type],
+                                   "-w",
+                                   "-t",
+                                   self.table.name,
+                                   "-D",
+                                   self.name,
+                                   str(count + 1)])
             self.rules.pop(count)
 
     def insert_rule(self, rule, position):
@@ -109,7 +108,7 @@ class Chain(object):
                 self.name,
                 str(position + 1)]
         args.extend(rule.generate_fields())
-        futils.check_call(args)
+        self.table.ops.append(args)
         self.rules.insert(position, rule)
 
     def __eq__(self, other):
@@ -130,19 +129,27 @@ class Table(object):
         self.type = type
         self.name = name
         self.chains = {}
+        self.ops = []
 
     def is_chain(self, name):
         return (name in self.chains)
 
     def delete_chain(self, chain_name):
         log.debug("Delete chain %s from table %s", chain_name, self.name)
-        futils.check_call([IPTABLES_CMD[self.type],
-                           "-w",
-                           "-t",
-                           self.name,
-                           "-X",
-                           chain_name])
+        self.ops.append([IPTABLES_CMD[self.type],
+                        "-w",
+                        "-t",
+                        self.name,
+                        "-X",
+                        chain_name])
         del self.chains[chain_name]
+
+    def apply(self):
+        """
+        Apply all changes to this table
+        """
+        for args in self.ops:
+            futils.check_call(args)
 
 class Rule(object):
     """
@@ -369,12 +376,12 @@ def get_chain(table, name):
     if chain is None:
         chain = Chain(table, name)
         table.chains[name] = chain
-        futils.check_call([IPTABLES_CMD[table.type],
-                           "-w",
-                           "-t",
-                           table.name,
-                           "-N",
-                           name])
+        table.ops.append([IPTABLES_CMD[table.type],
+                          "-w",
+                          "-t",
+                          table.name,
+                          "-N",
+                          name])
 
     return chain
 
