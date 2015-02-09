@@ -28,14 +28,13 @@ def setup_logging(logfile):
     log.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
     handler = logging.StreamHandler(sys.stdout)
-    # handler.setLevel(logging.ERROR)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.ERROR)
     handler.setFormatter(formatter)
     log.addHandler(handler)
     handler = logging.handlers.TimedRotatingFileHandler(logfile,
                                                         when='D',
                                                         backupCount=10)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
     log.addHandler(handler)
 
@@ -56,7 +55,7 @@ last_resync = {}
 
 def parse_json(value):
     """
-    Try to parse JSON out into a python datastructure, so that when we serialize it back for
+    Try to parse JSON out into a python data structure, so that when we serialize it back for
     zeroMQ we're not doing JSON in JSON.
     """
     ret_val = value
@@ -70,7 +69,7 @@ def parse_json(value):
 
 def process_endpoint_data(res, keyparts):
     host = keyparts[3]
-    endpoint_id = keyparts[7]
+    endpoint_id = keyparts[8]
     key = keyparts[-1]
 
     # Make sure the parent dicts are created since Python has no autovivification.
@@ -144,7 +143,7 @@ def do_ep_api():
     resync_socket.bind("tcp://*:9901")
     resync_socket.SNDTIMEO = 10000
     resync_socket.RCVTIMEO = 10000
-    log.debug("Created EP socket for resync")
+    log_api.info("Created REP socket on port 9901")
 
     # We create an EP REQ socket each time we get a connection from another
     # host.
@@ -156,8 +155,8 @@ def do_ep_api():
     while True:
         try:
             data = resync_socket.recv()
+            log_api.info("Received REP socket data:\n%s", data)
             fields = json.loads(data)
-            log.debug("Got %s EP msg : %s" % (fields['type'], fields))
         except zmq.error.Again:
             # No data received after timeout.
             fields = {'type': ""}
@@ -172,8 +171,10 @@ def do_ep_api():
                    "message": "Hooray",
                    "type": fields['type'],
                    "endpoint_count": str(len(eps_by_host.get(host, set())))}
-            resync_socket.send(json.dumps(rsp))
-            log.debug("Sending %s EP msg : %s" % (fields['type'], rsp))
+            rsp_json = json.dumps(rsp)
+            log_api.info("Sending RESYNCSTATE response to %s\n%s", host, rsp_json)
+            resync_socket.send(rsp_json)
+
             last_resync[host] = int(time.time())
 
             send_all_eps(create_sockets, host, resync_id)
@@ -181,7 +182,9 @@ def do_ep_api():
         elif fields['type'] == "HEARTBEAT":
             # Keepalive. We are still here.
             rsp = {"rc": "SUCCESS", "message": "Hooray", "type": fields['type']}
-            resync_socket.send(json.dumps(rsp))
+            rsp_json = json.dumps(rsp)
+            log_api.info("Sending resync HEARTBEAT\n%s" % rsp_json)
+            resync_socket.send(rsp_json)
 
 
         # Send a keepalive on each EP REQ socket.
@@ -197,14 +200,16 @@ def do_ep_api():
                 create_socket = create_sockets[host]
                 msg = {"type": "HEARTBEAT",
                        "issued": int(time.time() * 1000)}
-                log.debug("Sending KEEPALIVE to %s : %s" % (host, msg))
-                create_socket.send(json.dumps(msg))
-                create_socket.recv()
-                log.debug("Got response from host %s" % host)
+                msg_json = json.dumps(msg)
+                log_api.info("Sending HEARTBEAT to %s:\n%s" % (host, msg_json))
+                create_socket.send(msg_json)
+                data = create_socket.recv()
+                log_api.info("Received HEARTBEAT response from %s:\n%s", host, data)
 
 
 def send_all_eps(create_sockets, host, resync_id):
     create_socket = create_sockets.get(host)
+    log.info("Sending ENDPOINTCREATED messages for host %s", host)
 
     if create_socket is None:
         create_socket = zmq_context.socket(zmq.REQ)
@@ -212,9 +217,11 @@ def send_all_eps(create_sockets, host, resync_id):
         create_socket.RCVTIMEO = 10000
         create_socket.connect("tcp://%s:9902" % host)
         create_sockets[host] = create_socket
+        log_api.info("Created REQ socket on port 9902")
 
     # Send all of the ENDPOINTCREATED messages.
     for ep in eps_by_host.get(host, {}):
+        log.info("Sending ENDPOINTCREATED message for endpoint %s", ep)
         msg = {"type": "ENDPOINTCREATED",
                "mac": eps_by_host[host][ep]["mac"],
                "endpoint_id": ep,
@@ -222,10 +229,11 @@ def send_all_eps(create_sockets, host, resync_id):
                "issued": int(time.time() * 1000),
                "state": "enabled",
                "addrs": eps_by_host[host][ep]["addrs"]}
-        log.debug("Sending ENDPOINTCREATED to %s : %s" % (host, msg))
-        create_socket.send(json.dumps(msg))
-        create_socket.recv()
-        log.debug("Got endpoint created response")
+        msg_json = json.dumps(msg)
+        log_api.info("Sending ENDPOINTCREATED to %s:\n%s" % (host, msg_json))
+        create_socket.send(msg_json)
+        data = create_socket.recv()
+        log_api.info("Received ENPOINTCREATED response:\n%s", data)
 
 
 def do_network_api():
@@ -251,7 +259,6 @@ def do_network_api():
             data = rep_socket.recv()
             log_api.info("Received REP message: %s", data)
             fields = json.loads(data)
-            log.debug("Got %s network msg : %s" % (fields['type'], fields))
             if fields['type'] == "GETGROUPS":
                 rsp = {"rc": "SUCCESS",
                        "message": "Hooray",
@@ -269,7 +276,7 @@ def do_network_api():
 
         except zmq.error.Again:
             # Timeout - press on.
-            log.debug("No data received")
+            log.warning("No data received")
 
         send_all_groups(pub_socket)
 
@@ -278,14 +285,13 @@ def send_all_groups(pub_socket):
     load_data()
 
     # Now send all the data we have on the PUB socket.
-    log.debug("Build data to publish")
+    log.info("Build groups data to publish")
 
     if not all_groups:
         # No groups to send; send a keepalive instead so ACL Manager
         # doesn't think we have gone away.
         msg = {"type": "HEARTBEAT",
                "issued": int(time.time() * 1000)}
-        log.debug("Sending network heartbeat %s", msg)
         rsp_json = json.dumps(msg).encode('utf-8')
         log_api.info("Sent  HB PUB message: \n%s", rsp_json)
         pub_socket.send_multipart(['networkheartbeat'.encode('utf-8'),
@@ -304,18 +310,17 @@ def send_all_groups(pub_socket):
         # Send the data to the ACL manager.
         rsp_json = json.dumps(data).encode('utf-8')
         log.debug("Sending data about group %s : %s" % (group, data))
-        log_api.info("Sent GRP PUB message: \n%s", rsp_json)
         pub_socket.send_multipart(['groups'.encode('utf-8'),
                                    rsp_json])
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-    setup_logging("%s/plugin_startup.log" % arguments["--log-dir"])
-    load_data()
 
     if arguments["endpoint"]:
         setup_logging("%s/plugin_ep.log" % arguments["--log-dir"])
+        load_data()
         do_ep_api()
     if arguments["network"]:
         setup_logging("%s/plugin_net.log" % arguments["--log-dir"])
+        load_data()
         do_network_api()
