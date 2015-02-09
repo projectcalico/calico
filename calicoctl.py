@@ -106,18 +106,18 @@ class CalicoCmdLineEtcdClient(object):
         group_path = GROUP_PATH % {"group_id": group_id}
         self.client.write(group_path + "name", name)
 
-        # Default Rules
-        self.client.write(group_path + "rules/inbound_default", "deny")
-        self.client.write(group_path + "rules/outbound_default", "deny")
+        # Default rule
+        self.client.write(group_path + "rule/inbound_default", "deny")
+        self.client.write(group_path + "rule/outbound_default", "deny")
 
         # Allow traffic inbound from group.
         allow_group = Rule(group=group_id, cidr=None, protocol=None, port=None)
-        self.client.write(group_path + "rules/inbound/1", allow_group.to_json())
+        self.client.write(group_path + "rule/inbound/1", allow_group.to_json())
 
         # Allow traffic outbound to group and any address.
         allow_any_ip = Rule(group=None, cidr="0.0.0.0/0", protocol=None, port=None)
-        self.client.write(group_path + "rules/outbound/1", allow_group.to_json())
-        self.client.write(group_path + "rules/outbound/2", allow_any_ip.to_json())
+        self.client.write(group_path + "rule/outbound/1", allow_group.to_json())
+        self.client.write(group_path + "rule/outbound/2", allow_any_ip.to_json())
 
     def get_group_id(self, name):
         """
@@ -162,10 +162,10 @@ class CalicoCmdLineEtcdClient(object):
         endpoint = endpoints.next()
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
 
-        # Add the endpoint to the group.  ./members/ is a keyset of endpoint IDs, so write empty
+        # Add the endpoint to the group.  ./member/ is a keyset of endpoint IDs, so write empty
         # string as the value.
         group_path = GROUP_PATH % {"group_id": group_id}
-        self.client.write(group_path + "members/" + endpoint_id, "")
+        self.client.write(group_path + "member/" + endpoint_id, "")
 
 
 client = CalicoCmdLineEtcdClient()
