@@ -96,5 +96,5 @@ def set_up_endpoint(ip, cpid, in_container=False):
                        (cpid, VETH_NAME), shell=True).strip()
 
     # Return an Endpoint
-    return Endpoint(id=ep_id, addrs=[ip], state="enabled", mac=mac)
+    return Endpoint(id=ep_id, addrs=[{"addr":ip}], state="enabled", mac=mac)
 
