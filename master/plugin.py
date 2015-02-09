@@ -136,6 +136,8 @@ def load_data():
         except IndexError:
             log.debug("Ignoring key %s", res.key)
             continue
+    log.info("Finished reading data. Database contains %s hosts and %s groups",
+             len(eps_by_host), len(all_groups))
 
 def do_ep_api():
     # Create the EP REP socket
@@ -276,7 +278,7 @@ def do_network_api():
 
         except zmq.error.Again:
             # Timeout - press on.
-            log.warning("No data received")
+            log.warning("No data received - send all groups anyway")
 
         send_all_groups(pub_socket)
 
@@ -290,6 +292,7 @@ def send_all_groups(pub_socket):
     if not all_groups:
         # No groups to send; send a keepalive instead so ACL Manager
         # doesn't think we have gone away.
+        log.info("No groups defined, sending networkheartbeat")
         msg = {"type": "HEARTBEAT",
                "issued": int(time.time() * 1000)}
         rsp_json = json.dumps(msg).encode('utf-8')
@@ -309,7 +312,7 @@ def send_all_groups(pub_socket):
 
         # Send the data to the ACL manager.
         rsp_json = json.dumps(data).encode('utf-8')
-        log.debug("Sending data about group %s : %s" % (group, data))
+        log_api.info("Sent GROUPUPDATE for group %s:\n%s", group, rsp_json)
         pub_socket.send_multipart(['groups'.encode('utf-8'),
                                    rsp_json])
 
