@@ -44,6 +44,8 @@ GROUP_PATH = "/calico/network/group/%(group_id)s/"
 CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
 
+POWERSTRIP_PORT = 2375
+
 
 class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
     """
@@ -201,6 +203,9 @@ def node(ip):
                  "-d",
                  "calico/node")
     print "Calico node is running with id: %s" % cid
+    print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
+    print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
+    print "before using `docker run` for Calico networking.\n"
 
 
 def master(ip):
