@@ -1,2 +1,2 @@
 #!/bin/sh
-exec python /plugin.py network >>/var/log/calico/plugin_network.log 2>&1
+exec python /plugin.py network >>/var/log/calico/plugin_network_console.log 2>&1
