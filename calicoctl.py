@@ -4,7 +4,6 @@
 Usage:
   calicoctl master --ip=<IP>
   calicoctl node --ip=<IP>
-  calicoctl assignacl <CONTAINER_ID>
   calicoctl status
   calicoctl reset
   calicoctl version
