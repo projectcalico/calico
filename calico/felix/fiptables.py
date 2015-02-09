@@ -148,8 +148,8 @@ class Table(object):
         """
         Apply all changes to this table
         """
-        for args in self.ops:
-            futils.check_call(args)
+        if self.ops:
+            futils.multi_call(self.ops)
 
 class Rule(object):
     """

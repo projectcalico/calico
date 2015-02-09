@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import time
 
 from collections import namedtuple
@@ -89,6 +90,28 @@ def check_call(args):
         raise FailedSystemCall("Failed system call", args, retcode, stdout, stderr)
 
     return CommandOutput(stdout, stderr)
+
+
+def multi_call(ops):
+    """
+    Issue multiple ops, all of which must succeed.
+    """
+    log.debug("Calling out to system : %s" % ops)
+
+    fd, name = tempfile.mkstemp(text=True)
+    f = os.fdopen(fd, "w")
+    f.write("set -e\n")
+    cmds = [ " ".join(op) + "\n" for op in ops ]
+    for cmd in cmds:
+        # We echo every command before running it for diagnosability
+        f.write("echo Executing : " + cmd)
+        f.write(cmd)
+
+    f.close()
+
+    check_call(["bash", name])
+    os.remove(name)
+
 
 def time_ms():
     """
