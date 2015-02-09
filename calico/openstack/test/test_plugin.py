@@ -38,6 +38,8 @@ sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
 sys.modules['neutron.plugins'] = m_neutron.plugins
 sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
+sys.modules['oslo'] = m_oslo = mock.Mock()
+sys.modules['oslo.config'] = m_oslo.config
 
 #*****************************************************************************#
 #* Define a stub class, that we will use as the base class for               *#
@@ -390,8 +392,38 @@ class TestPlugin(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_mainline(self):
+    def assert_get_bound_socket(self, addr, port):
+        bound_sockets = {socket for socket in self.sockets
+                         if socket.bound_address == ("tcp://%s:%s" %
+                                                     (addr, port))}
+        self.assertEqual(len(bound_sockets), 1)
+        return bound_sockets.pop()
+        
+    def test_bind_host(self):
+        #*********************************************************************#
+        #* Test binding to a specific IP address.                            *#
+        #*********************************************************************#
+        ip_addr = '192.168.1.1'
+        m_oslo.config.cfg.CONF.bind_host = ip_addr
+        
+        #*********************************************************************#
+        #* Tell the driver to initialize.                                    *#
+        #*********************************************************************#
+        self.driver.initialize()
 
+        #*********************************************************************#
+        #* Check that sockets are bound to the specific IP address.          *#
+        #*********************************************************************#
+        self.felix_router_socket = self.assert_get_bound_socket(ip_addr, 9901)
+        self.acl_get_socket = self.assert_get_bound_socket(ip_addr, 9903)
+        self.acl_pub_socket = self.assert_get_bound_socket(ip_addr, 9904)
+
+    def test_mainline(self):
+        #*********************************************************************#
+        #* Don't provide bind_host config.                                   *#
+        #*********************************************************************#
+        m_oslo.config.cfg.CONF.bind_host = None
+        
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
         #*********************************************************************#
@@ -400,28 +432,19 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         #* Check that there's a socket bound to port 9901, and get it.       *#
         #*********************************************************************#
-        bound_sockets = {socket for socket in self.sockets
-                         if socket.bound_address == "tcp://*:9901"}
-        self.assertEqual(len(bound_sockets), 1)
-        self.felix_router_socket = bound_sockets.pop()
+        self.felix_router_socket = self.assert_get_bound_socket('*', 9901)
         print "Felix router socket is %s" % self.felix_router_socket
 
         #*********************************************************************#
         #* Check that there's a socket bound to port 9903, and get it.       *#
         #*********************************************************************#
-        bound_sockets = {socket for socket in self.sockets
-                         if socket.bound_address == "tcp://*:9903"}
-        self.assertEqual(len(bound_sockets), 1)
-        self.acl_get_socket = bound_sockets.pop()
+        self.acl_get_socket = self.assert_get_bound_socket('*', 9903)
         print "ACL GET socket is %s" % self.acl_get_socket
 
         #*********************************************************************#
         #* Check that there's a socket bound to port 9904, and get it.       *#
         #*********************************************************************#
-        bound_sockets = {socket for socket in self.sockets
-                         if socket.bound_address == "tcp://*:9904"}
-        self.assertEqual(len(bound_sockets), 1)
-        self.acl_pub_socket = bound_sockets.pop()
+        self.acl_pub_socket = self.assert_get_bound_socket('*', 9904)
         print "ACL PUB socket is %s" % self.acl_pub_socket
 
         #*********************************************************************#
