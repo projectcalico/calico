@@ -178,7 +178,6 @@ def validate_arguments(arguments):
 
 def create_dirs():
     mkdir_p("/var/log/calico")
-    mkdir_p("/tmp/config/data")
 
 
 def process_output(line):
