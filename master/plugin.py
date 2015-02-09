@@ -51,6 +51,7 @@ def setup_logging(logfile):
 # Global variables for system state. These will be set up in load_data.
 eps_by_host = {}
 all_groups = {}
+ips_by_endpointid = {}
 last_resync = {}
 
 def parse_json(value):
@@ -80,6 +81,9 @@ def process_endpoint_data(res, keyparts):
 
     eps_by_host[host][endpoint_id][key] = parse_json(res.value)
 
+    if key == "addrs":
+        ips_by_endpointid[endpoint_id] = parse_json(res.value)
+
 def process_network_data(res, keyparts):
     key = keyparts[-1]
     group = keyparts[4]
@@ -89,15 +93,15 @@ def process_network_data(res, keyparts):
         all_groups[group] = {}
         all_groups[group]["member"] = {}
         all_groups[group]["rule"] = {}
-        all_groups[group]["rule"]["inbound"] = {}
-        all_groups[group]["rule"]["outbound"] = {}
+        all_groups[group]["rule"]["inbound"] = []
+        all_groups[group]["rule"]["outbound"] = []
 
     if type == "member":
-        all_groups[group]["member"][key] = ""
+        all_groups[group]["member"][key] = []
     elif type == "rule":
         rule_type = keyparts[6]
         if rule_type in ("inbound", "outbound"):
-            all_groups[group]["rule"][rule_type][key] = parse_json(res.value)
+            all_groups[group]["rule"][rule_type].append(parse_json(res.value))
         else:
             all_groups[group]["rule"][key] = res.value
     elif key == "name":
@@ -112,6 +116,7 @@ def load_data():
     log.info("Clearing data structures for full resync")
     eps_by_host.clear()
     all_groups.clear()
+    ips_by_endpointid.clear()
 
     result = client.read('/calico', recursive=True)
 
@@ -229,7 +234,7 @@ def send_all_eps(create_sockets, host, resync_id):
                "endpoint_id": ep,
                "resync_id": resync_id,
                "issued": int(time.time() * 1000),
-               "state": "enabled",
+               "state": "enabled", # TODO - Map through enabled properly
                "addrs": eps_by_host[host][ep]["addrs"]}
         msg_json = json.dumps(msg)
         log_api.info("Sending ENDPOINTCREATED to %s:\n%s" % (host, msg_json))
@@ -304,10 +309,13 @@ def send_all_groups(pub_socket):
         rules = all_groups[group]["rule"]
         members = all_groups[group]["member"]
 
+        # Add IP addresses for endpoints.
+        members_with_ips = {member: ips_by_endpointid[member] for member in members}
+        
         data = {"type": "GROUPUPDATE",
                 "group": group,
                 "rules": rules,  # all outbound, inbound from group
-                "members": members,  # all endpoints
+                "members": members_with_ips,  # all endpoints
                 "issued": int(time.time() * 1000)}
 
         # Send the data to the ACL manager.
