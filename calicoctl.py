@@ -125,12 +125,16 @@ class CalicoCmdLineEtcdClient(object):
         :param name:
         :return: string UUID for the group, or None if the name was not found.
         """
-        groups = self.client.read(GROUPS_PATH, recursive=True,).children
-        for child in groups:
-            (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
-            if final_key == "name":
-                if child.value == name:
-                    return group_id
+        try:
+            groups = self.client.read(GROUPS_PATH, recursive=True,).children
+            for child in groups:
+                (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
+                if final_key == "name":
+                    if child.value == name:
+                        return group_id
+        except KeyError as e:
+            # Means the GROUPS_PATH was not set up.  So, group does not exist.
+            pass
         return None
 
     def add_container_to_group(self, container_id, group_name):
