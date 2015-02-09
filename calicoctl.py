@@ -201,6 +201,7 @@ def node(ip):
                  "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
                  "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
                                             # networking
+                 "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                  "-d",
                  "calico/node")
     print "Calico node is running with id: %s" % cid
@@ -222,6 +223,7 @@ def master(ip):
     cid = docker("run", "--name=calico-master",
                  "--privileged",
                  "--net=host",
+                 "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                  "-d",
                  "calico/master")
     print "Calico master is running with id: %s" % cid
