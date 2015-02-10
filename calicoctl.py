@@ -14,7 +14,7 @@ Usage:
 
 Options:
  --ip=<IP>              The local management address to use.
- --etcd-ip=<ETCD_IP>    The IP of an etcd proxy to the cluster [default: "127.0.0.1:4001"]
+ --etcd-ip=<ETCD_IP>    The IP of an etcd proxy to the cluster [default: 127.0.0.1:4001]
 
 """
 #Useful docker aliases

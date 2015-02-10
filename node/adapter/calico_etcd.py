@@ -20,6 +20,7 @@ import etcd
 from collections import namedtuple
 import json
 import sys
+import os
 import logging
 import logging.handlers
 
@@ -31,6 +32,9 @@ HOST_PATH = "/calico/host/%(hostname)s/"
 CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINT_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/" + \
                 "endpoint/%(endpoint_id)s/"
+
+ENV_ETCD = "ETCD_IP"
+"""The environment variable that locates etcd service."""
 
 
 def setup_logging(logfile):
@@ -54,7 +58,13 @@ class CalicoEtcdClient(object):
     """
 
     def __init__(self):
-        self.client = etcd.Client()
+        etcd_port = os.getenv(ENV_ETCD, None)
+        if not etcd_port:
+            self.client = etcd.Client()
+        else:
+            # TODO: Error handling
+            (host, port) = etcd_port.split(":", 1)
+            self.client = etcd.Client(host=host, port=int(port))
 
     def create_container(self, hostname, container_id, endpoint):
         """
