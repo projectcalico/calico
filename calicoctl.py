@@ -2,8 +2,8 @@
 """Calico..
 
 Usage:
-  calicoctl master --ip=<IP>
-  calicoctl node --ip=<IP>
+  calicoctl master --ip=<IP> [--etcd-ip=<ETCD_IP>]
+  calicoctl node --ip=<IP> [--etcd-ip=<ETCD_IP>]
   calicoctl status
   calicoctl reset
   calicoctl version
@@ -13,7 +13,9 @@ Usage:
 
 
 Options:
- --ip=<IP>    The local management address to use.
+ --ip=<IP>              The local management address to use.
+ --etcd-ip=<ETCD_IP>    The IP of an etcd proxy to the cluster [default: "127.0.0.1:4001"]
+
 """
 #Useful docker aliases
 # alias docker_kill_all='sudo docker kill $(docker ps -q)'
@@ -192,7 +194,7 @@ def process_output(line):
     sys.stdout.write(line)
 
 
-def node(ip):
+def node(ip, etcd_ip):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -211,6 +213,7 @@ def node(ip):
                  "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
                                             # networking
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
+                 "-e", "ETCD_IP=%s" % etcd_ip,  # etcd host:port, if not local
                  "-d",
                  "calico/node")
     print "Calico node is running with id: %s" % cid
@@ -219,7 +222,7 @@ def node(ip):
     print "before using `docker run` for Calico networking.\n"
 
 
-def master(ip):
+def master(ip, etcd_ip):
     create_dirs()
 
     # Add IP to etcd
@@ -233,6 +236,7 @@ def master(ip):
                  "--privileged",
                  "--net=host",
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
+                 "-e", "ETCD_IP=%s" % etcd_ip,  # etcd host:port, if not local
                  "-d",
                  "calico/master")
     print "Calico master is running with id: %s" % cid
@@ -372,9 +376,9 @@ if __name__ == '__main__':
         arguments = docopt(__doc__)
         if validate_arguments(arguments):
             if arguments["master"]:
-                master(arguments["--ip"])
+                master(arguments["--ip"], arguments["--etcd-ip"])
             if arguments["node"]:
-                node(arguments["--ip"])
+                node(arguments["--ip"], arguments["--etcd-ip"])
             if arguments["status"]:
                 status()
             if arguments["reset"]:
