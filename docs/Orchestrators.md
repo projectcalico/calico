@@ -53,10 +53,10 @@ The orchestrator should then set up Access Control Lists (ACLs) as detailed belo
 ## Collecting diags
 To collect (from the current machine only) and upload the diags, run the following command
 
-	calico diags
+	calicoctl diags
 
 It prints a local file name and a URL where the diags can be downloaded from.
-Etcd data format
+
 
 ## Setting Calico ACLs
 
