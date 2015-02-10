@@ -9,6 +9,7 @@ Usage:
   calicoctl version
   calicoctl addgroup <GROUP>
   calicoctl addtogroup <CONTAINER_ID> <GROUP>
+  calicoctl diags
 
 
 Options:
@@ -28,6 +29,7 @@ import json
 import uuid
 from collections import namedtuple
 import sh
+import subprocess
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -300,6 +302,69 @@ def add_container_to_group(container_id, group_name):
         print e
     return
 
+def save_diags():
+    """
+    Gather Calico diagnostics for bug reporting.
+    :return: None
+    """
+
+    script = """
+#!/bin/bash
+[ -z $BASH ] && echo "You must run this script in bash" && exit 1
+whoami | grep -q "root" || { echo "You must run this script as root" && exit 1; }
+echo "Collecting diags"
+
+ROUTE_FILE=route
+IPTABLES_PREFIX=iptables
+IP6TABLES_PREFIX=ip6tables
+CALICO_DIR=/var/log/calico
+date=`date +"%F_%H-%M-%S"`
+diags_dir="/tmp/$date"
+system=`hostname`
+echo $diags_dir
+mkdir $diags_dir
+pushd $diags_dir
+
+echo DATE=$date > date
+echo $system > hostname
+
+for cmd in "route -n" "ip route" "ip -6 route"
+do
+  echo $cmd >> $ROUTE_FILE
+  $cmd >> $ROUTE_FILE
+  echo >> $ROUTE_FILE
+done
+netstat -an > netstat
+
+iptables -v -L > $IPTABLES_PREFIX
+iptables -v -L -t nat > $IPTABLES_PREFIX-nat
+iptables -v -L -t mangle > $IPTABLES_PREFIX-mangle
+iptables -v -L > $IP6TABLES_PREFIX
+iptables -v -L -t nat > $IP6TABLES_PREFIX-nat
+iptables -v -L -t mangle > $IP6TABLES_PREFIX-mangle
+ipset list > ipset
+
+cp -a $CALICO_DIR .
+curl -s -L http://127.0.0.1:4001/v2/keys/calico?recursive=true -o etcd_calico
+
+mkdir logs
+cp /var/log/*log logs
+
+tar -zcf $diags_dir.gz *
+
+popd
+
+echo "Diags saved to $diags_dir.gz"
+"""
+    # Pipe the diags script to bash
+    # TODO: reimplement this in Python
+    proc = subprocess.Popen("bash",
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+    (out, _) = proc.communicate(script)
+    print out
+
 if __name__ == '__main__':
     if os.geteuid() != 0:
         print "calicoctl must be run as root"
@@ -321,5 +386,7 @@ if __name__ == '__main__':
             if arguments["addtogroup"]:
                 add_container_to_group(arguments["<CONTAINER_ID>"],
                                        arguments["<GROUP>"])
+            if arguments["diags"]:
+                save_diags()
         else:
             print "Not yet"
