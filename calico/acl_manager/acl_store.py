@@ -61,7 +61,8 @@ class ACLStore(object):
         Pass updated rules information to the ACL Store.
 
         The ACL Store will update its stored state for that endpoint, and
-        publish an update for it.  This method is thread-safe.
+        publish an update for it.  This method is thread-safe, and the ACL
+        Store owns the rules object passed in.
         """
         # At present there is no way to remove a deleted endpoint.
         self.queue.put(("update_endpoint", endpoint_uuid, rules))
@@ -108,6 +109,10 @@ class ACLStore(object):
         log.debug("ACL Store work: update rules for endpoint %s" %
                   endpoint_uuid)
 
-        self.endpoint_acls[endpoint_uuid] = rules
-
-        self.worker_publish_update(endpoint_uuid)
+        if (endpoint_uuid not in self.endpoint_acls or
+            self.endpoint_acls[endpoint_uuid] != rules):
+            log.debug("Publishing rules update")
+            self.endpoint_acls[endpoint_uuid] = rules
+            self.worker_publish_update(endpoint_uuid)
+        else:
+            log.debug("Supressing no-op rules update")

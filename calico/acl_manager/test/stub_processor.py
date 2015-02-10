@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from copy import deepcopy
+
 
 class StubRuleProcessor(object):
     """
@@ -69,4 +71,4 @@ class StubRuleProcessor(object):
         """
         Pass ACLs to the ACL Store.
         """
-        self.acl_store.update_endpoint_rules(endpoint_uuid, acls)
+        self.acl_store.update_endpoint_rules(endpoint_uuid, deepcopy(acls))
