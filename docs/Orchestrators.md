@@ -95,7 +95,12 @@ You can configure groups and ACLs for Calico by directly writing to the `/calico
 
 To create a group, generate a new UUID for the group.  Then set the key `/calico/network/group/<group-id>/name` to the name of the group, where &lt;group-id&gt; is the UUID you generated.
 
+	web_group=`cat /proc/sys/kernel/random/uuid`
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$web_group/name -d value="Web Servers"
+
 To delete a group, recursively delete the directory `/calico/network/group/<group-id>`
+
+	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/network/group/$web_group?recursive=true
 
 ### Definining Group Rules
 
@@ -122,7 +127,32 @@ This rule matches all traffic to/from a specific security group.
 
 This rule matches all TCP traffic to/from any source to port 80.
 
-	
+### Group rules worked example.
+
+The following commands will create a group that can receive traffic only from its own members.
+
+Create the group.
+
+	group1=`cat /proc/sys/kernel/random/uuid`
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/name -d value="Group 1"
+
+Set the default inbound rule.
+
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/inbound_default -d value="deny"
+
+Allow inbound traffic from the group (note the escaping required since we need the shell to expand $group1).
+
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/inbound/1 -d value="{\"group\": \"$group1\", \"cidr\": null, \"protocol\": null, \"port\": null}"
+
+Set the default outbound rule.
+
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/outbound_default -d value="deny"
+
+Allow outbound traffic to any IPv4 address (in this example we enclose JSON in `'`, so escaping the `"`is not required).
+
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/outbound/1 -d value='{"group": null, "cidr": "0.0.0.0/0", "protocol": null, "port": null}'
+
+
 ###  Controlling Group Membership
 
 After a container has been created, a node will appear in etcd
@@ -131,8 +161,41 @@ After a container has been created, a node will appear in etcd
 
 List the contents of `/calico/host/<hostname>/workload/docker/<container-id>/endpoint/` to get the UUID of the endpoint assigned to the container.
 
-Then add the key `/calico/network/group/<group-id>/member/<endpoint-id>` with an empty value.
+	export DOCKER_HOST=localhost:2375
+	container1=`docker run -e CALICO_IP 192.168.0.101 -td ubuntu`
+	curl -L http://127.0.0.1:4001/v2/keys/calico/host/$HOSTNAME/workload/docker/$container1/endpoint
+	
+If you have python available on your system, you can use it format JSON returned by etcd.
+
+	curl -L http://127.0.0.1:4001/v2/keys/calico/host/$HOSTNAME/workload/docker/$container1/endpoint | python -m json.tool
+	
+Example output:
+
+	{
+		"action": "get",
+		"node": {
+			"createdIndex": 132,
+			"dir": true,
+			"key": "/calico/host/sjc-dev/workload/docker/b41eb37fae7f7bf3388e0565e1a1d014fba239424b7ca1d81b2139d54c2260cd/endpoint",
+			"modifiedIndex": 132,
+			"nodes": [
+				{
+					"createdIndex": 132,
+					"dir": true,
+					"key": "/calico/host/sjc-dev/workload/docker/b41eb37fae7f7bf3388e0565e1a1d014fba239424b7ca1d81b2139d54c2260cd/endpoint/97753abeb0bd11e49cac08002737b14f",
+					"modifiedIndex": 132
+				}
+			]
+		}
+	}
+
+In this example, the endpoing UUID is 97753abeb0bd11e49cac08002737b14f
+
+To add an endpoint to a group, create the key `/calico/network/group/<group-id>/member/<endpoint-id>` with an empty value.  Using `$group1` from the above example:
+
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/member/97753abeb0bd11e49cac08002737b14f -d value=''
 
 To remove an endpoint from the group, delete the corresponding key.
 
+	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/member/97753abeb0bd11e49cac08002737b14f
  
