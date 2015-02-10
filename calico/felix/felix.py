@@ -547,21 +547,27 @@ class FelixAgent(object):
             for addr in fields['addrs']:
                 addresses.add(Address(addr))
         except KeyError:
-            log.error("Missing addrs or IP in addrs for endpoint %s, data %s",
-                      self.uuid, fields)
-            raise InvalidRequest("No valid address for endpoint %s")
+            log.error("Missing addr or IP in addrs for endpoint %s : %s",
+                      endpoint.uuid, fields)
+            raise InvalidRequest("No valid address for endpoint %s" %
+                                 endpoint.uuid)
 
         if mac is None:
-            log.error("No mac address for endpoint %s")
-            raise InvalidRequest("No mac address for endpoint %s")
+            log.error("No mac address for endpoint %s : %s",
+                      endpoint.uuid,
+                      fields)
+            raise InvalidRequest("No mac address for endpoint %s" %
+                                 endpoint.uuid)
 
         if state is None:
-            log.error("No state for endpoint %s")
-            raise InvalidRequest("No state for endpoint %s")
+            log.error("No state for endpoint %s : %s",
+                      endpoint.uuid,
+                      fields)
+            raise InvalidRequest("No state for endpoint %s" % endpoint.uuid)
 
         if state not in Endpoint.STATES:
-            log.error("Invalid state %s for endpoint %s : %s" %
-                      (state, endpoint.uuid, state))
+            log.error("Invalid state %s for endpoint %s : %s",
+                      state, endpoint.uuid, fields)
             raise InvalidRequest("Invalid state %s for endpoint %s" %
                                  (state, endpoint.uuid))
 
@@ -571,7 +577,7 @@ class FelixAgent(object):
         endpoint.state = state.encode('ascii')
 
         # Program the endpoint - i.e. set things up for it.
-        log.debug("Program %s" % endpoint.suffix)
+        log.debug("Program %s", endpoint.suffix)
         if endpoint.program_endpoint():
             # Failed to program this endpoint - put on the retry list.
             self.ep_retry.add(endpoint.uuid)
