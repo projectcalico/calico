@@ -310,8 +310,14 @@ def send_all_groups(pub_socket):
         members = all_groups[group]["member"]
 
         # Add IP addresses for endpoints.
-        members_with_ips = {member: ips_by_endpointid[member] for member in members}
-        
+        members_with_ips = {}
+        for member in members:
+            ep_ip_configs = ips_by_endpointid[member]
+            # Eac ep_ip_config is a dictionary containing addr, gateway, etc.  We only care about
+            # the address, so flatten to just a list.  This is what the GROUPUPDATE API expects.
+            ep_ips = [ip_config["addr"] for ip_config in ep_ip_configs]
+            members_with_ips[member] = ep_ips
+
         data = {"type": "GROUPUPDATE",
                 "group": group,
                 "rules": rules,  # all outbound, inbound from group
