@@ -2,19 +2,19 @@
 """Calico..
 
 Usage:
-  calicoctl master --ip=<IP> [--etcd-ip=<ETCD_IP>]
-  calicoctl node --ip=<IP> [--etcd-ip=<ETCD_IP>]
+  calicoctl master --ip=<IP> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl node --ip=<IP> [--etcd=<ETCD_AUTHORITY>]
   calicoctl status
   calicoctl reset
   calicoctl version
-  calicoctl addgroup <GROUP>
-  calicoctl addtogroup <CONTAINER_ID> <GROUP>
+  calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
+  calicoctl addtogroup <CONTAINER_ID> <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl diags
 
 
 Options:
- --ip=<IP>              The local management address to use.
- --etcd-ip=<ETCD_IP>    The IP of an etcd proxy to the cluster [default: 127.0.0.1:4001]
+ --ip=<IP>                  The local management address to use.
+ --etcd=<ETCD_AUTHORITY>    The location of the etcd service as host:port [default: 127.0.0.1:4001]
 
 """
 #Useful docker aliases
@@ -67,8 +67,13 @@ class CalicoCmdLineEtcdClient(object):
     An etcd client that exposes high level Calico operations needed by the calico CLI.
     """
 
-    def __init__(self):
-        self.client = etcd.Client()
+    def __init__(self, etcd_authority=None):
+        if not etcd_authority:
+            self.client = etcd.Client()
+        else:
+            # TODO: Error handling
+            (host, port) = etcd_authority.split(":", 1)
+            self.client = etcd.Client(host=host, port=int(port))
 
     def create_host(self, bird_ip):
         """
@@ -178,9 +183,6 @@ class CalicoCmdLineEtcdClient(object):
         self.client.write(group_path + "member/" + endpoint_id, "")
 
 
-client = CalicoCmdLineEtcdClient()
-
-
 def validate_arguments(arguments):
     # print(arguments)
     return True
@@ -194,12 +196,13 @@ def process_output(line):
     sys.stdout.write(line)
 
 
-def node(ip, etcd_ip):
+def node(ip, etcd_authority):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
 
     # Set up etcd
+    client = CalicoCmdLineEtcdClient(etcd_authority)
     client.create_host(ip)
     try:
         docker("rm", "-f", "calico-node")
@@ -213,7 +216,7 @@ def node(ip, etcd_ip):
                  "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
                                             # networking
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                 "-e", "ETCD_IP=%s" % etcd_ip,  # etcd host:port, if not local
+                 "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
                  "-d",
                  "calico/node")
     print "Calico node is running with id: %s" % cid
@@ -222,10 +225,11 @@ def node(ip, etcd_ip):
     print "before using `docker run` for Calico networking.\n"
 
 
-def master(ip, etcd_ip):
+def master(ip, etcd_authority):
     create_dirs()
 
     # Add IP to etcd
+    client = CalicoCmdLineEtcdClient(etcd_authority)
     client.set_master(ip)
     try:
         docker("rm", "-f", "calico-master")
@@ -236,7 +240,7 @@ def master(ip, etcd_ip):
                  "--privileged",
                  "--net=host",
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                 "-e", "ETCD_IP=%s" % etcd_ip,  # etcd host:port, if not local
+                 "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
                  "-d",
                  "calico/master")
     print "Calico master is running with id: %s" % cid
@@ -274,13 +278,13 @@ def version():
     print "Unknown"
 
 
-def add_group(group_name):
+def add_group(group_name, etcd_authority):
     """
     Create a security group with the given name.
     :param group_name: The name for the group.
     :return: None.
     """
-
+    client = CalicoCmdLineEtcdClient(etcd_authority)
     # Check if the group exists.
     if client.get_group_id(group_name):
         print "Group %s already exists." % group_name
@@ -292,14 +296,14 @@ def add_group(group_name):
     print "Created group %s with ID %s" % (group_name, group_id)
 
 
-def add_container_to_group(container_id, group_name):
+def add_container_to_group(container_id, group_name, etcd_authority):
     """
     Add the container to the listed group.
     :param container_id: ID of the container to add.
     :param group_name: Name of the group.
     :return: None
     """
-
+    client = CalicoCmdLineEtcdClient(etcd_authority)
     try:
         client.add_container_to_group(container_id, group_name)
     except KeyError as e:
@@ -376,9 +380,9 @@ if __name__ == '__main__':
         arguments = docopt(__doc__)
         if validate_arguments(arguments):
             if arguments["master"]:
-                master(arguments["--ip"], arguments["--etcd-ip"])
+                master(arguments["--ip"], arguments["--etcd"])
             if arguments["node"]:
-                node(arguments["--ip"], arguments["--etcd-ip"])
+                node(arguments["--ip"], arguments["--etcd"])
             if arguments["status"]:
                 status()
             if arguments["reset"]:
@@ -386,10 +390,11 @@ if __name__ == '__main__':
             if arguments["version"]:
                 version()
             if arguments["addgroup"]:
-                add_group(arguments["<GROUP>"])
+                add_group(arguments["<GROUP>"], arguments["--etcd"])
             if arguments["addtogroup"]:
                 add_container_to_group(arguments["<CONTAINER_ID>"],
-                                       arguments["<GROUP>"])
+                                       arguments["<GROUP>"],
+                                       arguments["--etcd"])
             if arguments["diags"]:
                 save_diags()
         else:

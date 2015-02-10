@@ -33,7 +33,7 @@ CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINT_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/" + \
                 "endpoint/%(endpoint_id)s/"
 
-ENV_ETCD = "ETCD_IP"
+ENV_ETCD = "ETCD_AUTHORITY"
 """The environment variable that locates etcd service."""
 
 
@@ -58,12 +58,12 @@ class CalicoEtcdClient(object):
     """
 
     def __init__(self):
-        etcd_port = os.getenv(ENV_ETCD, None)
-        if not etcd_port:
+        etcd_authority = os.getenv(ENV_ETCD, None)
+        if not etcd_authority:
             self.client = etcd.Client()
         else:
             # TODO: Error handling
-            (host, port) = etcd_port.split(":", 1)
+            (host, port) = etcd_authority.split(":", 1)
             self.client = etcd.Client(host=host, port=int(port))
 
     def create_container(self, hostname, container_id, endpoint):
