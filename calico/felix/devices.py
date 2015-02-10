@@ -94,12 +94,15 @@ def add_route(type, ip, tap, mac):
     """
     Add a route to a given tap interface (including arp config).
     Errors lead to exceptions that are not handled here.
+
+    Note that we use "ip route replace", since that overrides any imported
+    routes to the same IP, which might exist in the middle of a migration.
     """
     if type == futils.IPV4:
         futils.check_call(['arp', '-s', ip, mac, '-i', tap])
-        futils.check_call(["ip", "route", "add", ip, "dev", tap])
+        futils.check_call(["ip", "route", "replace", ip, "dev", tap])
     else:
-        futils.check_call(["ip", "-6", "route", "add", ip, "dev", tap])
+        futils.check_call(["ip", "-6", "route", "replace", ip, "dev", tap])
 
 
 def del_route(type, ip, tap):

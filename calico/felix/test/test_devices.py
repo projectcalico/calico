@@ -60,13 +60,13 @@ class TestDevices(unittest.TestCase):
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             devices.add_route(type, ip, tap, mac)
             futils.check_call.assert_any_call(['arp', '-s', ip, mac, '-i', tap])
-            futils.check_call.assert_called_with(["ip", "route", "add", ip, "dev", tap])
+            futils.check_call.assert_called_with(["ip", "route", "replace", ip, "dev", tap])
 
         type = futils.IPV6
         ip = "2001::"
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             devices.add_route(type, ip, tap, mac)
-            futils.check_call.assert_called_with(["ip", "-6", "route", "add", ip, "dev", tap])
+            futils.check_call.assert_called_with(["ip", "-6", "route", "replace", ip, "dev", tap])
 
     def test_del_route(self):
         tap = "tap" + str(uuid.uuid4())[:11]
