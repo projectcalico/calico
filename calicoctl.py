@@ -21,18 +21,21 @@ Options:
 from subprocess import call, check_output, CalledProcessError
 import os
 from docopt import docopt
-from sh import mkdir
-from sh import docker
-from sh import modprobe
-from sh import grep
 import etcd
 import sys
 import socket
 import json
 import uuid
 from collections import namedtuple
+import sh
+
+mkdir = sh.Command._create('mkdir')
+docker = sh.Command._create('docker')
+modprobe = sh.Command._create('modprobe')
+grep = sh.Command._create('grep')
 
 mkdir_p = mkdir.bake('-p')
+
 hostname = socket.gethostname()
 
 # etcd paths for Calico
