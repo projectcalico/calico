@@ -30,6 +30,7 @@ import uuid
 from collections import namedtuple
 import sh
 import subprocess
+import StringIO
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -203,7 +204,10 @@ def node(ip):
         docker("rm", "-f", "calico-node")
     except Exception:
         pass
-    cid = docker("run", "-e",  "IP=%s" % ip,
+
+    output = StringIO.StringIO()
+
+    docker("run", "-e",  "IP=%s" % ip,
                  "--name=calico-node",
                  "--privileged",
                  "--net=host",  # BIRD/Felix can manipulate the base networking stack
@@ -212,7 +216,10 @@ def node(ip):
                                             # networking
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                  "-d",
-                 "calico/node")
+                 "calico/node", _err=process_output, _out=output).wait()
+
+    cid = output.getvalue().strip()
+    output.close()
     print "Calico node is running with id: %s" % cid
     print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
     print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
@@ -228,13 +235,18 @@ def master(ip):
         docker("rm", "-f", "calico-master")
     except Exception:
         pass
+
+    output = StringIO.StringIO()
+    
     # Start the container
-    cid = docker("run", "--name=calico-master",
+    docker("run", "--name=calico-master",
                  "--privileged",
                  "--net=host",
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                  "-d",
-                 "calico/master")
+                 "calico/master", _err=process_output, _out=output).wait()
+    cid = output.getvalue().strip()
+    output.close()
     print "Calico master is running with id: %s" % cid
 
 def status():
