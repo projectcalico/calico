@@ -20,7 +20,7 @@ Follow the CoreOS instructions for setting up a cluster under Vagrant.
 From your git checkout, use Vagrant to start the CoreOS servers
 * `vagrant up`
 
-You should now have three CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
+You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
 
 * `vagrant destroy`
 * `vagrant up`
