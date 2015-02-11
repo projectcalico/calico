@@ -567,6 +567,7 @@ def set_ipv4_pool(cidr_pool, etcd_authority):
         return
     if pool.version == 6:
         print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+        return
 
     client = CalicoCmdLineEtcdClient(etcd_authority)
     client.set_ip_pool("v4", pool)

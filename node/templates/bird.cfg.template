@@ -32,8 +32,8 @@ protocol bgp {
   neighbor {{.Value}} as 64511;
   multihop;
   gateway recursive; # This should be the default, but just in case.
-  import where net ~ 192.168.0.0/16; #TODO Should be templated
-  export where net ~ 192.168.0.0/16; #TODO Should be templated
+  import where net ~ {{getv "/calico/ipam/v4/pool/1"}}; #TODO support multiple pools
+  export where net ~ {{getv "/calico/ipam/v4/pool/1"}}; #TODO support multiple pools
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
   source address {{getenv "IP"}};  # The local address we use for the TCP connection
