@@ -34,6 +34,7 @@ import sh
 import subprocess
 import StringIO
 import docker as pydocker
+from netaddr import IPNetwork
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -51,6 +52,8 @@ GROUPS_PATH = "/calico/network/group/"
 GROUP_PATH = "/calico/network/group/%(group_id)s/"
 CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
+IP_POOL_PATH = "/calico/ipam/%(version)s/pool/1"
+IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
 
 POWERSTRIP_PORT = 2377
 
@@ -104,6 +107,39 @@ class CalicoCmdLineEtcdClient(object):
         # update the master IP
         self.etcd_client.write(MASTER_IP_PATH, ip)
         return
+
+    def get_ip_pools(self, version):
+        """
+        Get the configured IP range
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :return: List of netaddr.IPNetwork IP pools.
+        """
+        assert version in ("v4", "v6")
+
+        pool_path = IP_POOLS_PATH % {"version": version}
+        nodes = self.etcd_client.read(pool_path).children
+        pools = []
+        for child in nodes:
+            cidr = child.value
+            pool = IPNetwork(cidr)
+            pools.append(pool)
+
+        return pools
+
+    def set_ip_pool(self, version, pool):
+        """
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param pool: IPNetwork object representing the pool
+        :return: None
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(pool, IPNetwork)
+
+        # TODO support more than one.
+        pool_path = IP_POOL_PATH % {"version": version}
+        self.etcd_client.write(pool_path, str(pool.cidr))
+
 
     def create_group(self, group_id, name):
         """
