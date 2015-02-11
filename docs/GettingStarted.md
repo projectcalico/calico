@@ -12,14 +12,19 @@ So, to get started, install Vagrant and Virtualbox for your OS. You'll also need
 * https://www.vagrantup.com/downloads.html
 * http://git-scm.com/downloads
 
-Follow the CoreOS instructions for setting up a cluster under Vagrant.
-* https://coreos.com/docs/running-coreos/platforms/vagrant/
-* In config.rb, set `$update_channel='alpha'` and `$num_instances=2`
-* Don't forget to set a discovery URL in `user-data`
+Follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  At a minimum you'll need to
+* copy `config.rb.sample` as `config.rb` and copy `user-data.sample` as `user-data`
+* set the following in config.rb 
+  * `$update_channel='alpha'`
+  * `$num_instances` to 2 or more (the demo is pretty boring with only a single node!)
+* either
+  * set the etcd discovery URL in `user-data`, or,
+  * uncomment the lines at the top of config.rb that fill in that value automatically on each `vagrant up`.
 
 You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
 
 * `vagrant destroy`
+* If you manually set the discovery URL in `user-data`, replace it with a fresh one.
 * `vagrant up`
 
 To connect to your servers
@@ -29,11 +34,14 @@ To connect to your servers
    * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
    * `vagrant putty <hostname>`
 
-At this point, it's worth checking that your servers can ping each other.
-* e.g. From core-01
+At this point, it's worth checking that your servers can ping each other reliabl.
+* From core-01
    * `ping 172.17.8.102`
-
-### Using Calico
+* From core-02
+   * `ping 172.17.8.101`
+If you see ping failures, the likely culprit is a problem with then Virtualbox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
+   
+### Installing Calico
 Download Calico onto both servers by SSHing onto them and running
 * `wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl`
 * `chmod +x calicoctl`
@@ -69,7 +77,7 @@ And like this on the other hosts
 
 ```
 
-#### Creating networked endpoints
+#### Using Calico: Creating networked endpoints
 All containers need to be assigned IPs in the `192.168.0.0/16` range.
 
 To allow networking to be set up during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
@@ -133,5 +141,7 @@ Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 Running `ip route` shows what routes have been programmed. Routes from other hosts should show that they are programmed by bird.
 
 If you have rebooted your hosts, then some configuration can get lost. It's best to run a `sudo ./calicoctl reset` and start again.
+
+If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS image is out of date.  Use `vagrant box update` to pull the new version.  I recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 
 If you hit issues, please raise tickets. Diags can be collected with the `sudo ./calicoctl diags` command.

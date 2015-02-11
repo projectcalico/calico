@@ -1,4 +1,5 @@
 pyinstaller
+infi.projector
 docopt
 sh
 requests
@@ -6,3 +7,4 @@ python-etcd
 simplejson
 docker-py
 netaddr
+prettytable
