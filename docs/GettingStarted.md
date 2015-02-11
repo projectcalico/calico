@@ -20,7 +20,7 @@ Follow the CoreOS instructions for setting up a cluster under Vagrant.
 From the git checkout directory ("calico-docker"), use Vagrant to start the CoreOS servers (all the Vagrant commands should be run from the git checkout directory)
 * `vagrant up`
 
-You should now have three CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
+You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
 
 * `vagrant destroy`
 * `vagrant up`
@@ -34,23 +34,23 @@ To connect to your servers
 
 At this point, it's worth checking that your servers can ping each other.
 * e.g. From core-01
-   * `ping 172.18.8.102`
+   * `ping 172.17.8.102`
 
 ### Using Calico
 Download Calico onto both servers by SSHing onto them and running
-* wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.3/calicoctl
-* chmod +x calicoctl
+* `wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl`
+* `chmod +x calicoctl`
 
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
 
 * Start the master on `core-01`
-  * `sudo ./calicoctl master --ip=172.18.8.101`
+  * `sudo ./calicoctl master --ip=172.17.8.101`
 
 Now start calico on all the nodes (only do this after the master is started)
 * On core-01
-   * ` sudo ./calicoctl node --ip=172.18.8.101`
+   * ` sudo ./calicoctl node --ip=172.17.8.101`
 * On core-02
-   * ` sudo ./calicoctl node --ip=172.18.8.102`
+   * ` sudo ./calicoctl node --ip=172.17.8.102`
 
 This will start a container. Check they are running
 * `sudo docker ps`
@@ -78,7 +78,7 @@ All containers need to be assigned IPs in the `192.168.0.0/16` range.
 To allow networking to be set up during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
 
 On both hosts run
-* export DOCKER_HOST=localhost:2377
+* `export DOCKER_HOST=localhost:2377`
 
 (Note - this export will only persist for your current SSH session)
 
@@ -91,13 +91,13 @@ Hit enter a few times to get a prompt. To get back out of the container and leav
 
 So, go ahead and start a few of containers on each host.
 * On core-01
-   * `A=(docker run -e CALICO_IP=192.168.1.1 -tid --name A busybox)`
-   * `B=(docker run -e CALICO_IP=192.168.1.2 -tid --name B busybox)`
-   * `C=(docker run -e CALICO_IP=192.168.1.3 -tid --name C busybox)`
+   * `A=$(docker run -e CALICO_IP=192.168.1.1 -tid busybox)`
+   * `B=$(docker run -e CALICO_IP=192.168.1.2 -tid busybox)`
+   * `C=$(docker run -e CALICO_IP=192.168.1.3 -tid busybox)`
    
 * On core-02
-   * `D=(docker run -e CALICO_IP=192.168.1.4 -tid --name D busybox)`
-   * `E=(docker run -e CALICO_IP=192.168.1.5 -tid --name E busybox)`
+   * `D=$(docker run -e CALICO_IP=192.168.1.4 -tid busybox)`
+   * `E=$(docker run -e CALICO_IP=192.168.1.5 -tid busybox)`
 
 At this point, the containers have not been added to any security groups so they won't be able to communicate with any other containers.
 
@@ -108,15 +108,24 @@ Create some security groups (this can be done on either host)
 
 Now add the containers to the security groups
 On core-01
-* sudo ./calicoctl addtogroup $A GROUP_A_C_E
-* sudo ./calicoctl addtogroup $B GROUP_B
-* sudo ./calicoctl addtogroup $C GROUP_A_C_E
+* `sudo ./calicoctl addtogroup $A GROUP_A_C_E`
+* `sudo ./calicoctl addtogroup $B GROUP_B`
+* `sudo ./calicoctl addtogroup $C GROUP_A_C_E`
 
 On core-02
-* sudo ./calicoctl addtogroup $D GROUP_D
-* sudo ./calicoctl addtogroup $E GROUP_A_C_E
+* `sudo ./calicoctl addtogroup $D GROUP_D`
+* `sudo ./calicoctl addtogroup $E GROUP_A_C_E`
 
-At this point, it should be possible to attach to B (`DOCKER_HOST=localhost:2377 docker attach $B`) and check that it can ping C (192.168.1.3) and E (192.168.1.5) but not A or D. A and D are in their own groups so shouldn't be able to ping anyone else.
+Now, check that A can ping C (192.168.1.3) and E (192.168.1.5)
+
+* `docker exec $A ping -c 4 192.168.1.3`
+* `docker exec $A ping -c 4 192.168.1.5`
+
+Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4).
+* `docker exec $A ping -c 4 192.168.1.2`
+* `docker exec $A ping -c 4 192.168.1.4`
+
+B and D are in their own groups so shouldn't be able to ping anyone else.
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 * `sudo ./calicoctl reset`

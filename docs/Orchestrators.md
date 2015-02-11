@@ -3,7 +3,7 @@
 ## Main Integration Tasks
  
  1. Calico service instantiation
-     -  Instantiate an etcd cluster, with proxies on each Docker compute host.
+     -  Instantiate an etcd cluster, with ideally with proxies on each Docker compute host.
      -  Bring up one instance of the `calico-master` service using `calicoctl`
      -  Bring up one instance of the `calico-node` service on each Docker compute host in the cluster.  This is also accomplished using `calicoctl`
  2. Redirect Docker Remote API requests to `calico-node`.
@@ -19,22 +19,24 @@
 Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
 
  - You'll want 1, 3, 5, or 7 etcd  nodes (odd numbers prevent split brain)
- - If you have more compute nodes, then we recommend you start etcd in proxy mode on all other nodes.
- 	- Calico accesses etcd on `localhost:4001` by default.
- 	- You can manually set the etcd location using the `--etcd=` option on `calicoctl` commands.  Type `calicoctl help` for details.  This allows you to use a single etcd instance for testing.
- - See the [etcd clustering guide](https://github.com/coreos/etcd/blob/master/Documentation/clustering.md).
+ - A simple 1 node cluster can easily be installed by following the [getting started](https://github.com/coreos/etcd/releases/) instructions.
+ - See the [etcd clustering guide](https://github.com/coreos/etcd/blob/master/Documentation/clustering.md) for more information on setting up a cluster. 
+ - We recommend you start etcd in proxy mode on all other nodes because Calico accesses etcd on `localhost:4001` by default.
+ - If you don't run the proxy, you can manually set the etcd location using the `--etcd=` option on `calicoctl` commands.  Type `calicoctl help` for details.
+ 
 
-Get the calico binary onto each node
+Get the calico binary onto each node. It's usually safe to just grab the latest [release](https://github.com/Metaswitch/calico-docker/releases/) e.g.
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.3/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl
+	chmod +x calicoctl
 
 Launch one instance of the Calico Master
 
-	calicoctl master --ip=<IP>
+	sudo ./calicoctl master --ip=<IP>
 
 Launch the Calico Node service on each Docker Host you want to use with Calico.
 
-	calicoctl node --ip=<IP>
+	sudo ./calicoctl node --ip=<IP>
 
 The “ip” parameter provides an IP on the current host on the management network that can be used.
 
@@ -55,14 +57,14 @@ The orchestrator should then set up Access Control Lists (ACLs) as detailed belo
 ## Collecting diags
 To collect (from the current machine only) and upload the diags, run the following command
 
-	calicoctl diags
+	sudo ./calicoctl diags
 
 It prints a local file name and a URL where the diags can be downloaded from.
 
 
 ## Setting Calico ACLs
 
-You can configure groups and ACLs for Calico by directly writing to the `/calico` directory in etcd.
+You can configure groups and ACLs for Calico by directly writing to the `/calico` directory in etcd. Examples of how to do this over etcd's RESTful API are given below.
 
  	+--calico  # root namespace
 	   |--master
