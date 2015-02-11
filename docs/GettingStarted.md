@@ -34,7 +34,7 @@ To connect to your servers
 
 At this point, it's worth checking that your servers can ping each other.
 * e.g. From core-01
-   * `ping 172.18.8.102`
+   * `ping 172.17.8.102`
 
 ### Using Calico
 Download Calico onto both servers by SSHing onto them and running
