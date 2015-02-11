@@ -351,7 +351,10 @@ def master(ip, etcd_authority):
     output.close()
     print "Calico master is running with id: %s" % cid
 
-def status():
+def status(etcd_authority):
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    print "Currently configured master is %s" % client.get_master()
+
     try:
         print(grep(docker("ps"), "-i", "calico"))
     except Exception:
@@ -511,7 +514,7 @@ if __name__ == '__main__':
         if arguments["node"]:
             node(arguments["--ip"], arguments["--etcd"])
         if arguments["status"]:
-            status()
+            status(arguments["--etcd"])
         if arguments["reset"]:
             reset(arguments["--delete-images"])
         if arguments["addgroup"]:
