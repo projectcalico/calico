@@ -15,9 +15,17 @@ import sys
 import time
 import zmq
 from docopt import docopt
+import os
 
 import etcd
-client = etcd.Client()
+ENV_ETCD = "ETCD_AUTHORITY"
+etcd_authority = os.getenv(ENV_ETCD, None)
+if not etcd_authority:
+    client = etcd.Client()
+else:
+    # TODO: Error handling
+    (host, port) = etcd_authority.split(":", 1)
+    client = etcd.Client(host=host, port=int(port))
 
 zmq_context = zmq.Context()
 log = logging.getLogger(__name__)
