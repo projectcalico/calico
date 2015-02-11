@@ -123,6 +123,9 @@ def set_global_rules(config):
     rule = fiptables.Rule(futils.IPV4, CHAIN_PREROUTING)
     fiptables.insert_rule(rule, chain, force_position=False)
 
+    # Apply changes.
+    table.apply()
+
     #*************************************************************************#
     #* Now the filter table. This needs to have calico-filter-FORWARD and    *#
     #* calico-filter-INPUT chains, which we must create before adding any    *#
@@ -178,8 +181,6 @@ def set_global_rules(config):
 
         # Apply the changes to the table itself.
         table.apply()
-
-
 
 def set_ep_specific_rules(suffix, iface, type, localips, mac):
     """

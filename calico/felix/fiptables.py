@@ -46,6 +46,7 @@ class Chain(object):
         self.table = table
         self.name = name
         self.rules = []
+        self.table.chains[name] = self
 
     def flush(self):
         log.debug("Flushing chain %s", self.name)
@@ -110,6 +111,15 @@ class Chain(object):
         args.extend(rule.generate_fields())
         self.table.ops.append(args)
         self.rules.insert(position, rule)
+        log.debug("Creating rule : %s", args)
+
+    def __str__(self):
+        output = "  Chain %s\n" % self.name
+        for rule in self.rules:
+            output += "    %s\n" % rule
+
+        return output
+
 
     def __eq__(self, other):
         # Equality deliberately only cares about name.
@@ -135,7 +145,10 @@ class Table(object):
         return (name in self.chains)
 
     def delete_chain(self, chain_name):
-        log.debug("Delete chain %s from table %s", chain_name, self.name)
+        log.debug("Delete chain %s from table %s (%s)",
+                  chain_name,
+                  self.name,
+                  self.type)
         self.ops.append([IPTABLES_CMD[self.type],
                         "-w",
                         "-t",
@@ -148,8 +161,18 @@ class Table(object):
         """
         Apply all changes to this table
         """
+        log.debug("Apply batched changes to table %s (%s)",
+                  self.name,
+                  self.type)
         if self.ops:
             futils.multi_call(self.ops)
+
+    def __str__(self):
+        output = "TABLE %s (%s)\n" % (self.name, self.type)
+        for chain_name in sorted(self.chains.keys()):
+            output += str(self.chains[chain_name])
+            output += "\n"
+        return output
 
 class Rule(object):
     """
@@ -281,7 +304,7 @@ class Rule(object):
         self.parameters["dport"] = dport
 
     def __str__(self):
-        return "%s" % self.generate_fields()
+        return " ".join(self.generate_fields())
 
     def __eq__(self, other):
         if (self.type != other.type or
@@ -348,7 +371,7 @@ def get_table(type, name):
             if words[0] in ("-P", "-N"):
                 # We found a chain; remember and go to next line.
                 log.debug("Found chain in table %s : %s", name, line)
-                table.chains[words[1]] = Chain(table, words[1])
+                Chain(table, words[1])
                 continue
 
             if words[0] != "-A":
@@ -374,8 +397,11 @@ def get_chain(table, name):
     chain = table.chains.get(name)
 
     if chain is None:
+        log.debug("Creating chain %s in table %s (%s)",
+                  name,
+                  table.name,
+                  table.type)
         chain = Chain(table, name)
-        table.chains[name] = chain
         table.ops.append([IPTABLES_CMD[table.type],
                           "-w",
                           "-t",

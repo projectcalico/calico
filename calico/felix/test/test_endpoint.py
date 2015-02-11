@@ -23,14 +23,6 @@ import sys
 import unittest
 import uuid
 
-# Stub out the iptables code.
-import calico.felix.test.stub_fiptables
-sys.modules['calico.felix.fiptables'] = __import__('calico.felix.test.stub_fiptables')
-calico.felix.fiptables = calico.felix.test.stub_fiptables
-
-# Hide iptc, since we do not have it.
-sys.modules['iptc'] = __import__('calico.felix.test.stub_empty')
-
 import calico.felix.devices as devices
 import calico.felix.endpoint as endpoint
 import calico.felix.frules as frules
