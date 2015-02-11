@@ -12,6 +12,7 @@ Usage:
   calicoctl diags
   calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
   calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl ipv4 pool <CIDR> [--etcd=<ETCD_AUTHORITY>]
 
 
 Options:
@@ -37,6 +38,7 @@ import subprocess
 import StringIO
 import docker as pydocker
 from netaddr import IPNetwork
+from netaddr.core import AddrFormatError
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -58,6 +60,8 @@ IP_POOL_PATH = "/calico/ipam/%(version)s/pool/1"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
 
 POWERSTRIP_PORT = 2377
+
+DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 
 
 class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
@@ -329,37 +333,42 @@ def node(ip, etcd_authority):
     client = CalicoCmdLineEtcdClient(etcd_authority)
 
     master_ip = client.get_master()
-
     if not master_ip:
         print "No master can be found. Exiting"
-    else:
-        print "Using master on IP: %s" % master_ip
-        client.create_host(ip)
-        try:
-            docker("rm", "-f", "calico-node")
-        except Exception:
-            pass
+        return
 
-        output = StringIO.StringIO()
+    ipv4_pools = client.get_ip_pools("v4")
+    if not ipv4_pools:
+        print "No IPv4 range defined.  Exiting."
+        return
 
-        docker("run", "-e",  "IP=%s" % ip,
-                     "--name=calico-node",
-                     "--privileged",
-                     "--net=host",  # BIRD/Felix can manipulate the base networking stack
-                     "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
-                     "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
-                                                # networking
-                     "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                     "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
-                     "-d",
-                     "calico/node", _err=process_output, _out=output).wait()
+    print "Using master on IP: %s" % master_ip
+    client.create_host(ip)
+    try:
+        docker("rm", "-f", "calico-node")
+    except Exception:
+        pass
 
-        cid = output.getvalue().strip()
-        output.close()
-        print "Calico node is running with id: %s" % cid
-        print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
-        print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
-        print "before using `docker run` for Calico networking.\n"
+    output = StringIO.StringIO()
+
+    docker("run", "-e",  "IP=%s" % ip,
+                 "--name=calico-node",
+                 "--privileged",
+                 "--net=host",  # BIRD/Felix can manipulate the base networking stack
+                 "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
+                 "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
+                                            # networking
+                 "-v", "/var/log/calico:/var/log/calico",  # Logging volume
+                 "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+                 "-d",
+                 "calico/node", _err=process_output, _out=output).wait()
+
+    cid = output.getvalue().strip()
+    output.close()
+    print "Calico node is running with id: %s" % cid
+    print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
+    print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
+    print "before using `docker run` for Calico networking.\n"
 
 
 def master(ip, etcd_authority):
@@ -368,6 +377,12 @@ def master(ip, etcd_authority):
     # Add IP to etcd
     client = CalicoCmdLineEtcdClient(etcd_authority)
     client.set_master(ip)
+
+    # If no IPv4 pools are defined, add a default.
+    ipv4_pools = client.get_ip_pools("v4")
+    if len(ipv4_pools == 0):
+        client.set_ip_pool("v4", DEFAULT_IPV4_POOL)
+
     try:
         docker("rm", "-f", "calico-master")
     except Exception:
@@ -537,6 +552,25 @@ echo "Diags saved to $diags_dir.gz"
     print out #TODO - Make this stream the output
 
 
+def set_ipv4_pool(cidr_pool, etcd_authority):
+    """
+    Set the IPv4 IP address allocation pool to the given CIDR range.
+
+    :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
+    :return: None
+    """
+
+    try:
+        pool = IPNetwork(cidr_pool)
+    except AddrFormatError:
+        print "%s is not a valid IPv4 prefix." % cidr_pool
+        return
+    if pool.version == 6:
+        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client.set_ip_pool("v4", pool)
+
 if __name__ == '__main__':
     arguments = docopt(__doc__)
     if os.geteuid() != 0:
@@ -564,5 +598,9 @@ if __name__ == '__main__':
                                    arguments["--etcd"])
         if arguments["diags"]:
             save_diags()
+        if arguments["ipv4"]:
+            assert arguments["pool"]
+            set_ipv4_pool(arguments["<CIDR>"], arguments["--etcd"])
+
     else:
         print "Not yet"
