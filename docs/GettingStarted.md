@@ -38,8 +38,8 @@ At this point, it's worth checking that your servers can ping each other.
 
 ### Using Calico
 Download Calico onto both servers by SSHing onto them and running
-* wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.3/calicoctl
-* chmod +x calicoctl
+* `wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl`
+* `chmod +x calicoctl`
 
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
 
@@ -78,7 +78,7 @@ All containers need to be assigned IPs in the `192.168.0.0/16` range.
 To allow networking to be set up during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
 
 On both hosts run
-* export DOCKER_HOST=localhost:2377
+* `export DOCKER_HOST=localhost:2377`
 
 (Note - this export will only persist for your current SSH session)
 
@@ -91,13 +91,13 @@ Hit enter a few times to get a prompt. To get back out of the container and leav
 
 So, go ahead and start a few of containers on each host.
 * On core-01
-   * `A=$(docker run -e CALICO_IP=192.168.1.1 -td busybox)`
-   * `B=$(docker run -e CALICO_IP=192.168.1.2 -td busybox)`
-   * `C=$(docker run -e CALICO_IP=192.168.1.3 -td busybox)`
+   * `A=$(docker run -e CALICO_IP=192.168.1.1 -tid busybox)`
+   * `B=$(docker run -e CALICO_IP=192.168.1.2 -tid busybox)`
+   * `C=$(docker run -e CALICO_IP=192.168.1.3 -tid busybox)`
    
 * On core-02
-   * `D=$(docker run -e CALICO_IP=192.168.1.4 -td busybox)`
-   * `E=$(docker run -e CALICO_IP=192.168.1.5 -td busybox)`
+   * `D=$(docker run -e CALICO_IP=192.168.1.4 -tid busybox)`
+   * `E=$(docker run -e CALICO_IP=192.168.1.5 -tid busybox)`
 
 At this point, the containers have not been added to any security groups so they won't be able to communicate with any other containers.
 
