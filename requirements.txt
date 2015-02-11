@@ -6,3 +6,4 @@ requests
 python-etcd
 simplejson
 docker-py
+prettytable

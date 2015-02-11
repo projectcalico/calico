@@ -10,6 +10,8 @@ Usage:
   calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl addtogroup <CONTAINER_ID> <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl diags
+  calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
+  calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
 
 
 Options:
@@ -141,24 +143,50 @@ class CalicoCmdLineEtcdClient(object):
         self.etcd_client.write(group_path + "rule/outbound/1", allow_group.to_json())
         self.etcd_client.write(group_path + "rule/outbound/2", allow_any_ip.to_json())
 
-    def get_group_id(self, name):
+    def delete_group(self, name):
+        """
+        Delete a security group with a given name. If there are multiple groups with that name
+        it will just delete one of them.
+
+        :param name: Human readable name for the group.
+        :return: the ID of the group that was deleted, or None if the group couldn't be found.
+        """
+
+        # Find a group ID
+        group_id = self.get_group_id(name)
+        if group_id:
+            group_path = GROUP_PATH % {"group_id": group_id}
+            self.etcd_client.delete(group_path, recursive=True, dir=True)
+        return group_id
+
+    def get_group_id(self, name_to_find):
         """
         Get the UUID of the named group.  If multiple groups have the same name, the first matching
         one will be returned.
         :param name:
         :return: string UUID for the group, or None if the name was not found.
         """
+        for id, name in self.get_groups().iteritems():
+            if name_to_find == name:
+                return id
+        return None
+
+    def get_groups(self):
+        """
+        Get the all configured groups.
+        :return: a dict of group_id => name
+        """
+        groups = {}
         try:
-            groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).children
-            for child in groups:
+            etcd_groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).children
+            for child in etcd_groups:
                 (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
                 if final_key == "name":
-                    if child.value == name:
-                        return group_id
+                    groups[group_id] = child.value
         except KeyError as e:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
-        return None
+        return groups
 
     def get_ep_id_from_cont(self, container_id):
         """
@@ -388,6 +416,27 @@ def add_container_to_group(container_name, group_name, etcd_authority):
         print e
     return
 
+def remove_group(group_name, etcd_authority):
+    #TODO - Don't allow removing a group that has enpoints in it.
+    client = CalicoDockerEtcd(etcd_authority)
+    group_id = client.delete_group(group_name)
+    if group_id:
+        print "Deleted group %s with ID %s" % (group_name, group_id)
+    else:
+        print "Couldn't find group with name %s" % group_name
+
+
+def show_groups(etcd_authority):
+    client = CalicoDockerEtcd(etcd_authority)
+
+    from prettytable import PrettyTable
+    x = PrettyTable(["ID", "Name"])
+    for group_id, name in client.get_groups().iteritems():
+        x.add_row([group_id, name])
+
+    print x
+
+
 def save_diags():
     """
     Gather Calico diagnostics for bug reporting.
@@ -449,31 +498,35 @@ echo "Diags saved to $diags_dir.gz"
                             stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT)
     (out, _) = proc.communicate(script)
-    print out
+    print out #TODO - Make this stream the output
+
 
 if __name__ == '__main__':
+    arguments = docopt(__doc__)
     if os.geteuid() != 0:
         print "calicoctl must be run as root"
+    elif validate_arguments(arguments):
+        if arguments["master"]:
+            master(arguments["--ip"], arguments["--etcd"])
+        if arguments["node"]:
+            node(arguments["--ip"], arguments["--etcd"])
+        if arguments["status"]:
+            status()
+        if arguments["reset"]:
+            reset(arguments["--delete-images"])
+        if arguments["version"]:
+            version()
+        if arguments["addgroup"]:
+            add_group(arguments["<GROUP>"], arguments["--etcd"])
+        if arguments["removegroup"]:
+            remove_group(arguments["<GROUP>"], arguments["--etcd"])
+        if arguments["showgroups"]:
+            show_groups(arguments["--etcd"])
+        if arguments["addtogroup"]:
+            add_container_to_group(arguments["<CONTAINER_ID>"],
+                                   arguments["<GROUP>"],
+                                   arguments["--etcd"])
+        if arguments["diags"]:
+            save_diags()
     else:
-        arguments = docopt(__doc__)
-        if validate_arguments(arguments):
-            if arguments["master"]:
-                master(arguments["--ip"], arguments["--etcd"])
-            if arguments["node"]:
-                node(arguments["--ip"], arguments["--etcd"])
-            if arguments["status"]:
-                status()
-            if arguments["reset"]:
-                reset(arguments["--delete-images"])
-            if arguments["version"]:
-                version()
-            if arguments["addgroup"]:
-                add_group(arguments["<GROUP>"], arguments["--etcd"])
-            if arguments["addtogroup"]:
-                add_container_to_group(arguments["<CONTAINER_ID>"],
-                                       arguments["<GROUP>"],
-                                       arguments["--etcd"])
-            if arguments["diags"]:
-                save_diags()
-        else:
-            print "Not yet"
+        print "Not yet"
