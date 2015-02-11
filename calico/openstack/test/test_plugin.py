@@ -29,6 +29,7 @@ import eventlet
 import traceback
 import json
 import inspect
+from eventlet.support import greenlets as greenlet
 
 if 'zmq' in sys.modules: del sys.modules['zmq']
 sys.modules['neutron'] = m_neutron = mock.Mock()
@@ -65,6 +66,7 @@ class TestPlugin(unittest.TestCase):
     def setUpClass(cls):
 
         global real_eventlet_sleep
+        global real_eventlet_spawn
 
         #*********************************************************************#
         #* Replacement for eventlet.sleep: sleep for some simulated passage  *#
@@ -103,11 +105,38 @@ class TestPlugin(unittest.TestCase):
             return None
 
         #*********************************************************************#
+        #* Replacement for eventlet.spawn: track spawned threads so that we  *#
+        #* can kill them all when a test case ends.                          *#
+        #*********************************************************************#
+        def simulated_spawn(*args):
+
+            #*****************************************************************#
+            #* Do the real spawn.                                            *#
+            #*****************************************************************#
+            thread = real_eventlet_spawn(*args)
+
+            #*****************************************************************#
+            #* Remember this thread.                                         *#
+            #*****************************************************************#
+            threads.append(thread)
+
+            #*****************************************************************#
+            #* Also return it.                                               *#
+            #*****************************************************************#
+            return thread
+
+        #*********************************************************************#
         #* Hook sleeping.  We must only do this once; hence it is in         *#
         #* setUpClass rather than in setUp.                                  *#
         #*********************************************************************#
         real_eventlet_sleep = eventlet.sleep
         mech_calico.eventlet.sleep = simulated_time_sleep
+
+        #*********************************************************************#
+        #* Similarly hook spawning.                                          *#
+        #*********************************************************************#
+        real_eventlet_spawn = eventlet.spawn
+        mech_calico.eventlet.spawn = simulated_spawn
 
     @classmethod
     def tearDownClass(cls):
@@ -301,6 +330,7 @@ class TestPlugin(unittest.TestCase):
 
         global current_time
         global sleepers
+        global threads
 
         #*********************************************************************#
         #* Reset the simulated time (in seconds) that has passed since the   *#
@@ -314,6 +344,8 @@ class TestPlugin(unittest.TestCase):
         #* the sleep should complete.                                        *#
         #*********************************************************************#
         sleepers = {}
+
+        threads = []
 
         print "\nTEST CASE: %s" % self.id()
 
@@ -390,7 +422,9 @@ class TestPlugin(unittest.TestCase):
         self.driver = mech_calico.CalicoMechanismDriver()
 
     def tearDown(self):
-        pass
+
+        for thread in threads:
+            thread.kill()
 
     def assert_get_bound_socket(self, addr, port):
         bound_sockets = {socket for socket in self.sockets

@@ -192,19 +192,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.acl_pub_socket = self.zmq_context.socket(zmq.PUB)
         self.acl_pub_socket.bind("tcp://%s:%s" % (bind_address,
                                                   PLUGIN_ACLPUB_PORT))
-        eventlet.spawn_n(self.acl_heartbeat_thread)
+        eventlet.spawn(self.acl_heartbeat_thread)
 
         #*********************************************************************#
         #* Spawn green thread for handling RESYNCSTATE requests on the       *#
         #* Felix-ROUTER socket.                                              *#
         #*********************************************************************#
-        eventlet.spawn_n(self.felix_router_thread)
+        eventlet.spawn(self.felix_router_thread)
 
         #*********************************************************************#
         #* Spawn green thread for handling GETGROUPS requests on the ACL-GET *#
         #* socket.                                                           *#
         #*********************************************************************#
-        eventlet.spawn_n(self.acl_get_thread)
+        eventlet.spawn(self.acl_get_thread)
 
         LOG.info("Started threads")
 
@@ -336,7 +336,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                                 'host': hostname,
                                                 'topic': constants.L2_AGENT_TOPIC,
                                                 'start_flag': True})
-                eventlet.spawn_n(self.felix_heartbeat_thread, hostname)
+                eventlet.spawn(self.felix_heartbeat_thread, hostname)
             except:
                 LOG.exception("Peer is not actually available")
 
