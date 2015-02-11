@@ -285,6 +285,9 @@ def process_output(line):
 
 
 def node(ip, etcd_authority):
+    # Make sure we have the correct image
+    docker("pull", "calico/node:v0.0.5", _err=process_output, _out=process_output).wait()
+
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -328,6 +331,9 @@ def node(ip, etcd_authority):
 
 def master(ip, etcd_authority):
     create_dirs()
+
+    # Make sure we have the correct image
+    docker("pull", "calico/master:v0.0.5", _err=process_output, _out=process_output).wait()
 
     # Add IP to etcd
     client = CalicoCmdLineEtcdClient(etcd_authority)
