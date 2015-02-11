@@ -33,6 +33,7 @@ from collections import namedtuple
 import sh
 import subprocess
 import StringIO
+import docker as pydocker
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -70,11 +71,11 @@ class CalicoCmdLineEtcdClient(object):
 
     def __init__(self, etcd_authority=None):
         if not etcd_authority:
-            self.client = etcd.Client()
+            self.etcd_client = etcd.Client()
         else:
             # TODO: Error handling
             (host, port) = etcd_authority.split(":", 1)
-            self.client = etcd.Client(host=host, port=int(port))
+            self.etcd_client = etcd.Client(host=host, port=int(port))
 
     def create_host(self, bird_ip):
         """
@@ -85,13 +86,13 @@ class CalicoCmdLineEtcdClient(object):
         """
         host_path = HOST_PATH % {"hostname": hostname}
         # Set up the host
-        self.client.write(host_path + "bird_ip", bird_ip)
+        self.etcd_client.write(host_path + "bird_ip", bird_ip)
         workload_dir = host_path + "workload"
         try:
-            self.client.read(workload_dir)
+            self.etcd_client.read(workload_dir)
         except KeyError:
             # Didn't exist, create it now.
-            self.client.write(workload_dir, None, dir=True)
+            self.etcd_client.write(workload_dir, None, dir=True)
         return
 
     def set_master(self, ip):
@@ -101,7 +102,7 @@ class CalicoCmdLineEtcdClient(object):
         :return: nothing.
         """
         # update the master IP
-        self.client.write(MASTER_IP_PATH, ip)
+        self.etcd_client.write(MASTER_IP_PATH, ip)
         return
 
     def create_group(self, group_id, name):
@@ -116,20 +117,20 @@ class CalicoCmdLineEtcdClient(object):
 
         # Create the group directory.
         group_path = GROUP_PATH % {"group_id": group_id}
-        self.client.write(group_path + "name", name)
+        self.etcd_client.write(group_path + "name", name)
 
         # Default rule
-        self.client.write(group_path + "rule/inbound_default", "deny")
-        self.client.write(group_path + "rule/outbound_default", "deny")
+        self.etcd_client.write(group_path + "rule/inbound_default", "deny")
+        self.etcd_client.write(group_path + "rule/outbound_default", "deny")
 
         # Allow traffic inbound from group.
         allow_group = Rule(group=group_id, cidr=None, protocol=None, port=None)
-        self.client.write(group_path + "rule/inbound/1", allow_group.to_json())
+        self.etcd_client.write(group_path + "rule/inbound/1", allow_group.to_json())
 
         # Allow traffic outbound to group and any address.
         allow_any_ip = Rule(group=None, cidr="0.0.0.0/0", protocol=None, port=None)
-        self.client.write(group_path + "rule/outbound/1", allow_group.to_json())
-        self.client.write(group_path + "rule/outbound/2", allow_any_ip.to_json())
+        self.etcd_client.write(group_path + "rule/outbound/1", allow_group.to_json())
+        self.etcd_client.write(group_path + "rule/outbound/2", allow_any_ip.to_json())
 
     def get_group_id(self, name):
         """
@@ -139,7 +140,7 @@ class CalicoCmdLineEtcdClient(object):
         :return: string UUID for the group, or None if the name was not found.
         """
         try:
-            groups = self.client.read(GROUPS_PATH, recursive=True,).children
+            groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).children
             for child in groups:
                 (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
                 if final_key == "name":
@@ -150,26 +151,17 @@ class CalicoCmdLineEtcdClient(object):
             pass
         return None
 
-    def add_container_to_group(self, container_id, group_name):
+    def get_ep_id_from_cont(self, container_id):
         """
-        Add a container (on this host) to the group with the given name.  This adds the first
-        endpoint on the container to the group.
+        Get a single endpoint ID from a container ID.
 
         :param container_id: The Docker container ID.
-        :param group_name:  The Calico security group name.
-        :return: None.
+        :return: Endpoint ID as a string.
         """
-
-        # Get the group UUID.
-        group_id = self.get_group_id(group_name)
-        if not group_id:
-            raise KeyError("Group with name %s was not found." % group_name)
-
-        # Get the endpoints from the container ID.
         ep_path = ENDPOINTS_PATH % {"hostname": hostname,
                                     "container_id": container_id}
         try:
-            endpoints = self.client.read(ep_path).children
+            endpoints = self.etcd_client.read(ep_path).children
         except KeyError:
             # Re-raise with better message
             raise KeyError("Container with ID %s was not found." % container_id)
@@ -177,11 +169,69 @@ class CalicoCmdLineEtcdClient(object):
         # Get the first endpoint & ID
         endpoint = endpoints.next()
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
+        return endpoint_id
+
+
+class CalicoDockerClient(object):
+    """
+    A Docker client that exposes high level operations needed by Calico.
+    """
+
+    def __init__(self):
+        self.docker_client = pydocker.Client(base_url='unix://var/run/docker.sock')
+
+    def get_container_id(self, container_name):
+        """
+        Get the full container ID from a partial ID or name.
+
+        :param container_name: The partial ID or name of the container.
+        :return: The container ID as a string.
+        """
+
+        info = self.docker_client.inspect_container(container_name)
+        return info["Id"]
+
+
+class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
+    """
+    A client that interacts with both Docker and etcd to provide high-level Calico abstractions.
+    """
+
+    def __init__(self, etcd_authority=None):
+        CalicoCmdLineEtcdClient.__init__(self, etcd_authority)
+        CalicoDockerClient.__init__(self)
+
+    def add_container_to_group(self, container_name, group_name):
+        """
+        Add a container (on this host) to the group with the given name.  This adds the first
+        endpoint on the container to the group.
+
+        :param container_name: The Docker container name or ID.
+        :param group_name:  The Calico security group name.
+        :return: None.
+        """
+
+        # Resolve the name to ID.
+        try:
+            container_id = self.get_container_id(container_name)
+        except pydocker.errors.APIError as e:
+            if e.response.status_code == 404:
+                # Re-raise as a key error for consistency.
+                raise KeyError("Container %s was not found." % container_name)
+            else:
+                raise
+
+        # Get the group UUID.
+        group_id = self.get_group_id(group_name)
+        if not group_id:
+            raise KeyError("Group with name %s was not found." % group_name)
+
+        endpoint_id = self.get_ep_id_from_cont(container_id)
 
         # Add the endpoint to the group.  ./member/ is a keyset of endpoint IDs, so write empty
         # string as the value.
         group_path = GROUP_PATH % {"group_id": group_id}
-        self.client.write(group_path + "member/" + endpoint_id, "")
+        self.etcd_client.write(group_path + "member/" + endpoint_id, "")
 
 
 def validate_arguments(arguments):
@@ -308,16 +358,16 @@ def add_group(group_name, etcd_authority):
     print "Created group %s with ID %s" % (group_name, group_id)
 
 
-def add_container_to_group(container_id, group_name, etcd_authority):
+def add_container_to_group(container_name, group_name, etcd_authority):
     """
     Add the container to the listed group.
-    :param container_id: ID of the container to add.
+    :param container_name: ID of the container to add.
     :param group_name: Name of the group.
     :return: None
     """
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoDockerEtcd(etcd_authority)
     try:
-        client.add_container_to_group(container_id, group_name)
+        client.add_container_to_group(container_name, group_name)
     except KeyError as e:
         print e
     return

@@ -4,3 +4,4 @@ sh
 requests
 python-etcd
 simplejson
+docker-py
