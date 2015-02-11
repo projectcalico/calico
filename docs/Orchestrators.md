@@ -19,7 +19,9 @@
 Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
 
  - You'll want 1, 3, 5, or 7 etcd  nodes (odd numbers prevent split brain)
- - If you have more compute nodes, then start etcd in proxy mode on all other nodes.  Calico needs to access etcd on `localhost:4001`
+ - If you have more compute nodes, then we recommend you start etcd in proxy mode on all other nodes.
+ 	- Calico accesses etcd on `localhost:4001` by default.
+ 	- You can manually set the etcd location using the `--etcd=` option on `calicoctl` commands.  Type `calicoctl help` for details.  This allows you to use a single etcd instance for testing.
  - See the [etcd clustering guide](https://github.com/coreos/etcd/blob/master/Documentation/clustering.md).
 
 Get the calico binary onto each node
