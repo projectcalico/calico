@@ -285,9 +285,6 @@ def process_output(line):
 
 
 def node(ip, etcd_authority):
-    # Make sure we have the correct image
-    docker("pull", "calico/node:v0.0.5", _err=process_output, _out=process_output).wait()
-
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -319,7 +316,7 @@ def node(ip, etcd_authority):
                      "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                      "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
                      "-d",
-                     "calico/node", _err=process_output, _out=output).wait()
+                     "calico/node:v0.0.6", _err=process_output, _out=output).wait()
 
         cid = output.getvalue().strip()
         output.close()
@@ -331,9 +328,6 @@ def node(ip, etcd_authority):
 
 def master(ip, etcd_authority):
     create_dirs()
-
-    # Make sure we have the correct image
-    docker("pull", "calico/master:v0.0.5", _err=process_output, _out=process_output).wait()
 
     # Add IP to etcd
     client = CalicoCmdLineEtcdClient(etcd_authority)
@@ -352,7 +346,7 @@ def master(ip, etcd_authority):
                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                  "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
                  "-d",
-                 "calico/master", _err=process_output, _out=output).wait()
+                 "calico/master:v0.0.6", _err=process_output, _out=output).wait()
     cid = output.getvalue().strip()
     output.close()
     print "Calico master is running with id: %s" % cid
