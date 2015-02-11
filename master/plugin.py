@@ -288,7 +288,6 @@ def do_network_api():
                 rep_socket.send(rsp_json)
             else:
                 # Heartbeat. Whatever.
-                # TODO Do we really get these on the req-res API?
                 rsp = {"rc": "SUCCESS", "message": "Hooray", "type": fields['type']}
                 rsp_json = json.dumps(rsp)
                 log_api.info("Sent     REP message: \n%s", rsp_json)
@@ -348,9 +347,7 @@ if __name__ == '__main__':
 
     if arguments["endpoint"]:
         setup_logging("%s/plugin_ep.log" % arguments["--log-dir"])
-        load_data()
         do_ep_api()
     if arguments["network"]:
         setup_logging("%s/plugin_net.log" % arguments["--log-dir"])
-        load_data()
         do_network_api()
