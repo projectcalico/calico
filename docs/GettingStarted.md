@@ -116,7 +116,16 @@ On core-02
 * `sudo ./calicoctl addtogroup $D GROUP_D`
 * `sudo ./calicoctl addtogroup $E GROUP_A_C_E`
 
-At this point, it should be possible to attach to A (`DOCKER_HOST=localhost:2377 docker attach $A`) and check that it can ping C (192.168.1.3) and E (192.168.1.5) but not B or D. B and D are in their own groups so shouldn't be able to ping anyone else.
+Now, check that A can ping C (192.168.1.3) and E (192.168.1.5)
+
+* `docker exec $A ping -c 4 192.168.1.3`
+* `docker exec $A ping -c 4 192.168.1.5`
+
+Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4).
+* `docker exec $A ping -c 4 192.168.1.2`
+* `docker exec $A ping -c 4 192.168.1.4`
+
+B and D are in their own groups so shouldn't be able to ping anyone else.
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 * `sudo ./calicoctl reset`
