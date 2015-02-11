@@ -222,6 +222,10 @@ def do_ep_api():
                 log_api.info("Received HEARTBEAT response from %s:\n%s", host, data)
 
 
+def get_ip_for_host(host):
+    return client.read('/calico/host/%s/bird_ip' % host).value
+
+
 def send_all_eps(create_sockets, host, resync_id):
     create_socket = create_sockets.get(host)
     log.info("Sending ENDPOINTCREATED messages for host %s", host)
@@ -230,7 +234,8 @@ def send_all_eps(create_sockets, host, resync_id):
         create_socket = zmq_context.socket(zmq.REQ)
         create_socket.SNDTIMEO = 10000
         create_socket.RCVTIMEO = 10000
-        create_socket.connect("tcp://%s:9902" % host)
+        ip = get_ip_for_host(host)
+        create_socket.connect("tcp://%s:9902" % ip)
         create_sockets[host] = create_socket
         log_api.info("Created REQ socket on port 9902")
 
