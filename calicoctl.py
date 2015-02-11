@@ -145,8 +145,9 @@ class CalicoCmdLineEtcdClient(object):
 
         # Find a group ID
         group_id = self.get_group_id(name)
-        group_path = GROUP_PATH % {"group_id": group_id}
-        self.etcd_client.delete(group_path, recursive=True, dir=True)
+        if group_id:
+            group_path = GROUP_PATH % {"group_id": group_id}
+            self.etcd_client.delete(group_path, recursive=True, dir=True)
         return group_id
 
     def get_group_id(self, name_to_find):
@@ -400,6 +401,7 @@ def add_container_to_group(container_name, group_name, etcd_authority):
     return
 
 def remove_group(group_name, etcd_authority):
+    #TODO - Don't allow removing a group that has enpoints in it.
     client = CalicoDockerEtcd(etcd_authority)
     group_id = client.delete_group(group_name)
     if group_id:
