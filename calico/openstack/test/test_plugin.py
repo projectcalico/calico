@@ -81,13 +81,16 @@ class TestPlugin(unittest.TestCase):
             queue = eventlet.Queue(1)
             queue.stack = inspect.stack()[1][3]
 
-            print "%s: Start sleep for %ss" % (queue.stack, secs)
-
             #*****************************************************************#
             #* Add it to the dict of sleepers, together with the waking up   *#
             #* time.                                                         *#
             #*****************************************************************#
             sleepers[queue] = current_time + secs
+
+            print "T=%s: %s: Start sleep for %ss until T=%s" % (current_time,
+                                                                queue.stack,
+                                                                secs,
+                                                                sleepers[queue])
 
             #*****************************************************************#
             #* Do a zero time real sleep, to allow other threads to run.     *#
@@ -359,7 +362,7 @@ class TestPlugin(unittest.TestCase):
         global current_time
 
         while (secs > 0):
-            print "Time %s, want to advance by %s" % (current_time, secs)
+            print "T=%s: Want to advance by %s" % (current_time, secs)
 
             #*****************************************************************#
             #* Determine the time to advance to in this iteration: either    *#
@@ -381,13 +384,14 @@ class TestPlugin(unittest.TestCase):
             #*****************************************************************#
             secs -= (wake_up_time - current_time)
             current_time = wake_up_time
+            print "T=%s" % current_time
 
             #*****************************************************************#
             #* Wake up all sleepers that should now wake up.                 *#
             #*****************************************************************#
             for queue in sleepers.keys():
                 if sleepers[queue] >= current_time:
-                    print "Wake up one sleeper: %s" % queue.stack
+                    print "T=%s: %s: Wake up!" % (current_time, queue.stack)
                     del sleepers[queue]
                     queue.put_nowait('Wake up!')
                     
