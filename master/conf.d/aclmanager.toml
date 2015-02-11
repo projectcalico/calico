@@ -1,0 +1,6 @@
+[template]
+src = "aclmanager.cfg.template"
+dest = "/config/acl_manager.cfg"
+keys = [
+    "/calico/master/ip"
+]

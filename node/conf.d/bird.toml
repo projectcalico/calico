@@ -1,0 +1,7 @@
+[template]
+src = "bird.cfg.template"
+dest = "/config/bird.cfg"
+keys = [
+    "/calico/host"
+]
+reload_cmd = "pkill -HUP bird || true"
