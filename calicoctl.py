@@ -357,6 +357,12 @@ def status():
     except Exception:
         print "No calico containers appear to be running"
 
+    try:
+        print(docker("exec", "calico-master", "/bin/bash", "-c", "apt-cache policy "
+                                                                        "calico-felix"))
+    except Exception:
+        print "Skipping felix version information as Calico node isn't running"
+
     #If bird is running, then print bird.
     try:
         pass
@@ -376,12 +382,6 @@ def reset():
             call("ip link delete %s" % interface, shell=True)
     except CalledProcessError:
         print "No interfaces to clean up"
-
-
-def version():
-    #TODO this won't work
-    # print(docker("run", "--rm", "calico_felix", "apt-cache", "policy", "calico-felix"))
-    print "Unknown"
 
 
 def add_group(group_name, etcd_authority):
@@ -514,8 +514,6 @@ if __name__ == '__main__':
             status()
         if arguments["reset"]:
             reset(arguments["--delete-images"])
-        if arguments["version"]:
-            version()
         if arguments["addgroup"]:
             add_group(arguments["<GROUP>"], arguments["--etcd"])
         if arguments["removegroup"]:
