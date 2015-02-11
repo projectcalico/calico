@@ -17,9 +17,6 @@ Follow the CoreOS instructions for setting up a cluster under Vagrant.
 * In config.rb, set `$update_channel='alpha'` and `$num_instances=2`
 * Don't forget to set a discovery URL in `user-data`
 
-From the git checkout directory ("calico-docker"), use Vagrant to start the CoreOS servers (all the Vagrant commands should be run from the git checkout directory)
-* `vagrant up`
-
 You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
 
 * `vagrant destroy`
