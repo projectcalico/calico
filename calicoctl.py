@@ -103,7 +103,16 @@ class CalicoCmdLineEtcdClient(object):
         """
         # update the master IP
         self.etcd_client.write(MASTER_IP_PATH, ip)
-        return
+
+    def get_master(self):
+        """
+        Get the IP address of the Calico Master
+        :return: The IP address to reach Calico Master or None if it can't be found.
+        """
+        try:
+            return self.etcd_client.get(MASTER_IP_PATH).value
+        except KeyError:
+            return None
 
     def create_group(self, group_id, name):
         """
@@ -254,32 +263,39 @@ def node(ip, etcd_authority):
 
     # Set up etcd
     client = CalicoCmdLineEtcdClient(etcd_authority)
-    client.create_host(ip)
-    try:
-        docker("rm", "-f", "calico-node")
-    except Exception:
-        pass
 
-    output = StringIO.StringIO()
+    master_ip = client.get_master()
 
-    docker("run", "-e",  "IP=%s" % ip,
-                 "--name=calico-node",
-                 "--privileged",
-                 "--net=host",  # BIRD/Felix can manipulate the base networking stack
-                 "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
-                 "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
-                                            # networking
-                 "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                 "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
-                 "-d",
-                 "calico/node", _err=process_output, _out=output).wait()
+    if not master_ip:
+        print "No master can be found. Exiting"
+    else:
+        print "Using master on IP: %s" % master_ip
+        client.create_host(ip)
+        try:
+            docker("rm", "-f", "calico-node")
+        except Exception:
+            pass
 
-    cid = output.getvalue().strip()
-    output.close()
-    print "Calico node is running with id: %s" % cid
-    print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
-    print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
-    print "before using `docker run` for Calico networking.\n"
+        output = StringIO.StringIO()
+
+        docker("run", "-e",  "IP=%s" % ip,
+                     "--name=calico-node",
+                     "--privileged",
+                     "--net=host",  # BIRD/Felix can manipulate the base networking stack
+                     "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
+                     "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
+                                                # networking
+                     "-v", "/var/log/calico:/var/log/calico",  # Logging volume
+                     "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+                     "-d",
+                     "calico/node", _err=process_output, _out=output).wait()
+
+        cid = output.getvalue().strip()
+        output.close()
+        print "Calico node is running with id: %s" % cid
+        print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
+        print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
+        print "before using `docker run` for Calico networking.\n"
 
 
 def master(ip, etcd_authority):
