@@ -3,3 +3,5 @@ config
 venv
 .idea
 *.pyc
+calicoctl
+calicoctl.spec
