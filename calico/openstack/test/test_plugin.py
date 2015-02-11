@@ -298,17 +298,18 @@ class TestPlugin(unittest.TestCase):
         #* Print logs to stdout.                                             *#
         #*********************************************************************#
         def log_info(msg):
-            print ">>>>>>>INFO %s" % msg
+            print "       INFO %s" % msg
             return None
         def log_debug(msg):
-            print ">>>>>>DEBUG %s" % msg
+            print "       DEBUG %s" % msg
             return None
         def log_warn(msg):
-            print ">>>>>>>WARN %s" % msg
+            print "       WARN %s" % msg
             return None
         def log_exception(msg):
-            print ">>EXCEPTION %s" % msg
-            traceback.print_exc()
+            print "       EXCEPTION %s" % msg
+            if sys.exc_type is not greenlet.GreenletExit:
+                traceback.print_exc()
             return None
 
         #*********************************************************************#
