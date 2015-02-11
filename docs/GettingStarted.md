@@ -44,13 +44,13 @@ Download Calico onto both servers by SSHing onto them and running
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
 
 * Start the master on `core-01`
-  * `sudo ./calicoctl master --ip=172.18.8.101`
+  * `sudo ./calicoctl master --ip=172.17.8.101`
 
 Now start calico on all the nodes (only do this after the master is started)
 * On core-01
-   * ` sudo ./calicoctl node --ip=172.18.8.101`
+   * ` sudo ./calicoctl node --ip=172.17.8.101`
 * On core-02
-   * ` sudo ./calicoctl node --ip=172.18.8.102`
+   * ` sudo ./calicoctl node --ip=172.17.8.102`
 
 This will start a container. Check they are running
 * `sudo docker ps`
