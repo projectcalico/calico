@@ -40,6 +40,9 @@ ADD adapters.yml /etc/powerstrip/adapters.yml
 RUN mkdir /etc/service/powerstrip
 ADD powerstrip.sh /etc/service/powerstrip/run
 
+# WORKAROUND to change Powerstrip port
+RUN sed -i s/2375/2377/ /powerstrip/powerstrip.tac
+
 # Powerstrip Calico Adapter
 RUN apt-get -y install -q build-essential
 # Already installed by Powerstrip

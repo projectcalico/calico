@@ -30,4 +30,4 @@ The `calico-node` service is a worker that configures the network endpoints for 
 
 Finally, we provide a command line tool, `calicoctl`, which configures and starts the Calico services listed above, and allows you to interact with the Orchestrator Plugin to define and apply network & security policy to the containers you create.
 
-The `calico-node` container exposes the Docker API on port 2375 using Powerstrip.  To start and stop containers, either point your Docker tools to this port, or set `DOCKER_HOST=localhost:2375` in your shell and use `docker`.
+The `calico-node` container exposes the Docker API on port 2377 using Powerstrip.  To start and stop containers, either point your Docker tools to this port, or set `DOCKER_HOST=localhost:2377` in your shell and use `docker`.

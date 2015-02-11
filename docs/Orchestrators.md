@@ -7,7 +7,7 @@
      -  Bring up one instance of the `calico-master` service using `calicoctl`
      -  Bring up one instance of the `calico-node` service on each Docker compute host in the cluster.  This is also accomplished using `calicoctl`
  2. Redirect Docker Remote API requests to `calico-node`.
-    - `calico-node` exposes the Docker Remote API on port 2375, using [Powerstrip][] to trap the container create/start/stop/destroy events and program the network.
+    - `calico-node` exposes the Docker Remote API on port 2377, using [Powerstrip][] to trap the container create/start/stop/destroy events and program the network.
     - Pass an enviroment variable `CALICO_IP` with the desired container IP address during creation of the container.  _You may not specify the `--net` parameter as Calico will overwrite this._
 3. After creating the container, configure groups and Access Control Lists (ACLs) for the container by writing to the `/calico/network/` keyspace in the etcd cluster.
 
@@ -40,12 +40,12 @@ The “ip” parameter provides an IP on the current host on the management netw
 
 Workload containers are launched on the compute hosts in the cluster through either the standard docker REST API or CLI interface.
 
- - The `calico-node` service exposes the Docker Remote API on port 2375 using [Powerstrip][].  Use this API to start and stop containers with Calico networking.
+ - The `calico-node` service exposes the Docker Remote API on port 2377 using [Powerstrip][].  Use this API to start and stop containers with Calico networking.
  - The container must be launched with the CALICO_IP environment variable to assigned an IP.
 
 For example, using the shell
 
-	export DOCKER_HOST=localhost:2375
+	export DOCKER_HOST=localhost:2377
 	docker run -e CALICO_IP=1.2.3.4 -td ubuntu
 
 The orchestrator should then set up Access Control Lists (ACLs) as detailed below.
@@ -161,7 +161,7 @@ After a container has been created, a node will appear in etcd
 
 List the contents of `/calico/host/<hostname>/workload/docker/<container-id>/endpoint/` to get the UUID of the endpoint assigned to the container.
 
-	export DOCKER_HOST=localhost:2375
+	export DOCKER_HOST=localhost:2377
 	container1=`docker run -e CALICO_IP 192.168.0.101 -td ubuntu`
 	curl -L http://127.0.0.1:4001/v2/keys/calico/host/$HOSTNAME/workload/docker/$container1/endpoint
 	

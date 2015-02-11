@@ -77,7 +77,7 @@ To allow networking to be set up, Docker API calls need to be routed through our
 
 Containers can be started using normal docker commands, but an IP address needs to be assigned. The is done by passing in an environment variable.
 
-`DOCKER_HOST=localhost:2375 docker run -e CALICO_IP=192.168.1.1 -tid --name node1 ubuntu`
+`DOCKER_HOST=localhost:2377 docker run -e CALICO_IP=192.168.1.1 -tid --name node1 ubuntu`
 
 You can attach to the container created above using
 * `docker attach node1`
@@ -86,13 +86,13 @@ Hit enter a few times to get a prompt. To get back out of the container and leav
 
 So, go ahead and start a few of containers on each host.
 * On core-01 TODO
-   * `DOCKER_HOST=localhost:2375 docker run -e CALICO_IP=192.168.1.1 -tid --name node1 busybox`
-   * `DOCKER_HOST=localhost:2375 docker run -e CALICO_IP=192.168.1.2 -tid --name node2 busybox`
-   * `DOCKER_HOST=localhost:2375 docker run -e CALICO_IP=192.168.1.3 -tid --name node3 busybox`
+   * `DOCKER_HOST=localhost:2377 docker run -e CALICO_IP=192.168.1.1 -tid --name node1 busybox`
+   * `DOCKER_HOST=localhost:2377 docker run -e CALICO_IP=192.168.1.2 -tid --name node2 busybox`
+   * `DOCKER_HOST=localhost:2377 docker run -e CALICO_IP=192.168.1.3 -tid --name node3 busybox`
    
 * On core-02
-   * `DOCKER_HOST=localhost:2375 docker run -e CALICO_IP=192.168.1.4 -tid --name node4 busybox`
-   * `DOCKER_HOST=localhost:2375 docker run -e CALICO_IP=192.168.1.5 -tid --name node5 busybox`
+   * `DOCKER_HOST=localhost:2377 docker run -e CALICO_IP=192.168.1.4 -tid --name node4 busybox`
+   * `DOCKER_HOST=localhost:2377 docker run -e CALICO_IP=192.168.1.5 -tid --name node5 busybox`
 
 At this point, the containers have not been added to any security groups so they won't be able to communicate with any other containers.
 

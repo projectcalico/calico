@@ -51,7 +51,7 @@ GROUP_PATH = "/calico/network/group/%(group_id)s/"
 CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
 
-POWERSTRIP_PORT = 2375
+POWERSTRIP_PORT = 2377
 
 
 class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):

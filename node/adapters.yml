@@ -5,4 +5,4 @@ endpoints:
   "POST /*/containers/*/start":
     post: [calico]
 adapters:
-  calico: http://127.0.0.1:2376/calico-adapter
+  calico: http://127.0.0.1:2378/calico-adapter
