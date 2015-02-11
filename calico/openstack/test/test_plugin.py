@@ -76,11 +76,6 @@ class TestPlugin(unittest.TestCase):
         def simulated_time_sleep(secs):
 
             #*****************************************************************#
-            #* Do a zero time real sleep, to allow other threads to run.     *#
-            #*****************************************************************#
-            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            #*****************************************************************#
             #* Create a new queue.                                           *#
             #*****************************************************************#
             queue = eventlet.Queue(1)
@@ -93,6 +88,11 @@ class TestPlugin(unittest.TestCase):
             #* time.                                                         *#
             #*****************************************************************#
             sleepers[queue] = current_time + secs
+
+            #*****************************************************************#
+            #* Do a zero time real sleep, to allow other threads to run.     *#
+            #*****************************************************************#
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
             #*****************************************************************#
             #* Block until something is posted to the queue.                 *#
