@@ -7,12 +7,13 @@ Calico provide IP connectivity between Docker containers on different hosts. Thi
 You can run these instructions on a Windows, Mac or Linux computer. You'll be guided through setting up a two node CoreOS cluster, creating some Calico enabled endpoints and pinging between them. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
 
 ### Initial environment setup
-So, to get started, install Vagrant and Virtualbox for your OS. You'll also need Git to get hold of the CoreOS Vagrantfile.
+So, to get started, install Vagrant, Virtualbox and Git for your OS.
 * https://www.virtualbox.org/wiki/Downloads (no need for the extensions, just the core package)
 * https://www.vagrantup.com/downloads.html
 * http://git-scm.com/downloads
 
-Follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  At a minimum you'll need to
+Either use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example or just
+follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  At a minimum you'll need to
 * copy `config.rb.sample` as `config.rb` and copy `user-data.sample` as `user-data`
 * set the following in config.rb 
   * `$update_channel='alpha'`
@@ -42,8 +43,8 @@ At this point, it's worth checking that your servers can ping each other reliabl
 If you see ping failures, the likely culprit is a problem with then Virtualbox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
    
 ### Installing Calico
-Download Calico onto both servers by SSHing onto them and running
-* `wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl`
+If you didn't use the calico-coreos-vagrant-example Vagrantfile, you'll need to download Calico onto both servers by SSHing onto them and running
+* `wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.6/calicoctl`
 * `chmod +x calicoctl`
 
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
