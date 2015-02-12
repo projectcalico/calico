@@ -7,4 +7,5 @@ requests
 python-etcd
 simplejson
 docker-py
+netaddr
 prettytable

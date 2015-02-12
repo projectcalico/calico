@@ -2,6 +2,7 @@
 src = "bird.cfg.template"
 dest = "/config/bird.cfg"
 keys = [
-    "/calico/host"
+    "/calico/host",
+    "/calico/ipam/v4/pool"
 ]
 reload_cmd = "pkill -HUP bird || true"

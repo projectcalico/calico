@@ -1,6 +1,15 @@
 router id {{getenv "IP"}};
 log "/var/log/calico/bird.log" all;
 
+filter calico_pools {
+{{range gets "/calico/ipam/v4/pool/*"}}
+    if ( net ~ {{.Value}} ) then {
+        accept;
+    }
+{{end}}
+    reject;
+}
+
 # Configure synchronization between routing tables and kernel.
 protocol kernel {
   learn;          # Learn all alien routes from the kernel
@@ -32,8 +41,8 @@ protocol bgp {
   neighbor {{.Value}} as 64511;
   multihop;
   gateway recursive; # This should be the default, but just in case.
-  import where net ~ 192.168.0.0/16; #TODO Should be templated
-  export where net ~ 192.168.0.0/16; #TODO Should be templated
+  import filter calico_pools;
+  export filter calico_pools;
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
   source address {{getenv "IP"}};  # The local address we use for the TCP connection
