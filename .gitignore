@@ -5,4 +5,5 @@ venv
 *.pyc
 calicoctl
 calicoctl.spec
+calicoctl.py.sh
 *~
