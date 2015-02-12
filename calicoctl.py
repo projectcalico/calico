@@ -9,7 +9,6 @@ Usage:
                  [--etcd=<ETCD_AUTHORITY>]
                  [--node-image=<DOCKER_IMAGE_NAME>]
   calicoctl status [--etcd=<ETCD_AUTHORITY>]
-  calicoctl reset [--etcd=<ETCD_AUTHORITY>]
   calicoctl version [--etcd=<ETCD_AUTHORITY>]
   calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl addtogroup <CONTAINER_ID> <GROUP>
@@ -18,7 +17,6 @@ Usage:
   calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
   calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
   calicoctl ipv4 pool <CIDR> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl status
   calicoctl reset
 
 Options:
@@ -33,9 +31,6 @@ Options:
                           [default: calico/node:v0.0.6]
 
 """
-#Useful docker aliases
-# alias docker_kill_all='sudo docker kill $(docker ps -q)'
-# alias docker_rm_all='sudo docker rm -v `docker ps -a -q -f status=exited`'
 
 from subprocess import call, check_output, CalledProcessError
 import os
@@ -222,12 +217,12 @@ class CalicoCmdLineEtcdClient(object):
         """
         Get the UUID of the named group.  If multiple groups have the same name, the first matching
         one will be returned.
-        :param name:
+        :param name_to_find:
         :return: string UUID for the group, or None if the name was not found.
         """
-        for id, name in self.get_groups().iteritems():
+        for group_id, name in self.get_groups().iteritems():
             if name_to_find == name:
-                return id
+                return group_id
         return None
 
     def get_groups(self):
@@ -242,7 +237,7 @@ class CalicoCmdLineEtcdClient(object):
                 (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
                 if final_key == "name":
                     groups[group_id] = child.value
-        except KeyError as e:
+        except KeyError:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
         return groups
@@ -371,16 +366,16 @@ def node(ip, node_image):
     output = StringIO.StringIO()
 
     docker("run", "-e",  "IP=%s" % ip,
-                 "--name=calico-node",
-                 "--privileged",
-                 "--net=host",  # BIRD/Felix can manipulate the base networking stack
-                 "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip can access Docker
-                 "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
-                                            # networking
-                 "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                 "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
-                 "-d",
-                 node_image, _err=process_output, _out=output).wait()
+                  "--name=calico-node",
+                  "--privileged",
+                  "--net=host",  # BIRD/Felix can manipulate the base networking stack
+                  "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip access Docker
+                  "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
+                                             # networking
+                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
+                  "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+                  "-d",
+                  node_image, _err=process_output, _out=output).wait()
 
     cid = output.getvalue().strip()
     output.close()
