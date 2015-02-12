@@ -27,6 +27,7 @@
 #* It is implemented as a Neutron/ML2 mechanism driver.                      *#
 #*****************************************************************************#
 
+from oslo.config import cfg
 from neutron.common import constants
 from neutron.openstack.common import log
 from neutron.plugins.ml2 import driver_api as api
@@ -169,36 +170,41 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.zmq_context = zmq.Context()
         LOG.warn("pyzmq version is %s" % zmq.pyzmq_version())
 
+        bind_address = cfg.CONF.bind_host or '*'
+
         #*********************************************************************#
         #* Create ROUTER socket for Felix instances to connect to.           *#
         #*********************************************************************#
         self.felix_router_socket = self.zmq_context.socket(zmq.ROUTER)
-        self.felix_router_socket.bind("tcp://*:%s" % PLUGIN_ENDPOINT_PORT)
+        self.felix_router_socket.bind("tcp://%s:%s" % (bind_address,
+                                                       PLUGIN_ENDPOINT_PORT))
 
         #*********************************************************************#
         #* Create ROUTER socket for ACL Manager(s) to connect to.            *#
         #*********************************************************************#
         self.acl_get_socket = self.zmq_context.socket(zmq.ROUTER)
-        self.acl_get_socket.bind("tcp://*:%s" % PLUGIN_ACLGET_PORT)
+        self.acl_get_socket.bind("tcp://%s:%s" % (bind_address,
+                                                  PLUGIN_ACLGET_PORT))
 
         #*********************************************************************#
         #* Create PUB socket for sending ACL updates to ACL Manager(s).      *#
         #*********************************************************************#
         self.acl_pub_socket = self.zmq_context.socket(zmq.PUB)
-        self.acl_pub_socket.bind("tcp://*:%s" % PLUGIN_ACLPUB_PORT)
-        eventlet.spawn_n(self.acl_heartbeat_thread)
+        self.acl_pub_socket.bind("tcp://%s:%s" % (bind_address,
+                                                  PLUGIN_ACLPUB_PORT))
+        eventlet.spawn(self.acl_heartbeat_thread)
 
         #*********************************************************************#
         #* Spawn green thread for handling RESYNCSTATE requests on the       *#
         #* Felix-ROUTER socket.                                              *#
         #*********************************************************************#
-        eventlet.spawn_n(self.felix_router_thread)
+        eventlet.spawn(self.felix_router_thread)
 
         #*********************************************************************#
         #* Spawn green thread for handling GETGROUPS requests on the ACL-GET *#
         #* socket.                                                           *#
         #*********************************************************************#
-        eventlet.spawn_n(self.acl_get_thread)
+        eventlet.spawn(self.acl_get_thread)
 
         LOG.info("Started threads")
 
@@ -330,7 +336,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                                 'host': hostname,
                                                 'topic': constants.L2_AGENT_TOPIC,
                                                 'start_flag': True})
-                eventlet.spawn_n(self.felix_heartbeat_thread, hostname)
+                eventlet.spawn(self.felix_heartbeat_thread, hostname)
             except:
                 LOG.exception("Peer is not actually available")
 
