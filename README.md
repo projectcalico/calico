@@ -43,19 +43,30 @@ Finally, we provide a command line tool, `calicoctl`, which configures and start
 
 ```
 Usage:
-  calicoctl master --ip=<IP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl node --ip=<IP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl shownodes [--etcd=<ETCD_AUTHORITY>]
-  calicoctl showendpoints [--etcd=<ETCD_AUTHORITY>]
-  calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
+  calicoctl master --ip=<IP>
+                   [--etcd=<ETCD_AUTHORITY>]
+                   [--master-image=<DOCKER_IMAGE_NAME>]
+  calicoctl node --ip=<IP>
+                 [--etcd=<ETCD_AUTHORITY>]
+                 [--node-image=<DOCKER_IMAGE_NAME>]
+  calicoctl status [--etcd=<ETCD_AUTHORITY>]
+  calicoctl reset [--etcd=<ETCD_AUTHORITY>]
+  calicoctl version [--etcd=<ETCD_AUTHORITY>]
   calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
-  calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl addtogroup <CONTAINER_ID> <GROUP>  [--etcd=<ETCD_AUTHORITY>]
+  calicoctl addtogroup <CONTAINER_ID> <GROUP>
+                       [--etcd=<ETCD_AUTHORITY>]
   calicoctl diags
   calicoctl status
   calicoctl reset
-
 Options:
- --ip=<IP>                  The local management address to use.
- --etcd=<ETCD_AUTHORITY>    The location of the etcd service as host:port [default: 127.0.0.1:4001]
+ --ip=<IP>                The local management address to use.
+ --etcd=<ETCD_AUTHORITY>  The location of the etcd service as
+                          host:port [default: 127.0.0.1:4001]
+ --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
+                          Calico's master container
+                          [default: calico/master:v0.0.6]
+ --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
+                          Calico's per-node container
+                          [default: calico/node:v0.0.6]
+
 ```
