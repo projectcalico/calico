@@ -42,7 +42,7 @@ class UnexpectedStateException(Exception):
         return ("%s\nDIFF:\n%s\nACTUAL:\n%s\nEXPECTED\n%s" %
                 (self.message, self.diff, self.actual, self.expected))
 
-class TableState(object):
+class TableState(fiptables.TableState):
     """
     Defines the current state of iptables - which rules exist in which
     tables. Normally there will be two - the state that the test generates, and
@@ -50,42 +50,35 @@ class TableState(object):
     these can be compared.
     """
     def __init__(self):
-        self.tables_v4 = {}
-        self.tables_v6 = {}
-        self.tables = []
+        super(TableState, self).__init__()
+
+        # tables_v4 and tables_v6 are the internal state of the tables; real_v4
+        # and real_v6 are the tables as written out. Just after "apply" or
+        # "reset", the two will match, but if you fail to call "apply" then the
+        # two will diverge.
+        self.real_v4 = {}
+        self.real_v6 = {}
+
         self.reset()
 
-    def get_table(self, type, name):
-        """
-        Replace fiptables.get_table with this function.
-        """
-        if type == IPV4:
-            table = self.tables_v4[name]
-        else:
-            table = self.tables_v6[name]
-        return deepcopy(table)
-
-    def apply(self, table):
+    def apply(self):
         """
         Replace fiptables.Table.apply() with this function.
         """
-        log.debug("Apply batched changes to table %s (%s)",
-                  table.name,
-                  table.type)
-
-        log.debug("Table applied :\n%s", table)
-
-        if table.type == IPV4:
-            self.tables_v4[table.name] = table
-        else:
-            self.tables_v6[table.name] = table
-
-        log.debug("State now :\n%s", self)
+        log.debug("Overwriting table changes to real state")
+        self.real_v4 = deepcopy(self.tables_v4)
+        self.real_v6 = deepcopy(self.tables_v4)
 
     def reset(self):
         """
-        Clear the state of the tables, getting them back to being empty.
+        Set up the state of the tables as if clean.
         """
+        # TODO: This is a bit weird; it makes the test work, but isn't
+        # very clear or logical. Better if it cleared tables_* and
+        # left real_* unchanged, while read_table then just loaded from
+        # real_v4.
+        log.debug("Reset table state")
+
         self.tables_v4.clear()
 
         table = fiptables.Table(IPV4, "filter")
@@ -121,15 +114,17 @@ class TableState(object):
         if actual != expected:
             raise UnexpectedStateException(actual, expected)
 
+
     def __str__(self):
         """
         Convert a full state to a readable string to use in matches and compare
-        for final testing.
+        for final testing. Note that we compare only what is actually written,
+        not what is just pending writing.
         """
-        table_list = ([ self.tables_v4[name]
-                        for name in sorted(self.tables_v4.keys()) ] +
-                      [ self.tables_v6[name]
-                        for name in sorted(self.tables_v6.keys()) ] )
+        table_list = ([ self.real_v4[name]
+                        for name in sorted(self.real_v4.keys()) ] +
+                      [ self.real_v6[name]
+                        for name in sorted(self.real_v6.keys()) ] )
 
         output = "".join([str(table) for table in table_list])
 

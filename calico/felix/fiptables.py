@@ -80,10 +80,12 @@ class Chain(object):
         It takes a chain object, and a count for how many of the rules should
         be left in place.
         """
-        log.debug("Truncate chain %s to length %d (length now %d)",
+        log.debug("Truncate %s chain %s to length %d (length now %d)",
+                  self.type,
                   self.name,
                   count,
                   len(self.rules))
+
         while len(self.rules) > count:
             self.table.ops.append([IPTABLES_CMD[self.type],
                                    "-w",
@@ -94,12 +96,41 @@ class Chain(object):
                                    str(count + 1)])
             self.rules.pop(count)
 
-    def insert_rule(self, rule, position):
+
+    def insert_rule(self, rule, position=0, force_position=True):
+        """
+        Add an iptables rule to a chain if it does not already exist. Position
+        is the position for the insert as an offset; if set to RULE_POSN_LAST
+        then the rule is appended.
+
+        If force_position is True, then the rule is added at the specified point
+        unless it already exists there. If force_position is False, then the
+        rule is added only if it does not exist anywhere in the list of rules.
+
+        Position starts at offset 0, even though iptables wants it to start at
+        offset 1.
+        """
+        if position == RULE_POSN_LAST:
+            position = len(self.rules)
+
+        if force_position:
+            if (len(self.rules) <= position) or (rule != self.rules[position]):
+                # Either adding after existing rules, or replacing an existing rule.
+                self._insert_rule(rule, position)
+        else:
+            if rule not in self.rules:
+                self._insert_rule(rule, position)
+        return
+
+    def _insert_rule(self, rule, position):
         """
         Insert the given rule at the supplied position.
         
         position of 0 means "insert at the start", which is what iptables
         considers as position 1.
+
+        This method is private; callers outside this module should call
+        insert_rule instead.
         """
         args = [IPTABLES_CMD[self.type],
                 "-w",
@@ -120,17 +151,6 @@ class Chain(object):
 
         return output
 
-
-    def __eq__(self, other):
-        # Equality deliberately only cares about name.
-        if self.name == other.name:
-            return True
-        else:
-            return False
-
-    def __ne__(self, other):
-        return not self.__eq__(self,other)
-
 class Table(object):
     """
     Representation of an iptables table.
@@ -144,6 +164,27 @@ class Table(object):
     def is_chain(self, name):
         return (name in self.chains)
 
+    def get_chain(self, name):
+        """
+        Gets a chain, creating it first if it does not exist.
+        """
+        chain = self.chains.get(name)
+
+        if chain is None:
+            log.debug("Creating chain %s in table %s (%s)",
+                      name,
+                      self.name,
+                      self.type)
+            chain = Chain(self, name)
+            self.ops.append([IPTABLES_CMD[self.type],
+                              "-w",
+                              "-t",
+                              self.name,
+                              "-N",
+                              name])
+
+        return chain
+
     def delete_chain(self, chain_name):
         log.debug("Delete chain %s from table %s (%s)",
                   chain_name,
@@ -156,16 +197,6 @@ class Table(object):
                         "-X",
                         chain_name])
         del self.chains[chain_name]
-
-    def apply(self):
-        """
-        Apply all changes to this table
-        """
-        log.debug("Apply batched changes to table %s (%s)",
-                  self.name,
-                  self.type)
-        if self.ops:
-            futils.multi_call(self.ops)
 
     def __str__(self):
         output = "TABLE %s (%s)\n" % (self.name, self.type)
@@ -323,38 +354,66 @@ class Rule(object):
         return not self.__eq__(other)
 
 
-def insert_rule(rule, chain, position=0, force_position=True):
-    """
-    Add an iptables rule to a chain if it does not already exist. Position is
-    the position for the insert as an offset; if set to RULE_POSN_LAST then the
-    rule is appended.
-
-    If force_position is True, then the rule is added at the specified point
-    unless it already exists there. If force_position is False, then the rule
-    is added only if it does not exist anywhere in the list of rules.
-
-    Position starts at offset 0, even though iptables wants it to start at
-    offset 1.
-    """
-    if position == RULE_POSN_LAST:
-        position = len(chain.rules)
-
-    if force_position:
-        if (len(chain.rules) <= position) or (rule != chain.rules[position]):
-            # Either adding after existing rules, or replacing an existing rule.
-            chain.insert_rule(rule, position)
-    else:
-        if rule not in chain.rules:
-            chain.insert_rule(rule, position)
-
-    return
-
 class UnrecognisedIptablesField(Exception):
     pass
 
-def get_table(type, name):
+
+class TableState(object):
     """
-    Gets a table, including current state.
+    Defines the current state of iptables - which rules exist in which
+    tables.
+    """
+    def __init__(self):
+        self.tables_v4 = {}
+        self.tables_v6 = {}
+
+    def get_table(self, type, name):
+        """
+        Get a table from the current state.
+        """
+        if type == IPV4:
+            hash = self.tables_v4
+        else:
+            hash = self.tables_v6
+        
+        if name in hash:
+            table = hash[name]
+        else:
+            table = read_table(type, name)
+            hash[name] = table
+
+        return table
+
+    def reset(self):
+        """
+        Clear the state of the tables.
+        """
+        self.tables_v4.clear()
+        self.tables_v6.clear()
+
+    def apply(self):
+        """
+        Apply all changes to this table.
+
+        Note that the only way to abort changes is to call
+        TableState.reset(); otherwise the changes remain queued up and happen
+        the next time TableState.apply() is called.
+        """
+        ops = []
+        for table in self.tables_v4.values() + self.tables_v6.values():
+            ops.extend(table.ops)
+            table.ops = []
+
+        if ops:
+            log.debug("Apply batched changes to tables")
+            futils.multi_call(ops)
+        else:
+            log.debug("No table changes required")
+
+
+def read_table(type, name):
+    """
+    Reads a table, building current state.
     """
     table = Table(type, name)
     data = futils.check_call([IPTABLES_CMD[type],
@@ -389,25 +448,4 @@ def get_table(type, name):
             chain.rules.append(rule)
 
     return table
-
-def get_chain(table, name):
-    """
-    Gets a chain, creating it first if it does not exist.
-    """
-    chain = table.chains.get(name)
-
-    if chain is None:
-        log.debug("Creating chain %s in table %s (%s)",
-                  name,
-                  table.name,
-                  table.type)
-        chain = Chain(table, name)
-        table.ops.append([IPTABLES_CMD[table.type],
-                          "-w",
-                          "-t",
-                          table.name,
-                          "-N",
-                          name])
-
-    return chain
 
