@@ -4,15 +4,15 @@
 Usage:
   calicoctl master --ip=<IP> [--etcd=<ETCD_AUTHORITY>]
   calicoctl node --ip=<IP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl status
-  calicoctl reset
-  calicoctl version
+  calicoctl shownodes [--etcd=<ETCD_AUTHORITY>]
+  calicoctl showendpoints [--etcd=<ETCD_AUTHORITY>]
+  calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
   calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
+  calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
   calicoctl addtogroup <CONTAINER_ID> <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl diags
-  calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
-  calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
-
+  calicoctl status
+  calicoctl reset
 
 Options:
  --ip=<IP>                  The local management address to use.
@@ -36,6 +36,7 @@ import sh
 import subprocess
 import StringIO
 import docker as pydocker
+from prettytable import PrettyTable
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -284,7 +285,7 @@ def process_output(line):
     sys.stdout.write(line)
 
 
-def node(ip, etcd_authority):
+def node(ip):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -326,7 +327,7 @@ def node(ip, etcd_authority):
         print "before using `docker run` for Calico networking.\n"
 
 
-def master(ip, etcd_authority):
+def master(ip):
     create_dirs()
 
     # Add IP to etcd
@@ -351,7 +352,7 @@ def master(ip, etcd_authority):
     output.close()
     print "Calico master is running with id: %s" % cid
 
-def status(etcd_authority):
+def status():
     client = CalicoCmdLineEtcdClient(etcd_authority)
     print "Currently configured master is %s" % client.get_master()
 
@@ -387,7 +388,7 @@ def reset():
         print "No interfaces to clean up"
 
 
-def add_group(group_name, etcd_authority):
+def add_group(group_name):
     """
     Create a security group with the given name.
     :param group_name: The name for the group.
@@ -405,7 +406,7 @@ def add_group(group_name, etcd_authority):
     print "Created group %s with ID %s" % (group_name, group_id)
 
 
-def add_container_to_group(container_name, group_name, etcd_authority):
+def add_container_to_group(container_name, group_name):
     """
     Add the container to the listed group.
     :param container_name: ID of the container to add.
@@ -419,7 +420,7 @@ def add_container_to_group(container_name, group_name, etcd_authority):
         print e
     return
 
-def remove_group(group_name, etcd_authority):
+def remove_group(group_name):
     #TODO - Don't allow removing a group that has enpoints in it.
     client = CalicoDockerEtcd(etcd_authority)
     group_id = client.delete_group(group_name)
@@ -429,13 +430,30 @@ def remove_group(group_name, etcd_authority):
         print "Couldn't find group with name %s" % group_name
 
 
-def show_groups(etcd_authority):
+def show_groups():
     client = CalicoDockerEtcd(etcd_authority)
 
-    from prettytable import PrettyTable
     x = PrettyTable(["ID", "Name"])
     for group_id, name in client.get_groups().iteritems():
         x.add_row([group_id, name])
+
+    print x
+
+def show_nodes():
+    client = CalicoDockerEtcd(etcd_authority)
+
+    x = PrettyTable(["Host", "Workload Type", "ID", "Addresses", "MAC", "State"])
+    # for group_id, name in client.get_hosts().iteritems():
+    #     x.add_row([group_id, name])
+
+    print x
+
+def show_endpoints():
+    client = CalicoDockerEtcd(etcd_authority)
+
+    x = PrettyTable(["Host", "Workload Type", "ID", "Addresses", "MAC", "State"])
+    # for group_id, name in client.get_hosts().iteritems():
+    #     x.add_row([group_id, name])
 
     print x
 
@@ -504,30 +522,35 @@ echo "Diags saved to $diags_dir.gz"
     print out #TODO - Make this stream the output
 
 
+
+
+
 if __name__ == '__main__':
     arguments = docopt(__doc__)
+    etcd_authority = arguments["--etcd"]
     if os.geteuid() != 0:
         print "calicoctl must be run as root"
     elif validate_arguments(arguments):
         if arguments["master"]:
-            master(arguments["--ip"], arguments["--etcd"])
+            master(arguments["--ip"])
         if arguments["node"]:
-            node(arguments["--ip"], arguments["--etcd"])
+            node(arguments["--ip"])
         if arguments["status"]:
-            status(arguments["--etcd"])
+            status()
         if arguments["reset"]:
             reset()
         if arguments["addgroup"]:
-            add_group(arguments["<GROUP>"], arguments["--etcd"])
+            add_group(arguments["<GROUP>"])
         if arguments["removegroup"]:
-            remove_group(arguments["<GROUP>"], arguments["--etcd"])
+            remove_group(arguments["<GROUP>"])
         if arguments["showgroups"]:
-            show_groups(arguments["--etcd"])
+            show_groups()
         if arguments["addtogroup"]:
             add_container_to_group(arguments["<CONTAINER_ID>"],
-                                   arguments["<GROUP>"],
-                                   arguments["--etcd"])
+                                   arguments["<GROUP>"])
         if arguments["diags"]:
             save_diags()
-    else:
-        print "Not yet"
+        if arguments["shownodes"]:
+            show_nodes()
+        if arguments["showendpoints"]:
+            show_endpoints()
