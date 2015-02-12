@@ -132,14 +132,19 @@ class CalicoCmdLineEtcdClient(object):
         assert version in ("v4", "v6")
 
         pool_path = IP_POOLS_PATH % {"version": version}
-        nodes = self.etcd_client.read(pool_path).children
-        pools = []
-        for child in nodes:
-            cidr = child.value
-            pool = IPNetwork(cidr)
-            pools.append(pool)
+        try:
+            nodes = self.etcd_client.read(pool_path).children
+        except KeyError:
+            # Path doesn't exist.  Interpret as no configured pools.
+            return []
+        else:
+            pools = []
+            for child in nodes:
+                cidr = child.value
+                pool = IPNetwork(cidr)
+                pools.append(pool)
 
-        return pools
+            return pools
 
     def set_ip_pool(self, version, pool):
         """
@@ -380,7 +385,7 @@ def master(ip, etcd_authority):
 
     # If no IPv4 pools are defined, add a default.
     ipv4_pools = client.get_ip_pools("v4")
-    if len(ipv4_pools == 0):
+    if len(ipv4_pools) == 0:
         client.set_ip_pool("v4", DEFAULT_IPV4_POOL)
 
     try:

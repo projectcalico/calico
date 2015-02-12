@@ -37,9 +37,8 @@ The following illustrates the directory structure calico-docker uses in etcd.
 	   `--ipam  #IP Address Management
 	      |--v4
 	      |   `--pool
-	      |      |--<cidr-1>  # use -, e.g. 192.168.0.0-16, value is empty string.
-	      |      `--<cidr-2>  
+	      |      |--1  # CIDR range to allocate from
+	      |      `--2
 	      `--v6
 	          `--pool
-	             |--<cidr-1>  # use -, e.g. 2004:b4ef:6a34::-48, value is empty string.
-	             `--<cidr-2>  
+	             `--1  # CIDR range to allocate from
