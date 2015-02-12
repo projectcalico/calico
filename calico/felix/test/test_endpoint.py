@@ -23,14 +23,18 @@ import sys
 import unittest
 import uuid
 
-import calico.felix.devices as devices
-
 # Stub out the iptables code.
 import calico.felix.test.stub_fiptables
 sys.modules['calico.felix.fiptables'] = __import__('calico.felix.test.stub_fiptables')
 calico.felix.fiptables = calico.felix.test.stub_fiptables
 
+# Hide iptc, since we do not have it.
+sys.modules['iptc'] = __import__('calico.felix.test.stub_empty')
+
+import calico.felix.devices as devices
 import calico.felix.endpoint as endpoint
+import calico.felix.frules as frules
+import calico.felix.futils as futils
 
 class TestEndpoint(unittest.TestCase):
     def test_program_bails_early(self):
@@ -44,3 +48,71 @@ class TestEndpoint(unittest.TestCase):
         retval = ep.program_endpoint()
 
         self.assertFalse(retval)
+
+    def test_remove_deleted(self):
+        """
+        Removal of an endpoint where tap interface deleted under our feet.
+        """
+        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+
+        with mock.patch('calico.felix.devices.tap_exists', \
+                        side_effect=[True, False]) as mock_exists,\
+             mock.patch('calico.felix.devices.list_tap_ips', \
+                         return_value = set(["1.2.3.4", "1.2.3.5"])) as mock_list, \
+             mock.patch('calico.felix.devices.del_route', \
+                        side_effect=futils.FailedSystemCall("blah",
+                                                            ["dummy", "args"],
+                                                            1,
+                                                            "",
+                                                            "")) as mock_del_route, \
+             mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
+            ep.remove()
+        self.assertEqual(mock_exists.call_count, 2)
+        self.assertEqual(mock_list.call_count, 1)
+        self.assertEqual(mock_del_route.call_count, 1)
+        self.assertEqual(mock_del_rules.call_count, 2)
+
+    def test_remove_sys_error(self):
+        """
+        Removal of an endpoint where other system error happens.
+        """
+        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+
+        with self.assertRaisesRegexp(futils.FailedSystemCall, "blah"), \
+             mock.patch('calico.felix.devices.tap_exists', \
+                         side_effect=[True, True]) as mock_exists, \
+             mock.patch('calico.felix.devices.list_tap_ips', \
+                         return_value = set(["1.2.3.4", "1.2.3.5"])) as mock_list, \
+             mock.patch('calico.felix.devices.del_route', \
+                        side_effect=futils.FailedSystemCall("blah",
+                                                            ["dummy", "args"],
+                                                            1,
+                                                            "",
+                                                            "")) as mock_del_route, \
+             mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
+            ep.remove()
+        self.assertEqual(mock_exists.call_count, 2)
+        self.assertEqual(mock_list.call_count, 1)
+        self.assertEqual(mock_del_route.call_count, 1)
+        self.assertEqual(mock_del_rules.call_count, 0)
+
+    def test_remove_other_error(self):
+        """
+        Removal of an endpoint where some random exception appears.
+        """
+        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+
+        with self.assertRaisesRegexp(Exception, "blah"), \
+             mock.patch('calico.felix.devices.tap_exists', \
+                         side_effect=[True, True]) as mock_exists, \
+             mock.patch('calico.felix.devices.list_tap_ips', \
+                         return_value = set(["1.2.3.4", "1.2.3.5"])) as mock_list, \
+             mock.patch('calico.felix.devices.del_route', \
+                        side_effect=Exception("blah")) as mock_del_route, \
+             mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
+            ep.remove()
+        self.assertEqual(mock_exists.call_count, 1)
+        self.assertEqual(mock_list.call_count, 1)
+        self.assertEqual(mock_del_route.call_count, 1)
+        self.assertEqual(mock_del_rules.call_count, 0)
+

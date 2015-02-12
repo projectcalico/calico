@@ -92,8 +92,23 @@ class Endpoint(object):
         self.state          = Endpoint.STATE_DISABLED
 
     def remove(self):
-        # Delete a programmed endpoint. Remove the rules only, since the routes
-        # will vanish in due course when the tap interface goes.
+        """
+        Delete a programmed endpoint. Remove the routes, then the rules.
+        """
+        if devices.tap_exists(self.tap):
+            for type in (futils.IPV4, futils.IPV6):
+                try:
+                    ips = devices.list_tap_ips(type, self.tap)
+                    for ip in ips:
+                        devices.del_route(type, ip, self.tap)
+                except futils.FailedSystemCall:
+                    # There is a window where the tap interface gets deleted
+                    # under our feet. If the tap interface has gone now, ignore
+                    # the error, otherwise rethrow it.
+                    if devices.tap_exists(self.tap):
+                        raise
+                    break
+
         frules.del_rules(self.suffix, futils.IPV4)
         frules.del_rules(self.suffix, futils.IPV6)
 

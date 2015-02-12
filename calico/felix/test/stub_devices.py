@@ -50,9 +50,9 @@ def tap_exists(tap_id):
 
 def list_tap_ips(type, tap_id):
     if type == futils.IPV4:
-        return taps[tap_id].v4_ips
+        return taps[tap_id].v4_ips.copy()
     else:
-        return taps[tap_id].v6_ips
+        return taps[tap_id].v6_ips.copy()
 
 def configure_tap(tap_id):
     pass
