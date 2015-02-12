@@ -68,10 +68,9 @@ def list_tap_ips(type, tap):
                 ips.add(words[0])
             else:
                 # Not an IP address; seems odd.
-                log.warning("No IP address found in line %s for %s" %
-                            (line, tap))
+                log.warning("No IP address found in line %s for %s", line, tap)
 
-    log.debug("Found existing IP addresses : %s" % ips)
+    log.debug("Found existing IP addresses : %s", ips)
 
     return ips
 
