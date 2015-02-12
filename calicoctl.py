@@ -8,16 +8,20 @@ Usage:
   calicoctl node --ip=<IP>
                  [--etcd=<ETCD_AUTHORITY>]
                  [--node-image=<DOCKER_IMAGE_NAME>]
+  calicoctl shownodes [--etcd=<ETCD_AUTHORITY>]
+  calicoctl showendpoints [--etcd=<ETCD_AUTHORITY>]
   calicoctl status [--etcd=<ETCD_AUTHORITY>]
   calicoctl version [--etcd=<ETCD_AUTHORITY>]
   calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl addtogroup <CONTAINER_ID> <GROUP>
                        [--etcd=<ETCD_AUTHORITY>]
-  calicoctl diags
   calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
   calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl ipv4 pool <CIDR> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl ipv4 pool add <CIDR> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl ipv4 pool del <CIDR> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl ipv4 pool show [--etcd=<ETCD_AUTHORITY>]
   calicoctl reset
+  calicoctl diags
 
 Options:
  --ip=<IP>                The local management address to use.
@@ -65,7 +69,7 @@ GROUPS_PATH = "/calico/network/group/"
 GROUP_PATH = "/calico/network/group/%(group_id)s/"
 CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
-IP_POOL_PATH = "/calico/ipam/%(version)s/pool/1"
+IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
 
 POWERSTRIP_PORT = 2377
@@ -134,29 +138,39 @@ class CalicoCmdLineEtcdClient(object):
 
     def get_ip_pools(self, version):
         """
-        Get the configured IP range
+        Get the configured IP pools.
+
         :param version: "v4" for IPv4, "v6" for IPv6
         :return: List of netaddr.IPNetwork IP pools.
         """
         assert version in ("v4", "v6")
+        return self._get_ip_pools_with_keys(version).keys()
 
+    def _get_ip_pools_with_keys(self, version):
+        """
+        Get configured IP pools with their etcd keys.
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :return: dict of {<IPNetwork>: <etcd key>} for the pools.
+        """
         pool_path = IP_POOLS_PATH % {"version": version}
         try:
             nodes = self.etcd_client.read(pool_path).children
         except KeyError:
             # Path doesn't exist.  Interpret as no configured pools.
-            return []
+            return {}
         else:
-            pools = []
+            pools = {}
             for child in nodes:
                 cidr = child.value
                 pool = IPNetwork(cidr)
-                pools.append(pool)
-
+                pools[pool] = child.key
             return pools
 
-    def set_ip_pool(self, version, pool):
+    def add_ip_pool(self, version, pool):
         """
+        Add the given pool to the list of IP allocation pools.  If the pool already exists, this
+        method completes silently without modifying the list of pools.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
@@ -165,10 +179,35 @@ class CalicoCmdLineEtcdClient(object):
         assert version in ("v4", "v6")
         assert isinstance(pool, IPNetwork)
 
-        # TODO support more than one.
-        pool_path = IP_POOL_PATH % {"version": version}
-        self.etcd_client.write(pool_path, str(pool.cidr))
+        # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
+        pool = pool.cidr
 
+        # Check if the pool exists.
+        if pool in self.get_ip_pools(version):
+            return
+
+        pool_path = IP_POOL_PATH % {"version": version}
+        self.etcd_client.write(pool_path, str(pool), append=True)
+
+    def del_ip_pool(self, version, pool):
+        """
+        Delete the given CIDR range from the list of pools.  If the pool does not exist, raise a
+        KeyError.
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param pool: IPNetwork object representing the pool
+        :return: None
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(pool, IPNetwork)
+
+        pools = self._get_ip_pools_with_keys(version)
+        try:
+            key = pools[pool.cidr]
+            self.etcd_client.delete(key)
+        except KeyError:
+            # Re-raise with a better error message.
+            raise KeyError("%s is not a configured IP pool." % pool)
 
     def create_group(self, group_id, name):
         """
@@ -395,7 +434,7 @@ def master(ip, master_image):
     # If no IPv4 pools are defined, add a default.
     ipv4_pools = client.get_ip_pools("v4")
     if len(ipv4_pools) == 0:
-        client.set_ip_pool("v4", DEFAULT_IPV4_POOL)
+        client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
 
     try:
         docker("rm", "-f", "calico-master")
@@ -481,7 +520,7 @@ def add_container_to_group(container_name, group_name):
     try:
         client.add_container_to_group(container_name, group_name)
     except KeyError as e:
-        print e
+        print str(e)
     return
 
 def remove_group(group_name):
@@ -585,10 +624,23 @@ echo "Diags saved to $diags_dir.gz"
     (out, _) = proc.communicate(script)
     print out #TODO - Make this stream the output
 
-
-def set_ipv4_pool(cidr_pool, etcd_authority):
+def ipv4_pool(dc_args):
     """
-    Set the IPv4 IP address allocation pool to the given CIDR range.
+    Dispatch "ipv4 pool" commands
+    :param dc_args: docopt arguments structure.
+    :return: None.
+    """
+    if dc_args["add"]:
+        add_ipv4_pool(dc_args["<CIDR>"])
+    elif dc_args["del"]:
+        del_ipv4_pool(dc_args["<CIDR>"])
+    elif dc_args["show"]:
+        show_ip_pools("v4")
+
+
+def add_ipv4_pool(cidr_pool):
+    """
+    Add the the given CIDR range to the IPv4 IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
@@ -602,10 +654,42 @@ def set_ipv4_pool(cidr_pool, etcd_authority):
     if pool.version == 6:
         print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
         return
-
     client = CalicoCmdLineEtcdClient(etcd_authority)
-    client.set_ip_pool("v4", pool)
+    client.add_ip_pool("v4", pool)
 
+
+def del_ipv4_pool(cidr_pool):
+    """
+    Add the the given CIDR range to the IPv4 IP address allocation pool.
+
+    :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
+    :return: None
+    """
+
+    try:
+        pool = IPNetwork(cidr_pool)
+    except AddrFormatError:
+        print "%s is not a valid IPv4 prefix." % cidr_pool
+        return
+    if pool.version == 6:
+        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+        return
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    try:
+        client.del_ip_pool("v4", pool)
+    except KeyError:
+        print "%s is not a configured pool." % cidr_pool
+
+
+def show_ip_pools(version):
+    """
+    Print a list of IPv4 allocation pools.
+    :return: None
+    """
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    pools = client.get_ip_pools(version)
+    for pool in pools:
+        print pool
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
@@ -640,4 +724,4 @@ if __name__ == '__main__':
             show_endpoints()
         if arguments["ipv4"]:
             assert arguments["pool"]
-            set_ipv4_pool(arguments["<CIDR>"], arguments["--etcd"])
+            ipv4_pool(arguments)
