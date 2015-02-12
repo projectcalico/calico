@@ -27,7 +27,7 @@ Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
 
 Get the calico binary onto each node. It's usually safe to just grab the latest [release](https://github.com/Metaswitch/calico-docker/releases/) e.g.
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.6/calicoctl
 	chmod +x calicoctl
 
 Launch one instance of the Calico Master
