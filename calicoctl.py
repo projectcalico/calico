@@ -516,7 +516,7 @@ if __name__ == '__main__':
         if arguments["status"]:
             status(arguments["--etcd"])
         if arguments["reset"]:
-            reset(arguments["--delete-images"])
+            reset()
         if arguments["addgroup"]:
             add_group(arguments["<GROUP>"], arguments["--etcd"])
         if arguments["removegroup"]:
