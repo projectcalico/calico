@@ -514,6 +514,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                    port,
                                    'CREATED',
                                    context._plugin_context)
+            elif original['binding:host_id'] != port['binding:host_id']:
+                #*************************************************************#
+                #* Migration as implemented in Icehouse.                     *#
+                #*************************************************************#
+                LOG.info("Migration as implemented in Icehouse")
+                self.send_endpoint(original['binding:host_id'],
+                                   None,
+                                   original,
+                                   'DESTROYED',
+                                   context._plugin_context)
+                self.send_endpoint(port['binding:host_id'],
+                                   None,
+                                   port,
+                                   'CREATED',
+                                   context._plugin_context)
             else:
                 #*************************************************************#
                 #* This is a non-migration-related update.                   *#
