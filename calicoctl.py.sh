@@ -5,7 +5,7 @@ _calicoctlpy()
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [ $COMP_CWORD -eq 1 ]; then
-        COMPREPLY=( $( compgen -W ' node status removegroup addtogroup showgroups reset diags version master addgroup' -- $cur) )
+        COMPREPLY=( $( compgen -W ' node status addtogroup reset diags version master addgroup' -- $cur) )
     else
         case ${COMP_WORDS[1]} in
             node)
@@ -14,14 +14,8 @@ _calicoctlpy()
             status)
             _calicoctlpy_status
         ;;
-            removegroup)
-            _calicoctlpy_removegroup
-        ;;
             addtogroup)
             _calicoctlpy_addtogroup
-        ;;
-            showgroups)
-            _calicoctlpy_showgroups
         ;;
             reset)
             _calicoctlpy_reset
@@ -49,7 +43,7 @@ _calicoctlpy_node()
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -W '--ip= --etcd= ' -- $cur) )
+        COMPREPLY=( $( compgen -W '--ip= --etcd= --node-image= ' -- $cur) )
     fi
 }
 
@@ -59,17 +53,7 @@ _calicoctlpy_status()
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -W ' ' -- $cur) )
-    fi
-}
-
-_calicoctlpy_removegroup()
-{
-    local cur
-    cur="${COMP_WORDS[COMP_CWORD]}"
-
-    if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -fW '--etcd= ' -- $cur) )
+        COMPREPLY=( $( compgen -W '--etcd= ' -- $cur) )
     fi
 }
 
@@ -83,23 +67,13 @@ _calicoctlpy_addtogroup()
     fi
 }
 
-_calicoctlpy_showgroups()
-{
-    local cur
-    cur="${COMP_WORDS[COMP_CWORD]}"
-
-    if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -W '--etcd= ' -- $cur) )
-    fi
-}
-
 _calicoctlpy_reset()
 {
     local cur
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -W ' ' -- $cur) )
+        COMPREPLY=( $( compgen -W '--etcd= ' -- $cur) )
     fi
 }
 
@@ -119,7 +93,7 @@ _calicoctlpy_version()
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -W ' ' -- $cur) )
+        COMPREPLY=( $( compgen -W '--etcd= ' -- $cur) )
     fi
 }
 
@@ -129,7 +103,7 @@ _calicoctlpy_master()
     cur="${COMP_WORDS[COMP_CWORD]}"
 
     if [ $COMP_CWORD -ge 2 ]; then
-        COMPREPLY=( $( compgen -W '--ip= --etcd= ' -- $cur) )
+        COMPREPLY=( $( compgen -W '--ip= --etcd= --master-image= ' -- $cur) )
     fi
 }
 

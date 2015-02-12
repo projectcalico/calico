@@ -4,60 +4,58 @@ FROM phusion/baseimage:0.9.16
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
 
-RUN apt-get update
+# Install Calico APT repo.  Note, we delay the apt-get update until 
+# below so that the update is done in the same FS layer as the 
+# install, making it unlikely to be out of sync.
+RUN curl -L http://binaries.projectcalico.org/repo/key | apt-key add - && \
+    echo "deb http://binaries.projectcalico.org/repo ./" >> /etc/apt/sources.list && \
+    echo "Package: *" >> /etc/apt/preferences &&\
+    echo "Pin: origin binaries.projectcalico.org" >> /etc/apt/preferences && \
+    echo "Pin-Priority: 1001" >> /etc/apt/preferences
 
-# Bird.
-RUN apt-get install -y bird
-RUN mkdir /etc/service/bird
-ADD bird.sh /etc/service/bird/run
-
-# Calico
-RUN apt-get install -y python-zmq iptables ipset curl
-RUN curl -L http://binaries.projectcalico.org/repo/key | apt-key add -
-RUN echo "deb http://binaries.projectcalico.org/repo ./" >> /etc/apt/sources.list
-RUN echo "Package: *" >> /etc/apt/preferences
-RUN echo "Pin: origin binaries.projectcalico.org" >> /etc/apt/preferences
-RUN echo "Pin-Priority: 1001" >> /etc/apt/preferences
-RUN apt-get update
-RUN apt-get dist-upgrade -y
-RUN apt-get install -y calico-felix calico-acl-manager
-RUN mkdir /etc/service/felix
-ADD felix.sh /etc/service/felix/run
+# Install dependencies shared with the master node.  If we can keep this
+# in sync then we'll share an FS layer with the master to speed downloads.
+RUN apt-get update && \
+    apt-get install -qy \
+        calico-felix \
+        calico-acl-manager \
+        ipset \
+        iptables \
+        libffi-dev \
+        libssl-dev \
+        libyaml-dev \
+        python-dev \
+        python-docopt \
+        python-pip \
+        python-pyasn1 \
+        python-zmq && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Confd
-RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/confd-0.7.1-linux-amd64 -o confd
-RUN chmod +x confd
-RUN mkdir /etc/service/confd
-ADD confd.sh /etc/service/confd/run
+RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/confd-0.7.1-linux-amd64 -o confd && \
+    chmod +x confd
+
+# Node-specific apt-get.
+RUN apt-get update && \
+    apt-get install -qy \
+        bird \
+        build-essential 
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Powerstrip
-RUN apt-get -qy install python-pip python-dev python-pyasn1 libyaml-dev libffi-dev libssl-dev
-RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz -o powerstrip.tar.gz
-RUN tar -xzf powerstrip.tar.gz
-RUN mv powerstrip-0.0.1 powerstrip
-RUN cd powerstrip && python setup.py install
-ADD adapters.yml /etc/powerstrip/adapters.yml
-RUN mkdir /etc/service/powerstrip
-ADD powerstrip.sh /etc/service/powerstrip/run
+RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz \
+            -o powerstrip.tar.gz && \
+    tar -xzf powerstrip.tar.gz && \
+    rm powerstrip.tar.gz && \
+    mv powerstrip-0.0.1 powerstrip && \
+    cd powerstrip && \
+    sed -i s/2375/2377/ powerstrip.tac && \
+    python setup.py install
 
-# WORKAROUND to change Powerstrip port
-RUN sed -i s/2375/2377/ /powerstrip/powerstrip.tac
+# Copy in our custom configuration files etc.
+COPY root_overlay /
 
-# Powerstrip Calico Adapter
-RUN apt-get -y install -q build-essential
-# Already installed by Powerstrip
-# RUN apt-get -y install -q python-dev libffi-dev libssl-dev python-pip
-RUN mkdir /adapter
-ADD adapter /adapter
+# Install Powerstrip Calico Adapter dependencies.
 RUN pip install -r /adapter/requirements.txt
-RUN mkdir /etc/service/powerstrip-calico
-ADD powerstrip-calico.sh /etc/service/powerstrip-calico/run
-
-# Clean up APT when done.
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-ADD rc.local /etc/rc.local
-ADD conf.d conf.d
-ADD templates templates
-RUN mkdir /config
-RUN mkdir -p /var/log/calico

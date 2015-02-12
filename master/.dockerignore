@@ -1,0 +1,4 @@
+.dockerfile
+__init__.py
+build.sh
+*~

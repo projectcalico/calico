@@ -1,5 +1,6 @@
 pyinstaller
 infi.projector
+infi.docopt_completion
 docopt
 sh
 requests

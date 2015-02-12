@@ -7,12 +7,13 @@ Calico provide IP connectivity between Docker containers on different hosts. Thi
 You can run these instructions on a Windows, Mac or Linux computer. You'll be guided through setting up a two node CoreOS cluster, creating some Calico enabled endpoints and pinging between them. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
 
 ### Initial environment setup
-So, to get started, install Vagrant and Virtualbox for your OS. You'll also need Git to get hold of the CoreOS Vagrantfile.
+So, to get started, install Vagrant, Virtualbox and Git for your OS.
 * https://www.virtualbox.org/wiki/Downloads (no need for the extensions, just the core package)
 * https://www.vagrantup.com/downloads.html
 * http://git-scm.com/downloads
 
-Follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  At a minimum you'll need to
+Either use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example or just
+follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  At a minimum you'll need to
 * copy `config.rb.sample` as `config.rb` and copy `user-data.sample` as `user-data`
 * set the following in config.rb 
   * `$update_channel='alpha'`
@@ -36,45 +37,56 @@ To connect to your servers
 
 At this point, it's worth checking that your servers can ping each other reliabl.
 * From core-01
-   * `ping 172.17.8.102`
+```
+ping 172.17.8.102
+```
 * From core-02
-   * `ping 172.17.8.101`
+```
+ping 172.17.8.101
+```
+
 If you see ping failures, the likely culprit is a problem with then Virtualbox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
    
 ### Installing Calico
-Download Calico onto both servers by SSHing onto them and running
-* `wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.4/calicoctl`
-* `chmod +x calicoctl`
-
+If you didn't use the calico-coreos-vagrant-example Vagrantfile, you'll need to download Calico onto both servers by SSHing onto them and running
+```
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.6/calicoctl
+chmod +x calicoctl
+```
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
 
 * Start the master on `core-01`
-  * `sudo ./calicoctl master --ip=172.17.8.101`
-
+```
+sudo ./calicoctl master --ip=172.17.8.101
+```
 Now start calico on all the nodes (only do this after the master is started)
 * On core-01
-   * ` sudo ./calicoctl node --ip=172.17.8.101`
+```
+sudo ./calicoctl node --ip=172.17.8.101
+```
 * On core-02
-   * ` sudo ./calicoctl node --ip=172.17.8.102`
+```
+sudo ./calicoctl node --ip=172.17.8.102
+```
 
 This will start a container. Check they are running
-* `sudo docker ps`
+```
+sudo docker ps
+```
 
 You should see output like this on the master
 
 ```
-    core@core-01 ~ $ docker ps
-    CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:latest     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-    17a54cc8f88a        calico/master:latest   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
-
+core@core-01 ~ $ docker ps
+CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
+077ceae44fe3        calico/node:latest     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+17a54cc8f88a        calico/master:latest   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
 ```
 And like this on the other hosts
 ```
-    core@core-02 ~ $ docker ps
-    CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
-    f770a8acbb11        calico/node:latest   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-
+core@core-02 ~ $ docker ps
+CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
+f770a8acbb11        calico/node:latest   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 ```
 
 #### Using Calico: Creating networked endpoints
@@ -83,57 +95,75 @@ All containers need to be assigned IPs in the `192.168.0.0/16` range.
 To allow networking to be set up during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
 
 On both hosts run
-* `export DOCKER_HOST=localhost:2377`
+```
+export DOCKER_HOST=localhost:2377
+```
 
 (Note - this export will only persist for your current SSH session)
 
 Containers can now be started using normal docker commands, but an IP address needs to be assigned. The is done by passing in an environment variable. e.g. `docker run -e CALICO_IP=192.168.1.1 -tid --name node1 busybox`
 
 You need to connect directly to docker to attach to containers. This can be done like this
-* `DOCKER_HOST=localhost:2375 docker attach node1`
+```
+DOCKER_HOST=localhost:2375 docker attach node1
+```
 
 Hit enter a few times to get a prompt. To get back out of the container and leave it running, remember to use `Ctrl-P,Q` rather than `exit`.
 
 So, go ahead and start a few of containers on each host.
 * On core-01
-   * `A=$(docker run -e CALICO_IP=192.168.1.1 -tid busybox)`
-   * `B=$(docker run -e CALICO_IP=192.168.1.2 -tid busybox)`
-   * `C=$(docker run -e CALICO_IP=192.168.1.3 -tid busybox)`
-   
+```
+A=$(docker run -e CALICO_IP=192.168.1.1 -tid busybox)
+B=$(docker run -e CALICO_IP=192.168.1.2 -tid busybox)
+C=$(docker run -e CALICO_IP=192.168.1.3 -tid busybox)
+```
 * On core-02
-   * `D=$(docker run -e CALICO_IP=192.168.1.4 -tid busybox)`
-   * `E=$(docker run -e CALICO_IP=192.168.1.5 -tid busybox)`
+```
+D=$(docker run -e CALICO_IP=192.168.1.4 -tid busybox)
+E=$(docker run -e CALICO_IP=192.168.1.5 -tid busybox)
+```
 
 At this point, the containers have not been added to any security groups so they won't be able to communicate with any other containers.
 
 Create some security groups (this can be done on either host)
-* ` sudo ./calicoctl addgroup GROUP_A_C_E`
-* ` sudo ./calicoctl addgroup GROUP_B`
-* ` sudo ./calicoctl addgroup GROUP_D`
+```
+sudo ./calicoctl addgroup GROUP_A_C_E
+sudo ./calicoctl addgroup GROUP_B
+sudo ./calicoctl addgroup GROUP_D
+```
 
 Now add the containers to the security groups
 On core-01
-* `sudo ./calicoctl addtogroup $A GROUP_A_C_E`
-* `sudo ./calicoctl addtogroup $B GROUP_B`
-* `sudo ./calicoctl addtogroup $C GROUP_A_C_E`
+```
+sudo ./calicoctl addtogroup $A GROUP_A_C_E
+sudo ./calicoctl addtogroup $B GROUP_B
+sudo ./calicoctl addtogroup $C GROUP_A_C_E
+```
 
 On core-02
-* `sudo ./calicoctl addtogroup $D GROUP_D`
-* `sudo ./calicoctl addtogroup $E GROUP_A_C_E`
+```
+sudo ./calicoctl addtogroup $D GROUP_D
+sudo ./calicoctl addtogroup $E GROUP_A_C_E
+```
 
 Now, check that A can ping C (192.168.1.3) and E (192.168.1.5)
-
-* `docker exec $A ping -c 4 192.168.1.3`
-* `docker exec $A ping -c 4 192.168.1.5`
+```
+docker exec $A ping -c 4 192.168.1.3
+docker exec $A ping -c 4 192.168.1.5
+```
 
 Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4).
-* `docker exec $A ping -c 4 192.168.1.2`
-* `docker exec $A ping -c 4 192.168.1.4`
+```
+docker exec $A ping -c 4 192.168.1.2
+docker exec $A ping -c 4 192.168.1.4
+```
 
 B and D are in their own groups so shouldn't be able to ping anyone else.
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
-* `sudo ./calicoctl reset`
+```
+sudo ./calicoctl reset
+```
 
 ## Troubleshooting
 

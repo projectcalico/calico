@@ -1,3 +1,8 @@
+#!/bin/bash
+
+set -e
+set -x
+
 pyinstaller calicoctl.py -a -F -s --clean
 mv dist/calicoctl .
 docopt-completion --manual-bash ./calicoctl.py
