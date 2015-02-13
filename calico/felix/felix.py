@@ -357,9 +357,6 @@ class FelixAgent(object):
             # Update the endpoint
             endpoint = self.endpoints[endpoint_id]
 
-            # Update the endpoint state; this can fail.
-            self._update_endpoint(endpoint, message.fields)
-
         except KeyError:
             log.error("Received update for absent endpoint %s", endpoint_id)
 
@@ -368,12 +365,17 @@ class FelixAgent(object):
                 "message": "Endpoint %s does not exist" % endpoint_id,
             }
 
-        except InvalidRequest as error:
-            # Invalid request fields. Return an error.
-            fields = {
-                "rc": RC_INVALID,
-                "message": error.value,
-            }
+        else:
+            try:
+                # Update the endpoint state; this can fail.
+                self._update_endpoint(endpoint, message.fields)
+
+            except InvalidRequest as error:
+                # Invalid request fields. Return an error.
+                fields = {
+                    "rc": RC_INVALID,
+                    "message": error.value,
+                }
 
         # Now we send the response.
         sock = self.sockets[Socket.TYPE_EP_REP]
@@ -401,6 +403,15 @@ class FelixAgent(object):
             # endpoints.
             endpoint = self.endpoints.pop(delete_id)
 
+        except KeyError:
+            log.error("Received destroy for absent endpoint %s", delete_id)
+
+            fields = {
+                "rc": RC_NOTEXIST,
+                "message": "Endpoint %s does not exist" % delete_id,
+            }
+
+        else:
             # Unsubscribe from ACL information for this endpoint.
             self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
                 delete_id.encode('utf-8')
@@ -409,13 +420,6 @@ class FelixAgent(object):
             # Remove programming for this endpoint.
             endpoint.remove()
 
-        except KeyError:
-            log.error("Received destroy for absent endpoint %s", delete_id)
-
-            fields = {
-                "rc": RC_NOTEXIST,
-                "message": "Endpoint %s does not exist" % delete_id,
-            }
 
         # Send the ENDPOINTDESTROYED response.
         sock = self.sockets[Socket.TYPE_EP_REP]
