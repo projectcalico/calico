@@ -38,6 +38,7 @@ import json
 import time
 from neutron import context as ctx
 from neutron import manager
+from zmq.error import Again
 
 LOG = log.getLogger(__name__)
 
@@ -439,6 +440,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.info("Response: %s" % rsp)
             else:
                 LOG.error("Response: %s" % rsp)
+        except Again:
+            LOG.error("No response from Felix within allowed time (%sms)" %
+                      ENDPOINT_RESPONSE_TIMEOUT)
+            self._clear_socket_to_felix_peer(hostname)
+            raise FelixUnavailable(op, port['id'], hostname)
         except:
             LOG.exception("Exception receiving ENDPOINT* response from Felix")
             self._clear_socket_to_felix_peer(hostname)
@@ -607,6 +613,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 else:
                     LOG.error("Unexpected response from Felix on %s: %s"
                               % (hostname, rsp))
+            except Again:
+                LOG.error("No response from Felix within allowed time (%sms)" %
+                          HEARTBEAT_RESPONSE_TIMEOUT)
+                self._clear_socket_to_felix_peer(hostname)
+                return
             except:
                 LOG.exception("Exception receiving HEARTBEAT from Felix on %s"
                               % hostname)
