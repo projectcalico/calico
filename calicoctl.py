@@ -494,6 +494,7 @@ def node(ip, node_image):
 
     docker("run", "-e",  "IP=%s" % ip,
                   "--name=calico-node",
+                  "--restart=always",
                   "--privileged",
                   "--net=host",  # BIRD/Felix can manipulate the base networking stack
                   "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip access Docker
@@ -533,12 +534,13 @@ def master(ip, master_image):
     
     # Start the container
     docker("run", "--name=calico-master",
-                 "--privileged",
-                 "--net=host",
-                 "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                 "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
-                 "-d",
-                 master_image, _err=process_output, _out=output).wait()
+                  "--restart=always",
+                  "--privileged",
+                  "--net=host",
+                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
+                  "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+                  "-d",
+                  master_image, _err=process_output, _out=output).wait()
     cid = output.getvalue().strip()
     output.close()
     print "Calico master is running with id: %s" % cid
