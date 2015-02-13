@@ -18,7 +18,7 @@
 
 Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
 
- - You'll want 1, 3, 5, or 7 etcd  nodes (odd numbers prevent split brain)
+ - You'll want 1, 3, 5, or 7 etcd  nodes (with 3 or more [strongly recommended](https://github.com/coreos/etcd/blob/master/Documentation/admin_guide.md#optimal-cluster-size) for production environments)
  - A simple 1 node cluster can easily be installed by following the [getting started](https://github.com/coreos/etcd/releases/) instructions.
  - See the [etcd clustering guide](https://github.com/coreos/etcd/blob/master/Documentation/clustering.md) for more information on setting up a cluster. 
  - We recommend you start etcd in proxy mode on all other nodes because Calico accesses etcd on `localhost:4001` by default.
