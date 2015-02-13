@@ -684,7 +684,6 @@ def save_diags():
     Gather Calico diagnostics for bug reporting.
     :return: None
     """
-
     script = """
 #!/bin/bash
 [ -z $BASH ] && echo "You must run this script in bash" && exit 1
@@ -696,15 +695,18 @@ IPTABLES_PREFIX=iptables
 IP6TABLES_PREFIX=ip6tables
 CALICO_DIR=/var/log/calico
 date=`date +"%F_%H-%M-%S"`
-diags_dir="/tmp/$date"
+diags_dir=`mktemp -d`
 system=`hostname`
-echo $diags_dir
-mkdir $diags_dir
-pushd $diags_dir
+echo "Using temp dir: $diags_dir"
+pushd $diags_dir >/dev/null
 
 echo DATE=$date > date
 echo $system > hostname
 
+echo "Dumping netstat output"
+netstat -an > $diags_dir/netstat
+
+echo "Dumping routes"
 for cmd in "route -n" "ip route" "ip -6 route"
 do
   echo $cmd >> $ROUTE_FILE
@@ -713,34 +715,43 @@ do
 done
 netstat -an > netstat
 
-iptables -v -L > $IPTABLES_PREFIX
-iptables -v -L -t nat > $IPTABLES_PREFIX-nat
-iptables -v -L -t mangle > $IPTABLES_PREFIX-mangle
-iptables -v -L > $IP6TABLES_PREFIX
-iptables -v -L -t nat > $IP6TABLES_PREFIX-nat
-iptables -v -L -t mangle > $IP6TABLES_PREFIX-mangle
+echo "Dumping iptables"
+iptables-save > $IPTABLES_PREFIX
 ipset list > ipset
 
+echo "Copying Calico logs"
 cp -a $CALICO_DIR .
+
+echo "Dumping datastore"
 curl -s -L http://127.0.0.1:4001/v2/keys/calico?recursive=true -o etcd_calico
 
-mkdir logs
-cp /var/log/*log logs
+FILENAME=diags-`date +%Y%m%d_%H%M%S`.tar.gz
 
-tar -zcf $diags_dir.gz *
+tar -zcf $FILENAME *
+echo "Diags saved to $FILENAME in $diags_dir"
 
-popd
+echo "Uploading file. It will be available for 14 days from the following URL (printed when the upload completes)"
+curl --upload-file $FILENAME https://transfer.sh/$FILENAME
 
-echo "Diags saved to $diags_dir.gz"
+popd >/dev/null
+
+echo "Done"
 """
-    # Pipe the diags script to bash
-    # TODO: reimplement this in Python
-    proc = subprocess.Popen("bash",
-                            stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
-    (out, _) = proc.communicate(script)
-    print out #TODO - Make this stream the output
+    bash = sh.Command._create('bash')
+    bash(_in=script, _err=process_output, _out=process_output).wait()
+    # # Pipe the diags script to bash
+    # # TODO: reimplement this in Python
+    # proc = subprocess.Popen("bash",
+    #                         stdin=subprocess.PIPE,
+    #                         stdout=subprocess.PIPE,
+    #                         stderr=subprocess.STDOUT,
+    #                         bufsize=1)
+    #
+    # for line in iter(proc.stdout.readline, b''):
+    #     print line,
+    # proc.communicate()
+    # # (out, _) = proc.communicate(script)
+    # # print out #TODO - Make this stream the output
 
 def ipv4_pool(dc_args):
     """
