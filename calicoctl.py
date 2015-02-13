@@ -35,7 +35,9 @@ Options:
 
 """
 from subprocess import call, check_output, CalledProcessError
+import netaddr
 import os
+import re
 from docopt import docopt
 import etcd
 import sys
@@ -432,9 +434,7 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         group_path = GROUP_PATH % {"group_id": group_id}
         self.etcd_client.delete(group_path + "member/" + endpoint_id)
 
-def validate_arguments(arguments):
-    # print(arguments)
-    return True
+
 
 
 def create_dirs():
@@ -775,6 +775,20 @@ def show_ip_pools(version):
     pools = client.get_ip_pools(version)
     for pool in pools:
         print pool
+
+def validate_arguments(arguments):
+    group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
+    ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"]) or \
+                                         netaddr.valid_ipv6(arguments["--ip"])
+    if not group_ok:
+        print "Groups must be <30 character longs and can only container numbers, letters and " \
+              "underscore."
+    if not ip_ok:
+        print "Invalid --ip argument"
+    # TODO
+    # --container
+    # --etcd
+    return ip_ok and group_ok
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
