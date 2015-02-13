@@ -67,6 +67,7 @@ HOST_PATH = "/calico/host/%(hostname)s/"
 MASTER_IP_PATH = "/calico/master/ip"
 GROUPS_PATH = "/calico/network/group/"
 GROUP_PATH = "/calico/network/group/%(group_id)s/"
+GROUP_MEMBER_PATH = "/calico/network/group/%(group_id)s/member"
 CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
@@ -285,6 +286,25 @@ class CalicoCmdLineEtcdClient(object):
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
         return groups
+
+    def get_group_members(self, group_id):
+        """
+        Get the all configured groups.
+        :return: a list of members
+        """
+        members = []
+        try:
+            etcd_members = self.etcd_client.read(GROUP_MEMBER_PATH % {"group_id": group_id},
+                                                 recursive=True).leaves
+            for child in etcd_members:
+                id = child.key.split("/")[-1]
+                if id != "member":
+                    members.append(id)
+        except KeyError:
+            # Means the GROUPS_MEMBER_PATH was not set up.  So, group does not exist.
+            pass
+        print "%s : %s" % (group_id, members)
+        return members
 
     def get_ep_id_from_cont(self, container_id):
         """
@@ -617,10 +637,21 @@ def remove_group(group_name):
 
 def show_groups(detailed):
     client = CalicoCmdLineEtcdClient(etcd_authority)
+    groups = client.get_groups()
 
-    x = PrettyTable(["ID", "Name"])
-    for group_id, name in client.get_groups().iteritems():
-        x.add_row([group_id, name])
+    if detailed:
+        x = PrettyTable(["ID", "Name", "Container ID"])
+        for group_id, name in groups.iteritems():
+            members = client.get_group_members(group_id)
+            if members:
+                for member in members:
+                    x.add_row([group_id, name, member])
+            else:
+                x.add_row([group_id, name, "No members"])
+    else:
+        x = PrettyTable(["ID", "Name"])
+        for group_id, name in groups.iteritems():
+            x.add_row([group_id, name])
 
     print x
 
