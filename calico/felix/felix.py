@@ -347,8 +347,11 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint update: %s", message.fields)
 
-        # Get the endpoint data from the message.
+        # Get the endpoint ID from the message.
         endpoint_id = message.fields['endpoint_id']
+
+        # Initially assume success.
+        fields = {"rc": RC_SUCCESS, "message": ""}
 
         try:
             # Update the endpoint
@@ -356,11 +359,6 @@ class FelixAgent(object):
 
             # Update the endpoint state; this can fail.
             self._update_endpoint(endpoint, message.fields)
-
-            fields = {
-                "rc": RC_SUCCESS,
-                "message": "",
-            }
 
         except KeyError:
             log.error("Received update for absent endpoint %s", endpoint_id)
@@ -392,26 +390,35 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint destroy: %s", message.fields)
 
+        # Get the endpoint ID from the message.
         delete_id = message.fields['endpoint_id']
 
+        # Initially assume success.
+        fields = {"rc": RC_SUCCESS, "message": ""}
+
         try:
+            # Remove this endpoint from Felix's list of managed
+            # endpoints.
             endpoint = self.endpoints.pop(delete_id)
+
+            # Unsubscribe from ACL information for this endpoint.
+            self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
+                delete_id.encode('utf-8')
+            )
+
+            # Remove programming for this endpoint.
+            endpoint.remove()
+
         except KeyError:
             log.error("Received destroy for absent endpoint %s", delete_id)
-            return
 
-        # Unsubscribe endpoint.
-        self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
-            delete_id.encode('utf-8')
-        )
-        endpoint.remove()
+            fields = {
+                "rc": RC_NOTEXIST,
+                "message": "Endpoint %s does not exist" % delete_id,
+            }
 
-        # Send a message indicating our success.
+        # Send the ENDPOINTDESTROYED response.
         sock = self.sockets[Socket.TYPE_EP_REP]
-        fields = {
-            "rc": RC_SUCCESS,
-            "message": "",
-        }
         sock.send(Message(Message.TYPE_EP_RM, fields))
 
         return

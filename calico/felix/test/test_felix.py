@@ -303,6 +303,44 @@ class TestBasic(unittest.TestCase):
         add_endpoint_rules(endpoint.suffix, endpoint.tap, addr, None, endpoint.mac)
         stub_fiptables.check_state(expected_iptables)
 
+    def test_destroy_absent_endpoint(self):
+        """
+        Test receiving ENDPOINTDESTROYED for a non-existent endpoint.
+        """
+        common.default_logging()
+        context = stub_zmq.Context()
+        agent = felix.FelixAgent(config_path, context)
+        context.add_poll_result(0)
+        agent.run()
+
+        # Now we want to reply to the RESYNC request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': 0,
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result = context.add_poll_result(50)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        # Send ENDPOINTDESTROYED for an endpoint that does not exist.
+        addr = "1.2.3.4"
+        endpoint = CreatedEndpoint([addr])
+        log.debug("Build endpoint destroyed : %s", endpoint.id)
+        poll_result = context.add_poll_result(100)
+        poll_result.add(TYPE_EP_REP, endpoint.destroy_req)
+        agent.run()
+
+        #*********************************************************************#
+        #* Expect an ENDPOINTDESTROYED response saying NOTEXIST.             *#
+        #*********************************************************************#
+        endpoint_destroyed_rsp = context.sent_data[TYPE_EP_REP].pop()
+        self.assertEqual(endpoint_destroyed_rsp['rc'], "NOTEXIST")
+
     def test_rule_reordering(self):
         # TODO: Want to check that with extra rules, the extras get tidied up.
         pass
