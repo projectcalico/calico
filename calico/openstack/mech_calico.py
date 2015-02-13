@@ -485,13 +485,65 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def update_port_postcommit(self, context):
         LOG.info("UPDATE_PORT_POSTCOMMIT: %s" % context)
         port = context._port
+        original = context.original
         if self._port_is_endpoint_port(port):
             LOG.info("Updated port: %s" % port)
-            self.send_endpoint(port['binding:host_id'],
-                               None,
-                               port,
-                               'UPDATED',
-                               context._plugin_context)
+            LOG.info("Original: %s" % original)
+            if port['binding:vif_type'] == 'unbound':
+                #*************************************************************#
+                #* This indicates part 1 of a port being migrated: the port  *#
+                #* being unbound from its old location.  The old compute     *#
+                #* host is available from context.original.  We should send  *#
+                #* an ENDPOINTDESTROYED to the old compute host.             *#
+                #*                                                           *#
+                #* Ref: http://lists.openstack.org/pipermail/openstack-dev/  *#
+                #* 2014-February/027571.html                                 *#
+                #*************************************************************#
+                LOG.info("Migration part 1")
+                self.send_endpoint(original['binding:host_id'],
+                                   None,
+                                   original,
+                                   'DESTROYED',
+                                   context._plugin_context)
+            elif original['binding:vif_type'] == 'unbound':
+                #*************************************************************#
+                #* This indicates part 2 of a port being migrated: the port  *#
+                #* being bound to its new location.  We should send an       *#
+                #* ENDPOINTCREATED to the new compute host.                  *#
+                #*                                                           *#
+                #* Ref: http://lists.openstack.org/pipermail/openstack-dev/  *#
+                #* 2014-February/027571.html                                 *#
+                #*************************************************************#
+                LOG.info("Migration part 2")
+                self.send_endpoint(port['binding:host_id'],
+                                   None,
+                                   port,
+                                   'CREATED',
+                                   context._plugin_context)
+            elif original['binding:host_id'] != port['binding:host_id']:
+                #*************************************************************#
+                #* Migration as implemented in Icehouse.                     *#
+                #*************************************************************#
+                LOG.info("Migration as implemented in Icehouse")
+                self.send_endpoint(original['binding:host_id'],
+                                   None,
+                                   original,
+                                   'DESTROYED',
+                                   context._plugin_context)
+                self.send_endpoint(port['binding:host_id'],
+                                   None,
+                                   port,
+                                   'CREATED',
+                                   context._plugin_context)
+            else:
+                #*************************************************************#
+                #* This is a non-migration-related update.                   *#
+                #*************************************************************#
+                self.send_endpoint(port['binding:host_id'],
+                                   None,
+                                   port,
+                                   'UPDATED',
+                                   context._plugin_context)
 
     def delete_port_postcommit(self, context):
         LOG.info("DELETE_PORT_POSTCOMMIT: %s" % context)
