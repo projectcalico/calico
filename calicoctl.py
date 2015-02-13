@@ -8,17 +8,14 @@ Usage:
   calicoctl node --ip=<IP>
                  [--etcd=<ETCD_AUTHORITY>]
                  [--node-image=<DOCKER_IMAGE_NAME>]
-  calicoctl shownodes [--etcd=<ETCD_AUTHORITY>]
-  calicoctl showendpoints [--etcd=<ETCD_AUTHORITY>]
   calicoctl status [--etcd=<ETCD_AUTHORITY>]
   calicoctl version [--etcd=<ETCD_AUTHORITY>]
   calicoctl shownodes [--detailed] [--etcd=<ETCD_AUTHORITY>]
-  calicoctl showgroups [--detailed] [--etcd=<ETCD_AUTHORITY>]
-  calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
-  calicoctl addtogroup <CONTAINER_ID> <GROUP>
-                       [--etcd=<ETCD_AUTHORITY>]
-  calicoctl showgroups [--etcd=<ETCD_AUTHORITY>]
-  calicoctl removegroup <GROUP> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl group show [--detailed] [--etcd=<ETCD_AUTHORITY>]
+  calicoctl group add <GROUP> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl group remove <GROUP> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl group addmember <GROUP> <CONTAINER> [--etcd=<ETCD_AUTHORITY>]
+  calicoctl group removemember <GROUP> <CONTAINER> [--etcd=<ETCD_AUTHORITY>]
   calicoctl ipv4 pool add <CIDR> [--etcd=<ETCD_AUTHORITY>]
   calicoctl ipv4 pool del <CIDR> [--etcd=<ETCD_AUTHORITY>]
   calicoctl ipv4 pool show [--etcd=<ETCD_AUTHORITY>]
@@ -404,6 +401,36 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         group_path = GROUP_PATH % {"group_id": group_id}
         self.etcd_client.write(group_path + "member/" + endpoint_id, "")
 
+    def remove_container_from_group(self, container_name, group_name):
+        """
+        Add a container (on this host) to the group with the given name.  This adds the first
+        endpoint on the container to the group.
+
+        :param container_name: The Docker container name or ID.
+        :param group_name:  The Calico security group name.
+        :return: None.
+        """
+
+        # Resolve the name to ID.
+        try:
+            container_id = self.get_container_id(container_name)
+        except pydocker.errors.APIError as e:
+            if e.response.status_code == 404:
+                # Re-raise as a key error for consistency.
+                raise KeyError("Container %s was not found." % container_name)
+            else:
+                raise
+
+        # Get the group UUID.
+        group_id = self.get_group_id(group_name)
+        if not group_id:
+            raise KeyError("Group with name %s was not found." % group_name)
+
+        endpoint_id = self.get_ep_id_from_cont(container_id)
+
+        # Remove the endpoint from the group.
+        group_path = GROUP_PATH % {"group_id": group_id}
+        self.etcd_client.delete(group_path + "member/" + endpoint_id)
 
 def validate_arguments(arguments):
     # print(arguments)
@@ -560,9 +587,23 @@ def add_container_to_group(container_name, group_name):
     client = CalicoDockerEtcd(etcd_authority)
     try:
         client.add_container_to_group(container_name, group_name)
+        print "Added container %s to %s" % (container_name, group_name)
     except KeyError as e:
         print str(e)
-    return
+
+def remove_container_from_group(container_name, group_name):
+    """
+    Remove the container from the listed group.
+    :param container_name: ID of the container to remove.
+    :param group_name: Name of the group.
+    :return: None
+    """
+    client = CalicoDockerEtcd(etcd_authority)
+    try:
+        client.remove_container_from_group(container_name, group_name)
+        print "Removed container %s from %s" % (container_name, group_name)
+    except KeyError as e:
+        print str(e)
 
 def remove_group(group_name):
     #TODO - Don't allow removing a group that has enpoints in it.
@@ -744,26 +785,30 @@ if __name__ == '__main__':
         if arguments["master"]:
             master_image = arguments['--master-image']
             master(arguments["--ip"], master_image=master_image)
-        if arguments["node"]:
+        elif arguments["node"]:
             node_image = arguments['--node-image']
             node(arguments["--ip"], node_image=node_image)
-        if arguments["status"]:
+        elif arguments["status"]:
             status()
-        if arguments["reset"]:
+        elif arguments["reset"]:
             reset()
-        if arguments["addgroup"]:
-            add_group(arguments["<GROUP>"])
-        # if arguments["removegroup"]:
-        #     remove_group(arguments["<GROUP>"])
-        if arguments["showgroups"]:
-            show_groups(arguments["--detailed"])
-        if arguments["addtogroup"]:
-            add_container_to_group(arguments["<CONTAINER_ID>"],
-                                   arguments["<GROUP>"])
-        if arguments["diags"]:
+        elif arguments["group"]:
+            if arguments["add"]:
+                add_group(arguments["<GROUP>"])
+            if arguments["remove"]:
+                remove_group(arguments["<GROUP>"])
+            if arguments["show"]:
+                show_groups(arguments["--detailed"])
+            if arguments["addmember"]:
+                add_container_to_group(arguments["<CONTAINER>"],
+                                       arguments["<GROUP>"])
+            if arguments["removemember"]:
+                remove_container_from_group(arguments["<CONTAINER>"],
+                                            arguments["<GROUP>"])
+        elif arguments["diags"]:
             save_diags()
-        if arguments["shownodes"]:
+        elif arguments["shownodes"]:
             show_nodes(arguments["--detailed"])
-        if arguments["ipv4"]:
+        elif arguments["ipv4"]:
             assert arguments["pool"]
             ipv4_pool(arguments)
