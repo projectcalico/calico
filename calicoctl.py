@@ -12,6 +12,8 @@ Usage:
   calicoctl showendpoints [--etcd=<ETCD_AUTHORITY>]
   calicoctl status [--etcd=<ETCD_AUTHORITY>]
   calicoctl version [--etcd=<ETCD_AUTHORITY>]
+  calicoctl shownodes [--detailed] [--etcd=<ETCD_AUTHORITY>]
+  calicoctl showgroups [--detailed] [--etcd=<ETCD_AUTHORITY>]
   calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
   calicoctl addtogroup <CONTAINER_ID> <GROUP>
                        [--etcd=<ETCD_AUTHORITY>]
@@ -35,7 +37,6 @@ Options:
                           [default: calico/node:v0.0.6]
 
 """
-
 from subprocess import call, check_output, CalledProcessError
 import os
 from docopt import docopt
@@ -76,6 +77,11 @@ POWERSTRIP_PORT = 2377
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 
+class Vividict(dict):
+    # From http://stackoverflow.com/a/19829714
+    def __missing__(self, key):
+        value = self[key] = type(self)()
+        return value
 
 class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
     """
@@ -271,7 +277,7 @@ class CalicoCmdLineEtcdClient(object):
         """
         groups = {}
         try:
-            etcd_groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).children
+            etcd_groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).leaves
             for child in etcd_groups:
                 (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
                 if final_key == "name":
@@ -291,7 +297,7 @@ class CalicoCmdLineEtcdClient(object):
         ep_path = ENDPOINTS_PATH % {"hostname": hostname,
                                     "container_id": container_id}
         try:
-            endpoints = self.etcd_client.read(ep_path).children
+            endpoints = self.etcd_client.read(ep_path).leaves
         except KeyError:
             # Re-raise with better message
             raise KeyError("Container with ID %s was not found." % container_id)
@@ -301,6 +307,41 @@ class CalicoCmdLineEtcdClient(object):
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
         return endpoint_id
 
+    def get_hosts(self):
+        """
+        Get the all configured hosts
+        :return: a dict of hostname => {type => {endpoint_id => {"addrs" => addr, "mac" => mac,
+        "state" => state}}}
+        """
+        hosts = Vividict()
+        try:
+            etcd_hosts = self.etcd_client.read('/calico/host', recursive=True,).leaves
+            for child in etcd_hosts:
+                packed = child.key.split("/")
+                if len(packed) != 10:
+                    continue
+                (_, _, _, host, _, type, container_id, _, endpoint_id, final_key) = packed
+                hosts[host][type][container_id][endpoint_id][final_key] = child.value
+        except KeyError as e:
+            # Means the GROUPS_PATH was not set up.  So, group does not exist.
+            pass
+
+        return hosts
+
+
+def parse_json(value):
+    """
+    Try to parse JSON out into a python data structure, so that when we serialize it back for
+    zeroMQ we're not doing JSON in JSON.
+    """
+    ret_val = value
+    try:
+        ret_val = json.loads(value)
+        log.debug("Parsed JSON %s", value)
+    except ValueError:
+        log.debug("Failed to parse JSON %s", value)
+
+    return ret_val
 
 class CalicoDockerClient(object):
     """
@@ -525,7 +566,7 @@ def add_container_to_group(container_name, group_name):
 
 def remove_group(group_name):
     #TODO - Don't allow removing a group that has enpoints in it.
-    client = CalicoDockerEtcd(etcd_authority)
+    client = CalicoCmdLineEtcdClient(etcd_authority)
     group_id = client.delete_group(group_name)
     if group_id:
         print "Deleted group %s with ID %s" % (group_name, group_id)
@@ -533,8 +574,8 @@ def remove_group(group_name):
         print "Couldn't find group with name %s" % group_name
 
 
-def show_groups():
-    client = CalicoDockerEtcd(etcd_authority)
+def show_groups(detailed):
+    client = CalicoCmdLineEtcdClient(etcd_authority)
 
     x = PrettyTable(["ID", "Name"])
     for group_id, name in client.get_groups().iteritems():
@@ -542,21 +583,24 @@ def show_groups():
 
     print x
 
-def show_nodes():
-    client = CalicoDockerEtcd(etcd_authority)
+def show_nodes(detailed):
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    hosts = client.get_hosts()
 
-    x = PrettyTable(["Host", "Workload Type", "ID", "Addresses", "MAC", "State"])
-    # for group_id, name in client.get_hosts().iteritems():
-    #     x.add_row([group_id, name])
-
-    print x
-
-def show_endpoints():
-    client = CalicoDockerEtcd(etcd_authority)
-
-    x = PrettyTable(["Host", "Workload Type", "ID", "Addresses", "MAC", "State"])
-    # for group_id, name in client.get_hosts().iteritems():
-    #     x.add_row([group_id, name])
+    if detailed:
+        x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID", "Addresses",
+                         "MAC", "State"])
+        for host, types in hosts.iteritems():
+            for type, workloads in types.iteritems():
+                for workload, endpoints in workloads.iteritems():
+                    for endpoint, data in endpoints.iteritems():
+                        x.add_row([host, type, workload, endpoint, data["addrs"], data["mac"],
+                                   data["state"]])
+    else:
+        x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
+        for host, types in hosts.iteritems():
+            for type, workloads in types.iteritems():
+              x.add_row([host, type, len(workloads)])
 
     print x
 
@@ -709,19 +753,17 @@ if __name__ == '__main__':
             reset()
         if arguments["addgroup"]:
             add_group(arguments["<GROUP>"])
-        if arguments["removegroup"]:
-            remove_group(arguments["<GROUP>"])
+        # if arguments["removegroup"]:
+        #     remove_group(arguments["<GROUP>"])
         if arguments["showgroups"]:
-            show_groups()
+            show_groups(arguments["--detailed"])
         if arguments["addtogroup"]:
             add_container_to_group(arguments["<CONTAINER_ID>"],
                                    arguments["<GROUP>"])
         if arguments["diags"]:
             save_diags()
         if arguments["shownodes"]:
-            show_nodes()
-        if arguments["showendpoints"]:
-            show_endpoints()
+            show_nodes(arguments["--detailed"])
         if arguments["ipv4"]:
             assert arguments["pool"]
             ipv4_pool(arguments)
