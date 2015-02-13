@@ -464,6 +464,27 @@ class TestPlugin(unittest.TestCase):
         m_oslo.config.cfg.CONF.bind_host = None
 
         #*********************************************************************#
+        #* Start of day processing: initialization and socket binding.       *#
+        #*********************************************************************#
+        self.start_of_day()
+
+        #*********************************************************************#
+        #* Connect a Felix instance.                                         *#
+        #*********************************************************************#
+        self.felix_connect()
+
+        #*********************************************************************#
+        #* Further mainline steps that we haven't actually implemented yet.  *#
+        #*********************************************************************#
+        self.acl_connect()
+        self.call_noop_entry_points()
+        self.new_endpoint()
+        self.endpoint_update()
+        self.sg_rule_update()
+        self.endpoint_deletion()
+
+    def start_of_day(self):
+        #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
         #*********************************************************************#
         self.driver.initialize()
@@ -486,6 +507,7 @@ class TestPlugin(unittest.TestCase):
         self.acl_pub_socket = self.assert_get_bound_socket('*', 9904)
         print "ACL PUB socket is %s" % self.acl_pub_socket
 
+    def felix_connect(self):
         #*********************************************************************#
         #* Hook the Neutron database.                                        *#
         #*********************************************************************#
@@ -576,6 +598,7 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+    def acl_connect(self):
         #*********************************************************************#
         #* ACL Manager connection.                                           *#
         #*                                                                   *#
@@ -596,7 +619,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Wait for HEARTBEAT_SEND_INTERVAL_SECS, check get      *#
         #*   HEARTBEAT, send HEARTBEAT response.                             *#
         #*********************************************************************#
+        pass
 
+    def call_noop_entry_points(self):
         #*********************************************************************#
         #* Mechanism driver entry points that are currently implemented as   *#
         #* no-ops (because Calico function does not need them).              *#
@@ -607,7 +632,9 @@ class TestPlugin(unittest.TestCase):
         #*   create_subnet_postcommit, update_network_postcommit,            *#
         #*   update_subnet_postcommit.                                       *#
         #*********************************************************************#
+        pass
 
+    def new_endpoint(self):
         #*********************************************************************#
         #* New endpoint processing.                                          *#
         #*                                                                   *#
@@ -634,7 +661,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Check get GROUPUPDATE publication indicating port     *#
         #*   added to default SG ID.                                         *#
         #*********************************************************************#
+        pass
 
+    def endpoint_update(self):
         #*********************************************************************#
         #* Endpoint update processing.                                       *#
         #*                                                                   *#
@@ -646,7 +675,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-Felix: Check get ENDPOINTUPDATED.  Send successful          *#
         #*   response.                                                       *#
         #*********************************************************************#
+        pass
 
+    def sg_rule_update(self):
         #*********************************************************************#
         #* SG rules update processing.                                       *#
         #*                                                                   *#
@@ -658,7 +689,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Check get GROUPUPDATE publication indicating updated  *#
         #*   rules.                                                          *#
         #*********************************************************************#
+        pass
 
+    def endpoint_deletion(self):
         #*********************************************************************#
         #* Endpoint deletion processing.                                     *#
         #*                                                                   *#
@@ -677,6 +710,7 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Check get GROUPUPDATE publication indicating port     *#
         #*   removed from default SG ID.                                     *#
         #*********************************************************************#
+        pass
 
     def test_timing_new_endpoint(self):
 
