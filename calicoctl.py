@@ -5,9 +5,11 @@ Usage:
   calicoctl master --ip=<IP>
                    [--etcd=<ETCD_AUTHORITY>]
                    [--master-image=<DOCKER_IMAGE_NAME>]
+  calicoctl master stop [--force] [--etcd=<ETCD_AUTHORITY>]
   calicoctl node --ip=<IP>
                  [--etcd=<ETCD_AUTHORITY>]
                  [--node-image=<DOCKER_IMAGE_NAME>]
+  calicoctl node stop [--force] [--etcd=<ETCD_AUTHORITY>]
   calicoctl status [--etcd=<ETCD_AUTHORITY>]
   calicoctl version [--etcd=<ETCD_AUTHORITY>]
   calicoctl shownodes [--detailed] [--etcd=<ETCD_AUTHORITY>]
@@ -123,6 +125,19 @@ class CalicoCmdLineEtcdClient(object):
             self.etcd_client.write(workload_dir, None, dir=True)
         return
 
+    def remove_host(self):
+        """
+        Remove a Calico host.
+
+        :param bird_ip: The IP address BIRD should listen on.
+        :return: nothing.
+        """
+        host_path = HOST_PATH % {"hostname": hostname}
+        try:
+            self.etcd_client.delete(host_path, dir=True, recursive=True)
+        except KeyError:
+            pass
+
     def set_master(self, ip):
         """
         Record the IP address of the Calico Master.
@@ -131,6 +146,18 @@ class CalicoCmdLineEtcdClient(object):
         """
         # update the master IP
         self.etcd_client.write(MASTER_IP_PATH, ip)
+
+    def remove_master(self):
+        """
+        Record the IP address of the Calico Master.
+        :param ip: The IP address to reach Calico Master.
+        :return: nothing.
+        """
+        # update the master IP
+        try:
+            self.etcd_client.delete(MASTER_IP_PATH)
+        except KeyError:
+            pass
 
     def get_master(self):
         """
@@ -337,10 +364,12 @@ class CalicoCmdLineEtcdClient(object):
             etcd_hosts = self.etcd_client.read('/calico/host', recursive=True,).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if len(packed) != 10:
-                    continue
-                (_, _, _, host, _, type, container_id, _, endpoint_id, final_key) = packed
-                hosts[host][type][container_id][endpoint_id][final_key] = child.value
+                if len(packed) == 5:
+                    (_, _, _, host, _) = packed
+                    hosts[host] = {}
+                elif len(packed) == 10:
+                    (_, _, _, host, _, type, container_id, _, endpoint_id, final_key) = packed
+                    hosts[host][type][container_id][endpoint_id][final_key] = child.value
         except KeyError as e:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
@@ -465,6 +494,15 @@ def process_output(line):
     sys.stdout.write(line)
 
 
+def node_stop(force):
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    if force or len(client.get_hosts()[hostname]["docker"]) == 0:
+        client.remove_host()
+        docker("stop", "calico-node")
+        print "Node stopped and all configuration removed"
+    else:
+        print "Current host has active endpoints so can't be stopped. Force with --force"
+
 def node(ip, node_image):
     create_dirs()
     modprobe("ip6_tables")
@@ -511,6 +549,16 @@ def node(ip, node_image):
     print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
     print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
     print "before using `docker run` for Calico networking.\n"
+
+
+def master_stop(force):
+    client = CalicoCmdLineEtcdClient(etcd_authority)
+    if force or len(client.get_hosts()) == 0:
+        client.remove_master()
+        docker("stop", "calico-master")
+        print "Master stopped and all configuration removed"
+    else:
+        print "Hosts exist so master can't be stopped. Force with --force"
 
 
 def master(ip, master_image):
@@ -665,6 +713,9 @@ def show_nodes(detailed):
         x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID", "Addresses",
                          "MAC", "State"])
         for host, types in hosts.iteritems():
+            if not types:
+                x.add_row([host, "None", "None", "None", "None", "None", "None"])
+                continue
             for type, workloads in types.iteritems():
                 for workload, endpoints in workloads.iteritems():
                     for endpoint, data in endpoints.iteritems():
@@ -673,6 +724,9 @@ def show_nodes(detailed):
     else:
         x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
         for host, types in hosts.iteritems():
+            if not types:
+                x.add_row([host, "N/A", "0"])
+                continue
             for type, workloads in types.iteritems():
               x.add_row([host, type, len(workloads)])
 
@@ -841,11 +895,15 @@ if __name__ == '__main__':
         print "calicoctl must be run as root"
     elif validate_arguments(arguments):
         if arguments["master"]:
-            master_image = arguments['--master-image']
-            master(arguments["--ip"], master_image=master_image)
+            if arguments["stop"]:
+                master_stop(arguments["--force"])
+            else:
+                master(arguments["--ip"], arguments['--master-image'])
         elif arguments["node"]:
-            node_image = arguments['--node-image']
-            node(arguments["--ip"], node_image=node_image)
+            if arguments["stop"]:
+                node_stop(arguments["--force"])
+            else:
+                node(arguments["--ip"], arguments['--node-image'])
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
