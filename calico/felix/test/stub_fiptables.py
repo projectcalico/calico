@@ -82,25 +82,25 @@ class TableState(fiptables.TableState):
         self.tables_v4.clear()
 
         table = fiptables.Table(IPV4, "filter")
-        fiptables.Chain(table, "INPUT")
-        fiptables.Chain(table, "OUTPUT")
-        fiptables.Chain(table, "FORWARD")
-        fiptables.Chain(table, "OUTPUT")
-        fiptables.Chain(table, "FORWARD")
+        table.get_chain("INPUT")
+        table.get_chain("OUTPUT")
+        table.get_chain("FORWARD")
+        table.get_chain("OUTPUT")
+        table.get_chain("FORWARD")
         self.tables_v4["filter"] = table
 
         table = fiptables.Table(IPV4, "nat")
-        fiptables.Chain(table, "PREROUTING")
-        fiptables.Chain(table, "POSTROUTING")
-        fiptables.Chain(table, "INPUT")
-        fiptables.Chain(table, "OUTPUT")
+        table.get_chain("PREROUTING")
+        table.get_chain("POSTROUTING")
+        table.get_chain("INPUT")
+        table.get_chain("OUTPUT")
         self.tables_v4["nat"] = table
 
         self.tables_v6.clear()
         table = fiptables.Table(IPV6, "filter")
-        fiptables.Chain(table, "INPUT")
-        fiptables.Chain(table, "OUTPUT")
-        fiptables.Chain(table, "FORWARD")
+        table.get_chain("INPUT")
+        table.get_chain("OUTPUT")
+        table.get_chain("FORWARD")
         self.tables_v6["filter"] = table
 
     def check_state(self, expected_state):

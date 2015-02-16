@@ -16,13 +16,13 @@
 felix.fiptables
 ~~~~~~~~~~~~
 
-IP tables management functions. This is a wrapper round python-iptables that
-allows us to mock it out for testing.
+IP tables management functions.
 """
 import logging
 import os
 import re
 import time
+import weakref
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6
@@ -30,6 +30,25 @@ from calico.felix.futils import IPV4, IPV6
 # iptables command to use.
 IPTABLES_CMD = { IPV4: "iptables",
                  IPV6: "ip6tables" }
+
+# We use the following arguments for iptables.
+# General arguments :
+# -w : wait for lock if somebody else is reading / writing
+# -t : specify table name
+#
+# Table commands :
+# -S : read
+#
+# Chain commands :
+# -N : create 
+# -F : flush
+# -X : delete
+#
+# Rule commands :
+# -A : append
+# -I : insert
+# -D : delete
+
 
 # Logger
 log = logging.getLogger(__name__)
@@ -41,12 +60,10 @@ class Chain(object):
     """
     Representation of an iptables chain.
     """
-    def __init__(self, table, name):
-        self.type = table.type
-        self.table = table
+    def __init__(self, type, name):
+        self.type = type
         self.name = name
         self.rules = []
-        self.table.chains[name] = self
 
     def flush(self):
         log.debug("Flushing chain %s", self.name)
@@ -59,8 +76,7 @@ class Chain(object):
         del self.rules[:]
 
     def delete_rule(self, rule):
-        # The rule must exist or it is an error.
-        self.rules.remove(rule)
+        # The rule must exist or there is an error.
         args = [IPTABLES_CMD[self.type],
                 "-w",
                 "-t",
@@ -68,8 +84,9 @@ class Chain(object):
                 "-D",
                 self.name]
         args.extend(rule.generate_fields())
-        self.table.ops.append(args)
         log.debug("Removing rule : %s", args)
+        self.rules.remove(rule)
+        self.table.ops.append(args)
 
     def truncate_rules(self, count):
         """
@@ -110,10 +127,9 @@ class Chain(object):
         Position starts at offset 0, even though iptables wants it to start at
         offset 1.
         """
-        if position == RULE_POSN_LAST:
-            position = len(self.rules)
-
         if force_position:
+            if position == RULE_POSN_LAST:
+                position = len(self.rules)
             if (len(self.rules) <= position) or (rule != self.rules[position]):
                 # Either adding after existing rules, or replacing an existing rule.
                 self._insert_rule(rule, position)
@@ -132,22 +148,48 @@ class Chain(object):
         This method is private; callers outside this module should call
         insert_rule instead.
         """
-        args = [IPTABLES_CMD[self.type],
-                "-w",
-                "-t",
-                self.table.name,
-                "-I",
-                self.name,
-                str(position + 1)]
+        if position == RULE_POSN_LAST:
+            args = [IPTABLES_CMD[self.type],
+                    "-w",
+                    "-t",
+                    self.table.name,
+                    "-A",
+                    self.name]
+            position = len(self.rules)
+        else:
+            args = [IPTABLES_CMD[self.type],
+                    "-w",
+                    "-t",
+                    self.table.name,
+                    "-I",
+                    self.name,
+                    str(position + 1)]
+
         args.extend(rule.generate_fields())
+        log.debug("Creating rule : %s", args)
         self.table.ops.append(args)
         self.rules.insert(position, rule)
-        log.debug("Creating rule : %s", args)
+
+    @property
+    def table(self):
+        """
+        Return the table for this chain.
+        """
+        return self.table_ref()
+
+    @table.setter
+    def table(self, value):
+        """
+        Set the table for this chain. The weakref is a hint that the table and
+        chain reference one another, but when the table goes the chain is no
+        longer in use.
+        """
+        self.table_ref = weakref.ref(value)
 
     def __str__(self):
-        output = "  Chain %s\n" % self.name
-        for rule in self.rules:
-            output += "    %s\n" % rule
+        output = "Chain %s\n" % self.name
+        if self.rules:
+            output += "  " + "\n  ".join(str(rule) for rule in self.rules) + "\n"
 
         return output
 
@@ -162,7 +204,7 @@ class Table(object):
         self.ops = []
 
     def is_chain(self, name):
-        return (name in self.chains)
+        return name in self.chains
 
     def get_chain(self, name):
         """
@@ -175,7 +217,11 @@ class Table(object):
                       name,
                       self.name,
                       self.type)
-            chain = Chain(self, name)
+
+            chain = Chain(self.type, name)
+            self.chains[name] = chain
+            chain.table = self
+
             self.ops.append([IPTABLES_CMD[self.type],
                               "-w",
                               "-t",
@@ -201,8 +247,7 @@ class Table(object):
     def __str__(self):
         output = "TABLE %s (%s)\n" % (self.name, self.type)
         for chain_name in sorted(self.chains.keys()):
-            output += str(self.chains[chain_name])
-            output += "\n"
+            output += "  " + "\n  ".join(str(self.chains[chain_name]).split("\n")) + "\n"
         return output
 
 class Rule(object):
@@ -430,7 +475,9 @@ def read_table(type, name):
             if words[0] in ("-P", "-N"):
                 # We found a chain; remember and go to next line.
                 log.debug("Found chain in table %s : %s", name, line)
-                Chain(table, words[1])
+                chain = Chain(type, words[1])
+                chain.table = table
+                table.chains[chain.name] = chain
                 continue
 
             if words[0] != "-A":
