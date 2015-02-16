@@ -12,8 +12,8 @@ So, to get started, install Vagrant, Virtualbox and Git for your OS.
 * https://www.vagrantup.com/downloads.html
 * http://git-scm.com/downloads
 
-Either use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example or just
-follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  At a minimum you'll need to
+Either use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example for streamlined setup or just
+follow the CoreOS <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">instructions for setting up a cluster under Vagrant</a>.  If following the CoreOS instructions then at a minimum you'll need to
 * copy `config.rb.sample` as `config.rb` and copy `user-data.sample` as `user-data`
 * set the following in config.rb 
   * `$update_channel='alpha'`
@@ -35,7 +35,7 @@ To connect to your servers
    * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
    * `vagrant putty <hostname>`
 
-At this point, it's worth checking that your servers can ping each other reliabl.
+At this point, it's worth checking that your servers can ping each other reliably.
 * From core-01
 ```
 ping 172.17.8.102
