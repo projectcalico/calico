@@ -59,6 +59,7 @@ mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
 modprobe = sh.Command._create('modprobe')
 grep = sh.Command._create('grep')
+sysctl = sh.Command._create("sysctl")
 
 mkdir_p = mkdir.bake('-p')
 
@@ -373,7 +374,8 @@ class CalicoDockerClient(object):
     """
 
     def __init__(self):
-        self.docker_client = pydocker.Client(base_url='unix://var/run/docker.sock')
+        self.docker_client = pydocker.Client(base_url='unix://var/run/docker.sock',
+                                             version="1.16")
 
     def get_container_id(self, container_name):
         """
@@ -477,6 +479,10 @@ def node(ip, node_image, ip6=""):
 
     # Set up etcd
     client = CalicoCmdLineEtcdClient(etcd_authority)
+
+    # Enable IP forwarding.
+    sysctl("-w", "net.ipv4.ip_forward=1")
+    sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
     master_ip = client.get_master()
     if not master_ip:
@@ -582,6 +588,8 @@ def status():
 
     print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
                                                                 "/etc/service/bird/bird.ctl"))
+    print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc6 -s "
+                                                                "/etc/service/bird6/bird6.ctl"))
 
 
 def reset():

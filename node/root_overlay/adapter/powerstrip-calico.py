@@ -23,6 +23,7 @@ from docker import Client
 import netns
 import calico_etcd
 import socket
+from netaddr import IPAddress
 
 _log = logging.getLogger(__name__)
 
@@ -59,7 +60,8 @@ class AdapterResource(resource.Resource):
         resource.Resource.__init__(self)
 
         # Init a Docker client, to save having to do so every time a request comes in.
-        self.docker = Client(base_url='unix://var/run/docker.sock')
+        self.docker = Client(base_url='unix://var/run/docker.sock',
+                             version="1.16")
 
         # Init an etcd client.
         self.etcd = calico_etcd.CalicoEtcdClient()
@@ -126,7 +128,8 @@ class AdapterResource(resource.Resource):
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
-            ip = env_dict[ENV_IP]
+            ip_str = env_dict[ENV_IP]
+            ip = IPAddress(ip_str)
 
             # TODO: process groups
             group = env_dict.get(ENV_GROUP, None)

@@ -18,6 +18,7 @@ import socket
 import logging
 import logging.handlers
 import sys
+from netaddr import IPAddress
 from calico_etcd import Endpoint
 import uuid
 
@@ -31,6 +32,8 @@ VETH_NAME = "eth0"
 ROOT_NETNS = "1"
 """The pid of the root namespace.  On almost all systems, the init system is pid 1"""
 
+PREFIX_LEN = {4: 32, 6: 128}
+"""The IP address prefix length to assign, by IP version."""
 
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
@@ -51,13 +54,14 @@ def set_up_endpoint(ip, cpid, in_container=False):
     """
     Set up an endpoint (veth) in the network namespace idenfitied by the PID.
 
-    :param ip: The IP address to assign to the endpoint (veth)
+    :param ip: The IP address to assign to the endpoint (veth) as Netaddr IPAddress.
     :param cpid: The PID of a process currently running in the namespace.
     :param in_container: When True, we assume this program is itself running in a container
     namespace, as opposed to the root namespace.  If so, this method also moves the other end of
     the veth into the root namespace.
     :return: An Endpoint describing the veth just created.
     """
+    assert isinstance(ip, IPAddress)
 
     # Generate a new endpoint ID.
     ep_id = uuid.uuid1().hex
@@ -100,14 +104,26 @@ def set_up_endpoint(ip, cpid, in_container=False):
         check_call("ip link set %s netns %s" % (iface, ROOT_NETNS), shell=True)
         check_call("ip netns exec %s ip link set %s up" % (ROOT_NETNS, iface), shell=True)
 
-    # Add an IP address to that thing :
-    check_call("ip netns exec %s ip addr add %s/32 dev %s" % (cpid, ip, VETH_NAME), shell=True)
-    check_call("ip netns exec %s ip route add default dev %s" % (cpid, VETH_NAME), shell=True)
+    # Add an IP address.
+    check_call("ip netns exec %(cpid)s ip -%(version)s addr add %(addr)s/%(len)s dev %(device)s" %
+               {"cpid": cpid,
+                "version": ip.version,
+                "len": PREFIX_LEN[ip.version],
+                "addr": ip,
+                "device": VETH_NAME},
+               shell=True)
+
+    # Set up the default route.
+    check_call("ip netns exec %(cpid)s ip -%(version)s route add default dev %(device)s" %
+               {"cpid": cpid,
+                "version": ip.version,
+                "device": VETH_NAME},
+               shell=True)
 
     # Get the MAC address.
     mac = check_output("ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" %
                        (cpid, VETH_NAME), shell=True).strip()
 
     # Return an Endpoint
-    return Endpoint(id=ep_id, addrs=[{"addr":ip}], state="enabled", mac=mac)
+    return Endpoint(id=ep_id, addrs=[{"addr":str(ip)}], state="enabled", mac=mac)
 
