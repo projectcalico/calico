@@ -35,6 +35,10 @@ ROOT_NETNS = "1"
 PREFIX_LEN = {4: 32, 6: 128}
 """The IP address prefix length to assign, by IP version."""
 
+PROC_ALIAS = "proc_host"
+"""The alias for /proc.  This is useful when the filesystem is containerized."""
+
+
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
@@ -50,7 +54,7 @@ def setup_logging(logfile):
     _log.addHandler(handler)
 
 
-def set_up_endpoint(ip, cpid, in_container=False):
+def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alias=PROC_ALIAS):
     """
     Set up an endpoint (veth) in the network namespace idenfitied by the PID.
 
@@ -59,6 +63,7 @@ def set_up_endpoint(ip, cpid, in_container=False):
     :param in_container: When True, we assume this program is itself running in a container
     namespace, as opposed to the root namespace.  If so, this method also moves the other end of
     the veth into the root namespace.
+    :param veth_name: The name of the interface inside the container namespace, e.g. eth0
     :return: An Endpoint describing the veth just created.
     """
     assert isinstance(ip, IPAddress)
@@ -72,13 +77,14 @@ def set_up_endpoint(ip, cpid, in_container=False):
 
     # Provision the networking
     check_call("mkdir -p /var/run/netns", shell=True)
-    check_call("ln -s /proc_host/%s/ns/net /var/run/netns/%s" % (cpid, cpid), shell=True)
+    check_call("ln -s /%s/%s/ns/net /var/run/netns/%s" % (proc_alias, cpid, cpid), shell=True)
 
     # If running in a container, set up a link to the root netns.
     if in_container:
         try:
-            check_call("ln -s /proc_host/%s/ns/net /var/run/netns/%s" % (ROOT_NETNS,
-                                                                         ROOT_NETNS),
+            check_call("ln -s /%s/%s/ns/net /var/run/netns/%s" % (proc_alias,
+                                                                  ROOT_NETNS,
+                                                                  ROOT_NETNS),
                        shell=True)
         except CalledProcessError:
             pass  # Only need to do this once.
@@ -93,9 +99,9 @@ def set_up_endpoint(ip, cpid, in_container=False):
     # Rename within the container to something sensible.
     check_call("ip netns exec %s ip link set dev %s name %s" % (cpid,
                                                                 iface_tmp,
-                                                                VETH_NAME),
+                                                                veth_name),
                shell=True)
-    check_call("ip netns exec %s ip link set %s up" % (cpid, VETH_NAME), shell=True)
+    check_call("ip netns exec %s ip link set %s up" % (cpid, veth_name), shell=True)
 
     # If in container, the iface end of the veth pair will be in the container namespace.  We need
     # to move it to the root namespace so it will participate in routing.
@@ -113,7 +119,14 @@ def set_up_endpoint(ip, cpid, in_container=False):
                 "device": VETH_NAME},
                shell=True)
 
-    # Set up the default route.
+    # Set the default route.
+    # Is there already a default route?  This occurs if there is already networking set up on
+    # the container.  We want Calico to be the default route.
+    curr_default = check_output("ip netns exec %s ip route show | grep default" % cpid,
+                                shell=True)
+    if curr_default:
+        # Delete the default.
+        check_call("ip netns exec %s ip route del default" % (cpid), shell=True)
     check_call("ip netns exec %(cpid)s ip -%(version)s route add default dev %(device)s" %
                {"cpid": cpid,
                 "version": ip.version,
@@ -122,7 +135,7 @@ def set_up_endpoint(ip, cpid, in_container=False):
 
     # Get the MAC address.
     mac = check_output("ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" %
-                       (cpid, VETH_NAME), shell=True).strip()
+                       (cpid, veth_name), shell=True).strip()
 
     # Return an Endpoint
     return Endpoint(id=ep_id, addrs=[{"addr":str(ip)}], state="enabled", mac=mac)

@@ -1,33 +1,32 @@
 #!/usr/bin/env python
 """calicoctl
 
+Override the host:port of the ETCD server by setting the environment variable
+ETCD_AUTHORITY [default: 127.0.0.1:4001]
+
 Usage:
-  calicoctl master --ip=<IP>
-                   [--etcd=<ETCD_AUTHORITY>]
-                   [--master-image=<DOCKER_IMAGE_NAME>]
-  calicoctl node --ip=<IP>
-                 [--etcd=<ETCD_AUTHORITY>]
-                 [--node-image=<DOCKER_IMAGE_NAME>]
-                 [--ip6=<IP6>]
-  calicoctl status [--etcd=<ETCD_AUTHORITY>]
-  calicoctl version [--etcd=<ETCD_AUTHORITY>]
-  calicoctl shownodes [--detailed] [--etcd=<ETCD_AUTHORITY>]
-  calicoctl group show [--detailed] [--etcd=<ETCD_AUTHORITY>]
-  calicoctl group add <GROUP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl group remove <GROUP> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl group addmember <GROUP> <CONTAINER> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl group removemember <GROUP> <CONTAINER> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl ipv4 pool add <CIDR> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl ipv4 pool del <CIDR> [--etcd=<ETCD_AUTHORITY>]
-  calicoctl ipv4 pool show [--etcd=<ETCD_AUTHORITY>]
+  calicoctl master --ip=<IP> [--master-image=<DOCKER_IMAGE_NAME>]
+  calicoctl master stop [--force]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node stop [--force]
+  calicoctl status
+  calicoctl version
+  calicoctl shownodes [--detailed]
+  calicoctl group show [--detailed]
+  calicoctl group add <GROUP>
+  calicoctl group remove <GROUP>
+  calicoctl group addmember <GROUP> <CONTAINER>
+  calicoctl group removemember <GROUP> <CONTAINER>
+  calicoctl ipv4 pool add <CIDR>
+  calicoctl ipv4 pool del <CIDR>
+  calicoctl ipv4 pool show
+  calicoctl container add <CONTAINER> <IP>
   calicoctl reset
   calicoctl diags
 
 Options:
  --ip=<IP>                The local management address to use.
  --ip6=<IP6>              The local IPv6 management address to use.
- --etcd=<ETCD_AUTHORITY>  The location of the etcd service as
-                          host:port [default: 127.0.0.1:4001]
  --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
                           Calico's master container
                           [default: calico/master:v0.0.6]
@@ -37,23 +36,29 @@ Options:
 
 """
 from subprocess import call, check_output, CalledProcessError
-import netaddr
-import os
-import re
-from docopt import docopt
-import etcd
 import sys
 import socket
 import json
 import uuid
 from collections import namedtuple
-import sh
-import subprocess
 import StringIO
+
+import netaddr
+import os
+import re
+from docopt import docopt
+import etcd
+import sh
 import docker as pydocker
-from netaddr import IPNetwork
+from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
+from node.root_overlay.adapter import netns
+
+
+ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
+
+ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
@@ -67,6 +72,7 @@ hostname = socket.gethostname()
 
 # etcd paths for Calico
 HOST_PATH = "/calico/host/%(hostname)s/"
+MASTER_PATH = "/calico/master"
 MASTER_IP_PATH = "/calico/master/ip"
 GROUPS_PATH = "/calico/network/group/"
 GROUP_PATH = "/calico/network/group/%(group_id)s/"
@@ -75,17 +81,22 @@ CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
+ENDPOINT_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/" + \
+                "endpoint/%(endpoint_id)s/"
+
 
 POWERSTRIP_PORT = 2377
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
+
 class Vividict(dict):
     # From http://stackoverflow.com/a/19829714
     def __missing__(self, key):
         value = self[key] = type(self)()
         return value
+
 
 class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
     """
@@ -96,18 +107,18 @@ class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
         return json.dumps(self._asdict())
 
 
+Endpoint = namedtuple("Endpoint", ["id", "addrs", "mac", "state"])
+
+
 class CalicoCmdLineEtcdClient(object):
     """
     An etcd client that exposes high level Calico operations needed by the calico CLI.
     """
 
-    def __init__(self, etcd_authority=None):
-        if not etcd_authority:
-            self.etcd_client = etcd.Client()
-        else:
-            # TODO: Error handling
-            (host, port) = etcd_authority.split(":", 1)
-            self.etcd_client = etcd.Client(host=host, port=int(port))
+    def __init__(self):
+        etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
+        (host, port) = etcd_authority.split(":", 1)
+        self.etcd_client = etcd.Client(host=host, port=int(port))
 
     def create_host(self, bird_ip, bird6_ip):
         """
@@ -129,6 +140,17 @@ class CalicoCmdLineEtcdClient(object):
             self.etcd_client.write(workload_dir, None, dir=True)
         return
 
+    def remove_host(self):
+        """
+        Remove a Calico host.
+        :return: nothing.
+        """
+        host_path = HOST_PATH % {"hostname": hostname}
+        try:
+            self.etcd_client.delete(host_path, dir=True, recursive=True)
+        except KeyError:
+            pass
+
     def set_master(self, ip):
         """
         Record the IP address of the Calico Master.
@@ -137,6 +159,16 @@ class CalicoCmdLineEtcdClient(object):
         """
         # update the master IP
         self.etcd_client.write(MASTER_IP_PATH, ip)
+
+    def remove_master(self):
+        """
+        Record the IP address of the Calico Master.
+        :return: nothing.
+        """
+        try:
+            self.etcd_client.delete(MASTER_PATH)
+        except KeyError:
+            pass
 
     def get_master(self):
         """
@@ -303,13 +335,12 @@ class CalicoCmdLineEtcdClient(object):
             etcd_members = self.etcd_client.read(GROUP_MEMBER_PATH % {"group_id": group_id},
                                                  recursive=True).leaves
             for child in etcd_members:
-                id = child.key.split("/")[-1]
-                if id != "member":
-                    members.append(id)
+                final_key = child.key.split("/")[-1]
+                if final_key != "member":
+                    members.append(final_key)
         except KeyError:
             # Means the GROUPS_MEMBER_PATH was not set up.  So, group does not exist.
             pass
-        print "%s : %s" % (group_id, members)
         return members
 
     def get_ep_id_from_cont(self, container_id):
@@ -332,6 +363,24 @@ class CalicoCmdLineEtcdClient(object):
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
         return endpoint_id
 
+    def create_container(self, container_id, endpoint):
+        """
+        Set up a container in the /calico/ namespace on this host.  This function assumes 1
+        container, with 1 endpoint.
+
+        :param hostname: The hostname for the Docker hosting this container.
+        :param container_id: The Docker container ID.
+        :param endpoint: The Endpoint to add to the container.
+        :return: Nothing
+        """
+
+        endpoint_path = ENDPOINT_PATH % {"hostname": hostname,
+                                         "container_id": container_id,
+                                         "endpoint_id": endpoint.id}
+        self.etcd_client.write(endpoint_path + "addrs", json.dumps(endpoint.addrs))
+        self.etcd_client.write(endpoint_path + "mac", endpoint.mac)
+        self.etcd_client.write(endpoint_path + "state", endpoint.state)
+
     def get_hosts(self):
         """
         Get the all configured hosts
@@ -343,30 +392,26 @@ class CalicoCmdLineEtcdClient(object):
             etcd_hosts = self.etcd_client.read('/calico/host', recursive=True,).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if len(packed) != 10:
-                    continue
-                (_, _, _, host, _, type, container_id, _, endpoint_id, final_key) = packed
-                hosts[host][type][container_id][endpoint_id][final_key] = child.value
-        except KeyError as e:
+                if len(packed) == 5:
+                    (_, _, _, host, _) = packed
+                    hosts[host] = {}
+                elif len(packed) == 10:
+                    (_, _, _, host, _, container_type, container_id, _, endpoint_id, final_key) = \
+                        packed
+                    hosts[host][container_type][container_id][endpoint_id][final_key] = child.value
+        except KeyError:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
 
         return hosts
 
+    def remove_all_data(self):
+        try:
+            self.etcd_client.delete("/calico", recursive=True, dir=True)
+        except KeyError:
+            # No "/calico" - all data must be removed already.
+            pass
 
-def parse_json(value):
-    """
-    Try to parse JSON out into a python data structure, so that when we serialize it back for
-    zeroMQ we're not doing JSON in JSON.
-    """
-    ret_val = value
-    try:
-        ret_val = json.loads(value)
-        log.debug("Parsed JSON %s", value)
-    except ValueError:
-        log.debug("Failed to parse JSON %s", value)
-
-    return ret_val
 
 class CalicoDockerClient(object):
     """
@@ -385,17 +430,27 @@ class CalicoDockerClient(object):
         :return: The container ID as a string.
         """
 
-        info = self.docker_client.inspect_container(container_name)
+        try:
+            info = self.docker_client.inspect_container(container_name)
+        except pydocker.errors.APIError as e:
+            if e.response.status_code == 404:
+                # Re-raise as a key error for consistency.
+                raise KeyError("Container %s was not found." % container_name)
+            else:
+                raise
         return info["Id"]
 
+
+class ConfigError(Exception):
+    pass
 
 class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
     """
     A client that interacts with both Docker and etcd to provide high-level Calico abstractions.
     """
 
-    def __init__(self, etcd_authority=None):
-        CalicoCmdLineEtcdClient.__init__(self, etcd_authority)
+    def __init__(self):
+        CalicoCmdLineEtcdClient.__init__(self)
         CalicoDockerClient.__init__(self)
 
     def add_container_to_group(self, container_name, group_name):
@@ -409,14 +464,7 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         """
 
         # Resolve the name to ID.
-        try:
-            container_id = self.get_container_id(container_name)
-        except pydocker.errors.APIError as e:
-            if e.response.status_code == 404:
-                # Re-raise as a key error for consistency.
-                raise KeyError("Container %s was not found." % container_name)
-            else:
-                raise
+        container_id = self.get_container_id(container_name)
 
         # Get the group UUID.
         group_id = self.get_group_id(group_name)
@@ -430,6 +478,56 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         group_path = GROUP_PATH % {"group_id": group_id}
         self.etcd_client.write(group_path + "member/" + endpoint_id, "")
 
+    def add_container_to_calico(self, container_name, ip):
+        """
+        Add a container (on this host) to Calico networking with the given IP.
+
+        :param container_name: The name or ID of the container.
+        :param ip: An IPAddress object with the desired IP to assign.
+        """
+
+        # Resolve the name to ID.  Use the docker_client call so we can avoid a second call when
+        # we need the running PID as well.
+        try:
+            info = self.docker_client.inspect_container(container_name)
+        except pydocker.errors.APIError as e:
+            if e.response.status_code == 404:
+                # Re-raise as a key error for consistency.
+                raise KeyError("Container %s was not found." % container_name)
+            else:
+                raise
+        container_id = info["Id"]
+
+        # Check if the container already exists
+        try:
+            _ = self.get_ep_id_from_cont(container_id)
+        except KeyError:
+            # Calico doesn't know about this container.  Continue.
+            pass
+        else:
+            # Calico already set up networking for this container.  Since we got called with an
+            # IP address, we shouldn't just silently exit, since that would confuse the user:
+            # the container would not be reachable on that IP address.  So, raise an exception.
+            raise KeyError("%s has already been configured with Calico Networking." %
+                           container_name)
+
+        # Check the IP is in the allocation pool.  If it isn't, BIRD won't export it.
+        version = "v%s" % ip.version
+        pools = self.get_ip_pools(version)
+        if not any([ip in pool for pool in pools]):
+            raise ConfigError("%s was not in any configured pools" % ip)
+
+        # Check the container is actually running.
+        if not info["State"]["Running"]:
+            raise ConfigError("%s is not currently running." % container_name)
+
+        # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
+        pid = info["State"]["Pid"]
+        endpoint = netns.set_up_endpoint(ip, pid, veth_name="eth1", proc_alias="proc")
+
+        # Register the endpoint
+        self.create_container(container_id, endpoint)
+
     def remove_container_from_group(self, container_name, group_name):
         """
         Add a container (on this host) to the group with the given name.  This adds the first
@@ -441,14 +539,7 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         """
 
         # Resolve the name to ID.
-        try:
-            container_id = self.get_container_id(container_name)
-        except pydocker.errors.APIError as e:
-            if e.response.status_code == 404:
-                # Re-raise as a key error for consistency.
-                raise KeyError("Container %s was not found." % container_name)
-            else:
-                raise
+        container_id = self.get_container_id(container_name)
 
         # Get the group UUID.
         group_id = self.get_group_id(group_name)
@@ -462,8 +553,6 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         self.etcd_client.delete(group_path + "member/" + endpoint_id)
 
 
-
-
 def create_dirs():
     mkdir_p("/var/log/calico")
 
@@ -472,13 +561,23 @@ def process_output(line):
     sys.stdout.write(line)
 
 
+def node_stop(force):
+    client = CalicoCmdLineEtcdClient()
+    if force or len(client.get_hosts()[hostname]["docker"]) == 0:
+        client.remove_host()
+        docker("stop", "calico-node")
+        print "Node stopped and all configuration removed"
+    else:
+        print "Current host has active endpoints so can't be stopped. Force with --force"
+
+
 def node(ip, node_image, ip6=""):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
 
     # Set up etcd
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
 
     # Enable IP forwarding.
     sysctl("-w", "net.ipv4.ip_forward=1")
@@ -505,6 +604,7 @@ def node(ip, node_image, ip6=""):
     except Exception:
         pass
 
+    etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
     output = StringIO.StringIO()
 
     docker("run", "-e",  "IP=%s" % ip,
@@ -529,11 +629,21 @@ def node(ip, node_image, ip6=""):
     print "before using `docker run` for Calico networking.\n"
 
 
+def master_stop(force):
+    client = CalicoCmdLineEtcdClient()
+    if force or len(client.get_hosts()) == 0:
+        client.remove_master()
+        docker("stop", "calico-master")
+        print "Master stopped and all configuration removed"
+    else:
+        print "Hosts exist so master can't be stopped. Force with --force"
+
+
 def master(ip, master_image):
     create_dirs()
 
     # Add IP to etcd
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     client.set_master(ip)
 
     # If no IPv4 pools are defined, add a default.
@@ -550,6 +660,7 @@ def master(ip, master_image):
     except Exception:
         pass
 
+    etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
     output = StringIO.StringIO()
     
     # Start the container
@@ -565,8 +676,9 @@ def master(ip, master_image):
     output.close()
     print "Calico master is running with id: %s" % cid
 
+
 def status():
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     print "Currently configured master is %s" % client.get_master()
 
     try:
@@ -576,7 +688,7 @@ def status():
 
     try:
         print(docker("exec", "calico-master", "/bin/bash", "-c", "apt-cache policy "
-                                                                        "calico-felix"))
+                                                                 "calico-felix"))
     except Exception:
         print "Skipping felix version information as Calico node isn't running"
 
@@ -587,14 +699,23 @@ def status():
         print "Couldn't collect BGP Peer information"
 
     print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
-                                                                "/etc/service/bird/bird.ctl"))
+                                                            "/etc/service/bird/bird.ctl"))
     print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc6 -s "
-                                                                "/etc/service/bird6/bird6.ctl"))
+                                                            "/etc/service/bird6/bird6.ctl"))
 
 
 def reset():
+    client = CalicoCmdLineEtcdClient()
+
+    print "Removing all data from datastore"
+    client.remove_all_data()
+
+    docker("kill", "calico-node")
+    docker("kill", "calico-master")
+
     try:
-        interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'", shell=True)
+        interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'",
+                                      shell=True)
         print "Removing interfaces:\n%s" % interfaces_raw
         interfaces = interfaces_raw.splitlines()
         for interface in interfaces:
@@ -609,7 +730,7 @@ def add_group(group_name):
     :param group_name: The name for the group.
     :return: None.
     """
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     # Check if the group exists.
     if client.get_group_id(group_name):
         print "Group %s already exists." % group_name
@@ -628,12 +749,13 @@ def add_container_to_group(container_name, group_name):
     :param group_name: Name of the group.
     :return: None
     """
-    client = CalicoDockerEtcd(etcd_authority)
+    client = CalicoDockerEtcd()
     try:
         client.add_container_to_group(container_name, group_name)
         print "Added container %s to %s" % (container_name, group_name)
     except KeyError as e:
         print str(e)
+
 
 def remove_container_from_group(container_name, group_name):
     """
@@ -642,16 +764,17 @@ def remove_container_from_group(container_name, group_name):
     :param group_name: Name of the group.
     :return: None
     """
-    client = CalicoDockerEtcd(etcd_authority)
+    client = CalicoDockerEtcd()
     try:
         client.remove_container_from_group(container_name, group_name)
         print "Removed container %s from %s" % (container_name, group_name)
     except KeyError as e:
         print str(e)
 
+
 def remove_group(group_name):
     #TODO - Don't allow removing a group that has enpoints in it.
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     group_id = client.delete_group(group_name)
     if group_id:
         print "Deleted group %s with ID %s" % (group_name, group_id)
@@ -660,7 +783,7 @@ def remove_group(group_name):
 
 
 def show_groups(detailed):
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     groups = client.get_groups()
 
     if detailed:
@@ -679,25 +802,31 @@ def show_groups(detailed):
 
     print x
 
+
 def show_nodes(detailed):
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     hosts = client.get_hosts()
 
     if detailed:
         x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID", "Addresses",
                          "MAC", "State"])
         for host, types in hosts.iteritems():
-            for type, workloads in types.iteritems():
+            if not types:
+                x.add_row([host, "None", "None", "None", "None", "None", "None"])
+                continue
+            for container_type, workloads in types.iteritems():
                 for workload, endpoints in workloads.iteritems():
                     for endpoint, data in endpoints.iteritems():
                         x.add_row([host, type, workload, endpoint, data["addrs"], data["mac"],
                                    data["state"]])
     else:
         x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
-        for host, types in hosts.iteritems():
-            for type, workloads in types.iteritems():
-              x.add_row([host, type, len(workloads)])
-
+        for host, container_types in hosts.iteritems():
+            if not container_types:
+                x.add_row([host, "N/A", "0"])
+                continue
+            for container_type, workloads in container_types.iteritems():
+                x.add_row([host, type, len(workloads)])
     print x
 
 
@@ -761,19 +890,10 @@ echo "Done"
 """
     bash = sh.Command._create('bash')
     bash(_in=script, _err=process_output, _out=process_output).wait()
-    # # Pipe the diags script to bash
-    # # TODO: reimplement this in Python
-    # proc = subprocess.Popen("bash",
-    #                         stdin=subprocess.PIPE,
-    #                         stdout=subprocess.PIPE,
-    #                         stderr=subprocess.STDOUT,
-    #                         bufsize=1)
-    #
-    # for line in iter(proc.stdout.readline, b''):
-    #     print line,
-    # proc.communicate()
-    # # (out, _) = proc.communicate(script)
-    # # print out #TODO - Make this stream the output
+    # TODO: reimplement this in Python
+    # TODO: ipset might not be installed on the host. But we don't want to gather the diags in
+    # the container because it might not be running...
+
 
 def ipv4_pool(dc_args):
     """
@@ -805,7 +925,7 @@ def add_ipv4_pool(cidr_pool):
     if pool.version == 6:
         print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
         return
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     client.add_ip_pool("v4", pool)
 
 
@@ -825,11 +945,33 @@ def del_ipv4_pool(cidr_pool):
     if pool.version == 6:
         print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
         return
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     try:
         client.del_ip_pool("v4", pool)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
+
+
+def container_add(name_or_id, ip_str):
+    """
+    Add Calico networking to an existing container.
+
+    :param name_or_id: The name or ID of the container.
+    :param ip_str: The IP address to assign to the interface with Calico (string).
+    :return:
+    """
+
+    client = CalicoDockerEtcd()
+    try:
+        ip = IPAddress(ip_str)
+    except AddrFormatError:
+        print "%s is not a valid IP address." % ip_str
+        return
+
+    try:
+        client.add_container_to_calico(name_or_id, ip)
+    except KeyError as e:
+        print str(e)
 
 
 def show_ip_pools(version):
@@ -837,15 +979,17 @@ def show_ip_pools(version):
     Print a list of IPv4 allocation pools.
     :return: None
     """
-    client = CalicoCmdLineEtcdClient(etcd_authority)
+    client = CalicoCmdLineEtcdClient()
     pools = client.get_ip_pools(version)
     for pool in pools:
         print pool
 
-def validate_arguments(arguments):
+
+def validate_arguments():
     group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
-    ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"]) or \
-                                         netaddr.valid_ipv6(arguments["--ip"])
+    ip_ok = arguments["--ip"] is None \
+            or netaddr.valid_ipv4(arguments["--ip"]) \
+            or netaddr.valid_ipv6(arguments["--ip"])
     if not group_ok:
         print "Groups must be <30 character longs and can only container numbers, letters and " \
               "underscore."
@@ -858,17 +1002,21 @@ def validate_arguments(arguments):
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-    etcd_authority = arguments["--etcd"]
     if os.geteuid() != 0:
         print "calicoctl must be run as root"
-    elif validate_arguments(arguments):
+    elif validate_arguments():
         if arguments["master"]:
-            master_image = arguments['--master-image']
-            master(arguments["--ip"], master_image=master_image)
+            if arguments["stop"]:
+                master_stop(arguments["--force"])
+            else:
+                master(arguments["--ip"], arguments['--master-image'])
         elif arguments["node"]:
-            node_image = arguments['--node-image']
-            ip6 = arguments["--ip6"]
-            node(arguments["--ip"], node_image=node_image, ip6=ip6)
+            if arguments["stop"]:
+                node_stop(arguments["--force"])
+            else:
+                node_image = arguments['--node-image']
+                ip6 = arguments["--ip6"]
+                node(arguments["--ip"], node_image=node_image, ip6=ip6)
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
@@ -893,3 +1041,6 @@ if __name__ == '__main__':
         elif arguments["ipv4"]:
             assert arguments["pool"]
             ipv4_pool(arguments)
+        if arguments["container"]:
+            assert arguments["add"] # Only support add now.
+            container_add(arguments["<CONTAINER>"], arguments["<IP>"])
