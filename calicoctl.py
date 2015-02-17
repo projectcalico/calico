@@ -808,19 +808,9 @@ echo "Done"
 """
     bash = sh.Command._create('bash')
     bash(_in=script, _err=process_output, _out=process_output).wait()
-    # # Pipe the diags script to bash
-    # # TODO: reimplement this in Python
-    # proc = subprocess.Popen("bash",
-    #                         stdin=subprocess.PIPE,
-    #                         stdout=subprocess.PIPE,
-    #                         stderr=subprocess.STDOUT,
-    #                         bufsize=1)
-    #
-    # for line in iter(proc.stdout.readline, b''):
-    #     print line,
-    # proc.communicate()
-    # # (out, _) = proc.communicate(script)
-    # # print out #TODO - Make this stream the output
+    # TODO: reimplement this in Python
+    # TODO: ipset might not be installed on the host. But we don't want to gather the diags in
+    # the container because it might not be running...
 
 def ipv4_pool(dc_args):
     """
