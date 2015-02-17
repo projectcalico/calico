@@ -20,6 +20,7 @@ Usage:
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
+  calicoctl container add <CONTAINER> <IP>
   calicoctl reset
   calicoctl diags
 
@@ -48,9 +49,10 @@ from docopt import docopt
 import etcd
 import sh
 import docker as pydocker
-from netaddr import IPNetwork
+from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
+from node.root_overlay.adapter import netns
 
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
@@ -77,6 +79,9 @@ CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
 ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
+ENDPOINT_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/" + \
+                "endpoint/%(endpoint_id)s/"
+
 
 POWERSTRIP_PORT = 2377
 
@@ -97,6 +102,9 @@ class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
 
     def to_json(self):
         return json.dumps(self._asdict())
+
+
+Endpoint = namedtuple("Endpoint", ["id", "addrs", "mac", "state"])
 
 
 class CalicoCmdLineEtcdClient(object):
@@ -350,6 +358,24 @@ class CalicoCmdLineEtcdClient(object):
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
         return endpoint_id
 
+    def create_container(self, container_id, endpoint):
+        """
+        Set up a container in the /calico/ namespace on this host.  This function assumes 1
+        container, with 1 endpoint.
+
+        :param hostname: The hostname for the Docker hosting this container.
+        :param container_id: The Docker container ID.
+        :param endpoint: The Endpoint to add to the container.
+        :return: Nothing
+        """
+
+        endpoint_path = ENDPOINT_PATH % {"hostname": hostname,
+                                         "container_id": container_id,
+                                         "endpoint_id": endpoint.id}
+        self.etcd_client.write(endpoint_path + "addrs", json.dumps(endpoint.addrs))
+        self.etcd_client.write(endpoint_path + "mac", endpoint.mac)
+        self.etcd_client.write(endpoint_path + "state", endpoint.state)
+
     def get_hosts(self):
         """
         Get the all configured hosts
@@ -398,9 +424,19 @@ class CalicoDockerClient(object):
         :return: The container ID as a string.
         """
 
-        info = self.docker_client.inspect_container(container_name)
+        try:
+            info = self.docker_client.inspect_container(container_name)
+        except pydocker.errors.APIError as e:
+            if e.response.status_code == 404:
+                # Re-raise as a key error for consistency.
+                raise KeyError("Container %s was not found." % container_name)
+            else:
+                raise
         return info["Id"]
 
+
+class ConfigError(Exception):
+    pass
 
 class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
     """
@@ -422,14 +458,7 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         """
 
         # Resolve the name to ID.
-        try:
-            container_id = self.get_container_id(container_name)
-        except pydocker.errors.APIError as e:
-            if e.response.status_code == 404:
-                # Re-raise as a key error for consistency.
-                raise KeyError("Container %s was not found." % container_name)
-            else:
-                raise
+        container_id = self.get_container_id(container_name)
 
         # Get the group UUID.
         group_id = self.get_group_id(group_name)
@@ -443,6 +472,56 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         group_path = GROUP_PATH % {"group_id": group_id}
         self.etcd_client.write(group_path + "member/" + endpoint_id, "")
 
+    def add_container_to_calico(self, container_name, ip):
+        """
+        Add a container (on this host) to Calico networking with the given IP.
+
+        :param container_name: The name or ID of the container.
+        :param ip: An IPAddress object with the desired IP to assign.
+        """
+
+        # Resolve the name to ID.  Use the docker_client call so we can avoid a second call when
+        # we need the running PID as well.
+        try:
+            info = self.docker_client.inspect_container(container_name)
+        except pydocker.errors.APIError as e:
+            if e.response.status_code == 404:
+                # Re-raise as a key error for consistency.
+                raise KeyError("Container %s was not found." % container_name)
+            else:
+                raise
+        container_id = info["Id"]
+
+        # Check if the container already exists
+        try:
+            _ = self.get_ep_id_from_cont(container_id)
+        except KeyError:
+            # Calico doesn't know about this container.  Continue.
+            pass
+        else:
+            # Calico already set up networking for this container.  Since we got called with an
+            # IP address, we shouldn't just silently exit, since that would confuse the user:
+            # the container would not be reachable on that IP address.  So, raise an exception.
+            raise KeyError("%s has already been configured with Calico Networking." %
+                           container_name)
+
+        # Check the IP is in the allocation pool.  If it isn't, BIRD won't export it.
+        version = "v%s" % ip.version
+        pools = self.get_ip_pools(version)
+        if not any([ip in pool for pool in pools]):
+            raise ConfigError("%s was not in any configured pools" % ip)
+
+        # Check the container is actually running.
+        if not info["State"]["Running"]:
+            raise ConfigError("%s is not currently running." % container_name)
+
+        # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
+        pid = info["State"]["Pid"]
+        endpoint = netns.set_up_endpoint(ip, pid, veth_name="eth1", proc_alias="proc")
+
+        # Register the endpoint
+        self.create_container(container_id, endpoint)
+
     def remove_container_from_group(self, container_name, group_name):
         """
         Add a container (on this host) to the group with the given name.  This adds the first
@@ -454,14 +533,7 @@ class CalicoDockerEtcd(CalicoDockerClient, CalicoCmdLineEtcdClient):
         """
 
         # Resolve the name to ID.
-        try:
-            container_id = self.get_container_id(container_name)
-        except pydocker.errors.APIError as e:
-            if e.response.status_code == 404:
-                # Re-raise as a key error for consistency.
-                raise KeyError("Container %s was not found." % container_name)
-            else:
-                raise
+        container_id = self.get_container_id(container_name)
 
         # Get the group UUID.
         group_id = self.get_group_id(group_name)
@@ -859,6 +931,28 @@ def del_ipv4_pool(cidr_pool):
         print "%s is not a configured pool." % cidr_pool
 
 
+def container_add(name_or_id, ip_str):
+    """
+    Add Calico networking to an existing container.
+
+    :param name_or_id: The name or ID of the container.
+    :param ip_str: The IP address to assign to the interface with Calico (string).
+    :return:
+    """
+
+    client = CalicoDockerEtcd()
+    try:
+        ip = IPAddress(ip_str)
+    except AddrFormatError:
+        print "%s is not a valid IP address." % ip_str
+        return
+
+    try:
+        client.add_container_to_calico(name_or_id, ip)
+    except KeyError as e:
+        print str(e)
+
+
 def show_ip_pools(version):
     """
     Print a list of IPv4 allocation pools.
@@ -924,3 +1018,6 @@ if __name__ == '__main__':
         elif arguments["ipv4"]:
             assert arguments["pool"]
             ipv4_pool(arguments)
+        if arguments["container"]:
+            assert arguments["add"] # Only support add now.
+            container_add(arguments["<CONTAINER>"], arguments["<IP>"])

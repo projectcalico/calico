@@ -1,5 +1,4 @@
 build
-config
 venv
 .idea
 *.pyc
