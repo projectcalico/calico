@@ -374,6 +374,13 @@ class CalicoCmdLineEtcdClient(object):
 
         return hosts
 
+    def remove_all_data(self):
+        try:
+            self.etcd_client.delete("/calico", recursive=True, dir=True)
+        except KeyError:
+            # No "/calico" - all data must be removed already.
+            pass
+
 
 def parse_json(value):
     """
@@ -619,6 +626,14 @@ def status():
 
 
 def reset():
+    client = CalicoCmdLineEtcdClient()
+
+    print "Removing all data from datastore"
+    client.remove_all_data()
+
+    docker("kill", "calico-node")
+    docker("kill", "calico-master")
+
     try:
         interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'", shell=True)
         print "Removing interfaces:\n%s" % interfaces_raw
