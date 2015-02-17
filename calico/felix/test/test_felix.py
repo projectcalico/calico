@@ -62,7 +62,6 @@ from calico.felix.endpoint import Endpoint
 from calico.felix.fsocket import Socket 
 
 # IPtables state.
-calico.felix.fiptables.TableState = stub_fiptables.TableState
 expected_iptables = stub_fiptables.TableState()
 expected_ipsets = stub_ipsets.IpsetState()
 
@@ -77,7 +76,6 @@ config_path = "calico/felix/test/data/felix_debug.cfg"
 # Logger
 log = logging.getLogger(__name__)
 
-
 class TestBasic(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -86,12 +84,15 @@ class TestBasic(unittest.TestCase):
         endpoint.devices = stub_devices
         cls.real_ipsets = calico.felix.ipsets
         frules.ipsets = stub_ipsets
+        cls.real_TableState = fiptables.TableState
+        calico.felix.fiptables.TableState = stub_fiptables.TableState
 
     @classmethod
     def tearDownClass(cls):
         # Reinstate the modules we overwrote
         endpoint.devices = cls.real_devices
         frules.ipsets = cls.real_ipsets
+        fiptables.TableState = cls.real_TableState
 
     def create_patch(self, name):
         return thing
@@ -107,7 +108,7 @@ class TestBasic(unittest.TestCase):
         stub_ipsets.reset()
 
         # Set the expected IP tables state to be clean.
-        expected_iptables.reset()
+        expected_iptables.set_empty()
         expected_ipsets.reset()
 
     def tearDown(self):
@@ -118,7 +119,7 @@ class TestBasic(unittest.TestCase):
         context = stub_zmq.Context()
         agent = felix.FelixAgent(config_path, context)
 
-        set_expected_global_rules()
+        expected_iptables.set_expected_global_rules()
         agent.iptables_state.check_state(expected_iptables)
         stub_ipsets.check_state(expected_ipsets)
 
@@ -134,7 +135,7 @@ class TestBasic(unittest.TestCase):
         context.add_poll_result(0)
         agent.run()
 
-        set_expected_global_rules()
+        expected_iptables.set_expected_global_rules()
         agent.iptables_state.check_state(expected_iptables)
         stub_ipsets.check_state(expected_ipsets)
 
@@ -193,8 +194,9 @@ class TestBasic(unittest.TestCase):
         poll_result.add(TYPE_ACL_REQ, acl_rsp)
 
         # Check the rules are what we expect.
-        set_expected_global_rules()
-        add_endpoint_rules(endpoint.suffix, endpoint.tap, addr, None, endpoint.mac)
+        expected_iptables.set_expected_global_rules()
+        expected_iptables.add_endpoint_rules(endpoint.suffix, endpoint.tap,
+                                             addr, None, endpoint.mac)
         agent.iptables_state.check_state(expected_iptables)
         add_endpoint_ipsets(endpoint.suffix)
         stub_ipsets.check_state(expected_ipsets)
@@ -291,7 +293,8 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(acl_req['endpoint_id'], endpoint2.id)
         self.assertFalse(context.sent_data_present())
 
-        add_endpoint_rules(endpoint2.suffix, endpoint2.tap, addr2, None, endpoint2.mac)
+        expected_iptables.add_endpoint_rules(endpoint2.suffix, endpoint2.tap,
+                                             addr2, None, endpoint2.mac)
         agent.iptables_state.check_state(expected_iptables)
         add_endpoint_ipsets(endpoint2.suffix)
         agent.iptables_state.check_state(expected_iptables)
@@ -303,8 +306,9 @@ class TestBasic(unittest.TestCase):
         agent.run()
 
         # Rebuild and recheck the state. Only the first endpoint still exists.
-        set_expected_global_rules()
-        add_endpoint_rules(endpoint.suffix, endpoint.tap, addr, None, endpoint.mac)
+        expected_iptables.set_expected_global_rules()
+        expected_iptables.add_endpoint_rules(endpoint.suffix, endpoint.tap,
+                                             addr, None, endpoint.mac)
         agent.iptables_state.check_state(expected_iptables)
 
     def test_rule_reordering(self):
@@ -324,12 +328,15 @@ class TestTimings(unittest.TestCase):
         endpoint.devices = stub_devices
         cls.real_ipsets = calico.felix.ipsets
         frules.ipsets = stub_ipsets
+        cls.real_TableState = fiptables.TableState
+        calico.felix.fiptables.TableState = stub_fiptables.TableState
 
     @classmethod
     def tearDownClass(cls):
         # Reinstate the modules we overwrote
         endpoint.devices = cls.real_devices
         frules.ipsets = cls.real_ipsets
+        fiptables.TableState = cls.real_TableState
 
     def setUp(self):
         # Mock out time
@@ -341,7 +348,7 @@ class TestTimings(unittest.TestCase):
         stub_devices.reset()
         stub_ipsets.reset()
 
-        expected_iptables.reset()
+        expected_iptables.set_empty()
         expected_ipsets.reset()
 
     def tearDown(self):
@@ -1041,267 +1048,6 @@ def get_blank_acls():
     acls['v6']['outbound'] = []
     return acls
 
-
-def set_expected_global_rules():
-    """
-    Sets up the minimal global rules we expect to have.
-    """
-    #TODO: This is a bit ugly. It would be better if instead of doing this we:
-    # - put these rules into a file as if read from iptables -S
-    # - overrode the call in read_table to take some kind of "real state"
-    # - let reset do what you would expect
-    # That's a pretty substantial rework though, so not happening right now.
-    expected_iptables.reset()
-
-    table = expected_iptables.tables_v4["filter"]
-    table.get_chain("felix-TO-ENDPOINT")
-    table.get_chain("felix-FROM-ENDPOINT")
-    table.get_chain("felix-FORWARD")
-    table.get_chain("felix-INPUT")
-    chain = table.chains["FORWARD"]
-    chain.rules.append(fiptables.Rule(IPV4, "felix-FORWARD"))
-    chain = table.chains["INPUT"]
-    chain.rules.append(fiptables.Rule(IPV4, "felix-INPUT"))
-
-    chain = table.chains["felix-FORWARD"]
-    rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "felix-TO-ENDPOINT")
-    rule.out_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "ACCEPT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "ACCEPT")
-    rule.out_interface = "tap+"
-    chain.rules.append(rule)
-
-    chain = table.chains["felix-INPUT"]
-    rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "ACCEPT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-
-    table = expected_iptables.tables_v4["nat"]
-    chain = table.chains["PREROUTING"]
-    chain.rules.append(fiptables.Rule(IPV4, "felix-PREROUTING"))
-
-    chain = table.get_chain("felix-PREROUTING")
-    rule = fiptables.Rule(IPV4)
-    rule.dst      = "169.254.169.254/32"
-    rule.protocol = "tcp"
-    rule.create_tcp_match("80")
-    rule.create_target("DNAT", {'to_destination': '127.0.0.1:9697'})
-    chain.rules.append(rule)
-
-    table = expected_iptables.tables_v6["filter"]
-    table.get_chain("felix-TO-ENDPOINT")
-    table.get_chain("felix-FROM-ENDPOINT")
-    table.get_chain("felix-FORWARD")
-    table.get_chain("felix-INPUT")
-    chain = table.chains["FORWARD"]
-    chain.rules.append(fiptables.Rule(IPV6, "felix-FORWARD"))
-    chain = table.chains["INPUT"]
-    chain.rules.append(fiptables.Rule(IPV6, "felix-INPUT"))
-
-    chain = table.chains["felix-FORWARD"]
-    rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "felix-TO-ENDPOINT")
-    rule.out_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "ACCEPT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "ACCEPT")
-    rule.out_interface = "tap+"
-    chain.rules.append(rule)
-
-    chain = table.chains["felix-INPUT"]
-    rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-    rule  = fiptables.Rule(type, "ACCEPT")
-    rule.in_interface = "tap+"
-    chain.rules.append(rule)
-
-    expected_iptables.apply()
-
-def add_endpoint_rules(suffix, tap, ipv4, ipv6, mac):
-    """
-    This adds the rules for an endpoint, appending to the end. This generates
-    a clean state to allow us to test that the state is correct, even after
-    it starts with extra rules etc.
-    """
-    table = expected_iptables.tables_v4["filter"]
-    chain = table.chains["felix-FROM-ENDPOINT"]
-    rule = fiptables.Rule(IPV4, "felix-from-%s" % suffix)
-    rule.in_interface = tap
-    chain.rules.append(rule)
-
-    chain = table.chains["felix-TO-ENDPOINT"]
-    rule = fiptables.Rule(IPV4, "felix-to-%s" % suffix)
-    rule.out_interface = tap
-    chain.rules.append(rule)
-
-    chain = table.get_chain("felix-from-%s" % suffix)
-    rule = fiptables.Rule(IPV4, "DROP")
-    rule.create_conntrack_match("INVALID")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.create_conntrack_match("RELATED,ESTABLISHED")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.protocol = "udp"
-    rule.create_udp_match("68", "67")
-    chain.rules.append(rule)
-
-    if ipv4 is not None:
-        rule = fiptables.Rule(IPV4)
-        rule.create_target("MARK", {"set_mark": "1"})
-        rule.src = ipv4 + "/32"
-        rule.create_mac_match(mac)
-        chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "DROP")
-    rule.create_mark_match("!1")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.create_set_match("felix-from-port-%s" % suffix, "dst,dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.create_set_match("felix-from-addr-%s" % suffix, "dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.protocol = "icmp"
-    rule.create_set_match("felix-from-icmp-%s" % suffix, "dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "DROP")
-    chain.rules.append(rule)
-
-    chain = table.get_chain("felix-to-%s" % suffix)
-    rule = fiptables.Rule(IPV4, "DROP")
-    rule.create_conntrack_match("INVALID")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.create_conntrack_match("RELATED,ESTABLISHED")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.create_set_match("felix-to-port-%s" % suffix, "src,dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.create_set_match("felix-to-addr-%s" % suffix, "src")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "RETURN")
-    rule.protocol = "icmp"
-    rule.create_set_match("felix-to-icmp-%s" % suffix, "src")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV4, "DROP")
-    chain.rules.append(rule)
-
-    table = expected_iptables.tables_v6["filter"]
-    chain = table.chains["felix-FROM-ENDPOINT"]
-    rule = fiptables.Rule(IPV6, "felix-from-%s" % suffix)
-    rule.in_interface = tap
-    chain.rules.append(rule)
-
-    chain = table.chains["felix-TO-ENDPOINT"]
-    rule = fiptables.Rule(IPV6, "felix-to-%s" % suffix)
-    rule.out_interface = tap
-    chain.rules.append(rule)
-
-    chain = table.get_chain("felix-from-%s" % suffix)
-    rule = fiptables.Rule(type, "RETURN")
-    rule.protocol = "ipv6-icmp"
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "DROP")
-    rule.create_conntrack_match("INVALID")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.create_conntrack_match("RELATED,ESTABLISHED")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.protocol = "udp"
-    rule.create_udp_match("546", "547")
-    chain.rules.append(rule)
-
-    if ipv6 is not None:
-        rule = fiptables.Rule(IPV6)
-        rule.create_target("MARK", {"set_mark": "1"})
-        rule.src = ipv6
-        rule.create_mac_match(mac)
-        chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "DROP")
-    rule.create_mark_match("!1")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.create_set_match("felix-6-from-port-%s" % suffix, "dst,dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.create_set_match("felix-6-from-addr-%s" % suffix, "dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.protocol = "ipv6-icmp"
-    rule.create_set_match("felix-6-from-icmp-%s" % suffix, "dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "DROP")
-    chain.rules.append(rule)
-
-    chain = table.get_chain("felix-to-%s" % suffix)
-    for icmp in ["130", "131", "132", "134", "135", "136"]:
-        rule = fiptables.Rule(futils.IPV6, "RETURN")
-        rule.protocol = "ipv6-icmp"
-        rule.create_icmp6_match(icmp)
-        chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "DROP")
-    rule.create_conntrack_match("INVALID")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.create_conntrack_match("RELATED,ESTABLISHED")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.create_set_match("felix-6-to-port-%s" % suffix, "src,dst")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.create_set_match("felix-6-to-addr-%s" % suffix, "src")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "RETURN")
-    rule.protocol = "ipv6-icmp"
-    rule.create_set_match("felix-6-to-icmp-%s" % suffix, "src")
-    chain.rules.append(rule)
-
-    rule = fiptables.Rule(IPV6, "DROP")
-    chain.rules.append(rule)
-
-    expected_iptables.apply()
 
 def add_endpoint_ipsets(suffix):
     """

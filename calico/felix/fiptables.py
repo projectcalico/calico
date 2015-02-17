@@ -40,7 +40,7 @@ IPTABLES_CMD = { IPV4: "iptables",
 # -S : read
 #
 # Chain commands :
-# -N : create 
+# -N : create
 # -F : flush
 # -X : delete
 #
@@ -53,7 +53,8 @@ IPTABLES_CMD = { IPV4: "iptables",
 # Logger
 log = logging.getLogger(__name__)
 
-# Special value to mean "put this rule at the end".
+# Special value to mean "put this rule at the end".  This must be "-1" as we
+# use it as a python array index!
 RULE_POSN_LAST = -1
 
 class Chain(object):
@@ -127,36 +128,47 @@ class Chain(object):
         Position starts at offset 0, even though iptables wants it to start at
         offset 1.
         """
+        # We append if we are not forcing position, but want to put the rule
+        # last.
+        append = position == RULE_POSN_LAST and not force_position
+
         if force_position:
-            if position == RULE_POSN_LAST:
-                position = len(self.rules)
-            if (len(self.rules) <= position) or (rule != self.rules[position]):
-                # Either adding after existing rules, or replacing an existing rule.
+            try:
+                if rule != self.rules[position]:
+                    self._insert_rule(rule, position)
+            except IndexError:
+                # Either appending to empty list (so -1 no good), or list not
+                # long enough. Explicitly add it.
                 self._insert_rule(rule, position)
         else:
             if rule not in self.rules:
-                self._insert_rule(rule, position)
+                if position == RULE_POSN_LAST:
+                    append = True
+                self._insert_rule(rule, position, append)
         return
 
-    def _insert_rule(self, rule, position):
+    def _insert_rule(self, rule, position, append=False):
         """
-        Insert the given rule at the supplied position.
-        
+        Insert the given rule at the supplied offset.
+
         position of 0 means "insert at the start", which is what iptables
         considers as position 1.
 
         This method is private; callers outside this module should call
         insert_rule instead.
         """
-        if position == RULE_POSN_LAST:
+        if append:
             args = [IPTABLES_CMD[self.type],
                     "-w",
                     "-t",
                     self.table.name,
                     "-A",
                     self.name]
-            position = len(self.rules)
+            self.rules.append(rule)
         else:
+            if position == RULE_POSN_LAST:
+                position = len(self.rules)
+
             args = [IPTABLES_CMD[self.type],
                     "-w",
                     "-t",
@@ -164,11 +176,11 @@ class Chain(object):
                     "-I",
                     self.name,
                     str(position + 1)]
+            self.rules.insert(position, rule)
 
         args.extend(rule.generate_fields())
         log.debug("Creating rule : %s", args)
         self.table.ops.append(args)
-        self.rules.insert(position, rule)
 
     @property
     def table(self):
@@ -262,6 +274,15 @@ class Rule(object):
                       "-j": "target",
                       "-m": "match" }
 
+    # Values of the above. Order is to ensure that tests are more regressible.
+    KNOWN_FIELDS = [ "src",
+                     "dst",
+                     "protocol",
+                     "in_interface",
+                     "out_interface",
+                     "match",
+                     "target" ]
+
     FIELD_TO_FLAG = {field: flag for flag, field in FLAG_TO_FIELD.items()}
 
     def __init__(self, type, target=None):
@@ -302,8 +323,8 @@ class Rule(object):
             flag = fields.pop(0)
 
             values = []
-            while fields and fields[0][0] != "-":
-                values.append(fields.pop(0)) 
+            while fields and fields[0][0] != "-" and fields[0] != "!":
+                values.append(fields.pop(0))
 
             value = " ".join(values)
 
@@ -325,7 +346,7 @@ class Rule(object):
         """
         fields = []
 
-        for field in Rule.FIELD_TO_FLAG:
+        for field in Rule.KNOWN_FIELDS:
             value = getattr(self, field)
             if value is not None and value[0] == "!":
                 fields.extend(["!", Rule.FIELD_TO_FLAG[field], value[1:]])
@@ -341,7 +362,7 @@ class Rule(object):
             fields.extend(value.split())
 
         return fields
-            
+
     def create_target(self, name, parameters=None):
         self.target = name
         for key in parameters:
@@ -420,11 +441,11 @@ class TableState(object):
             hash = self.tables_v4
         else:
             hash = self.tables_v6
-        
+
         if name in hash:
             table = hash[name]
         else:
-            table = read_table(type, name)
+            table = self.load_table(type, name)
             hash[name] = table
 
         return table
@@ -455,44 +476,56 @@ class TableState(object):
         else:
             log.debug("No table changes required")
 
+    def load_table(self, type, name):
+        """
+        Reads a table, building current state.
+        """
+        table = Table(type, name)
+        data = self.read_table(type, name)
+        lines = data.split("\n")
 
-def read_table(type, name):
-    """
-    Reads a table, building current state.
-    """
-    table = Table(type, name)
-    data = futils.check_call([IPTABLES_CMD[type],
-                              "-w",
-                              "-S",
-                              "-t",
-                              name]).stdout
-    lines = data.split("\n")
+        for line in lines:
+            words = line.split()
 
-    for line in lines:
-        words = line.split()
+            if len(words) > 1:
+                if words[0] in ("-P", "-N"):
+                    # We found a chain; remember and go to next line.
+                    log.debug("Found chain in table %s : %s", name, line)
+                    chain = Chain(type, words[1])
+                    chain.table = table
+                    table.chains[chain.name] = chain
+                    continue
 
-        if len(words) > 1:
-            if words[0] in ("-P", "-N"):
-                # We found a chain; remember and go to next line.
-                log.debug("Found chain in table %s : %s", name, line)
-                chain = Chain(type, words[1])
-                chain.table = table
-                table.chains[chain.name] = chain
-                continue
+                if words[0] != "-A":
+                    # A line we do not know how to parse. Panic.
+                    raise UnrecognisedIptablesField(
+                        "Unable to parse iptables line : %s" % line)
 
-            if words[0] != "-A":
-                # A line we do not know how to parse. Panic.
-                raise UnrecognisedIptablesField(
-                    "Unable to parse iptables line : %s" % line)
+                log.debug("Found rule in table %s : %s", name, line)
+                words.pop(0)
+                chain_name = words.pop(0)
+                try:
+                    chain = table.chains[chain_name]
+                except KeyError:
+                    # Rule for chain that does not exist
+                    raise UnrecognisedIptablesField(
+                        "Rule in table %s for chain which does not exist : %s" %
+                        (name, line))
+                rule = Rule(type)
+                rule.parse_fields(line, words)
+                chain.rules.append(rule)
 
-            log.debug("Found rule in table %s : %s", name, line)
-            words.pop(0)
-            chain_name = words.pop(0)
-            chain = table.chains[chain_name]
+        return table
 
-            rule = Rule(type)
-            rule.parse_fields(line, words)
-            chain.rules.append(rule)
+    def read_table(self, type, name):
+        """
+        Runs the iptables command to load a table and returns it. Separated out
+        purely for convenience of testing (since we can trivially mock it out).
+        """
+        data = futils.check_call([IPTABLES_CMD[type],
+                                  "-w",
+                                  "-S",
+                                  "-t",
+                                  name]).stdout
 
-    return table
-
+        return data
