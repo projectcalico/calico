@@ -8,6 +8,7 @@ Usage:
   calicoctl node --ip=<IP>
                  [--etcd=<ETCD_AUTHORITY>]
                  [--node-image=<DOCKER_IMAGE_NAME>]
+                 [--ip6=<IP6>]
   calicoctl status [--etcd=<ETCD_AUTHORITY>]
   calicoctl version [--etcd=<ETCD_AUTHORITY>]
   calicoctl shownodes [--detailed] [--etcd=<ETCD_AUTHORITY>]
@@ -24,6 +25,7 @@ Usage:
 
 Options:
  --ip=<IP>                The local management address to use.
+ --ip6=<IP6>              The local IPv6 management address to use.
  --etcd=<ETCD_AUTHORITY>  The location of the etcd service as
                           host:port [default: 127.0.0.1:4001]
  --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
@@ -76,6 +78,7 @@ IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
 POWERSTRIP_PORT = 2377
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
+DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
 class Vividict(dict):
     # From http://stackoverflow.com/a/19829714
@@ -105,16 +108,18 @@ class CalicoCmdLineEtcdClient(object):
             (host, port) = etcd_authority.split(":", 1)
             self.etcd_client = etcd.Client(host=host, port=int(port))
 
-    def create_host(self, bird_ip):
+    def create_host(self, bird_ip, bird6_ip):
         """
         Create a new Calico host.
 
         :param bird_ip: The IP address BIRD should listen on.
+        :param bird6_ip: The IP address BIRD6 should listen on.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
+        self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
@@ -465,7 +470,7 @@ def process_output(line):
     sys.stdout.write(line)
 
 
-def node(ip, node_image):
+def node(ip, node_image, ip6=""):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -482,9 +487,13 @@ def node(ip, node_image):
     if not ipv4_pools:
         print "No IPv4 range defined.  Exiting."
         return
+    ipv6_pools = client.get_ip_pools("v6")
+    if not ipv6_pools:
+        print "No IPv6 range defined.  Exiting."
+        return
 
     print "Using master on IP: %s" % master_ip
-    client.create_host(ip)
+    client.create_host(ip, ip6)
     try:
         docker("rm", "-f", "calico-node")
     except Exception:
@@ -493,6 +502,7 @@ def node(ip, node_image):
     output = StringIO.StringIO()
 
     docker("run", "-e",  "IP=%s" % ip,
+                  "-e",  "IP6=%s" % ip6,
                   "--name=calico-node",
                   "--restart=always",
                   "--privileged",
@@ -524,6 +534,10 @@ def master(ip, master_image):
     ipv4_pools = client.get_ip_pools("v4")
     if len(ipv4_pools) == 0:
         client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
+    # If no IPv6 pools are defined, add a default.
+    ipv6_pools = client.get_ip_pools("v6")
+    if len(ipv6_pools) == 0:
+        client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
     try:
         docker("rm", "-f", "calico-master")
@@ -845,7 +859,8 @@ if __name__ == '__main__':
             master(arguments["--ip"], master_image=master_image)
         elif arguments["node"]:
             node_image = arguments['--node-image']
-            node(arguments["--ip"], node_image=node_image)
+            ip6 = arguments["--ip6"]
+            node(arguments["--ip"], node_image=node_image, ip6=ip6)
         elif arguments["status"]:
             status()
         elif arguments["reset"]:

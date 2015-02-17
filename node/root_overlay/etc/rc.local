@@ -2,6 +2,6 @@
 # Record current boot time. Helps with debugging.
 date > /tmp/boottime.txt
 
-# Run Confd in onetime mode, to ensure that we have a working config in place to allow bird and
+# Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
 # felix to start.
 ./confd -confdir=. -onetime -node ${ETCD_AUTHORITY}
