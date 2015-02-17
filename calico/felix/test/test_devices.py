@@ -21,7 +21,6 @@ Test the device handling code.
 import logging
 import mock
 import os
-import sys
 import unittest
 import uuid
 
@@ -31,6 +30,11 @@ import calico.felix.test.stub_utils as stub_utils
 
 # Logger
 log = logging.getLogger(__name__)
+
+# Canned mock calls representing clean entry to/exit from a context manager.
+M_ENTER = mock.call().__enter__()
+M_CLEAN_EXIT = mock.call().__exit__(None, None, None)
+
 
 class TestDevices(unittest.TestCase):
     def setUp(self):
@@ -125,17 +129,18 @@ class TestDevices(unittest.TestCase):
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
 
-    def test_configure_tap2(self):
+    def test_configure_tap_mainline(self):
+        m_open = mock.mock_open()
         tap = "tap" + str(uuid.uuid4())[:11]
-
-        open_mock = mock.Mock()
-        calls = [mock.call('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb'),
-                 mock.call("/proc/sys/net/ipv4/conf/%s/proxy_arp" % tap, 'wb')]
-
-        with mock.patch('__builtin__.open') as open_mock:
-            # TODO: We don't test that the write calls happened, which is deeply annoying...
+        with mock.patch('__builtin__.open', m_open, create=True):
             devices.configure_tap(tap)
-            open_mock.assert_has_calls(calls, any_order=True)
+        calls = [mock.call('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb'),
+                 M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,
+                 mock.call('/proc/sys/net/ipv4/conf/%s/proxy_arp' % tap, 'wb'),
+                 M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,
+                 mock.call('/proc/sys/net/ipv4/neigh/%s/proxy_delay' %tap, 'wb'),
+                 M_ENTER, mock.call().write('0'), M_CLEAN_EXIT,]
+        m_open.assert_has_calls(calls)
 
     def test_interface_up1(self):
         """

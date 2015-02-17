@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.11
+Version:        0.12.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -217,6 +217,23 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Feb 13 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.12.1
+- Bug fixes and improvements to Calico components
+  - Initial refactor of fsocket.
+  - Fix issue #133 (lost resync when connection error)
+  - Fix restart failure on connection error (bug #97)
+  - More timing tests, and fixing of resulting bugs.
+  - Tighten up resync testing, with bug fix.
+  - ACL Manager fix: Suppress superfluous unsolicited ACLUPDATE messages when nothing has changed
+  - Use ip route replace instead of add Fixes timing window when route exists during live migration
+  - Fix #164: Disable proxy_delay on taps to avoid delayed proxy ARP response.
+  - Better doc and organization for setup code
+  - mech_calico: Bind as directed by Neutron server's bind_host config
+  - Delete routes when endpoint destroyed
+  - Send ENDPOINTDESTROYED rsp even whenendpoint is unknown (fixes #192)
+  - More robust exception handling in handle_endpoint{updated|destroyed}
+  - Unit testing and diagnostics improvements
+
 * Fri Jan 30 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.11
 - Logging improvements and additional unit tests
 - ACL Manager fixes

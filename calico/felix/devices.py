@@ -88,6 +88,9 @@ def configure_tap(tap):
     with open("/proc/sys/net/ipv4/conf/%s/proxy_arp" % tap, 'wb') as f:
         f.write('1')
 
+    with open("/proc/sys/net/ipv4/neigh/%s/proxy_delay" % tap, 'wb') as f:
+        f.write('0')
+
 
 def add_route(type, ip, tap, mac):
     """

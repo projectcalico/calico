@@ -352,20 +352,15 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint update: %s", message.fields)
 
-        # Get the endpoint data from the message.
+        # Get the endpoint ID from the message.
         endpoint_id = message.fields['endpoint_id']
+
+        # Initially assume success.
+        fields = {"rc": RC_SUCCESS, "message": ""}
 
         try:
             # Update the endpoint
             endpoint = self.endpoints[endpoint_id]
-
-            # Update the endpoint state; this can fail.
-            self._update_endpoint(endpoint, message.fields)
-
-            fields = {
-                "rc": RC_SUCCESS,
-                "message": "",
-            }
 
         except KeyError:
             log.error("Received update for absent endpoint %s", endpoint_id)
@@ -375,12 +370,17 @@ class FelixAgent(object):
                 "message": "Endpoint %s does not exist" % endpoint_id,
             }
 
-        except InvalidRequest as error:
-            # Invalid request fields. Return an error.
-            fields = {
-                "rc": RC_INVALID,
-                "message": error.value,
-            }
+        else:
+            try:
+                # Update the endpoint state; this can fail.
+                self._update_endpoint(endpoint, message.fields)
+
+            except InvalidRequest as error:
+                # Invalid request fields. Return an error.
+                fields = {
+                    "rc": RC_INVALID,
+                    "message": error.value,
+                }
 
         # Now we send the response.
         sock = self.sockets[Socket.TYPE_EP_REP]
@@ -397,26 +397,33 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint destroy: %s", message.fields)
 
+        # Get the endpoint ID from the message.
         delete_id = message.fields['endpoint_id']
 
+        # Initially assume success.
+        fields = {"rc": RC_SUCCESS, "message": ""}
+
         try:
+            # Remove this endpoint from Felix's list of managed
+            # endpoints.
             endpoint = self.endpoints.pop(delete_id)
         except KeyError:
             log.error("Received destroy for absent endpoint %s", delete_id)
-            return
+            fields = {
+                "rc": RC_NOTEXIST,
+                "message": "Endpoint %s does not exist" % delete_id,
+            }
+        else:
+            # Unsubscribe from ACL information for this endpoint.
+            self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
+                delete_id.encode('utf-8')
+            )
 
-        # Unsubscribe endpoint.
-        self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
-            delete_id.encode('utf-8')
-        )
-        endpoint.remove(self.iptables_state)
+            # Remove programming for this endpoint.
+            endpoint.remove(self.iptables_state)
 
-        # Send a message indicating our success.
+        # Send the ENDPOINTDESTROYED response.
         sock = self.sockets[Socket.TYPE_EP_REP]
-        fields = {
-            "rc": RC_SUCCESS,
-            "message": "",
-        }
         sock.send(Message(Message.TYPE_EP_RM, fields))
 
         return
