@@ -1,7 +1,0 @@
-#!/bin/sh
-
-set -e
-
-pip install "python-iptables>=0.7.0"
-
-#DEBHELPER#
