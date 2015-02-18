@@ -331,26 +331,34 @@ class DatastoreClient(object):
         """
         hosts = Vividict()
         try:
-            etcd_hosts = self.etcd_client.read('/calico/host', recursive=True,).leaves
+            etcd_hosts = self.etcd_client.read('/calico/host', recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
                 if len(packed) == 5:
                     (_, _, _, host, _) = packed
-                    hosts[host] = {}
+                    hosts[host] = Vividict()
                 elif len(packed) == 10:
                     (_, _, _, host, _, container_type, container_id, _, endpoint_id, final_key) = \
                         packed
                     hosts[host][container_type][container_id][endpoint_id][final_key] = child.value
+                else:
+                    raise Exception("Unrecognized data")
         except KeyError:
-            # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
 
         return hosts
 
     def remove_all_data(self):
         """
+        Remove all data from the datastore.
+
+        We don't care if Calico data can't be found.
+
         """
-        self.etcd_client.delete("/calico", recursive=True, dir=True)
+        try:
+            self.etcd_client.delete("/calico", recursive=True, dir=True)
+        except KeyError:
+            pass
 
     def remove_container(self, container_id):
         container_path = CONTAINER_PATH % {"hostname": hostname,

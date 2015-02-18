@@ -10,7 +10,6 @@ Usage:
   calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>]
   calicoctl node stop [--force]
   calicoctl status
-  calicoctl version
   calicoctl shownodes [--detailed]
   calicoctl group show [--detailed]
   calicoctl group add <GROUP>
@@ -449,7 +448,7 @@ def node_show(detailed):
                 x.add_row([host, "N/A", "0"])
                 continue
             for container_type, workloads in container_types.iteritems():
-                x.add_row([host, type, len(workloads)])
+                x.add_row([host, container_type, len(workloads)])
     print x
 
 
@@ -576,13 +575,10 @@ def validate_arguments():
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
         arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
     if not group_ok:
-        print "Groups must be <30 character longs and can only container numbers, letters and " \
+        print "Groups must be <30 character long and can only container numbers, letters and " \
               "underscore."
     if not ip_ok:
         print "Invalid --ip argument"
-    # TODO
-    # --container
-    # --etcd
     return group_ok and ip_ok
 
 def create_dirs():
