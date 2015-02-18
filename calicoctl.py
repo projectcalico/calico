@@ -388,11 +388,12 @@ def group_add_container(container_name, group_name):
     # Get the group UUID.
     group_id = client.get_group_id(group_name)
     if not group_id:
-        raise KeyError("Group with name %s was not found." % group_name)
+        print "Group with name %s was not found." % group_name
+        return
 
     endpoint_id = client.get_ep_id_from_cont(container_id)
     client.add_endpoint_to_group(group_id, endpoint_id)
-
+    print "Added %s to %s" % (container_name, group_name)
 
 def group_remove(group_name):
     #TODO - Don't allow removing a group that has enpoints in it.
@@ -432,14 +433,14 @@ def node_show(detailed):
     if detailed:
         x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID", "Addresses",
                          "MAC", "State"])
-        for host, types in hosts.iteritems():
-            if not types:
+        for host, container_types in hosts.iteritems():
+            if not container_types:
                 x.add_row([host, "None", "None", "None", "None", "None", "None"])
                 continue
-            for container_type, workloads in types.iteritems():
+            for container_type, workloads in container_types.iteritems():
                 for workload, endpoints in workloads.iteritems():
                     for endpoint, data in endpoints.iteritems():
-                        x.add_row([host, type, workload, endpoint, data["addrs"], data["mac"],
+                        x.add_row([host, container_type, workload, endpoint, data["addrs"], data["mac"],
                                    data["state"]])
     else:
         x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
