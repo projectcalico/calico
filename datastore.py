@@ -334,15 +334,14 @@ class DatastoreClient(object):
             etcd_hosts = self.etcd_client.read('/calico/host', recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if len(packed) == 5:
-                    (_, _, _, host, _) = packed
-                    hosts[host] = Vividict()
+                if len(packed) > 4 and len(packed) < 10:
+                    (_, _, _, host, _) = packed[0:5]
+                    if not hosts[host]:
+                        hosts[host] = Vividict()
                 elif len(packed) == 10:
                     (_, _, _, host, _, container_type, container_id, _, endpoint_id, final_key) = \
                         packed
                     hosts[host][container_type][container_id][endpoint_id][final_key] = child.value
-                else:
-                    raise Exception("Unrecognized data")
         except KeyError:
             pass
 
@@ -363,4 +362,4 @@ class DatastoreClient(object):
     def remove_container(self, container_id):
         container_path = CONTAINER_PATH % {"hostname": hostname,
                                            "container_id": container_id}
-        self.etcd_client.delete(container_path)
+        self.etcd_client.delete(container_path, recursive=True, dir=True)

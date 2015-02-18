@@ -20,7 +20,7 @@ Usage:
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
   calicoctl container add <CONTAINER> <IP>
-  calicoctl container remove <CONTAINER> <--force>
+  calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
 
@@ -180,6 +180,7 @@ def container_remove(container_name):
     # Remove the container from the datastore.
     client.remove_container(container_id)
 
+    print "Removed %s" % container_name
 
 def group_remove_container(container_name, group_name):
     """
@@ -198,19 +199,30 @@ def group_remove_container(container_name, group_name):
     # Get the group UUID.
     group_id = client.get_group_id(group_name)
     if not group_id:
-        raise KeyError("Group with name %s was not found." % group_name)
+        print "Group with name %s was not found." % group_name
+    else:
 
-    endpoint_id = client.get_ep_id_from_cont(container_id)
+        endpoint_id = client.get_ep_id_from_cont(container_id)
 
-    # Remove the endpoint from the group.
-    client.remove_endpoint_from_group(group_id, endpoint_id)
-
+        try:
+            # Remove the endpoint from the group.
+            client.remove_endpoint_from_group(group_id, endpoint_id)
+            print "Remove %s from %s" % (container_name, group_name)
+        except KeyError:
+            print "%s is not a member of %s" % (container_name, group_name)
+            sys.exit(1)
 
 def node_stop(force):
     client = DatastoreClient()
     if force or len(client.get_hosts()[hostname]["docker"]) == 0:
         client.remove_host()
-        docker("stop", "calico-node")
+
+        # This next line can fail, since the container is needed for the connection to
+        # docker.
+        try:
+            docker("stop", "calico-node")
+        except Exception:
+            pass
         print "Node stopped and all configuration removed"
     else:
         print "Current host has active endpoints so can't be stopped. Force with --force"
@@ -567,9 +579,10 @@ def ipv4_pool_show(version):
     """
     client = DatastoreClient()
     pools = client.get_ip_pools(version)
+    x = PrettyTable(["CIDR"])
     for pool in pools:
-        print pool
-
+        x.add_row([pool])
+    print x
 
 def validate_arguments():
     group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
@@ -581,6 +594,7 @@ def validate_arguments():
     if not ip_ok:
         print "Invalid --ip argument"
     return group_ok and ip_ok
+
 
 def create_dirs():
     mkdir_p("/var/log/calico")
