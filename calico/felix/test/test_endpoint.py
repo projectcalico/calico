@@ -29,8 +29,13 @@ import calico.felix.endpoint as endpoint
 import calico.felix.frules as frules
 import calico.felix.futils as futils
 
+from collections import namedtuple
+Config = namedtuple('Config', ['IFACE_PREFIX', 'SUFFIX_LEN'])
+
 # Supplied, but never accessed thanks to mocks.
 iptables_state = None
+
+config = Config("tap", 11)
 
 class TestEndpoint(unittest.TestCase):
     def test_program_bails_early(self):
@@ -43,7 +48,7 @@ class TestEndpoint(unittest.TestCase):
         # iptables_state is never accessed (as the code returns too early).
         iptables_state = None
 
-        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
         retval = ep.program_endpoint(iptables_state)
 
         self.assertFalse(retval)
@@ -52,11 +57,11 @@ class TestEndpoint(unittest.TestCase):
         """
         Removal of an endpoint where tap interface deleted under our feet.
         """
-        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
 
-        p_exists = mock.patch('calico.felix.devices.tap_exists',
+        p_exists = mock.patch('calico.felix.devices.interface_exists',
                               side_effect=[True, False])
-        p_list = mock.patch('calico.felix.devices.list_tap_ips',
+        p_list = mock.patch('calico.felix.devices.list_interface_ips',
                             return_value = set(["1.2.3.4", "1.2.3.5"]))
         p_del_route = mock.patch('calico.felix.devices.del_route',
             side_effect=futils.FailedSystemCall("blah",
@@ -78,12 +83,12 @@ class TestEndpoint(unittest.TestCase):
         """
         Removal of an endpoint where other system error happens.
         """
-        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
 
         with self.assertRaisesRegexp(futils.FailedSystemCall, "blah"):
-            p_exists = mock.patch('calico.felix.devices.tap_exists',
+            p_exists = mock.patch('calico.felix.devices.interface_exists',
                                   side_effect=[True, True])
-            p_list = mock.patch('calico.felix.devices.list_tap_ips',
+            p_list = mock.patch('calico.felix.devices.list_interface_ips',
                                 return_value = set(["1.2.3.4", "1.2.3.5"]))
             p_del_route = mock.patch('calico.felix.devices.del_route',
                 side_effect=futils.FailedSystemCall("blah",
@@ -105,12 +110,12 @@ class TestEndpoint(unittest.TestCase):
         """
         Removal of an endpoint where some random exception appears.
         """
-        ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
 
         with self.assertRaisesRegexp(Exception, "blah"):
-            p_exists = mock.patch('calico.felix.devices.tap_exists',
+            p_exists = mock.patch('calico.felix.devices.interface_exists',
                                   side_effect=[True, True])
-            p_list = mock.patch('calico.felix.devices.list_tap_ips',
+            p_list = mock.patch('calico.felix.devices.list_interface_ips',
                                 return_value = set(["1.2.3.4", "1.2.3.5"]))
             p_del_route = mock.patch('calico.felix.devices.del_route',
                                      side_effect=Exception("blah"))
@@ -123,4 +128,3 @@ class TestEndpoint(unittest.TestCase):
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)
         self.assertEqual(mock_del_rules.call_count, 0)
-

@@ -84,8 +84,8 @@ class FelixAgent(object):
         # The endpoints managed by this Felix, keyed off their UUID.
         self.endpoints = {}
 
-        # Set of UUIDs of endpoints that need to be retried (the tap interface
-        # did not exist when the ENDPOINTCREATED was received).
+        # Set of UUIDs of endpoints that need to be retried (the interface did
+        # not exist when the ENDPOINTCREATED was received).
         self.ep_retry = set()
 
         # Properties for handling resynchronization.
@@ -257,8 +257,8 @@ class FelixAgent(object):
                 if found_suffix not in known_suffices:
                     # Found rules which we own for an endpoint which does not
                     # exist.  Remove those rules.
-                    log.warning("Removing %s rules for removed object %s" %
-                                (type, found_suffix))
+                    log.warning("Removing %s rules for removed object %s",
+                                type, found_suffix)
                     frules.del_rules(self.iptables_state, found_suffix, type)
 
     def handle_endpointcreated(self, message, sock):
@@ -271,77 +271,96 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint create: %s", message.fields)
 
-        # TODO: Ought to firewall missing mandatory fields here.
-        endpoint_id = message.fields['endpoint_id']
-        mac         = message.fields['mac']
-        resync_id   = message.fields.get('resync_id')
-
-        # First, check whether we know about this endpoint already. If we do,
-        # we should raise a warning log unless we're in the middle of a resync.
-        endpoint = self.endpoints.get(endpoint_id)
-        if endpoint is not None and resync_id is None:
-            log.warning(
-                "Received endpoint creation for existing endpoint %s",
-                endpoint_id
-            )
-        elif endpoint is not None and resync_id is not None:
-            endpoint.pending_resync = False
-        elif endpoint is None:
-            endpoint = self._create_endpoint(endpoint_id, mac)
+        # Default to success
+        fields = { "rc": RC_SUCCESS, "message": "" }
 
         try:
-            # Update the endpoint state; this can fail.
+            try:
+                endpoint_id = message.fields['endpoint_id']
+            except KeyError:
+                raise InvalidRequest("Missing \"endpoint_id\" field",
+                                     message.fields)
+            try:
+                mac = message.fields['mac']
+            except KeyError:
+                raise InvalidRequest("Missing \"mac\" field",
+                                     message.fields)
+
+            try:
+                resync_id   = message.fields['resync_id']
+            except KeyError:
+                raise InvalidRequest("Missing \"resync_id\" field",
+                                     message.fields)
+
+            interface   = message.fields.get('interface_id')
+
+            if interface and not interface.startswith(self.config.IFACE_PREFIX):
+                raise InvalidRequest("Interface \"%s\" does not start with \"%s\""
+                                     % (interface, self.config.IFACE_PREFIX),
+                                     message.fields)
+
+            endpoint = self.endpoints.get(endpoint_id)
+            if endpoint is not None and resync_id is None:
+                # We know about this endpoint, but not a resync; accept, but log.
+                log.warning(
+                    "Received endpoint creation for existing endpoint %s",
+                    endpoint_id
+                )
+            elif endpoint is not None and resync_id is not None:
+                # We know about this endpoint, and this is a resync.
+                endpoint.pending_resync = False
+            elif endpoint is None:
+                # New endpoint.
+                endpoint = self._create_endpoint(endpoint_id, mac, interface)
+
+            # Update the endpoint state; this can fail with Invalid Request.
             self._update_endpoint(endpoint, message.fields)
 
-            fields = {
-                "rc": RC_SUCCESS,
-                "message": "",
-            }
+            if resync_id:
+                # This endpoint created was part of a resync.
+                if resync_id == self.resync_id:
+                    #*********************************************************#
+                    #* It was part of the most recent resync.  Increment how *#
+                    #* many ENDPOINTCREATED requests we have received, and   *#
+                    #* if this is the last one expected, complete the        *#
+                    #* resync.                                               *#
+                    #*********************************************************#
+                    self.resync_recd += 1
+                    if self.resync_expected is None:
+                        # resync_expected not set - resync response pending
+                        log.debug(
+                            "Received ENDPOINTCREATED number %d for resync "
+                            "before resync response", self.resync_recd)
+                    else:
+                        log.debug(
+                            "Received ENDPOINTCREATED for resync, %d out of %d",
+                            self.resync_recd, self.resync_expected)
+
+                    if self.resync_recd == self.resync_expected:
+                        self.complete_endpoint_resync(True)
+                else:
+                    #*********************************************************#
+                    #* We just got an ENDPOINTCREATED for the wrong          *#
+                    #* resync. This can happen (perhaps we restarted during  *#
+                    #* a resync and are seeing messages from that old        *#
+                    #* resync).  Log it though, since this is very unusual   *#
+                    #* and strange.                                          *#
+                    #*********************************************************#
+                    log.warning(
+                        "Received ENDPOINTCREATED for %s with invalid "
+                        "resync %s (expected %s)" ,
+                        endpoint_id, resync_id, self.resync_id)
 
         except InvalidRequest as error:
-            # Invalid request fields. Return an error.
             fields = {
                 "rc": RC_INVALID,
-                "message": error.value,
+                "message": error.message,
             }
+            log.error("Got invalid ENDPOINTCREATED message : %s, "
+                      "request fields %s", error.message, error.fields)
 
-        # Now we send the response.
-        sock = self.sockets[Socket.TYPE_EP_REP]
+        # Send the response.
         sock.send(Message(Message.TYPE_EP_CR, fields))
-
-        if resync_id:
-            # This endpoint created was part of a resync.
-            if resync_id == self.resync_id:
-                #*************************************************************#
-                #* It was part of the most recent resync.  Increment how     *#
-                #* many ENDPOINTCREATED requests we have received, and if    *#
-                #* this is the last one expected, complete the resync.       *#
-                #*************************************************************#
-                self.resync_recd += 1
-                if self.resync_expected is None:
-                    # resync_expected not set - resync response pending
-                    log.debug("Received ENDPOINTCREATED number %d for resync "
-                              "before resync response" ,
-                              self.resync_recd)
-                else:
-                    log.debug("Received ENDPOINTCREATED for resync, %d out of %d",
-                              self.resync_recd, self.resync_expected)
-
-                if self.resync_recd == self.resync_expected:
-                    self.complete_endpoint_resync(True)
-            else:
-                #*************************************************************#
-                #* We just got an ENDPOINTCREATED for the wrong resync. This *#
-                #* can happen (perhaps we restarted during a resync and are  *#
-                #* seeing messages from that old resync).  Log it though,    *#
-                #* since this is very unusual and strange.                   *#
-                #*************************************************************#
-                log.warning(
-                    "Received ENDPOINTCREATED for %s with invalid "
-                    "resync %s (expected %s)" ,
-                    endpoint_id, resync_id, self.resync_id)
-
-        return
 
     def handle_endpointupdated(self, message, sock):
         """
@@ -352,41 +371,43 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint update: %s", message.fields)
 
-        # Get the endpoint ID from the message.
-        endpoint_id = message.fields['endpoint_id']
-
         # Initially assume success.
         fields = {"rc": RC_SUCCESS, "message": ""}
 
         try:
-            # Update the endpoint
-            endpoint = self.endpoints[endpoint_id]
-
-        except KeyError:
-            log.error("Received update for absent endpoint %s", endpoint_id)
-
-            fields = {
-                "rc": RC_NOTEXIST,
-                "message": "Endpoint %s does not exist" % endpoint_id,
-            }
-
-        else:
+            # Get the endpoint ID from the message.
             try:
-                # Update the endpoint state; this can fail.
-                self._update_endpoint(endpoint, message.fields)
+                endpoint_id = message.fields['endpoint_id']
+            except KeyError:
+                raise InvalidRequest("Missing \"endpoint_id\" field",
+                                     message.fields)
 
-            except InvalidRequest as error:
-                # Invalid request fields. Return an error.
+            try:
+                # Update the endpoint
+                endpoint = self.endpoints[endpoint_id]
+
+            except KeyError:
+                log.error("Received update for absent endpoint %s", endpoint_id)
+
                 fields = {
-                    "rc": RC_INVALID,
-                    "message": error.value,
+                    "rc": RC_NOTEXIST,
+                    "message": "Endpoint %s does not exist" % endpoint_id,
                 }
 
-        # Now we send the response.
-        sock = self.sockets[Socket.TYPE_EP_REP]
-        sock.send(Message(Message.TYPE_EP_UP, fields))
+            else:
+                # Update the endpoint state; this can fail with InvalidRequest.
+                self._update_endpoint(endpoint, message.fields)
 
-        return
+        except InvalidRequest as error:
+            fields = {
+                "rc": RC_INVALID,
+                "message": error.message,
+            }
+            log.error("Got invalid ENDPOINTUPDATED message : %s, "
+                      "request fields %s", error.message, error.fields)
+
+        # Send the response.
+        sock.send(Message(Message.TYPE_EP_UP, fields))
 
     def handle_endpointdestroyed(self, message, sock):
         """
@@ -397,36 +418,45 @@ class FelixAgent(object):
         """
         log.debug("Received endpoint destroy: %s", message.fields)
 
-        # Get the endpoint ID from the message.
-        delete_id = message.fields['endpoint_id']
-
         # Initially assume success.
         fields = {"rc": RC_SUCCESS, "message": ""}
 
         try:
-            # Remove this endpoint from Felix's list of managed
-            # endpoints.
-            endpoint = self.endpoints.pop(delete_id)
-        except KeyError:
-            log.error("Received destroy for absent endpoint %s", delete_id)
+            # Get the endpoint ID from the message.
+            try:
+                delete_id = message.fields['endpoint_id']
+            except KeyError:
+                raise InvalidRequest("Missing \"endpoint_id\" field",
+                                     message.fields)
+            try:
+                # Remove this endpoint from Felix's list of managed
+                # endpoints.
+                endpoint = self.endpoints.pop(delete_id)
+            except KeyError:
+                log.error("Received destroy for absent endpoint %s", delete_id)
+                fields = {
+                    "rc": RC_NOTEXIST,
+                    "message": "Endpoint %s does not exist" % delete_id,
+                }
+            else:
+                # Unsubscribe from ACL information for this endpoint.
+                self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
+                    delete_id.encode('utf-8')
+                )
+
+                # Remove programming for this endpoint.
+                endpoint.remove(self.iptables_state)
+
+        except InvalidRequest as error:
             fields = {
-                "rc": RC_NOTEXIST,
-                "message": "Endpoint %s does not exist" % delete_id,
+                "rc": RC_INVALID,
+                "message": error.message,
             }
-        else:
-            # Unsubscribe from ACL information for this endpoint.
-            self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
-                delete_id.encode('utf-8')
-            )
+            log.error("Got invalid ENDPOINTDESTROYED message : %s, "
+                      "request fields %s", error.message, error.fields)
 
-            # Remove programming for this endpoint.
-            endpoint.remove(self.iptables_state)
-
-        # Send the ENDPOINTDESTROYED response.
-        sock = self.sockets[Socket.TYPE_EP_REP]
+        # Send the response.
         sock.send(Message(Message.TYPE_EP_RM, fields))
-
-        return
 
     def handle_heartbeat(self, message, sock):
         """
@@ -449,10 +479,27 @@ class FelixAgent(object):
         endpoints.
         """
         log.debug("Received resync response: %s", message.fields)
-
-        endpoint_count = int(message.fields['endpoint_count'])
-        return_code = message.fields['rc']
-        return_str = message.fields['message']
+        try:
+            try:
+                endpoint_count = int(message.fields['endpoint_count'])
+            except KeyError:
+                raise InvalidRequest("Missing \"endpoint_count\" field",
+                                     message.fields)
+            try:
+                return_code = message.fields['rc']
+            except KeyError:
+                raise InvalidRequest("Missing \"rc\" field",
+                                     message.fields)
+            try:
+                return_str = message.fields['message']
+            except KeyError:
+                raise InvalidRequest("Missing \"message\" field",
+                                     message.fields)
+        except InvalidRequest as error:
+            log.error("Got invalid RESYNCSTATE response : %s, "
+                      "request fields %s", error.message, error.fields)
+            self.complete_endpoint_resync(False)
+            return
 
         if return_code != RC_SUCCESS:
             log.error('Resync request refused with rc : %s, %s',
@@ -479,20 +526,32 @@ class FelixAgent(object):
         """
         log.debug("Received GETACLSTATE response: %s", message.fields)
 
-        return_code = message.fields['rc']
-        return_str = message.fields['message']
+        try:
+            try:
+                return_code = message.fields['rc']
+            except KeyError:
+                raise InvalidRequest("Missing \"rc\" field",
+                                     message.fields)
 
-        if return_code != RC_SUCCESS:
-            #*****************************************************************#
-            #* It's hard to see what errors we might get other than a timing *#
-            #* window one of "never heard of that endpoint". We just log it  *#
-            #* and continue onwards.                                         *#
-            #*****************************************************************#
-            log.error("ACL state request refused with rc : %s, %s",
-                      return_code,
-                      return_str)
+            try:
+                return_str = message.fields['message']
+            except KeyError:
+                raise InvalidRequest("Missing \"message\" field",
+                                     message.fields)
 
-        return
+            if return_code != RC_SUCCESS:
+                #*************************************************************#
+                #* It's hard to see what errors we might get other than a    *#
+                #* timing window one of "never heard of that endpoint". We   *#
+                #* just log it and continue onwards.                         *#
+                #*************************************************************#
+                log.error("ACL state request refused with rc : %s, %s",
+                          return_code,
+                          return_str)
+
+        except InvalidRequest as error:
+            log.error("Got invalid GETACLSTATE response : %s, "
+                        "request fields %s", error.message, error.fields)
 
     def handle_aclupdate(self, message, sock):
         """
@@ -522,7 +581,7 @@ class FelixAgent(object):
 
         return
 
-    def _create_endpoint(self, endpoint_id, mac):
+    def _create_endpoint(self, endpoint_id, mac, interface):
         """
         Creates an endpoint after having been informed about it over the API.
         Does the state programming required to get future updates for this
@@ -531,11 +590,12 @@ class FelixAgent(object):
         This routine must only be called if the endpoint is not already known
         to Felix.
         """
+        log.debug("Create endpoint %s", endpoint_id)
 
-        log.debug("Create endpoint %s" % endpoint_id)
-
-        # First message about an endpoint about which we know nothing.
-        endpoint = Endpoint(endpoint_id, mac)
+        endpoint = Endpoint(self.config,
+                            endpoint_id,
+                            mac,
+                            interface)
 
         self.endpoints[endpoint_id] = endpoint
 
@@ -560,36 +620,34 @@ class FelixAgent(object):
         """
         Updates an endpoint's data.
         """
-        mac   = fields.get('mac')
-        state = fields.get('state')
+        try:
+            mac = fields['mac']
+        except KeyError:
+            raise InvalidRequest("Missing \"mac\" field", fields)
+
+        try:
+            state = fields['state']
+        except KeyError:
+            raise InvalidRequest("Missing \"state\" field", fields)
+
+        try:
+            addrs = fields['addrs']
+        except KeyError:
+            raise InvalidRequest("Missing \"addrs\" field", fields)
+
         addresses = set()
         try:
-            for addr in fields['addrs']:
+            for addr in addrs:
                 addresses.add(Address(addr))
         except KeyError:
-            log.error("Missing addr or IP in addrs for endpoint %s : %s",
+            log.error("Missing IP in addrs for endpoint %s : %s",
                       endpoint.uuid, fields)
-            raise InvalidRequest("No valid address for endpoint %s" %
-                                 endpoint.uuid)
-
-        if mac is None:
-            log.error("No mac address for endpoint %s : %s",
-                      endpoint.uuid,
-                      fields)
-            raise InvalidRequest("No mac address for endpoint %s" %
-                                 endpoint.uuid)
-
-        if state is None:
-            log.error("No state for endpoint %s : %s",
-                      endpoint.uuid,
-                      fields)
-            raise InvalidRequest("No state for endpoint %s" % endpoint.uuid)
+            raise InvalidRequest("Missing \"addr\" field", fields)
 
         if state not in Endpoint.STATES:
             log.error("Invalid state %s for endpoint %s : %s",
                       state, endpoint.uuid, fields)
-            raise InvalidRequest("Invalid state %s for endpoint %s" %
-                                 (state, endpoint.uuid))
+            raise InvalidRequest("Invalid state \"%s\"" % state, fields)
 
         endpoint.addresses = addresses
 
@@ -620,7 +678,12 @@ class FelixAgent(object):
             message = sock.receive()
 
             if message is not None:
-                self.handlers[message.type](message, sock)
+                try:
+                    self.handlers[message.type](message, sock)
+                except KeyError:
+                    # We are going down, but raise a better exception.
+                    raise InvalidRequest("Unrecognised message type",
+                                         message.fields)
 
         for sock in self.sockets.values():
             #*****************************************************************#
@@ -758,4 +821,9 @@ class InvalidRequest(Exception):
     """
     Exception that allows us to report an invalid request.
     """
-    pass
+    def __init__(self, message, fields):
+        super(InvalidRequest, self).__init__(message)
+        self.fields = fields
+
+    def __str__(self):
+        return "%s (request : %s)" % (self.message, self.fields)

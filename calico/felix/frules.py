@@ -111,6 +111,10 @@ def set_global_rules(config, iptables_state):
     # is the best place to clean out and resync our state.
     iptables_state.reset()
 
+    # The interface matching string; for example, if interfaces start "tap"
+    # then this string is "tap+".
+    iface_match = config.IFACE_PREFIX + "+"
+
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
     table = iptables_state.get_table(futils.IPV4, "nat")
     chain = table.get_chain(CHAIN_PREROUTING)
@@ -145,7 +149,6 @@ def set_global_rules(config, iptables_state):
     #*************************************************************************#
     for type in (IPV4, IPV6):
         table = iptables_state.get_table(type, "filter")
-        log.debug("Table : %s", table)
         table.get_chain(CHAIN_FROM_ENDPOINT)
         table.get_chain(CHAIN_TO_ENDPOINT)
         table.get_chain(CHAIN_INPUT)
@@ -163,19 +166,19 @@ def set_global_rules(config, iptables_state):
         # The felix forward chain tests traffic to and from endpoints
         chain = table.get_chain(CHAIN_FORWARD)
         rule  = fiptables.Rule(type, CHAIN_FROM_ENDPOINT)
-        rule.in_interface = "tap+"
+        rule.in_interface = iface_match
         chain.insert_rule(rule, 0)
 
         rule  = fiptables.Rule(type, CHAIN_TO_ENDPOINT)
-        rule.out_interface = "tap+"
+        rule.out_interface = iface_match
         chain.insert_rule(rule, 1)
 
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.in_interface = "tap+"
+        rule.in_interface = iface_match
         chain.insert_rule(rule, 2)
 
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.out_interface = "tap+"
+        rule.out_interface = iface_match
         chain.insert_rule(rule, 3)
 
         chain.truncate_rules(4)
@@ -183,11 +186,11 @@ def set_global_rules(config, iptables_state):
         # The felix INPUT chain tests traffic from endpoints
         chain = table.get_chain(CHAIN_INPUT)
         rule  = fiptables.Rule(type, CHAIN_FROM_ENDPOINT)
-        rule.in_interface = "tap+"
+        rule.in_interface = iface_match
         chain.insert_rule(rule, 0)
 
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.in_interface = "tap+"
+        rule.in_interface = iface_match
         chain.insert_rule(rule, 1)
 
         chain.truncate_rules(2)
@@ -203,7 +206,7 @@ def set_ep_specific_rules(iptables_state, suffix, iface, type, localips, mac):
     - ensures that the chains specific to this endpoint exist, where there is
       a chain for packets leaving and a chain for packets arriving at the
       endpoint;
-    - routes packets to / from the tap interface to the chains created above;
+    - routes packets to / from the interface to the chains created above;
     - fills out the endpoint specific chains with the correct rules;
     - verifies that the ipsets exist.
 
@@ -714,9 +717,9 @@ def list_eps_with_rules(iptables_state, type):
     Returns a set of suffices, i.e. the start of the uuid / end of the
     interface name.
 
-    The purpose of this routine is to get a list of endpoints (actually tap
-    suffices) for which there is configuration that Felix might need to tidy up
-    from a previous iteration.
+    The purpose of this routine is to get a list of endpoints (actually just
+    the suffices) for which there is configuration that Felix might need to
+    tidy up from a previous iteration.
     """
 
     #*************************************************************************#
@@ -740,6 +743,6 @@ def list_eps_with_rules(iptables_state, type):
         elif name.startswith(IPSET6_TO_PORT_PREFIX):
             eps.add(name.replace(IPSET6_TO_PORT_PREFIX, ""))
 
-    log.debug("Current list of managed %s endpoints : %s" % (type, eps))
+    log.debug("Current list of managed %s endpoints : %s", type, eps)
 
     return eps

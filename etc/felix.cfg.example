@@ -13,6 +13,11 @@ ACLAddress    = controller
 #MetadataPort  = 9697
 # Address to bind to - either "*" or an IPv4 address (or hostname)
 #LocalAddress = *
+# Interface prefix; all interfaces must start with this.
+#InterfacePrefix = tap
+# If no interface name is provided, then the interface name is created from
+# the prefix plus the first InterfaceSuffixLength characters of the ID.
+#InterfaceSuffixLength = 11
 
 [log]
 # Log file path. If LogFilePath is not set, felix will not log to file.
