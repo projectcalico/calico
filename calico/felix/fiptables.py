@@ -16,199 +16,500 @@
 felix.fiptables
 ~~~~~~~~~~~~
 
-IP tables management functions. This is a wrapper round python-iptables that
-allows us to mock it out for testing.
+IP tables management functions.
 """
-import iptc
 import logging
 import os
 import re
 import time
+import weakref
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6
 
+# iptables command to use.
+IPTABLES_CMD = { IPV4: "iptables",
+                 IPV6: "ip6tables" }
+
+# We use the following arguments for iptables.
+# General arguments :
+# -w : wait for lock if somebody else is reading / writing
+# -t : specify table name
+#
+# Table commands :
+# -S : read
+#
+# Chain commands :
+# -N : create
+# -F : flush
+# -X : delete
+#
+# Rule commands :
+# -A : append
+# -I : insert
+# -D : delete
+
+
 # Logger
 log = logging.getLogger(__name__)
 
-# Special value to mean "put this rule at the end".
+# Special value to mean "put this rule at the end".  This must be "-1" as we
+# use it as a python array index!
 RULE_POSN_LAST = -1
 
-#*****************************************************************************#
-#* Load the conntrack tables. This is a workaround for this issue            *#
-#* https://github.com/ldx/python-iptables/issues/112                         *#
-#*                                                                           *#
-#* It forces all extensions to be loaded at start of day then stored so they *#
-#* cannot be unloaded (and hence reloaded).                                  *#
-#*****************************************************************************#
-global_rule  = iptc.Rule()
-global_rule6 = iptc.Rule6()
-global_rule.create_match("conntrack")
-global_rule6.create_match("conntrack")
-global_rule.create_match("tcp")
-global_rule6.create_match("tcp")
-global_rule6.create_match("icmp6")
-global_rule.create_match("udp")
-global_rule6.create_match("udp")
-global_rule.create_match("mac")
-global_rule6.create_match("mac")
+class Chain(object):
+    """
+    Representation of an iptables chain.
+    """
+    def __init__(self, type, name):
+        self.type = type
+        self.name = name
+        self.rules = []
 
-# Attach some targets.
-global_rule.create_target("RETURN")
-global_rule6.create_target("RETURN")
-global_target = iptc.Target(global_rule, "DNAT")
+    def flush(self):
+        log.debug("Flushing chain %s", self.name)
+        self.table.ops.append([IPTABLES_CMD[self.type],
+                               "-w",
+                               "-t",
+                               self.table.name,
+                               "-F",
+                               self.name])
+        del self.rules[:]
+
+    def delete_rule(self, rule):
+        # The rule must exist.
+        args = [IPTABLES_CMD[self.type],
+                "-w",
+                "-t",
+                self.table.name,
+                "-D",
+                self.name]
+        args.extend(rule.generate_fields())
+        log.debug("Removing rule : %s", args)
+        self.rules.remove(rule)
+        self.table.ops.append(args)
+
+    def truncate_rules(self, count):
+        """
+        This is a utility function to remove any excess rules from a
+        chain. After we have carefully inserted all the rules we want at the
+        start, we want to get rid of any legacy rules from the end.
+
+        It takes a chain object, and a count for how many of the rules should
+        be left in place.
+        """
+        log.debug("Truncate %s chain %s to length %d (length now %d)",
+                  self.type,
+                  self.name,
+                  count,
+                  len(self.rules))
+
+        while len(self.rules) > count:
+            self.table.ops.append([IPTABLES_CMD[self.type],
+                                   "-w",
+                                   "-t",
+                                   self.table.name,
+                                   "-D",
+                                   self.name,
+                                   str(count + 1)])
+            self.rules.pop(count)
+
+
+    def insert_rule(self, rule, position=0, force_position=True):
+        """
+        Add an iptables rule to a chain if it does not already exist. Position
+        is the position for the insert as an offset; if set to RULE_POSN_LAST
+        then the rule is appended.
+
+        If force_position is True, then the rule is added at the specified point
+        unless it already exists there. If force_position is False, then the
+        rule is added only if it does not exist anywhere in the list of rules.
+
+        Position starts at offset 0, even though iptables wants it to start at
+        offset 1.
+        """
+        if force_position:
+            try:
+                if rule != self.rules[position]:
+                    self._insert_rule(rule, position)
+            except IndexError:
+                # Either appending to empty list (so -1 no good), or list not
+                # long enough. Just append the rule.
+                self._insert_rule(rule, RULE_POSN_LAST)
+        else:
+            if rule not in self.rules:
+                self._insert_rule(rule, position)
+        return
+
+    def _insert_rule(self, rule, position):
+        """
+        Insert the given rule at the supplied offset.
+
+        position of 0 means "insert at the start", which is what iptables
+        considers as position 1.
+
+        This method is private; callers outside this module should call
+        insert_rule instead.
+        """
+        if position == RULE_POSN_LAST:
+            args = [IPTABLES_CMD[self.type],
+                    "-w",
+                    "-t",
+                    self.table.name,
+                    "-A",
+                    self.name]
+            self.rules.append(rule)
+        else:
+            args = [IPTABLES_CMD[self.type],
+                    "-w",
+                    "-t",
+                    self.table.name,
+                    "-I",
+                    self.name,
+                    str(position + 1)]
+            self.rules.insert(position, rule)
+
+        args.extend(rule.generate_fields())
+        log.debug("Creating rule : %s", args)
+        self.table.ops.append(args)
+
+    @property
+    def table(self):
+        """
+        Return the table for this chain.
+        """
+        return self.table_ref()
+
+    @table.setter
+    def table(self, value):
+        """
+        Set the table for this chain. The weakref is a hint that the table and
+        chain reference one another, but when the table goes the chain is no
+        longer in use.
+        """
+        self.table_ref = weakref.ref(value)
+
+    def __str__(self):
+        output = "Chain %s\n" % self.name
+        if self.rules:
+            output += "  " + "\n  ".join(str(rule) for rule in self.rules) + "\n"
+
+        return output
+
+class Table(object):
+    """
+    Representation of an iptables table.
+    """
+    def __init__(self, type, name):
+        self.type = type
+        self.name = name
+        self.chains = {}
+        self.ops = []
+
+    def is_chain(self, name):
+        return name in self.chains
+
+    def get_chain(self, name):
+        """
+        Gets a chain, creating it first if it does not exist.
+        """
+        chain = self.chains.get(name)
+
+        if chain is None:
+            log.debug("Creating chain %s in table %s (%s)",
+                      name,
+                      self.name,
+                      self.type)
+
+            chain = Chain(self.type, name)
+            self.chains[name] = chain
+            chain.table = self
+
+            self.ops.append([IPTABLES_CMD[self.type],
+                              "-w",
+                              "-t",
+                              self.name,
+                              "-N",
+                              name])
+
+        return chain
+
+    def delete_chain(self, chain_name):
+        log.debug("Delete chain %s from table %s (%s)",
+                  chain_name,
+                  self.name,
+                  self.type)
+        self.ops.append([IPTABLES_CMD[self.type],
+                        "-w",
+                        "-t",
+                        self.name,
+                        "-X",
+                        chain_name])
+        del self.chains[chain_name]
+
+    def __str__(self):
+        output = "TABLE %s (%s)\n" % (self.name, self.type)
+        for chain_name in sorted(self.chains.keys()):
+            output += "  " + "\n  ".join(str(self.chains[chain_name]).split("\n")) + "\n"
+        return output
 
 class Rule(object):
     """
-    Rule object. This is just a very simple wrapper round a python-iptables rule.
-
-    It would be nicer if it were a subclass of iptc.Rule, but sometimes it
-    would need to be a subclass of iptc.Rule6 (which is not a subclass of
-    iptc.Rule).
+    Rule object. This contains information about rules.
     """
-    def __init__(self, type, target_name=None):
+    tuples = (("-s", "src"),
+              ("-d", "dst"),
+              ("-p", "protocol"),
+              ("-i", "in_interface"),
+              ("-o", "out_interface"),
+              ("-m", "match"),
+              ("-j", "target"))
+
+    FLAG_TO_FIELD = dict(tuples)
+    KNOWN_FIELDS = [ a[1] for a in tuples ]
+    FIELD_TO_FLAG = {field: flag for flag, field in tuples}
+
+    def __init__(self, type, target=None):
         self.type = type
 
-        if type == IPV4:
-            self._rule = iptc.Rule()
-        else:
-            assert(type == IPV6)
-            self._rule = iptc.Rule6()
+        self.dst = None
+        self.src = None
+        self.protocol = None
+        self.in_interface = None
+        self.out_interface = None
 
-        if target_name is not None:
-            self._rule.create_target(target_name)
+        self.target = target
+        self.match = None
 
-    @property
-    def protocol(self):
-        return self._rule.protocol
+        # We bundle rule and match parameters together for easier coding.
+        self.parameters = {}
 
-    @protocol.setter
-    def protocol(self, value):
-        self._rule.protocol = value
+    def parse_fields(self, line, fields):
+        """
+        Parse fields retrieved from iptables -S. The -A and the chain name must
+        have been removed from the list supplied.
 
-    @property
-    def src(self):
-        return self._rule.src
+        For example :
+        -s 192.168.122.0/24 -d 224.0.0.0/24 -j RETURN
+        -m set --match-set felix-from-port-1729ebac-f0 dst,dst -j RETURN
 
-    @src.setter
-    def src(self, value):
-        self._rule.src = value
+        line is used only for logging.
+        """
+        while fields:
+            # For a negative, we just prepend "!" to the value (or the first
+            # value if many).
+            negative = False
 
-    @property
-    def dst(self):
-        return self._rule.dst
+            if fields[0] == "!":
+                negative = True
+                fields.pop(0)
 
-    @dst.setter
-    def dst(self, value):
-        self._rule.dst = value
+            flag = fields.pop(0)
 
-    @property
-    def in_interface(self):
-        return self._rule.in_interface
+            values = []
+            while fields and fields[0][0] != "-" and fields[0] != "!":
+                values.append(fields.pop(0))
 
-    @in_interface.setter
-    def in_interface(self, value):
-        self._rule.in_interface = value
+            value = " ".join(values)
 
-    @property
-    def out_interface(self):
-        return self._rule.out_interface
+            if negative:
+                value = "!" + value
 
-    @out_interface.setter
-    def out_interface(self, value):
-        self._rule.out_interface = value
+            if flag in Rule.FLAG_TO_FIELD:
+                setattr(self, Rule.FLAG_TO_FIELD[flag], value)
+            elif flag.startswith("--"):
+                self.parameters[flag[2:]] = value
+            else:
+                raise UnrecognisedIptablesField(
+                        "Unable to parse iptables rule : %s" % line)
+
+    def generate_fields(self):
+        """
+        Returns an iptables set of fields from a rule; the inverse of
+        parse_fields.
+        """
+        fields = []
+
+        for field in Rule.KNOWN_FIELDS:
+            value = getattr(self, field)
+            if value is not None and value[0] == "!":
+                fields.extend(["!", Rule.FIELD_TO_FLAG[field], value[1:]])
+            elif value is not None:
+                fields.extend([Rule.FIELD_TO_FLAG[field], value])
+
+        for key in self.parameters:
+            value = self.parameters[key]
+            if value[0] == "!":
+                fields.append("!")
+                value = value[1:]
+            fields.append("--" + key)
+            fields.extend(value.split())
+
+        return fields
 
     def create_target(self, name, parameters=None):
-        target = self._rule.create_target(name)
-        if parameters is not None:
-            for name, value in parameters.iteritems():
-                setattr(target, name, value)
+        self.target = name
+        # Note that this adds parameters, rather than replacing existing ones.
+        for key in parameters:
+            self.parameters[key] = parameters[key]
 
     def create_tcp_match(self, dport):
-        match = self._rule.create_match("tcp")
-        match.dport = dport
+        self.match = "tcp"
+        self.parameters["dport"] = dport
 
     def create_icmp6_match(self, icmp_type):
-        match = self._rule.create_match("icmp6")
-        match.icmpv6_type = icmp_type
+        self.match = "icmp6"
+        self.parameters["icmpv6-type"] = icmp_type
 
     def create_conntrack_match(self, state):
-        match = self._rule.create_match("conntrack")
-        match.ctstate = state
+        # State is a comma separated string
+        self.match = "conntrack"
+        self.parameters["ctstate"] = state
 
     def create_mark_match(self, mark):
-        match = self._rule.create_match("mark")
-        match.mark = mark
+        self.match = "mark"
+        self.parameters["mark"] = mark
 
     def create_mac_match(self, mac_source):
-        match = self._rule.create_match("mac")
-        match.mac_source = mac_source
+        self.match = "mac"
+        # Upper case to allow matching with what iptables returns.
+        self.parameters["mac-source"] = mac_source.upper()
 
-    def create_set_match(self, match_set):
-        match = self._rule.create_match("set")
-        match.match_set = match_set
+    def create_set_match(self, set_name, direction):
+        self.match = "set"
+        self.parameters["match-set"] = set_name + " " + direction
 
     def create_udp_match(self, sport, dport):
-        match = self._rule.create_match("udp")
-        match.sport = sport
-        match.dport = dport
+        self.match = "udp"
+        self.parameters["sport"] = sport
+        self.parameters["dport"] = dport
+
+    def __str__(self):
+        return " ".join(self.generate_fields())
+
+    def __eq__(self, other):
+        if (self.type != other.type or
+            self.dst != other.dst or
+            self.src != other.src or
+            self.protocol != other.protocol or
+            self.in_interface != other.in_interface or
+            self.out_interface != other.out_interface or
+            self.target != other.target or
+            self.match != other.match or
+            self.parameters != other.parameters):
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
-def insert_rule(rule, chain, position=0, force_position=True):
+class UnrecognisedIptablesField(Exception):
+    pass
+
+
+class TableState(object):
     """
-    Add an iptables rule to a chain if it does not already exist. Position is
-    the position for the insert as an offset; if set to RULE_POSN_LAST then the
-    rule is appended.
-
-    If force_position is True, then the rule is added at the specified point
-    unless it already exists there. If force_position is False, then the rule
-    is added only if it does not exist anywhere in the list of rules.
+    Defines the current state of iptables - which rules exist in which
+    tables.
     """
-    found = False
-    rules = chain.rules
+    def __init__(self):
+        self.tables_v4 = {}
+        self.tables_v6 = {}
 
-    if position == RULE_POSN_LAST:
-        position = len(rules)
+    def get_table(self, type, name):
+        """
+        Get a table from the current state.
+        """
+        if type == IPV4:
+            hash = self.tables_v4
+        else:
+            hash = self.tables_v6
 
-    if force_position:
-        if (len(rules) <= position) or (rule._rule != chain.rules[position]):
-            # Either adding after existing rules, or replacing an existing rule.
-            chain.insert_rule(rule._rule, position)
-    else:
-        #*********************************************************************#
-        #* The python-iptables code to compare rules does a comparison on    *#
-        #* all the relevant rule parameters (target, match, etc.) excluding  *#
-        #* the offset into the chain. Hence the test below finds whether     *#
-        #* there is a rule with the same parameters anywhere in the chain.   *#
-        #*********************************************************************#
-        if rule._rule not in chain.rules:
-            chain.insert_rule(rule._rule, position)
+        if name in hash:
+            table = hash[name]
+        else:
+            table = self.load_table(type, name)
+            hash[name] = table
 
-    return
+        return table
 
+    def reset(self):
+        """
+        Clear the state of the tables.
+        """
+        self.tables_v4.clear()
+        self.tables_v6.clear()
 
-def get_table(type, name):
-    """
-    Gets a table. This is a simple helper method that returns either
-    an IP v4 or an IP v6 table according to type.
-    """
-    if type == IPV4:
-        table = iptc.Table(name)
-    else:
-        table = iptc.Table6(name)
+    def apply(self):
+        """
+        Apply all changes to this table.
 
-    return table
+        Note that the only way to abort changes is to call
+        TableState.reset(); otherwise the changes remain queued up and happen
+        the next time TableState.apply() is called.
+        """
+        ops = []
+        for table in self.tables_v4.values() + self.tables_v6.values():
+            ops.extend(table.ops)
+            table.ops = []
 
+        if ops:
+            log.debug("Apply batched changes to tables")
+            futils.multi_call(ops)
+        else:
+            log.debug("No table changes required")
 
-def get_chain(table, name):
-    """
-    Gets a chain, creating it first if it does not exist.
-    """
-    if table.is_chain(name):
-        chain = iptc.Chain(table, name)
-    else:
-        table.create_chain(name)
-        chain = iptc.Chain(table, name)
+    def load_table(self, type, name):
+        """
+        Reads a table, building current state.
+        """
+        table = Table(type, name)
+        data = self.read_table(type, name)
+        lines = data.split("\n")
 
-    return chain
+        for line in lines:
+            words = line.split()
 
+            if len(words) > 1:
+                if words[0] in ("-P", "-N"):
+                    # We found a chain; remember and go to next line.
+                    log.debug("Found chain in table %s : %s", name, line)
+                    chain = Chain(type, words[1])
+                    chain.table = table
+                    table.chains[chain.name] = chain
+                    continue
+
+                if words[0] != "-A":
+                    # A line we do not know how to parse. Panic.
+                    raise UnrecognisedIptablesField(
+                        "Unable to parse iptables line : %s" % line)
+
+                log.debug("Found rule in table %s : %s", name, line)
+                words.pop(0)
+                chain_name = words.pop(0)
+                try:
+                    chain = table.chains[chain_name]
+                except KeyError:
+                    # Rule for chain that does not exist
+                    raise UnrecognisedIptablesField(
+                        "Rule in table %s for chain which does not exist : %s" %
+                        (name, line))
+                rule = Rule(type)
+                rule.parse_fields(line, words)
+                chain.rules.append(rule)
+
+        return table
+
+    def read_table(self, type, name):
+        """
+        Runs the iptables command to load a table and returns it. Separated out
+        purely for convenience of testing (since we can trivially mock it out).
+        """
+        data = futils.check_call([IPTABLES_CMD[type],
+                                  "-w",
+                                  "-S",
+                                  "-t",
+                                  name]).stdout
+
+        return data

@@ -23,18 +23,13 @@ import sys
 import unittest
 import uuid
 
-# Stub out the iptables code.
-import calico.felix.test.stub_fiptables
-sys.modules['calico.felix.fiptables'] = __import__('calico.felix.test.stub_fiptables')
-calico.felix.fiptables = calico.felix.test.stub_fiptables
-
-# Hide iptc, since we do not have it.
-sys.modules['iptc'] = __import__('calico.felix.test.stub_empty')
-
 import calico.felix.devices as devices
 import calico.felix.endpoint as endpoint
 import calico.felix.frules as frules
 import calico.felix.futils as futils
+
+# Supplied, but never accessed thanks to mocks.
+iptables_state = None
 
 class TestEndpoint(unittest.TestCase):
     def test_program_bails_early(self):
@@ -44,8 +39,11 @@ class TestEndpoint(unittest.TestCase):
         devices.interface_up = mock.MagicMock()
         devices.interface_up.return_value = False
 
+        # iptables_state is never accessed (as the code returns too early).
+        iptables_state = None
+
         ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
-        retval = ep.program_endpoint()
+        retval = ep.program_endpoint(iptables_state)
 
         self.assertFalse(retval)
 
@@ -66,7 +64,7 @@ class TestEndpoint(unittest.TestCase):
                                                             "",
                                                             "")) as mock_del_route, \
              mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
-            ep.remove()
+            ep.remove(iptables_state)
         self.assertEqual(mock_exists.call_count, 2)
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)
@@ -90,7 +88,7 @@ class TestEndpoint(unittest.TestCase):
                                                             "",
                                                             "")) as mock_del_route, \
              mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
-            ep.remove()
+            ep.remove(iptables_state)
         self.assertEqual(mock_exists.call_count, 2)
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)
@@ -110,7 +108,7 @@ class TestEndpoint(unittest.TestCase):
              mock.patch('calico.felix.devices.del_route', \
                         side_effect=Exception("blah")) as mock_del_route, \
              mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
-            ep.remove()
+            ep.remove(iptables_state)
         self.assertEqual(mock_exists.call_count, 1)
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)

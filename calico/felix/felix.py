@@ -32,8 +32,9 @@ import zmq
 from calico.felix.config import Config
 from calico.felix.endpoint import Address, Endpoint
 from calico.felix.fsocket import Socket, Message
-from calico.felix import fsocket
+from calico.felix import fiptables
 from calico.felix import frules
+from calico.felix import fsocket
 from calico.felix import futils
 from calico import common
 
@@ -127,14 +128,17 @@ class FelixAgent(object):
         self.connect_to_plugin()
         self.connect_to_acl_manager()
 
+        # Grab a new iptables state.
+        self.iptables_state = fiptables.TableState()
+
         # Begin full endpoint resync. We do not resync ACLs, since we resync
         # the ACLs for each endpoint when we are get an ENDPOINTCREATED in the
         # endpoint resync (and doing it now when we don't know of any endpoints
         # would just be a noop anyway).
         self.resync_endpoints()
 
-        # Set up the global rules.
-        frules.set_global_rules(self.config)
+        # Reset the global rules.
+        frules.set_global_rules(self.config, self.iptables_state)
 
     def connect_to_plugin(self):
         """
@@ -236,7 +240,7 @@ class FelixAgent(object):
                     log.info(
                         "Remove endpoint %s that is no longer being managed" %
                         ep.uuid)
-                    ep.remove()
+                    ep.remove(self.iptables_state)
                     del self.endpoints[uuid]
 
         #*********************************************************************#
@@ -246,7 +250,8 @@ class FelixAgent(object):
         known_suffices = {ep.suffix for ep in self.endpoints.values()}
 
         for type in [futils.IPV4, futils.IPV6]:
-            found_suffices  = frules.list_eps_with_rules(type)
+            found_suffices  = frules.list_eps_with_rules(self.iptables_state,
+                                                         type)
 
             for found_suffix in found_suffices:
                 if found_suffix not in known_suffices:
@@ -254,7 +259,7 @@ class FelixAgent(object):
                     # exist.  Remove those rules.
                     log.warning("Removing %s rules for removed object %s" %
                                 (type, found_suffix))
-                    frules.del_rules(found_suffix, type)
+                    frules.del_rules(self.iptables_state, found_suffix, type)
 
     def handle_endpointcreated(self, message, sock):
         """
@@ -402,15 +407,12 @@ class FelixAgent(object):
             # Remove this endpoint from Felix's list of managed
             # endpoints.
             endpoint = self.endpoints.pop(delete_id)
-
         except KeyError:
             log.error("Received destroy for absent endpoint %s", delete_id)
-
             fields = {
                 "rc": RC_NOTEXIST,
                 "message": "Endpoint %s does not exist" % delete_id,
             }
-
         else:
             # Unsubscribe from ACL information for this endpoint.
             self.sockets[Socket.TYPE_ACL_SUB].unsubscribe(
@@ -418,8 +420,7 @@ class FelixAgent(object):
             )
 
             # Remove programming for this endpoint.
-            endpoint.remove()
-
+            endpoint.remove(self.iptables_state)
 
         # Send the ENDPOINTDESTROYED response.
         sock = self.sockets[Socket.TYPE_EP_REP]
@@ -597,7 +598,7 @@ class FelixAgent(object):
 
         # Program the endpoint - i.e. set things up for it.
         log.debug("Program %s", endpoint.suffix)
-        if endpoint.program_endpoint():
+        if endpoint.program_endpoint(self.iptables_state):
             # Failed to program this endpoint - put on the retry list.
             self.ep_retry.add(endpoint.uuid)
 
@@ -706,7 +707,7 @@ class FelixAgent(object):
             if uuid in self.endpoints:
                 endpoint = self.endpoints[uuid]
                 log.debug("Retry program of %s" % endpoint.suffix)
-                if endpoint.program_endpoint():
+                if endpoint.program_endpoint(self.iptables_state):
                     # Failed again - put back on list
                     self.ep_retry.add(uuid)
                 else:

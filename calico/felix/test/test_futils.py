@@ -70,8 +70,28 @@ class TestFutils(unittest.TestCase):
         self.assertEqual(retcode, 0)
 
     def test_bad_call_silent(self):
-        # Test an invalid command - must parse but not return anything.
+        # Test an invalid command - must parse but not return anything.       
         args = ["ls", "wibble_wobble"]
         retcode = futils.call_silent(args)
         self.assertNotEqual(retcode, 0)
+
+    def stub_store_calls(self, args):
+        log.debug("Args are : %s", args)
+        self.assertEqual(args[0], "bash")
+      
+        with open(args[1], 'r') as f:
+            self.data = f.read()          
+
+    def test_multi_call(self):
+        # Test multiple command calls; this just stores the command values.
+        ops = [ ["ls"], ["ls", "calico"] ]
+        expected = "set -e\n"
+        for op in ops:
+            cmd = " ".join(op) + "\n"
+            expected += "echo Executing : " + cmd + cmd
+
+        with mock.patch('calico.felix.futils.check_call', side_effect=self.stub_store_calls):
+            result = futils.multi_call(ops)
+
+        self.assertEqual(expected, self.data)
 

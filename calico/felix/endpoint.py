@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # Copyright (c) 2014 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -91,7 +90,7 @@ class Endpoint(object):
         # Assume disabled until we know different
         self.state          = Endpoint.STATE_DISABLED
 
-    def remove(self):
+    def remove(self, iptables_state):
         """
         Delete a programmed endpoint. Remove the routes, then the rules.
         """
@@ -109,10 +108,10 @@ class Endpoint(object):
                         raise
                     break
 
-        frules.del_rules(self.suffix, futils.IPV4)
-        frules.del_rules(self.suffix, futils.IPV6)
+        frules.del_rules(iptables_state, self.suffix, futils.IPV4)
+        frules.del_rules(iptables_state, self.suffix, futils.IPV6)
 
-    def program_endpoint(self):
+    def program_endpoint(self, iptables_state):
         """
         Given an endpoint, make the programmed state match the desired state,
         setting up rules and creating chains and ipsets, but not putting
@@ -205,9 +204,11 @@ class Endpoint(object):
         #* if the endpoint is disabled, then it has no permitted addresses,  *#
         #* so it cannot send any data.                                       *#
         #*********************************************************************#
-        frules.set_ep_specific_rules(self.suffix, self.tap, futils.IPV4,
+        frules.set_ep_specific_rules(iptables_state,
+                                     self.suffix, self.tap, futils.IPV4,
                                      ipv4_intended, self.mac)
-        frules.set_ep_specific_rules(self.suffix, self.tap, futils.IPV6,
+        frules.set_ep_specific_rules(iptables_state,
+                                     self.suffix, self.tap, futils.IPV6,
                                      ipv6_intended, self.mac)
 
         #*********************************************************************#

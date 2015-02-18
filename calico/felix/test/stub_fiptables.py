@@ -16,240 +16,16 @@
 felix.test.stub_fiptables
 ~~~~~~~~~~~~
 
-Stub version of the fiptables module.
+Stub versions of functions for the fiptables module.
 """
+from calico.felix import fiptables
 from calico.felix.futils import IPV4, IPV6
+from copy import deepcopy
 import difflib
+import logging
 
-from collections import namedtuple
-#*****************************************************************************#
-#* The following is so that rule.target.name can be used to identify rules;  *#
-#* this is the subset of the Target object from iptc that is actually        *#
-#* required by calling code.                                                 *#
-#*****************************************************************************#
-RuleTarget = namedtuple('RuleTarget', ['name'])
-
-# Special value to mean "put this rule at the end".
-RULE_POSN_LAST = -1
-
-#*****************************************************************************#
-#* The range of definitions below mimic fiptables.                           *#
-#*****************************************************************************#
-class Rule(object):
-    """
-    Fake rule object.
-    """
-    def __init__(self, type, target_name=None):
-        self.type = type
-
-        self.target_name = target_name
-        self.target = RuleTarget(target_name)
-        self.target_args = {}
-
-        self.match_name = None
-        self.match_args = {}
-
-        self.protocol = None
-        self.src = None
-        self.in_interface = None
-        self.out_interface = None
-
-    def create_target(self, name, parameters=None):
-        self.target = RuleTarget(name)
-        self.target_name = name
-        if parameters is not None:
-            for key in parameters:
-                self.target_args[key] = parameters[key]
-
-    def create_tcp_match(self, dport):
-        self.match_name = "tcp"
-        self.match_args["dport"] = dport
-
-    def create_icmp6_match(self, icmp_type):
-        self.match_name = "icmp6"
-        self.match_args["icmpv6_type"] = icmp_type
-
-    def create_conntrack_match(self, state):
-        self.match_name = "conntrack"
-        self.match_args["ctstate"] = state
-
-    def create_mark_match(self, mark):
-        self.match_name = "mark"
-        self.match_args["mark"] = mark
-
-    def create_mac_match(self, mac_source):
-        self.match_name = "mac"
-        self.match_args["mac_source"] = mac_source
-
-    def create_set_match(self, match_set):
-        self.match_name = "set"
-        self.match_args["match_set"] = match_set
-
-    def create_udp_match(self, sport, dport):
-        self.match_name = "udp"
-        self.match_args["sport"] = sport
-        self.match_args["dport"] = dport
-
-    def __eq__(self, other):
-        if (self.protocol != other.protocol or
-            self.src != other.src or
-            self.in_interface != other.in_interface or
-            self.out_interface != other.out_interface or
-            self.target_name != other.target_name or
-            self.match_name != other.match_name):
-            return False
-
-        if (len(self.match_args) != len(other.match_args) or
-            len(self.target_args) != len(other.target_args)):
-            return False
-
-        if self.match_args != other.match_args:
-            return False
-
-        if self.target_args != other.target_args:
-            return False
-
-        return True
-
-    def __str__(self):
-        output = self.target_name
-        if self.target_args:
-            output += " " + str(self.target_args)
-        output += " " + (self.protocol if self.protocol else "all")
-        output += " " + (self.src if self.src else "anywhere")
-        output += " " + (self.in_interface if self.in_interface else "any_in")
-        output += " " + (self.out_interface if self.out_interface else "any_out")
-        if self.match_name:
-            output += " " + self.match_name
-        output += ((" " + str(self.match_args)) if self.match_args else "")
-
-        return output
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-class Chain(object):
-    """
-    Mimic of an IPTC chain. Rules must be a list (not a set).
-    """
-    def __init__(self, name):
-        self.name = name
-        self.rules = []
-        self.type = None # Not known until put in table.
-
-    def flush(self):
-        del self.rules[:]
-
-    def delete_rule(self, rule):
-        # The rule must exist or it is an error.
-        self.rules.remove(rule)
-
-    def __eq__(self, other):
-        # Equality deliberately only cares about name.
-        if self.name == other.name:
-            return True
-        else:
-            return False
-
-    def __ne__(self, other):
-        return not self.__eq__(self,other)
-
-
-class Table(object):
-    """
-    Mimic of an IPTC table.
-    """
-    def __init__(self, type, name):
-        self.type = type
-        self.name = name
-        self._chains_dict = {}
-
-    def is_chain(self, name):
-        return (name in self._chains_dict)
-
-    def delete_chain(self, name):
-        del self._chains_dict[name]
-        for chain in self.chains:
-            if chain.name == name:
-                self.chains.remove(chain)
-                
-    @property
-    def chains(self):
-        # The python-iptables code exposes the list of chains directly.
-        return self._chains_dict.values()
-
-def get_table(type, name):
-    """
-    Gets a table. This is a simple helper method that returns either
-    an IP v4 or an IP v6 table according to type.
-    """
-    if type == IPV4:
-        table = current_state.tables_v4[name]
-    elif type == IPV6:
-        table = current_state.tables_v6[name]
-    else:
-        raise ValueError("Invalid type %s for table" % type)
-
-    return table
-
-
-def get_chain(table, name):
-    """
-    Gets a chain, creating it first if it does not exist.
-    """
-    if name in table._chains_dict:
-        chain = table._chains_dict[name]
-    else:
-        chain = Chain(name)
-        table._chains_dict[name] = chain
-        chain.type = table.type
-
-    return chain
-
-
-def insert_rule(rule, chain, position=0, force_position=True):
-    """
-    Add an iptables rule to a chain if it does not already exist. Position is
-    the position for the insert as an offset; if set to RULE_POSN_LAST then the
-    rule is appended.
-
-    If force_position is True, then the rule is added at the specified point
-    unless it already exists there. If force_position is False, then the rule
-    is added only if it does not exist anywhere in the list of rules.
-    """
-    found = False
-    rules = chain.rules
-
-    # Check the type - python iptables would do this for us.
-    if rule.type != chain.type:
-        raise ValueError("Type of rule (%s) does not match chain (%s)" %
-                         (rule.type, chain.type))
-
-    if position == RULE_POSN_LAST:
-        position = len(rules)
-
-    if force_position:
-        if (len(rules) <= position) or (rule != chain.rules[position]):
-            # Either adding after existing rules, or replacing an existing rule.
-            chain.rules.insert(position, rule)
-    else:
-        #*********************************************************************#
-        #* The python-iptables code to compare rules does a comparison on    *#
-        #* all the relevant rule parameters (target, match, etc.) excluding  *#
-        #* the offset into the chain. Hence the test below finds whether     *#
-        #* there is a rule with the same parameters anywhere in the chain.   *#
-        #*********************************************************************#
-        if rule not in chain.rules:
-            chain.rules.insert(position, rule)
-
-    return
-
-#*****************************************************************************#
-#* The next few definitions are not exposed to production code.              *#
-#*****************************************************************************#
-def reset_current_state():
-    current_state.reset()
-
+# Logger
+log = logging.getLogger(__name__)
 
 class UnexpectedStateException(Exception):
     def __init__(self, actual, expected):
@@ -266,19 +42,7 @@ class UnexpectedStateException(Exception):
         return ("%s\nDIFF:\n%s\nACTUAL:\n%s\nEXPECTED\n%s" %
                 (self.message, self.diff, self.actual, self.expected))
 
-
-def check_state(expected_state):
-    """
-    Checks that the current state matches the expected state. Throws an
-    exception if it does not.
-    """
-    actual = str(current_state)
-    expected = str(expected_state)
-
-    if actual != expected:
-        raise UnexpectedStateException(actual, expected)
-
-class TableState(object):
+class TableState(fiptables.TableState):
     """
     Defines the current state of iptables - which rules exist in which
     tables. Normally there will be two - the state that the test generates, and
@@ -286,58 +50,356 @@ class TableState(object):
     these can be compared.
     """
     def __init__(self):
-        self.tables_v4 = {}
-        self.tables_v6 = {}
+        super(TableState, self).__init__()
+
+        # tables_v4 and tables_v6 are the internal state of the tables; real_v4
+        # and real_v6 are the tables as written out. Just after "apply" or
+        # "reset", the two will match, but if you fail to call "apply" then the
+        # two will diverge.
+        self.real_v4 = {}
+        self.real_v6 = {}
+
+        self.set_empty()
+
+    def apply(self):
+        """
+        Overriding fiptables.Table.apply().
+        """
+        log.debug("Overwriting table changes to real state")
+        self.real_v4 = deepcopy(self.tables_v4)
+        self.real_v6 = deepcopy(self.tables_v4)
+
+    def read_table(self, type, name):
+        """
+        Overriding fiptables.Table.read_table().
+        """
+        if type == IPV4:
+            table = self.real_v4[name]
+        else:
+            table = self.real_v6[name]
+
+        data = ""
+
+        for chain in table.chains.values():
+            data += ("-N %s\n" % chain.name +
+                     "\n".join(str(rule) for rule in chain.rules))
+
+        return data
+
+    def set_empty(self):
+        """
+        Set up the state of the tables with minimal chains.  After calling
+        this, the real (i.e. logically physical) tables and chains are set up,
+        and the normal chains are empty.
+        """
+        log.debug("Set table state to empty")
 
         self.reset()
+        self.real_v4.clear()
+        self.real_v6.clear()
 
-    def reset(self):
+        # We must not use get_table, since it assumes that the tables already
+        # exist in real_v4.
+        table = fiptables.Table(IPV4, "filter")
+        table.get_chain("INPUT")
+        table.get_chain("OUTPUT")
+        table.get_chain("FORWARD")
+        table.get_chain("OUTPUT")
+        table.get_chain("FORWARD")
+        self.real_v4["filter"] = table
+
+        table = fiptables.Table(IPV4, "nat")
+        table.get_chain("PREROUTING")
+        table.get_chain("POSTROUTING")
+        table.get_chain("INPUT")
+        table.get_chain("OUTPUT")
+        self.real_v4["nat"] = table
+
+        table = fiptables.Table(IPV6, "filter")
+        table.get_chain("INPUT")
+        table.get_chain("OUTPUT")
+        table.get_chain("FORWARD")
+        self.real_v6["filter"] = table
+
+    def check_state(self, expected_state):
         """
-        Clear the state of the tables, getting them back to being empty.
+        Checks that the current state matches the expected state. Throws an
+        exception if it does not.
         """
-        self.tables_v4.clear()
-        self.tables = []
+        actual = str(self)
+        expected = str(expected_state)
 
-        table = Table(IPV4, "filter")
-        get_chain(table, "INPUT")
-        get_chain(table, "OUTPUT")
-        get_chain(table, "FORWARD")
-        self.tables_v4["filter"] = table
-        self.tables.append(table)
-
-        table = Table(IPV4, "nat")
-        get_chain(table, "PREROUTING")
-        get_chain(table, "POSTROUTING")
-        get_chain(table, "INPUT")
-        get_chain(table, "OUTPUT")
-        self.tables_v4["nat"] = table
-        self.tables.append(table)
-
-        self.tables_v6.clear()
-        table = Table(IPV6, "filter")
-        get_chain(table, "INPUT")
-        get_chain(table, "OUTPUT")
-        get_chain(table, "FORWARD")
-        self.tables_v6["filter"] = table
-        self.tables.append(table)
+        if actual != expected:
+            raise UnexpectedStateException(actual, expected)
 
     def __str__(self):
         """
         Convert a full state to a readable string to use in matches and compare
-        for final testing.
+        for final testing. Note that we compare only what is actually written,
+        not what is just pending writing.
         """
-        output = ""
-        for table in self.tables:
-            output += "TABLE %s (%s)\n" % (table.name, table.type)
-            for chain_name in sorted(table._chains_dict.keys()):
-                output += "  Chain %s\n" % chain_name
-                chain = table._chains_dict[chain_name]
-                for rule in chain.rules:
-                    output += "    %s\n" % rule
-                output += "\n"
-            output += "\n"
+        table_list = ([ self.real_v4[name]
+                        for name in sorted(self.real_v4.keys()) ] +
+                      [ self.real_v6[name]
+                        for name in sorted(self.real_v6.keys()) ] )
+
+        output = "".join([str(table) for table in table_list])
 
         return output
 
-# Current state - store in a global.
-current_state = TableState()
+
+    def set_expected_global_rules(self):
+        """
+        Sets up the minimal global rules we expect to have.
+        """
+        self.set_empty()
+
+        table = self.get_table(IPV4, "filter")
+        table.get_chain("felix-TO-ENDPOINT")
+        table.get_chain("felix-FROM-ENDPOINT")
+        table.get_chain("felix-FORWARD")
+        table.get_chain("felix-INPUT")
+        chain = table.chains["FORWARD"]
+        chain.rules.append(fiptables.Rule(IPV4, "felix-FORWARD"))
+        chain = table.chains["INPUT"]
+        chain.rules.append(fiptables.Rule(IPV4, "felix-INPUT"))
+
+        chain = table.chains["felix-FORWARD"]
+        rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "felix-TO-ENDPOINT")
+        rule.out_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.out_interface = "tap+"
+        chain.rules.append(rule)
+
+        chain = table.chains["felix-INPUT"]
+        rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+
+        table = self.get_table(IPV4, "nat")
+        chain = table.chains["PREROUTING"]
+        chain.rules.append(fiptables.Rule(IPV4, "felix-PREROUTING"))
+
+        chain = table.get_chain("felix-PREROUTING")
+        rule = fiptables.Rule(IPV4)
+        rule.dst = "169.254.169.254/32"
+        rule.protocol = "tcp"
+        rule.create_tcp_match("80")
+        rule.create_target("DNAT", {'to-destination': '127.0.0.1:9697'})
+        chain.rules.append(rule)
+
+        table = self.get_table(IPV6, "filter")
+        table.get_chain("felix-TO-ENDPOINT")
+        table.get_chain("felix-FROM-ENDPOINT")
+        table.get_chain("felix-FORWARD")
+        table.get_chain("felix-INPUT")
+        chain = table.chains["FORWARD"]
+        chain.rules.append(fiptables.Rule(IPV6, "felix-FORWARD"))
+        chain = table.chains["INPUT"]
+        chain.rules.append(fiptables.Rule(IPV6, "felix-INPUT"))
+
+        chain = table.chains["felix-FORWARD"]
+        rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "felix-TO-ENDPOINT")
+        rule.out_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.out_interface = "tap+"
+        chain.rules.append(rule)
+
+        chain = table.chains["felix-INPUT"]
+        rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+        rule  = fiptables.Rule(type, "ACCEPT")
+        rule.in_interface = "tap+"
+        chain.rules.append(rule)
+
+        self.apply()
+
+    def add_endpoint_rules(self, suffix, tap, ipv4, ipv6, mac):
+        """
+        This adds the rules for an endpoint, appending to the end. This generates
+        a clean state to allow us to test that the state is correct, even after
+        it starts with extra rules etc.
+        """
+        table = self.tables_v4["filter"]
+        chain = table.chains["felix-FROM-ENDPOINT"]
+        rule = fiptables.Rule(IPV4, "felix-from-%s" % suffix)
+        rule.in_interface = tap
+        chain.rules.append(rule)
+
+        chain = table.chains["felix-TO-ENDPOINT"]
+        rule = fiptables.Rule(IPV4, "felix-to-%s" % suffix)
+        rule.out_interface = tap
+        chain.rules.append(rule)
+
+        chain = table.get_chain("felix-from-%s" % suffix)
+        rule = fiptables.Rule(IPV4, "DROP")
+        rule.create_conntrack_match("INVALID")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.create_conntrack_match("RELATED,ESTABLISHED")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.protocol = "udp"
+        rule.create_udp_match("68", "67")
+        chain.rules.append(rule)
+
+        if ipv4 is not None:
+            rule = fiptables.Rule(IPV4)
+            rule.create_target("MARK", {"set-mark": "1"})
+            rule.src = ipv4 + "/32"
+            rule.create_mac_match(mac)
+            chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "DROP")
+        rule.create_mark_match("!1")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.create_set_match("felix-from-port-%s" % suffix, "dst,dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.create_set_match("felix-from-addr-%s" % suffix, "dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.protocol = "icmp"
+        rule.create_set_match("felix-from-icmp-%s" % suffix, "dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "DROP")
+        chain.rules.append(rule)
+
+        chain = table.get_chain("felix-to-%s" % suffix)
+        rule = fiptables.Rule(IPV4, "DROP")
+        rule.create_conntrack_match("INVALID")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.create_conntrack_match("RELATED,ESTABLISHED")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.create_set_match("felix-to-port-%s" % suffix, "src,dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.create_set_match("felix-to-addr-%s" % suffix, "src")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "RETURN")
+        rule.protocol = "icmp"
+        rule.create_set_match("felix-to-icmp-%s" % suffix, "src")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV4, "DROP")
+        chain.rules.append(rule)
+
+        table = self.tables_v6["filter"]
+        chain = table.chains["felix-FROM-ENDPOINT"]
+        rule = fiptables.Rule(IPV6, "felix-from-%s" % suffix)
+        rule.in_interface = tap
+        chain.rules.append(rule)
+
+        chain = table.chains["felix-TO-ENDPOINT"]
+        rule = fiptables.Rule(IPV6, "felix-to-%s" % suffix)
+        rule.out_interface = tap
+        chain.rules.append(rule)
+
+        chain = table.get_chain("felix-from-%s" % suffix)
+        rule = fiptables.Rule(type, "RETURN")
+        rule.protocol = "ipv6-icmp"
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "DROP")
+        rule.create_conntrack_match("INVALID")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.create_conntrack_match("RELATED,ESTABLISHED")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.protocol = "udp"
+        rule.create_udp_match("546", "547")
+        chain.rules.append(rule)
+
+        if ipv6 is not None:
+            rule = fiptables.Rule(IPV6)
+            rule.create_target("MARK", {"set-mark": "1"})
+            rule.src = ipv6
+            rule.create_mac_match(mac)
+            chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "DROP")
+        rule.create_mark_match("!1")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.create_set_match("felix-6-from-port-%s" % suffix, "dst,dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.create_set_match("felix-6-from-addr-%s" % suffix, "dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.protocol = "ipv6-icmp"
+        rule.create_set_match("felix-6-from-icmp-%s" % suffix, "dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "DROP")
+        chain.rules.append(rule)
+
+        chain = table.get_chain("felix-to-%s" % suffix)
+        for icmp in ["130", "131", "132", "134", "135", "136"]:
+            rule = fiptables.Rule(IPV6, "RETURN")
+            rule.protocol = "ipv6-icmp"
+            rule.create_icmp6_match(icmp)
+            chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "DROP")
+        rule.create_conntrack_match("INVALID")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.create_conntrack_match("RELATED,ESTABLISHED")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.create_set_match("felix-6-to-port-%s" % suffix, "src,dst")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.create_set_match("felix-6-to-addr-%s" % suffix, "src")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "RETURN")
+        rule.protocol = "ipv6-icmp"
+        rule.create_set_match("felix-6-to-icmp-%s" % suffix, "src")
+        chain.rules.append(rule)
+
+        rule = fiptables.Rule(IPV6, "DROP")
+        chain.rules.append(rule)
+
+        self.apply()
