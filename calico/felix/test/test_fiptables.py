@@ -386,7 +386,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(chain.rules[2].target, "original")
         self.assertTrue(chain.rules[3].target, "rule1")
         args = copy(base_args)
-        args.extend(["-I", "blah", "4", "-j", "rule1"])
+        args.extend(["-A", "blah", "-j", "rule1"])
         self.assertEqual(len(table.ops), 3)
         self.assertEqual(table.ops[2], args)
 

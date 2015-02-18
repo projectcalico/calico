@@ -93,7 +93,7 @@ class TableState(fiptables.TableState):
         and the normal chains are empty.
         """
         log.debug("Set table state to empty")
-       
+
         self.reset()
         self.real_v4.clear()
         self.real_v6.clear()
@@ -195,7 +195,7 @@ class TableState(fiptables.TableState):
         rule.dst = "169.254.169.254/32"
         rule.protocol = "tcp"
         rule.create_tcp_match("80")
-        rule.create_target("DNAT", {'to_destination': '127.0.0.1:9697'})
+        rule.create_target("DNAT", {'to-destination': '127.0.0.1:9697'})
         chain.rules.append(rule)
 
         table = self.get_table(IPV6, "filter")
@@ -265,7 +265,7 @@ class TableState(fiptables.TableState):
 
         if ipv4 is not None:
             rule = fiptables.Rule(IPV4)
-            rule.create_target("MARK", {"set_mark": "1"})
+            rule.create_target("MARK", {"set-mark": "1"})
             rule.src = ipv4 + "/32"
             rule.create_mac_match(mac)
             chain.rules.append(rule)
@@ -346,7 +346,7 @@ class TableState(fiptables.TableState):
 
         if ipv6 is not None:
             rule = fiptables.Rule(IPV6)
-            rule.create_target("MARK", {"set_mark": "1"})
+            rule.create_target("MARK", {"set-mark": "1"})
             rule.src = ipv6
             rule.create_mac_match(mac)
             chain.rules.append(rule)
@@ -403,4 +403,3 @@ class TableState(fiptables.TableState):
         chain.rules.append(rule)
 
         self.apply()
-

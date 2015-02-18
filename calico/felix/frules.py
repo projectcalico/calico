@@ -94,7 +94,18 @@ IPSET6_TMP_ICMP         = "felix-6-tmp-icmp"
 def set_global_rules(config, iptables_state):
     """
     Set up global iptables rules. These are rules that do not change with
-    endpoint, and are expected never to change - but they must be present.
+    endpoint, and are expected never to change (such as the rules that send all
+    traffic through the top level Felix chains).
+
+    This method therefore :
+
+    - resets the table state (i.e. clears the cache in case any of the tables
+      that are not Felix-owned have changed since the last read);
+    - ensures that all the required global tables are present;
+    - applies any changes required.
+
+    This method should be called at start of day and periodically thereafter
+    (so that we can periodically discard and reload the cache).
     """
     # Reset all the tables; we are about to recheck the global rules, so this
     # is the best place to clean out and resync our state.
@@ -114,7 +125,7 @@ def set_global_rules(config, iptables_state):
         rule          = fiptables.Rule(futils.IPV4)
         rule.dst      = "169.254.169.254/32"
         rule.protocol = "tcp"
-        rule.create_target("DNAT", {"to_destination": 
+        rule.create_target("DNAT", {"to-destination":
                                     "%s:%s" % (config.METADATA_IP,
                                                config.METADATA_PORT)})
 
@@ -362,7 +373,7 @@ def set_ep_specific_rules(iptables_state, suffix, iface, type, localips, mac):
     #*************************************************************************#
     for ip in localips:
         rule = fiptables.Rule(type)
-        rule.create_target("MARK", {"set_mark": "1"})
+        rule.create_target("MARK", {"set-mark": "1"})
         if type == IPV4:
             rule.src = ip + "/32"
         else:
@@ -375,7 +386,7 @@ def set_ep_specific_rules(iptables_state, suffix, iface, type, localips, mac):
     rule.create_mark_match("!1")
     from_chain.insert_rule(rule, index)
     index += 1
-  
+
     # "Permit packets whose destination matches the supplied ipsets."
     rule = fiptables.Rule(type, "RETURN")
     rule.create_set_match(from_ipset_port, "dst,dst")
@@ -461,32 +472,12 @@ def del_rules(iptables_state, suffix, type):
         from_ipset_addr = IPSET6_FROM_ADDR_PREFIX + suffix
         from_ipset_icmp = IPSET6_FROM_ICMP_PREFIX + suffix
 
-    #*************************************************************************#
-    #* Remove the rules routing to the chain we are about to remove. The     *#
-    #* baroque structure is caused by the python-iptables interface.         *#
-    #* chain.rules returns a list of rules, each of which contains its index *#
-    #* (i.e. position). If we get rules 7 and 8 and try to remove them in    *#
-    #* that order, then the second fails because rule 8 got renumbered when  *#
-    #* rule 7 was deleted, so the rule we have in our hand neither matches   *#
-    #* the old rule 8 (now at index 7) or the new rule 8 (with a different   *#
-    #* target etc. Hence each time we remove a rule we rebuild the list of   *#
-    #* rules to iterate through.                                             *#
-    #*                                                                       *#
-    #* In principle we could use autocommit to make this much nicer (as the  *#
-    #* python-iptables docs suggest), but in practice it seems a bit buggy,  *#
-    #* and leads to errors elsewhere. Reversing the list sounds like it      *#
-    #* should work too, but in practice does not.                            *#
-    #*************************************************************************#
+    # Remove the rules routing to the chain we are about to remove.
     for name in (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT):
         chain = table.get_chain(name)
-        done  = False
-        while not done:
-            done = True
-            for rule in chain.rules:
-                if rule.target in (to_chain, from_chain):
-                    chain.delete_rule(rule)
-                    done = False
-                    break
+        for rule in chain.rules[:]:
+            if rule.target in (to_chain, from_chain):
+                chain.delete_rule(rule)
 
     # Delete the from and to chains for this endpoint.
     for name in (from_chain, to_chain):
@@ -752,4 +743,3 @@ def list_eps_with_rules(iptables_state, type):
     log.debug("Current list of managed %s endpoints : %s" % (type, eps))
 
     return eps
-

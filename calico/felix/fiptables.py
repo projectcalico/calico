@@ -77,7 +77,7 @@ class Chain(object):
         del self.rules[:]
 
     def delete_rule(self, rule):
-        # The rule must exist or there is an error.
+        # The rule must exist.
         args = [IPTABLES_CMD[self.type],
                 "-w",
                 "-t",
@@ -128,26 +128,20 @@ class Chain(object):
         Position starts at offset 0, even though iptables wants it to start at
         offset 1.
         """
-        # We append if we are not forcing position, but want to put the rule
-        # last.
-        append = position == RULE_POSN_LAST and not force_position
-
         if force_position:
             try:
                 if rule != self.rules[position]:
                     self._insert_rule(rule, position)
             except IndexError:
                 # Either appending to empty list (so -1 no good), or list not
-                # long enough. Explicitly add it.
-                self._insert_rule(rule, position)
+                # long enough. Just append the rule.
+                self._insert_rule(rule, RULE_POSN_LAST)
         else:
             if rule not in self.rules:
-                if position == RULE_POSN_LAST:
-                    append = True
-                self._insert_rule(rule, position, append)
+                self._insert_rule(rule, position)
         return
 
-    def _insert_rule(self, rule, position, append=False):
+    def _insert_rule(self, rule, position):
         """
         Insert the given rule at the supplied offset.
 
@@ -157,7 +151,7 @@ class Chain(object):
         This method is private; callers outside this module should call
         insert_rule instead.
         """
-        if append:
+        if position == RULE_POSN_LAST:
             args = [IPTABLES_CMD[self.type],
                     "-w",
                     "-t",
@@ -166,9 +160,6 @@ class Chain(object):
                     self.name]
             self.rules.append(rule)
         else:
-            if position == RULE_POSN_LAST:
-                position = len(self.rules)
-
             args = [IPTABLES_CMD[self.type],
                     "-w",
                     "-t",
@@ -266,24 +257,17 @@ class Rule(object):
     """
     Rule object. This contains information about rules.
     """
-    FLAG_TO_FIELD = { "-s": "src",
-                      "-d": "dst",
-                      "-p": "protocol",
-                      "-i": "in_interface",
-                      "-o": "out_interface",
-                      "-j": "target",
-                      "-m": "match" }
+    tuples = (("-s", "src"),
+              ("-d", "dst"),
+              ("-p", "protocol"),
+              ("-i", "in_interface"),
+              ("-o", "out_interface"),
+              ("-m", "match"),
+              ("-j", "target"))
 
-    # Values of the above. Order is to ensure that tests are more regressible.
-    KNOWN_FIELDS = [ "src",
-                     "dst",
-                     "protocol",
-                     "in_interface",
-                     "out_interface",
-                     "match",
-                     "target" ]
-
-    FIELD_TO_FLAG = {field: flag for flag, field in FLAG_TO_FIELD.items()}
+    FLAG_TO_FIELD = dict(tuples)
+    KNOWN_FIELDS = [ a[1] for a in tuples ]
+    FIELD_TO_FLAG = {field: flag for flag, field in tuples}
 
     def __init__(self, type, target=None):
         self.type = type
@@ -302,7 +286,7 @@ class Rule(object):
 
     def parse_fields(self, line, fields):
         """
-        Parse field retrieved from iptables -S. The -A and the chain name must
+        Parse fields retrieved from iptables -S. The -A and the chain name must
         have been removed from the list supplied.
 
         For example :
@@ -365,9 +349,9 @@ class Rule(object):
 
     def create_target(self, name, parameters=None):
         self.target = name
+        # Note that this adds parameters, rather than replacing existing ones.
         for key in parameters:
-            # replace _ (python_iptables) with - (normal iptables)
-            self.parameters[key.replace("_", "-")] = parameters[key]
+            self.parameters[key] = parameters[key]
 
     def create_tcp_match(self, dport):
         self.match = "tcp"
