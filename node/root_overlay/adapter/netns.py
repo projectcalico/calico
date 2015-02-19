@@ -121,11 +121,14 @@ def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alia
     # Set the default route.
     # Is there already a default route?  This occurs if there is already networking set up on
     # the container.  We want Calico to be the default route.
-    curr_default = check_output("ip netns exec %s ip route show | grep default" % cpid,
-                                shell=True)
-    if curr_default:
+    routes = check_output(['ip', 'netns', 'exec', str(cpid), 'ip', 'route'])
+    _log.debug('Netns %d "ip route" output:\n%s', cpid, routes)
+    if 'default' in routes:
         # Delete the default.
-        check_call("ip netns exec %s ip route del default" % (cpid), shell=True)
+        _log.info('Found default route in output, deleting.')
+        _log.debug('"ip route" output:\n%s', routes)
+        check_call("ip netns exec %s ip route del default" % cpid, shell=True)
+
     check_call("ip netns exec %s ip route add default dev %s" % (cpid, veth_name), shell=True)
 
     # Get the MAC address.
