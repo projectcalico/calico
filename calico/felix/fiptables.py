@@ -267,7 +267,7 @@ class Rule(object):
 
     FLAG_TO_FIELD = dict(tuples)
     KNOWN_FIELDS = [ a[1] for a in tuples ]
-    FIELD_TO_FLAG = {field: flag for flag, field in tuples}
+    FIELD_TO_FLAG = dict((field, flag) for flag, field in tuples)
 
     def __init__(self, type, target=None):
         self.type = type
