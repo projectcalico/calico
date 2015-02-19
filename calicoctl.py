@@ -339,12 +339,12 @@ def status():
 
     #If bird is running, then print bird.
     try:
-        pass
+        print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
+                                                            "/etc/service/bird/bird.ctl"))
     except Exception:
         print "Couldn't collect BGP Peer information"
 
-    print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
-                                                            "/etc/service/bird/bird.ctl"))
+
 
 
 def reset():

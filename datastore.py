@@ -139,8 +139,9 @@ class DatastoreClient(object):
             pools = {}
             for child in nodes:
                 cidr = child.value
-                pool = IPNetwork(cidr)
-                pools[pool] = child.key
+                if cidr:
+                    pool = IPNetwork(cidr)
+                    pools[pool] = child.key
             return pools
 
     def add_ip_pool(self, version, pool):
@@ -249,9 +250,11 @@ class DatastoreClient(object):
         try:
             etcd_groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).leaves
             for child in etcd_groups:
-                (_, _, _, _, group_id, final_key) = child.key.split("/", 5)
-                if final_key == "name":
-                    groups[group_id] = child.value
+                packed = child.key.split("/")
+                if len(packed) > 4:
+                    (_, _, _, _, group_id, final_key) = packed[0:6]
+                    if final_key == "name":
+                        groups[group_id] = child.value
         except KeyError:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass

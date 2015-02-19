@@ -52,10 +52,10 @@ def setup_logging(logfile):
 
 def remove_endpoint(ep_id):
     """
-    TODO
+    Remove an endpoint.
 
-    :param ep_id:
-    :return:
+    :param ep_id: The endpoint ID to remove
+    :return: Nothing
     """
     iface = "tap" + ep_id[:11]
     call("ip link delete %s" % iface, shell=True)
