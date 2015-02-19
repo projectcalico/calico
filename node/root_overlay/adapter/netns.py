@@ -54,16 +54,21 @@ def setup_logging(logfile):
     _log.addHandler(handler)
 
 
-def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alias=PROC_ALIAS):
+def set_up_endpoint(ip, cpid, next_hop_ips,
+                    in_container=False,
+                    veth_name=VETH_NAME,
+                    proc_alias=PROC_ALIAS):
     """
     Set up an endpoint (veth) in the network namespace idenfitied by the PID.
 
     :param ip: The IP address to assign to the endpoint (veth) as Netaddr IPAddress.
     :param cpid: The PID of a process currently running in the namespace.
+    :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the default routes.
     :param in_container: When True, we assume this program is itself running in a container
     namespace, as opposed to the root namespace.  If so, this method also moves the other end of
     the veth into the root namespace.
     :param veth_name: The name of the interface inside the container namespace, e.g. eth0
+    :param proc_alias: The head of the /proc filesystem on the host.
     :return: An Endpoint describing the veth just created.
     """
     assert isinstance(ip, IPAddress)
@@ -119,18 +124,21 @@ def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alia
                 "device": VETH_NAME},
                shell=True)
 
-    # Set the default route.
-    # Is there already a default route?  This occurs if there is already networking set up on
-    # the container.  We want Calico to be the default route.
-    curr_default = check_output("ip netns exec %s ip route show | grep default" % cpid,
-                                shell=True)
-    if curr_default:
-        # Delete the default.
-        check_call("ip netns exec %s ip route del default" % (cpid), shell=True)
-    check_call("ip netns exec %(cpid)s ip -%(version)s route add default dev %(device)s" %
+    # Connected route to next hop & default route.
+    next_hop = next_hop_ips[ip.version]
+    check_call("ip netns exec %(cpid)s ip -%(version)s route replace"
+               " %(next_hop)s dev %(device)s" %
                {"cpid": cpid,
                 "version": ip.version,
-                "device": VETH_NAME},
+                "device": VETH_NAME,
+                "next_hop": next_hop},
+               shell=True)
+    check_call("ip netns exec %(cpid)s ip -%(version)s route replace"
+               " default via %(next_hop)s dev %(device)s" %
+               {"cpid": cpid,
+                "version": ip.version,
+                "device": VETH_NAME,
+                "next_hop": next_hop},
                shell=True)
 
     # Get the MAC address.
@@ -138,5 +146,8 @@ def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alia
                        (cpid, veth_name), shell=True).strip()
 
     # Return an Endpoint
-    return Endpoint(id=ep_id, addrs=[{"addr":str(ip)}], state="enabled", mac=mac)
+    return Endpoint(id=ep_id,
+                    addrs=[{"addr": str(ip), "gw": str(next_hop)}],
+                    state="enabled",
+                    mac=mac)
 
