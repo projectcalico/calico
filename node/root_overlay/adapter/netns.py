@@ -50,6 +50,16 @@ def setup_logging(logfile):
     _log.addHandler(handler)
 
 
+def remove_endpoint(ep_id):
+    """
+    Remove an endpoint.
+
+    :param ep_id: The endpoint ID to remove
+    :return: Nothing
+    """
+    iface = "tap" + ep_id[:11]
+    call("ip link delete %s" % iface, shell=True)
+
 def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alias=PROC_ALIAS):
     """
     Set up an endpoint (veth) in the network namespace idenfitied by the PID.
