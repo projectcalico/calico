@@ -33,9 +33,11 @@ hostname = socket.gethostname()
 
 LISTEN_PORT = 2378
 
+
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(filename)s.%(name)s %(lineno)d: '
+                                  '%(message)s')
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
