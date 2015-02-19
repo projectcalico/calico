@@ -1,7 +1,7 @@
 from collections import namedtuple
 import json
 import socket
-import etcd #TODO - rename this
+import etcd
 from netaddr import IPNetwork
 import os
 

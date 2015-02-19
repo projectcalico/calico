@@ -63,15 +63,14 @@ mkdir_p = mkdir.bake('-p')
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 
 
-def get_container_id(container_name):
+def get_container_info(container_name):
     """
-    Get the full container ID from a partial ID or name.
+    Get the full container info array from a partial ID or name.
 
     :param container_name: The partial ID or name of the container.
-    :return: The container ID as a string.
+    :return: The container info array
     """
-    docker_client = pydocker.Client(base_url='unix://var/run/docker.sock')
-    # TODO should use DOCKER_HOST
+    docker_client = pydocker.Client()
     try:
         info = docker_client.inspect_container(container_name)
     except pydocker.errors.APIError as e:
@@ -80,6 +79,16 @@ def get_container_id(container_name):
             raise KeyError("Container %s was not found." % container_name)
         else:
             raise
+    return info
+
+def get_container_id(container_name):
+    """
+    Get the full container ID from a partial ID or name.
+
+    :param container_name: The partial ID or name of the container.
+    :return: The container ID as a string.
+    """
+    info = get_container_info(container_name)
     return info["Id"]
 
 
@@ -96,24 +105,7 @@ def container_add(container_name, ip):
     """
     client = DatastoreClient()
 
-    try:
-        ip = IPAddress(ip)
-    except AddrFormatError:
-        print "%s is not a valid IP address." % ip
-        return
-
-    # Resolve the name to ID.  Use the docker_client call so we can avoid a second call when
-    # we need the running PID as well.
-    try:
-        docker_client = pydocker.Client(base_url='unix://var/run/docker.sock')
-        # TODO should use DOCKER_HOST
-        info = docker_client.inspect_container(container_name)
-    except pydocker.errors.APIError as e:
-        if e.response.status_code == 404:
-            # Re-raise as a key error for consistency.
-            raise KeyError("Container %s was not found." % container_name)
-        else:
-            raise
+    info = get_container_info(container_name)
     container_id = info["Id"]
 
     # Check if the container already exists
@@ -126,18 +118,18 @@ def container_add(container_name, ip):
         # Calico already set up networking for this container.  Since we got called with an
         # IP address, we shouldn't just silently exit, since that would confuse the user:
         # the container would not be reachable on that IP address.  So, raise an exception.
-        raise KeyError("%s has already been configured with Calico Networking." %
-                       container_name)
+        print "%s has already been configured with Calico Networking." % container_name
 
     # Check the IP is in the allocation pool.  If it isn't, BIRD won't export it.
+    ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
     if not any([ip in pool for pool in pools]):
-        raise ConfigError("%s was not in any configured pools" % ip)
+        print "%s is not in any configured pools" % ip
 
     # Check the container is actually running.
     if not info["State"]["Running"]:
-        raise ConfigError("%s is not currently running." % container_name)
+        print "%s is not currently running." % container_name
 
     # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
     pid = info["State"]["Pid"]
@@ -145,6 +137,8 @@ def container_add(container_name, ip):
 
     # Register the endpoint
     client.create_container(hostname, container_id, endpoint)
+
+    print "IP %s added to %s" % (ip, container_name)
 
 
 def container_remove(container_name):
@@ -162,17 +156,16 @@ def container_remove(container_name):
     client = DatastoreClient()
     container_id = get_container_id(container_name)
 
-    # TODO - no need to check that we're running on the right host - because the above call
-    # will always fail if we're not.
-    # hosts = self.get_hosts()
-    # if hosts[hostname]["docker"][container_id]
-
     # Find the endpoint ID. We need this to find any ACL rules
-    endpoint_id = client.get_ep_id_from_cont(container_id)
+    try:
+        endpoint_id = client.get_ep_id_from_cont(container_id)
+    except KeyError:
+        print "Container %s doesn't contain any endpoints" % container_name
+        return
 
-    if len(client.get_groups_by_endpoint(endpoint_id)) > 0:
-        # TODO name the groups.
-        print "Container is mentioned in rules. Can't remove."
+    groups = client.get_groups_by_endpoint(endpoint_id)
+    if len(groups) > 0:
+        print "Container %s is in security groups %s. Can't remove." % (container_name, groups)
 
     # Remove the endpoint
     netns.remove_endpoint(endpoint_id)
@@ -180,7 +173,7 @@ def container_remove(container_name):
     # Remove the container from the datastore.
     client.remove_container(container_id)
 
-    print "Removed %s" % container_name
+    print "Removed Calico interface from %s" % container_name
 
 def group_remove_container(container_name, group_name):
     """
@@ -201,7 +194,6 @@ def group_remove_container(container_name, group_name):
     if not group_id:
         print "Group with name %s was not found." % group_name
     else:
-
         endpoint_id = client.get_ep_id_from_cont(container_id)
 
         try:
@@ -588,12 +580,15 @@ def validate_arguments():
     group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
         arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
+    container_ip_ok = arguments["<IP>"] is None or netaddr.valid_ipv4(
+        arguments["<IP>"]) or netaddr.valid_ipv6(arguments["<IP>"])
+
     if not group_ok:
         print "Groups must be <30 character long and can only container numbers, letters and " \
               "underscore."
     if not ip_ok:
-        print "Invalid --ip argument"
-    return group_ok and ip_ok
+        print "Invalid ip argument"
+    return group_ok and ip_ok and container_ip_ok
 
 
 def create_dirs():
