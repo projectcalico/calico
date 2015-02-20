@@ -247,7 +247,7 @@ class FelixAgent(object):
         #* Now remove rules for any endpoints that should no longer          *#
         #* exist. This method returns a set of endpoint suffices.            *#
         #*********************************************************************#
-        known_suffices = {ep.suffix for ep in self.endpoints.values()}
+        known_suffices = set(ep.suffix for ep in self.endpoints.values())
 
         for type in [futils.IPV4, futils.IPV6]:
             found_suffices  = frules.list_eps_with_rules(self.iptables_state,

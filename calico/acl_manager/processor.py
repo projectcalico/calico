@@ -33,7 +33,7 @@ class RuleProcessor(object):
         # both of these to support groups with no endpoints.
         group_members = defaultdict(
             dict,
-            {group: ns.get_group_members(group) for (group) in ns.get_groups()}
+            ((group, ns.get_group_members(group)) for group in ns.get_groups())
         )
         endpoint_groups = defaultdict(list)
         for group, endpoints in group_members.iteritems():

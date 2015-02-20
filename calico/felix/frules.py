@@ -729,9 +729,9 @@ def list_eps_with_rules(iptables_state, type):
     #*************************************************************************#
     table = iptables_state.get_table(type, "filter")
 
-    eps  = {chain.name.replace(CHAIN_TO_PREFIX, "")
-            for chain in table.chains.values()
-            if chain.name.startswith(CHAIN_TO_PREFIX)}
+    eps  = set(chain.name.replace(CHAIN_TO_PREFIX, "")
+               for chain in table.chains.values()
+               if chain.name.startswith(CHAIN_TO_PREFIX))
 
     names = ipsets.list_names()
     for name in names:

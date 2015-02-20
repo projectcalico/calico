@@ -196,7 +196,7 @@ class TestPlugin(unittest.TestCase):
             #*****************************************************************#
             #* Add this to the test code's list of known sockets.            *#
             #*****************************************************************#
-            self.sockets |= {socket}
+            self.sockets.add(socket)
 
             return socket
 
@@ -394,7 +394,7 @@ class TestPlugin(unittest.TestCase):
                     print "T=%s: %s: Wake up!" % (current_time, queue.stack)
                     del sleepers[queue]
                     queue.put_nowait('Wake up!')
-                    
+
             #*****************************************************************#
             #* Allow woken (and possibly other) threads to run.              *#
             #*****************************************************************#
@@ -437,14 +437,14 @@ class TestPlugin(unittest.TestCase):
                                                      (addr, port))}
         self.assertEqual(len(bound_sockets), 1)
         return bound_sockets.pop()
-        
+
     def test_bind_host(self):
         #*********************************************************************#
         #* Test binding to a specific IP address.                            *#
         #*********************************************************************#
         ip_addr = '192.168.1.1'
         m_oslo.config.cfg.CONF.bind_host = ip_addr
-        
+
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
         #*********************************************************************#
@@ -462,7 +462,7 @@ class TestPlugin(unittest.TestCase):
         #* Don't provide bind_host config.                                   *#
         #*********************************************************************#
         m_oslo.config.cfg.CONF.bind_host = None
-        
+
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
         #*********************************************************************#
@@ -745,7 +745,7 @@ class TestPlugin(unittest.TestCase):
     #* operations. These all represent different manifestations of           *#
     #* networking connectivity trouble.                                      *#
     #*************************************************************************#
- 
+
     def test_felix_router_addr_in_use(self):
 
         #*********************************************************************#
