@@ -580,6 +580,46 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         self.felix_connect()
 
+    #*************************************************************************#
+    #* Test when plugin sends an ENDPOINT* request and Felix does not        *#
+    #* respond within ENDPOINT_RESPONSE_TIMEOUT.                             *#
+    #*************************************************************************#
+    def test_no_endpoint_response(self):
+
+        #*********************************************************************#
+        #* Start of day processing: initialization and socket binding.       *#
+        #*********************************************************************#
+        self.start_of_day()
+
+        #*********************************************************************#
+        #* Connect a Felix instance.                                         *#
+        #*********************************************************************#
+        self.felix_connect()
+
+        #*********************************************************************#
+        #* Process a new endpoint, but don't send in the ENDPOINTCREATED     *#
+        #* response.                                                         *#
+        #*********************************************************************#
+        self.new_endpoint(flags={NO_ENDPOINT_RESPONSE})
+        self.sockets -= {self.felix_endpoint_socket}
+
+        #*********************************************************************#
+        #* Let time pass to allow the felix_heartbeat_thread for the old     *#
+        #* connection to die.  It's a bug that we need to do this: Github    *#
+        #* issue.                                                            *#
+        #*********************************************************************#
+        self.simulated_time_advance(40)
+
+        #*********************************************************************#
+        #* Connect the Felix instance again.                                 *#
+        #*********************************************************************#
+        self.felix_connect()
+
+        #*********************************************************************#
+        #* Now process the new endpoint successfully.                        *#
+        #*********************************************************************#
+        self.new_endpoint()
+
     def start_of_day(self):
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
@@ -878,6 +918,7 @@ class TestPlugin(unittest.TestCase):
         #* a string.                                                         *#
         #*********************************************************************#
         kall = self.acl_pub_socket.send_multipart.call_args
+        assert kall is not None
         args, kwargs = kall
         assert len(args) == 1
         assert len(args[0]) == 2
