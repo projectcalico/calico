@@ -70,3 +70,16 @@ Options:
                           [default: calico/node:v0.0.6]
 
 ```
+
+## Building the calicoctl binary
+The calicoctl binary is a statically-compiled version of the calicoctl.py script in this directory.  To (re)build it:
+
+* Install pip and virtualenv.  On Ubuntu:
+
+    sudo apt-get install python-pip
+    sudo pip install -U virtualenv
+
+* Run
+
+    ./create-binary.sh
+
