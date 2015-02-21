@@ -159,6 +159,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             if self.db.notifier.__class__ != CalicoNotifierProxy:
                 self.db.notifier = CalicoNotifierProxy(self.db.notifier, self)
+            else:
+                #*************************************************************#
+                #* In case the notifier proxy already exists but the current *#
+                #* CalicoMechanismDriver instance has changed, ensure that   *#
+                #* the notifier proxy will delegate to the current           *#
+                #* CalicoMechanismDriver instance.                           *#
+                #*************************************************************#
+                self.db.notifier.calico_driver = self
 
     def check_segment_for_agent(self, segment, agent):
         LOG.debug("Checking segment %s with agent %s" % (segment, agent))
