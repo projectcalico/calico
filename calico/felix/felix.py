@@ -113,6 +113,9 @@ class FelixAgent(object):
         # worry about overflowing for many thousands of years yet.
         self.resync_time = None
 
+        # Interface prefix. Only present after first resync response received.
+        self.iface_prefix = None
+
         # Build a dispatch table for handling various messages.
         self.handlers = {
             Message.TYPE_HEARTBEAT: self.handle_heartbeat,
@@ -136,9 +139,6 @@ class FelixAgent(object):
         # endpoint resync (and doing it now when we don't know of any endpoints
         # would just be a noop anyway).
         self.resync_endpoints()
-
-        # Reset the global rules.
-        frules.set_global_rules(self.config, self.iptables_state)
 
     def connect_to_plugin(self):
         """
@@ -287,16 +287,20 @@ class FelixAgent(object):
                                      message.fields)
 
             try:
-                resync_id   = message.fields['resync_id']
+                resync_id = message.fields['resync_id']
             except KeyError:
                 raise InvalidRequest("Missing \"resync_id\" field",
                                      message.fields)
 
-            interface   = message.fields.get('interface_id')
+            try:
+                interface = message.fields['interface_name']
+            except KeyError:
+                raise InvalidRequest("Missing \"interface_name\" field",
+                                     message.fields)
 
-            if interface and not interface.startswith(self.config.IFACE_PREFIX):
+            if not interface.startswith(self.iface_prefix):
                 raise InvalidRequest("Interface \"%s\" does not start with \"%s\""
-                                     % (interface, self.config.IFACE_PREFIX),
+                                     % (interface, self.iface_prefix),
                                      message.fields)
 
             endpoint = self.endpoints.get(endpoint_id)
@@ -311,7 +315,9 @@ class FelixAgent(object):
                 endpoint.pending_resync = False
             elif endpoint is None:
                 # New endpoint.
-                endpoint = self._create_endpoint(endpoint_id, mac, interface)
+                endpoint = self._create_endpoint(endpoint_id,
+                                                 mac,
+                                                 interface)
 
             # Update the endpoint state; this can fail with Invalid Request.
             self._update_endpoint(endpoint, message.fields)
@@ -495,6 +501,11 @@ class FelixAgent(object):
             except KeyError:
                 raise InvalidRequest("Missing \"message\" field",
                                      message.fields)
+            try:
+                self.iface_prefix = message.fields['interface_prefix']
+            except KeyError:
+                raise InvalidRequest("Missing \"interface_prefix\" field",
+                                     message.fields)
         except InvalidRequest as error:
             log.error("Got invalid RESYNCSTATE response : %s, "
                       "request fields %s", error.message, error.fields)
@@ -507,6 +518,11 @@ class FelixAgent(object):
                       return_str)
             self.complete_endpoint_resync(False)
             return
+
+        # Reset / create the global rules.
+        frules.set_global_rules(self.config,
+                                self.iface_prefix,
+                                self.iptables_state)
 
         # If there are no endpoints to expect, or we got this after all the
         # resyncs, then we're done.
@@ -592,10 +608,10 @@ class FelixAgent(object):
         """
         log.debug("Create endpoint %s", endpoint_id)
 
-        endpoint = Endpoint(self.config,
-                            endpoint_id,
+        endpoint = Endpoint(endpoint_id,
                             mac,
-                            interface)
+                            interface,
+                            self.iface_prefix)
 
         self.endpoints[endpoint_id] = endpoint
 
@@ -651,7 +667,7 @@ class FelixAgent(object):
 
         endpoint.addresses = addresses
 
-        endpoint.mac   = mac.encode('ascii')
+        endpoint.mac = mac.encode('ascii')
         endpoint.state = state.encode('ascii')
 
         # Program the endpoint - i.e. set things up for it.
@@ -670,7 +686,14 @@ class FelixAgent(object):
         endpoint_resync_needed = False
         acl_resync_needed = False
 
-        active_sockets = fsocket.poll(self.sockets.values(),
+        if self.iface_prefix:
+            poll_list = self.sockets.values()
+        else:
+            # Not got an first resync response (as no interface prefix), so
+            # ignore all sockets except the EP_REQ socket until we do.
+            poll_list = [self.sockets[Socket.TYPE_EP_REQ]]
+
+        active_sockets = fsocket.poll(poll_list,
                                       self.config.EP_RETRY_INT_MS)
 
         # For each active socket, pull the message off and handle it.

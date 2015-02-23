@@ -689,6 +689,7 @@ class TestPlugin(unittest.TestCase):
              '',
              json.dumps({'type': 'RESYNCSTATE',
                          'endpoint_count': 0,
+                         'interface_prefix': 'tap',
                          'rc': 'SUCCESS',
                          'message': 'Здра́вствуйте!'}).encode('utf-8')])
         self.felix_router_socket.send_multipart.reset_mock()
@@ -843,6 +844,7 @@ class TestPlugin(unittest.TestCase):
                         'addr': '10.65.0.2',
                         'gateway': '10.65.0.1'}],
              'endpoint_id': 'DEADBEEF-1234-5678',
+             'interface_name': 'tapDEADBEEF-12',
              'issued': mock.ANY,
              'resync_id': None,
              'type': 'ENDPOINTCREATED',

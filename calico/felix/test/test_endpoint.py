@@ -48,7 +48,13 @@ class TestEndpoint(unittest.TestCase):
         # iptables_state is never accessed (as the code returns too early).
         iptables_state = None
 
-        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep_id = str(uuid.uuid4())
+        prefix = "tap"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
         retval = ep.program_endpoint(iptables_state)
 
         self.assertFalse(retval)
@@ -57,7 +63,13 @@ class TestEndpoint(unittest.TestCase):
         """
         Removal of an endpoint where tap interface deleted under our feet.
         """
-        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep_id = str(uuid.uuid4())
+        prefix = "tap"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
 
         p_exists = mock.patch('calico.felix.devices.interface_exists',
                               side_effect=[True, False])
@@ -83,7 +95,13 @@ class TestEndpoint(unittest.TestCase):
         """
         Removal of an endpoint where other system error happens.
         """
-        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep_id = str(uuid.uuid4())
+        prefix = "tap"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
 
         with self.assertRaisesRegexp(futils.FailedSystemCall, "blah"):
             p_exists = mock.patch('calico.felix.devices.interface_exists',
@@ -110,7 +128,13 @@ class TestEndpoint(unittest.TestCase):
         """
         Removal of an endpoint where some random exception appears.
         """
-        ep = endpoint.Endpoint(config, str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
+        ep_id = str(uuid.uuid4())
+        prefix = "tap"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
 
         with self.assertRaisesRegexp(Exception, "blah"):
             p_exists = mock.patch('calico.felix.devices.interface_exists',

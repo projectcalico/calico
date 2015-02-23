@@ -58,19 +58,11 @@ class Endpoint(object):
     STATE_DISABLED = "disabled"
     STATES         = [STATE_ENABLED, STATE_DISABLED]
 
-    def __init__(self, config, uuid, mac, interface=None):
+    def __init__(self, uuid, mac, interface, prefix):
         self.uuid = uuid.encode('ascii')
-
-        # suffix is the first SUFFIX_LEN characters of the ID, used as a suffix
-        # in default interface, chain and ipset names.
-        self.suffix = uuid.encode('ascii')[:config.SUFFIX_LEN]
-
-        if interface:
-            self.interface = interface
-        else:
-            self.interface = config.IFACE_PREFIX + self.suffix
-
         self.mac = mac.encode('ascii')
+        self.interface = interface.encode('ascii')
+        self.suffix = interface.replace(prefix, "", 1)
 
         # Addresses is a set of Address objects.
         self.addresses = set()

@@ -63,7 +63,6 @@ class Config(object):
                                                   "FelixHostname",
                                                   socket.gethostname())
 
-
         self.PLUGIN_ADDR     = self.get_cfg_entry("global",
                                                   "PluginAddress")
         self.ACL_ADDR        = self.get_cfg_entry("global",
@@ -71,12 +70,6 @@ class Config(object):
         self.METADATA_IP     = self.get_cfg_entry("global",
                                                   "MetadataAddr",
                                                   "127.0.0.1")
-        self.IFACE_PREFIX    = self.get_cfg_entry("global",
-                                                  "InterfacePrefix",
-                                                  "tap")
-        self.SUFFIX_LEN      = int(self.get_cfg_entry("global",
-                                                      "InterfaceSuffixLength",
-                                                      "11"))
         self.METADATA_PORT   = self.get_cfg_entry("global",
                                                   "MetadataPort",
                                                   "9697")

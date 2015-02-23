@@ -91,7 +91,7 @@ IPSET6_TMP_ADDR         = "felix-6-tmp-addr"
 IPSET6_TMP_ICMP         = "felix-6-tmp-icmp"
 
 
-def set_global_rules(config, iptables_state):
+def set_global_rules(config, iface_prefix, iptables_state):
     """
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change (such as the rules that send all
@@ -113,7 +113,7 @@ def set_global_rules(config, iptables_state):
 
     # The interface matching string; for example, if interfaces start "tap"
     # then this string is "tap+".
-    iface_match = config.IFACE_PREFIX + "+"
+    iface_match = iface_prefix + "+"
 
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
     table = iptables_state.get_table(futils.IPV4, "nat")

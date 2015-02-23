@@ -119,7 +119,6 @@ class TestBasic(TestFelixSuperclass):
         context = stub_zmq.Context()
         agent = felix.FelixAgent(config_path, context)
 
-        expected_iptables.set_expected_global_rules()
         agent.iptables_state.check_state(expected_iptables)
         stub_ipsets.check_state(expected_ipsets)
 
@@ -135,8 +134,25 @@ class TestBasic(TestFelixSuperclass):
         context.add_poll_result(0)
         agent.run()
 
-        expected_iptables.set_expected_global_rules()
         agent.iptables_state.check_state(expected_iptables)
+        stub_ipsets.check_state(expected_ipsets)
+
+        # Send an empty response to the RESYNC request.
+        resync_req = context.sent_data[TYPE_EP_REQ].pop()
+        log.debug("Resync request : %s" % resync_req)
+        self.assertFalse(context.sent_data_present())
+        resync_id = resync_req['resync_id']
+        resync_rsp = { 'type': "RESYNCSTATE",
+                       'endpoint_count': 0,
+                       'interface_prefix': "tap",
+                       'rc': "SUCCESS",
+                       'message': "hello" }
+
+        poll_result = context.add_poll_result(0)
+        poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        expected_iptables.set_expected_global_rules()
         stub_ipsets.check_state(expected_ipsets)
 
     def test_main_flow(self):
@@ -156,6 +172,7 @@ class TestBasic(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': 1,
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -327,6 +344,7 @@ class TestBasic(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': 0,
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -385,6 +403,7 @@ class TestTimings(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "0",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -409,6 +428,7 @@ class TestTimings(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "2",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -481,6 +501,7 @@ class TestTimings(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "0",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -549,12 +570,19 @@ class TestTimings(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "0",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
         # Send keepalives on the connections that expect them
         poll_result = context.add_poll_result(0)
         poll_result.add(TYPE_EP_REQ, resync_rsp)
+        agent.run()
+
+        # Send keepalives on the connections that expect them. This must not be
+        # combined with the poll above, as only after the first resync does
+        # Felix start listening on other sockets.
+        poll_result = context.add_poll_result(0)
         poll_result.add(TYPE_EP_REP, {'type': "HEARTBEAT"})
         poll_result.add(TYPE_ACL_SUB, {'type': "HEARTBEAT"}, 'aclheartbeat')
         agent.run()
@@ -636,6 +664,7 @@ class TestTimings(TestFelixSuperclass):
         poll_request = context.add_poll_result(120000)
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "5",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -762,6 +791,7 @@ class TestTimings(TestFelixSuperclass):
         agent.run()
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "0",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -897,6 +927,7 @@ class TestTimings(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': 0,
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -943,6 +974,7 @@ class TestTimings(TestFelixSuperclass):
         poll_result = context.add_poll_result(0)
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "5",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
         poll_result.add(TYPE_EP_REQ, resync_rsp)
@@ -992,6 +1024,7 @@ class TestTimings(TestFelixSuperclass):
         poll_result = context.add_poll_result(0)
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': "4",
+                       'interface_prefix': "tap",
                        'rc': "SUCCESS",
                        'message': "hello" }
         poll_result.add(TYPE_EP_REQ, resync_rsp)
@@ -1041,8 +1074,7 @@ class TestInterfacePrefix(TestFelixSuperclass):
         """
         common.default_logging()
         context = stub_zmq.Context()
-        agent = felix.FelixAgent("calico/felix/test/data/felix_veth.cfg",
-                                 context)
+        agent = felix.FelixAgent(config_path, context)
         context.add_poll_result(0)
         agent.run()
 
@@ -1053,6 +1085,7 @@ class TestInterfacePrefix(TestFelixSuperclass):
         resync_id = resync_req['resync_id']
         resync_rsp = { 'type': "RESYNCSTATE",
                        'endpoint_count': 1,
+                       'interface_prefix': "veth",
                        'rc': "SUCCESS",
                        'message': "hello" }
 
@@ -1121,12 +1154,15 @@ class TestMessages(TestFelixSuperclass):
         common.default_logging()
         context = stub_zmq.Context()
         agent = felix.FelixAgent(config_path, context)
+        # Set up interface prefix so we'll notice the messages.
+        agent.iface_prefix = "tap"
 
         # We build a valid endpoint request, then monkey with it.
         addr = "1.2.3.4"
         endpoint = CreatedEndpoint([addr])
 
-        for missing in ["endpoint_id", "mac", "resync_id", "state", "addrs"]:
+        for missing in ["endpoint_id", "mac", "resync_id",
+                        "state", "addrs", "interface_name"]:
             log.debug("Testing ENDPOINTCREATED with missing %s", missing)
             request = endpoint.create_req.copy()
             del request[missing]
@@ -1139,7 +1175,7 @@ class TestMessages(TestFelixSuperclass):
 
         log.debug("Testing ENDPOINTCREATED with invalid interface")
         request = endpoint.create_req.copy()
-        request['interface_id'] = "bloop"
+        request['interface_name'] = "bloop"
         poll_result = context.add_poll_result(0)
         poll_result.add(TYPE_EP_REP, request)
         agent.run()
@@ -1216,7 +1252,8 @@ class TestMessages(TestFelixSuperclass):
         """
         common.default_logging()
 
-        for missing in [ 'endpoint_count', 'rc', 'message', None ]:
+        for missing in [ 'endpoint_count', 'rc', 'message',
+                         'interface_prefix', None ]:
             with mock.patch('calico.felix.felix.FelixAgent.complete_endpoint_resync') \
                  as mock_complete:
                 context = stub_zmq.Context()
@@ -1228,6 +1265,7 @@ class TestMessages(TestFelixSuperclass):
                 resync_id = resync_req['resync_id']
                 resync_rsp = { 'type': "RESYNCSTATE",
                                'endpoint_count': 1,
+                               'interface_prefix': "tap",
                                'rc': "SUCCESS",
                                'message': "hello" }
 
@@ -1265,7 +1303,6 @@ class TestMessages(TestFelixSuperclass):
         agent.handle_getaclstate(fsocket.Message("GETACLSTATE", fields),
                                  sock)
 
-
     def test_odd_ep_requests(self):
         """
         Test some endpoint requests in slightly odd states.
@@ -1273,6 +1310,7 @@ class TestMessages(TestFelixSuperclass):
         common.default_logging()
         context = stub_zmq.Context()
         agent = felix.FelixAgent(config_path, context)
+        agent.iface_prefix = "tap"
 
         # We build a valid endpoint request, then monkey with it.
         addr = "1.2.3.4"
@@ -1356,14 +1394,19 @@ class CreatedEndpoint(object):
 
     addresses is a list or set of addresses; we just need to iterate over it.
     """
-    def __init__(self, addresses, resync_id="", prefix="tap", interface=None):
+    def __init__(self, addresses, resync_id="", interface=None, prefix=None):
         self.id = str(uuid.uuid4())
         self.mac = stub_utils.get_mac()
-        self.suffix = self.id[:11]
+        if not prefix:
+            prefix = "tap"
+
         if interface:
             self.interface = interface
         else:
-            self.interface = prefix + self.suffix
+            self.interface = prefix + self.id[:11]
+
+        self.suffix = self.interface.replace(prefix, "", 1)
+
         addrs = []
         for addr in addresses:
             if "." in addr:
@@ -1373,6 +1416,7 @@ class CreatedEndpoint(object):
 
         self.create_req = { 'type': "ENDPOINTCREATED",
                             'endpoint_id': self.id,
+                            'interface_name': self.interface,
                             'resync_id': resync_id,
                             'issued': str(futils.time_ms()),
                             'mac': self.mac,

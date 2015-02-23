@@ -73,6 +73,7 @@ class TableState(fiptables.TableState):
         """
         Overriding fiptables.Table.read_table().
         """
+        log.debug("Read of table %s (%s)", name, type)
         if type == IPV4:
             table = self.real_v4[name]
         else:
@@ -82,7 +83,9 @@ class TableState(fiptables.TableState):
 
         for chain in table.chains.values():
             data += ("-N %s\n" % chain.name +
-                     "\n".join(str(rule) for rule in chain.rules))
+                     "\n".join(("-A %s %s" % (chain.name, str(rule)))
+                               for rule in chain.rules) +
+                     "\n")
 
         return data
 
