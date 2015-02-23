@@ -609,8 +609,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             #* Receive and log Felix's response.  Use poll and NOBLOCK to    *#
             #* require that this comes within HEARTBEAT_RESPONSE_TIMEOUT     *#
-            #* milliseconds.  An exception will be thrown if there's no      *#
-            #* response in the allowed time.                                 *#
+            #* milliseconds.  The recv_json call will throw an exception if  *#
+            #* there's no response in the allowed time, and in that case     *#
+            #* this heartbeat thread will exit.                              *#
             #*****************************************************************#
             try:
                 sock.poll(HEARTBEAT_RESPONSE_TIMEOUT)
