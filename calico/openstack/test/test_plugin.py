@@ -22,10 +22,10 @@ import logging
 import mock
 import socket
 import sys
-import time
 import unittest
 import uuid
 import eventlet
+import eventlet.queue
 import traceback
 import json
 import inspect
@@ -41,6 +41,7 @@ sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
+sys.modules['time'] = m_time = mock.Mock()
 
 #*****************************************************************************#
 #* Define a stub class, that we will use as the base class for               *#
@@ -59,6 +60,17 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 import calico.openstack.mech_calico as mech_calico
 
 REAL_EVENTLET_SLEEP_TIME = 0.2
+
+#*****************************************************************************#
+#* Test variation flags.                                                     *#
+#*****************************************************************************#
+NO_HEARTBEAT_RESPONSE = 1
+NO_ENDPOINT_RESPONSE  = 2
+
+#*****************************************************************************#
+#* Value used to indicate 'timeout' in poll and sleep processing.            *#
+#*****************************************************************************#
+TIMEOUT_VALUE = object()
 
 class TestPlugin(unittest.TestCase):
 
@@ -240,14 +252,18 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         def make_recv(name, socket):
 
-            def recv(*args):
+            def recv(flags=0, *args):
                 print "Socket %s recv_%s..." % (socket, name)
 
                 #*************************************************************#
                 #* Block until there's something to receive, and then get    *#
                 #* that.                                                     *#
                 #*************************************************************#
-                msg = socket.rcv_queue.get(True)
+                try:
+                    msg = socket.rcv_queue.get(not (flags &
+                                                    mech_calico.zmq.NOBLOCK))
+                except eventlet.queue.Empty:
+                    raise mech_calico.Again()
 
                 #*************************************************************#
                 #* Return that.                                              *#
@@ -265,16 +281,24 @@ class TestPlugin(unittest.TestCase):
                 print "Socket %s poll for %sms..." % (socket, ms)
 
                 #*************************************************************#
-                #* Block until there's something to receive, and then get    *#
-                #* that.                                                     *#
+                #* Add this socket's receive queue to the set of current     *#
+                #* sleepers.                                                 *#
                 #*************************************************************#
-                msg = socket.rcv_queue.get(True, ms / 1000)
+                socket.rcv_queue.stack = inspect.stack()[1][3]
+                sleepers[socket.rcv_queue] = current_time + ms / 1000
 
                 #*************************************************************#
-                #* Get the message back on the queue, for a following        *#
-                #* receive call.                                             *#
+                #* Block until there's something added to the queue.         *#
                 #*************************************************************#
-                socket.rcv_queue.put_nowait(msg)
+                msg = socket.rcv_queue.get(True)
+
+                #*************************************************************#
+                #* If what was added was not the timeout indication, put it  *#
+                #* back on the queue, for a following receive call.          *#
+                #*************************************************************#
+                if msg is not TIMEOUT_VALUE:
+                    socket.rcv_queue.put_nowait(msg)
+
                 real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
                 #*************************************************************#
@@ -309,6 +333,9 @@ class TestPlugin(unittest.TestCase):
         def log_warn(msg):
             print "       WARN %s" % msg
             return None
+        def log_error(msg):
+            print "       ERROR %s" % msg
+            return None
         def log_exception(msg):
             print "       EXCEPTION %s" % msg
             if sys.exc_type is not greenlet.GreenletExit:
@@ -322,6 +349,7 @@ class TestPlugin(unittest.TestCase):
         mech_calico.LOG.info.side_effect = log_info
         mech_calico.LOG.debug.side_effect = log_debug
         mech_calico.LOG.warn.side_effect = log_warn
+        mech_calico.LOG.error.side_effect = log_error
         mech_calico.LOG.exception.side_effect = log_exception
 
     #*************************************************************************#
@@ -341,6 +369,11 @@ class TestPlugin(unittest.TestCase):
         #* beginning of the test.                                            *#
         #*********************************************************************#
         current_time = 0
+
+        #*********************************************************************#
+        #* Make time.time() return current_time.                             *#
+        #*********************************************************************#
+        m_time.time.side_effect = lambda: current_time
 
         #*********************************************************************#
         #* Reset the dict of current sleepers.  In each dict entry, the key  *#
@@ -380,6 +413,15 @@ class TestPlugin(unittest.TestCase):
                     wake_up_time = sleepers[queue]
 
             #*****************************************************************#
+            #* Check if we're about to advance past any exact multiples of   *#
+            #* HEARTBEAT_SEND_INTERVAL_SECS.                                 *#
+            #*****************************************************************#
+            num_acl_pub_heartbeats = (
+                int(wake_up_time / mech_calico.HEARTBEAT_SEND_INTERVAL_SECS) -
+                int(current_time / mech_calico.HEARTBEAT_SEND_INTERVAL_SECS)
+            )
+
+            #*****************************************************************#
             #* Advance to the determined time.                               *#
             #*****************************************************************#
             secs -= (wake_up_time - current_time)
@@ -390,21 +432,40 @@ class TestPlugin(unittest.TestCase):
             #* Wake up all sleepers that should now wake up.                 *#
             #*****************************************************************#
             for queue in sleepers.keys():
-                if sleepers[queue] >= current_time:
-                    print "T=%s: %s: Wake up!" % (current_time, queue.stack)
+                if sleepers[queue] <= current_time:
+                    print "T=%s >= %s: %s: Wake up!" % (current_time,
+                                                        sleepers[queue],
+                                                        queue.stack)
                     del sleepers[queue]
-                    queue.put_nowait('Wake up!')
+                    queue.put_nowait(TIMEOUT_VALUE)
 
             #*****************************************************************#
             #* Allow woken (and possibly other) threads to run.              *#
             #*****************************************************************#
             real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+            #*****************************************************************#
+            #* Handle any ACL HEARTBEAT publications.                        *#
+            #*****************************************************************#
+            for i in range(num_acl_pub_heartbeats):
+                print "Handle ACL HEARTBEAT publication"
+                pub = {'type': 'HEARTBEAT',
+                       'issued': current_time * 1000}
+                self.acl_pub_socket.send_multipart.assert_called_once_with(
+                    ['networkheartbeat'.encode('utf-8'),
+                     json.dumps(pub).encode('utf-8')])
+                self.acl_pub_socket.send_multipart.reset_mock()
+
     #*************************************************************************#
     #* Setup before each test case (= each method below whose name begins    *#
     #* with "test").                                                         *#
     #*************************************************************************#
     def setUp(self):
+
+        #*********************************************************************#
+        #* Normally do not provide bind_host config.                         *#
+        #*********************************************************************#
+        m_oslo.config.cfg.CONF.bind_host = None
 
         #*********************************************************************#
         #* Setup to control 0MQ socket operations.                           *#
@@ -426,21 +487,35 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         self.driver = mech_calico.CalicoMechanismDriver()
 
+    #*************************************************************************#
+    #* Tear down after each test case.                                       *#
+    #*************************************************************************#
     def tearDown(self):
+
+        print "\nClean up remaining green threads..."
 
         for thread in threads:
             thread.kill()
 
+    #*************************************************************************#
+    #* Check that a socket is now bound to a specified address and port, and *#
+    #* return that socket.                                                   *#
+    #*************************************************************************#
     def assert_get_bound_socket(self, addr, port):
+
         bound_sockets = {socket for socket in self.sockets
                          if socket.bound_address == ("tcp://%s:%s" %
                                                      (addr, port))}
         self.assertEqual(len(bound_sockets), 1)
         return bound_sockets.pop()
 
+    #*************************************************************************#
+    #* Test binding to a specific IP address.                                *#
+    #*************************************************************************#
     def test_bind_host(self):
+
         #*********************************************************************#
-        #* Test binding to a specific IP address.                            *#
+        #* Provide bind_host config.                                         *#
         #*********************************************************************#
         ip_addr = '192.168.1.1'
         m_oslo.config.cfg.CONF.bind_host = ip_addr
@@ -457,12 +532,95 @@ class TestPlugin(unittest.TestCase):
         self.acl_get_socket = self.assert_get_bound_socket(ip_addr, 9903)
         self.acl_pub_socket = self.assert_get_bound_socket(ip_addr, 9904)
 
+    #*************************************************************************#
+    #* Mainline test.                                                        *#
+    #*************************************************************************#
     def test_mainline(self):
-        #*********************************************************************#
-        #* Don't provide bind_host config.                                   *#
-        #*********************************************************************#
-        m_oslo.config.cfg.CONF.bind_host = None
 
+        #*********************************************************************#
+        #* Start of day processing: initialization and socket binding.       *#
+        #*********************************************************************#
+        self.start_of_day()
+
+        #*********************************************************************#
+        #* Connect a Felix instance.                                         *#
+        #*********************************************************************#
+        self.felix_connect()
+
+        #*********************************************************************#
+        #* Further mainline steps that we haven't actually implemented yet.  *#
+        #*********************************************************************#
+        self.acl_connect()
+        self.call_noop_entry_points()
+        self.new_endpoint()
+        self.endpoint_update()
+        self.sg_rule_update()
+        self.endpoint_deletion()
+
+    #*************************************************************************#
+    #* Test when plugin sends a HEARTBEAT request and Felix does not respond *#
+    #* within HEARTBEAT_RESPONSE_TIMEOUT.                                    *#
+    #*************************************************************************#
+    def test_no_heartbeat_response(self):
+
+        #*********************************************************************#
+        #* Start of day processing: initialization and socket binding.       *#
+        #*********************************************************************#
+        self.start_of_day()
+
+        #*********************************************************************#
+        #* Connect a Felix instance.                                         *#
+        #*********************************************************************#
+        self.felix_connect(flags={NO_HEARTBEAT_RESPONSE})
+        self.sockets -= {self.felix_endpoint_socket}
+
+        #*********************************************************************#
+        #* Check that it works for Felix to connect again after the plugin   *#
+        #* has cleaned up following that non-response.                       *#
+        #*********************************************************************#
+        self.felix_connect()
+
+    #*************************************************************************#
+    #* Test when plugin sends an ENDPOINT* request and Felix does not        *#
+    #* respond within ENDPOINT_RESPONSE_TIMEOUT.                             *#
+    #*************************************************************************#
+    def test_no_endpoint_response(self):
+
+        #*********************************************************************#
+        #* Start of day processing: initialization and socket binding.       *#
+        #*********************************************************************#
+        self.start_of_day()
+
+        #*********************************************************************#
+        #* Connect a Felix instance.                                         *#
+        #*********************************************************************#
+        self.felix_connect()
+
+        #*********************************************************************#
+        #* Process a new endpoint, but don't send in the ENDPOINTCREATED     *#
+        #* response.                                                         *#
+        #*********************************************************************#
+        self.new_endpoint(flags={NO_ENDPOINT_RESPONSE})
+        self.sockets -= {self.felix_endpoint_socket}
+
+        #*********************************************************************#
+        #* Let time pass to allow the felix_heartbeat_thread for the old     *#
+        #* connection to die.  It's a bug that we need to do this: Github    *#
+        #* issue.                                                            *#
+        #*********************************************************************#
+        self.simulated_time_advance(40)
+
+        #*********************************************************************#
+        #* Connect the Felix instance again.                                 *#
+        #*********************************************************************#
+        self.felix_connect()
+
+        #*********************************************************************#
+        #* Now process the new endpoint successfully.                        *#
+        #*********************************************************************#
+        self.new_endpoint()
+
+    def start_of_day(self):
         #*********************************************************************#
         #* Tell the driver to initialize.                                    *#
         #*********************************************************************#
@@ -486,6 +644,7 @@ class TestPlugin(unittest.TestCase):
         self.acl_pub_socket = self.assert_get_bound_socket('*', 9904)
         print "ACL PUB socket is %s" % self.acl_pub_socket
 
+    def felix_connect(self, **kwargs):
         #*********************************************************************#
         #* Hook the Neutron database.                                        *#
         #*********************************************************************#
@@ -494,11 +653,16 @@ class TestPlugin(unittest.TestCase):
         self.db.get_ports.return_value = []
 
         #*********************************************************************#
+        #* Get test variation flags.                                         *#
+        #*********************************************************************#
+        flags = kwargs.get('flags', set())
+
+        #*********************************************************************#
         #* Send a RESYNCSTATE.                                               *#
         #*********************************************************************#
         resync = {'type': 'RESYNCSTATE',
                   'resync_id': 'resync#1',
-                  'issued': time.time() * 1000,
+                  'issued': current_time * 1000,
                   'hostname': 'felix-host-1'}
         self.felix_router_socket.rcv_queue.put_nowait(
             ['felix-1',
@@ -516,6 +680,7 @@ class TestPlugin(unittest.TestCase):
              'host': 'felix-host-1',
              'topic': mech_calico.constants.L2_AGENT_TOPIC,
              'start_flag': True})
+        self.db.create_or_update_agent.reset_mock()
 
         #*********************************************************************#
         #* Check RESYNCSTATE response was sent.                              *#
@@ -566,22 +731,43 @@ class TestPlugin(unittest.TestCase):
             {'type': 'HEARTBEAT'},
             mech_calico.zmq.NOBLOCK)
         self.felix_endpoint_socket.send_json.reset_mock()
+
+        if NO_HEARTBEAT_RESPONSE in flags:
+            #*****************************************************************#
+            #* Advance time by more than HEARTBEAT_RESPONSE_TIMEOUT.         *#
+            #*****************************************************************#
+            self.simulated_time_advance((mech_calico.HEARTBEAT_RESPONSE_TIMEOUT
+                                         / 1000) + 1)
+
+            #*****************************************************************#
+            #* The plugin now cleans up its Felix socket.                    *#
+            #*****************************************************************#
+            return
+
         self.felix_endpoint_socket.rcv_queue.put_nowait(
             {'type': 'HEARTBEAT'})
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         #*********************************************************************#
+        #* Check DB got create_or_update_agent call.                         *#
+        #*********************************************************************#
+        self.db.create_or_update_agent.assert_called_once_with(
+            self.db_context,
+            {'agent_type': mech_calico.AGENT_TYPE_FELIX,
+             'binary': '',
+             'host': 'felix-host-1',
+             'topic': mech_calico.constants.L2_AGENT_TOPIC})
+        self.db.create_or_update_agent.reset_mock()
+
+        #*********************************************************************#
         #* Yield to allow anything pending on other threads to come out.     *#
         #*********************************************************************#
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+    def acl_connect(self):
         #*********************************************************************#
         #* ACL Manager connection.                                           *#
-        #*                                                                   *#
-        #* - sim-ACLM: Connect to PLUGIN_ACLPUB_PORT, make normal            *#
-        #*  subscriptions, wait a bit to ensure that Plugin's 0MQ layer has  *#
-        #*  processed these.                                                 *#
         #*                                                                   *#
         #* - sim-DB: Prep response to next get_security_groups query,        *#
         #*  returning the default SG.  Prep null response to next            *#
@@ -596,7 +782,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Wait for HEARTBEAT_SEND_INTERVAL_SECS, check get      *#
         #*   HEARTBEAT, send HEARTBEAT response.                             *#
         #*********************************************************************#
+        pass
 
+    def call_noop_entry_points(self):
         #*********************************************************************#
         #* Mechanism driver entry points that are currently implemented as   *#
         #* no-ops (because Calico function does not need them).              *#
@@ -607,34 +795,138 @@ class TestPlugin(unittest.TestCase):
         #*   create_subnet_postcommit, update_network_postcommit,            *#
         #*   update_subnet_postcommit.                                       *#
         #*********************************************************************#
+        pass
+
+    #*************************************************************************#
+    #* New endpoint processing.                                              *#
+    #*************************************************************************#
+    def new_endpoint(self, **kwargs):
 
         #*********************************************************************#
-        #* New endpoint processing.                                          *#
-        #*                                                                   *#
-        #* - sim-ML2: Call check_segment_for_agent with params so that it    *#
-        #*   should return True.  Check get True.                            *#
-        #*                                                                   *#
-        #* - sim-DB: Prep response to next get_subnet call.                  *#
-        #*                                                                   *#
-        #* - sim-ML2: Call create_port_postcommit for an endpoint port with  *#
-        #*   host_id matching sim-Felix.                                     *#
-        #*                                                                   *#
-        #* - sim-Felix: Check get ENDPOINTCREATED.  Send successful          *#
-        #*   response.                                                       *#
-        #*                                                                   *#
-        #* - sim-DB: Check get update_port_status call, indicating port      *#
-        #*   active.                                                         *#
-        #*                                                                   *#
-        #* - sim-DB: Prep appropriate responses for next get_security_group, *#
-        #*   _get_port_security_group_bindings and get_port calls.           *#
-        #*                                                                   *#
-        #* - sim-ML2: Call security_groups_member_updated with default SG    *#
-        #*   ID.                                                             *#
-        #*                                                                   *#
-        #* - sim-ACLM: Check get GROUPUPDATE publication indicating port     *#
-        #*   added to default SG ID.                                         *#
+        #* Get test variation flags.                                         *#
         #*********************************************************************#
+        flags = kwargs.get('flags', set())
 
+        #*********************************************************************#
+        #* Simulate ML2 asking the driver if it can handle a port.           *#
+        #*********************************************************************#
+        self.assertTrue(self.driver.check_segment_for_agent(
+            {mech_calico.api.NETWORK_TYPE: 'flat'},
+            mech_calico.constants.AGENT_TYPE_DHCP
+        ))
+
+        #*********************************************************************#
+        #* Prep response to next get_subnet call.                            *#
+        #*********************************************************************#
+        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
+
+        #*********************************************************************#
+        #* Simulate ML2 notifying creation of the new port.                  *#
+        #*********************************************************************#
+        context = mock.Mock()
+        context._port = {'binding:host_id': 'felix-host-1',
+                         'id': 'DEADBEEF-1234-5678',
+                         'device_owner': 'compute:nova',
+                         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                        'ip_address': '10.65.0.2'}],
+                         'mac_address': '00:11:22:33:44:55',
+                         'admin_state_up': True}
+        real_eventlet_spawn(lambda: self.driver.create_port_postcommit(context))
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        #*********************************************************************#
+        #* Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix   *#
+        #* responding successfully.                                          *#
+        #*********************************************************************#
+        self.felix_endpoint_socket.send_json.assert_called_once_with(
+            {'mac': '00:11:22:33:44:55',
+             'addrs': [{'properties': {'gr': False},
+                        'addr': '10.65.0.2',
+                        'gateway': '10.65.0.1'}],
+             'endpoint_id': 'DEADBEEF-1234-5678',
+             'issued': mock.ANY,
+             'resync_id': None,
+             'type': 'ENDPOINTCREATED',
+             'state': 'enabled'},
+            mech_calico.zmq.NOBLOCK)
+        self.felix_endpoint_socket.send_json.reset_mock()
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            #*****************************************************************#
+            #* Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.          *#
+            #*****************************************************************#
+            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+                                         / 1000) + 1)
+
+            #*****************************************************************#
+            #* The plugin now cleans up its Felix socket.                    *#
+            #*****************************************************************#
+            return
+
+        self.felix_endpoint_socket.rcv_queue.put_nowait(
+            {'type': 'ENDPOINTCREATED',
+             'rc': 'SUCCESS',
+             'message': ''})
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        #*********************************************************************#
+        #* Check get update_port_status call, indicating port active.        *#
+        #*********************************************************************#
+        self.db.update_port_status.assert_called_once_with(
+            context._plugin_context,
+            context._port['id'],
+            mech_calico.constants.PORT_STATUS_ACTIVE)
+        self.db.update_port_status.reset_mock()
+
+        #*********************************************************************#
+        #* Prep appropriate responses for next get_security_group,           *#
+        #* _get_port_security_group_bindings and get_port calls.             *#
+        #*********************************************************************#
+        self.db.get_security_group.return_value = {
+            'id': 'SG-1',
+            'security_group_rules': []
+        }
+        self.db._get_port_security_group_bindings.return_value = [
+            {'port_id': 'DEADBEEF-1234-5678'}
+        ]
+        self.db.get_port.return_value = context._port
+
+        #*********************************************************************#
+        #* Call security_groups_member_updated with default SG ID.           *#
+        #*********************************************************************#
+        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+
+        #*********************************************************************#
+        #* Check get GROUPUPDATE publication indicating port added to        *#
+        #* default SG ID.                                                    *#
+        #*********************************************************************#
+        pub = {'rules': {'inbound': [],
+                         'outbound': [],
+                         'outbound_default': 'deny',
+                         'inbound_default': 'deny'},
+               'group': 'SG-1',
+               'type': 'GROUPUPDATE',
+               'members': {'DEADBEEF-1234-5678': ['10.65.0.2']},
+               'issued': current_time * 1000}
+
+        #*********************************************************************#
+        #* Unpack the last self.acl_pub_socket.send_multipart call, to check *#
+        #* that its args were as expected.  It doesn't work to check the     *#
+        #* arguments directly using assert_called_once_with(...), because    *#
+        #* variation is possible when a dict such as 'pub' is represented as *#
+        #* a string.                                                         *#
+        #*********************************************************************#
+        kall = self.acl_pub_socket.send_multipart.call_args
+        assert kall is not None
+        args, kwargs = kall
+        assert len(args) == 1
+        assert len(args[0]) == 2
+        assert args[0][0].decode('utf-8') == 'groups'
+        assert json.loads(args[0][1].decode('utf-8')) == pub
+        self.acl_pub_socket.send_multipart.reset_mock()
+
+    def endpoint_update(self):
         #*********************************************************************#
         #* Endpoint update processing.                                       *#
         #*                                                                   *#
@@ -646,7 +938,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-Felix: Check get ENDPOINTUPDATED.  Send successful          *#
         #*   response.                                                       *#
         #*********************************************************************#
+        pass
 
+    def sg_rule_update(self):
         #*********************************************************************#
         #* SG rules update processing.                                       *#
         #*                                                                   *#
@@ -658,7 +952,9 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Check get GROUPUPDATE publication indicating updated  *#
         #*   rules.                                                          *#
         #*********************************************************************#
+        pass
 
+    def endpoint_deletion(self):
         #*********************************************************************#
         #* Endpoint deletion processing.                                     *#
         #*                                                                   *#
@@ -677,6 +973,7 @@ class TestPlugin(unittest.TestCase):
         #* - sim-ACLM: Check get GROUPUPDATE publication indicating port     *#
         #*   removed from default SG ID.                                     *#
         #*********************************************************************#
+        pass
 
     def test_timing_new_endpoint(self):
 

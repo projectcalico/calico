@@ -38,6 +38,7 @@ import json
 import time
 from neutron import context as ctx
 from neutron import manager
+from zmq.error import Again
 
 LOG = log.getLogger(__name__)
 
@@ -158,6 +159,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             if self.db.notifier.__class__ != CalicoNotifierProxy:
                 self.db.notifier = CalicoNotifierProxy(self.db.notifier, self)
+            else:
+                #*************************************************************#
+                #* In case the notifier proxy already exists but the current *#
+                #* CalicoMechanismDriver instance has changed, ensure that   *#
+                #* the notifier proxy will delegate to the current           *#
+                #* CalicoMechanismDriver instance.                           *#
+                #*************************************************************#
+                self.db.notifier.calico_driver = self
 
     def check_segment_for_agent(self, segment, agent):
         LOG.debug("Checking segment %s with agent %s" % (segment, agent))
@@ -439,6 +448,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.info("Response: %s" % rsp)
             else:
                 LOG.error("Response: %s" % rsp)
+        except Again:
+            LOG.error("No response from Felix within allowed time (%sms)" %
+                      ENDPOINT_RESPONSE_TIMEOUT)
+            self._clear_socket_to_felix_peer(hostname)
+            raise FelixUnavailable(op, port['id'], hostname)
         except:
             LOG.exception("Exception receiving ENDPOINT* response from Felix")
             self._clear_socket_to_felix_peer(hostname)
@@ -595,8 +609,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #*****************************************************************#
             #* Receive and log Felix's response.  Use poll and NOBLOCK to    *#
             #* require that this comes within HEARTBEAT_RESPONSE_TIMEOUT     *#
-            #* milliseconds.  An exception will be thrown if there's no      *#
-            #* response in the allowed time.                                 *#
+            #* milliseconds.  The recv_json call will throw an exception if  *#
+            #* there's no response in the allowed time, and in that case     *#
+            #* this heartbeat thread will exit.                              *#
             #*****************************************************************#
             try:
                 sock.poll(HEARTBEAT_RESPONSE_TIMEOUT)
@@ -607,6 +622,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 else:
                     LOG.error("Unexpected response from Felix on %s: %s"
                               % (hostname, rsp))
+            except Again:
+                LOG.error("No response from Felix within allowed time (%sms)" %
+                          HEARTBEAT_RESPONSE_TIMEOUT)
+                self._clear_socket_to_felix_peer(hostname)
+                return
             except:
                 LOG.exception("Exception receiving HEARTBEAT from Felix on %s"
                               % hostname)
