@@ -16,4 +16,4 @@ virtualenv env
 pip install -e .
 pip install nose mock coverage
 nosetests --with-coverage --cover-erase $NOSETEST_ARGS
-#coverage html"
+coverage html
