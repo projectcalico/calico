@@ -67,18 +67,21 @@ class NetworkSubscriber(object):
             self.sub_socket.setsockopt(zmq.SUBSCRIBE, "groups")
             self.sub_socket.setsockopt(zmq.SUBSCRIBE, "networkheartbeat")
 
-            # Create the REQ socket used for start of day synchronization with the
-            # plugin.
-            log.debug("Creating Network API synchronization socket")
-            self.req_socket = context.socket(zmq.REQ)
-            self.req_socket.connect("tcp://%(address)s:%(port)s" %
-                                    {"address": self.plugin_address,
-                                     "port": PLUGIN_ACLGET_PORT})
+            # Create the REQ socket used for start of day synchronization with
+            # the plugin.
+            synchronized = False
+            while not synchronized:
+                log.debug("Creating Network API synchronization socket")
+                self.req_socket = context.socket(zmq.REQ)
+                self.req_socket.connect("tcp://%(address)s:%(port)s" %
+                                        {"address": self.plugin_address,
+                                         "port": PLUGIN_ACLGET_PORT})
 
-            # Perform the start of day synchronization.  Published updates are
-            # queued during this, so none are lost.
-            log.debug("Begin start of day synchronization")
-            self.start_of_day_sync()
+                # Perform the start of day synchronization.  Published updates
+                # are queued during this, so none are lost.
+                log.debug("Begin start of day synchronization")
+                synchronized = self.start_of_day_sync()
+
             log.debug("End start of day synchronization")
 
             # Listen for published updates to network state.
@@ -92,8 +95,16 @@ class NetworkSubscriber(object):
         query = {"type": "GETGROUPS",
                  "issued": time.time() * 1000}
         self.req_socket.send_json(query)
-        message = self.req_socket.recv()
+
+        # Wait for a response.
+        if not self.req_socket.poll(timeout=HEARTBEAT_TIMEOUT):
+            log.error("Timed out waiting for start of day response.")
+            return False
+
+        message = self.req_socket.recv(zmq.NOBLOCK)
         log.info("Received start of day response %s" % message)
+
+        return True
 
     def subscribe_loop(self):
         """
