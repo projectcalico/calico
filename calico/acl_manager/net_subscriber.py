@@ -99,7 +99,7 @@ class NetworkSubscriber(object):
 
         # Wait for a response.
         if not self.req_socket.poll(timeout=HEARTBEAT_TIMEOUT):
-            log.error("Timed out waiting for start of day response.")
+            log.warning("Still waiting for start of day response")
             return False
 
         message = self.req_socket.recv(zmq.NOBLOCK)
