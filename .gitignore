@@ -4,3 +4,4 @@ env/
 tmp/
 *.log
 .coverage
+/htmlcov
