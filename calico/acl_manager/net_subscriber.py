@@ -56,29 +56,30 @@ class NetworkSubscriber(object):
         try:
             self.network_store = network_store
 
-            # Create the SUB socket that receives updates to the network state.
-            # Do this before start-of-day synchronization so that there's no window
-            # during which the ACL Manager could miss updates.
-            log.debug("Creating Network API subscriber socket")
-            self.sub_socket = context.socket(zmq.SUB)
-            self.sub_socket.connect("tcp://%(address)s:%(port)s" %
-                                    {"address": self.plugin_address,
-                                     "port": PLUGIN_ACLPUB_PORT})
-            self.sub_socket.setsockopt(zmq.SUBSCRIBE, "groups")
-            self.sub_socket.setsockopt(zmq.SUBSCRIBE, "networkheartbeat")
-
-            # Create the REQ socket used for start of day synchronization with
-            # the plugin.
             synchronized = False
             while not synchronized:
+                # Create the SUB socket that receives updates to the network
+                # state. Do this before the rest of the synchronization so that
+                # there's no window during which the ACL Manager could miss
+                # updates.
+                log.debug("Creating Network API subscriber socket")
+                self.sub_socket = context.socket(zmq.SUB)
+                self.sub_socket.connect("tcp://%(address)s:%(port)s" %
+                                        {"address": self.plugin_address,
+                                         "port": PLUGIN_ACLPUB_PORT})
+                self.sub_socket.setsockopt(zmq.SUBSCRIBE, "groups")
+                self.sub_socket.setsockopt(zmq.SUBSCRIBE, "networkheartbeat")
+
+                # Create the REQ socket used for start of day synchronization
+                # with the plugin.
                 log.debug("Creating Network API synchronization socket")
                 self.req_socket = context.socket(zmq.REQ)
                 self.req_socket.connect("tcp://%(address)s:%(port)s" %
                                         {"address": self.plugin_address,
                                          "port": PLUGIN_ACLGET_PORT})
 
-                # Perform the start of day synchronization.  Published updates
-                # are queued during this, so none are lost.
+                # Perform the final synchronization.  Published updates are
+                # queued during this, so none are lost.
                 log.debug("Begin start of day synchronization")
                 synchronized = self.start_of_day_sync()
 
