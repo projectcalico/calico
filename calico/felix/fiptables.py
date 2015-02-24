@@ -31,25 +31,6 @@ from calico.felix.futils import IPV4, IPV6
 IPTABLES_CMD = { IPV4: "iptables",
                  IPV6: "ip6tables" }
 
-# We use the following arguments for iptables.
-# General arguments :
-# -w : wait for lock if somebody else is reading / writing
-# -t : specify table name
-#
-# Table commands :
-# -S : read
-#
-# Chain commands :
-# -N : create
-# -F : flush
-# -X : delete
-#
-# Rule commands :
-# -A : append
-# -I : insert
-# -D : delete
-
-
 # Logger
 log = logging.getLogger(__name__)
 
@@ -69,20 +50,20 @@ class Chain(object):
     def flush(self):
         log.debug("Flushing chain %s", self.name)
         self.table.ops.append([IPTABLES_CMD[self.type],
-                               "-w",
-                               "-t",
+                               "--wait",
+                               "--table",
                                self.table.name,
-                               "-F",
+                               "--flush",
                                self.name])
         del self.rules[:]
 
     def delete_rule(self, rule):
         # The rule must exist.
         args = [IPTABLES_CMD[self.type],
-                "-w",
-                "-t",
+                "--wait",
+                "--table",
                 self.table.name,
-                "-D",
+                "--delete",
                 self.name]
         args.extend(rule.generate_fields())
         log.debug("Removing rule : %s", args)
@@ -106,10 +87,10 @@ class Chain(object):
 
         while len(self.rules) > count:
             self.table.ops.append([IPTABLES_CMD[self.type],
-                                   "-w",
-                                   "-t",
+                                   "--wait",
+                                   "--table",
                                    self.table.name,
-                                   "-D",
+                                   "--delete",
                                    self.name,
                                    str(count + 1)])
             self.rules.pop(count)
@@ -153,18 +134,18 @@ class Chain(object):
         """
         if position == RULE_POSN_LAST:
             args = [IPTABLES_CMD[self.type],
-                    "-w",
-                    "-t",
+                    "--wait",
+                    "--table",
                     self.table.name,
-                    "-A",
+                    "--append",
                     self.name]
             self.rules.append(rule)
         else:
             args = [IPTABLES_CMD[self.type],
-                    "-w",
-                    "-t",
+                    "--wait",
+                    "--table",
                     self.table.name,
-                    "-I",
+                    "--insert",
                     self.name,
                     str(position + 1)]
             self.rules.insert(position, rule)
@@ -226,10 +207,10 @@ class Table(object):
             chain.table = self
 
             self.ops.append([IPTABLES_CMD[self.type],
-                              "-w",
-                              "-t",
+                              "--wait",
+                              "--table",
                               self.name,
-                              "-N",
+                              "--new-chain",
                               name])
 
         return chain
@@ -240,10 +221,10 @@ class Table(object):
                   self.name,
                   self.type)
         self.ops.append([IPTABLES_CMD[self.type],
-                        "-w",
-                        "-t",
+                        "--wait",
+                        "--table",
                         self.name,
-                        "-X",
+                        "--delete-chain",
                         chain_name])
         del self.chains[chain_name]
 
@@ -507,9 +488,9 @@ class TableState(object):
         purely for convenience of testing (since we can trivially mock it out).
         """
         data = futils.check_call([IPTABLES_CMD[type],
-                                  "-w",
-                                  "-S",
-                                  "-t",
+                                  "--wait",
+                                  "--list-rules",
+                                  "--table",
                                   name]).stdout
 
         return data
