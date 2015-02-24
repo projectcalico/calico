@@ -38,11 +38,11 @@ class TestFiptables(unittest.TestCase):
 
         with mock.patch('calico.felix.futils.check_call'):
             state.read_table(IPV4, "blah")
-            futils.check_call.assert_called_with(["iptables", "-w", "-S", "-t", "blah"])
+            futils.check_call.assert_called_with(["iptables", "--wait", "--list-rules", "--table", "blah"])
 
         with mock.patch('calico.felix.futils.check_call'):
             state.read_table(IPV6, "blah")
-            futils.check_call.assert_called_with(["ip6tables", "-w", "-S", "-t", "blah"])
+            futils.check_call.assert_called_with(["ip6tables", "--wait", "--list-rules", "--table", "blah"])
 
     def test_load_table(self):
         state = fiptables.TableState()
@@ -221,16 +221,16 @@ class TestFiptables(unittest.TestCase):
         self.assertEqual(mock_call.call_count, 1)
 
         ops = []
-        op = ["iptables", "-w", "-t", "filter", "-I", "FORWARD", "2"]
+        op = ["iptables", "--wait", "--table", "filter", "--insert", "FORWARD", "2"]
         op.extend(rules[1].generate_fields())
         ops.append(op)
 
         for loop in range(0,6):
             ops.append(["iptables",
-                        "-w",
-                        "-t",
+                        "--wait",
+                        "--table",
                         "filter",
-                        "-D",
+                        "--delete",
                         "FORWARD",
                         "4"])
 
@@ -305,7 +305,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(len(chain.rules), 1)
 
         # Set up a handy list of arguments
-        base_args = ["iptables", "-w", "-t", "filter"]
+        base_args = ["iptables", "--wait", "--table", "filter"]
 
         # Put a new rule at the start
         rule = fiptables.Rule(IPV4, "rule1")
@@ -314,7 +314,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(chain.rules[0].target, "rule1")
         self.assertTrue(chain.rules[1].target, "original")
         args = copy(base_args)
-        args.extend(["-I", "blah", "1", "-j", "rule1"])
+        args.extend(["--insert", "blah", "1", "-j", "rule1"])
         self.assertEqual(len(table.ops), 1)
         self.assertEqual(table.ops[0], args)
 
@@ -326,7 +326,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(chain.rules[1].target, "rule1")
         self.assertTrue(chain.rules[2].target, "original")
         args = copy(base_args)
-        args.extend(["-I", "blah", "1", "-j", "original"])
+        args.extend(["--insert", "blah", "1", "-j", "original"])
         self.assertEqual(len(table.ops), 2)
         self.assertEqual(table.ops[1], args)
 
@@ -386,7 +386,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(chain.rules[2].target, "original")
         self.assertTrue(chain.rules[3].target, "rule1")
         args = copy(base_args)
-        args.extend(["-A", "blah", "-j", "rule1"])
+        args.extend(["--append", "blah", "-j", "rule1"])
         self.assertEqual(len(table.ops), 3)
         self.assertEqual(table.ops[2], args)
 
@@ -408,7 +408,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(chain.rules[3].target, "rule1")
         self.assertTrue(chain.rules[4].target, "original")
         args = copy(base_args)
-        args.extend(["-A", "blah", "-j", "new"])
+        args.extend(["--append", "blah", "-j", "new"])
         self.assertEqual(len(table.ops), 4)
         self.assertEqual(table.ops[3], args)
 
