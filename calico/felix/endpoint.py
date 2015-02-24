@@ -20,6 +20,7 @@ felix.endpoint
 
 Contains Felix logic to manage endpoints and their configuration.
 """
+from calico import common
 from calico.felix import devices
 from calico.felix import frules
 from calico.felix import futils
@@ -27,6 +28,8 @@ import logging
 
 log = logging.getLogger(__name__)
 
+class InvalidAddress(Exception):
+    pass
 
 class Address(object):
     """
@@ -39,14 +42,20 @@ class Address(object):
     """
     def __init__(self, fields):
         #*********************************************************************#
-        #* An address must have an IP field, and so if we get one that does  *#
-        #* not have one we should throw an exception.                        *#
+        #* This constructor throws InvalidAddress if there is a missing or   *#
+        #* invalid field.                                                    *#
         #*********************************************************************#
-        self.ip = fields['addr'].encode('ascii')
-        if ":" in self.ip:
+        try:
+            self.ip = fields['addr'].encode('ascii')
+        except KeyError:
+            raise InvalidAddress
+
+        if common.validate_ip_addr(self.ip, 4):
+            self.type = futils.IPV4
+        elif common.validate_ip_addr(self.ip, 6):
             self.type = futils.IPV6
         else:
-            self.type = futils.IPV4
+            raise InvalidAddress
 
 
 class Endpoint(object):

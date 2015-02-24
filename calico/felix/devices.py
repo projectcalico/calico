@@ -63,13 +63,10 @@ def list_interface_ips(type, interface):
 
         if len(words) > 1:
             ip = words[0]
-            if common.validate_ipv4_addr(ip) or common.validate_ipv6_addr(ip):
-                # Looks like an IP address to me
+            if common.validate_ip_addr(ip, None):
+                # Looks like an IP address. Note that we here are ignoring
+                # routes to networks configured when the interface is created.
                 ips.add(words[0])
-            else:
-                # Not an IP address; seems odd.
-                log.warning("No IP address found in line %s for %s",
-                            line, interface)
 
     log.debug("Found existing IP addresses : %s", ips)
 
