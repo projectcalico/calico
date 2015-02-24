@@ -80,19 +80,22 @@ class TestEndpoint(unittest.TestCase):
         """
         ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
 
-        with self.assertRaisesRegexp(futils.FailedSystemCall, "blah"), \
-             mock.patch('calico.felix.devices.tap_exists', \
-                         side_effect=[True, True]) as mock_exists, \
-             mock.patch('calico.felix.devices.list_tap_ips', \
-                         return_value = set(["1.2.3.4", "1.2.3.5"])) as mock_list, \
-             mock.patch('calico.felix.devices.del_route', \
-                        side_effect=futils.FailedSystemCall("blah",
-                                                            ["dummy", "args"],
-                                                            1,
-                                                            "",
-                                                            "")) as mock_del_route, \
-             mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
-            ep.remove(iptables_state)
+        with self.assertRaisesRegexp(futils.FailedSystemCall, "blah"):
+            p_exists = mock.patch('calico.felix.devices.tap_exists',
+                                  side_effect=[True, True])
+            p_list = mock.patch('calico.felix.devices.list_tap_ips',
+                                return_value = set(["1.2.3.4", "1.2.3.5"]))
+            p_del_route = mock.patch('calico.felix.devices.del_route',
+                side_effect=futils.FailedSystemCall("blah",
+                                                    ["dummy", "args"],
+                                                    1,
+                                                    "",
+                                                    ""))
+            p_del_rules = mock.patch('calico.felix.frules.del_rules')
+            with nested(p_exists, p_list, p_del_route, p_del_rules) as (
+                mock_exists, mock_list, mock_del_route, mock_del_rules):
+                ep.remove(iptables_state)
+
         self.assertEqual(mock_exists.call_count, 2)
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)
@@ -104,15 +107,18 @@ class TestEndpoint(unittest.TestCase):
         """
         ep = endpoint.Endpoint(str(uuid.uuid4()), 'aa:bb:cc:dd:ee:ff')
 
-        with self.assertRaisesRegexp(Exception, "blah"), \
-             mock.patch('calico.felix.devices.tap_exists', \
-                         side_effect=[True, True]) as mock_exists, \
-             mock.patch('calico.felix.devices.list_tap_ips', \
-                         return_value = set(["1.2.3.4", "1.2.3.5"])) as mock_list, \
-             mock.patch('calico.felix.devices.del_route', \
-                        side_effect=Exception("blah")) as mock_del_route, \
-             mock.patch('calico.felix.frules.del_rules') as mock_del_rules:
-            ep.remove(iptables_state)
+        with self.assertRaisesRegexp(Exception, "blah"):
+            p_exists = mock.patch('calico.felix.devices.tap_exists',
+                                  side_effect=[True, True])
+            p_list = mock.patch('calico.felix.devices.list_tap_ips',
+                                return_value = set(["1.2.3.4", "1.2.3.5"]))
+            p_del_route = mock.patch('calico.felix.devices.del_route',
+                                     side_effect=Exception("blah"))
+            p_del_rules = mock.patch('calico.felix.frules.del_rules')
+            with nested(p_exists, p_list, p_del_route, p_del_rules) as (
+                mock_exists, mock_list, mock_del_route, mock_del_rules):
+                ep.remove(iptables_state)
+
         self.assertEqual(mock_exists.call_count, 1)
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)

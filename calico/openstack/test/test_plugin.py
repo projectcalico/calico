@@ -502,10 +502,9 @@ class TestPlugin(unittest.TestCase):
     #* return that socket.                                                   *#
     #*************************************************************************#
     def assert_get_bound_socket(self, addr, port):
-
-        bound_sockets = {socket for socket in self.sockets
-                         if socket.bound_address == ("tcp://%s:%s" %
-                                                     (addr, port))}
+        bound_sockets = set(socket for socket in self.sockets
+                            if socket.bound_address == ("tcp://%s:%s" %
+                                                        (addr, port)))
         self.assertEqual(len(bound_sockets), 1)
         return bound_sockets.pop()
 
@@ -711,8 +710,8 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         #* Get the socket that the plugin used to connect back to Felix.     *#
         #*********************************************************************#
-        connected_sockets = {socket for socket in self.sockets
-                             if socket.connected_address == "tcp://felix-host-1:9902"}
+        connected_sockets = set(socket for socket in self.sockets
+                                if socket.connected_address == "tcp://felix-host-1:9902")
         self.assertEqual(len(connected_sockets), 1)
         self.felix_endpoint_socket = connected_sockets.pop()
         print "Felix endpoint socket is %s" % self.felix_endpoint_socket
