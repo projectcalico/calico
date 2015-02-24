@@ -217,4 +217,3 @@ class Config(object):
             raise ConfigException("Invalid or unresolvable %s value : %s" %
                                   (name, addr),
                                   self._config_path)
-

@@ -73,6 +73,7 @@ class TableState(fiptables.TableState):
         """
         Overriding fiptables.Table.read_table().
         """
+        log.debug("Read of table %s (%s)", name, type)
         if type == IPV4:
             table = self.real_v4[name]
         else:
@@ -82,7 +83,9 @@ class TableState(fiptables.TableState):
 
         for chain in table.chains.values():
             data += ("-N %s\n" % chain.name +
-                     "\n".join(str(rule) for rule in chain.rules))
+                     "\n".join(("-A %s %s" % (chain.name, str(rule)))
+                               for rule in chain.rules) +
+                     "\n")
 
         return data
 
@@ -148,11 +151,13 @@ class TableState(fiptables.TableState):
         return output
 
 
-    def set_expected_global_rules(self):
+    def set_expected_global_rules(self, prefix="tap"):
         """
         Sets up the minimal global rules we expect to have.
         """
         self.set_empty()
+
+        match = prefix + "+"
 
         table = self.get_table(IPV4, "filter")
         table.get_chain("felix-TO-ENDPOINT")
@@ -166,24 +171,24 @@ class TableState(fiptables.TableState):
 
         chain = table.chains["felix-FORWARD"]
         rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "felix-TO-ENDPOINT")
-        rule.out_interface = "tap+"
+        rule.out_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.out_interface = "tap+"
+        rule.out_interface = match
         chain.rules.append(rule)
 
         chain = table.chains["felix-INPUT"]
         rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
 
         table = self.get_table(IPV4, "nat")
@@ -210,29 +215,29 @@ class TableState(fiptables.TableState):
 
         chain = table.chains["felix-FORWARD"]
         rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "felix-TO-ENDPOINT")
-        rule.out_interface = "tap+"
+        rule.out_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.out_interface = "tap+"
+        rule.out_interface = match
         chain.rules.append(rule)
 
         chain = table.chains["felix-INPUT"]
         rule  = fiptables.Rule(type, "felix-FROM-ENDPOINT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
         rule  = fiptables.Rule(type, "ACCEPT")
-        rule.in_interface = "tap+"
+        rule.in_interface = match
         chain.rules.append(rule)
 
         self.apply()
 
-    def add_endpoint_rules(self, suffix, tap, ipv4, ipv6, mac):
+    def add_endpoint_rules(self, suffix, interface, ipv4, ipv6, mac):
         """
         This adds the rules for an endpoint, appending to the end. This generates
         a clean state to allow us to test that the state is correct, even after
@@ -241,12 +246,12 @@ class TableState(fiptables.TableState):
         table = self.tables_v4["filter"]
         chain = table.chains["felix-FROM-ENDPOINT"]
         rule = fiptables.Rule(IPV4, "felix-from-%s" % suffix)
-        rule.in_interface = tap
+        rule.in_interface = interface
         chain.rules.append(rule)
 
         chain = table.chains["felix-TO-ENDPOINT"]
         rule = fiptables.Rule(IPV4, "felix-to-%s" % suffix)
-        rule.out_interface = tap
+        rule.out_interface = interface
         chain.rules.append(rule)
 
         chain = table.get_chain("felix-from-%s" % suffix)
@@ -318,12 +323,12 @@ class TableState(fiptables.TableState):
         table = self.tables_v6["filter"]
         chain = table.chains["felix-FROM-ENDPOINT"]
         rule = fiptables.Rule(IPV6, "felix-from-%s" % suffix)
-        rule.in_interface = tap
+        rule.in_interface = interface
         chain.rules.append(rule)
 
         chain = table.chains["felix-TO-ENDPOINT"]
         rule = fiptables.Rule(IPV6, "felix-to-%s" % suffix)
-        rule.out_interface = tap
+        rule.out_interface = interface
         chain.rules.append(rule)
 
         chain = table.get_chain("felix-from-%s" % suffix)

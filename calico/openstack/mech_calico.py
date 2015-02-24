@@ -278,6 +278,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                     resync_rsp = {'type': 'RESYNCSTATE',
                                   'endpoint_count': len(ports),
+                                  'interface_prefix': 'tap',
                                   'rc': 'SUCCESS',
                                   'message': 'Здра́вствуйте!'}
 
@@ -409,12 +410,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
 
         #*********************************************************************#
-        #* For ENDPOINTCREATED, add in the resync_id.  For ENDPOINTUPDATED   *#
-        #* verify that our caller didn't specify any resync_id, as it isn't  *#
-        #* allowed in that case.                                             *#
+        #* For ENDPOINTCREATED, add in the resync_id and interface name.     *#
+        #* For ENDPOINTUPDATED verify that our caller didn't specify any     *#
+        #* resync_id, as it isn't allowed in that case.                      *#
         #*********************************************************************#
         if op == 'CREATED':
-            rq.update({'resync_id': resync_id})
+            rq.update(
+                {'resync_id': resync_id,
+                 'interface_name': 'tap' + port['id'][:11]}
+            )
+
         else:
             assert not resync_id
 

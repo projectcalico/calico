@@ -128,7 +128,7 @@ class Socket(object):
         """
         if self._send_queue is not None:
             self._send_queue.clear()
-        
+
     def communicate(self, hostname, context):
         """
         Create and connect / bind a socket
@@ -314,7 +314,9 @@ class Message(object):
 
     @classmethod
     def parse_message(cls, text, endpoint_id=None):
-        """Parse a received message."""
+        """
+        Parse a received message.
+        """
         data = json.loads(text)
         type = data.pop('type')
         msg = cls(type, data, endpoint_id)

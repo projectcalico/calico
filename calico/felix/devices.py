@@ -28,30 +28,30 @@ from calico.felix import futils
 # Logger
 log = logging.getLogger(__name__)
 
-def tap_exists(tap):
+def interface_exists(interface):
     """
-    Returns True if tap device exists.
+    Returns True if interface device exists.
     """
-    return os.path.exists("/sys/class/net/" + tap)
+    return os.path.exists("/sys/class/net/" + interface)
 
 
-def list_tap_ips(type, tap):
+def list_interface_ips(type, interface):
     """
-    List IP addresses for which there are routes to a given tap interface.
+    List IP addresses for which there are routes to a given interface.
     Returns a set with all addresses for which there is a route to the device.
     """
     ips = set()
 
     if type == futils.IPV4:
         data = futils.check_call(
-            ["ip", "route", "list", "dev", tap]).stdout
+            ["ip", "route", "list", "dev", interface]).stdout
     else:
         data = futils.check_call(
-            ["ip", "-6", "route", "list", "dev", tap]).stdout
+            ["ip", "-6", "route", "list", "dev", interface]).stdout
 
     lines = data.split("\n")
 
-    log.debug("Existing routes to %s : %s" % (tap, ",".join(lines)))
+    log.debug("Existing routes to %s : %s" % (interface, ",".join(lines)))
 
     for line in lines:
         #*********************************************************************#
@@ -68,55 +68,56 @@ def list_tap_ips(type, tap):
                 ips.add(words[0])
             else:
                 # Not an IP address; seems odd.
-                log.warning("No IP address found in line %s for %s", line, tap)
+                log.warning("No IP address found in line %s for %s",
+                            line, interface)
 
     log.debug("Found existing IP addresses : %s", ips)
 
     return ips
 
 
-def configure_tap(tap):
+def configure_interface(interface):
     """
-    Configure the various proc file system parameters for the tap interface.
+    Configure the various proc file system parameters for the interface.
 
-    Specifically, allow packets from tap interfaces to be directed to
+    Specifically, allow packets from controlled interfaces to be directed to
     localhost, and enable proxy ARP.
     """
-    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb') as f:
+    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % interface, 'wb') as f:
         f.write('1')
 
-    with open("/proc/sys/net/ipv4/conf/%s/proxy_arp" % tap, 'wb') as f:
+    with open("/proc/sys/net/ipv4/conf/%s/proxy_arp" % interface, 'wb') as f:
         f.write('1')
 
-    with open("/proc/sys/net/ipv4/neigh/%s/proxy_delay" % tap, 'wb') as f:
+    with open("/proc/sys/net/ipv4/neigh/%s/proxy_delay" % interface, 'wb') as f:
         f.write('0')
 
 
-def add_route(type, ip, tap, mac):
+def add_route(type, ip, interface, mac):
     """
-    Add a route to a given tap interface (including arp config).
+    Add a route to a given interface (including arp config).
     Errors lead to exceptions that are not handled here.
 
     Note that we use "ip route replace", since that overrides any imported
     routes to the same IP, which might exist in the middle of a migration.
     """
     if type == futils.IPV4:
-        futils.check_call(['arp', '-s', ip, mac, '-i', tap])
-        futils.check_call(["ip", "route", "replace", ip, "dev", tap])
+        futils.check_call(['arp', '-s', ip, mac, '-i', interface])
+        futils.check_call(["ip", "route", "replace", ip, "dev", interface])
     else:
-        futils.check_call(["ip", "-6", "route", "replace", ip, "dev", tap])
+        futils.check_call(["ip", "-6", "route", "replace", ip, "dev", interface])
 
 
-def del_route(type, ip, tap):
+def del_route(type, ip, interface):
     """
-    Delete a route to a given tap interface (including arp config).
+    Delete a route to a given interface (including arp config).
     Errors lead to exceptions that are not handled here.
     """
     if type == futils.IPV4:
-        futils.check_call(['arp', '-d', ip, '-i', tap])
-        futils.check_call(["ip", "route", "del", ip, "dev", tap])
+        futils.check_call(['arp', '-d', ip, '-i', interface])
+        futils.check_call(["ip", "route", "del", ip, "dev", interface])
     else:
-        futils.check_call(["ip", "-6", "route", "del", ip, "dev", tap])
+        futils.check_call(["ip", "-6", "route", "del", ip, "dev", interface])
 
 
 def interface_up(if_name):

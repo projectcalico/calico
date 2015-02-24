@@ -161,9 +161,10 @@ class Poller(object):
                 del poll_result.events[socket.type]
 
         if poll_result.events:
-            # Make sure that all the events have been assigned to a socket
-            raise ZmqStubException("Got event for socket not polled on : %s" %
-                                   poll_result.events)
+            # Make sure that all the events have been assigned to a socket.
+            # We just log if not; sometimes Felix does not poll all sockets.
+            log.debug("Got event for socket not polled on : %s",
+                      poll_result.events)
 
         return retval
 
@@ -205,4 +206,3 @@ class Context(object):
                           socket_type)
                 return True
         return False
-

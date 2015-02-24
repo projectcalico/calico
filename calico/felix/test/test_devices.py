@@ -43,15 +43,15 @@ class TestDevices(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_tap_exists(self):
+    def test_interface_exists(self):
         tap = "tap" + str(uuid.uuid4())[:11]
 
         with mock.patch('os.path.exists', return_value=True):
-            self.assertTrue(devices.tap_exists(tap))
+            self.assertTrue(devices.interface_exists(tap))
             os.path.exists.assert_called_with("/sys/class/net/" + tap)
 
         with mock.patch('os.path.exists', return_value=False):
-            self.assertFalse(devices.tap_exists(tap))
+            self.assertFalse(devices.interface_exists(tap))
             os.path.exists.assert_called_with("/sys/class/net/" + tap)
 
     def test_add_route(self):
@@ -90,27 +90,27 @@ class TestDevices(unittest.TestCase):
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "del", ip, "dev", tap])
 
 
-    def test_list_tap_ips(self):
+    def test_list_interface_ips(self):
         type = futils.IPV4
         tap = "tap" + str(uuid.uuid4())[:11]
 
         retcode = futils.CommandOutput("", "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_tap_ips(type, tap)
+            ips = devices.list_interface_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertFalse(ips)
 
         stdout = "10.11.9.90  scope link"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_tap_ips(type, tap)
+            ips = devices.list_interface_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["10.11.9.90"]))
 
         stdout = "10.11.9.90  scope link\nblah-di-blah not valid\nx\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_tap_ips(type, tap)
+            ips = devices.list_interface_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["10.11.9.90"]))
 
@@ -118,22 +118,22 @@ class TestDevices(unittest.TestCase):
         stdout = "2001:: scope link\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_tap_ips(type, tap)
+            ips = devices.list_interface_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
 
         stdout = "2001:: scope link\n\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_tap_ips(type, tap)
+            ips = devices.list_interface_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
 
-    def test_configure_tap_mainline(self):
+    def test_configure_interface_mainline(self):
         m_open = mock.mock_open()
         tap = "tap" + str(uuid.uuid4())[:11]
         with mock.patch('__builtin__.open', m_open, create=True):
-            devices.configure_tap(tap)
+            devices.configure_interface(tap)
         calls = [mock.call('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb'),
                  M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,
                  mock.call('/proc/sys/net/ipv4/conf/%s/proxy_arp' % tap, 'wb'),
@@ -161,7 +161,7 @@ class TestDevices(unittest.TestCase):
             self.assertTrue(file_handle.read.called)
             self.assertTrue(is_up)
 
-    def test_tap_interface_up2(self):
+    def test_interface_interface_up2(self):
         """
         Test that the interface_up returns False when an interface is down.
         """

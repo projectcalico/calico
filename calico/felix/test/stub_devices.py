@@ -24,17 +24,17 @@ from calico.felix import futils
 # Logger
 log = logging.getLogger(__name__)
 
-taps = dict()
+ifaces = dict()
 
 def reset():
-    taps.clear
+    ifaces.clear
 
-def add_tap(tap):
+def add_interface(tap):
     log.debug("Adding new tap interface : %s" % tap.id)
-    taps[tap.id] = tap
+    ifaces[tap.id] = tap
 
-def del_tap(tap_id):
-    del taps[tap_id]
+def del_interface(iface_id):
+    del ifaces[iface_id]
 
 class TapInterface(object):
     def __init__(self, id, v4_ips=[], v6_ips=[]):
@@ -45,29 +45,29 @@ class TapInterface(object):
 #*****************************************************************************#
 #* Methods that match the real interface.                                    *#
 #*****************************************************************************#
-def tap_exists(tap_id):
-    return tap_id in taps
+def interface_exists(iface_id):
+    return iface_id in ifaces
 
-def list_tap_ips(type, tap_id):
+def list_interface_ips(type, iface_id):
     if type == futils.IPV4:
-        return taps[tap_id].v4_ips.copy()
+        return ifaces[iface_id].v4_ips.copy()
     else:
-        return taps[tap_id].v6_ips.copy()
+        return ifaces[iface_id].v6_ips.copy()
 
-def configure_tap(tap_id):
+def configure_interface(iface_id):
     pass
 
-def add_route(type, ip, tap_id, mac):
+def add_route(type, ip, iface_id, mac):
     if type == futils.IPV4:
-        taps[tap_id].v4_ips.add(ip)
+        ifaces[iface_id].v4_ips.add(ip)
     else:
-        taps[tap_id].v6_ips.add(ip)
+        ifaces[iface_id].v6_ips.add(ip)
 
-def del_route(type, ip, tap_id):
+def del_route(type, ip, iface_id):
     if type == futils.IPV4:
-        taps[tap_id].v4_ips.remove(ip)
+        ifaces[iface_id].v4_ips.remove(ip)
     else:
-        taps[tap_id].v6_ips.remove(ip)
+        ifaces[iface_id].v6_ips.remove(ip)
 
 def interface_up(if_name):
     return True
