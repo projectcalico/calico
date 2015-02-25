@@ -67,7 +67,7 @@ class IpsetState(object):
 
     def list_names(self):
         return self.ipsets.keys()
-    
+
 
 class StubIpset(object):
     def __init__(self, name, typename, family):
@@ -80,6 +80,7 @@ class StubIpset(object):
         return("Name: %s\nType: %s (%s)\nMembers:\n%s\n" %
                (self.name, self.typename, self.family,
                 "\n".join(sorted(self.entries))))
+
 
 class StubIpsetError(Exception):
     pass
@@ -139,6 +140,6 @@ def add(name, value):
 
 def list_names():
     return ipset_state.list_names()
-    
+
 # One global variable - the existing state.
 ipset_state = IpsetState()

@@ -57,7 +57,7 @@ CHAIN_FROM_PREFIX        = "felix-from-"
 #*                                                                           *#
 #* - The "port" ipsets contain a CIDR / protocol / port triple, and allow    *#
 #*   matching such as the following examples.                                *#
-#*   - outbound UDP to 1.2.3.4/32:0 (port 0, i.e. any port)                  *#
+#*   - outbound UDP to 1.2.3.4/32:1-655355 (i.e. any port)                   *#
 #*   - inbound TCP on port 80 from 0.0.0.0/0                                 *#
 #*   - outbound ICMP with type 1, code 2 to 10.0.0.0/8                       *#
 #*   - outbound ICMP (neighbor-discover) to 10.0.0.0/8                       *#
@@ -574,12 +574,18 @@ def update_ipsets(type,
     """
     for rule in rule_list:
         if rule.get('cidr') is None:
-            log.error("Invalid %s rule without cidr for %s : %s" %
-                      (descr, suffix, rule))
+            log.error("Invalid %s rule without cidr for %s : %s",
+                      descr, suffix, rule)
+            continue
+
+        if ((type == IPV4 and not common.validate_cidr(rule['cidr'], 4)) or
+            (type == IPV6 and not common.validate_cidr(rule['cidr'], 6))    ):
+            log.error("Invalid CIDR in %s rule cidr for %s : %s",
+                      descr, suffix, rule)
             continue
 
         #*********************************************************************#
-        #* The ipset format is something like "10.11.1.3,udp:0"              *#
+        #* The ipset format is something like "10.11.1.3,udp:1-15"           *#
         #* Further valid examples include                                    *#
         #*   10.11.1.0/24                                                    *#
         #*   10.11.1.0/24,tcp                                                *#
@@ -623,8 +629,8 @@ def update_ipsets(type,
             ipset  = tmp_ipset_addr
         elif protocol in ("tcp", "sctp", "udp", "udplite"):
             if port is None:
-                # ipsets use port 0 to mean "any port"
-                ipset_value = ",%s:0" % (protocol)
+                # No port implies port range 1 to 65535.
+                ipset_value = ",%s:1-65535" % (protocol)
                 ipset = tmp_ipset_port
             elif isinstance(port, list) and len(port) == 2:
                 # List of two ports - port range
@@ -686,7 +692,8 @@ def update_ipsets(type,
                     "Invalid %s rule with port but no protocol for %s : %s",
                     descr, suffix, rule)
                 continue
-            # ipsets use port 0 to mean "any port"
+            # ipsets require a port number of 0 to be specified in a hash:net
+            # set for any protocol other than tcp / udp / sctp / udplite.
             ipset_value = ",%s:0" % (protocol)
             ipset = tmp_ipset_port
 

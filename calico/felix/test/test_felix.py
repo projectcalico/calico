@@ -276,7 +276,7 @@ class TestBasic(TestFelixSuperclass):
 
         expected_ipsets.add("felix-from-icmp-" + endpoint.suffix, "0.0.0.0/1")
         expected_ipsets.add("felix-from-icmp-" + endpoint.suffix, "128.0.0.0/1")
-        expected_ipsets.add("felix-from-port-" + endpoint.suffix, "1.2.3.0/24,tcp:0")
+        expected_ipsets.add("felix-from-port-" + endpoint.suffix, "1.2.3.0/24,tcp:1-65535")
         expected_ipsets.add("felix-from-port-" + endpoint.suffix, "0.0.0.0/1,tcp:80")
         expected_ipsets.add("felix-from-port-" + endpoint.suffix, "128.0.0.0/1,tcp:80")
 
