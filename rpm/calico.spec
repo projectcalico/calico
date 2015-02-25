@@ -183,7 +183,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %files common
 %defattr(-,root,root,-)
-/usr/lib/python2.7/site-packages/calico*
+%{python_sitelib}/calico*
 %doc
 
 %files compute
