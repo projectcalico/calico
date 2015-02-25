@@ -1,0 +1,13 @@
+[Unit]
+Description=Calico ACL Manager
+After=syslog.target network.target
+ConditionFileNotEmpty=/etc/calico/acl_manager.cfg
+
+[Service]
+User=root
+ExecStart=/usr/bin/calico-acl-manager --config-file /etc/calico/acl_manager.cfg
+KillMode=process
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -9,8 +9,10 @@ URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
 Source35:	calico-felix.init
 Source45:	calico-felix.upstart
+Source75:	calico-felix.service
 Source55:	calico-acl-manager.init
 Source65:	calico-acl-manager.upstart
+Source85:	calico-acl-manager.service
 BuildArch:	noarch
 
 
@@ -168,6 +170,12 @@ install -p -D -m 755 %{SOURCE55} %{buildroot}%{_initrddir}/calico-acl-manager
 install -p -m 644 %{SOURCE45} %{buildroot}%{_datadir}/calico/
 install -p -m 644 %{SOURCE65} %{buildroot}%{_datadir}/calico/
 
+# For EL7, install systemd service files
+%if 0%{?el7}
+    install -p -D -m 755 %{SOURCE75} %{buildroot}%{_unitdir}/calico-felix.service
+    install -p -D -m 755 %{SOURCE85} %{buildroot}%{_unitdir}/calico-acl-manager.service
+%endif
+
 # Install config and other non-Python files
 install -d %{buildroot}%{_sysconfdir}/calico
 install etc/*.cfg.example %{buildroot}%{_sysconfdir}/calico
@@ -203,6 +211,9 @@ rm -rf $RPM_BUILD_ROOT
 /etc/calico/felix.cfg.example
 %{_initrddir}/calico-felix
 %{_datadir}/calico/calico-felix.upstart
+%if 0%{?el7}
+    %{_unitdir}/calico-felix.service
+%endif
 %doc
 
 %files acl-manager
@@ -211,6 +222,9 @@ rm -rf $RPM_BUILD_ROOT
 /etc/calico/acl_manager.cfg.example
 %{_initrddir}/calico-acl-manager
 %{_datadir}/calico/calico-acl-manager.upstart
+%if 0%{?el7}
+    %{_unitdir}/calico-acl-manager.service
+%endif
 %doc
 
 
