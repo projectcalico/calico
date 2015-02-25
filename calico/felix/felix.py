@@ -30,7 +30,7 @@ import uuid
 import zmq
 
 from calico.felix.config import Config
-from calico.felix.endpoint import Address, Endpoint
+from calico.felix.endpoint import Address, Endpoint, InvalidAddress
 from calico.felix.fsocket import Socket, Message
 from calico.felix import fiptables
 from calico.felix import frules
@@ -655,10 +655,11 @@ class FelixAgent(object):
         try:
             for addr in addrs:
                 addresses.add(Address(addr))
-        except KeyError:
-            log.error("Missing IP in addrs for endpoint %s : %s",
+        except InvalidAddress:
+            log.error("Invalid address for endpoint %s : %s",
                       endpoint.uuid, fields)
-            raise InvalidRequest("Missing \"addr\" field", fields)
+            raise InvalidRequest("Invalid address for endpoint",
+                                 fields)
 
         if state not in Endpoint.STATES:
             log.error("Invalid state %s for endpoint %s : %s",

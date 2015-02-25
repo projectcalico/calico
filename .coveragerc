@@ -1,8 +1,9 @@
 [run]
 include =
-    *felix*
-    *acl_manager*
-    *openstack*
+    calico/felix/*
+    calico/acl_manager/*
+    calico/openstack/*
+    calico/common.py
 omit =
     calico/felix/test/*
     calico/acl_manager/test/*
