@@ -570,8 +570,8 @@ class TestPlugin(unittest.TestCase):
         #*********************************************************************#
         #* Connect a Felix instance.                                         *#
         #*********************************************************************#
-        self.felix_connect(flags={NO_HEARTBEAT_RESPONSE})
-        self.sockets -= {self.felix_endpoint_socket}
+        self.felix_connect(flags=set([NO_HEARTBEAT_RESPONSE]))
+        self.sockets.remove(self.felix_endpoint_socket)
 
         #*********************************************************************#
         #* Check that it works for Felix to connect again after the plugin   *#
@@ -599,8 +599,8 @@ class TestPlugin(unittest.TestCase):
         #* Process a new endpoint, but don't send in the ENDPOINTCREATED     *#
         #* response.                                                         *#
         #*********************************************************************#
-        self.new_endpoint(flags={NO_ENDPOINT_RESPONSE})
-        self.sockets -= {self.felix_endpoint_socket}
+        self.new_endpoint(flags=set([NO_ENDPOINT_RESPONSE]))
+        self.sockets.remove(self.felix_endpoint_socket)
 
         #*********************************************************************#
         #* Let time pass to allow the felix_heartbeat_thread for the old     *#
