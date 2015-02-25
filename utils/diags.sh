@@ -37,6 +37,7 @@ netstat -an > netstat
 iptables-save > iptables
 ip6tables-save > ip6tables
 ipset list > ipset
+ip -6 neigh > ip6neigh
 
 echo "  copying log files..."
 
