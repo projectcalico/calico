@@ -289,7 +289,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                                 'binary': '',
                                                 'host': hostname,
                                                 'topic':
-                                                constants.L2_AGENT_TOPIC,
+                                                    constants.L2_AGENT_TOPIC,
                                                 'start_flag': True})
                 eventlet.spawn(self.felix_heartbeat_thread, hostname)
             except:
