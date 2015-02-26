@@ -67,6 +67,19 @@ def validate_ip_addr(addr, version):
         return False
 
 
+def validate_cidr(cidr, version):
+    """
+    Validates that a CIDR is valid. Returns true if valid, false if
+    not. Version can be "4", "6", None for "IPv4", "IPv6", or "either"
+    respectively.
+    """
+    try:
+        ip = netaddr.IPNetwork(cidr, version=version)
+        return True
+    except (netaddr.core.AddrFormatError, ValueError):
+        return False
+
+
 def mkdir_p(path):
     """http://stackoverflow.com/a/600612/190597 (tzot)"""
     try:
