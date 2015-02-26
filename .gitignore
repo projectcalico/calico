@@ -5,3 +5,4 @@ tmp/
 *.log
 .coverage
 /htmlcov
+/.dir-locals.el
