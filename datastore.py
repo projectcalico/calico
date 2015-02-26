@@ -64,7 +64,7 @@ class DatastoreClient(object):
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(workload_dir, None, dir=True)
         return
@@ -77,7 +77,7 @@ class DatastoreClient(object):
         host_path = HOST_PATH % {"hostname": hostname}
         try:
             self.etcd_client.delete(host_path, dir=True, recursive=True)
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             pass
 
     def set_master(self, ip):
@@ -96,7 +96,7 @@ class DatastoreClient(object):
         """
         try:
             self.etcd_client.delete(MASTER_PATH)
-        except KeyError:
+        except (etcd.EtcdKeyNotFound, etcd.EtcdNotFile):
             pass
 
     def get_master(self):
@@ -106,7 +106,7 @@ class DatastoreClient(object):
         """
         try:
             return self.etcd_client.get(MASTER_IP_PATH).value
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             return None
 
     def get_groups_by_endpoint(self, endpoint_id):
@@ -120,7 +120,14 @@ class DatastoreClient(object):
         :return: List of netaddr.IPNetwork IP pools.
         """
         assert version in ("v4", "v6")
-        return self._get_ip_pools_with_keys(version).keys()
+        pools = []
+        try:
+            pools = self._get_ip_pools_with_keys(version).keys()
+        except etcd.EtcdKeyNotFound:
+            # No pools defined yet, return empty list.
+            pass
+
+        return pools
 
     def _get_ip_pools_with_keys(self, version):
         """
@@ -132,7 +139,7 @@ class DatastoreClient(object):
         pool_path = IP_POOLS_PATH % {"version": version}
         try:
             nodes = self.etcd_client.read(pool_path).children
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             # Path doesn't exist.  Interpret as no configured pools.
             return {}
         else:
@@ -169,7 +176,7 @@ class DatastoreClient(object):
     def del_ip_pool(self, version, pool):
         """
         Delete the given CIDR range from the list of pools.  If the pool does not exist, raise a
-        KeyError.
+        etcd.EtcdKeyNotFound:.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
@@ -182,7 +189,7 @@ class DatastoreClient(object):
         try:
             key = pools[pool.cidr]
             self.etcd_client.delete(key)
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
 
@@ -255,7 +262,7 @@ class DatastoreClient(object):
                     (_, _, _, _, group_id, final_key) = packed[0:6]
                     if final_key == "name":
                         groups[group_id] = child.value
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
         return groups
@@ -273,7 +280,7 @@ class DatastoreClient(object):
                 final_key = child.key.split("/")[-1]
                 if final_key != "member":
                     members.append(final_key)
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             # Means the GROUPS_MEMBER_PATH was not set up.  So, group does not exist.
             pass
         return members
@@ -299,7 +306,7 @@ class DatastoreClient(object):
                                     "container_id": container_id}
         try:
             endpoints = self.etcd_client.read(ep_path).leaves
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             # Re-raise with better message
             raise KeyError("Container with ID %s was not found." % container_id)
 
@@ -345,7 +352,7 @@ class DatastoreClient(object):
                     (_, _, _, host, _, container_type, container_id, _, endpoint_id, final_key) = \
                         packed
                     hosts[host][container_type][container_id][endpoint_id][final_key] = child.value
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             pass
 
         return hosts
@@ -359,7 +366,7 @@ class DatastoreClient(object):
         """
         try:
             self.etcd_client.delete("/calico", recursive=True, dir=True)
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             pass
 
     def remove_container(self, container_id):

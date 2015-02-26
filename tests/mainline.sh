@@ -10,7 +10,8 @@ python calicoctl.py group show --detailed
 
 # Set it up
 docker rm -f node1 node2 || true
-python calicoctl.py reset
+python calicoctl.py reset || true
+
 show_commands
 docker run -tid --name=node2 busybox
 python calicoctl.py master --ip=172.17.8.10
