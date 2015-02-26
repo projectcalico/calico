@@ -18,12 +18,9 @@ openstack.test.test_plugin
 
 Unit test for the Calico/OpenStack Plugin.
 """
-import logging
 import mock
-import socket
 import sys
 import unittest
-import uuid
 import eventlet
 import eventlet.queue
 import traceback
@@ -31,7 +28,8 @@ import json
 import inspect
 from eventlet.support import greenlets as greenlet
 
-if 'zmq' in sys.modules: del sys.modules['zmq']
+if 'zmq' in sys.modules:
+    del sys.modules['zmq']
 sys.modules['neutron'] = m_neutron = mock.Mock()
 sys.modules['neutron.common'] = m_neutron.common
 sys.modules['neutron.openstack'] = m_neutron.openstack
@@ -43,6 +41,7 @@ sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
 sys.modules['time'] = m_time = mock.Mock()
 
+
 # Define a stub class, that we will use as the base class for
 # CalicoMechanismDriver.
 class DriverBase(object):
@@ -51,7 +50,8 @@ class DriverBase(object):
 
 # Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
 # that CalicoMechanismDriver inherits from - with this stub class.
-m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = DriverBase
+m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
+    DriverBase
 
 import calico.openstack.mech_calico as mech_calico
 
@@ -59,10 +59,11 @@ REAL_EVENTLET_SLEEP_TIME = 0.2
 
 # Test variation flags.
 NO_HEARTBEAT_RESPONSE = 1
-NO_ENDPOINT_RESPONSE  = 2
+NO_ENDPOINT_RESPONSE = 2
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
+
 
 class TestPlugin(unittest.TestCase):
 
@@ -84,10 +85,9 @@ class TestPlugin(unittest.TestCase):
             # Add it to the dict of sleepers, together with the waking up time.
             sleepers[queue] = current_time + secs
 
-            print "T=%s: %s: Start sleep for %ss until T=%s" % (current_time,
-                                                                queue.stack,
-                                                                secs,
-                                                                sleepers[queue])
+            print "T=%s: %s: Start sleep for %ss until T=%s" % (
+                current_time, queue.stack, secs, sleepers[queue]
+            )
 
             # Do a zero time real sleep, to allow other threads to run.
             real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
@@ -244,15 +244,19 @@ class TestPlugin(unittest.TestCase):
         def log_info(msg):
             print "       INFO %s" % msg
             return None
+
         def log_debug(msg):
             print "       DEBUG %s" % msg
             return None
+
         def log_warn(msg):
             print "       WARN %s" % msg
             return None
+
         def log_error(msg):
             print "       ERROR %s" % msg
             return None
+
         def log_exception(msg):
             print "       EXCEPTION %s" % msg
             if sys.exc_type is not greenlet.GreenletExit:
@@ -525,7 +529,8 @@ class TestPlugin(unittest.TestCase):
 
         # Get the socket that the plugin used to connect back to Felix.
         connected_sockets = set(socket for socket in self.sockets
-                                if socket.connected_address == "tcp://felix-host-1:9902")
+                                if (socket.connected_address ==
+                                    "tcp://felix-host-1:9902"))
         self.assertEqual(len(connected_sockets), 1)
         self.felix_endpoint_socket = connected_sockets.pop()
         print "Felix endpoint socket is %s" % self.felix_endpoint_socket
@@ -617,7 +622,8 @@ class TestPlugin(unittest.TestCase):
                                         'ip_address': '10.65.0.2'}],
                          'mac_address': '00:11:22:33:44:55',
                          'admin_state_up': True}
-        real_eventlet_spawn(lambda: self.driver.create_port_postcommit(context))
+        real_eventlet_spawn(
+            lambda: self.driver.create_port_postcommit(context))
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         # Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix

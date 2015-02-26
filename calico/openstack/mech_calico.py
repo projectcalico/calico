@@ -95,6 +95,7 @@ HEARTBEAT_SEND_INTERVAL_SECS = 30
 # architecture.
 AGENT_TYPE_FELIX = 'Felix (Calico agent)'
 
+
 class FelixUnavailable(Exception):
     """
     Exception raised when a Felix instance cannot be contacted.
@@ -225,11 +226,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # it isn't possible to use 'binding:host_id' as a query
                     # filter, so we filter the results ourselves instead.
                     LOG.info("Query Neutron DB...")
-                    ports = []
-                    for port in self.db.get_ports(db_context):
-                        if (port['binding:host_id'] == rq['hostname'] and
-                            self._port_is_endpoint_port(port)):
-                            ports.append(port)
+                    ports = [port for port in self.db.get_ports(db_context)
+                             if (port['binding:host_id'] == rq['hostname'] and
+                                 self._port_is_endpoint_port(port))]
 
                     resync_rsp = {'type': 'RESYNCSTATE',
                                   'endpoint_count': len(ports),
@@ -278,7 +277,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.exception("Exception in Felix-facing ROUTER socket thread")
 
     def _ensure_socket_to_felix_peer(self, hostname, db_context):
-        if not hostname in self.felix_peer_sockets:
+        if hostname not in self.felix_peer_sockets:
             LOG.info("Create new socket for %s" % hostname)
             try:
                 sock = self.zmq_context.socket(zmq.REQ)
@@ -289,7 +288,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                                {'agent_type': AGENT_TYPE_FELIX,
                                                 'binary': '',
                                                 'host': hostname,
-                                                'topic': constants.L2_AGENT_TOPIC,
+                                                'topic':
+                                                constants.L2_AGENT_TOPIC,
                                                 'start_flag': True})
                 eventlet.spawn(self.felix_heartbeat_thread, hostname)
             except:
