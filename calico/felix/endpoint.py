@@ -24,6 +24,8 @@ from calico import common
 from calico.felix import devices
 from calico.felix import frules
 from calico.felix import futils
+from calico.felix.exceptions import InvalidRequest
+from netaddr import IPAddress
 import logging
 
 log = logging.getLogger(__name__)
@@ -36,26 +38,49 @@ class Address(object):
     An address as reported to Felix by the plugin (ignoring fields that Felix
     does not use). The input *fields* parameter is the fields from the API
     ENDPOINTCREATED (or other ENDPOINT*) request, of which we just need the
-    address.
+    address and gateway.
 
     Raises KeyError if there is a missing "addr" field in the parameters.
+
     """
     def __init__(self, fields):
-        #*********************************************************************#
-        #* This constructor throws InvalidAddress if there is a missing or   *#
-        #* invalid field.                                                    *#
-        #*********************************************************************#
+        # Two things can go wrong here, addr key doesn't exist, or the IP
+        # address is not valid.  In both cases, the caller will deal with the
+        # exception thrown.
         try:
-            self.ip = fields['addr'].encode('ascii')
+            self.ip = IPAddress(fields['addr'])
         except KeyError:
-            raise InvalidAddress
+            raise InvalidAddress()
 
-        if common.validate_ip_addr(self.ip, 4):
-            self.type = futils.IPV4
-        elif common.validate_ip_addr(self.ip, 6):
-            self.type = futils.IPV6
+        self.version = self.ip.version
+
+        # The gateway is used by Felix to set up NDP proxy.  It is required
+        # for IPv6 addresses unless the deployment has some other mechanism
+        # for endpoints to learn the gateway's MAC address, such as Router
+        # Advertisements from a DHCP6 service (typical OpenStack mechanism).
+        # However, we would always expect the gateway to be provided on the
+        # API. lIf no gateway is provided, log a warning.
+        try:
+            self.gateway = IPAddress(fields['gateway'])
+        except KeyError:
+            log.warning("No gateway provided with address")
+            self.gateway = None
         else:
-            raise InvalidAddress
+            # If, for some reason, the IP version on the address and gateway
+            # don't match, we will fail to program the proxy.  So, better to
+            # fail the API request now.
+            if self.gateway.version != self.ip.version:
+                raise InconsistentIPVersion(
+                    "IP %s is not the same IP version as gateway %s" %
+                    (self.ip, self.gateway))
+
+
+class InconsistentIPVersion(Exception):
+    """
+    Tried to create an Address with inconsistent IP versions between
+    properties, e.g. IP and gateway.
+    """
+    pass
 
 
 class Endpoint(object):
@@ -73,8 +98,8 @@ class Endpoint(object):
         self.interface = interface.encode('ascii')
         self.suffix = interface.replace(prefix, "", 1)
 
-        # Addresses is a set of Address objects.
-        self.addresses = set()
+        # Dictionary of Address objects, keyed by the IPAddress.
+        self.addresses = {}
 
         #*********************************************************************#
         #* pending_resync is set True when we have triggered a resync and    *#
@@ -179,13 +204,19 @@ class Endpoint(object):
         if self.state == Endpoint.STATE_ENABLED:
             devices.configure_interface(self.interface)
 
+            # List the IPv6 gateways to see if we need proxy NDP.
+            ipv6_gateways = [addr.gateway for addr in self.addresses.values()
+                             if addr.version is 6]
+            if ipv6_gateways:
+                devices.configure_interface_ipv6(self.interface, ipv6_gateways)
+
             # Build up list of addresses that should be present
-            ipv4_intended = set([addr.ip.encode('ascii')
-                                 for addr in self.addresses
-                                 if addr.type is futils.IPV4])
-            ipv6_intended = set([addr.ip.encode('ascii')
-                                 for addr in self.addresses
-                                 if addr.type is futils.IPV6])
+            ipv4_intended = set([str(addr.ip)
+                                 for addr in self.addresses.values()
+                                 if addr.version is 4])
+            ipv6_intended = set([str(addr.ip)
+                                 for addr in self.addresses.values()
+                                 if addr.version is futils.IPV6])
         else:
             # Disabled endpoint; we should remove all the routes.
             ipv4_intended = set()
@@ -270,3 +301,65 @@ class Endpoint(object):
         frules.set_acls(self.suffix, futils.IPV6,
                         inbound, in_default,
                         outbound, out_default)
+
+    def store_update(self, fields):
+        """
+        Update an endpoint's MAC, state and addresses with the contents of an
+        ENDPOINT* API message.
+
+        :param fields: dictionary of Endpoint Update API fields.
+        :return: None.
+        :throws: InvalidRequest if unsuccessful.
+        """
+
+        try:
+            mac = fields['mac']
+        except KeyError:
+            raise InvalidRequest("Missing \"mac\" field", fields)
+
+        try:
+            state = fields['state']
+        except KeyError:
+            raise InvalidRequest("Missing \"state\" field", fields)
+
+        try:
+            addrs = fields['addrs']
+        except KeyError:
+            raise InvalidRequest("Missing \"addrs\" field", fields)
+
+        addresses = {}
+
+        for addr in addrs:
+            try:
+                address = Address(addr)
+            except InconsistentIPVersion as err:
+                # exception has an operator-suitable error message.
+                log.error("For endpoint %s, %s", self.uuid, err)
+                raise InvalidRequest(str(err),
+                                     fields)
+            except InvalidAddress:
+                log.error("Invalid address for endpoint %s : %s",
+                          self.uuid, fields)
+                raise InvalidRequest("Invalid address for endpoint",
+                                     fields)
+
+            if address.ip in addresses:
+                # The IP is listed multiple times in the message.  This is
+                # an error.
+                log.error("IP %s listed multiple times in message for endpoint"
+                          " %s : %s", address.ip, self.uuid, fields)
+                raise InvalidRequest("IP %s listed multiple times in message "
+                                     "for endpoint %s" %
+                                     (address.ip, self.uuid), fields)
+
+            # All error checks passed on this addr.
+            addresses[address.ip] = address
+
+        if state not in Endpoint.STATES:
+            log.error("Invalid state %s for endpoint %s : %s",
+                      state, self.uuid, fields)
+            raise InvalidRequest("Invalid state \"%s\"" % state, fields)
+
+        self.addresses = addresses
+        self.mac = mac.encode('ascii')
+        self.state = state.encode('ascii')

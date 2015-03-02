@@ -75,7 +75,8 @@ def list_interface_ips(type, interface):
 
 def configure_interface(interface):
     """
-    Configure the various proc file system parameters for the interface.
+    Configure the various proc file system parameters for the interface to
+    work for IPv4 traffic.
 
     Specifically, allow packets from controlled interfaces to be directed to
     localhost, and enable proxy ARP.
@@ -88,6 +89,25 @@ def configure_interface(interface):
 
     with open("/proc/sys/net/ipv4/neigh/%s/proxy_delay" % interface, 'wb') as f:
         f.write('0')
+
+
+def configure_interface_ipv6(if_name, proxy_targets):
+    """
+    Configure an interface to support IPv6 traffic from an endpoint.
+      - Enable proxy NDP on the interface.
+      - Program the given proxy targets (gateway(s) the endpoint will use).
+
+    :param if_name: The name of the interface to configure.
+    :param proxy_targets: IPv6 addresses which are proxied on this interface
+    for NDP.
+    :return: None
+    """
+    with open("/proc/sys/net/ipv6/conf/%s/proxy_ndp" % if_name, 'wb') as f:
+        f.write('1')
+
+    for target in proxy_targets:
+        futils.check_call(["ip", "-6", "neigh", "add",
+                           "proxy", str(target), "dev", if_name])
 
 
 def add_route(type, ip, interface, mac):
