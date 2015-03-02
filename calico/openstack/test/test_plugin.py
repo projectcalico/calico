@@ -444,9 +444,9 @@ class TestPlugin(unittest.TestCase):
         # cleaned up following that non-response.
         self.felix_connect()
 
-    # Test when plugin sends an ENDPOINT* request and Felix does not respond
-    # within ENDPOINT_RESPONSE_TIMEOUT.
-    def test_no_endpoint_response(self):
+    # Subroutine for testing when plugin sends an ENDPOINT* request and Felix
+    # does not respond within ENDPOINT_RESPONSE_TIMEOUT.
+    def _test_no_endpoint_response(self, reconnect_time):
 
         # Start of day processing: initialization and socket binding.
         self.start_of_day()
@@ -462,13 +462,25 @@ class TestPlugin(unittest.TestCase):
         # Let time pass to allow the felix_heartbeat_thread for the old
         # connection to die.  It's a bug that we need to do this: Github issue
         # #224.
-        self.simulated_time_advance(40)
+        self.simulated_time_advance(reconnect_time)
 
         # Connect the Felix instance again.
         self.felix_connect()
 
         # Now process the new endpoint successfully.
         self.new_endpoint()
+
+    # Test when plugin sends an ENDPOINT* request and Felix does not respond
+    # within ENDPOINT_RESPONSE_TIMEOUT, with a 40s delay before Felix connects
+    # again.
+    def test_no_endpoint_response_40s(self):
+        self._test_no_endpoint_response(40)
+
+    # Test when plugin sends an ENDPOINT* request and Felix does not respond
+    # within ENDPOINT_RESPONSE_TIMEOUT, with a 1s delay before Felix connects
+    # again.
+    def test_no_endpoint_response_1s(self):
+        self._test_no_endpoint_response(1)
 
     def start_of_day(self):
         # Tell the driver to initialize.
