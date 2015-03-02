@@ -423,6 +423,8 @@ class TestPlugin(unittest.TestCase):
 
         # Further mainline steps that we haven't actually implemented yet.
         self.sg_rule_update()
+
+        # Delete an endpoint.
         self.endpoint_deletion()
 
     # Test when plugin sends a HEARTBEAT request and Felix does not respond
@@ -814,13 +816,6 @@ class TestPlugin(unittest.TestCase):
     # Update an endpoint.
     def endpoint_update(self, **kwargs):
 
-        # - sim-DB: Prep response to next get_subnet call.
-        #
-        # - sim-ML2: Call update_port_postcommit for an endpoint port with
-        #   host_id matching sim-Felix.
-        #
-        # - sim-Felix: Check get ENDPOINTUPDATED.  Send successful response.
-
         # Get test variation flags.
         flags = kwargs.get('flags', set())
 
@@ -903,22 +898,84 @@ class TestPlugin(unittest.TestCase):
         #   rules.
         pass
 
-    def endpoint_deletion(self):
-        # Endpoint deletion processing.
-        #
-        # - sim-ML2: Call delete_port_postcommit for an endpoint port with
-        #   host_id matching sim-Felix.
-        #
-        # - sim-Felix: Check get ENDPOINTDESTROYED.  Send successful response.
-        #
-        # - sim-DB: Prep appropriate responses for next get_security_group,
-        #   _get_port_security_group_bindings and get_port calls.
-        #
-        # - sim-ML2: Call security_groups_member_updated with default SG ID.
-        #
-        # - sim-ACLM: Check get GROUPUPDATE publication indicating port removed
-        #   from default SG ID.
-        pass
+    # Delete an endpoint.
+    def endpoint_deletion(self, **kwargs):
+
+        # Get test variation flags.
+        flags = kwargs.get('flags', set())
+
+        # Simulate ML2 notifying a port deletion.
+        context = mock.Mock()
+        context._port = {'binding:host_id': 'felix-host-1',
+                         'binding:vif_type': 'tap',
+                         'id': 'DEADBEEF-1234-5678',
+                         'device_owner': 'compute:nova',
+                         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                        'ip_address': '10.65.0.22'}],
+                         'mac_address': '00:11:22:33:44:55',
+                         'admin_state_up': True}
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Expect update_port_postcommit to throw a FelixUnavailable
+            # exception.
+            real_eventlet_spawn(
+                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                                          self.driver.delete_port_postcommit,
+                                          (context)))
+        else:
+            # No exception expected.
+            real_eventlet_spawn(
+                lambda: self.driver.delete_port_postcommit(context))
+
+        # Yield to allow that new thread to run.
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Check ENDPOINTDESTROYED request is sent to Felix.  Simulate Felix
+        # responding successfully.
+        self.felix_endpoint_socket.send_json.assert_called_once_with(
+            {'endpoint_id': 'DEADBEEF-1234-5678',
+             'issued': current_time * 1000,
+             'type': 'ENDPOINTDESTROYED'},
+            mech_calico.zmq.NOBLOCK)
+        self.felix_endpoint_socket.send_json.reset_mock()
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
+            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+                                         / 1000) + 1)
+
+            # The plugin now cleans up its Felix socket.
+            return
+
+        self.felix_endpoint_socket.rcv_queue.put_nowait(
+            {'type': 'ENDPOINTDESTROYED',
+             'rc': 'SUCCESS',
+             'message': ''})
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Prep appropriate responses for next get_security_group and
+        # _get_port_security_group_bindings calls.
+        self.db.get_security_group.return_value = {
+            'id': 'SG-1',
+            'security_group_rules': []
+        }
+        self.db._get_port_security_group_bindings.return_value = []
+
+        # Call security_groups_member_updated with default SG ID.
+        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+
+        # Check get GROUPUPDATE publication indicating port removed from
+        # default SG ID.
+        pub = {'rules': {'inbound': [],
+                         'outbound': [],
+                         'outbound_default': 'deny',
+                         'inbound_default': 'deny'},
+               'group': 'SG-1',
+               'type': 'GROUPUPDATE',
+               'members': {},
+               'issued': current_time * 1000}
+        self.check_acl_pub('groups', pub)
 
     def test_timing_new_endpoint(self):
 
