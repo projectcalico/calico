@@ -622,8 +622,20 @@ class TestPlugin(unittest.TestCase):
                                         'ip_address': '10.65.0.2'}],
                          'mac_address': '00:11:22:33:44:55',
                          'admin_state_up': True}
-        real_eventlet_spawn(
-            lambda: self.driver.create_port_postcommit(context))
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Expect create_port_postcommit to throw a FelixUnavailable
+            # exception.
+            real_eventlet_spawn(
+                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                                          self.driver.create_port_postcommit,
+                                          (context)))
+        else:
+            # No exception expected.
+            real_eventlet_spawn(
+                lambda: self.driver.create_port_postcommit(context))
+
+        # Yield to allow that new thread to run.
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         # Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix
