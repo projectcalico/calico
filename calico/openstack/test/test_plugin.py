@@ -1089,3 +1089,10 @@ class TestPlugin(unittest.TestCase):
         # coverage and add further tests for any mech_calico.py lines that have
         # not yet been covered.  (Or else persuade ourselves that we don't
         # actually need those lines, and delete them.)
+
+        # Simulate ML2 asking the driver if it can handle a port that it can't
+        # handle.
+        self.assertFalse(self.driver.check_segment_for_agent(
+            {mech_calico.api.NETWORK_TYPE: 'vlan'},
+            mech_calico.constants.AGENT_TYPE_DHCP
+        ))
