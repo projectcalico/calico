@@ -55,7 +55,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
 
 import calico.openstack.mech_calico as mech_calico
 
-REAL_EVENTLET_SLEEP_TIME = 0.2
+REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Test variation flags.
 NO_HEARTBEAT_RESPONSE = 1
