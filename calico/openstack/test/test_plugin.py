@@ -353,6 +353,8 @@ class TestPlugin(unittest.TestCase):
     # "test").
     def setUp(self):
 
+        self.maxDiff = 1000
+
         # Normally do not provide bind_host config.
         m_oslo.config.cfg.CONF.bind_host = None
 
