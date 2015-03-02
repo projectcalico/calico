@@ -409,10 +409,16 @@ class TestPlugin(unittest.TestCase):
         # Connect a Felix instance.
         self.felix_connect()
 
-        # Further mainline steps that we haven't actually implemented yet.
+        # Connect an ACL Manager.
         self.acl_connect()
+
+        # Call the ML2 driver entry points that we implement as no-ops.
         self.call_noop_entry_points()
+
+        # Process a new endpoint.
         self.new_endpoint()
+
+        # Further mainline steps that we haven't actually implemented yet.
         self.endpoint_update()
         self.sg_rule_update()
         self.endpoint_deletion()
@@ -571,22 +577,100 @@ class TestPlugin(unittest.TestCase):
         # Yield to allow anything pending on other threads to come out.
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+    # Test what happens when an ACL Manager connects to the Neutron driver.
     def acl_connect(self):
-        # ACL Manager connection.
-        #
-        # - sim-DB: Prep response to next get_security_groups query, returning
-        #  the default SG.  Prep null response to next
-        #  _get_port_security_group_bindings call.
-        #
-        # - sim-ACLM: Connect to PLUGIN_ACLGET_PORT, send GETGROUPS, check get
-        #  GETGROUPS response.  Check get GROUPUPDATE publication describing
-        #  default SG.
-        #
-        # - sim-ACLM: Send HEARTBEAT, check get HEARTBEAT response.
-        #
-        # - sim-ACLM: Wait for HEARTBEAT_SEND_INTERVAL_SECS, check get
-        #   HEARTBEAT, send HEARTBEAT response.
-        pass
+        # Prep response to next get_security_groups query, returning the
+        # default SG.  Prep a null response to the following
+        # _get_port_security_group_bindings call.
+        self.db = mech_calico.manager.NeutronManager.get_plugin()
+        self.db_context = mech_calico.ctx.get_admin_context()
+        self.db.get_security_groups.return_value = [
+            {'id': 'SGID-default',
+             'security_group_rules': [
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1}
+             ]}
+        ]
+        self.db._get_port_security_group_bindings.return_value = []
+
+        # Simulate ACL Manager sending GETGROUPS request.
+        getgroups = {'type': 'GETGROUPS',
+                     'issued': current_time * 1000}
+        self.acl_get_socket.rcv_queue.put_nowait(
+            ['aclm-1',
+             '',
+             json.dumps(getgroups).encode('utf-8')])
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Check get GETGROUPS response.
+        self.acl_get_socket.send_multipart.assert_called_once_with(
+            ['aclm-1',
+             '',
+             json.dumps({'type': 'GETGROUPS'}).encode('utf-8')])
+        self.acl_get_socket.send_multipart.reset_mock()
+
+        # Check get GROUPUPDATE publication describing default SG.
+        gupdate = {'rules': {'inbound': [{'protocol': -1,
+                                          'cidr': None,
+                                          'group': 'SGID-default',
+                                          'port': '*'},
+                                         {'protocol': -1,
+                                          'cidr': None,
+                                          'group': 'SGID-default',
+                                          'port': '*'}],
+                             'outbound': [{'protocol': -1,
+                                           'cidr': '0.0.0.0/0',
+                                           'group': None,
+                                           'port': '*'},
+                                          {'protocol': -1,
+                                           'cidr': '::/0',
+                                           'group': None,
+                                           'port': '*'}],
+                             'outbound_default': 'deny',
+                             'inbound_default': 'deny'},
+                   'group': 'SGID-default',
+                   'type': 'GROUPUPDATE',
+                   'members': {},
+                   'issued': current_time * 1000}
+        self.check_acl_pub('groups', gupdate)
+
+        # Send HEARTBEAT from ACL Manager and check for response.
+        self.acl_get_socket.rcv_queue.put_nowait(
+            ['aclm-1',
+             '',
+             json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.acl_get_socket.send_multipart.assert_called_once_with(
+            ['aclm-1',
+             '',
+             json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
+        self.acl_get_socket.send_multipart.reset_mock()
+
+        # The periodic sending of a HEARTBEAT on the Network API subscription
+        # socket is checked automatically by the simulated time infrastructure,
+        # and covered by other tests that advance the simulated time.
 
     def call_noop_entry_points(self):
         # Mechanism driver entry points that are currently implemented as
@@ -596,7 +680,14 @@ class TestPlugin(unittest.TestCase):
         #   delete_subnet_postcommit, delete_network_postcommit,
         #   create_network_postcommit, create_subnet_postcommit,
         #   update_network_postcommit, update_subnet_postcommit.
-        pass
+        self.driver.update_subnet_postcommit(None)
+        self.driver.update_network_postcommit(None)
+        self.driver.delete_subnet_postcommit(None)
+        self.driver.delete_network_postcommit(None)
+        self.driver.create_network_postcommit(None)
+        self.driver.create_subnet_postcommit(None)
+        self.driver.update_network_postcommit(None)
+        self.driver.update_subnet_postcommit(None)
 
     # New endpoint processing.
     def new_endpoint(self, **kwargs):
@@ -700,7 +791,10 @@ class TestPlugin(unittest.TestCase):
                'type': 'GROUPUPDATE',
                'members': {'DEADBEEF-1234-5678': ['10.65.0.2']},
                'issued': current_time * 1000}
+        self.check_acl_pub('groups', pub)
 
+    # Check an expected publication by the plugin to ACL Manager.
+    def check_acl_pub(self, subscription, message):
         # Unpack the last self.acl_pub_socket.send_multipart call, to check
         # that its args were as expected.  It doesn't work to check the
         # arguments directly using assert_called_once_with(...), because
@@ -711,8 +805,8 @@ class TestPlugin(unittest.TestCase):
         args, kwargs = kall
         assert len(args) == 1
         assert len(args[0]) == 2
-        assert args[0][0].decode('utf-8') == 'groups'
-        assert json.loads(args[0][1].decode('utf-8')) == pub
+        assert args[0][0].decode('utf-8') == subscription
+        assert json.loads(args[0][1].decode('utf-8')) == message
         self.acl_pub_socket.send_multipart.reset_mock()
 
     def endpoint_update(self):
