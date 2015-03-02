@@ -2,7 +2,7 @@ pyinstaller
 infi.docopt_completion
 docopt
 sh
-requests
+requests==2.5.1
 python-etcd 0.3.2
 simplejson
 docker-py
