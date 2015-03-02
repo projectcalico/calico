@@ -235,7 +235,7 @@ def send_all_eps(create_sockets, host, resync_id):
         create_socket.SNDTIMEO = 10000
         create_socket.RCVTIMEO = 10000
         ip = get_ip_for_host(host)
-        create_socket = create_socket.connect("tcp://%s:9902" % ip)
+        create_socket.connect("tcp://%s:9902" % ip)
         create_sockets[host] = create_socket
         log_api.info("Created REQ socket on port 9902")
 
