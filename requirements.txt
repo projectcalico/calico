@@ -3,7 +3,7 @@ infi.docopt_completion
 docopt
 sh
 requests
-python-etcd
+python-etcd 0.3.2
 simplejson
 docker-py
 netaddr
