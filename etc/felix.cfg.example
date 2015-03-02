@@ -8,9 +8,10 @@
 # Plugin and ACL manager addresses
 PluginAddress = controller
 ACLAddress    = controller
-# Metadata IP (or host) and port. If no metadata configuration, set to None
+# Metadata IP (or host) and port. If metadata is not desired, set both
+# MetadataAddr and MetadataPort to 'None'.
 #MetadataAddr  = 127.0.0.1
-#MetadataPort  = 9697
+#MetadataPort  = 8775
 # Address to bind to - either "*" or an IPv4 address (or hostname)
 #LocalAddress = *
 

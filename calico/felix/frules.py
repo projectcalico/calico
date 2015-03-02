@@ -125,7 +125,7 @@ def set_global_rules(config, iface_prefix, iptables_state):
     else:
         # Now set the chain to have a single rule by adding it at the start,
         # then truncating. The rule looks like this.
-        #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:9697
+        #  DNAT tcp -- any any anywhere 169.254.169.254 tcp dpt:http to:127.0.0.1:8775
         rule          = fiptables.Rule(futils.IPV4)
         rule.dst      = "169.254.169.254/32"
         rule.protocol = "tcp"

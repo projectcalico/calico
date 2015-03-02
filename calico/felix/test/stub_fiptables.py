@@ -200,7 +200,7 @@ class TableState(fiptables.TableState):
         rule.dst = "169.254.169.254/32"
         rule.protocol = "tcp"
         rule.create_tcp_match("80")
-        rule.create_target("DNAT", {'to-destination': '127.0.0.1:9697'})
+        rule.create_target("DNAT", {'to-destination': '127.0.0.1:8775'})
         chain.rules.append(rule)
 
         table = self.get_table(IPV6, "filter")
