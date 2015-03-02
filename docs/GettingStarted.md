@@ -71,14 +71,14 @@ You should see output like this on the master
 ```
 core@core-01 ~ $ docker ps
 CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-077ceae44fe3        calico/node:latest     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-17a54cc8f88a        calico/master:latest   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
+077ceae44fe3        calico/node:v0.0.7     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+17a54cc8f88a        calico/master:v0.0.7   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
 ```
 And like this on the other hosts
 ```
 core@core-02 ~ $ docker ps
 CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
-f770a8acbb11        calico/node:latest   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+f770a8acbb11        calico/node:v0.0.7   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 ```
 
 #### Using Calico: Creating networked endpoints
@@ -124,7 +124,7 @@ sudo ./calicoctl group add GROUP_B
 sudo ./calicoctl group add GROUP_D
 ```
 
-Now add the containers to the security groups
+Now add the containers to the security groups (note that `group add` works from any Calico node, but `group addmember` only works from the Calico node where the container is hosted).
 On core-01
 ```
 sudo ./calicoctl group addmember GROUP_A_C_E workload-A
