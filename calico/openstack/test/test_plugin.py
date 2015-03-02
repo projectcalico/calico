@@ -418,8 +418,10 @@ class TestPlugin(unittest.TestCase):
         # Process a new endpoint.
         self.new_endpoint()
 
-        # Further mainline steps that we haven't actually implemented yet.
+        # Update an endpoint.
         self.endpoint_update()
+
+        # Further mainline steps that we haven't actually implemented yet.
         self.sg_rule_update()
         self.endpoint_deletion()
 
@@ -809,16 +811,85 @@ class TestPlugin(unittest.TestCase):
         assert json.loads(args[0][1].decode('utf-8')) == message
         self.acl_pub_socket.send_multipart.reset_mock()
 
-    def endpoint_update(self):
-        # Endpoint update processing.
-        #
+    # Update an endpoint.
+    def endpoint_update(self, **kwargs):
+
         # - sim-DB: Prep response to next get_subnet call.
         #
         # - sim-ML2: Call update_port_postcommit for an endpoint port with
         #   host_id matching sim-Felix.
         #
         # - sim-Felix: Check get ENDPOINTUPDATED.  Send successful response.
-        pass
+
+        # Get test variation flags.
+        flags = kwargs.get('flags', set())
+
+        # Prep response to get_subnet call.
+        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
+
+        # Simulate ML2 notifying a port update, with contexts such that the IP
+        # address is changing.
+        context = mock.Mock()
+        context.original = {'binding:host_id': 'felix-host-1',
+                            'binding:vif_type': 'tap',
+                            'id': 'DEADBEEF-1234-5678',
+                            'device_owner': 'compute:nova',
+                            'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                           'ip_address': '10.65.0.2'}],
+                            'mac_address': '00:11:22:33:44:55',
+                            'admin_state_up': True}
+        context._port = {'binding:host_id': 'felix-host-1',
+                         'binding:vif_type': 'tap',
+                         'id': 'DEADBEEF-1234-5678',
+                         'device_owner': 'compute:nova',
+                         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                        'ip_address': '10.65.0.22'}],
+                         'mac_address': '00:11:22:33:44:55',
+                         'admin_state_up': True}
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Expect update_port_postcommit to throw a FelixUnavailable
+            # exception.
+            real_eventlet_spawn(
+                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                                          self.driver.update_port_postcommit,
+                                          (context)))
+        else:
+            # No exception expected.
+            real_eventlet_spawn(
+                lambda: self.driver.update_port_postcommit(context))
+
+        # Yield to allow that new thread to run.
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Check ENDPOINTUPDATED request is sent to Felix.  Simulate Felix
+        # responding successfully.
+        self.felix_endpoint_socket.send_json.assert_called_once_with(
+            {'mac': '00:11:22:33:44:55',
+             'addrs': [{'properties': {'gr': False},
+                        'addr': '10.65.0.22',
+                        'gateway': '10.65.0.1'}],
+             'endpoint_id': 'DEADBEEF-1234-5678',
+             'issued': current_time * 1000,
+             'type': 'ENDPOINTUPDATED',
+             'state': 'enabled'},
+            mech_calico.zmq.NOBLOCK)
+        self.felix_endpoint_socket.send_json.reset_mock()
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
+            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+                                         / 1000) + 1)
+
+            # The plugin now cleans up its Felix socket.
+            return
+
+        self.felix_endpoint_socket.rcv_queue.put_nowait(
+            {'type': 'ENDPOINTUPDATED',
+             'rc': 'SUCCESS',
+             'message': ''})
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
     def sg_rule_update(self):
         # SG rules update processing.
