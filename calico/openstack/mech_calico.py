@@ -291,7 +291,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                                 'topic':
                                                     constants.L2_AGENT_TOPIC,
                                                 'start_flag': True})
-                eventlet.spawn(self.felix_heartbeat_thread, hostname)
+                eventlet.spawn(self.felix_heartbeat_thread, hostname, sock)
             except:
                 LOG.exception("Peer is not actually available")
 
@@ -493,7 +493,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                'DESTROYED',
                                context._plugin_context)
 
-    def felix_heartbeat_thread(self, hostname):
+    def felix_heartbeat_thread(self, hostname, sock):
 
         # Get a Neutron DB context for this thread.
         db_context = ctx.get_admin_context()
@@ -505,10 +505,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                      % hostname)
             eventlet.sleep(HEARTBEAT_SEND_INTERVAL_SECS)
 
-            # Check that there is still a socket to this Felix.
-            sock = self._get_socket_for_felix_peer(hostname)
-            if not sock:
-                LOG.info("No connection to this host, bail out")
+            # Check that the socket for which this thread was started is still
+            # valid.
+            if sock is not self._get_socket_for_felix_peer(hostname):
+                LOG.info("Socket no longer valid, bail out")
                 return
 
             # Send a heartbeat.
