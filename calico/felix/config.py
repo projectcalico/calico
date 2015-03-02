@@ -72,7 +72,7 @@ class Config(object):
                                                   "127.0.0.1")
         self.METADATA_PORT   = self.get_cfg_entry("global",
                                                   "MetadataPort",
-                                                  "9697")
+                                                  "8775")
         self.LOCAL_ADDR      = self.get_cfg_entry("global",
                                                   "LocalAddress",
                                                   "*")
