@@ -70,7 +70,7 @@ def get_container_info(container_name):
     :param container_name: The partial ID or name of the container.
     :return: The container info array
     """
-    docker_client = pydocker.Client()
+    docker_client = pydocker.Client(version="1.16")
     try:
         info = docker_client.inspect_container(container_name)
     except pydocker.errors.APIError as e:

@@ -61,7 +61,8 @@ class AdapterResource(resource.Resource):
         resource.Resource.__init__(self)
 
         # Init a Docker client, to save having to do so every time a request comes in.
-        self.docker = Client(base_url='unix://var/run/docker.sock')
+        self.docker = Client(base_url='unix://var/run/docker.sock',
+                             version="1.16")
 
         # Init an etcd client.
         self.etcd = calico_etcd.CalicoEtcdClient()
