@@ -813,12 +813,12 @@ class TestPlugin(unittest.TestCase):
         # variation is possible when a dict such as 'pub' is represented as a
         # string.
         kall = self.acl_pub_socket.send_multipart.call_args
-        assert kall is not None
+        self.assertIsNot(kall, None)
         args, kwargs = kall
-        assert len(args) == 1
-        assert len(args[0]) == 2
-        assert args[0][0].decode('utf-8') == subscription
-        assert json.loads(args[0][1].decode('utf-8')) == message
+        self.assertEqual(len(args), 1)
+        self.assertEqual(len(args[0]), 2)
+        self.assertEqual(args[0][0].decode('utf-8'), subscription)
+        self.assertEqual(json.loads(args[0][1].decode('utf-8')), message)
         self.acl_pub_socket.send_multipart.reset_mock()
 
     # Update an endpoint.
@@ -894,17 +894,42 @@ class TestPlugin(unittest.TestCase):
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+    # Test a rule being updated in a security group.
     def sg_rule_update(self):
-        # SG rules update processing.
-        #
-        # - sim-DB: Prep appropriate responses for next get_security_group,
-        #   _get_port_security_group_bindings and get_port calls.
-        #
-        # - sim-ML2: Call security_groups_rule_updated with default SG ID.
-        #
-        # - sim-ACLM: Check get GROUPUPDATE publication indicating updated
-        #   rules.
-        pass
+
+        # Prep appropriate responses for next get_security_group and
+        # _get_port_security_group_bindings calls.
+        self.db.get_security_group.return_value = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}
+            ]
+        }
+        self.db._get_port_security_group_bindings.return_value = []
+
+        # Call security_groups_member_updated with default SG ID.
+        self.db.notifier.security_groups_rule_updated(mock.Mock(), ['SG-1'])
+
+        # Check get GROUPUPDATE publication indicating port removed from
+        # default SG ID.
+        pub = {'rules': {'inbound': [{'cidr': None,
+                                      'group': 'SGID-default',
+                                      'port': [5060, 5061],
+                                      'protocol': -1}],
+                         'outbound': [],
+                         'outbound_default': 'deny',
+                         'inbound_default': 'deny'},
+               'group': 'SG-1',
+               'type': 'GROUPUPDATE',
+               'members': {},
+               'issued': current_time * 1000}
+        self.check_acl_pub('groups', pub)
 
     # Delete an endpoint.
     def endpoint_deletion(self, **kwargs):
