@@ -797,6 +797,12 @@ class TestPlugin(unittest.TestCase):
                'issued': current_time * 1000}
         self.check_acl_pub('groups', pub)
 
+        # Exercise the notifier's general attribute proxying.
+        self.assertIsInstance(self.db.notifier,
+                              mech_calico.CalicoNotifierProxy)
+        self.assertIsInstance(self.db.notifier.thingummy,
+                              mock.Mock)
+
     # Check an expected publication by the plugin to ACL Manager.
     def check_acl_pub(self, subscription, message):
         # Unpack the last self.acl_pub_socket.send_multipart call, to check
