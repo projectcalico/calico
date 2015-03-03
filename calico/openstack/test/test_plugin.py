@@ -209,7 +209,9 @@ class TestPlugin(unittest.TestCase):
         def make_poll(socket):
 
             def poll(ms):
-                print "Socket %s poll for %sms..." % (socket, ms)
+                print "T=%s: Socket %s poll for %sms..." % (current_time,
+                                                            socket,
+                                                            ms)
 
                 # Add this socket's receive queue to the set of current
                 # sleepers.
@@ -222,7 +224,11 @@ class TestPlugin(unittest.TestCase):
                 # If what was added was not the timeout indication, put it back
                 # on the queue, for a following receive call.
                 if msg is not TIMEOUT_VALUE:
+                    del sleepers[socket.rcv_queue]
+                    print "Requeue: %s" % msg
                     socket.rcv_queue.put_nowait(msg)
+                else:
+                    print "Poll timed out"
 
                 real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
@@ -580,6 +586,7 @@ class TestPlugin(unittest.TestCase):
 
         self.felix_endpoint_socket.rcv_queue.put_nowait(
             {'type': 'HEARTBEAT'})
+        print "Provided HEARTBEAT response from Felix on %s" % self.felix_endpoint_socket
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
