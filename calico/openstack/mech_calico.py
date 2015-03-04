@@ -25,6 +25,9 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 
+import abc
+import six
+
 from oslo.config import cfg
 from neutron.common import constants
 from neutron.openstack.common import log
@@ -125,13 +128,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             'tap',
             {'port_filter': True})
 
-        # Initialize dictionary mapping Felix hostnames to corresponding REQ
-        # sockets.
-        self.felix_peer_sockets = {}
-
         # Initialize fields for the database object and context.  We will
         # initialize these properly when we first need them.
         self.db = None
+
+        # Use 0MQ-based transport.
+        self.transport = CalicoTransport0MQ(self)
+
+    def initialize(self):
+        self.transport.initialize()
 
     def _get_db(self):
         if not self.db:
@@ -155,6 +160,301 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return True
         else:
             return False
+
+    def _port_is_endpoint_port(self, port):
+        # Return True if port is a VM port.
+        if port['device_owner'].startswith('compute:'):
+            return True
+
+        # Otherwise log and return False.
+        LOG.debug("Not a VM port: %s" % port)
+        return False
+
+    def create_network_postcommit(self, context):
+        LOG.info("CREATE_NETWORK_POSTCOMMIT: %s" % context)
+
+    def update_network_postcommit(self, context):
+        LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
+
+    def delete_network_postcommit(self, context):
+        LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
+
+    def create_subnet_postcommit(self, context):
+        LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
+
+    def update_subnet_postcommit(self, context):
+        LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
+
+    def delete_subnet_postcommit(self, context):
+        LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
+
+    def add_port_gateways(self, port, context):
+        assert self.db
+        for ip in port['fixed_ips']:
+            subnet = self.db.get_subnet(context, ip['subnet_id'])
+            ip['gateway'] = subnet['gateway_ip']
+
+    def add_port_interface_name(self, port):
+        port['interface_name'] = 'tap' + port['id'][:11]
+
+    def create_port_postcommit(self, context):
+        LOG.info("CREATE_PORT_POSTCOMMIT: %s" % context)
+        port = context._port
+        if self._port_is_endpoint_port(port):
+            LOG.info("Created port: %s" % port)
+            self.add_port_gateways(port, context)
+            self.add_port_interface_name(port)
+            self.transport.endpoint_created(port)
+            self._get_db()
+            self.db.update_port_status(context._plugin_context,
+                                       port['id'],
+                                       constants.PORT_STATUS_ACTIVE)
+
+    def update_port_postcommit(self, context):
+        LOG.info("UPDATE_PORT_POSTCOMMIT: %s" % context)
+        port = context._port
+        original = context.original
+        if self._port_is_endpoint_port(port):
+            LOG.info("Updated port: %s" % port)
+            LOG.info("Original: %s" % original)
+            if port['binding:vif_type'] == 'unbound':
+                # This indicates part 1 of a port being migrated: the port
+                # being unbound from its old location.  The old compute host is
+                # available from context.original.  We should send an
+                # ENDPOINTDESTROYED to the old compute host.
+                #
+                # Ref: http://lists.openstack.org/pipermail/openstack-dev/
+                # 2014-February/027571.html
+                LOG.info("Migration part 1")
+                self.add_port_gateways(original, context)
+                self.transport.endpoint_deleted(original)
+            elif original['binding:vif_type'] == 'unbound':
+                # This indicates part 2 of a port being migrated: the port
+                # being bound to its new location.  We should send an
+                # ENDPOINTCREATED to the new compute host.
+                #
+                # Ref: http://lists.openstack.org/pipermail/openstack-dev/
+                # 2014-February/027571.html
+                LOG.info("Migration part 2")
+                self.add_port_gateways(port, context)
+                self.transport.endpoint_created(port)
+            elif original['binding:host_id'] != port['binding:host_id']:
+                # Migration as implemented in Icehouse.
+                LOG.info("Migration as implemented in Icehouse")
+                self.add_port_gateways(original, context)
+                self.transport.endpoint_deleted(original)
+                self.add_port_gateways(port, context)
+                self.transport.endpoint_created(port)
+            else:
+                # This is a non-migration-related update.
+                self.add_port_gateways(port, context)
+                self.transport.endpoint_updated(port)
+
+    def delete_port_postcommit(self, context):
+        LOG.info("DELETE_PORT_POSTCOMMIT: %s" % context)
+        port = context._port
+        if self._port_is_endpoint_port(port):
+            LOG.info("Deleted port: %s" % port)
+            self.transport.endpoint_deleted(port)
+
+    def send_sg_updates(self, sgids, db_context):
+        for sgid in sgids:
+            sg = self.db.get_security_group(db_context, sgid)
+            sg['members'] = self._get_members(sg, db_context)
+            self.transport.security_group_updated(sg)
+
+    def get_endpoints(self):
+        """Return the current set of endpoints.
+        """
+        # Set up access to the Neutron database, if we haven't already.
+        self._get_db()
+
+        # Get a DB context for this query.
+        db_context = ctx.get_admin_context()
+
+        # Get current endpoint ports.
+        ports = [port for port in self.db.get_ports(db_context)
+                 if self._port_is_endpoint_port(port)]
+
+        # Add IP gateways and interface names.
+        for port in ports:
+            self.add_port_gateways(port, db_context)
+            self.add_port_interface_name(port)
+
+        # Return those (augmented) ports.
+        return ports
+
+    def get_security_groups(self):
+        """Return the current set of security groups.
+        """
+        # Set up access to the Neutron database, if we haven't already.
+        self._get_db()
+
+        # Get a DB context for this query.
+        db_context = ctx.get_admin_context()
+
+        # Get current SGs.
+        sgs = self.db.get_security_groups(db_context)
+
+        # Add, to each SG, a dict whose keys are the endpoints configured to
+        # use that SG, and whose values are the corresponding IP addresses.
+        for sg in sgs:
+            sg['members'] = self._get_members(sg, db_context)
+
+        # Return those (augmented) security groups.
+        return sgs
+
+    def _get_members(self, sg, db_context):
+        filters = {'security_group_id': [sg['id']]}
+        bindings = self.db._get_port_security_group_bindings(db_context,
+                                                             filters)
+        endpoints = {}
+        for binding in bindings:
+            port_id = binding['port_id']
+            port = self.db.get_port(db_context, port_id)
+            endpoints[port_id] = [ip['ip_address'] for ip in port['fixed_ips']]
+
+        LOG.info("Endpoints for SG %s are %s" % (sg['id'], endpoints))
+        return endpoints
+
+    def felix_status(self, hostname, up):
+        # Get a DB context for this processing.
+        db_context = ctx.get_admin_context()
+
+        if up:
+            self.db.create_or_update_agent(db_context,
+                                           {'agent_type': AGENT_TYPE_FELIX,
+                                            'binary': '',
+                                            'host': hostname,
+                                            'topic': constants.L2_AGENT_TOPIC})
+
+
+class CalicoNotifierProxy(object):
+    """Proxy pattern class used to intercept security-related notifications
+    from the ML2 plugin.
+    """
+
+    def __init__(self, ml2_notifier, calico_driver):
+        self.ml2_notifier = ml2_notifier
+        self.calico_driver = calico_driver
+
+    def __getattr__(self, name):
+        return getattr(self.ml2_notifier, name)
+
+    def security_groups_rule_updated(self, context, sgids):
+        LOG.info("security_groups_rule_updated: %s %s" % (context, sgids))
+        self.calico_driver.send_sg_updates(sgids, context)
+        self.ml2_notifier.security_groups_rule_updated(context, sgids)
+
+    def security_groups_member_updated(self, context, sgids):
+        LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
+        self.calico_driver.send_sg_updates(sgids, context)
+        self.ml2_notifier.security_groups_member_updated(context, sgids)
+
+
+@six.add_metaclass(abc.ABCMeta)
+class CalicoTransport(object):
+    """Abstract base class for Calico transport implementations."""
+
+    def __init__(self, driver):
+        super(CalicoTransport, self).__init__()
+        self.driver = driver
+
+    @abc.abstractmethod
+    def initialize(self):
+        pass
+
+    @abc.abstractmethod
+    def endpoint_created(self, port):
+        """Indicate to the transport that an endpoint has been created.
+
+        Args:
+          port (dict): OpenStack Neutron dict holding properties of the created
+            port, with the following additions.
+
+            (1) port['fixed_ips'][N]['gateway'] set to the gateway IP address
+            for the subnet from which the relevant endpoint IP address was
+            allocated.
+
+            (2) port['interface_name'] set to the name of the TAP interface
+            that OpenStack has created for this endpoint on the compute host.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def endpoint_updated(self, port):
+        """Indicate to the transport that an endpoint has been updated.
+
+        Args:
+          port (dict): OpenStack Neutron dict holding new properties of the
+            updated port, with the following additions.
+
+            (1) port['fixed_ips'][N]['gateway'] set to the gateway IP address
+            for the subnet from which the relevant endpoint IP address was
+            allocated.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def endpoint_deleted(self, port):
+        """Indicate to the transport that an endpoint has been deleted.
+
+        Args:
+          port (dict): OpenStack Neutron dict holding properties of the deleted
+            port.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def security_group_updated(self, sg):
+        """Indicate to the transport that a security group has been updated.
+
+        Args:
+          sg (dict): OpenStack Neutron dict holding properties of the updated
+            security group, with the following additions.
+
+            (1) sg['members'] set to a dict whose keys are the endpoints
+            configured to use that SG, and whose values are the corresponding
+            IP addresses.
+
+        """
+        pass
+
+
+class CalicoTransportEtcd(CalicoTransport):
+    """Calico transport implementation based on etcd."""
+
+    def __init__(self, driver):
+        super(CalicoTransportEtcd, self).__init__(driver)
+
+    def initialize(self):
+        pass
+
+    def endpoint_created(self, port):
+        pass
+
+    def endpoint_updated(self, port):
+        pass
+
+    def endpoint_deleted(self, port):
+        pass
+
+    def security_group_updated(self, sg):
+        pass
+
+
+class CalicoTransport0MQ(CalicoTransport):
+    """Legacy Calico transport implementation based on 0MQ sockets."""
+
+    def __init__(self, driver):
+        super(CalicoTransport0MQ, self).__init__(driver)
+
+        # Initialize dictionary mapping Felix hostnames to corresponding REQ
+        # sockets.
+        self.felix_peer_sockets = {}
 
     def initialize(self):
         self.zmq_context = zmq.Context()
@@ -188,10 +488,27 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         LOG.info("Started threads")
 
-    def felix_router_thread(self):
+    def acl_heartbeat_thread(self):
 
-        # Get a Neutron DB context for this thread.
-        db_context = ctx.get_admin_context()
+        while True:
+
+            # Sleep until time for next heartbeat.
+            LOG.info("Network-HEARTBEAT: sleep till time for next heartbeat")
+            eventlet.sleep(HEARTBEAT_SEND_INTERVAL_SECS)
+
+            # Send a heartbeat.
+            try:
+                pub = {'type': 'HEARTBEAT',
+                       'issued': time.time() * 1000}
+                self.acl_pub_socket.send_multipart(
+                    ['networkheartbeat'.encode('utf-8'),
+                     json.dumps(pub).encode('utf-8')])
+                LOG.info("HEARTBEAT published to ACL managers")
+            except:
+                LOG.exception("Exception publishing HEARTBEAT to ACL managers")
+                return
+
+    def felix_router_thread(self):
 
         while True:
 
@@ -218,17 +535,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # It's a RESYNCSTATE request.
                     LOG.info("RESYNCSTATE request")
 
-                    # Set up access to the Neutron database, if we haven't
-                    # already.
-                    self._get_db()
-
                     # Get a list of all ports on the Felix host.  Unfortunately
                     # it isn't possible to use 'binding:host_id' as a query
                     # filter, so we filter the results ourselves instead.
                     LOG.info("Query Neutron DB...")
-                    ports = [port for port in self.db.get_ports(db_context)
-                             if (port['binding:host_id'] == rq['hostname'] and
-                                 self._port_is_endpoint_port(port))]
+                    ports = [port for port in self.driver.get_endpoints()
+                             if port['binding:host_id'] == rq['hostname']]
 
                     resync_rsp = {'type': 'RESYNCSTATE',
                                   'endpoint_count': len(ports),
@@ -245,17 +557,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                     # If we don't already have a REQ socket to this Felix,
                     # create that now.
-                    self._ensure_socket_to_felix_peer(rq['hostname'],
-                                                      db_context)
+                    self._ensure_socket_to_felix_peer(rq['hostname'])
 
                     # Now also send an ENDPOINTCREATED request to the Felix
                     # instance, for each port.
                     for port in ports:
-                        self.send_endpoint(rq['hostname'],
-                                           rq['resync_id'],
-                                           port,
-                                           'CREATED',
-                                           db_context)
+                        self.send_endpoint(rq['resync_id'], port, 'CREATED')
 
                 elif rq['type'] == 'HEARTBEAT':
                     # It's a heartbeat.  Send the same back.
@@ -276,7 +583,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             except:
                 LOG.exception("Exception in Felix-facing ROUTER socket thread")
 
-    def _ensure_socket_to_felix_peer(self, hostname, db_context):
+    def _ensure_socket_to_felix_peer(self, hostname):
         if hostname not in self.felix_peer_sockets:
             LOG.info("Create new socket for %s" % hostname)
             try:
@@ -284,13 +591,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 sock.setsockopt(zmq.LINGER, 0)
                 sock.connect("tcp://%s:%s" % (hostname, FELIX_ENDPOINT_PORT))
                 self.felix_peer_sockets[hostname] = sock
-                self.db.create_or_update_agent(db_context,
-                                               {'agent_type': AGENT_TYPE_FELIX,
-                                                'binary': '',
-                                                'host': hostname,
-                                                'topic':
-                                                    constants.L2_AGENT_TOPIC,
-                                                'start_flag': True})
+
+                # Tell OpenStack that Felix on this host is up.
+                self.driver.felix_status(hostname, True)
+
                 eventlet.spawn(self.felix_heartbeat_thread, hostname, sock)
             except:
                 LOG.exception("Peer is not actually available")
@@ -306,18 +610,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.felix_peer_sockets[hostname].close()
             del self.felix_peer_sockets[hostname]
 
-    def _port_is_endpoint_port(self, port):
+    def endpoint_created(self, port):
+        self.send_endpoint(None, port, 'CREATED')
 
-        # Return True if port is a VM port.
-        if port['device_owner'].startswith('compute:'):
-            return True
+    def endpoint_updated(self, port):
+        self.send_endpoint(None, port, 'UPDATED')
 
-        # Otherwise log and return False.
-        LOG.debug("Not a VM port: %s" % port)
-        return False
+    def endpoint_deleted(self, port):
+        self.send_endpoint(None, port, 'DESTROYED')
 
-    def send_endpoint(self, hostname, resync_id, port, op, db_context):
-        LOG.info("Send ENDPOINT%s to %s for %s" % (op, hostname, port))
+    def send_endpoint(self, resync_id, port, op):
+        LOG.info("Send ENDPOINT%s for %s" % (op, port))
+        hostname = port['binding:host_id']
 
         # Get the socket that we should send on to the Felix on this hostname.
         # If there is no such socket, bail out.
@@ -336,8 +640,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if op == 'CREATED' or op == 'UPDATED':
             rq.update(
                 {'addrs': [{'addr': ip['ip_address'],
-                            'gateway': self._get_subnet_gw(ip['subnet_id'],
-                                                           db_context),
+                            'gateway': ip['gateway'],
                             'properties': {'gr': False}}
                            for ip in port['fixed_ips']],
                  'mac': port['mac_address'],
@@ -389,114 +692,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self._clear_socket_to_felix_peer(hostname)
             raise FelixUnavailable(op, port['id'], hostname)
 
-    def _get_subnet_gw(self, subnet_id, db_context):
-        assert self.db
-        subnet = self.db.get_subnet(db_context, subnet_id)
-        return subnet['gateway_ip']
-
-    def create_network_postcommit(self, context):
-        LOG.info("CREATE_NETWORK_POSTCOMMIT: %s" % context)
-
-    def update_network_postcommit(self, context):
-        LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
-
-    def delete_network_postcommit(self, context):
-        LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
-
-    def create_subnet_postcommit(self, context):
-        LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
-
-    def update_subnet_postcommit(self, context):
-        LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
-
-    def delete_subnet_postcommit(self, context):
-        LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
-
-    def create_port_postcommit(self, context):
-        LOG.info("CREATE_PORT_POSTCOMMIT: %s" % context)
-        port = context._port
-        if self._port_is_endpoint_port(port):
-            LOG.info("Created port: %s" % port)
-            self.send_endpoint(port['binding:host_id'],
-                               None,
-                               port,
-                               'CREATED',
-                               context._plugin_context)
-            self._get_db()
-            self.db.update_port_status(context._plugin_context,
-                                       port['id'],
-                                       constants.PORT_STATUS_ACTIVE)
-
-    def update_port_postcommit(self, context):
-        LOG.info("UPDATE_PORT_POSTCOMMIT: %s" % context)
-        port = context._port
-        original = context.original
-        if self._port_is_endpoint_port(port):
-            LOG.info("Updated port: %s" % port)
-            LOG.info("Original: %s" % original)
-            if port['binding:vif_type'] == 'unbound':
-                # This indicates part 1 of a port being migrated: the port
-                # being unbound from its old location.  The old compute host is
-                # available from context.original.  We should send an
-                # ENDPOINTDESTROYED to the old compute host.
-                #
-                # Ref: http://lists.openstack.org/pipermail/openstack-dev/
-                # 2014-February/027571.html
-                LOG.info("Migration part 1")
-                self.send_endpoint(original['binding:host_id'],
-                                   None,
-                                   original,
-                                   'DESTROYED',
-                                   context._plugin_context)
-            elif original['binding:vif_type'] == 'unbound':
-                # This indicates part 2 of a port being migrated: the port
-                # being bound to its new location.  We should send an
-                # ENDPOINTCREATED to the new compute host.
-                #
-                # Ref: http://lists.openstack.org/pipermail/openstack-dev/
-                # 2014-February/027571.html
-                LOG.info("Migration part 2")
-                self.send_endpoint(port['binding:host_id'],
-                                   None,
-                                   port,
-                                   'CREATED',
-                                   context._plugin_context)
-            elif original['binding:host_id'] != port['binding:host_id']:
-                # Migration as implemented in Icehouse.
-                LOG.info("Migration as implemented in Icehouse")
-                self.send_endpoint(original['binding:host_id'],
-                                   None,
-                                   original,
-                                   'DESTROYED',
-                                   context._plugin_context)
-                self.send_endpoint(port['binding:host_id'],
-                                   None,
-                                   port,
-                                   'CREATED',
-                                   context._plugin_context)
-            else:
-                # This is a non-migration-related update.
-                self.send_endpoint(port['binding:host_id'],
-                                   None,
-                                   port,
-                                   'UPDATED',
-                                   context._plugin_context)
-
-    def delete_port_postcommit(self, context):
-        LOG.info("DELETE_PORT_POSTCOMMIT: %s" % context)
-        port = context._port
-        if self._port_is_endpoint_port(port):
-            LOG.info("Deleted port: %s" % port)
-            self.send_endpoint(port['binding:host_id'],
-                               None,
-                               port,
-                               'DESTROYED',
-                               context._plugin_context)
-
     def felix_heartbeat_thread(self, hostname, sock):
-
-        # Get a Neutron DB context for this thread.
-        db_context = ctx.get_admin_context()
 
         while True:
 
@@ -547,36 +743,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 return
 
             # Felix is still there, tell OpenStack.
-            self.db.create_or_update_agent(db_context,
-                                           {'agent_type': AGENT_TYPE_FELIX,
-                                            'binary': '',
-                                            'host': hostname,
-                                            'topic': constants.L2_AGENT_TOPIC})
-
-    def acl_heartbeat_thread(self):
-
-        while True:
-
-            # Sleep until time for next heartbeat.
-            LOG.info("Network-HEARTBEAT: sleep till time for next heartbeat")
-            eventlet.sleep(HEARTBEAT_SEND_INTERVAL_SECS)
-
-            # Send a heartbeat.
-            try:
-                pub = {'type': 'HEARTBEAT',
-                       'issued': time.time() * 1000}
-                self.acl_pub_socket.send_multipart(
-                    ['networkheartbeat'.encode('utf-8'),
-                     json.dumps(pub).encode('utf-8')])
-                LOG.info("HEARTBEAT published to ACL managers")
-            except:
-                LOG.exception("Exception publishing HEARTBEAT to ACL managers")
-                return
+            self.driver.felix_status(hostname, True)
 
     def acl_get_thread(self):
-
-        # Get a Neutron DB context for this thread.
-        db_context = ctx.get_admin_context()
 
         while True:
 
@@ -612,17 +781,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                          '',
                          json.dumps(rsp).encode('utf-8')])
 
-                    # Set up access to the Neutron database, if we haven't
-                    # already.
-                    self._get_db()
-
-                    # Get a list of all security groups.
-                    LOG.info("Query Neutron DB...")
-                    sgs = self.db.get_security_groups(db_context)
-
                     # Send a GROUPUPDATE message for each group.
-                    for sg in sgs:
-                        self.send_group(sg, db_context)
+                    for sg in self.driver.get_security_groups():
+                        self.send_group(sg)
 
                 elif rq['type'] == 'HEARTBEAT':
                     # It's a heartbeat.  Send the same back.
@@ -643,19 +804,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             except:
                 LOG.exception("Exception in ACL Manager-facing ROUTER thread")
 
-    def send_group(self, sg, db_context):
+    def send_group(self, sg):
         LOG.info("Publish definition of security group %s" % sg)
 
         # Send a GROUPUPDATE message, with the definition of this security
         # group, on the PUB socket.
-        [inbound, outbound] = self._get_rules(sg)
+        [inbound, outbound] = self.translate_rules(sg)
         pub = {'type': 'GROUPUPDATE',
                'group': sg['id'],
                'rules': {'inbound': inbound,
                          'outbound': outbound,
                          'inbound_default': 'deny',
                          'outbound_default': 'deny'},
-               'members': self._get_members(sg, db_context),
+               'members': sg['members'],
                'issued': time.time() * 1000}
         LOG.info("Sending GROUPUPDATE: %s" % pub)
 
@@ -663,7 +824,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                             json.dumps(pub).encode('utf-8')])
         LOG.info("Message sent")
 
-    def _get_rules(self, sg):
+    def translate_rules(self, sg):
         inbound = []
         outbound = []
         for rule in sg['security_group_rules']:
@@ -702,43 +863,5 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         return [inbound, outbound]
 
-    def _get_members(self, sg, db_context):
-        filters = {'security_group_id': [sg['id']]}
-        bindings = self.db._get_port_security_group_bindings(db_context,
-                                                             filters)
-        endpoints = {}
-        for binding in bindings:
-            port_id = binding['port_id']
-            port = self.db.get_port(db_context, port_id)
-            endpoints[port_id] = [ip['ip_address'] for ip in port['fixed_ips']]
-
-        LOG.info("Endpoints for SG %s are %s" % (sg['id'], endpoints))
-        return endpoints
-
-    def send_sg_updates(self, sgids, db_context):
-        for sgid in sgids:
-            self.send_group(self.db.get_security_group(db_context, sgid),
-                            db_context)
-
-
-class CalicoNotifierProxy(object):
-    """Proxy pattern class used to intercept security-related notifications
-    from the ML2 plugin.
-    """
-
-    def __init__(self, ml2_notifier, calico_driver):
-        self.ml2_notifier = ml2_notifier
-        self.calico_driver = calico_driver
-
-    def __getattr__(self, name):
-        return getattr(self.ml2_notifier, name)
-
-    def security_groups_rule_updated(self, context, sgids):
-        LOG.info("security_groups_rule_updated: %s %s" % (context, sgids))
-        self.calico_driver.send_sg_updates(sgids, context)
-        self.ml2_notifier.security_groups_rule_updated(context, sgids)
-
-    def security_groups_member_updated(self, context, sgids):
-        LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
-        self.calico_driver.send_sg_updates(sgids, context)
-        self.ml2_notifier.security_groups_member_updated(context, sgids)
+    def security_group_updated(self, sg):
+        self.send_group(sg)
