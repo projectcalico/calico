@@ -12,7 +12,7 @@ So, to get started, install Vagrant, Virtualbox and Git for your OS.
 * https://www.vagrantup.com/downloads.html
 * http://git-scm.com/downloads
 
-Use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example for streamlined setup. Follow the instructions there (and see the <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">CoreOS documentation</a>.
+Use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example for streamlined setup. Follow the instructions there (and see the <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">CoreOS documentation</a>).
 
 You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
 
