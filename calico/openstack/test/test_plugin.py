@@ -55,14 +55,33 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
 
 import calico.openstack.mech_calico as mech_calico
 
-REAL_EVENTLET_SLEEP_TIME = 0.2
+REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Test variation flags.
 NO_HEARTBEAT_RESPONSE = 1
 NO_ENDPOINT_RESPONSE = 2
+KEEP_EXISTING_REQ_SOCK = 3
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
+
+port1 = {'binding:vif_type': 'tap',
+         'binding:host_id': 'felix-host-1',
+         'id': 'DEADBEEF-1234-5678',
+         'device_owner': 'compute:nova',
+         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                        'ip_address': '10.65.0.2'}],
+         'mac_address': '00:11:22:33:44:55',
+         'admin_state_up': True}
+
+port2 = {'binding:vif_type': 'tap',
+         'binding:host_id': 'felix-host-1',
+         'id': 'FACEBEEF-1234-5678',
+         'device_owner': 'compute:nova',
+         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                        'ip_address': '10.65.0.3'}],
+         'mac_address': '00:11:22:33:44:66',
+         'admin_state_up': True}
 
 
 class TestPlugin(unittest.TestCase):
@@ -125,6 +144,10 @@ class TestPlugin(unittest.TestCase):
 
         # Restore the real eventlet.sleep.
         mech_calico.eventlet.sleep = real_eventlet_sleep
+
+    # Ports to return when the driver asks the OpenStack database for all
+    # current ports.
+    osdb_ports = []
 
     # Setup for explicit test code control of all operations on 0MQ sockets.
     def setUp_sockets(self):
@@ -209,7 +232,9 @@ class TestPlugin(unittest.TestCase):
         def make_poll(socket):
 
             def poll(ms):
-                print "Socket %s poll for %sms..." % (socket, ms)
+                print "T=%s: Socket %s poll for %sms..." % (current_time,
+                                                            socket,
+                                                            ms)
 
                 # Add this socket's receive queue to the set of current
                 # sleepers.
@@ -222,7 +247,11 @@ class TestPlugin(unittest.TestCase):
                 # If what was added was not the timeout indication, put it back
                 # on the queue, for a following receive call.
                 if msg is not TIMEOUT_VALUE:
+                    del sleepers[socket.rcv_queue]
+                    print "Requeue: %s" % msg
                     socket.rcv_queue.put_nowait(msg)
+                else:
+                    print "Poll timed out"
 
                 real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
@@ -353,6 +382,8 @@ class TestPlugin(unittest.TestCase):
     # "test").
     def setUp(self):
 
+        self.maxDiff = 1000
+
         # Normally do not provide bind_host config.
         m_oslo.config.cfg.CONF.bind_host = None
 
@@ -409,12 +440,22 @@ class TestPlugin(unittest.TestCase):
         # Connect a Felix instance.
         self.felix_connect()
 
-        # Further mainline steps that we haven't actually implemented yet.
+        # Connect an ACL Manager.
         self.acl_connect()
+
+        # Call the ML2 driver entry points that we implement as no-ops.
         self.call_noop_entry_points()
-        self.new_endpoint()
+
+        # Process a new endpoint.
+        self.new_endpoint(port1)
+
+        # Update an endpoint.
         self.endpoint_update()
+
+        # Further mainline steps that we haven't actually implemented yet.
         self.sg_rule_update()
+
+        # Delete an endpoint.
         self.endpoint_deletion()
 
     # Test when plugin sends a HEARTBEAT request and Felix does not respond
@@ -432,9 +473,9 @@ class TestPlugin(unittest.TestCase):
         # cleaned up following that non-response.
         self.felix_connect()
 
-    # Test when plugin sends an ENDPOINT* request and Felix does not respond
-    # within ENDPOINT_RESPONSE_TIMEOUT.
-    def test_no_endpoint_response(self):
+    # Subroutine for testing when plugin sends an ENDPOINT* request and Felix
+    # does not respond within ENDPOINT_RESPONSE_TIMEOUT.
+    def _test_no_endpoint_response(self, reconnect_time):
 
         # Start of day processing: initialization and socket binding.
         self.start_of_day()
@@ -444,19 +485,31 @@ class TestPlugin(unittest.TestCase):
 
         # Process a new endpoint, but don't send in the ENDPOINTCREATED
         # response.
-        self.new_endpoint(flags=set([NO_ENDPOINT_RESPONSE]))
+        self.new_endpoint(port1, flags=set([NO_ENDPOINT_RESPONSE]))
         self.sockets.remove(self.felix_endpoint_socket)
 
         # Let time pass to allow the felix_heartbeat_thread for the old
         # connection to die.  It's a bug that we need to do this: Github issue
         # #224.
-        self.simulated_time_advance(40)
+        self.simulated_time_advance(reconnect_time)
 
         # Connect the Felix instance again.
         self.felix_connect()
 
         # Now process the new endpoint successfully.
-        self.new_endpoint()
+        self.new_endpoint(port1)
+
+    # Test when plugin sends an ENDPOINT* request and Felix does not respond
+    # within ENDPOINT_RESPONSE_TIMEOUT, with a 40s delay before Felix connects
+    # again.
+    def test_no_endpoint_response_40s(self):
+        self._test_no_endpoint_response(40)
+
+    # Test when plugin sends an ENDPOINT* request and Felix does not respond
+    # within ENDPOINT_RESPONSE_TIMEOUT, with a 1s delay before Felix connects
+    # again.
+    def test_no_endpoint_response_1s(self):
+        self._test_no_endpoint_response(1)
 
     def start_of_day(self):
         # Tell the driver to initialize.
@@ -475,10 +528,11 @@ class TestPlugin(unittest.TestCase):
         print "ACL PUB socket is %s" % self.acl_pub_socket
 
     def felix_connect(self, **kwargs):
+
         # Hook the Neutron database.
         self.db = mech_calico.manager.NeutronManager.get_plugin()
         self.db_context = mech_calico.ctx.get_admin_context()
-        self.db.get_ports.return_value = []
+        self.db.get_ports.return_value = self.osdb_ports
 
         # Get test variation flags.
         flags = kwargs.get('flags', set())
@@ -495,25 +549,54 @@ class TestPlugin(unittest.TestCase):
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         # Check DB got create_or_update_agent call.
-        self.db.create_or_update_agent.assert_called_once_with(
-            self.db_context,
-            {'agent_type': mech_calico.AGENT_TYPE_FELIX,
-             'binary': '',
-             'host': 'felix-host-1',
-             'topic': mech_calico.constants.L2_AGENT_TOPIC,
-             'start_flag': True})
-        self.db.create_or_update_agent.reset_mock()
+        if KEEP_EXISTING_REQ_SOCK not in flags:
+            self.db.create_or_update_agent.assert_called_once_with(
+                self.db_context,
+                {'agent_type': mech_calico.AGENT_TYPE_FELIX,
+                 'binary': '',
+                 'host': 'felix-host-1',
+                 'topic': mech_calico.constants.L2_AGENT_TOPIC,
+                 'start_flag': True})
+            self.db.create_or_update_agent.reset_mock()
 
         # Check RESYNCSTATE response was sent.
         self.felix_router_socket.send_multipart.assert_called_once_with(
             ['felix-1',
              '',
              json.dumps({'type': 'RESYNCSTATE',
-                         'endpoint_count': 0,
+                         'endpoint_count': len(self.osdb_ports),
                          'interface_prefix': 'tap',
                          'rc': 'SUCCESS',
                          'message': 'Здра́вствуйте!'}).encode('utf-8')])
         self.felix_router_socket.send_multipart.reset_mock()
+
+        for port in self.osdb_ports:
+            # Check that the plugin sent an ENDPOINTCREATED request for this
+            # port.
+            self.felix_endpoint_socket.send_json.assert_called_once_with(
+                {'type': 'ENDPOINTCREATED',
+                 'mac': port['mac_address'],
+                 'resync_id': 'resync#1',
+                 'addrs':
+                     [{'properties': {'gr': False},
+                       'addr': ip['ip_address'],
+                       'gateway': '10.65.0.1'} for ip in port['fixed_ips']],
+                 'endpoint_id': port['id'],
+                 'issued': current_time * 1000,
+                 'interface_name': 'tap' + port['id'][:11],
+                 'state': 'enabled'},
+                mech_calico.zmq.NOBLOCK
+            )
+            self.felix_endpoint_socket.send_json.reset_mock()
+
+            # Send back a successful response.
+            self.felix_endpoint_socket.rcv_queue.put_nowait(
+                {'type': 'ENDPOINTCREATED',
+                 'rc': 'SUCCESS'})
+
+            # Yield twice to allow that response to be processed.
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         # Send HEARTBEAT from Felix and check for response.
         self.felix_router_socket.rcv_queue.put_nowait(
@@ -556,6 +639,7 @@ class TestPlugin(unittest.TestCase):
 
         self.felix_endpoint_socket.rcv_queue.put_nowait(
             {'type': 'HEARTBEAT'})
+        print "Provided HEARTBEAT response from Felix on %s" % self.felix_endpoint_socket
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
@@ -571,22 +655,100 @@ class TestPlugin(unittest.TestCase):
         # Yield to allow anything pending on other threads to come out.
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+    # Test what happens when an ACL Manager connects to the Neutron driver.
     def acl_connect(self):
-        # ACL Manager connection.
-        #
-        # - sim-DB: Prep response to next get_security_groups query, returning
-        #  the default SG.  Prep null response to next
-        #  _get_port_security_group_bindings call.
-        #
-        # - sim-ACLM: Connect to PLUGIN_ACLGET_PORT, send GETGROUPS, check get
-        #  GETGROUPS response.  Check get GROUPUPDATE publication describing
-        #  default SG.
-        #
-        # - sim-ACLM: Send HEARTBEAT, check get HEARTBEAT response.
-        #
-        # - sim-ACLM: Wait for HEARTBEAT_SEND_INTERVAL_SECS, check get
-        #   HEARTBEAT, send HEARTBEAT response.
-        pass
+        # Prep response to next get_security_groups query, returning the
+        # default SG.  Prep a null response to the following
+        # _get_port_security_group_bindings call.
+        self.db = mech_calico.manager.NeutronManager.get_plugin()
+        self.db_context = mech_calico.ctx.get_admin_context()
+        self.db.get_security_groups.return_value = [
+            {'id': 'SGID-default',
+             'security_group_rules': [
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1}
+             ]}
+        ]
+        self.db._get_port_security_group_bindings.return_value = []
+
+        # Simulate ACL Manager sending GETGROUPS request.
+        getgroups = {'type': 'GETGROUPS',
+                     'issued': current_time * 1000}
+        self.acl_get_socket.rcv_queue.put_nowait(
+            ['aclm-1',
+             '',
+             json.dumps(getgroups).encode('utf-8')])
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Check get GETGROUPS response.
+        self.acl_get_socket.send_multipart.assert_called_once_with(
+            ['aclm-1',
+             '',
+             json.dumps({'type': 'GETGROUPS'}).encode('utf-8')])
+        self.acl_get_socket.send_multipart.reset_mock()
+
+        # Check get GROUPUPDATE publication describing default SG.
+        gupdate = {'rules': {'inbound': [{'protocol': -1,
+                                          'cidr': None,
+                                          'group': 'SGID-default',
+                                          'port': '*'},
+                                         {'protocol': -1,
+                                          'cidr': None,
+                                          'group': 'SGID-default',
+                                          'port': '*'}],
+                             'outbound': [{'protocol': -1,
+                                           'cidr': '0.0.0.0/0',
+                                           'group': None,
+                                           'port': '*'},
+                                          {'protocol': -1,
+                                           'cidr': '::/0',
+                                           'group': None,
+                                           'port': '*'}],
+                             'outbound_default': 'deny',
+                             'inbound_default': 'deny'},
+                   'group': 'SGID-default',
+                   'type': 'GROUPUPDATE',
+                   'members': {},
+                   'issued': current_time * 1000}
+        self.check_acl_pub('groups', gupdate)
+
+        # Send HEARTBEAT from ACL Manager and check for response.
+        self.acl_get_socket.rcv_queue.put_nowait(
+            ['aclm-1',
+             '',
+             json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.acl_get_socket.send_multipart.assert_called_once_with(
+            ['aclm-1',
+             '',
+             json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
+        self.acl_get_socket.send_multipart.reset_mock()
+
+        # The periodic sending of a HEARTBEAT on the Network API subscription
+        # socket is checked automatically by the simulated time infrastructure,
+        # and covered by other tests that advance the simulated time.
 
     def call_noop_entry_points(self):
         # Mechanism driver entry points that are currently implemented as
@@ -596,10 +758,17 @@ class TestPlugin(unittest.TestCase):
         #   delete_subnet_postcommit, delete_network_postcommit,
         #   create_network_postcommit, create_subnet_postcommit,
         #   update_network_postcommit, update_subnet_postcommit.
-        pass
+        self.driver.update_subnet_postcommit(None)
+        self.driver.update_network_postcommit(None)
+        self.driver.delete_subnet_postcommit(None)
+        self.driver.delete_network_postcommit(None)
+        self.driver.create_network_postcommit(None)
+        self.driver.create_subnet_postcommit(None)
+        self.driver.update_network_postcommit(None)
+        self.driver.update_subnet_postcommit(None)
 
     # New endpoint processing.
-    def new_endpoint(self, **kwargs):
+    def new_endpoint(self, port, **kwargs):
 
         # Get test variation flags.
         flags = kwargs.get('flags', set())
@@ -615,13 +784,7 @@ class TestPlugin(unittest.TestCase):
 
         # Simulate ML2 notifying creation of the new port.
         context = mock.Mock()
-        context._port = {'binding:host_id': 'felix-host-1',
-                         'id': 'DEADBEEF-1234-5678',
-                         'device_owner': 'compute:nova',
-                         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                                        'ip_address': '10.65.0.2'}],
-                         'mac_address': '00:11:22:33:44:55',
-                         'admin_state_up': True}
+        context._port = port
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect create_port_postcommit to throw a FelixUnavailable
@@ -641,13 +804,14 @@ class TestPlugin(unittest.TestCase):
         # Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'mac': '00:11:22:33:44:55',
-             'addrs': [{'properties': {'gr': False},
-                        'addr': '10.65.0.2',
-                        'gateway': '10.65.0.1'}],
-             'endpoint_id': 'DEADBEEF-1234-5678',
-             'interface_name': 'tapDEADBEEF-12',
-             'issued': mock.ANY,
+            {'mac': port['mac_address'],
+             'addrs':
+                 [{'properties': {'gr': False},
+                   'addr': ip['ip_address'],
+                   'gateway': '10.65.0.1'} for ip in port['fixed_ips']],
+             'endpoint_id': port['id'],
+             'issued': current_time * 1000,
+             'interface_name': 'tap' + port['id'][:11],
              'resync_id': None,
              'type': 'ENDPOINTCREATED',
              'state': 'enabled'},
@@ -683,7 +847,7 @@ class TestPlugin(unittest.TestCase):
             'security_group_rules': []
         }
         self.db._get_port_security_group_bindings.return_value = [
-            {'port_id': 'DEADBEEF-1234-5678'}
+            {'port_id': port['id']}
         ]
         self.db.get_port.return_value = context._port
 
@@ -698,62 +862,205 @@ class TestPlugin(unittest.TestCase):
                          'inbound_default': 'deny'},
                'group': 'SG-1',
                'type': 'GROUPUPDATE',
-               'members': {'DEADBEEF-1234-5678': ['10.65.0.2']},
+               'members': {
+                   port['id']: [ip['ip_address'] for ip in port['fixed_ips']]
+               },
                'issued': current_time * 1000}
+        self.check_acl_pub('groups', pub)
 
+        # Exercise the notifier's general attribute proxying.
+        self.assertIsInstance(self.db.notifier,
+                              mech_calico.CalicoNotifierProxy)
+        self.assertIsInstance(self.db.notifier.thingummy,
+                              mock.Mock)
+
+    # Check an expected publication by the plugin to ACL Manager.
+    def check_acl_pub(self, subscription, message):
         # Unpack the last self.acl_pub_socket.send_multipart call, to check
         # that its args were as expected.  It doesn't work to check the
         # arguments directly using assert_called_once_with(...), because
         # variation is possible when a dict such as 'pub' is represented as a
         # string.
         kall = self.acl_pub_socket.send_multipart.call_args
-        assert kall is not None
+        self.assertIsNot(kall, None)
         args, kwargs = kall
-        assert len(args) == 1
-        assert len(args[0]) == 2
-        assert args[0][0].decode('utf-8') == 'groups'
-        assert json.loads(args[0][1].decode('utf-8')) == pub
+        self.assertEqual(len(args), 1)
+        self.assertEqual(len(args[0]), 2)
+        self.assertEqual(args[0][0].decode('utf-8'), subscription)
+        self.assertEqual(json.loads(args[0][1].decode('utf-8')), message)
         self.acl_pub_socket.send_multipart.reset_mock()
 
-    def endpoint_update(self):
-        # Endpoint update processing.
-        #
-        # - sim-DB: Prep response to next get_subnet call.
-        #
-        # - sim-ML2: Call update_port_postcommit for an endpoint port with
-        #   host_id matching sim-Felix.
-        #
-        # - sim-Felix: Check get ENDPOINTUPDATED.  Send successful response.
-        pass
+    # Update an endpoint.
+    def endpoint_update(self, **kwargs):
 
+        # Get test variation flags.
+        flags = kwargs.get('flags', set())
+
+        # Prep response to get_subnet call.
+        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
+
+        # Simulate ML2 notifying a port update, with contexts such that the IP
+        # address is changing.
+        context = mock.Mock()
+        context.original = port1.copy()
+        context._port = context.original.copy()
+        context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                             'ip_address': '10.65.0.22'}]})
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Expect update_port_postcommit to throw a FelixUnavailable
+            # exception.
+            real_eventlet_spawn(
+                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                                          self.driver.update_port_postcommit,
+                                          (context)))
+        else:
+            # No exception expected.
+            real_eventlet_spawn(
+                lambda: self.driver.update_port_postcommit(context))
+
+        # Yield to allow that new thread to run.
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Check ENDPOINTUPDATED request is sent to Felix.  Simulate Felix
+        # responding successfully.
+        self.felix_endpoint_socket.send_json.assert_called_once_with(
+            {'mac': port1['mac_address'],
+             'addrs': [{'properties': {'gr': False},
+                        'addr': '10.65.0.22',
+                        'gateway': '10.65.0.1'}],
+             'endpoint_id': port1['id'],
+             'issued': current_time * 1000,
+             'type': 'ENDPOINTUPDATED',
+             'state': 'enabled'},
+            mech_calico.zmq.NOBLOCK)
+        self.felix_endpoint_socket.send_json.reset_mock()
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
+            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+                                         / 1000) + 1)
+
+            # The plugin now cleans up its Felix socket.
+            return
+
+        self.felix_endpoint_socket.rcv_queue.put_nowait(
+            {'type': 'ENDPOINTUPDATED',
+             'rc': 'SUCCESS',
+             'message': ''})
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+    # Test a rule being updated in a security group.
     def sg_rule_update(self):
-        # SG rules update processing.
-        #
-        # - sim-DB: Prep appropriate responses for next get_security_group,
-        #   _get_port_security_group_bindings and get_port calls.
-        #
-        # - sim-ML2: Call security_groups_rule_updated with default SG ID.
-        #
-        # - sim-ACLM: Check get GROUPUPDATE publication indicating updated
-        #   rules.
-        pass
 
-    def endpoint_deletion(self):
-        # Endpoint deletion processing.
-        #
-        # - sim-ML2: Call delete_port_postcommit for an endpoint port with
-        #   host_id matching sim-Felix.
-        #
-        # - sim-Felix: Check get ENDPOINTDESTROYED.  Send successful response.
-        #
-        # - sim-DB: Prep appropriate responses for next get_security_group,
-        #   _get_port_security_group_bindings and get_port calls.
-        #
-        # - sim-ML2: Call security_groups_member_updated with default SG ID.
-        #
-        # - sim-ACLM: Check get GROUPUPDATE publication indicating port removed
-        #   from default SG ID.
-        pass
+        # Prep appropriate responses for next get_security_group and
+        # _get_port_security_group_bindings calls.
+        self.db.get_security_group.return_value = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}
+            ]
+        }
+        self.db._get_port_security_group_bindings.return_value = []
+
+        # Call security_groups_member_updated with default SG ID.
+        self.db.notifier.security_groups_rule_updated(mock.Mock(), ['SG-1'])
+
+        # Check get GROUPUPDATE publication indicating port removed from
+        # default SG ID.
+        pub = {'rules': {'inbound': [{'cidr': None,
+                                      'group': 'SGID-default',
+                                      'port': [5060, 5061],
+                                      'protocol': -1}],
+                         'outbound': [],
+                         'outbound_default': 'deny',
+                         'inbound_default': 'deny'},
+               'group': 'SG-1',
+               'type': 'GROUPUPDATE',
+               'members': {},
+               'issued': current_time * 1000}
+        self.check_acl_pub('groups', pub)
+
+    # Delete an endpoint.
+    def endpoint_deletion(self, **kwargs):
+
+        # Get test variation flags.
+        flags = kwargs.get('flags', set())
+
+        # Simulate ML2 notifying a port deletion.
+        context = mock.Mock()
+        context._port = port1.copy()
+        context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                             'ip_address': '10.65.0.22'}]})
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Expect update_port_postcommit to throw a FelixUnavailable
+            # exception.
+            real_eventlet_spawn(
+                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                                          self.driver.delete_port_postcommit,
+                                          (context)))
+        else:
+            # No exception expected.
+            real_eventlet_spawn(
+                lambda: self.driver.delete_port_postcommit(context))
+
+        # Yield to allow that new thread to run.
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Check ENDPOINTDESTROYED request is sent to Felix.  Simulate Felix
+        # responding successfully.
+        self.felix_endpoint_socket.send_json.assert_called_once_with(
+            {'endpoint_id': port1['id'],
+             'issued': current_time * 1000,
+             'type': 'ENDPOINTDESTROYED'},
+            mech_calico.zmq.NOBLOCK)
+        self.felix_endpoint_socket.send_json.reset_mock()
+
+        if NO_ENDPOINT_RESPONSE in flags:
+            # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
+            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+                                         / 1000) + 1)
+
+            # The plugin now cleans up its Felix socket.
+            return
+
+        self.felix_endpoint_socket.rcv_queue.put_nowait(
+            {'type': 'ENDPOINTDESTROYED',
+             'rc': 'SUCCESS',
+             'message': ''})
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+        # Prep appropriate responses for next get_security_group and
+        # _get_port_security_group_bindings calls.
+        self.db.get_security_group.return_value = {
+            'id': 'SG-1',
+            'security_group_rules': []
+        }
+        self.db._get_port_security_group_bindings.return_value = []
+
+        # Call security_groups_member_updated with default SG ID.
+        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+
+        # Check get GROUPUPDATE publication indicating port removed from
+        # default SG ID.
+        pub = {'rules': {'inbound': [],
+                         'outbound': [],
+                         'outbound_default': 'deny',
+                         'inbound_default': 'deny'},
+               'group': 'SG-1',
+               'type': 'GROUPUPDATE',
+               'members': {},
+               'issued': current_time * 1000}
+        self.check_acl_pub('groups', pub)
 
     def test_timing_new_endpoint(self):
 
@@ -859,26 +1166,35 @@ class TestPlugin(unittest.TestCase):
         # - 'EWOULDBLOCK' error when receiving HEARTBEAT response.
         pass
 
+    # Test that plugin processing is continuous and correct across connectivity
+    # blips.
     def test_connectivity_blips(self):
 
-        # Tell the driver to initialize.
-        self.driver.initialize()
+        # Start of day processing: initialization and socket binding.
+        self.start_of_day()
 
-        # Test the following scenarios, to check that plugin processing is
-        # continuous and correct across connectivity blips.
-        #
-        # - Connect a Felix, and process a new endpoint for that Felix.
-        #   Simulate disconnection and reconnection, in the form of a
-        #   RESYNCSTATE on new connection but with same hostname.  Check that
-        #   the existing endpoint is sent on the new connection.  Check that
-        #   heartbeats occur as normal on the new connection.
-        #
-        # - Add another new endpoint for same hostname, and check it is
-        #   processed normally and notified on the new connection.
-        #
-        # - Simulate disconnect and reconnect again, and check that both
-        #   existing endpoints are notified on the new active connection (#3),
-        #   after the new RESYNCSTATE.
+        # Connect a Felix, and process a new endpoint for that Felix.
+        self.felix_connect()
+        self.new_endpoint(port1)
+        self.osdb_ports = [port1]
+
+        # Simulate disconnection and reconnection, in the form of a RESYNCSTATE
+        # on new connection but with same hostname.  Check that the existing
+        # endpoint is sent on the new connection.  Check that heartbeats occur
+        # as normal on the new connection.
+        self.simulated_time_advance(1)
+        self.felix_connect(flags=set([KEEP_EXISTING_REQ_SOCK]))
+
+        # Add another new endpoint for same hostname, and check it is processed
+        # normally and notified on the new connection.
+        self.new_endpoint(port2)
+        self.osdb_ports = [port1, port2]
+
+        # Simulate disconnect and reconnect again, and check that both existing
+        # endpoints are notified on the new active connection (#3), after the
+        # new RESYNCSTATE.
+        self.simulated_time_advance(1)
+        self.felix_connect(flags=set([KEEP_EXISTING_REQ_SOCK]))
 
     def test_no_felix_new_endpoint(self):
 
@@ -924,3 +1240,10 @@ class TestPlugin(unittest.TestCase):
         # coverage and add further tests for any mech_calico.py lines that have
         # not yet been covered.  (Or else persuade ourselves that we don't
         # actually need those lines, and delete them.)
+
+        # Simulate ML2 asking the driver if it can handle a port that it can't
+        # handle.
+        self.assertFalse(self.driver.check_segment_for_agent(
+            {mech_calico.api.NETWORK_TYPE: 'vlan'},
+            mech_calico.constants.AGENT_TYPE_DHCP
+        ))
