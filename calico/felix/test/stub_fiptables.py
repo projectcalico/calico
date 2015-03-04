@@ -40,6 +40,7 @@ class UnexpectedStateException(Exception):
     def __init__(self, actual, expected):
         super(UnexpectedStateException, self).__init__(
             "iptables state does not match")
+        self.message = "iptables state does not match"
         self.diff = "\n".join(difflib.unified_diff(
             expected.split("\n"),
             actual.split("\n")))

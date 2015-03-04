@@ -42,6 +42,7 @@ IPV6 = "IPv6"
 class FailedSystemCall(Exception):
     def __init__(self, message, args, retcode, stdout, stderr):
         super(FailedSystemCall, self).__init__(message)
+        self.message = message
         self.args = args
         self.retcode = retcode
         self.stdout = stdout
@@ -66,7 +67,7 @@ def call_silent(args):
         return 0
     except FailedSystemCall as e:
         return e.retcode
-        
+
 def check_call(args):
     """
     Substitute for the subprocess.check_call funtion. It has the following useful
