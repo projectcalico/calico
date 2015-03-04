@@ -31,3 +31,15 @@ class InvalidRequest(Exception):
 
     def __str__(self):
         return "%s (request : %s)" % (self.message, self.fields)
+
+
+class InconsistentIPVersion(Exception):
+    """
+    Tried to create an Address with inconsistent IP versions between
+    properties, e.g. IP and gateway.
+    """
+    pass
+
+
+class InvalidAddress(Exception):
+    pass

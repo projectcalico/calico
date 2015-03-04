@@ -24,14 +24,13 @@ from calico import common
 from calico.felix import devices
 from calico.felix import frules
 from calico.felix import futils
-from calico.felix.exceptions import InvalidRequest
+from calico.felix.exceptions import (InvalidRequest,
+                                     InconsistentIPVersion,
+                                     InvalidAddress)
 from netaddr import IPAddress
 import logging
 
 log = logging.getLogger(__name__)
-
-class InvalidAddress(Exception):
-    pass
 
 class Address(object):
     """
@@ -59,7 +58,7 @@ class Address(object):
         # for endpoints to learn the gateway's MAC address, such as Router
         # Advertisements from a DHCP6 service (typical OpenStack mechanism).
         # However, we would always expect the gateway to be provided on the
-        # API. lIf no gateway is provided, log a warning.
+        # API. If no gateway is provided, log a warning.
         try:
             self.gateway = IPAddress(fields['gateway'])
         except KeyError:
@@ -73,14 +72,6 @@ class Address(object):
                 raise InconsistentIPVersion(
                     "IP %s is not the same IP version as gateway %s" %
                     (self.ip, self.gateway))
-
-
-class InconsistentIPVersion(Exception):
-    """
-    Tried to create an Address with inconsistent IP versions between
-    properties, e.g. IP and gateway.
-    """
-    pass
 
 
 class Endpoint(object):
@@ -216,7 +207,7 @@ class Endpoint(object):
                                  if addr.version is 4])
             ipv6_intended = set([str(addr.ip)
                                  for addr in self.addresses.values()
-                                 if addr.version is futils.IPV6])
+                                 if addr.version is 6])
         else:
             # Disabled endpoint; we should remove all the routes.
             ipv4_intended = set()
@@ -315,17 +306,17 @@ class Endpoint(object):
         try:
             mac = fields['mac']
         except KeyError:
-            raise InvalidRequest("Missing \"mac\" field", fields)
+            raise InvalidRequest('Missing "mac" field', fields)
 
         try:
             state = fields['state']
         except KeyError:
-            raise InvalidRequest("Missing \"state\" field", fields)
+            raise InvalidRequest('Missing "state" field', fields)
 
         try:
             addrs = fields['addrs']
         except KeyError:
-            raise InvalidRequest("Missing \"addrs\" field", fields)
+            raise InvalidRequest('Missing "addrs" field', fields)
 
         addresses = {}
 
@@ -358,7 +349,7 @@ class Endpoint(object):
         if state not in Endpoint.STATES:
             log.error("Invalid state %s for endpoint %s : %s",
                       state, self.uuid, fields)
-            raise InvalidRequest("Invalid state \"%s\"" % state, fields)
+            raise InvalidRequest('Invalid state "%s"' % state, fields)
 
         self.addresses = addresses
         self.mac = mac.encode('ascii')
