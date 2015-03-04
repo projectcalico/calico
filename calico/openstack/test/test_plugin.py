@@ -60,9 +60,28 @@ REAL_EVENTLET_SLEEP_TIME = 0.01
 # Test variation flags.
 NO_HEARTBEAT_RESPONSE = 1
 NO_ENDPOINT_RESPONSE = 2
+KEEP_EXISTING_REQ_SOCK = 3
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
+
+port1 = {'binding:vif_type': 'tap',
+         'binding:host_id': 'felix-host-1',
+         'id': 'DEADBEEF-1234-5678',
+         'device_owner': 'compute:nova',
+         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                        'ip_address': '10.65.0.2'}],
+         'mac_address': '00:11:22:33:44:55',
+         'admin_state_up': True}
+
+port2 = {'binding:vif_type': 'tap',
+         'binding:host_id': 'felix-host-1',
+         'id': 'FACEBEEF-1234-5678',
+         'device_owner': 'compute:nova',
+         'fixed_ips': [{'subnet_id': '10.65.0/24',
+                        'ip_address': '10.65.0.3'}],
+         'mac_address': '00:11:22:33:44:66',
+         'admin_state_up': True}
 
 
 class TestPlugin(unittest.TestCase):
@@ -125,6 +144,10 @@ class TestPlugin(unittest.TestCase):
 
         # Restore the real eventlet.sleep.
         mech_calico.eventlet.sleep = real_eventlet_sleep
+
+    # Ports to return when the driver asks the OpenStack database for all
+    # current ports.
+    osdb_ports = []
 
     # Setup for explicit test code control of all operations on 0MQ sockets.
     def setUp_sockets(self):
@@ -424,7 +447,7 @@ class TestPlugin(unittest.TestCase):
         self.call_noop_entry_points()
 
         # Process a new endpoint.
-        self.new_endpoint()
+        self.new_endpoint(port1)
 
         # Update an endpoint.
         self.endpoint_update()
@@ -462,7 +485,7 @@ class TestPlugin(unittest.TestCase):
 
         # Process a new endpoint, but don't send in the ENDPOINTCREATED
         # response.
-        self.new_endpoint(flags=set([NO_ENDPOINT_RESPONSE]))
+        self.new_endpoint(port1, flags=set([NO_ENDPOINT_RESPONSE]))
         self.sockets.remove(self.felix_endpoint_socket)
 
         # Let time pass to allow the felix_heartbeat_thread for the old
@@ -474,7 +497,7 @@ class TestPlugin(unittest.TestCase):
         self.felix_connect()
 
         # Now process the new endpoint successfully.
-        self.new_endpoint()
+        self.new_endpoint(port1)
 
     # Test when plugin sends an ENDPOINT* request and Felix does not respond
     # within ENDPOINT_RESPONSE_TIMEOUT, with a 40s delay before Felix connects
@@ -505,10 +528,11 @@ class TestPlugin(unittest.TestCase):
         print "ACL PUB socket is %s" % self.acl_pub_socket
 
     def felix_connect(self, **kwargs):
+
         # Hook the Neutron database.
         self.db = mech_calico.manager.NeutronManager.get_plugin()
         self.db_context = mech_calico.ctx.get_admin_context()
-        self.db.get_ports.return_value = []
+        self.db.get_ports.return_value = self.osdb_ports
 
         # Get test variation flags.
         flags = kwargs.get('flags', set())
@@ -525,25 +549,54 @@ class TestPlugin(unittest.TestCase):
         real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         # Check DB got create_or_update_agent call.
-        self.db.create_or_update_agent.assert_called_once_with(
-            self.db_context,
-            {'agent_type': mech_calico.AGENT_TYPE_FELIX,
-             'binary': '',
-             'host': 'felix-host-1',
-             'topic': mech_calico.constants.L2_AGENT_TOPIC,
-             'start_flag': True})
-        self.db.create_or_update_agent.reset_mock()
+        if KEEP_EXISTING_REQ_SOCK not in flags:
+            self.db.create_or_update_agent.assert_called_once_with(
+                self.db_context,
+                {'agent_type': mech_calico.AGENT_TYPE_FELIX,
+                 'binary': '',
+                 'host': 'felix-host-1',
+                 'topic': mech_calico.constants.L2_AGENT_TOPIC,
+                 'start_flag': True})
+            self.db.create_or_update_agent.reset_mock()
 
         # Check RESYNCSTATE response was sent.
         self.felix_router_socket.send_multipart.assert_called_once_with(
             ['felix-1',
              '',
              json.dumps({'type': 'RESYNCSTATE',
-                         'endpoint_count': 0,
+                         'endpoint_count': len(self.osdb_ports),
                          'interface_prefix': 'tap',
                          'rc': 'SUCCESS',
                          'message': 'Здра́вствуйте!'}).encode('utf-8')])
         self.felix_router_socket.send_multipart.reset_mock()
+
+        for port in self.osdb_ports:
+            # Check that the plugin sent an ENDPOINTCREATED request for this
+            # port.
+            self.felix_endpoint_socket.send_json.assert_called_once_with(
+                {'type': 'ENDPOINTCREATED',
+                 'mac': port['mac_address'],
+                 'resync_id': 'resync#1',
+                 'addrs':
+                     [{'properties': {'gr': False},
+                       'addr': ip['ip_address'],
+                       'gateway': '10.65.0.1'} for ip in port['fixed_ips']],
+                 'endpoint_id': port['id'],
+                 'issued': current_time * 1000,
+                 'interface_name': 'tap' + port['id'][:11],
+                 'state': 'enabled'},
+                mech_calico.zmq.NOBLOCK
+            )
+            self.felix_endpoint_socket.send_json.reset_mock()
+
+            # Send back a successful response.
+            self.felix_endpoint_socket.rcv_queue.put_nowait(
+                {'type': 'ENDPOINTCREATED',
+                 'rc': 'SUCCESS'})
+
+            # Yield twice to allow that response to be processed.
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
         # Send HEARTBEAT from Felix and check for response.
         self.felix_router_socket.rcv_queue.put_nowait(
@@ -715,7 +768,7 @@ class TestPlugin(unittest.TestCase):
         self.driver.update_subnet_postcommit(None)
 
     # New endpoint processing.
-    def new_endpoint(self, **kwargs):
+    def new_endpoint(self, port, **kwargs):
 
         # Get test variation flags.
         flags = kwargs.get('flags', set())
@@ -731,13 +784,7 @@ class TestPlugin(unittest.TestCase):
 
         # Simulate ML2 notifying creation of the new port.
         context = mock.Mock()
-        context._port = {'binding:host_id': 'felix-host-1',
-                         'id': 'DEADBEEF-1234-5678',
-                         'device_owner': 'compute:nova',
-                         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                                        'ip_address': '10.65.0.2'}],
-                         'mac_address': '00:11:22:33:44:55',
-                         'admin_state_up': True}
+        context._port = port
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect create_port_postcommit to throw a FelixUnavailable
@@ -757,13 +804,14 @@ class TestPlugin(unittest.TestCase):
         # Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'mac': '00:11:22:33:44:55',
-             'addrs': [{'properties': {'gr': False},
-                        'addr': '10.65.0.2',
-                        'gateway': '10.65.0.1'}],
-             'endpoint_id': 'DEADBEEF-1234-5678',
-             'interface_name': 'tapDEADBEEF-12',
-             'issued': mock.ANY,
+            {'mac': port['mac_address'],
+             'addrs':
+                 [{'properties': {'gr': False},
+                   'addr': ip['ip_address'],
+                   'gateway': '10.65.0.1'} for ip in port['fixed_ips']],
+             'endpoint_id': port['id'],
+             'issued': current_time * 1000,
+             'interface_name': 'tap' + port['id'][:11],
              'resync_id': None,
              'type': 'ENDPOINTCREATED',
              'state': 'enabled'},
@@ -799,7 +847,7 @@ class TestPlugin(unittest.TestCase):
             'security_group_rules': []
         }
         self.db._get_port_security_group_bindings.return_value = [
-            {'port_id': 'DEADBEEF-1234-5678'}
+            {'port_id': port['id']}
         ]
         self.db.get_port.return_value = context._port
 
@@ -814,7 +862,9 @@ class TestPlugin(unittest.TestCase):
                          'inbound_default': 'deny'},
                'group': 'SG-1',
                'type': 'GROUPUPDATE',
-               'members': {'DEADBEEF-1234-5678': ['10.65.0.2']},
+               'members': {
+                   port['id']: [ip['ip_address'] for ip in port['fixed_ips']]
+               },
                'issued': current_time * 1000}
         self.check_acl_pub('groups', pub)
 
@@ -852,22 +902,10 @@ class TestPlugin(unittest.TestCase):
         # Simulate ML2 notifying a port update, with contexts such that the IP
         # address is changing.
         context = mock.Mock()
-        context.original = {'binding:host_id': 'felix-host-1',
-                            'binding:vif_type': 'tap',
-                            'id': 'DEADBEEF-1234-5678',
-                            'device_owner': 'compute:nova',
-                            'fixed_ips': [{'subnet_id': '10.65.0/24',
-                                           'ip_address': '10.65.0.2'}],
-                            'mac_address': '00:11:22:33:44:55',
-                            'admin_state_up': True}
-        context._port = {'binding:host_id': 'felix-host-1',
-                         'binding:vif_type': 'tap',
-                         'id': 'DEADBEEF-1234-5678',
-                         'device_owner': 'compute:nova',
-                         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                                        'ip_address': '10.65.0.22'}],
-                         'mac_address': '00:11:22:33:44:55',
-                         'admin_state_up': True}
+        context.original = port1.copy()
+        context._port = context.original.copy()
+        context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                             'ip_address': '10.65.0.22'}]})
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect update_port_postcommit to throw a FelixUnavailable
@@ -887,11 +925,11 @@ class TestPlugin(unittest.TestCase):
         # Check ENDPOINTUPDATED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'mac': '00:11:22:33:44:55',
+            {'mac': port1['mac_address'],
              'addrs': [{'properties': {'gr': False},
                         'addr': '10.65.0.22',
                         'gateway': '10.65.0.1'}],
-             'endpoint_id': 'DEADBEEF-1234-5678',
+             'endpoint_id': port1['id'],
              'issued': current_time * 1000,
              'type': 'ENDPOINTUPDATED',
              'state': 'enabled'},
@@ -958,14 +996,9 @@ class TestPlugin(unittest.TestCase):
 
         # Simulate ML2 notifying a port deletion.
         context = mock.Mock()
-        context._port = {'binding:host_id': 'felix-host-1',
-                         'binding:vif_type': 'tap',
-                         'id': 'DEADBEEF-1234-5678',
-                         'device_owner': 'compute:nova',
-                         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                                        'ip_address': '10.65.0.22'}],
-                         'mac_address': '00:11:22:33:44:55',
-                         'admin_state_up': True}
+        context._port = port1.copy()
+        context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
+                                             'ip_address': '10.65.0.22'}]})
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect update_port_postcommit to throw a FelixUnavailable
@@ -985,7 +1018,7 @@ class TestPlugin(unittest.TestCase):
         # Check ENDPOINTDESTROYED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'endpoint_id': 'DEADBEEF-1234-5678',
+            {'endpoint_id': port1['id'],
              'issued': current_time * 1000,
              'type': 'ENDPOINTDESTROYED'},
             mech_calico.zmq.NOBLOCK)
@@ -1133,26 +1166,35 @@ class TestPlugin(unittest.TestCase):
         # - 'EWOULDBLOCK' error when receiving HEARTBEAT response.
         pass
 
+    # Test that plugin processing is continuous and correct across connectivity
+    # blips.
     def test_connectivity_blips(self):
 
-        # Tell the driver to initialize.
-        self.driver.initialize()
+        # Start of day processing: initialization and socket binding.
+        self.start_of_day()
 
-        # Test the following scenarios, to check that plugin processing is
-        # continuous and correct across connectivity blips.
-        #
-        # - Connect a Felix, and process a new endpoint for that Felix.
-        #   Simulate disconnection and reconnection, in the form of a
-        #   RESYNCSTATE on new connection but with same hostname.  Check that
-        #   the existing endpoint is sent on the new connection.  Check that
-        #   heartbeats occur as normal on the new connection.
-        #
-        # - Add another new endpoint for same hostname, and check it is
-        #   processed normally and notified on the new connection.
-        #
-        # - Simulate disconnect and reconnect again, and check that both
-        #   existing endpoints are notified on the new active connection (#3),
-        #   after the new RESYNCSTATE.
+        # Connect a Felix, and process a new endpoint for that Felix.
+        self.felix_connect()
+        self.new_endpoint(port1)
+        self.osdb_ports = [port1]
+
+        # Simulate disconnection and reconnection, in the form of a RESYNCSTATE
+        # on new connection but with same hostname.  Check that the existing
+        # endpoint is sent on the new connection.  Check that heartbeats occur
+        # as normal on the new connection.
+        self.simulated_time_advance(1)
+        self.felix_connect(flags=set([KEEP_EXISTING_REQ_SOCK]))
+
+        # Add another new endpoint for same hostname, and check it is processed
+        # normally and notified on the new connection.
+        self.new_endpoint(port2)
+        self.osdb_ports = [port1, port2]
+
+        # Simulate disconnect and reconnect again, and check that both existing
+        # endpoints are notified on the new active connection (#3), after the
+        # new RESYNCSTATE.
+        self.simulated_time_advance(1)
+        self.felix_connect(flags=set([KEEP_EXISTING_REQ_SOCK]))
 
     def test_no_felix_new_endpoint(self):
 
