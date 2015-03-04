@@ -20,13 +20,18 @@ Test the device handling code.
 """
 import logging
 import mock
+import sys
 import os
-import unittest
 import uuid
 
 import calico.felix.devices as devices
 import calico.felix.futils as futils
 import calico.felix.test.stub_utils as stub_utils
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 # Logger
 log = logging.getLogger(__name__)

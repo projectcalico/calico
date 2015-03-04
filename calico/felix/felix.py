@@ -847,6 +847,7 @@ class InvalidRequest(Exception):
     """
     def __init__(self, message, fields):
         super(InvalidRequest, self).__init__(message)
+        self.message = message
         self.fields = fields
 
     def __str__(self):

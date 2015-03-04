@@ -6,3 +6,4 @@ tmp/
 .coverage
 /htmlcov
 /.dir-locals.el
+/.tox

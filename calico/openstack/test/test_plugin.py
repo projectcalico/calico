@@ -20,13 +20,17 @@ Unit test for the Calico/OpenStack Plugin.
 """
 import mock
 import sys
-import unittest
 import eventlet
 import eventlet.queue
 import traceback
 import json
 import inspect
 from eventlet.support import greenlets as greenlet
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 if 'zmq' in sys.modules:
     del sys.modules['zmq']

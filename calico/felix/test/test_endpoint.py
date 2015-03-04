@@ -20,7 +20,6 @@ Test the endpoint handling code.
 """
 import mock
 import sys
-import unittest
 import uuid
 from contextlib import nested
 
@@ -28,6 +27,11 @@ import calico.felix.devices as devices
 import calico.felix.endpoint as endpoint
 import calico.felix.frules as frules
 import calico.felix.futils as futils
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 from collections import namedtuple
 Config = namedtuple('Config', ['IFACE_PREFIX', 'SUFFIX_LEN'])

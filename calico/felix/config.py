@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 class ConfigException(Exception):
     def __init__(self, message, path):
         super(ConfigException, self).__init__(message)
+        self.message = message
         self.file_path = path
 
     def __str__(self):

@@ -2,19 +2,10 @@
 
 # Shell script for running the Calico unit test suite.
 #
-# Invoke as './run-unit-test.sh'. Environment variable NOSETEST_ARGS
-# may be used to pass additional arguments to nosetests.  For example:
-#
-# NOSETEST_ARGS="--nocapture calico.openstack.test.test_plugin:TestPlugin" ./run-unit-test.sh
-#
-# to run a specific test file, and show the output from it even if it
-# passes.
+# Invoke as './run-unit-test.sh'. Arguments to this script are passed directly
+# to tox: e.g., to force a rebuild of tox's virtual environments, invoke this
+# script as './run-unit-test.sh -r'.
 
-#rm -rf env
-virtualenv env
-. env/bin/activate
-pip install -e .
-pip install nose mock
-pip install --pre "coverage>=4.0a5"
-nosetests --with-coverage --cover-erase $NOSETEST_ARGS
+coverage erase
+tox "$@"
 coverage html
