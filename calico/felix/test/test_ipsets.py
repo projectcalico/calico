@@ -22,8 +22,12 @@ import logging
 import mock
 import os
 import sys
-import unittest
 import uuid
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 import calico.felix.ipsets as ipsets
 import calico.felix.futils as futils

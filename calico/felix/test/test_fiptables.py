@@ -22,7 +22,12 @@ some parts that are not.
 from copy import copy
 import logging
 import mock
-import unittest
+import sys
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 import calico.felix.fiptables as fiptables
 import calico.felix.futils as futils

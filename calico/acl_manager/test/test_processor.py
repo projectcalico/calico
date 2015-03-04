@@ -12,13 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
+import sys
 from copy import deepcopy
 
 from stub_network_store import StubNetworkStore
 from stub_acl_store import StubACLStore
 
 from calico.acl_manager.processor import RuleProcessor
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 
 class TestProcessor(unittest.TestCase):

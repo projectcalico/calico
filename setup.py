@@ -19,6 +19,9 @@ import inspect
 import os
 import os.path
 import setuptools
+import sys
+
+PY2_DEPENDENCIES = ['argparse']
 
 def collect_requirements():
     def filter_requirements(filters, file):
@@ -58,6 +61,11 @@ def collect_requirements():
                 line = line.split('#', 1)[0].strip()
                 if line:
                     reqs.add(line)
+
+    # If we're running on Python 2.6, add other necessary dependencies. These
+    # are added unconditionally.
+    if sys.version_info < (2, 7):
+        reqs.add(*PY2_DEPENDENCIES)
 
     return reqs
 

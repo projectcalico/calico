@@ -21,8 +21,13 @@ Top level tests for Felix configuration.
 import logging
 import socket
 import sys
-import unittest
 from calico.felix.config import Config, ConfigException
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
+
 
 # Logger
 log = logging.getLogger(__name__)

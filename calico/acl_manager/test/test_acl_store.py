@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
 import time
 import threading
+import sys
 from copy import deepcopy
 
 from stub_acl_publisher import StubACLPublisher
@@ -22,6 +22,11 @@ from stub_processor import StubRuleProcessor
 
 from calico.acl_manager.acl_store import ACLStore
 import calico.acl_manager.utils as utils
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 
 class TestACLStore(unittest.TestCase):
