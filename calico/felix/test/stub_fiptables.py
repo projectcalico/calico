@@ -21,8 +21,17 @@ Stub versions of functions for the fiptables module.
 from calico.felix import fiptables
 from calico.felix.futils import IPV4, IPV6
 from copy import deepcopy
+import copy
 import difflib
 import logging
+import weakref
+import sys
+
+# Python 2.6: On this version of Python we can't deepcopy a weakref by default
+# because of issue 2116: http://bugs.python.org/issue2116. This code enables
+# that function.
+if sys.version_info < (2, 7):
+    copy._deepcopy_dispatch[weakref.ref] = copy._deepcopy_atomic
 
 # Logger
 log = logging.getLogger(__name__)
