@@ -1,0 +1,1 @@
+include README.md LICENSE openstack_plugin_requirements.txt acl_manager_requirements.txt felix_requirements.txt
