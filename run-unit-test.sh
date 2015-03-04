@@ -5,6 +5,7 @@
 # Invoke as './run-unit-test.sh'. Arguments to this script are passed directly
 # to tox: e.g., to force a rebuild of tox's virtual environments, invoke this
 # script as './run-unit-test.sh -r'.
+set -e
 
 coverage erase
 tox "$@"
