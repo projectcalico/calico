@@ -262,7 +262,7 @@ class Rule(object):
         self.match = None
 
         # We bundle rule and match parameters together for easier coding.
-        self.parameters = {}
+        self.parameters = []
 
     def parse_fields(self, line, fields):
         """
@@ -298,7 +298,7 @@ class Rule(object):
             if flag in Rule.FLAG_TO_FIELD:
                 setattr(self, Rule.FLAG_TO_FIELD[flag], value)
             elif flag.startswith("--"):
-                self.parameters[flag[2:]] = value
+                self.parameters.append((flag[2:], value))
             else:
                 raise UnrecognisedIptablesField(
                         "Unable to parse iptables rule : %s" % line)
@@ -317,8 +317,7 @@ class Rule(object):
             elif value is not None:
                 fields.extend([Rule.FIELD_TO_FLAG[field], value])
 
-        for key in self.parameters:
-            value = self.parameters[key]
+        for key, value in self.parameters:
             if value[0] == "!":
                 fields.append("!")
                 value = value[1:]
@@ -331,38 +330,40 @@ class Rule(object):
         self.target = name
         # Note that this adds parameters, rather than replacing existing ones.
         for key in parameters:
-            self.parameters[key] = parameters[key]
+            self.parameters.append((key, parameters[key]))
 
     def create_tcp_match(self, dport):
         self.match = "tcp"
-        self.parameters["dport"] = dport
+        self.parameters.append(("dport", dport))
 
     def create_icmp6_match(self, icmp_type):
         self.match = "icmp6"
-        self.parameters["icmpv6-type"] = icmp_type
+        self.parameters.append(("icmpv6-type", icmp_type))
 
     def create_conntrack_match(self, state):
         # State is a comma separated string
         self.match = "conntrack"
-        self.parameters["ctstate"] = state
+        self.parameters.append(("ctstate", state))
 
     def create_mark_match(self, mark):
         self.match = "mark"
-        self.parameters["mark"] = mark
+        self.parameters.append(("mark", mark))
 
     def create_mac_match(self, mac_source):
         self.match = "mac"
         # Upper case to allow matching with what iptables returns.
-        self.parameters["mac-source"] = mac_source.upper()
+        self.parameters.append(("mac-source", mac_source.upper()))
 
     def create_set_match(self, set_name, direction):
         self.match = "set"
-        self.parameters["match-set"] = set_name + " " + direction
+        self.parameters.append(("match-set", set_name + " " + direction))
 
     def create_udp_match(self, sport, dport):
         self.match = "udp"
-        self.parameters["sport"] = sport
-        self.parameters["dport"] = dport
+        self.parameters.extend([
+            ("sport", sport),
+            ("dport", dport),
+        ])
 
     def __str__(self):
         return " ".join(self.generate_fields())
