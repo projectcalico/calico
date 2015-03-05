@@ -246,14 +246,14 @@ class TestEndpoint(unittest.TestCase):
         self.assertEqual(len(ep.addresses), 2)
 
         # Set comprehension to get the 2 IP addresses
-        ips = {address.ip for address in ep.addresses.values()}
-        self.assertSetEqual(ips, {IPAddress("10.0.65.2"),
-                                  IPAddress("2001::3:4")})
+        ips = set(address.ip for address in ep.addresses.values())
+        self.assertSetEqual(ips, set([IPAddress("10.0.65.2"),
+                                      IPAddress("2001::3:4")]))
 
         # Set comprehension to get the gateways
-        gws = {address.gateway for address in ep.addresses.values()}
-        self.assertSetEqual(gws, {IPAddress("10.0.65.1"),
-                                  IPAddress("2001::1")})
+        gws = set(address.gateway for address in ep.addresses.values())
+        self.assertSetEqual(gws, set([IPAddress("10.0.65.1"),
+                                      IPAddress("2001::1")]))
 
     def test_store_update_2_addrs_repeated(self):
         """
