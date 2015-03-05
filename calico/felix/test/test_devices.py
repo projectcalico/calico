@@ -27,6 +27,7 @@ import uuid
 import calico.felix.devices as devices
 import calico.felix.futils as futils
 import calico.felix.test.stub_utils as stub_utils
+from contextlib import nested
 from netaddr import IPAddress
 
 if sys.version_info < (2, 7):
@@ -162,8 +163,11 @@ class TestDevices(unittest.TestCase):
         if_name = "tap3e5a2b34222"
         proxy_targets = [IPAddress("2001::3:4"),
                          IPAddress("2001:3::4")]
-        with mock.patch('__builtin__.open', m_open, create=True), \
-             mock.patch('calico.felix.futils.check_call', return_value=rc) as m_check_call:
+
+        open_patch = mock.patch('__builtin__.open', m_open, create=True)
+        m_check_call = mock.patch('calico.felix.futils.check_call', return_value=rc)
+
+        with nested(open_patch, m_check_call) as (_, m_check_call):
             devices.configure_interface_ipv6(if_name, proxy_targets)
             calls = [mock.call('/proc/sys/net/ipv6/conf/%s/proxy_ndp' % if_name,
                                'wb'),
