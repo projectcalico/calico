@@ -43,7 +43,6 @@ sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
-sys.modules['time'] = m_time = mock.Mock()
 
 
 # Define a stub class, that we will use as the base class for
@@ -318,7 +317,8 @@ class TestPlugin(unittest.TestCase):
         current_time = 0
 
         # Make time.time() return current_time.
-        m_time.time.side_effect = lambda: current_time
+        self.old_time = sys.modules['time'].time
+        sys.modules['time'].time = lambda: current_time
 
         # Reset the dict of current sleepers.  In each dict entry, the key is
         # an eventlet.Queue object and the value is the time at which the sleep
@@ -410,6 +410,8 @@ class TestPlugin(unittest.TestCase):
 
         for thread in threads:
             thread.kill()
+
+        sys.modules['time'].time = self.old_time
 
     # Check that a socket is now bound to a specified address and port, and
     # return that socket.
