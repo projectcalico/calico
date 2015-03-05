@@ -60,6 +60,7 @@ class TestProcessor(unittest.TestCase):
         be ordered for dict comparison. It's an unfortunate hack, but c'est la
         vie.
         """
+        self.assertEqual(len(d1), len(d2))
         for k,v1 in d1.iteritems():
             self.assertIn(k, d2, msg)
             v2 = d2[k]
@@ -68,7 +69,6 @@ class TestProcessor(unittest.TestCase):
                 self.assertItemsEqual(v1, v2, msg)
             else:
                 self.assertEqual(v1, v2, msg)
-        return True
 
     def test_case1(self):
         """
