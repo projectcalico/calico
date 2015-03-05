@@ -54,7 +54,12 @@ def list_interface_ips(type, iface_id):
     else:
         return ifaces[iface_id].v6_ips.copy()
 
+
 def configure_interface(iface_id):
+    pass
+
+
+def configure_interface_ipv6(if_name, proxy_targets):
     pass
 
 def add_route(type, ip, iface_id, mac):
