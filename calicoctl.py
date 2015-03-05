@@ -19,6 +19,9 @@ Usage:
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
+  calicoctl ipv6 pool add <CIDR>
+  calicoctl ipv6 pool del <CIDR>
+  calicoctl ipv6 pool show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -539,51 +542,54 @@ echo "Done"
     # the container because it might not be running...
 
 
-def ipv4_pool_add(cidr_pool):
+def ip_pool_add(cidr_pool, version):
     """
-    Add the the given CIDR range to the IPv4 IP address allocation pool.
+    Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
     """
+    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
-        print "%s is not a valid IPv4 prefix." % cidr_pool
+        print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version == 6:
-        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+    if pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+              (cidr_pool, pool.version, version)
         return
     client = DatastoreClient()
-    client.add_ip_pool("v4", pool)
+    client.add_ip_pool("v%d" % version, pool)
 
 
-def ipv4_pool_remove(cidr_pool):
+def ip_pool_remove(cidr_pool, version):
     """
-    Add the the given CIDR range to the IPv4 IP address allocation pool.
+    Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
     """
-
+    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
-        print "%s is not a valid IPv4 prefix." % cidr_pool
+        print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version == 6:
-        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+    if pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+              (cidr_pool, pool.version, version)
         return
     client = DatastoreClient()
     try:
-        client.del_ip_pool("v4", pool)
+        client.del_ip_pool("v%d" % version, pool)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
 
 
-def ipv4_pool_show(version):
+def ip_pool_show(version):
     """
-    Print a list of IPv4 allocation pools.
+    Print a list of IP allocation pools.
     :return: None
     """
     client = DatastoreClient()
@@ -592,6 +598,7 @@ def ipv4_pool_show(version):
     for pool in pools:
         x.add_row([pool])
     print x
+
 
 def validate_arguments():
     group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
@@ -657,11 +664,19 @@ if __name__ == '__main__':
         elif arguments["ipv4"]:
             assert arguments["pool"]
             if arguments["add"]:
-                ipv4_pool_add(arguments["<CIDR>"])
+                ip_pool_add(arguments["<CIDR>"], version=4)
             elif arguments["del"]:
-                ipv4_pool_remove(arguments["<CIDR>"])
+                ip_pool_remove(arguments["<CIDR>"], version=4)
             elif arguments["show"]:
-                ipv4_pool_show("v4")
+                ip_pool_show("v4")
+        elif arguments["ipv6"]:
+            assert arguments["pool"]
+            if arguments["add"]:
+                ip_pool_add(arguments["<CIDR>"], version=6)
+            elif arguments["del"]:
+                ip_pool_remove(arguments["<CIDR>"], version=6)
+            elif arguments["show"]:
+                ip_pool_show("v6")
         if arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"], arguments["<IP>"])
