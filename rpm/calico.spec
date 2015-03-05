@@ -27,7 +27,12 @@ Virtualization (NFV).
 %package compute
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
+%if 0%{?el6}
+Requires:       calico-common, calico-felix, openstack-neutron, iptables, python-argparse
+%else
 Requires:       calico-common, calico-felix, openstack-neutron, iptables
+%endif
+
 
 %description compute
 This package provides the pieces needed on a compute node.
@@ -110,7 +115,7 @@ if [ $1 -eq 0 ] ; then
     /usr/bin/systemctl disable calico-felix >/dev/null 2>&1
     /usr/bin/systemctl stop calico-felix
 %else
-    /sbin/initctl stop calico-felix >/dev/null 2>&1
+    /sbin/initctl stop calico-felix >/dev/null 2>&1 || :
 %endif
 fi
 
