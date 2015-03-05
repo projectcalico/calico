@@ -48,7 +48,7 @@ class Chain(object):
         self.rules = []
 
     def flush(self):
-        log.debug("Flushing chain %s", self.name)
+        log.debug("Flushing chain %s in table %s", self.name, self.table.desc)
         self.table.ops.append([IPTABLES_CMD[self.type],
                                "--wait",
                                "--table",
@@ -184,6 +184,7 @@ class Table(object):
     def __init__(self, type, name):
         self.type = type
         self.name = name
+        self.desc = "%s (%s)" % (name, type)
         self.chains = {}
         self.ops = []
 
@@ -197,10 +198,9 @@ class Table(object):
         chain = self.chains.get(name)
 
         if chain is None:
-            log.debug("Creating chain %s in table %s (%s)",
+            log.debug("Creating chain %s in table %s",
                       name,
-                      self.name,
-                      self.type)
+                      self.desc)
 
             chain = Chain(self.type, name)
             self.chains[name] = chain
@@ -216,10 +216,9 @@ class Table(object):
         return chain
 
     def delete_chain(self, chain_name):
-        log.debug("Delete chain %s from table %s (%s)",
+        log.debug("Delete chain %s from table %s",
                   chain_name,
-                  self.name,
-                  self.type)
+                  self.desc)
         self.ops.append([IPTABLES_CMD[self.type],
                         "--wait",
                         "--table",
@@ -229,7 +228,7 @@ class Table(object):
         del self.chains[chain_name]
 
     def __str__(self):
-        output = "TABLE %s (%s)\n" % (self.name, self.type)
+        output = "TABLE %s\n" % self.desc
         for chain_name in sorted(self.chains.keys()):
             output += "  " + "\n  ".join(str(self.chains[chain_name]).split("\n")) + "\n"
         return output
@@ -455,7 +454,7 @@ class TableState(object):
             if len(words) > 1:
                 if words[0] in ("-P", "-N"):
                     # We found a chain; remember and go to next line.
-                    log.debug("Found chain in table %s : %s", name, line)
+                    log.debug("Found chain in table %s : %s", table.desc, line)
                     chain = Chain(type, words[1])
                     chain.table = table
                     table.chains[chain.name] = chain
@@ -466,7 +465,7 @@ class TableState(object):
                     raise UnrecognisedIptablesField(
                         "Unable to parse iptables line : %s" % line)
 
-                log.debug("Found rule in table %s : %s", name, line)
+                log.debug("Found rule in table %s : %s", table.desc, line)
                 words.pop(0)
                 chain_name = words.pop(0)
                 try:
@@ -475,7 +474,7 @@ class TableState(object):
                     # Rule for chain that does not exist
                     raise UnrecognisedIptablesField(
                         "Rule in table %s for chain which does not exist : %s" %
-                        (name, line))
+                        (table.desc, line))
                 rule = Rule(type)
                 rule.parse_fields(line, words)
                 chain.rules.append(rule)
