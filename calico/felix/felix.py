@@ -30,8 +30,9 @@ import uuid
 import zmq
 
 from calico.felix.config import Config
-from calico.felix.endpoint import Address, Endpoint, InvalidAddress
+from calico.felix.endpoint import Endpoint
 from calico.felix.fsocket import Socket, Message
+from calico.felix.exceptions import InvalidRequest
 from calico.felix import fiptables
 from calico.felix import frules
 from calico.felix import fsocket
@@ -636,42 +637,11 @@ class FelixAgent(object):
         """
         Updates an endpoint's data.
         """
-        try:
-            mac = fields['mac']
-        except KeyError:
-            raise InvalidRequest("Missing \"mac\" field", fields)
+        endpoint.store_update(fields)
 
-        try:
-            state = fields['state']
-        except KeyError:
-            raise InvalidRequest("Missing \"state\" field", fields)
-
-        try:
-            addrs = fields['addrs']
-        except KeyError:
-            raise InvalidRequest("Missing \"addrs\" field", fields)
-
-        addresses = set()
-        try:
-            for addr in addrs:
-                addresses.add(Address(addr))
-        except InvalidAddress:
-            log.error("Invalid address for endpoint %s : %s",
-                      endpoint.uuid, fields)
-            raise InvalidRequest("Invalid address for endpoint",
-                                 fields)
-
-        if state not in Endpoint.STATES:
-            log.error("Invalid state %s for endpoint %s : %s",
-                      state, endpoint.uuid, fields)
-            raise InvalidRequest("Invalid state \"%s\"" % state, fields)
-
-        endpoint.addresses = addresses
-
-        endpoint.mac = mac.encode('ascii')
-        endpoint.state = state.encode('ascii')
-
-        # Program the endpoint - i.e. set things up for it.
+        # store_update throws InvalidRequest exception if unsuccessful, so if
+        # we get here it is safe to program the endpoint - i.e. set things up
+        # for it.
         log.debug("Program %s", endpoint.suffix)
         if endpoint.program_endpoint(self.iptables_state):
             # Failed to program this endpoint - put on the retry list.
@@ -839,16 +809,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-class InvalidRequest(Exception):
-    """
-    Exception that allows us to report an invalid request.
-    """
-    def __init__(self, message, fields):
-        super(InvalidRequest, self).__init__(message)
-        self.message = message
-        self.fields = fields
-
-    def __str__(self):
-        return "%s (request : %s)" % (self.message, self.fields)

@@ -22,11 +22,13 @@ import mock
 import sys
 import uuid
 from contextlib import nested
+from netaddr import IPAddress
 
 import calico.felix.devices as devices
 import calico.felix.endpoint as endpoint
 import calico.felix.frules as frules
 import calico.felix.futils as futils
+from calico.felix.exceptions import InvalidRequest
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
@@ -156,3 +158,193 @@ class TestEndpoint(unittest.TestCase):
         self.assertEqual(mock_list.call_count, 1)
         self.assertEqual(mock_del_route.call_count, 1)
         self.assertEqual(mock_del_rules.call_count, 0)
+
+    def test_store_update_valid(self):
+        """
+        Test that store update works for valid data.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        fields = {u'mac': u'11:22:33:44:55:66',
+                  u'state': u'enabled',
+                  u'addrs': [{u"addr": u"10.0.65.2",
+                              u"gateway": u"10.0.65.1",
+                              u"properties": {u"gr": False}
+                             }]
+                  }
+        ep.store_update(fields)
+        self.assertEqual(ep.state, "enabled")
+        self.assertEqual(ep.mac, "11:22:33:44:55:66")
+        self.assertEqual(len(ep.addresses), 1)
+        (ip, addr) = ep.addresses.popitem()
+        self.assertEqual(ip, addr.ip)
+        self.assertEqual(addr.ip, IPAddress("10.0.65.2"))
+        self.assertEqual(addr.gateway, IPAddress("10.0.65.1"))
+
+        # Now, modify one of the addresses and update again.
+        fields[u'addrs'][0][u'addr'] = u'10.34.66.1'
+        ep.store_update(fields)
+        self.assertEqual(ep.state, "enabled")
+        self.assertEqual(ep.mac, "11:22:33:44:55:66")
+        self.assertEqual(len(ep.addresses), 1)
+        (ip, addr) = ep.addresses.popitem()
+        self.assertEqual(ip, addr.ip)
+        self.assertEqual(addr.ip, IPAddress("10.34.66.1"))
+        self.assertEqual(addr.gateway, IPAddress("10.0.65.1"))
+
+    def test_store_update_no_addrs(self):
+        """
+        Test that store update works even if there are no addresses.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        fields = {u'mac': u'11:22:33:44:55:66',
+                  u'state': u'enabled',
+                  u'addrs': []
+                  }
+        ep.store_update(fields)
+        self.assertEqual(ep.state, "enabled")
+        self.assertEqual(ep.mac, "11:22:33:44:55:66")
+        self.assertEqual(len(ep.addresses), 0)
+
+    def test_store_update_2_addrs(self):
+        """
+        Test that store update works for multiple IP addresses.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        # Mix ascii and unicode to make sure we cope.
+        fields = {u'mac': '11:22:33:44:55:66',
+                  'state': u'enabled',
+                  u'addrs': [{u'addr': '10.0.65.2',
+                              "gateway": u"10.0.65.1",
+                              u"properties": {u"gr": False}
+                             },
+                             {"addr": u"2001::3:4",
+                              u"gateway": "2001::1",
+                              "properties": {"gr": False}
+                             },]
+                  }
+        ep.store_update(fields)
+        self.assertEqual(ep.state, "enabled")
+        self.assertEqual(ep.mac, "11:22:33:44:55:66")
+        self.assertEqual(len(ep.addresses), 2)
+
+        # Set comprehension to get the 2 IP addresses
+        ips = {address.ip for address in ep.addresses.values()}
+        self.assertSetEqual(ips, {IPAddress("10.0.65.2"),
+                                  IPAddress("2001::3:4")})
+
+        # Set comprehension to get the gateways
+        gws = {address.gateway for address in ep.addresses.values()}
+        self.assertSetEqual(gws, {IPAddress("10.0.65.1"),
+                                  IPAddress("2001::1")})
+
+    def test_store_update_2_addrs_repeated(self):
+        """
+        Test that store update throws an exception if an address is repeated.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        # Mix ascii and unicode to make sure we cope.
+        fields = {u'mac': '11:22:33:44:55:66',
+                  'state': u'enabled',
+                  u'addrs': [{u'addr': '10.0.65.2',
+                              "gateway": u"10.0.65.1",
+                              u"properties": {u"gr": False}
+                             },
+                             {u'addr': '10.0.65.2',
+                              "gateway": u"10.0.65.10",
+                              u"properties": {u"gr": True}
+                             },]
+                  }
+        self.assertRaises(InvalidRequest, ep.store_update, fields)
+
+    def test_store_update_ip_gw_mismatch(self):
+        """
+        Test that store update throws an exception if a IP and gateway are
+        different versions.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        # Mix ascii and unicode to make sure we cope.
+        fields = {u'mac': '11:22:33:44:55:66',
+                  'state': u'enabled',
+                  u'addrs': [{u'addr': '10.0.65.2',
+                              "gateway": u"2001::10:0:65:4",
+                              u"properties": {u"gr": False}
+                             },]
+                  }
+        self.assertRaises(InvalidRequest, ep.store_update, fields)
+
+    def test_store_update_no_ip(self):
+        """
+        Test that store update throws an exception if a IP and gateway are
+        different versions.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        # Mix ascii and unicode to make sure we cope.
+        fields = {u'mac': '11:22:33:44:55:66',
+                  'state': u'enabled',
+                  u'addrs': [{"gateway": u"2001::10:0:65:4",
+                              u"properties": {u"gr": False}
+                             },]
+                  }
+        self.assertRaises(InvalidRequest, ep.store_update, fields)
+
+    def test_store_update_no_gw(self):
+        """
+        Test that store update works for valid data.
+        """
+        ep_id = str(uuid.uuid4())
+        prefix = "vth"
+        interface = prefix + ep_id[:11]
+        ep = endpoint.Endpoint(ep_id,
+                               'aa:bb:cc:dd:ee:ff',
+                               interface,
+                               prefix)
+        fields = {u'mac': u'11:22:33:44:55:66',
+                  u'state': u'enabled',
+                  u'addrs': [{u"addr": u"10.0.65.2",
+                              u"properties": {u"gr": False}
+                             }]
+                  }
+        ep.store_update(fields)
+        self.assertEqual(ep.state, "enabled")
+        self.assertEqual(ep.mac, "11:22:33:44:55:66")
+        self.assertEqual(len(ep.addresses), 1)
+        (ip, addr) = ep.addresses.popitem()
+        self.assertEqual(ip, addr.ip)
+        self.assertEqual(addr.ip, IPAddress("10.0.65.2"))
+        self.assertEqual(addr.gateway, None)

@@ -27,6 +27,7 @@ import uuid
 import calico.felix.devices as devices
 import calico.felix.futils as futils
 import calico.felix.test.stub_utils as stub_utils
+from netaddr import IPAddress
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
@@ -146,6 +147,35 @@ class TestDevices(unittest.TestCase):
                  mock.call('/proc/sys/net/ipv4/neigh/%s/proxy_delay' %tap, 'wb'),
                  M_ENTER, mock.call().write('0'), M_CLEAN_EXIT,]
         m_open.assert_has_calls(calls)
+
+    def test_configure_interface_ipv6_mainline(self):
+        """
+        Test that configure_interface_ipv6_mainline
+            - opens and writes to the /proc system to enable proxy NDP on the
+              interface.
+            - calls ip -6 neigh to set up the proxy targets.
+
+        Mainline test has two proxy targets.
+        """
+        m_open = mock.mock_open()
+        rc = futils.CommandOutput("", "")
+        if_name = "tap3e5a2b34222"
+        proxy_targets = [IPAddress("2001::3:4"),
+                         IPAddress("2001:3::4")]
+        with mock.patch('__builtin__.open', m_open, create=True), \
+             mock.patch('calico.felix.futils.check_call', return_value=rc) as m_check_call:
+            devices.configure_interface_ipv6(if_name, proxy_targets)
+            calls = [mock.call('/proc/sys/net/ipv6/conf/%s/proxy_ndp' % if_name,
+                               'wb'),
+                     M_ENTER,
+                     mock.call().write('1'),
+                     M_CLEAN_EXIT]
+            m_open.assert_has_calls(calls)
+            ip_calls = []
+            for target in proxy_targets:
+                ip_calls.append(mock.call(["ip", "-6", "neigh", "add", "proxy",
+                                           str(target), "dev", if_name]))
+            m_check_call.assert_has_calls(ip_calls)
 
     def test_interface_up1(self):
         """
