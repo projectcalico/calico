@@ -185,6 +185,7 @@ def do_ep_api():
             rsp = {"rc": "SUCCESS",
                    "message": "Hooray",
                    "type": fields['type'],
+                   "interface_prefix": "tap",
                    "endpoint_count": str(len(eps_by_host.get(host, set())))}
             rsp_json = json.dumps(rsp)
             log_api.info("Sending RESYNCSTATE response to %s\n%s", host, rsp_json)
@@ -242,9 +243,11 @@ def send_all_eps(create_sockets, host, resync_id):
     # Send all of the ENDPOINTCREATED messages.
     for ep in eps_by_host.get(host, {}):
         log.info("Sending ENDPOINTCREATED message for endpoint %s", ep)
+        if_name = "tap" + ep[:11]
         msg = {"type": "ENDPOINTCREATED",
                "mac": eps_by_host[host][ep]["mac"],
                "endpoint_id": ep,
+               "interface_name":  if_name,
                "resync_id": resync_id,
                "issued": int(time.time() * 1000),
                "state": "enabled", # TODO - Map through enabled properly

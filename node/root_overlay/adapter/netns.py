@@ -158,7 +158,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
 
     # Return an Endpoint
     return Endpoint(id=ep_id,
-                    addrs=[{"addr": str(ip), "gw": str(next_hop)}],
+                    addrs=[{"addr": str(ip), "gateway": str(next_hop)}],
                     state="enabled",
                     mac=mac)
 
