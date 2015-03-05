@@ -103,7 +103,7 @@ This package provides the Felix component.
 if [ $1 -eq 1 ] ; then
     # Initial installation
     /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl enable calico-felix >/dev/null 2>&1
+    /usr/bin/systemctl enable calico-felix
     /usr/bin/systemctl start calico-felix
 fi
 %endif
@@ -112,7 +112,7 @@ fi
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
 %if 0%{?el7}
-    /usr/bin/systemctl disable calico-felix >/dev/null 2>&1
+    /usr/bin/systemctl disable calico-felix
     /usr/bin/systemctl stop calico-felix
 %else
     /sbin/initctl stop calico-felix >/dev/null 2>&1 || :
@@ -143,7 +143,7 @@ This package provides the ACL Manager component.
 if [ $1 -eq 1 ] ; then
     # Initial installation
     /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl enable calico-acl-manager >/dev/null 2>&1
+    /usr/bin/systemctl enable calico-acl-manager
     /usr/bin/systemctl start calico-acl-manager
 fi
 %endif
@@ -152,7 +152,7 @@ fi
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
 %if 0%{?el7}
-    /usr/bin/systemctl disable calico-acl-manager >/dev/null 2>&1
+    /usr/bin/systemctl disable calico-acl-manager
     /usr/bin/systemctl stop calico-acl-manager
 %else
     /sbin/initctl stop calico-acl-manager >/dev/null 2>&1
