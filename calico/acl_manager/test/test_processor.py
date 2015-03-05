@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import sys
 from copy import deepcopy
 
@@ -52,6 +53,22 @@ class TestProcessor(unittest.TestCase):
                          'inbound_default': 'deny',
                          'outbound': [],
                          'outbound_default': 'deny'}}
+
+    def assertDictEqual(self, d1, d2, msg=None):
+        """
+        This override for assertDictEqual ensures that lists do not need to
+        be ordered for dict comparison. It's an unfortunate hack, but c'est la
+        vie.
+        """
+        self.assertEqual(len(d1), len(d2))
+        for k,v1 in d1.iteritems():
+            self.assertIn(k, d2, msg)
+            v2 = d2[k]
+            if (isinstance(v1, collections.Iterable) and
+                not isinstance(v1, basestring)):
+                self.assertItemsEqual(v1, v2, msg)
+            else:
+                self.assertEqual(v1, v2, msg)
 
     def test_case1(self):
         """
