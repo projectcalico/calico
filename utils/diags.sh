@@ -18,8 +18,8 @@ date=`date +"%F_%H-%M-%S"`
 diags_dir=./"$date"
 system=`hostname`
 echo "  creating dir $diags_dir"
-mkdir "$diags_dir"
-pushd "$diags_dir" > /dev/null
+mkdir "$diags_dir" || exit 2
+pushd "$diags_dir" > /dev/null || exit 2
 
 echo "  storing system state..."
 
