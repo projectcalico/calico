@@ -20,6 +20,7 @@ import logging.handlers
 import sys
 from calico_etcd import Endpoint
 import uuid
+from netaddr import IPNetwork, IPAddress
 
 _log = logging.getLogger(__name__)
 
@@ -136,5 +137,11 @@ def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alia
                        (cpid, veth_name), shell=True).strip()
 
     # Return an Endpoint
-    return Endpoint(id=ep_id, addrs=[{"addr":str(ip)}], state="enabled", mac=mac)
+    network = IPNetwork(IPAddress(ip))
+    ep = Endpoint(ep_id=ep_id, state="enabled", mac=mac, felix_host=HOSTNAME)
+    if network.version == 4:
+        ep.ipv4_nets.add(network)
+    else:
+        ep.ipv6_nets.add(network)
+    return ep
 

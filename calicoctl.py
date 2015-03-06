@@ -5,8 +5,6 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl master --ip=<IP> [--master-image=<DOCKER_IMAGE_NAME>]
-  calicoctl master stop [--force]
   calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>]
   calicoctl node stop [--force]
   calicoctl status
@@ -26,9 +24,6 @@ Usage:
 
 Options:
  --ip=<IP>                The local management address to use.
- --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
-                          Calico's master container
-                          [default: calico/master:latest]
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
@@ -177,8 +172,8 @@ def container_remove(container_name):
 
 def group_remove_container(container_name, group_name):
     """
-    Add a container (on this host) to the group with the given name.  This adds the first
-    endpoint on the container to the group.
+    Add a container (on this host) to the group with the given name.  This
+    removes the first endpoint on the container from the group.
 
     :param container_name: The Docker container name or ID.
     :param group_name:  The Calico security group name.
@@ -189,20 +184,14 @@ def group_remove_container(container_name, group_name):
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
-    # Get the group UUID.
-    group_id = client.get_group_id(group_name)
-    if not group_id:
-        print "Group with name %s was not found." % group_name
-    else:
-        endpoint_id = client.get_ep_id_from_cont(container_id)
-
-        try:
-            # Remove the endpoint from the group.
-            client.remove_endpoint_from_group(group_id, endpoint_id)
-            print "Remove %s from %s" % (container_name, group_name)
-        except KeyError:
-            print "%s is not a member of %s" % (container_name, group_name)
-            sys.exit(1)
+    try:
+        # Remove the endpoint from the group.
+        client.remove_workload_from_group(container_id)
+        print "Remove %s from %s" % (container_name, group_name)
+    except KeyError as e:
+        print e
+        print "%s is not a member of %s" % (container_name, group_name)
+        sys.exit(1)
 
 def node_stop(force):
     client = DatastoreClient()
@@ -228,17 +217,11 @@ def node(ip, node_image):
     # Set up etcd
     client = DatastoreClient()
 
-    master_ip = client.get_master()
-    if not master_ip:
-        print "No master can be found. Exiting"
-        return
-
     ipv4_pools = client.get_ip_pools("v4")
     if not ipv4_pools:
-        print "No IPv4 range defined.  Exiting."
-        return
+        # If no IPv4 pools are defined, add a default.
+        client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
 
-    print "Using master on IP: %s" % master_ip
     client.create_host(ip)
     try:
         docker("rm", "-f", "calico-node")
@@ -270,61 +253,15 @@ def node(ip, node_image):
     print "before using `docker run` for Calico networking.\n"
 
 
-def master_stop(force):
-    client = DatastoreClient()
-    if force or len(client.get_hosts()) == 0:
-        client.remove_master()
-        docker("stop", "calico-master")
-        print "Master stopped and all configuration removed"
-    else:
-        print "Hosts exist so master can't be stopped. Force with --force"
-
-
-def master(ip, master_image):
-    create_dirs()
-
-    # Add IP to etcd
-    client = DatastoreClient()
-    client.set_master(ip)
-
-    # If no IPv4 pools are defined, add a default.
-    ipv4_pools = client.get_ip_pools("v4")
-    if len(ipv4_pools) == 0:
-        client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
-
-    try:
-        docker("rm", "-f", "calico-master")
-    except Exception:
-        pass
-
-    etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
-    output = StringIO.StringIO()
-    
-    # Start the container
-    docker("run", "--name=calico-master",
-                  "--restart=always",
-                  "--privileged",
-                  "--net=host",
-                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                  "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
-                  "-d",
-                  master_image, _err=process_output, _out=output).wait()
-    cid = output.getvalue().strip()
-    output.close()
-    print "Calico master is running with id: %s" % cid
-
-
 def status():
     client = DatastoreClient()
-    print "Currently configured master is %s" % client.get_master()
-
     try:
         print(grep(docker("ps"), "-i", "calico"))
     except Exception:
         print "No calico containers appear to be running"
 
     try:
-        print(docker("exec", "calico-master", "/bin/bash", "-c", "apt-cache policy "
+        print(docker("exec", "calico-node", "/bin/bash", "-c", "apt-cache policy "
                                                                  "calico-felix"))
     except Exception:
         print "Skipping felix version information as Calico node isn't running"
@@ -337,8 +274,6 @@ def status():
         print "Couldn't collect BGP Peer information"
 
 
-
-
 def reset():
     client = DatastoreClient()
 
@@ -346,7 +281,6 @@ def reset():
     client.remove_all_data()
 
     docker("kill", "calico-node")
-    docker("kill", "calico-master")
 
     try:
         interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'",
@@ -367,13 +301,12 @@ def group_add(group_name):
     """
     client = DatastoreClient()
     # Check if the group exists.
-    if client.get_group_id(group_name):
+    if client.group_exists(group_name):
         print "Group %s already exists." % group_name
     else:
         # Create the group.
-        group_id = uuid.uuid1().hex
-        client.create_group(group_id, group_name)
-        print "Created group %s with ID %s" % (group_name, group_id)
+        client.create_group(group_name)
+        print "Created group %s" % (group_name)
 
 
 def group_add_container(container_name, group_name):
@@ -389,24 +322,22 @@ def group_add_container(container_name, group_name):
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
-    # Get the group UUID.
-    group_id = client.get_group_id(group_name)
-    if not group_id:
+    if not client.group_exists(group_name):
         print "Group with name %s was not found." % group_name
         return
 
-    endpoint_id = client.get_ep_id_from_cont(container_id)
-    client.add_endpoint_to_group(group_id, endpoint_id)
+    client.add_workload_to_group(group_name, container_id)
     print "Added %s to %s" % (container_name, group_name)
 
 def group_remove(group_name):
     #TODO - Don't allow removing a group that has enpoints in it.
     client = DatastoreClient()
-    group_id = client.delete_group(group_name)
-    if group_id:
-        print "Deleted group %s with ID %s" % (group_name, group_id)
-    else:
+    try:
+        client.delete_group(group_name)
+    except KeyError:
         print "Couldn't find group with name %s" % group_name
+    else:
+        print "Deleted group %s" % (group_name)
 
 
 def group_show(detailed):
@@ -414,18 +345,18 @@ def group_show(detailed):
     groups = client.get_groups()
 
     if detailed:
-        x = PrettyTable(["ID", "Name", "Container ID"])
-        for group_id, name in groups.iteritems():
-            members = client.get_group_members(group_id)
+        x = PrettyTable(["Name", "Endpoint ID"])
+        for name in groups:
+            members = client.get_group_members(name)
             if members:
                 for member in members:
-                    x.add_row([group_id, name, member])
+                    x.add_row([name, member])
             else:
-                x.add_row([group_id, name, "No members"])
+                x.add_row([name, "No members"])
     else:
-        x = PrettyTable(["ID", "Name"])
-        for group_id, name in groups.iteritems():
-            x.add_row([group_id, name])
+        x = PrettyTable(["Name"])
+        for name in groups:
+            x.add_row([name])
 
     print x
 
@@ -604,12 +535,7 @@ if __name__ == '__main__':
     if os.geteuid() != 0:
         print "calicoctl must be run as root"
     elif validate_arguments():
-        if arguments["master"]:
-            if arguments["stop"]:
-                master_stop(arguments["--force"])
-            else:
-                master(arguments["--ip"], arguments['--master-image'])
-        elif arguments["node"]:
+        if arguments["node"]:
             if arguments["stop"]:
                 node_stop(arguments["--force"])
             else:

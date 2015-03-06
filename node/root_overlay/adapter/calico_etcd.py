@@ -23,15 +23,59 @@ import sys
 import os
 import logging
 import logging.handlers
+from netaddr import IPNetwork, IPAddress
 
 _log = logging.getLogger(__name__)
 
-Endpoint = namedtuple("Endpoint", ["id", "addrs", "mac", "state"])
+class Endpoint(object):
+
+    def __init__(self, ep_id, state, mac, felix_host):
+        self.ep_id = ep_id
+        self.state = state
+        self.mac = mac
+
+        self.profile_id = None
+        self.ipv4_nets = set()
+        self.ipv6_nets = set()
+        self.ipv4_gateway = None
+        self.ipv6_gateway = None
+
+    def to_json(self):
+        json_dict = {"state": self.state,
+                     "mac": self.mac,
+                     "profile_id": self.profile_id,
+                     "ipv4_nets": [str(net) for net in self.ipv4_nets],
+                     "ipv6_nets": [str(net) for net in self.ipv6_nets],
+                     "ipv4_gateway": str(self.ipv4_gateway) if
+                                     self.ipv4_gateway else None,
+                     "ipv6_gateway": str(self.ipv6_gateway) if
+                                     self.ipv6_gateway else None}
+        return json.dumps(json_dict)
+
+    @classmethod
+    def from_json(cls, ep_id, json_str):
+        json_dict = json.loads(json_str)
+        ep = cls(ep_id=ep_id,
+                 state=json_dict["state"],
+                 mac=json_dict["mac"],
+                 felix_host=["hostname"])
+        for net in json_dict["ipv4_nets"]:
+            ep.ipv4_nets.add(IPNetwork(net))
+        for net in json_dict["ipv6_nets"]:
+            ep.ipv6_nets.add(IPNetwork(net))
+        ipv4_gw = json_dict["ipv4_gateway"]
+        if ipv4_gw:
+            ep.ipv4_gateway = IPAddress(ipv4_gw)
+        ipv6_gw = json_dict["ipv6_gateway"]
+        if ipv6_gw:
+            ep.ipv6_gateway = IPAddress(ipv6_gw)
+        ep.profile_id = json_dict["profile_id"]
+        return ep
+
 
 HOST_PATH = "/calico/host/%(hostname)s/"
-CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
-ENDPOINT_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/" + \
-                "endpoint/%(endpoint_id)s/"
+CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
+ENDPOINT_PATH = CONTAINER_PATH + "endpoint/%(endpoint_id)s/"
 
 ENV_ETCD = "ETCD_AUTHORITY"
 """The environment variable that locates etcd service."""
@@ -68,8 +112,8 @@ class CalicoEtcdClient(object):
 
     def create_container(self, hostname, container_id, endpoint):
         """
-        Set up a container in the /calico/ namespace.  This function assumes 1 container, with 1
-        endpoint.
+        Set up a container in the /calico/ namespace.  This function assumes 1
+        container, with 1 endpoint.
 
         :param hostname: The hostname for the Docker hosting this container.
         :param container_id: The Docker container ID.
@@ -79,13 +123,11 @@ class CalicoEtcdClient(object):
 
         endpoint_path = ENDPOINT_PATH % {"hostname": hostname,
                                          "container_id": container_id,
-                                         "endpoint_id": endpoint.id}
+                                         "endpoint_id": endpoint.ep_id}
 
         _log.info("Creating endpoint at %s", endpoint_path)
         try:
-            self.client.write(endpoint_path + "addrs", json.dumps(endpoint.addrs))
-            self.client.write(endpoint_path + "mac", endpoint.mac)
-            self.client.write(endpoint_path + "state", endpoint.state)
+            self.client.write(endpoint_path, endpoint.to_json())
         except etcd.EtcdException as e:
             _log.exception("Hit Exception %s writing to etcd.", e)
             pass
