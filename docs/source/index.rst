@@ -5,7 +5,7 @@ Contents:
 
 .. toctree::
    :maxdepth: 1
-   
+
    home
    arch-overview
    arch-felix-and-acl
@@ -17,11 +17,3 @@ Contents:
    contribute
    faq
    api-proposal
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
