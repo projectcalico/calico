@@ -1,0 +1,153 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Frequently Asked Questions &mdash; Project Calico 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Project Calico 0.0.1 documentation" href="index.html" />
+    <link rel="next" title="Calico API Design" href="api-proposal.html" />
+    <link rel="prev" title="Contribution Guidelines" href="contribute.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="api-proposal.html" title="Calico API Design"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="contribute.html" title="Contribution Guidelines"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="frequently-asked-questions">
+<h1>Frequently Asked Questions<a class="headerlink" href="#frequently-asked-questions" title="Permalink to this headline">¶</a></h1>
+<p>This page contains answers to several frequently asked technical
+questions about Project Calico. It is updated on a regular basis: please
+check back for more information.</p>
+<div class="section" id="how-does-calico-maintain-saved-state">
+<h2>&#8220;How Does Calico Maintain Saved State?&#8221;<a class="headerlink" href="#how-does-calico-maintain-saved-state" title="Permalink to this headline">¶</a></h2>
+<p>State is saved in a few places in a Calico deployment, depending on
+whether it&#8217;s global or local state.</p>
+<p>Local state is state that belongs on a single compute host (associated
+with a single running Felix instance). That state is actually entirely
+stored by the Linux kernel on that host: Felix doesn&#8217;t store any of it
+internally. This makes Felix basically stateless, with the kernel acting
+as a backing data store on one side and the plugin/ACL manger as a data
+source on the other.</p>
+<p>If Felix dies and returns, it learns current state from the kernel
+(things like kernel routes, tap devices etc.) at start up. It then asks
+the plugin for a full report of the state it should have, and updates
+the kernel to match. This approach has strong resiliency benefits, in
+that if Felix crashes you don&#8217;t suddenly lose access to your VMs. As
+long as the Linux kernel is running, you&#8217;ve still got functionality.</p>
+<p>The bulk of global state is mastered in whatever component hosts the
+plugin. In the case of OpenStack, this means a Neutron database. Our
+OpenStack plugin (more strictly a Neutron ML2 driver) queries the
+Neutron database to find out state about the entire deployment. That
+state is then reflected down to Felix and the ACL manager. In other
+orchestration systems, it may be stored in distributed databases, either
+owned directly by the plugin or by the orchestrator itself.</p>
+<p>The only other state storage in a Calico network is in the BGP sessions,
+which approximate a distributed database of routes. This isn&#8217;t actually
+the master state (that&#8217;s stored by the orchestrator), but it&#8217;s the state
+that is updated by Calico in response to changes in the master state.</p>
+<p>This makes the Calico design very simple, because we store very little
+state. All of our components can be shutdown and restarted without risk,
+because they resynchronize state as necessary. This makes modelling
+their behaviour extremely simple, reducing the complexity of bugs.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Frequently Asked Questions</a><ul>
+<li><a class="reference internal" href="#how-does-calico-maintain-saved-state">&#8220;How Does Calico Maintain Saved State?&#8221;</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="contribute.html"
+                        title="previous chapter">Contribution Guidelines</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="api-proposal.html"
+                        title="next chapter">Calico API Design</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/faq.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="api-proposal.html" title="Calico API Design"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="contribute.html" title="Contribution Guidelines"
+             >previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Metaswitch Networks.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>

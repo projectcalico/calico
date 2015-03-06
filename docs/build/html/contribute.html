@@ -1,0 +1,170 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Contribution Guidelines &mdash; Project Calico 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Project Calico 0.0.1 documentation" href="index.html" />
+    <link rel="next" title="Frequently Asked Questions" href="faq.html" />
+    <link rel="prev" title="Support" href="support.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="faq.html" title="Frequently Asked Questions"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="support.html" title="Support"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="contribution-guidelines">
+<h1>Contribution Guidelines<a class="headerlink" href="#contribution-guidelines" title="Permalink to this headline">¶</a></h1>
+<p>Features or any changes to the codebase should be done as follows:</p>
+<ol class="arabic simple">
+<li>Pull latest code in the <strong>master</strong> branch and create a feature branch
+off this.</li>
+<li>Implement your feature. Commits are cheap in git, try to split up
+your code into many, it makes reviewing easier as well as for saner
+merging.</li>
+</ol>
+<ul class="simple">
+<li>If your commit fixes an existing issue #123, include the text &#8220;fixes
+#123&#8221; in at least one of your commit messages. This ensures the pull
+request is attached to the existing issue
+(<a class="reference external" href="http://stackoverflow.com/questions/4528869/how-do-you-attach-a-new-pull-request-to-an-existing-issue-on-github">http://stackoverflow.com/questions/4528869/how-do-you-attach-a-new-pull-request-to-an-existing-issue-on-github</a>).</li>
+</ul>
+<ol class="arabic simple" start="3">
+<li>Push your feature branch to GitHub.</li>
+<li>Create a pull request using GitHub, from your branch to master.</li>
+<li>Reviewer process:</li>
+</ol>
+<ul class="simple">
+<li>Receive notice of review by Github email, Github notification, or by
+checking <a class="reference external" href="https://github.com/organizations/Metaswitch/dashboard/issues/assigned?direction=desc&amp;state=open">all your Metaswitch Github
+issues</a>.</li>
+<li>Make markups as comments on the pull request (either line comments or
+top-level comments).</li>
+<li>Make a top-level comment saying something along the lines of “Fine;
+some minor comments” or “Some issues to address before merging”.</li>
+<li>If there are no issues, merge the pull request and close the branch.
+Otherwise, assign the pull request to the developer and leave this to
+them.</li>
+</ul>
+<ol class="arabic simple" start="6">
+<li>Developer process:</li>
+</ol>
+<ul class="simple">
+<li>Await review.</li>
+<li>Address code review issues on your feature branch.</li>
+<li>Push your changes to the feature branch on GitHub. This automatically
+updates the pull request.</li>
+<li>If necessary, make a top-level comment along the lines of “Please
+re-review”, assign back to the reviewer, and repeat the above.</li>
+<li>If no further review is necessary and you have the necessary
+privileges, merge the pull request and close the branch. Otherwise,
+make a top-level comment and assign back to the reviewer as above.</li>
+</ul>
+<div class="section" id="upcoming-changes">
+<h2>Upcoming Changes<a class="headerlink" href="#upcoming-changes" title="Permalink to this headline">¶</a></h2>
+<p>These guidelines will be revised extensively over the next few weeks as
+more infrastructure is added. In particular, automatic continuous
+integration of pull requests and commits will be added in the near
+future.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Contribution Guidelines</a><ul>
+<li><a class="reference internal" href="#upcoming-changes">Upcoming Changes</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="support.html"
+                        title="previous chapter">Support</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="faq.html"
+                        title="next chapter">Frequently Asked Questions</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/contribute.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="faq.html" title="Frequently Asked Questions"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="support.html" title="Support"
+             >previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Metaswitch Networks.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>

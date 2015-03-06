@@ -1,0 +1,198 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>IPv6 support &mdash; Project Calico 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Project Calico 0.0.1 documentation" href="index.html" />
+    <link rel="next" title="Overlapping IPv4 address ranges" href="overlap-ips.html" />
+    <link rel="prev" title="Configuring Calico" href="configuration.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="overlap-ips.html" title="Overlapping IPv4 address ranges"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="configuration.html" title="Configuring Calico"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="ipv6-support">
+<h1>IPv6 support<a class="headerlink" href="#ipv6-support" title="Permalink to this headline">¶</a></h1>
+<p><strong>In the currently release of Calico (0.12.1) IPv6 is temporarily
+non-functional. We aim to fix this in the next release.</strong></p>
+<p>Calico supports connectivity over IPv6, between compute hosts, and
+between compute hosts and their VMs. This means that, subject to
+security configuration, a VM can initiate an IPv6 connection to another
+VM, or to an IPv6 destination outside the data center; and that a VM can
+terminate an IPv6 connection from outside.</p>
+<div class="section" id="requirements-on-guest-vm-images">
+<h2>Requirements on guest VM images<a class="headerlink" href="#requirements-on-guest-vm-images" title="Permalink to this headline">¶</a></h2>
+<p>IPv6 connectivity requires some things of the guest VM image:</p>
+<ul class="simple">
+<li>When it boots up, the VM should issue a DHCPv6 request for each of
+its interfaces, so that it can learn the IPv6 addresses that
+OpenStack has allocated for it.</li>
+<li>The VM must be configured to accept Router Advertisements.</li>
+<li>If it uses the widely deployed DHCP client from ISC, the VM must have
+a fix or workaround for this known issue:
+<a class="reference external" href="https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html">https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html</a>.</li>
+<li>When it boots up, the VM should wait a short while (say, 10 seconds)
+before sending a Router Solicit message for each of its interfaces,
+to ensure that the communication path to the Router Advertisement
+daemon is ready. This is a pragmatic workaround for a bug
+(<a class="reference external" href="https://github.com/Metaswitch/calico/issues/12">https://github.com/Metaswitch/calico/issues/12</a>) that needs further
+investigation, and should become unnecessary when that bug is
+resolved.</li>
+</ul>
+<p>These requirements are not yet all met in common cloud images - but it
+is easy to remedy that by launching an image, making appropriate changes
+to its configuration files, taking a snapshot, and then using that
+snapshot thereafter instead of the original image.</p>
+<p>For example, starting from the Ubuntu 14.04 cloud image, the following
+changes will suffice to meet the requirements just listed.</p>
+<ul>
+<li><p class="first">In /etc/network/interfaces.d/eth0.cfg, add:</p>
+<div class="highlight-python"><div class="highlight"><pre>iface eth0 inet6 dhcp
+        accept_ra 1
+</pre></div>
+</div>
+</li>
+<li><p class="first">In /sbin/dhclient-script, add at the start of the script:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">new_ip6_prefixlen</span><span class="o">=</span><span class="mi">128</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">In /etc/sysctl.d, create a file named 30-eth0-rs-delay.conf with
+contents:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">net</span><span class="o">.</span><span class="n">ipv6</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">eth0</span><span class="o">.</span><span class="n">router_solicitation_delay</span> <span class="o">=</span> <span class="mi">10</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="technical-details">
+<h2>Technical details<a class="headerlink" href="#technical-details" title="Permalink to this headline">¶</a></h2>
+<p>Following are the key points of how IPv6 connectivity is currently
+implemented in Calico.</p>
+<ul class="simple">
+<li>IPv6 forwarding is globally enabled on each compute host.</li>
+<li>Felix (the Calico agent):<ul>
+<li>does “ip -6 neigh add lladdr dev ”, instead of IPv4 case “arp -s ”,
+for each VM that is created with an IPv6 address</li>
+<li>adds a static route for the VM&#8217;s IPv6 address, via its TAP device,
+similarly as for IPv4.</li>
+</ul>
+</li>
+<li>Dnsmasq provides both Router Advertisements and DHCPv6 service.<ul>
+<li>Router Advertisements, without SLAAC or on-link flags, cause each VM
+to create a default route to the link-local address of the VM&#8217;s TAP
+device on the compute host.</li>
+<li>DHCPv6 allows each VM to get its OpenStack-allocated IPv6 address.</li>
+</ul>
+</li>
+<li>BIRD6 runs between the compute hosts, either via a route reflector or
+in a full mesh.</li>
+<li>A single OpenStack network is configured, with an IPv4 subnet
+(10.65.0/24) and an IPv6 subnet (2001:db8:a41:2::/64), with both
+subnets DHCP-enabled.</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">IPv6 support</a><ul>
+<li><a class="reference internal" href="#requirements-on-guest-vm-images">Requirements on guest VM images</a></li>
+<li><a class="reference internal" href="#technical-details">Technical details</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="configuration.html"
+                        title="previous chapter">Configuring Calico</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="overlap-ips.html"
+                        title="next chapter">Overlapping IPv4 address ranges</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/ipv6.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="overlap-ips.html" title="Overlapping IPv4 address ranges"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="configuration.html" title="Configuring Calico"
+             >previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Metaswitch Networks.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>

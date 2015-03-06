@@ -1,0 +1,395 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Red Hat Enterprise Linux 7 Packaged Install Instructions &mdash; Project Calico 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Project Calico 0.0.1 documentation" href="index.html" />
+    <link rel="up" title="Calico with OpenStack" href="openstack.html" />
+    <link rel="next" title="Ubuntu 14.04 Packaged Install Instructions" href="ubuntu-opens-install.html" />
+    <link rel="prev" title="Major Differences from Standard OpenStack" href="opens-external-conn.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="ubuntu-opens-install.html" title="Ubuntu 14.04 Packaged Install Instructions"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="opens-external-conn.html" title="Major Differences from Standard OpenStack"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li>
+          <li><a href="openstack.html" accesskey="U">Calico with OpenStack</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="red-hat-enterprise-linux-7-packaged-install-instructions">
+<h1>Red Hat Enterprise Linux 7 Packaged Install Instructions<a class="headerlink" href="#red-hat-enterprise-linux-7-packaged-install-instructions" title="Permalink to this headline">¶</a></h1>
+<p>The instructions come in two sections: one for installing control nodes,
+and one for installing compute nodes. Before moving on to those
+sections, make sure you follow the <strong>Common Steps</strong> section, and if you
+want to create a combined controller and compute node, work through all
+three sections.</p>
+<div class="section" id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this headline">¶</a></h2>
+<p>Before starting this you will need the following:</p>
+<ul class="simple">
+<li>One or more machines running RHEL 7, with OpenStack Juno installed on
+them.</li>
+<li>SSH access to these machines.</li>
+<li>Working DNS between these machines (use <tt class="docutils literal"><span class="pre">/etc/hosts</span></tt> if you don&#8217;t
+have DNS on your network).</li>
+</ul>
+</div>
+<div class="section" id="common-steps">
+<h2>Common Steps<a class="headerlink" href="#common-steps" title="Permalink to this headline">¶</a></h2>
+<p>Some steps need to be taken on all machines being installed with Calico.
+These steps are detailed here.</p>
+<div class="section" id="install-openstack-juno">
+<h3>Install OpenStack Juno<a class="headerlink" href="#install-openstack-juno" title="Permalink to this headline">¶</a></h3>
+<p>If you haven&#8217;t already done so, install Juno with Neutron and ML2
+networking. Instructions for installing OpenStack on RHEL can be found
+<a class="reference external" href="http://openstack.redhat.com/Main_Page">here</a>.</p>
+</div>
+<div class="section" id="configure-yum-repositories">
+<h3>Configure YUM repositories<a class="headerlink" href="#configure-yum-repositories" title="Permalink to this headline">¶</a></h3>
+<p>As well as the repositories for OpenStack and EPEL
+(<a class="reference external" href="https://fedoraproject.org/wiki/EPEL">https://fedoraproject.org/wiki/EPEL</a>) - which you will have already
+configured as part of the previous step - you will need to configure the
+repository for Calico:</p>
+<div class="highlight-python"><div class="highlight"><pre>cat &gt; /etc/yum.repos.d/calico.repo &lt;&lt;EOF
+[calico]
+name=Calico Repository
+baseurl=http://binaries.projectcalico.org/rpm/
+enabled=1
+skip_if_unavailable=0
+gpgcheck=1
+gpgkey=http://binaries.projectcalico.org/rpm/key
+priority=97
+EOF
+</pre></div>
+</div>
+<p>Note: The priority setting in <tt class="docutils literal"><span class="pre">calico.repo</span></tt> is needed so that the
+Calico repository can install Calico-enhanced versions of some of the
+OpenStack Nova and Neutron packages.</p>
+</div>
+</div>
+<div class="section" id="control-node-install">
+<h2>Control Node Install<a class="headerlink" href="#control-node-install" title="Permalink to this headline">¶</a></h2>
+<p>On a control node, perform the following steps:</p>
+<ol class="arabic">
+<li><p class="first">Delete all configured OpenStack state, in particular any instances,
+routers, and networks (in that order) created by the install process
+referenced above. You can do this using the web dashboard or at the
+command line. The Calico install will fail if incompatible state is
+left around.</p>
+</li>
+<li><p class="first">Run <tt class="docutils literal"><span class="pre">yum</span> <span class="pre">update</span></tt>. This will bring in Calico-specific updates to the
+OpenStack packages and to <tt class="docutils literal"><span class="pre">dnsmasq</span></tt>.</p>
+</li>
+<li><p class="first">Install the <tt class="docutils literal"><span class="pre">calico-control</span></tt> package:</p>
+<div class="highlight-python"><div class="highlight"><pre>yum install calico-control
+</pre></div>
+</div>
+</li>
+<li><p class="first">Edit the <tt class="docutils literal"><span class="pre">/etc/neutron/plugins/ml2/ml2_conf.ini</span></tt> file:</p>
+<ul class="simple">
+<li>Find the <tt class="docutils literal"><span class="pre">type_drivers</span></tt> setting and change it to read
+<tt class="docutils literal"><span class="pre">type_drivers</span> <span class="pre">=</span> <span class="pre">local,</span> <span class="pre">flat</span></tt>.</li>
+<li>Find the <tt class="docutils literal"><span class="pre">tenant_network_types</span></tt> setting and change it to read
+<tt class="docutils literal"><span class="pre">tenant_network_types</span> <span class="pre">=</span> <span class="pre">local</span></tt>.</li>
+<li>Find the <tt class="docutils literal"><span class="pre">mechanism_drivers</span></tt> setting and change it to read
+<tt class="docutils literal"><span class="pre">mechanism_drivers</span> <span class="pre">=</span> <span class="pre">calico</span></tt>.</li>
+</ul>
+</li>
+<li><p class="first">Edit the <tt class="docutils literal"><span class="pre">/etc/neutron/neutron.conf</span></tt> file:</p>
+<ul class="simple">
+<li>Find the line for the <tt class="docutils literal"><span class="pre">dhcp_agents_per_network</span></tt> setting,
+uncomment it, and set its value to the number of compute nodes
+that you will have (or any number larger than that). This allows a
+DHCP agent to run on every compute node, which Calico requires
+because the networks on different compute nodes are not bridged
+together.</li>
+<li>Find the lines for <tt class="docutils literal"><span class="pre">api_workers</span></tt> and <tt class="docutils literal"><span class="pre">rpc_workers</span></tt>, uncomment
+them and set them both to 0.</li>
+</ul>
+</li>
+<li><p class="first">Restart the neutron server process:
+<tt class="docutils literal"><span class="pre">service</span> <span class="pre">neutron-server</span> <span class="pre">restart</span></tt>.</p>
+</li>
+<li><p class="first">Create the <tt class="docutils literal"><span class="pre">/etc/calico/acl_manager.cfg</span></tt> file by copying the
+<tt class="docutils literal"><span class="pre">/etc/calico/acl_manager.cfg.example</span></tt> file and edit it:</p>
+<ul class="simple">
+<li>Change the <tt class="docutils literal"><span class="pre">PluginAddress</span></tt> to the host name or IP address of the
+controller node. Then restart the ACL manager service with
+<tt class="docutils literal"><span class="pre">service</span> <span class="pre">calico-acl-manager</span> <span class="pre">restart</span></tt>.</li>
+</ul>
+</li>
+</ol>
+</div>
+<div class="section" id="compute-node-install">
+<h2>Compute Node Install<a class="headerlink" href="#compute-node-install" title="Permalink to this headline">¶</a></h2>
+<p>On a compute node, perform the following steps:</p>
+<ol class="arabic">
+<li><p class="first">Make the changes to SELinux and QEMU config that are described at
+<a class="reference external" href="http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29">http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29</a>,
+to allow VM interfaces with <tt class="docutils literal"><span class="pre">type='ethernet'</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre>setenforce permissive
+</pre></div>
+</div>
+</li>
+</ol>
+<p>Edit <tt class="docutils literal"><span class="pre">/etc/selinux/config</span></tt> and change the <tt class="docutils literal"><span class="pre">SELINUX=</span></tt> line to the
+following:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">SELINUX</span><span class="o">=</span><span class="n">permissive</span>
+</pre></div>
+</div>
+<p>In <tt class="docutils literal"><span class="pre">/etc/libvirt/qemu.conf</span></tt>, add or edit the following four options
+(in particular note the <tt class="docutils literal"><span class="pre">/dev/net/tun</span></tt> in <tt class="docutils literal"><span class="pre">cgroup_device_acl</span></tt>):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">clear_emulator_capabilities</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">user</span> <span class="o">=</span> <span class="s">&quot;root&quot;</span>
+<span class="n">group</span> <span class="o">=</span> <span class="s">&quot;root&quot;</span>
+<span class="n">cgroup_device_acl</span> <span class="o">=</span> <span class="p">[</span>
+     <span class="s">&quot;/dev/null&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/full&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/zero&quot;</span><span class="p">,</span>
+     <span class="s">&quot;/dev/random&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/urandom&quot;</span><span class="p">,</span>
+     <span class="s">&quot;/dev/ptmx&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/kvm&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/kqemu&quot;</span><span class="p">,</span>
+     <span class="s">&quot;/dev/rtc&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/hpet&quot;</span><span class="p">,</span> <span class="s">&quot;/dev/net/tun&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>Then restart libvirt to pick up the changes:</p>
+<div class="highlight-python"><div class="highlight"><pre>service libvirtd restart
+</pre></div>
+</div>
+<ol class="arabic" start="2">
+<li><p class="first">Open <tt class="docutils literal"><span class="pre">/etc/nova/nova.conf</span></tt> and remove the line that reads:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">linuxnet_interface_driver</span> <span class="o">=</span> <span class="n">nova</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">linux_net</span><span class="o">.</span><span class="n">LinuxOVSInterfaceDriver</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<p>Remove the line setting <tt class="docutils literal"><span class="pre">service_neutron_metadata_proxy</span></tt> or
+<tt class="docutils literal"><span class="pre">service_metadata_proxy</span></tt> to <tt class="docutils literal"><span class="pre">True</span></tt>, if there is one.</p>
+<p>Restart nova compute.</p>
+<div class="highlight-python"><div class="highlight"><pre>service openstack-nova-compute restart
+</pre></div>
+</div>
+<ol class="arabic" start="3">
+<li><p class="first">If they&#8217;re running, stop the Open vSwitch services:</p>
+<div class="highlight-python"><div class="highlight"><pre>service neutron-openvswitch-agent stop
+service openvswitch stop
+</pre></div>
+</div>
+</li>
+</ol>
+<p>Then, prevent the services running if you reboot:</p>
+<div class="highlight-python"><div class="highlight"><pre>chkconfig openvswitch off
+chkconfig neutron-openvswitch-agent off
+</pre></div>
+</div>
+<ol class="arabic" start="4">
+<li><p class="first">Run <tt class="docutils literal"><span class="pre">yum</span> <span class="pre">update</span></tt>. This will bring in Calico-specific updates to the
+OpenStack packages and to <tt class="docutils literal"><span class="pre">dnsmasq</span></tt>.</p>
+</li>
+<li><p class="first">Install build dependencies:</p>
+<div class="highlight-python"><div class="highlight"><pre>yum groupinstall &#39;Development Tools&#39;
+</pre></div>
+</div>
+</li>
+<li><p class="first">Install and configure the DHCP agent on the compute host:</p>
+<div class="highlight-python"><div class="highlight"><pre>yum install openstack-neutron
+</pre></div>
+</div>
+</li>
+</ol>
+<p>Open <tt class="docutils literal"><span class="pre">/etc/neutron/dhcp_agent.ini</span></tt>. In the <tt class="docutils literal"><span class="pre">[DEFAULT]</span></tt> section, add
+the following line (removing any existing <tt class="docutils literal"><span class="pre">interface_driver</span> <span class="pre">=</span></tt> line):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">interface_driver</span> <span class="o">=</span> <span class="n">neutron</span><span class="o">.</span><span class="n">agent</span><span class="o">.</span><span class="n">linux</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">RoutedInterfaceDriver</span>
+</pre></div>
+</div>
+<ol class="arabic" start="7">
+<li><p class="first">Restart and enable the DHCP agent, and stop and disable the L3
+agent.</p>
+<div class="highlight-python"><div class="highlight"><pre>service neutron-dhcp-agent restart
+chkconfig neutron-dhcp-agent on
+service neutron-l3-agent stop
+chkconfig neutron-l3-agent off
+</pre></div>
+</div>
+</li>
+<li><p class="first">If this node is not a controller, install and start the Nova
+Metadata API. This step is not required on combined compute and
+controller nodes.</p>
+<div class="highlight-python"><div class="highlight"><pre>yum install openstack-nova-api
+service openstack-nova-metadata-api restart
+chkconfig openstack-nova-metadata-api on
+</pre></div>
+</div>
+</li>
+<li><p class="first">Install the BIRD BGP client:</p>
+<div class="highlight-python"><div class="highlight"><pre>yum install -y bird bird6
+</pre></div>
+</div>
+</li>
+<li><p class="first">Install the <tt class="docutils literal"><span class="pre">calico-compute</span></tt> package:</p>
+<div class="highlight-python"><div class="highlight"><pre>yum install calico-compute
+</pre></div>
+</div>
+</li>
+<li><p class="first">Configure BIRD. Calico includes useful configuration scripts that
+will create BIRD config files for simple topologies - either a
+peering between a single pair of compute nodes, or to a route
+reflector (to avoid the need for a full BGP mesh in networks with
+more than 2 compute nodes). If your topology is more complex, please
+consult the relevant documentation for your chosen BGP stack or ask
+the mailing list if you have questions about how BGP relates to
+Calico.</p>
+<p>For IPv4 connectivity between compute hosts:</p>
+<div class="highlight-python"><div class="highlight"><pre>/usr/bin/calico-gen-bird-conf.sh &lt;compute_node_ipv4&gt; &lt;peer_ipv4&gt; &lt;bgp_as_number&gt;
+</pre></div>
+</div>
+<p>And/or for IPv6 connectivity between compute hosts:</p>
+<div class="highlight-python"><div class="highlight"><pre>/usr/bin/calico-gen-bird6-conf.sh &lt;compute_node_ipv4&gt; &lt;compute_node_ipv6&gt; &lt;peer_ipv6&gt; &lt;bgp_as_number&gt;
+</pre></div>
+</div>
+<p><tt class="docutils literal"><span class="pre">&lt;compute_node_ipv4&gt;</span></tt> and `&#8217; are the IPv4/6 addresses of the
+compute host, used as next hops and router ids.</p>
+<p><tt class="docutils literal"><span class="pre">&lt;peer_ipv4&gt;</span></tt> and <tt class="docutils literal"><span class="pre">&lt;peer_ipv6&gt;</span></tt> are the IP address of your
+single other compute node, or the route reflector as described
+earlier.</p>
+<p><tt class="docutils literal"><span class="pre">&lt;bgp_as_number&gt;</span></tt> is the BGP <a class="reference external" href="http://en.wikipedia.org/wiki/Autonomous_System_%28Internet%29">AS
+number</a>.
+Unless your deployment needs to peer with other BGP routers, this
+can be chosen arbitrarily.</p>
+</li>
+</ol>
+<p>Note that you&#8217;ll also need to configure your route reflector to allow
+connections from the compute node as a route reflector client. This
+configuration is outside the scope of this install document.</p>
+<p>Ensure BIRD (and/or BIRD 6 for IPv6) is running:</p>
+<div class="highlight-python"><div class="highlight"><pre>service bird restart
+service bird6 restart
+</pre></div>
+</div>
+<p>Finally ensure BIRD starts on reboot by running one or both of:</p>
+<div class="highlight-python"><div class="highlight"><pre>chkconfig bird on
+chkconfig bird6 on
+</pre></div>
+</div>
+<ol class="arabic simple" start="12">
+<li>Create the <tt class="docutils literal"><span class="pre">/etc/calico/felix.cfg</span></tt> file by copying
+<tt class="docutils literal"><span class="pre">/etc/calico/felix.cfg.example</span></tt> and edit it:<ul>
+<li>Change the <tt class="docutils literal"><span class="pre">PluginAddress</span></tt> and <tt class="docutils literal"><span class="pre">ACLAddress</span></tt> settings to the
+host name or IP address of the controller node.</li>
+<li>Restart the Felix service with <tt class="docutils literal"><span class="pre">service</span> <span class="pre">calico-felix</span> <span class="pre">restart</span></tt>.</li>
+</ul>
+</li>
+</ol>
+</div>
+<div class="section" id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this headline">¶</a></h2>
+<p>Now you&#8217;ve installed Calico, follow <em class="xref std std-ref">opens-install-inst-next-steps</em> for
+details on how to configure networks and use your new deployment.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Red Hat Enterprise Linux 7 Packaged Install Instructions</a><ul>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#common-steps">Common Steps</a><ul>
+<li><a class="reference internal" href="#install-openstack-juno">Install OpenStack Juno</a></li>
+<li><a class="reference internal" href="#configure-yum-repositories">Configure YUM repositories</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#control-node-install">Control Node Install</a></li>
+<li><a class="reference internal" href="#compute-node-install">Compute Node Install</a></li>
+<li><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="opens-external-conn.html"
+                        title="previous chapter">Major Differences from Standard OpenStack</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="ubuntu-opens-install.html"
+                        title="next chapter">Ubuntu 14.04 Packaged Install Instructions</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/redhat-opens-install.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="ubuntu-opens-install.html" title="Ubuntu 14.04 Packaged Install Instructions"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="opens-external-conn.html" title="Major Differences from Standard OpenStack"
+             >previous</a> |</li>
+        <li><a href="index.html">Project Calico 0.0.1 documentation</a> &raquo;</li>
+          <li><a href="openstack.html" >Calico with OpenStack</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, Metaswitch Networks.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>
