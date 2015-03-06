@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.12.1
+Version:        0.13
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -259,6 +259,17 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Mar 06 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.13
+- Bug fixes and enhancements to Calico components
+  - Remove python-iptables
+  - Add EL6.5 support
+  - Make Calico components restart after failures
+  - Enhance diagnostics gathering script
+  - Fix live migration support
+  - Many logging, testing and configuration improvements
+  - Improve handling of connection timeouts
+  - Program proxy NDP
+
 * Fri Feb 13 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.12.1
 - Bug fixes and improvements to Calico components
   - Initial refactor of fsocket.
