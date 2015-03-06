@@ -88,7 +88,7 @@ class TestFiptables(unittest.TestCase):
         rule.protocol = "udp"
         rule.in_interface = "virbr0"
         rule.match = "udp"
-        rule.parameters["dport"] = "53"
+        rule.parameters.append(("dport", "53"))
 
         self.assertEqual(str(table.chains["INPUT"].rules[1]),
                          "-p udp -i virbr0 -m udp -j ACCEPT --dport 53")
@@ -152,7 +152,7 @@ class TestFiptables(unittest.TestCase):
         rule = fiptables.Rule(IPV4, "DROP")
         rule.protocol = "tcp"
         rule.in_interface = "eth0"
-        rule.parameters["some-thing"] = "x y"
+        rule.parameters.append(("some-thing", "x y"))
 
         self.assertEqual(rule, table.chains["INPUT"].rules[0])
 
@@ -203,7 +203,7 @@ class TestFiptables(unittest.TestCase):
         rules[1].in_interface = "blah"
         rules[1].out_interface = "stuff"
         rules[1].match = "udp"
-        rules[1].parameters["dport"] = "53"
+        rules[1].parameters.append(("dport", "53"))
 
         line = "-d 192.168.122.0/24 -o virbr0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
         rules.append(fiptables.Rule(IPV4))
@@ -279,7 +279,7 @@ class TestFiptables(unittest.TestCase):
 
         rule = fiptables.Rule(IPV4)
         rule.match = "mark"
-        rule.parameters["mark"] = "!0x1"
+        rule.parameters.append(("mark", "!0x1"))
         rule.target = "DROP"
         self.assertEqual(chain.rules[3], rule)
 
@@ -477,9 +477,9 @@ class TestFiptables(unittest.TestCase):
         rule2.out_interface = "out_interface"
         self.assertEqual(rule1, rule2)
 
-        rule1.parameters = { "x": "blah", "y": "other" }
+        rule1.parameters = [("x", "blah"), ("y", "other")]
         self.assertNotEqual(rule1, rule2)
-        rule2.parameters = { "x": "blah" }
+        rule2.parameters = [("x", "blah")]
         self.assertNotEqual(rule1, rule2)
-        rule2.parameters["y"] = "other"
+        rule2.parameters.append(("y", "other"))
         self.assertEqual(rule1, rule2)
