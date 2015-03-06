@@ -43,11 +43,11 @@ class TestFiptables(unittest.TestCase):
 
         with mock.patch('calico.felix.futils.check_call'):
             state.read_table(IPV4, "blah")
-            futils.check_call.assert_called_with(["iptables", "--wait", "--list-rules", "--table", "blah"])
+            futils.check_call.assert_called_with(["iptables", "--list-rules", "--table", "blah"])
 
         with mock.patch('calico.felix.futils.check_call'):
             state.read_table(IPV6, "blah")
-            futils.check_call.assert_called_with(["ip6tables", "--wait", "--list-rules", "--table", "blah"])
+            futils.check_call.assert_called_with(["ip6tables", "--list-rules", "--table", "blah"])
 
     def test_load_table(self):
         state = fiptables.TableState()
@@ -226,13 +226,12 @@ class TestFiptables(unittest.TestCase):
         self.assertEqual(mock_call.call_count, 1)
 
         ops = []
-        op = ["iptables", "--wait", "--table", "filter", "--insert", "FORWARD", "2"]
+        op = ["iptables", "--table", "filter", "--insert", "FORWARD", "2"]
         op.extend(rules[1].generate_fields())
         ops.append(op)
 
         for loop in range(0,6):
             ops.append(["iptables",
-                        "--wait",
                         "--table",
                         "filter",
                         "--delete",
@@ -310,7 +309,7 @@ class TestFiptables(unittest.TestCase):
         self.assertTrue(len(chain.rules), 1)
 
         # Set up a handy list of arguments
-        base_args = ["iptables", "--wait", "--table", "filter"]
+        base_args = ["iptables", "--table", "filter"]
 
         # Put a new rule at the start
         rule = fiptables.Rule(IPV4, "rule1")
