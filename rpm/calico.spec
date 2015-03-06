@@ -210,6 +210,7 @@ install -d %{buildroot}%{_datadir}/calico/bird
 install etc/bird/*.template %{buildroot}%{_datadir}/calico/bird
 install -d %{buildroot}%{_bindir}
 install -m 755 etc/*.sh %{buildroot}%{_bindir}
+install -m 755 utils/diags.sh %{buildroot}%{_bindir}/calico-diags
 
 
 %clean
@@ -219,6 +220,7 @@ rm -rf $RPM_BUILD_ROOT
 %files common
 %defattr(-,root,root,-)
 %{python_sitelib}/calico*
+/usr/bin/calico-diags
 %doc
 
 %files compute
