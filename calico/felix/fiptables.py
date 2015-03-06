@@ -50,7 +50,6 @@ class Chain(object):
     def flush(self):
         log.debug("Flushing chain %s in table %s", self.name, self.table.desc)
         self.table.ops.append([IPTABLES_CMD[self.type],
-                               "--wait",
                                "--table",
                                self.table.name,
                                "--flush",
@@ -60,7 +59,6 @@ class Chain(object):
     def delete_rule(self, rule):
         # The rule must exist.
         args = [IPTABLES_CMD[self.type],
-                "--wait",
                 "--table",
                 self.table.name,
                 "--delete",
@@ -87,7 +85,6 @@ class Chain(object):
 
         while len(self.rules) > count:
             self.table.ops.append([IPTABLES_CMD[self.type],
-                                   "--wait",
                                    "--table",
                                    self.table.name,
                                    "--delete",
@@ -134,7 +131,6 @@ class Chain(object):
         """
         if position == RULE_POSN_LAST:
             args = [IPTABLES_CMD[self.type],
-                    "--wait",
                     "--table",
                     self.table.name,
                     "--append",
@@ -142,7 +138,6 @@ class Chain(object):
             self.rules.append(rule)
         else:
             args = [IPTABLES_CMD[self.type],
-                    "--wait",
                     "--table",
                     self.table.name,
                     "--insert",
@@ -207,7 +202,6 @@ class Table(object):
             chain.table = self
 
             self.ops.append([IPTABLES_CMD[self.type],
-                              "--wait",
                               "--table",
                               self.name,
                               "--new-chain",
@@ -220,7 +214,6 @@ class Table(object):
                   chain_name,
                   self.desc)
         self.ops.append([IPTABLES_CMD[self.type],
-                        "--wait",
                         "--table",
                         self.name,
                         "--delete-chain",
@@ -487,7 +480,6 @@ class TableState(object):
         purely for convenience of testing (since we can trivially mock it out).
         """
         data = futils.check_call([IPTABLES_CMD[type],
-                                  "--wait",
                                   "--list-rules",
                                   "--table",
                                   name]).stdout
