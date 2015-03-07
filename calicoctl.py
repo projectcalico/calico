@@ -7,7 +7,7 @@ ETCD_AUTHORITY [default: 127.0.0.1:4001]
 Usage:
   calicoctl master --ip=<IP> [--master-image=<DOCKER_IMAGE_NAME>]
   calicoctl master stop [--force]
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
@@ -19,6 +19,9 @@ Usage:
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
+  calicoctl ipv6 pool add <CIDR>
+  calicoctl ipv6 pool del <CIDR>
+  calicoctl ipv6 pool show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -26,6 +29,7 @@ Usage:
 
 Options:
  --ip=<IP>                The local management address to use.
+ --ip6=<IP6>              The local IPv6 management address to use.
  --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
                           Calico's master container
                           [default: calico/master:latest]
@@ -58,9 +62,12 @@ mkdir = sh.Command._create('mkdir')
 docker = sh.Command._create('docker')
 modprobe = sh.Command._create('modprobe')
 grep = sh.Command._create('grep')
+sysctl = sh.Command._create("sysctl")
+
 mkdir_p = mkdir.bake('-p')
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
+DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
 
 def get_container_info(container_name):
@@ -220,7 +227,7 @@ def node_stop(force):
         print "Current host has active endpoints so can't be stopped. Force with --force"
 
 
-def node(ip, node_image):
+def node(ip, node_image, ip6=""):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -228,18 +235,28 @@ def node(ip, node_image):
     # Set up etcd
     client = DatastoreClient()
 
+    # Enable IP forwarding since all compute hosts are vRouters.
+    sysctl("-w", "net.ipv4.ip_forward=1")
+    sysctl("-w", "net.ipv6.conf.all.forwarding=1")
+
     master_ip = client.get_master()
     if not master_ip:
         print "No master can be found. Exiting"
         return
 
+    # Creating the master also should set up the IP pool information.  Since
+    # bird and bird6 will not be able to start without these, check them now.
     ipv4_pools = client.get_ip_pools("v4")
     if not ipv4_pools:
         print "No IPv4 range defined.  Exiting."
         return
+    ipv6_pools = client.get_ip_pools("v6")
+    if not ipv6_pools:
+        print "No IPv6 range defined.  Exiting."
+        return
 
     print "Using master on IP: %s" % master_ip
-    client.create_host(ip)
+    client.create_host(ip, ip6)
     try:
         docker("rm", "-f", "calico-node")
     except Exception:
@@ -249,6 +266,7 @@ def node(ip, node_image):
     output = StringIO.StringIO()
 
     docker("run", "-e",  "IP=%s" % ip,
+                  "-e",  "IP6=%s" % ip6,
                   "--name=calico-node",
                   "--restart=always",
                   "--privileged",
@@ -291,6 +309,10 @@ def master(ip, master_image):
     ipv4_pools = client.get_ip_pools("v4")
     if len(ipv4_pools) == 0:
         client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
+    # If no IPv6 pools are defined, add a default.
+    ipv6_pools = client.get_ip_pools("v6")
+    if len(ipv6_pools) == 0:
+        client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
     try:
         docker("rm", "-f", "calico-master")
@@ -333,10 +355,10 @@ def status():
     try:
         print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
                                                             "/etc/service/bird/bird.ctl"))
+        print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc6 -s "
+                                                                "/etc/service/bird6/bird6.ctl"))
     except Exception:
         print "Couldn't collect BGP Peer information"
-
-
 
 
 def reset():
@@ -522,51 +544,54 @@ echo "Done"
     # the container because it might not be running...
 
 
-def ipv4_pool_add(cidr_pool):
+def ip_pool_add(cidr_pool, version):
     """
-    Add the the given CIDR range to the IPv4 IP address allocation pool.
+    Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
     """
+    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
-        print "%s is not a valid IPv4 prefix." % cidr_pool
+        print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version == 6:
-        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+    if pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+              (cidr_pool, pool.version, version)
         return
     client = DatastoreClient()
-    client.add_ip_pool("v4", pool)
+    client.add_ip_pool("v%d" % version, pool)
 
 
-def ipv4_pool_remove(cidr_pool):
+def ip_pool_remove(cidr_pool, version):
     """
-    Add the the given CIDR range to the IPv4 IP address allocation pool.
+    Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
     """
-
+    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
-        print "%s is not a valid IPv4 prefix." % cidr_pool
+        print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version == 6:
-        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+    if pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+              (cidr_pool, pool.version, version)
         return
     client = DatastoreClient()
     try:
-        client.del_ip_pool("v4", pool)
+        client.del_ip_pool("v%d" % version, pool)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
 
 
-def ipv4_pool_show(version):
+def ip_pool_show(version):
     """
-    Print a list of IPv4 allocation pools.
+    Print a list of IP allocation pools.
     :return: None
     """
     client = DatastoreClient()
@@ -575,6 +600,7 @@ def ipv4_pool_show(version):
     for pool in pools:
         x.add_row([pool])
     print x
+
 
 def validate_arguments():
     group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
@@ -613,7 +639,9 @@ if __name__ == '__main__':
             if arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
-                node(arguments["--ip"], arguments['--node-image'])
+                node_image = arguments['--node-image']
+                ip6 = arguments["--ip6"]
+                node(arguments["--ip"], node_image=node_image, ip6=ip6)
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
@@ -638,11 +666,19 @@ if __name__ == '__main__':
         elif arguments["ipv4"]:
             assert arguments["pool"]
             if arguments["add"]:
-                ipv4_pool_add(arguments["<CIDR>"])
+                ip_pool_add(arguments["<CIDR>"], version=4)
             elif arguments["del"]:
-                ipv4_pool_remove(arguments["<CIDR>"])
+                ip_pool_remove(arguments["<CIDR>"], version=4)
             elif arguments["show"]:
-                ipv4_pool_show("v4")
+                ip_pool_show("v4")
+        elif arguments["ipv6"]:
+            assert arguments["pool"]
+            if arguments["add"]:
+                ip_pool_add(arguments["<CIDR>"], version=6)
+            elif arguments["del"]:
+                ip_pool_remove(arguments["<CIDR>"], version=6)
+            elif arguments["show"]:
+                ip_pool_show("v6")
         if arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"], arguments["<IP>"])

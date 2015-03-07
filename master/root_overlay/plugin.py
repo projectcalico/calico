@@ -31,6 +31,17 @@ zmq_context = zmq.Context()
 log = logging.getLogger(__name__)
 log_api = logging.getLogger("api")
 
+INTERFACE_NAME_PREFIX = "tap"
+"""
+The interface name in the host namespace is a prefix, followed by characters
+from the endpoint ID.  For example tap3ab5678911a
+"""
+
+INTERFACE_NAME_POSTFIX_LEN = 11
+"""
+The number of characters of the Endpoint ID to name the interface with.  Linux
+interface names have a max of 14 characters.
+"""
 
 def setup_logging(logfile):
     log.setLevel(logging.DEBUG)
@@ -182,9 +193,13 @@ def do_ep_api():
         if fields['type'] == "RESYNCSTATE":
             resync_id = fields['resync_id']
             host = fields['hostname']
+            # interface_prefix sets the prefix used by all Calico interfaces
+            # to containers.  Felix needs this since it wildcards interface
+            # names to select packets for Calico processing in iptables.
             rsp = {"rc": "SUCCESS",
                    "message": "Hooray",
                    "type": fields['type'],
+                   "interface_prefix": INTERFACE_NAME_PREFIX,
                    "endpoint_count": str(len(eps_by_host.get(host, set())))}
             rsp_json = json.dumps(rsp)
             log_api.info("Sending RESYNCSTATE response to %s\n%s", host, rsp_json)
@@ -242,9 +257,11 @@ def send_all_eps(create_sockets, host, resync_id):
     # Send all of the ENDPOINTCREATED messages.
     for ep in eps_by_host.get(host, {}):
         log.info("Sending ENDPOINTCREATED message for endpoint %s", ep)
+        if_name = INTERFACE_NAME_PREFIX + ep[:INTERFACE_NAME_POSTFIX_LEN]
         msg = {"type": "ENDPOINTCREATED",
                "mac": eps_by_host[host][ep]["mac"],
                "endpoint_id": ep,
+               "interface_name":  if_name,
                "resync_id": resync_id,
                "issued": int(time.time() * 1000),
                "state": "enabled", # TODO - Map through enabled properly

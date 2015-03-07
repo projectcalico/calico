@@ -51,7 +51,7 @@ class DatastoreClient(object):
         (host, port) = etcd_authority.split(":", 1)
         self.etcd_client = etcd.Client(host=host, port=int(port))
 
-    def create_host(self, bird_ip):
+    def create_host(self, bird_ip, bird6_ip):
         """
         Create a new Calico host.
 
@@ -61,6 +61,7 @@ class DatastoreClient(object):
         host_path = HOST_PATH % {"hostname": hostname}
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
+        self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)

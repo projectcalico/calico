@@ -23,6 +23,7 @@ from docker import Client
 import netns
 import calico_etcd
 import socket
+from netaddr import IPAddress, AddrFormatError
 
 _log = logging.getLogger(__name__)
 
@@ -129,19 +130,25 @@ class AdapterResource(resource.Resource):
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
-            ip = env_dict[ENV_IP]
-
+            ip_str = env_dict[ENV_IP]
             # TODO: process groups
             group = env_dict.get(ENV_GROUP, None)
-
-            endpoint = netns.set_up_endpoint(ip=ip, cpid=pid)
-            self.etcd.create_container(hostname=hostname,
-                                       container_id=cid,
-                                       endpoint=endpoint)
-            _log.info("Finished network for container %s, IP=%s", cid, ip)
-
         except KeyError as e:
             _log.warning("Key error %s, request: %s", e, client_request)
+            return
+
+        try:
+            ip = IPAddress(ip_str)
+        except AddrFormatError:
+            _log.warning("IP address %s could not be parsed" % ip_str)
+            return
+
+        next_hop_ips = self.etcd.get_default_next_hops(hostname)
+        endpoint = netns.set_up_endpoint(ip=ip, cpid=pid, next_hop_ips=next_hop_ips)
+        self.etcd.create_container(hostname=hostname,
+                                   container_id=cid,
+                                   endpoint=endpoint)
+        _log.info("Finished network for container %s, IP=%s", cid, ip)
 
         return
 

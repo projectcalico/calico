@@ -40,6 +40,7 @@ RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/co
 RUN apt-get update && \
     apt-get install -qy \
         bird \
+        bird6 \
         build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
