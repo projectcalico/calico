@@ -157,6 +157,55 @@ Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 sudo ./calicoctl reset
 ```
 
+## IPv6
+To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
+
+On core-01
+```
+sudo ip addr add fd80:24e2:f998:72d6::1/112 dev eth1
+```
+
+On core-02
+```
+sudo ip addr add fd80:24e2:f998:72d6::2/112 dev eth1
+```
+
+Verify connectivity by pinging
+
+On core-01
+```
+ping6 fd80:24e2:f998:72d6::2
+```
+
+Then restart your calico-node processes with the `--ip6` parameter to enable v6 routing.
+
+On core-01
+```
+sudo ./calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d6::1
+```
+
+On core-02
+```
+sudo ./calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d6::2
+```
+
+Then, you can start containers with IPv6 connectivity by giving them an IPv6 address in `CALICO_IP`. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl ipv6 pool add` to change this).
+
+On core-01
+```
+docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid busybox
+sudo ./calicoctl group add GROUP_F_G
+sudo ./calicoctl group addmember GROUP_F_G workload-F
+```
+
+One core-02
+```
+docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid busybox
+sudo ./calicoctl group addmember GROUP_F_G workload-G
+docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
+```
+
+
 ## Troubleshooting
 
 ### Basic checks
