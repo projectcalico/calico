@@ -235,7 +235,7 @@ def node(ip, node_image, ip6=""):
     # Set up etcd
     client = DatastoreClient()
 
-    # Enable IP forwarding.
+    # Enable IP forwarding since all compute hosts are vRouters.
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
@@ -244,6 +244,8 @@ def node(ip, node_image, ip6=""):
         print "No master can be found. Exiting"
         return
 
+    # Creating the master also should set up the IP pool information.  Since
+    # bird and bird6 will not be able to start without these, check them now.
     ipv4_pools = client.get_ip_pools("v4")
     if not ipv4_pools:
         print "No IPv4 range defined.  Exiting."

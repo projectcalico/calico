@@ -30,13 +30,16 @@ VETH_NAME = "eth0"
 """The name to give to the veth in the target container's namespace"""
 
 ROOT_NETNS = "1"
-"""The pid of the root namespace.  On almost all systems, the init system is pid 1"""
+"""The pid of the root namespace.  On almost all systems, the init system is
+pid 1
+"""
 
 PREFIX_LEN = {4: 32, 6: 128}
 """The IP address prefix length to assign, by IP version."""
 
 PROC_ALIAS = "proc_host"
-"""The alias for /proc.  This is useful when the filesystem is containerized."""
+"""The alias for /proc.  This is useful when the filesystem is containerized.
+"""
 
 
 def setup_logging(logfile):
@@ -72,13 +75,17 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     """
     Set up an endpoint (veth) in the network namespace idenfitied by the PID.
 
-    :param ip: The IP address to assign to the endpoint (veth) as Netaddr IPAddress.
+    :param ip: The IP address to assign to the endpoint (veth) as Netaddr
+    IPAddress.
     :param cpid: The PID of a process currently running in the namespace.
-    :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the default routes.
-    :param in_container: When True, we assume this program is itself running in a container
-    namespace, as opposed to the root namespace.  If so, this method also moves the other end of
-    the veth into the root namespace.
-    :param veth_name: The name of the interface inside the container namespace, e.g. eth0
+    :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
+    default routes.
+    :param in_container: When True, we assume this program is itself running in
+    a container
+    namespace, as opposed to the root namespace.  If so, this method also moves
+    the other end of the veth into the root namespace.
+    :param veth_name: The name of the interface inside the container namespace,
+    e.g. eth0
     :param proc_alias: The head of the /proc filesystem on the host.
     :return: An Endpoint describing the veth just created.
     """
@@ -119,15 +126,17 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                shell=True)
     check_call("ip netns exec %s ip link set %s up" % (cpid, veth_name), shell=True)
 
-    # If in container, the iface end of the veth pair will be in the container namespace.  We need
-    # to move it to the root namespace so it will participate in routing.
+    # If in container, the iface end of the veth pair will be in the container
+    # namespace.  We need to move it to the root namespace so it will
+    # participate in routing.
     if in_container:
         # Move the other end of the veth pair into the root namespace
         check_call("ip link set %s netns %s" % (iface, ROOT_NETNS), shell=True)
         check_call("ip netns exec %s ip link set %s up" % (ROOT_NETNS, iface), shell=True)
 
     # Add an IP address.
-    check_call("ip netns exec %(cpid)s ip -%(version)s addr add %(addr)s/%(len)s dev %(device)s" %
+    check_call("ip netns exec %(cpid)s ip -%(version)s addr add "
+               "%(addr)s/%(len)s dev %(device)s" %
                {"cpid": cpid,
                 "version": ip.version,
                 "len": PREFIX_LEN[ip.version],
