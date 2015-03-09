@@ -174,7 +174,7 @@ post <https://code.facebook.com/posts/360346274145943/introducing-data-center-fa
 on their fabric approach. A quick picture to visualize the idea is shown
 below.
 
-.. figure:: _static/l2-interconnectFabric/l2-spine-planes.svg
+.. figure:: _static/l2-interconnectFabric/l2-spine-planes.*
    :alt: spine plane diagram
 
    spine plane diagram
