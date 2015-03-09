@@ -4,11 +4,10 @@ Project Calico documentation
 Contents:
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    home
-   arch-overview
-   arch-felix-and-acl
+   architecture
    configuration
    ipv6
    overlap-ips
