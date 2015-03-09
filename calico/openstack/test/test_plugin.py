@@ -58,6 +58,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
     DriverBase
 
 import calico.openstack.mech_calico as mech_calico
+import calico.openstack.t_zmq as t_zmq
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
@@ -137,17 +138,17 @@ class TestPlugin(unittest.TestCase):
         # Hook sleeping.  We must only do this once; hence it is in setUpClass
         # rather than in setUp.
         real_eventlet_sleep = eventlet.sleep
-        mech_calico.eventlet.sleep = simulated_time_sleep
+        t_zmq.eventlet.sleep = simulated_time_sleep
 
         # Similarly hook spawning.
         real_eventlet_spawn = eventlet.spawn
-        mech_calico.eventlet.spawn = simulated_spawn
+        t_zmq.eventlet.spawn = simulated_spawn
 
     @classmethod
     def tearDownClass(cls):
 
         # Restore the real eventlet.sleep.
-        mech_calico.eventlet.sleep = real_eventlet_sleep
+        t_zmq.eventlet.sleep = real_eventlet_sleep
 
     # Ports to return when the driver asks the OpenStack database for all
     # current ports.
@@ -223,9 +224,9 @@ class TestPlugin(unittest.TestCase):
                 # Block until there's something to receive, and then get that.
                 try:
                     msg = socket.rcv_queue.get(not (flags &
-                                                    mech_calico.zmq.NOBLOCK))
+                                                    t_zmq.zmq.NOBLOCK))
                 except eventlet.queue.Empty:
-                    raise mech_calico.Again()
+                    raise t_zmq.Again()
 
                 # Return that.
                 return msg
@@ -266,8 +267,8 @@ class TestPlugin(unittest.TestCase):
 
         # Intercept 0MQ socket creations, so that we can hook all of the
         # operations on sockets, using the methods above.
-        mech_calico.zmq.Context = mock.Mock()
-        self.zmq_context = mech_calico.zmq.Context.return_value
+        t_zmq.zmq.Context = mock.Mock()
+        self.zmq_context = t_zmq.zmq.Context.return_value
         self.zmq_context.socket.side_effect = socket_created
 
     # Setup to intercept and display logging by the code under test.
@@ -351,8 +352,8 @@ class TestPlugin(unittest.TestCase):
             # Check if we're about to advance past any exact multiples of
             # HEARTBEAT_SEND_INTERVAL_SECS.
             num_acl_pub_heartbeats = (
-                int(wake_up_time / mech_calico.HEARTBEAT_SEND_INTERVAL_SECS) -
-                int(current_time / mech_calico.HEARTBEAT_SEND_INTERVAL_SECS)
+                int(wake_up_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) -
+                int(current_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
             )
 
             # Advance to the determined time.
@@ -588,7 +589,7 @@ class TestPlugin(unittest.TestCase):
                  'issued': current_time * 1000,
                  'interface_name': 'tap' + port['id'][:11],
                  'state': 'enabled'},
-                mech_calico.zmq.NOBLOCK
+                t_zmq.zmq.NOBLOCK
             )
             self.felix_endpoint_socket.send_json.reset_mock()
 
@@ -629,12 +630,12 @@ class TestPlugin(unittest.TestCase):
         self.simulated_time_advance(30)
         self.felix_endpoint_socket.send_json.assert_called_once_with(
             {'type': 'HEARTBEAT'},
-            mech_calico.zmq.NOBLOCK)
+            t_zmq.zmq.NOBLOCK)
         self.felix_endpoint_socket.send_json.reset_mock()
 
         if NO_HEARTBEAT_RESPONSE in flags:
             # Advance time by more than HEARTBEAT_RESPONSE_TIMEOUT.
-            self.simulated_time_advance((mech_calico.HEARTBEAT_RESPONSE_TIMEOUT
+            self.simulated_time_advance((t_zmq.HEARTBEAT_RESPONSE_TIMEOUT
                                          / 1000) + 1)
 
             # The plugin now cleans up its Felix socket.
@@ -793,7 +794,7 @@ class TestPlugin(unittest.TestCase):
             # Expect create_port_postcommit to throw a FelixUnavailable
             # exception.
             real_eventlet_spawn(
-                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                lambda: self.assertRaises(t_zmq.FelixUnavailable,
                                           self.driver.create_port_postcommit,
                                           (context)))
         else:
@@ -818,12 +819,12 @@ class TestPlugin(unittest.TestCase):
              'resync_id': None,
              'type': 'ENDPOINTCREATED',
              'state': 'enabled'},
-            mech_calico.zmq.NOBLOCK)
+            t_zmq.zmq.NOBLOCK)
         self.felix_endpoint_socket.send_json.reset_mock()
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
-            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+            self.simulated_time_advance((t_zmq.ENDPOINT_RESPONSE_TIMEOUT
                                          / 1000) + 1)
 
             # The plugin now cleans up its Felix socket.
@@ -914,7 +915,7 @@ class TestPlugin(unittest.TestCase):
             # Expect update_port_postcommit to throw a FelixUnavailable
             # exception.
             real_eventlet_spawn(
-                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                lambda: self.assertRaises(t_zmq.FelixUnavailable,
                                           self.driver.update_port_postcommit,
                                           (context)))
         else:
@@ -936,12 +937,12 @@ class TestPlugin(unittest.TestCase):
              'issued': current_time * 1000,
              'type': 'ENDPOINTUPDATED',
              'state': 'enabled'},
-            mech_calico.zmq.NOBLOCK)
+            t_zmq.zmq.NOBLOCK)
         self.felix_endpoint_socket.send_json.reset_mock()
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
-            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+            self.simulated_time_advance((t_zmq.ENDPOINT_RESPONSE_TIMEOUT
                                          / 1000) + 1)
 
             # The plugin now cleans up its Felix socket.
@@ -1007,7 +1008,7 @@ class TestPlugin(unittest.TestCase):
             # Expect update_port_postcommit to throw a FelixUnavailable
             # exception.
             real_eventlet_spawn(
-                lambda: self.assertRaises(mech_calico.FelixUnavailable,
+                lambda: self.assertRaises(t_zmq.FelixUnavailable,
                                           self.driver.delete_port_postcommit,
                                           (context)))
         else:
@@ -1024,12 +1025,12 @@ class TestPlugin(unittest.TestCase):
             {'endpoint_id': port1['id'],
              'issued': current_time * 1000,
              'type': 'ENDPOINTDESTROYED'},
-            mech_calico.zmq.NOBLOCK)
+            t_zmq.zmq.NOBLOCK)
         self.felix_endpoint_socket.send_json.reset_mock()
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Advance time by more than ENDPOINT_RESPONSE_TIMEOUT.
-            self.simulated_time_advance((mech_calico.ENDPOINT_RESPONSE_TIMEOUT
+            self.simulated_time_advance((t_zmq.ENDPOINT_RESPONSE_TIMEOUT
                                          / 1000) + 1)
 
             # The plugin now cleans up its Felix socket.
