@@ -37,26 +37,26 @@ Ethernet for anything other than providing physical point-to-point links
 in the networking fabric. The principal reasons for Ethernet failures at
 large scale are:
 
-1. Large numbers of *end points*\  [1]_. Each switch in an Ethernet
+#. Large numbers of *end points*\  [#ep]_. Each switch in an Ethernet
    network must learn the path to all Ethernet endpoints that are
    connected to the Ethernet network. Learning this amount of state can
    become a substantial task when we are talking about hundreds of
    thousands of *end points*.
 
-1. High rate of *churn* or change in the network. With that many end
+#. High rate of *churn* or change in the network. With that many end
    points, most of them being ephemeral (such as virtual machines or
    containers), there is a large amount of *churn* in the network. That
    load of re--learning paths can be a substantial burden on the control
    plane processor of most Ethernet switches.
 
-2. High volumes of broadcast traffic. As each node on the Ethernet
+#. High volumes of broadcast traffic. As each node on the Ethernet
    network must use Broadcast packets to locate peers, and many use
    broadcast for other purposes, the resultant packet replication to
    each and every end point can lead to *broadcast storms* in large
    Ethernet networks, effectively consuming most, if not all resources
    in the network and the attached end points.
 
-3. Spanning tree. Spanning tree is the protocol used to keep an Ethernet
+#. Spanning tree. Spanning tree is the protocol used to keep an Ethernet
    network from forming loops. The protocol was designed in the era of
    smaller, simpler networks, and it has not aged well. As the number of
    links and interconnects in an Ethernet network goes up, many
@@ -89,7 +89,7 @@ those ISPs' customers' nodes. We leverage the same effect in Calico.
 To take the issues outlined above, let's re--visit them in a Calico
 context.
 
-1. Large numbers of end points. In a Calico network, the Ethernet
+#. Large numbers of end points. In a Calico network, the Ethernet
    interconnect fabric only sees the routers/compute servers, not the
    end point. In a standard cloud model, where there is tens of VMs per
    server (or hundreds of containers), this reduces the number of nodes
@@ -99,7 +99,7 @@ context.
    points. Well within the scale of any competent data center Ethernet
    top of rack (TOR) switch.
 
-2. High rate of *churn*. In a classical Ethernet data center fabric,
+#. High rate of *churn*. In a classical Ethernet data center fabric,
    there is a *churn* event each time an end point is created,
    destroyed, or moved. In a large data center, with hundreds of
    thousands of endpoints, this *churn* could run into tens of events
@@ -114,7 +114,7 @@ context.
    not handle that volume of change in the network should not be used
    for any application.
 
-3. High volume of broadcast traffic. Since the first (and last) hop for
+#. High volume of broadcast traffic. Since the first (and last) hop for
    any traffic in a Calico network is an IP hop, and IP hops terminate
    broadcast traffic, there is no endpoint broadcast network in the
    Ethernet fabric, period. In fact, the only broadcast traffic that
@@ -124,7 +124,7 @@ context.
    a pathological case, the ARP rate should be well within normal
    accepted boundaries.
 
-4. Spanning tree. Depending on the architecture chosen for the Ethernet
+#. Spanning tree. Depending on the architecture chosen for the Ethernet
    fabric, it may even be possible to turn off spanning tree. However,
    even if it is left on, due to the reduction in node count, and
    reduction in churn, most competent spanning tree implementations
@@ -185,7 +185,7 @@ I am not showing the end points in this diagram, and the end points
 would be unaware of anything in the fabric (as noted above).
 
 In the particular case of this diagram, each TOR is segmented into four
-logical switches (possibly by using 'port VLANs'), [2]_ and each compute
+logical switches (possibly by using 'port VLANs'), [#vswitch]_ and each compute
 server has a connection to each of those logical switches. We will call
 those logical switches by their color. Each TOR would then have a blue,
 green, orange, and red logical switch. Those 'colors' would be members
@@ -197,7 +197,7 @@ and only its spine.
 Each plane would constitute an IP network, so the blue plane would be
 2001:db8:1000::/36, the green would be 2001:db8:2000::/36, and the
 orange and red planes would be 2001:db8:3000::/36 and 2001:db8:4000::/36
-respectively. [3]_
+respectively. [#ipv6]_
 
 Each IP network (plane) requires it's own BGP route reflectors. Those
 route reflectors need to be peered with each other within the plane, but
@@ -227,7 +227,7 @@ the load across all planes.
 If a plane were to fail (say due to a spanning tree failure), then only
 that one plane would fail. The remaining planes would stay running.
 
-.. [1]
+.. [#ep]
    In this document (and in all Calico documents) we tend to use the
    terms *end point* to refer to a virtual machine, container,
    appliance, bare metal server, or any other entity that is connected
@@ -235,12 +235,12 @@ that one plane would fail. The remaining planes would stay running.
    point, we will call that out (such as referring to the behavior of
    VMs as distinct from containers).
 
-.. [2]
+.. [#vswitch]
    I am using logical switches in this example. Physical TORs could also
    be used, or a mix of the two (say 2 logical switches hosted on each
    physical switch).
 
-.. [3]
+.. [#ipv6]
    We use IPv6 here purely as an example. IPv4 would be configured
    similarly. I welcome your questions, either here on the blog, or via
    the Project Calico mailing list.
