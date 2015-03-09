@@ -49,8 +49,14 @@ from node.root_overlay.adapter import netns
 
 
 hostname = socket.gethostname()
+
+# Directly use Command._create() because the magic-import sh.mkdir.bake()
+# fails in pyinstaller.
 mkdir = sh.Command._create('mkdir')
-docker = sh.Command._create('docker')
+try:
+    docker = sh.Command._create('docker')
+except sh.CommandNotFound:
+    docker = None  # We'll tell the user about it later.
 modprobe = sh.Command._create('modprobe')
 grep = sh.Command._create('grep')
 mkdir_p = mkdir.bake('-p')
@@ -533,7 +539,11 @@ def process_output(line):
 if __name__ == '__main__':
     arguments = docopt(__doc__)
     if os.geteuid() != 0:
-        print "calicoctl must be run as root"
+        print >> sys.stderr, "calicoctl must be run as root."
+        exit(2)
+    elif not docker:
+        print >> sys.stderr, "The docker command wasn't found; calicoctl requires docker."
+        exit(3)
     elif validate_arguments():
         if arguments["node"]:
             if arguments["stop"]:

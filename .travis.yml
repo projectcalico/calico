@@ -1,0 +1,6 @@
+language: python
+python:
+  - "2.7"
+  - "2.6"
+install: sudo ./travis-install-deps.sh
+script: ./create-binary.sh
