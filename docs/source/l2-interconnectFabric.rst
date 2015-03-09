@@ -1,7 +1,7 @@
 Calico over an Ethernet interconnect fabric
 -------------------------------------------
 
-This is the first of a few blog posts that I will be authoring that will
+This is the first of a few *tech notes*  that I will be authoring that will
 discuss some of the various interconnect fabric options in a Calico
 network.
 
