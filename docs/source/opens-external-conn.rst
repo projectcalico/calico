@@ -1,3 +1,5 @@
+.. _opens-external-conn:
+
 Connectivity in OpenStack
 =========================
 

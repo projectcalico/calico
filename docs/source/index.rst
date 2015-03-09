@@ -8,8 +8,7 @@ Contents:
 
    home
    architecture
-   configuration
-   ipv6
+   configuring-calico
    overlap-ips
    openstack
    support
