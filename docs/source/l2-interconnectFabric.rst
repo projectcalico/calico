@@ -175,9 +175,11 @@ on their fabric approach. A quick picture to visualize the idea is shown
 below.
 
 .. figure:: _static/l2-interconnectFabric/l2-spine-planes.*
+   :align: center
    :alt: spine plane diagram
 
-   spine plane diagram
+   A diagram showing the Ethernet spine planes.  Each color represents
+   a distinct Ethernet network, transporting a unique IP network.
 
 I am not showing the end points in this diagram, and the end points
 would be unaware of anything in the fabric (as noted above).
