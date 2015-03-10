@@ -15,3 +15,4 @@ Contents:
    contribute
    faq
    api-proposal
+   fuel-integration
