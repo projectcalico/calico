@@ -336,7 +336,7 @@ def group_add_container(container_name, group_name):
     print "Added %s to %s" % (container_name, group_name)
 
 def group_remove(group_name):
-    #TODO - Don't allow removing a group that has enpoints in it.
+    #TODO - Don't allow removing a group that has endpoints in it.
     client = DatastoreClient()
     try:
         client.delete_group(group_name)

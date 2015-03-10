@@ -18,7 +18,6 @@ RUN curl -L http://binaries.projectcalico.org/repo/key | apt-key add - && \
 RUN apt-get update && \
     apt-get install -qy \
         calico-felix \
-        calico-acl-manager \
         ipset \
         iptables \
         libffi-dev \
@@ -28,9 +27,10 @@ RUN apt-get update && \
         python-docopt \
         python-pip \
         python-pyasn1 \
-        python-zmq && \
+        python-gevent && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    pip install python-etcd
 
 # Confd
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/confd-0.7.1-linux-amd64 -o confd && \

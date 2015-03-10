@@ -41,8 +41,9 @@ class Endpoint(object):
         self.ipv6_gateway = None
 
     def to_json(self):
-        json_dict = {"state": self.state,
+        json_dict = {"state": "active" if self.state == "enabled" else "inactive",
                      "mac": self.mac,
+                     "name": self.ep_id[:11],
                      "profile_id": self.profile_id,
                      "ipv4_nets": [str(net) for net in self.ipv4_nets],
                      "ipv6_nets": [str(net) for net in self.ipv6_nets],

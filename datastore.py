@@ -79,6 +79,7 @@ class Endpoint(object):
 
     def to_json(self):
         json_dict = {"state": self.state,
+                     "name": "tap" + self.ep_id[:11], # FIXME: commonize name calculation
                      "mac": self.mac,
                      "profile_id": self.profile_id,
                      "ipv4_nets": [str(net) for net in self.ipv4_nets],
@@ -273,10 +274,10 @@ class DatastoreClient(object):
         # Accept inbound traffic from self, allow outbound traffic to anywhere.
         default_deny = Rule(action="deny")
         accept_self = Rule(src_tag=name)
-        default_accept = Rule(action="accept")
+        default_allow = Rule(action="allow")
         rules = Rules(id=name,
                       inbound_rules=[accept_self, default_deny],
-                      outbound_rules=[default_accept])
+                      outbound_rules=[default_allow])
         self.etcd_client.write(profile_path + "rules", rules.to_json())
 
     def delete_group(self, name):
