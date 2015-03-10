@@ -76,7 +76,7 @@ fi
 %package control
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, calico-acl-manager
+Requires:       calico-common, calico-acl-manager, python-six, python-zmq
 
 %description control
 This package provides the pieces needed on a controller node.
