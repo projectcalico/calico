@@ -132,7 +132,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
         if self._port_is_endpoint_port(port):
             LOG.info("Created port: %s" % port)
-            self.add_port_gateways(port, context)
+            self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
             self.transport.endpoint_created(port)
             self._get_db()
@@ -156,7 +156,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Ref: http://lists.openstack.org/pipermail/openstack-dev/
                 # 2014-February/027571.html
                 LOG.info("Migration part 1")
-                self.add_port_gateways(original, context)
+                self.add_port_gateways(original, context._plugin_context)
                 self.transport.endpoint_deleted(original)
             elif original['binding:vif_type'] == 'unbound':
                 # This indicates part 2 of a port being migrated: the port
@@ -166,18 +166,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Ref: http://lists.openstack.org/pipermail/openstack-dev/
                 # 2014-February/027571.html
                 LOG.info("Migration part 2")
-                self.add_port_gateways(port, context)
+                self.add_port_gateways(port, context._plugin_context)
                 self.transport.endpoint_created(port)
             elif original['binding:host_id'] != port['binding:host_id']:
                 # Migration as implemented in Icehouse.
                 LOG.info("Migration as implemented in Icehouse")
-                self.add_port_gateways(original, context)
+                self.add_port_gateways(original, context._plugin_context)
                 self.transport.endpoint_deleted(original)
-                self.add_port_gateways(port, context)
+                self.add_port_gateways(port, context._plugin_context)
                 self.transport.endpoint_created(port)
             else:
                 # This is a non-migration-related update.
-                self.add_port_gateways(port, context)
+                self.add_port_gateways(port, context._plugin_context)
                 self.transport.endpoint_updated(port)
 
     def delete_port_postcommit(self, context):
