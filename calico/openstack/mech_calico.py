@@ -603,15 +603,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # It's a GETGROUPS request.
                     LOG.info("GETGROUPS request")
 
-                    # Send a GETGROUPS response, with no detail, on the ROUTER
-                    # socket.
-                    rsp = {'type': 'GETGROUPS'}
-                    LOG.info("Sending GETGROUPS response: %s" % rsp)
-                    self.acl_get_socket.send_multipart(
-                        [peer,
-                         '',
-                         json.dumps(rsp).encode('utf-8')])
-
                     # Set up access to the Neutron database, if we haven't
                     # already.
                     self._get_db()
@@ -623,6 +614,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # Send a GROUPUPDATE message for each group.
                     for sg in sgs:
                         self.send_group(sg, db_context)
+
+                    # Send a GETGROUPS response, with no detail, on the ROUTER
+                    # socket.  Do this after sending the start of day
+                    # GROUPUPDATEs so ACL Manager can detect if the audit
+                    # failed.
+                    rsp = {'type': 'GETGROUPS'}
+                    LOG.info("Sending GETGROUPS response: %s" % rsp)
+                    self.acl_get_socket.send_multipart(
+                        [peer,
+                         '',
+                         json.dumps(rsp).encode('utf-8')])
 
                 elif rq['type'] == 'HEARTBEAT':
                     # It's a heartbeat.  Send the same back.
