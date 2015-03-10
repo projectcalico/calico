@@ -1,11 +1,8 @@
 Calico Component Architecture
-=============================     
+=============================
 
 Felix, the Calico Plugin and the Calico ACL Manager
 ---------------------------------------------------
-
-The current high level architecture of Calico is described in
-:doc:`arch-overview`.
 
 This document describes a planned new architecture that clearly
 separates Calico’s core function from how that function is integrated
@@ -15,7 +12,7 @@ components of the new architecture, and the interactions between them,
 are shown in the following diagram.
 
 .. figure:: _static/calico_API_arch_Sept_2014.png
-   :alt: 
+   :alt:
 
 Each segment is broken down below.
 
