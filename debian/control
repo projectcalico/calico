@@ -33,6 +33,8 @@ Architecture: all
 Depends:
  calico-common (= ${binary:Version}),
  calico-acl-manager (= ${binary:Version}),
+ python-six,
+ python-zmq,
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico virtual networking for cloud data centers.
