@@ -58,7 +58,7 @@ def remove_endpoint(ep_id):
     :param ep_id: The endpoint ID to remove
     :return: Nothing
     """
-    iface = "tap" + ep_id[:11]
+    iface = "cali" + ep_id[:11]
     call("ip link delete %s" % iface, shell=True)
 
 def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alias=PROC_ALIAS):
@@ -78,7 +78,7 @@ def set_up_endpoint(ip, cpid, in_container=False, veth_name=VETH_NAME, proc_alia
     ep_id = uuid.uuid1().hex
 
     # TODO - need to handle containers exiting straight away...
-    iface = "tap" + ep_id[:11]
+    iface = "cali" + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]
 
     # Provision the networking

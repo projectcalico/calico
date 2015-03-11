@@ -228,6 +228,7 @@ def node(ip, node_image):
         # If no IPv4 pools are defined, add a default.
         client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
 
+    client.create_global_config()
     client.create_host(ip)
     try:
         docker("rm", "-f", "calico-node")

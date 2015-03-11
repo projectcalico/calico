@@ -9,6 +9,7 @@ ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # etcd paths for Calico
+CONFIG_PATH = "/calico/config/"
 HOSTS_PATH = "/calico/host/"
 HOST_PATH = HOSTS_PATH + "%(hostname)s/"
 CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
@@ -79,7 +80,7 @@ class Endpoint(object):
 
     def to_json(self):
         json_dict = {"state": self.state,
-                     "name": "tap" + self.ep_id[:11], # FIXME: commonize name calculation
+                     "name": "cali" + self.ep_id[:11],
                      "mac": self.mac,
                      "profile_id": self.profile_id,
                      "ipv4_nets": [str(net) for net in self.ipv4_nets],
@@ -128,6 +129,15 @@ class DatastoreClient(object):
         (host, port) = etcd_authority.split(":", 1)
         self.etcd_client = etcd.Client(host=host, port=int(port))
 
+    def create_global_config(self):
+        config_dir = CONFIG_PATH
+        try:
+            self.etcd_client.read(config_dir)
+        except KeyError:
+            # Didn't exist, create it now.
+            self.etcd_client.set(config_dir + "InterfacePrefix", "veth")
+            self.etcd_client.set(config_dir + "LogSeverityFile", "DEBUG")
+
     def create_host(self, bird_ip):
         """
         Create a new Calico host.
@@ -138,6 +148,7 @@ class DatastoreClient(object):
         host_path = HOST_PATH % {"hostname": hostname}
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
+        self.etcd_client.set(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
