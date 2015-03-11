@@ -3,4 +3,4 @@ build:
   steps:
     - script:
         name: Build binary
-        code: create_binary.sh
+        code: ./create_binary.sh
