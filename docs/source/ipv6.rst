@@ -81,8 +81,8 @@ implemented in Calico.
    -  adds a static route for the endpoint's IPv6 address, via its tap or veth
       device, just as for IPv4.
 
--  Dnsmasq provides both Router Advertisements and DHCPv6 service (DHCPv6 is
-   not needed for containers).
+-  Dnsmasq provides both Router Advertisements and DHCPv6 service (neither of
+   these are required for container environments).
 
    -  Router Advertisements, without SLAAC or on-link flags, cause each VM
       to create a default route to the link-local address of the VM's TAP
@@ -90,12 +90,19 @@ implemented in Calico.
 
    -  DHCPv6 allows VMs to get their orchestrator-allocated IPv6 address.
 
+-  For container environments, rather than using Router Advertisements and
+   DHCPv6, we enable Proxy-NDP instead.
+
 -  BIRD6 runs between the compute hosts to distribute routes.
 
 OpenStack Specific Details
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For OpenStack, IPv6 works best when each OpenStack network is configured with
-both an IPv4 and IPv6 subnet, each with DHCP enabled.
+both an IPv4 and IPv6 subnet with DHCP enabled, at least initially. This makes
+it possible to seamlessly handle VM images that support only IPv4 alongside
+those that support both, and guarantees it will be possible to access
+misconfigured VM images over IPv4.
 
-
+However, we do not believe there are any problems with providing an
+IPv6-only network in OpenStack.

@@ -1,7 +1,7 @@
-Calico Security Configuration Model
-===================================
+Calico Security Data Model (OpenStack)
+======================================
 
-.. warning:: The current security configuration model in Calico is based
+.. warning:: The current security data model in Calico is based
              primarily on what OpenStack allows users to configure. This is
              shortly being replaced by a new, more flexible model, so this
              article is only for reference of the current setup.
@@ -11,17 +11,17 @@ At present, the flow of security information proceeds as follows::
     [Configuration in OpenStack or other orchestrator] -(Plugin)-> [Calico network API] -(ACL Manager)-> [Calico ACL API] -(Felix)-> [Programmed IPTables rules]
 
 When a security group is configured, the Calico orchestrator plugin discovers
-the new configuration. This configuration is programmed over the Calico Network
+the new configuration. This configuration is passed over the Calico Network
 API to the ACL manager. This component transforms the ACLs if necessary and
-then programs them over the Calico ACL API to the relevant Felix agent. That
-Felix agent then transforms the rules finally into ``iptables`` and ``ipsets``
-commands.
-
-Configuration Model: OpenStack
-------------------------------
+then passes them over the Calico ACL API to the relevant Felix agent. That
+Felix agent then programs the rules into the kernel using ``iptables`` and
+``ipsets`` commands.
 
 Security in OpenStack is controlled by 3 objects: networks, routers and
-security groups.
+security groups. Calico **only** uses security groups for
+security configuration: networks and routers have no impact. The following
+subsections go into this in more detail, and discuss how these concepts map
+onto the Calico data model.
 
 Groups
 ~~~~~~
