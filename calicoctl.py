@@ -58,12 +58,15 @@ from node.root_overlay.adapter import netns
 
 
 hostname = socket.gethostname()
-mkdir = sh.Command._create('mkdir')
-docker = sh.Command._create('docker')
-modprobe = sh.Command._create('modprobe')
-grep = sh.Command._create('grep')
-sysctl = sh.Command._create("sysctl")
-
+try:
+    mkdir = sh.Command._create('mkdir')
+    docker = sh.Command._create('docker')
+    modprobe = sh.Command._create('modprobe')
+    grep = sh.Command._create('grep')
+    sysctl = sh.Command._create("sysctl")
+except sh.CommandNotFound as e:
+    print "Missing command: %s" % e.message
+    
 mkdir_p = mkdir.bake('-p')
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
