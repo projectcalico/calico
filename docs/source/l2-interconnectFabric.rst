@@ -1,5 +1,9 @@
-Calico over an Ethernet interconnect fabric
--------------------------------------------
+=============================================
+ Calico over an Ethernet interconnect fabric
+=============================================
+------------------------------------
+ At scale, and no, we're not joking
+------------------------------------
 
 This is the first of a few *tech notes* that I will be authoring that will
 discuss some of the various interconnect fabric options in a Calico
@@ -13,7 +17,7 @@ Calico will earn a very nice dinner on or with the core Calico team).
 This means that the standard tools used to transport IP, such as MPLS
 and Ethernet can be used in a Calico network.
 
-In this blog post, I'm going to focus on Ethernet as the interconnect
+In this note, I'm going to focus on Ethernet as the interconnect
 network. Talking to most at--scale cloud operators, they have converted
 to IP fabrics, and as will cover in the next blog post that
 infrastructure will work for Calico as well. However, the concerns that
@@ -23,7 +27,7 @@ to be viably considered as a Calico interconnect, even in large--scale
 deployments.
 
 Concerns over Ethernet at scale
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+===============================
 
 It has been acknowledged by the industry for years that, beyond a
 certain size, classical Ethernet networks are unsuitable for production
@@ -76,7 +80,7 @@ how Project Calico can mitigate these issues, even in very large
 deployments.
 
 How does Calico tame the Ethernet daemons?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+==========================================
 
 First, let's look at how Calico uses an Ethernet interconnect fabric.
 It's important to remember that an Ethernet network *sees* nothing on
@@ -141,7 +145,7 @@ account. The Ethernet fabric option has fewer architectural
 considerations in its design.
 
 A brief note about Ethernet topology
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+====================================
 
 As mentioned elsewhere in the Calico documentation, since Calico can use
 most of the standard IP tooling, some interesting options regarding
