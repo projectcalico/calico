@@ -184,8 +184,7 @@ def container_remove(container_name):
 
 def group_remove_container(container_name, group_name):
     """
-    Add a container (on this host) to the group with the given name.  This adds the first
-    endpoint on the container to the group.
+    Remove a container (on this host) from the group with the given name.  
 
     :param container_name: The Docker container name or ID.
     :param group_name:  The Calico security group name.
