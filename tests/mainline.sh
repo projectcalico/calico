@@ -9,11 +9,12 @@ python calicoctl.py group show --detailed
 }
 
 # Set it up
-docker rm -f node1 node2 || true
+docker rm -f node1 node2 etcd || true
+docker run -d -p 4001:4001 --name etcd quay.io/coreos/etcd:v0.4.6
 python calicoctl.py reset || true
 
 show_commands
-docker run -tid --name=node2 busybox
+#docker run -tid --name=node2 busybox
 python calicoctl.py master --ip=172.17.8.10
 python calicoctl.py node --ip=172.17.8.10
 python calicoctl.py group add TEST_GROUP
@@ -25,7 +26,8 @@ echo "Waiting for powerstrip to come up"
   sleep 1
 done
 docker run -e CALICO_IP=192.168.1.1 -tid --name=node1 busybox
-python calicoctl.py container add node2 192.168.1.2
+docker run -e CALICO_IP=192.168.1.2 -tid --name=node2 busybox 
+#python calicoctl.py container add node2 192.168.1.2
 
 python calicoctl.py group addmember TEST_GROUP node1
 python calicoctl.py group addmember TEST_GROUP node2
