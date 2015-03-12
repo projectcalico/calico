@@ -4,11 +4,12 @@ Calico Component Architecture
 Felix, the Calico Plugin and the Calico ACL Manager
 ---------------------------------------------------
 
-This document describes a planned new architecture that clearly
-separates Calico’s core function from how that function is integrated
+This document describes the architecture of Calico, where Calico's core 
+function is separated from the integration of that function 
 into the environment that Calico is running – for example, OpenStack,
-CoreOS or some other cloud OS; or a switch OS such as Cumulus Linux. The
-components of the new architecture, and the interactions between them,
+Docker, CoreOS or some other cloud OS. 
+
+The components of this architecture, and the interactions between them,
 are shown in the following diagram.
 
 .. figure:: _static/calico_API_arch_Sept_2014.png
