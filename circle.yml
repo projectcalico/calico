@@ -10,3 +10,4 @@ dependencies:
 test:
   override:
     - ./create_binary.sh
+    - sudo tests/mainline.sh
