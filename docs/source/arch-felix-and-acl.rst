@@ -4,10 +4,10 @@ Calico Component Architecture
 Felix, the Calico Plugin and the Calico ACL Manager
 ---------------------------------------------------
 
-This document describes the architecture of Calico, where Calico's core 
-function is separated from the integration of that function 
+This document describes the architecture of Calico, where Calico's core
+function is separated from the integration of that function
 into the environment that Calico is running – for example, OpenStack,
-Docker, CoreOS or some other cloud OS. 
+Docker, CoreOS or some other cloud OS.
 
 The components of this architecture, and the interactions between them,
 are shown in the following diagram.
@@ -105,7 +105,7 @@ BGP Stack (not present on diagram)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The BGP stack is not present on the diagram, but is nevertheless part of
-the overall Calico architecture (as shown in :doc:`arch-overview`.
+the overall Calico architecture.
 
 Felix does not talk to the BGP stack directly, but instead the BGP stack
 is programmed via the Linux kernel. In effect, the programming of the
