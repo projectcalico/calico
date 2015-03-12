@@ -1,6 +1,8 @@
 machine:
   services:
     - docker
+dependencies:
+  override:
 test:
   override:
     - ./create_binary.sh
