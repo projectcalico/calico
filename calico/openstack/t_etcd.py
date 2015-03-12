@@ -51,6 +51,11 @@ class CalicoTransportEtcd(CalicoTransport):
         # the OpenStack database.
         eventlet.spawn(self.periodic_resync_thread)
 
+        # We will remember the OpenStack security group data, between resyncs,
+        # so that we can generate profiles when needed for new or updated
+        # endpoints.  Start off with an empty set.
+        self.sgs = {}
+
     def periodic_resync_thread(self):
         while True:
             try:
@@ -78,7 +83,7 @@ class CalicoTransportEtcd(CalicoTransport):
         needed_profiles = set()
 
         # Read all etcd keys under /calico/host.
-        r = client.read('/calico/host', recursive=True)
+        r = self.client.read('/calico/host', recursive=True)
         for child in r.children:
             m = OPENSTACK_ENDPOINT_RE.match(child.key)
             if m:
@@ -109,14 +114,14 @@ class CalicoTransportEtcd(CalicoTransport):
                     # cases the etcd key is no longer valid and should be
                     # deleted.  In the migration case, data will be written
                     # below to an etcd key that incorporates the new hostname.
-                    client.delete(child.key)
+                    self.client.delete(child.key)
 
         # Now write etcd data for any endpoints remaining in the ports dict;
         # these are new endpoints - i.e. never previously represented in etcd
         # data - or endpoints that have migrated or whose data has changed.
         for port in ports.values:
             data = self.port_etcd_data(port)
-            client.write(self.port_etcd_key(port), json.dumps(data))
+            self.client.write(self.port_etcd_key(port), json.dumps(data))
 
             # Remember the security profile that this port needs.
             needed_profiles.add(data['profile_id'])
@@ -162,12 +167,12 @@ class CalicoTransportEtcd(CalicoTransport):
     def resync_security_groups(self, needed_profiles):
         # Get all current security groups from the OpenStack database and key
         # them on security group ID.
-        sgs = {}
+        self.sgs = {}
         for sg in self.driver.get_security_groups():
-            sgs[sg['id']] = sg
+            self.sgs[sg['id']] = sg
 
         # Read all etcd keys directly under /calico/policy/profile.
-        r = client.read('/calico/policy/profile')
+        r = self.client.read('/calico/policy/profile')
         for child in r.children:
             # Get the bit of the key after the last /.
             profile_id = child.key.rstrip('/').rsplit('/', 1)[-1]
@@ -175,11 +180,11 @@ class CalicoTransportEtcd(CalicoTransport):
                 # This is a profile that we want.  Let's read its rules and
                 # tags, and compare those against the current OpenStack data.
                 rules = json_decoder.decode(
-                    client.read(child.key + '/rules').value)
+                    self.client.read(child.key + '/rules').value)
                 tags = json_decoder.decode(
-                    client.read(child.key + '/tags').value)
+                    self.client.read(child.key + '/tags').value)
 
-                if (rules == self.profile_rules(profile_id, sgs) and
+                if (rules == self.profile_rules(profile_id) and
                     tags == self.profile_tags(profile_id)):
                     # The existing etcd data for this profile is completely
                     # correct.  Delete the profile_id from needed_profiles so
@@ -188,21 +193,21 @@ class CalicoTransportEtcd(CalicoTransport):
                     needed_profiles.remove(profile_id)
             else:
                 # We don't want this profile any more, so delete the key.
-                client.delete(child.key, recursive=True)
+                self.client.delete(child.key, recursive=True)
 
         # Now write etcd data for each profile remaining in needed_profiles.
         for profile_id in needed_profiles:
             key = '/calico/policy/profile/' + profile_id
-            client.write(key + '/rules',
-                         json.dumps(self.profile_rules(profile_id, sgs)))
-            client.write(key + '/tags',
-                         json.dumps(self.profile_tags(profile_id)))
+            self.client.write(key + '/rules',
+                              json.dumps(self.profile_rules(profile_id)))
+            self.client.write(key + '/tags',
+                              json.dumps(self.profile_tags(profile_id)))
 
-    def profile_rules(self, profile_id, sgs):
+    def profile_rules(self, profile_id):
         inbound = []
         outbound = []
         for sgid in self.profile_tags(profile_id):
-            for rule in sgs[sgid]['security_group_rules']:
+            for rule in self.sgs[sgid]['security_group_rules']:
                 LOG.info("Neutron rule %s" % rule)
 
                 ethertype = rule['ethertype']
@@ -258,13 +263,27 @@ class CalicoTransportEtcd(CalicoTransport):
         return profile_id.split('_')
 
     def endpoint_created(self, port):
-        pass
+        # Write etcd data for the new endpoint.
+        data = self.port_etcd_data(port)
+        self.client.write(self.port_etcd_key(port), json.dumps(data))
+
+        # Get the security profile that this port needs.
+        profile_id = data['profile_id']
+
+        # Write etcd data for this profile.
+        key = '/calico/policy/profile/' + profile_id
+        self.client.write(key + '/rules',
+                          json.dumps(self.profile_rules(profile_id)))
+        self.client.write(key + '/tags',
+                          json.dumps(self.profile_tags(profile_id)))
 
     def endpoint_updated(self, port):
-        pass
+        # Do the same as for endpoint_created.
+        self.endpoint_created(port)
 
     def endpoint_deleted(self, port):
-        pass
+        # Delete the etcd key for this endpoint.
+        self.client.delete(self.port_etcd_key(port))
 
     def security_group_updated(self, sg):
         pass
