@@ -154,6 +154,7 @@ class CalicoTransportEtcd(CalicoTransport):
         return data
 
     def port_profile_id(self, port):
+        return '_'.join(port['security_groups'])
 
     def resync_security_groups(self):
 
