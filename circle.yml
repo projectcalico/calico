@@ -3,6 +3,7 @@ machine:
     - docker
 dependencies:
   override:
+    - echo "Skipped"
 test:
   override:
     - ./create_binary.sh
