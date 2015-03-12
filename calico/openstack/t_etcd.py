@@ -116,7 +116,7 @@ class CalicoTransportEtcd(CalicoTransport):
         # data - or endpoints that have migrated or whose data has changed.
         for port in ports.values:
             data = self.port_etcd_data(port)
-            client.write(self.port_etcd_key(port), data)
+            client.write(self.port_etcd_key(port), json.dumps(data))
 
             # Remember the security profile that this port needs.
             needed_profiles.add(data['profile_id'])
@@ -193,8 +193,10 @@ class CalicoTransportEtcd(CalicoTransport):
         # Now write etcd data for each profile remaining in needed_profiles.
         for profile_id in needed_profiles:
             key = '/calico/policy/profile/' + profile_id
-            client.write(key + '/rules', self.profile_rules(profile_id, sgs))
-            client.write(key + '/tags', self.profile_tags(profile_id))
+            client.write(key + '/rules',
+                         json.dumps(self.profile_rules(profile_id, sgs)))
+            client.write(key + '/tags',
+                         json.dumps(self.profile_tags(profile_id)))
 
     def profile_rules(self, profile_id, sgs):
         inbound = []
