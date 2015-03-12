@@ -55,10 +55,10 @@ class CalicoTransportEtcd(CalicoTransport):
         while True:
             try:
                 # Resynchronize endpoint data.
-                self.resync_endpoints()
+                needed_profiles = self.resync_endpoints()
 
                 # Resynchronize security group data.
-                self.resync_security_groups()
+                self.resync_security_groups(needed_profiles)
 
                 # Sleep until time for next resync.
                 eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
@@ -72,6 +72,10 @@ class CalicoTransportEtcd(CalicoTransport):
         ports = {}
         for port in self.driver.get_endpoints():
             ports[port['id']] = port
+
+        # As we go through the current endpoints, we'll accumulate the set of
+        # security profiles that they need.  So start with an empty list here.
+        needed_profiles = set()
 
         # Read all etcd keys under /calico/host.
         r = client.read('/calico/host', recursive=True)
@@ -89,11 +93,14 @@ class CalicoTransportEtcd(CalicoTransport):
                     hostname == ports[endpoint_id]['binding:host_id'] and
                     data == self.port_etcd_data(ports[endpoint_id])):
                     # OpenStack still has an endpoint that exactly matches this
-                    # etcd key/value.  No change is needed to the etcd data,
-                    # and we can delete the port from the ports dict so as not
-                    # to unnecessarily write out its (unchanged) value again
-                    # below.
+                    # etcd key/value.  Remember its security profile.
+                    needed_profiles.add(data['profile_id'])
+
+                    # No change is needed to the etcd data, and we can delete
+                    # the port from the ports dict so as not to unnecessarily
+                    # write out its (unchanged) value again below.
                     del ports[endpoint_id]
+
                 elif (endpoint_id not in ports or
                       hostname != ports[endpoint_id]['binding:host_id']):
                     # OpenStack no longer has an endpoint with the ID in the
@@ -108,7 +115,13 @@ class CalicoTransportEtcd(CalicoTransport):
         # these are new endpoints - i.e. never previously represented in etcd
         # data - or endpoints that have migrated or whose data has changed.
         for port in ports.values:
-            client.write(self.port_etcd_key(port), self.port_etcd_data(port))
+            data = self.port_etcd_data(port)
+            client.write(self.port_etcd_key(port), data)
+
+            # Remember the security profile that this port needs.
+            needed_profiles.add(data['profile_id'])
+
+        return needed_profiles
 
     def port_etcd_key(self, port):
         return "/calico/host/%s/workload/openstack/endpoint/%s" % (
@@ -146,7 +159,101 @@ class CalicoTransportEtcd(CalicoTransport):
     def port_profile_id(self, port):
         return '_'.join(port['security_groups'])
 
-    def resync_security_groups(self):
+    def resync_security_groups(self, needed_profiles):
+        # Get all current security groups from the OpenStack database and key
+        # them on security group ID.
+        sgs = {}
+        for sg in self.driver.get_security_groups():
+            sgs[sg['id']] = sg
+
+        # Read all etcd keys directly under /calico/policy/profile.
+        r = client.read('/calico/policy/profile')
+        for child in r.children:
+            # Get the bit of the key after the last /.
+            profile_id = child.key.rstrip('/').rsplit('/', 1)[-1]
+            if profile_id in needed_profiles:
+                # This is a profile that we want.  Let's read its rules and
+                # tags, and compare those against the current OpenStack data.
+                rules = json_decoder.decode(
+                    client.read(child.key + '/rules').value)
+                tags = json_decoder.decode(
+                    client.read(child.key + '/tags').value)
+
+                if (rules == self.profile_rules(profile_id, sgs) and
+                    tags == self.profile_tags(profile_id)):
+                    # The existing etcd data for this profile is completely
+                    # correct.  Delete the profile_id from needed_profiles so
+                    # that we don't unnecessarily write out its (unchanged)
+                    # data again below.
+                    needed_profiles.remove(profile_id)
+            else:
+                # We don't want this profile any more, so delete the key.
+                client.delete(child.key, recursive=True)
+
+        # Now write etcd data for each profile remaining in needed_profiles.
+        for profile_id in needed_profiles:
+            key = '/calico/policy/profile/' + profile_id
+            client.write(key + '/rules', self.profile_rules(profile_id, sgs))
+            client.write(key + '/tags', self.profile_tags(profile_id))
+
+    def profile_rules(self, profile_id, sgs):
+        inbound = []
+        outbound = []
+        for sgid in self.profile_tags(profile_id):
+            for rule in sgs[sgid]['security_group_rules']:
+                LOG.info("Neutron rule %s" % rule)
+
+                ethertype = rule['ethertype']
+                etcd_rule = {}
+
+                # Map the protocol field from Neutron to etcd format.
+                if rule['protocol'] is None:
+                    raise UnsupportedError('protocol None')
+                elif rule['protocol'] == 'icmp':
+                    etcd_rule['protocol'] = {'IPv4': 'icmp',
+                                             'IPv6': 'icmpv6'}[ethertype]
+                    etcd_rule['icmp_type'] = rule['port_range_min']
+                else:
+                    etcd_rule['protocol'] = rule['protocol']
+
+                # OpenStack (sometimes) represents 'any IP address' by setting
+                # both 'remote_group_id' and 'remote_ip_prefix' to None.  We
+                # translate that to an explicit 0.0.0.0/0 (for IPv4) or ::/0
+                # (for IPv6).
+                net = rule['remote_ip_prefix']
+                if not (net or rule['remote_group_id']):
+                    net = {'IPv4': '0.0.0.0/0',
+                           'IPv6': '::/0'}[ethertype]
+
+                # src/dst_ports is a list in which each entry can be a single
+                # number, or a string describing a port range.
+                if rule['port_range_min'] == -1:
+                    port_spec = '1:65535'
+                elif rule['port_range_min'] == rule['port_range_max']:
+                    port_spec = rule['port_range_min']
+                else:
+                    port_spec = '%s:%s' % (rule['port_range_min'],
+                                           rule['port_range_max'])
+
+                # Put it all together and add to either the inbound or the
+                # outbound list.
+                if rule['direction'] == 'ingress':
+                    etcd_rule['src_tag'] = rule['remote_group_id']
+                    etcd_rule['src_net'] = net
+                    etcd_rule['src_ports'] = [port_spec]
+                    inbound.append(etcd_rule)
+                    LOG.info("=> Inbound Calico rule %s" % etcd_rule)
+                else:
+                    etcd_rule['dst_tag'] = rule['remote_group_id']
+                    etcd_rule['dst_net'] = net
+                    etcd_rule['dst_ports'] = [port_spec]
+                    outbound.append(etcd_rule)
+                    LOG.info("=> Outbound Calico rule %s" % etcd_rule)
+
+        return {'inbound_rules': inbound, 'outbound_rules': outbound}
+
+    def profile_tags(self, profile_id):
+        return profile_id.split('_')
 
     def endpoint_created(self, port):
         pass
