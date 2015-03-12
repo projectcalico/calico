@@ -82,7 +82,7 @@ implemented in Calico.
       device, just as for IPv4.
 
 -  Dnsmasq provides both Router Advertisements and DHCPv6 service (neither of
-   these are required for container environments).
+   which are required for container environments).
 
    -  Router Advertisements, without SLAAC or on-link flags, cause each VM
       to create a default route to the link-local address of the VM's TAP
@@ -91,7 +91,7 @@ implemented in Calico.
    -  DHCPv6 allows VMs to get their orchestrator-allocated IPv6 address.
 
 -  For container environments, rather than using Router Advertisements and
-   DHCPv6, we enable Proxy-NDP instead.
+   DHCPv6, we enable Proxy-NDP on the host.
 
 -  BIRD6 runs between the compute hosts to distribute routes.
 
