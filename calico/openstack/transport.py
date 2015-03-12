@@ -20,6 +20,7 @@
 # Standard Python library imports.
 import abc
 import six
+import weakref
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -28,7 +29,11 @@ class CalicoTransport(object):
 
     def __init__(self, driver):
         super(CalicoTransport, self).__init__()
-        self.driver = driver
+
+        # Explicitly store the driver as a weakreference. This prevents
+        # the reference loop between transport and driver keeping the objects
+        # alive.
+        self.driver = weakref.proxy(driver)
 
     @abc.abstractmethod
     def initialize(self):
