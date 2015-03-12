@@ -13,6 +13,5 @@ Contents:
    support
    contribute
    faq
+   technical-details
    futures
-   api-proposal
-   fuel-integration
