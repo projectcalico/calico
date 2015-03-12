@@ -428,18 +428,20 @@ class CalicoTransport0MQ(CalicoTransport):
                     # It's a GETGROUPS request.
                     LOG.info("GETGROUPS request")
 
+                    # Send a GROUPUPDATE message for each group.
+                    for sg in self.driver.get_security_groups():
+                        self.send_group(sg)
+
                     # Send a GETGROUPS response, with no detail, on the ROUTER
-                    # socket.
+                    # socket.  Do this after sending the start of day
+                    # GROUPUPDATEs so ACL Manager can detect if the audit
+                    # failed.
                     rsp = {'type': 'GETGROUPS'}
                     LOG.info("Sending GETGROUPS response: %s" % rsp)
                     self.acl_get_socket.send_multipart(
                         [peer,
                          '',
                          json.dumps(rsp).encode('utf-8')])
-
-                    # Send a GROUPUPDATE message for each group.
-                    for sg in self.driver.get_security_groups():
-                        self.send_group(sg)
 
                 elif rq['type'] == 'HEARTBEAT':
                     # It's a heartbeat.  Send the same back.
