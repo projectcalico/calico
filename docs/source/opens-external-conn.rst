@@ -1,3 +1,8 @@
+.. _opens-external-conn:
+
+Connectivity in OpenStack
+=========================
+
 An OpenStack deployment is of limited use if its VMs cannot reach and be
 reached by the outside world. This document will explain how to
 configure your Calico-based OpenStack deployment to ensure that you have

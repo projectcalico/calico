@@ -8,11 +8,11 @@ Contents:
 
    home
    architecture
-   configuration
-   ipv6
+   configuring-calico
    overlap-ips
    openstack
    support
    contribute
    faq
    api-proposal
+   fuel-integration
