@@ -9,10 +9,10 @@ Contents:
    home
    architecture
    configuring-calico
-   overlap-ips
    openstack
    support
    contribute
    faq
+   futures
    api-proposal
    fuel-integration
