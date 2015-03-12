@@ -81,42 +81,32 @@ class CalicoTransportEtcd(CalicoTransport):
                 # We have a key/value pair for an OpenStack endpoint.  Extract
                 # the endpoint ID and hostname from the key, and read the JSON
                 # data as a dict.
-                id = m.group("endpoint_id")
+                endpoint_id = m.group("endpoint_id")
                 hostname = m.group("hostname")
                 data = json_decoder.decode(child.value)
 
-                if id in ports:
-                    # OpenStack still has an endpoint with this ID.
-                    new_data = self.port_etcd_value(ports[id])
-
-                    if ports[id]['binding:host_id'] == hostname:
-                        # The endpoint's current host matches the etcd key.
-                        if data == new_data:
-                            # The endpoint data is unchanged.  No change
-                            # needed.
-                            pass
-                        else:
-                            # The endpoint data has changed, so we should
-                            # rewrite it.
-                            client.write(child.key, json.dumps(new_data))
-                    else:
-                        # The endpoint has moved to a new host.  We should
-                        # delete the old key and create a new one with the new
-                        # hostname.
-                        client.delete(child.key)
-                        client.write(self.port_etcd_key(ports[id]), new_data)
-
-                    # This OpenStack port is now correctly reflected in etcd,
-                    # so we won't need to process it again below.
-                    del ports[id]
-                else:
-                    # OpenStack no longer wants an endpoint with this ID, so we
-                    # should delete the etcd key.
+                if (endpoint_id in ports and
+                    hostname == ports[endpoint_id]['binding:host_id'] and
+                    data == self.port_etcd_data(ports[endpoint_id])):
+                    # OpenStack still has an endpoint that exactly matches this
+                    # etcd key/value.  No change is needed to the etcd data,
+                    # and we can delete the port from the ports dict so as not
+                    # to unnecessarily write out its (unchanged) value again
+                    # below.
+                    del ports[endpoint_id]
+                elif (endpoint_id not in ports or
+                      hostname != ports[endpoint_id]['binding:host_id']):
+                    # OpenStack no longer has an endpoint with the ID in the
+                    # etcd key; or it does, but the endpoint has migrated to a
+                    # different host than the one in the etcd key.  In both
+                    # cases the etcd key is no longer valid and should be
+                    # deleted.  In the migration case, data will be written
+                    # below to an etcd key that incorporates the new hostname.
                     client.delete(child.key)
 
-        # Now create etcd data for any endpoints remaining in the ports dict;
+        # Now write etcd data for any endpoints remaining in the ports dict;
         # these are new endpoints - i.e. never previously represented in etcd
-        # data.
+        # data - or endpoints that have migrated or whose data has changed.
         for port in ports.values:
             client.write(self.port_etcd_key(port), self.port_etcd_data(port))
 
