@@ -13,7 +13,7 @@ Architecture
 ------------
 
 Calico represents a new approach to virtual networking, based on the
-same scalable IP networking principles as the Internet. See :doc:`arch-overview`
+same scalable IP networking principles as the Internet. See :doc:`architecture`
 for an overview of how Calico works and what a Calico deployment
 contains.
 
