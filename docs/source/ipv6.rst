@@ -90,8 +90,14 @@ implemented in Calico.
 
    -  DHCPv6 allows VMs to get their orchestrator-allocated IPv6 address.
 
--  For container environments, rather than using Router Advertisements and
-   DHCPv6, we enable Proxy-NDP on the host.
+-  For container environments, we don't Dnsmasq:
+
+   - rather than using Router Advertisements to create the default route, we
+     Proxy NDP to ensure that routes to all machines go via the compute host.
+
+   - rather than using DHCPv6 to allocate IPv6 addresses, we allocate the IPv6
+     address directly to the container interface betfore we move it into the
+     container.
 
 -  BIRD6 runs between the compute hosts to distribute routes.
 
