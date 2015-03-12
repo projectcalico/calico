@@ -23,7 +23,7 @@ import sys
 import os
 import logging
 import logging.handlers
-from netaddr import IPAddress
+from netaddr import IPAddress, AddrFormatError
 
 _log = logging.getLogger(__name__)
 
@@ -102,4 +102,20 @@ class CalicoEtcdClient(object):
         host_path = HOST_PATH % {"hostname": hostname}
         ipv4 = self.client.read(host_path + "bird_ip").value
         ipv6 = self.client.read(host_path + "bird6_ip").value
-        return {4: IPAddress(ipv4), 6: IPAddress(ipv6)}
+
+        next_hops = {}
+
+        # The IP addresses read from etcd could be blank. Only store them if
+        # they can be parsed by IPAddress
+        try:
+            next_hops[4] = IPAddress(ipv4)
+        except AddrFormatError:
+            pass
+
+        try:
+            next_hops[6] = IPAddress(ipv6)
+        except AddrFormatError:
+            pass
+
+        _log.info(next_hops)
+        return next_hops
