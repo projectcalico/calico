@@ -1,3 +1,6 @@
+general:
+  artifacts:
+    - "dist"
 machine:
   services:
     - docker
