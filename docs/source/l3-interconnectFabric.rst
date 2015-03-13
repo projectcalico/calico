@@ -93,13 +93,13 @@ technical note.
    design of these networks is somewhat complex though, and will not
    be addressed further in this technical note. [#igp_punt]_
 
-#. A BGP fabric where all of the TOR switches are in a single
-   `Autonomous
-   System <http://en.wikipedia.org/wiki/Autonomous_System_(Internet)>`__
-   and they are interconnected via an Ethernet switching plane provided
-   by the spine switches in a
-   `leaf/spine <http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/>`__
-   architecture.
+#. A BGP fabric where each of the TOR switches (and their subsidiary
+   compute servers) are a unique 
+   `Autonomous System (AS)`_ and they are interconnected via either an
+   Ethernet switching plane provided by the spine switches in a
+   `leaf/spine`_
+   architecture, or via a set of spine switches, each of which is also
+   a unique AS.  We'll refer to this as 
 
 #. A BGP fabric where the spine is a single AS, and each TOR is a
    separate AS as discussed in `this IETF working group
@@ -107,6 +107,10 @@ technical note.
    Of the three models, The Calico team tends to see this model the most
    frequently when talking with potential users and partners.
 
+.. _`Autonomous System (AS)`: http://en.wikipedia.org/wiki/Autonomous_System_(Internet)
+.. _leaf/spine:
+   http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/
+   
 We will be covering these last two, and how they might be utilized as a
 Calico interconnect fabric.
 
