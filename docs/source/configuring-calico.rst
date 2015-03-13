@@ -1,5 +1,5 @@
 Configuring Calico
-=====================
+==================
 
 Contents:
 
@@ -8,5 +8,3 @@ Contents:
 
    configuration
    ipv6
-   security-model
-

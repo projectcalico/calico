@@ -1,68 +1,37 @@
-Welcome to Calico
-=================
+What is Calico?
+===============
 
-Project Calico is an open source solution for virtual networking in
-cloud data centers, developed by `Metaswitch
-Networks <http://www.metaswitch.com/>`__ and released under the `Apache
-2.0
-License <https://github.com/Metaswitch/calico-docs/blob/master/LICENSE.txt>`__.
-You can find more information about it on `our
-website <http://www.projectcalico.org/>`__.
+Calico is a new approach to virtual networking, based on the same scalable IP
+networking principles as the Internet.  It targets data centers where most of
+the workloads (VMs, containers or bare metal servers) only require IP
+connectivity, and provides that using standard IP routing.  Isolation between
+workloads - whether according to tenant ownership, or any finer grained
+policy - is achieved by iptables programming at the servers hosting the source
+and destination workloads.
 
-Architecture
-------------
+In comparison with the common solutions that provide simulated layer 2
+networks, Calico is a lot simpler, specifically in the following ways.
 
-Calico represents a new approach to virtual networking, based on the
-same scalable IP networking principles as the Internet. See :doc:`architecture`
-for an overview of how Calico works and what a Calico deployment
-contains.
+- Packets flowing through a Calico network do not require additional
+  encapsulation and decapsulation anywhere.  In contrast, layer 2 solutions
+  typically require packets to be encapsulated in a tunneling protocol when
+  travelling between host servers.
 
-Getting Started
----------------
+- Where permitted by policy, Calico packets can be routed between different
+  tenants' workloads, or out to or in from the Internet, in exactly the same
+  way as between the workloads of a single tenant.  There is no need for on-
+  and off-ramps as in overlay solutions, and hence for passing through special
+  'networking' or 'router' nodes that provide those ramps.
 
--  :doc:`opens-install-inst`
--  :doc:`verification`
+- As a consequence of those two points, Calico networks are easier to
+  understand and to troubleshoot.  Standard tools like ping and traceroute work
+  for probing connectivity, and tcpdump and Wireshark for looking at flows -
+  because Calico packets are just IP packets, and the same throughout the
+  network.
 
-Getting Source Code
--------------------
-
-All of the source code is on `GitHub <https://github.com/Metaswitch>`__,
-in the following repositories, separated by function
-
-Product Code
-~~~~~~~~~~~~
-
--  `calico <https://github.com/Metaswitch/calico>`__ - the Felix agent,
-   the ACL manager, and the officially-supported orchestrator plugins.
--  `calico-neutron <https://github.com/Metaswitch/calico-neutron>`__ -
-   Calico-specific patched version of OpenStack Neutron.
--  `calico-nova <https://github.com/Metaswitch/calico-nova>`__ -
-   Calico-specific patched version of OpenStack Nova.
--  `calico-dnsmasq <https://github.com/Metaswitch/calico-dnsmasq>`__ -
-   Calico-specific patched version of dnsmasq.
-
-Infrastructure
-~~~~~~~~~~~~~~
-
--  `calico-chef <https://github.com/Metaswitch/calico-chef>`__ - Chef
-   cookbooks for installing test versions of OpenStack-using-Calico.
-
-Contributing
-------------
-
-You can contribute by making a GitHub pull request. See :doc:`contribute` 
-for details.
-
-Support
--------
-
-If you want help or to help others, check out :doc:`support`.
-
-License and Acknowledgements
-----------------------------
-
-Calico's license is documented in
-`LICENSE.txt <https://github.com/Metaswitch/calico-docs/blob/master/LICENSE.txt>`__.
-
-It also makes use of other open source components as acknowledged in
-`README.txt <https://github.com/Metaswitch/calico-docs/blob/master/README.txt>`__.
+- Security policy is specified (using ACLs) and implemented (iptables) in a
+  single uniform way - making it more likely that it will actually be correct
+  and robust.  In contrast, in layer 2 solutions, effective security policy is
+  a more complex (but also less expressive) product of the networks and
+  security groups that are defined for each tenant, and of any virtual
+  'routers' that have been defined to allow passage between tenant networks.
