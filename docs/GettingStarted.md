@@ -193,14 +193,16 @@ Then, you can start containers with IPv6 connectivity by giving them an IPv6 add
 
 On core-01
 ```
-docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid busybox
+docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
 sudo ./calicoctl group add GROUP_F_G
 sudo ./calicoctl group addmember GROUP_F_G workload-F
 ```
 
+Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
+
 One core-02
 ```
-docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid busybox
+docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
 sudo ./calicoctl group addmember GROUP_F_G workload-G
 docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
 ```
