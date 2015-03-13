@@ -115,7 +115,11 @@ def container_add(container_name, ip):
     """
     client = DatastoreClient()
 
-    info = get_container_info(container_name)
+    try:
+        info = get_container_info(container_name)
+    except KeyError as e:
+        print e.message
+        sys.exit(1)
     container_id = info["Id"]
 
     # Check if the container already exists
@@ -125,25 +129,41 @@ def container_add(container_name, ip):
         # Calico doesn't know about this container.  Continue.
         pass
     else:
-        # Calico already set up networking for this container.  Since we got called with an
-        # IP address, we shouldn't just silently exit, since that would confuse the user:
-        # the container would not be reachable on that IP address.  So, raise an exception.
-        print "%s has already been configured with Calico Networking." % container_name
+        # Calico already set up networking for this container.  Since we got
+        # called with an IP address, we shouldn't just silently exit, since
+        # that would confuse the user: the container would not be reachable on
+        # that IP address.
+        print "%s has already been configured with Calico Networking." % \
+              container_name
+        sys.exit(1)
 
-    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export it.
+    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
+    # it.
     ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
     if not any([ip in pool for pool in pools]):
         print "%s is not in any configured pools" % ip
+        sys.exit(1)
 
     # Check the container is actually running.
     if not info["State"]["Running"]:
         print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # The next hop IPs for this host are stored in etcd.
+    next_hops = client.get_default_next_hops(hostname)
+    try:
+        next_hops[ip.version]
+    except KeyError:
+        print "This node is not configured for IPv%d." % ip.version
+        sys.exit(1)
 
     # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
     pid = info["State"]["Pid"]
-    endpoint = netns.set_up_endpoint(ip, pid, veth_name="eth1", proc_alias="proc")
+    endpoint = netns.set_up_endpoint(ip, pid, next_hops,
+                                     veth_name="eth1",
+                                     proc_alias="proc")
 
     # Register the endpoint
     client.create_container(hostname, container_id, endpoint)

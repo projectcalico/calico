@@ -141,7 +141,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                 "version": ip.version,
                 "len": PREFIX_LEN[ip.version],
                 "addr": ip,
-                "device": VETH_NAME},
+                "device": veth_name},
                shell=True)
 
     # Connected route to next hop & default route.
@@ -150,14 +150,14 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                " %(next_hop)s dev %(device)s" %
                {"cpid": cpid,
                 "version": ip.version,
-                "device": VETH_NAME,
+                "device": veth_name,
                 "next_hop": next_hop},
                shell=True)
     check_call("ip netns exec %(cpid)s ip -%(version)s route replace"
                " default via %(next_hop)s dev %(device)s" %
                {"cpid": cpid,
                 "version": ip.version,
-                "device": VETH_NAME,
+                "device": veth_name,
                 "next_hop": next_hop},
                shell=True)
 
