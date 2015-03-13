@@ -7,10 +7,10 @@ CMD ["/sbin/my_init"]
 # Install Calico APT repo.  Note, we delay the apt-get update until 
 # below so that the update is done in the same FS layer as the 
 # install, making it unlikely to be out of sync.
-RUN curl -L http://binaries.projectcalico.org/repo/key | apt-key add - && \
-    echo "deb http://binaries.projectcalico.org/repo ./" >> /etc/apt/sources.list && \
+RUN curl -L http://calico-jenkins/debian/pr/gevent-proto/key | apt-key add - && \
+    echo "deb http://calico-jenkins/debian/pr/gevent-proto ./" >> /etc/apt/sources.list && \
     echo "Package: *" >> /etc/apt/preferences &&\
-    echo "Pin: origin binaries.projectcalico.org" >> /etc/apt/preferences && \
+    echo "Pin: origin calico-jenkins" >> /etc/apt/preferences && \
     echo "Pin-Priority: 1001" >> /etc/apt/preferences
 
 # Install dependencies shared with the master node.  If we can keep this
