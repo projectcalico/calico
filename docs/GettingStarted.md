@@ -42,7 +42,7 @@ If you see ping failures, the likely culprit is a problem with then Virtualbox n
 ### Installing Calico
 If you didn't use the calico-coreos-vagrant-example Vagrantfile, you'll need to download Calico onto both servers by SSHing onto them and running
 ```
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.7/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.1.0/calicoctl
 chmod +x calicoctl
 ```
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
@@ -71,14 +71,14 @@ You should see output like this on the master
 ```
 core@core-01 ~ $ docker ps
 CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-077ceae44fe3        calico/node:v0.0.7     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-17a54cc8f88a        calico/master:v0.0.7   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
+077ceae44fe3        calico/node:v0.1.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+17a54cc8f88a        calico/master:v0.1.0   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
 ```
 And like this on the other hosts
 ```
 core@core-02 ~ $ docker ps
 CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
-f770a8acbb11        calico/node:v0.0.7   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+f770a8acbb11        calico/node:v0.1.0   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 ```
 
 #### Using Calico: Creating networked endpoints
