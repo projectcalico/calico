@@ -226,7 +226,7 @@ class TestPlugin(unittest.TestCase):
                     msg = socket.rcv_queue.get(not (flags &
                                                     t_zmq.zmq.NOBLOCK))
                 except eventlet.queue.Empty:
-                    raise t_zmq.Again()
+                    raise t_zmq.zmq.ZMQError(t_zmq.zmq.EAGAIN)
 
                 # Return that.
                 return msg
