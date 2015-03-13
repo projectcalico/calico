@@ -140,8 +140,12 @@ def del_route(type, ip, interface):
 def interface_up(if_name):
     """
     Checks whether a given interface is up.
-    """
-    with open('/sys/class/net/%s/operstate' % if_name, 'r') as f:
-        state = f.read()
 
-    return 'up' in state
+    Checks this by examining the interface flags and looking for whether the
+    IFF_UP flag has been set. IFF_UP is the flag 0x01, so read in the flags
+    (represented by a hexadecimal integer) and check if the 1 bit is set.
+    """
+    with open('/sys/class/net/%s/flags' % if_name, 'r') as f:
+        flags = f.read().strip()
+
+    return bool(int(flags, 16) & 1)

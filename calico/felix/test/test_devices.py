@@ -190,12 +190,12 @@ class TestDevices(unittest.TestCase):
         with mock.patch('__builtin__.open') as open_mock:
             open_mock.return_value = mock.MagicMock(spec=file)
             file_handle = open_mock.return_value.__enter__.return_value
-            file_handle.read.return_value = 'up\n'
+            file_handle.read.return_value = '0x1003\n'
 
             is_up = devices.interface_up(tap)
 
             open_mock.assert_called_with(
-                '/sys/class/net/%s/operstate' % tap, 'r'
+                '/sys/class/net/%s/flags' % tap, 'r'
             )
             self.assertTrue(file_handle.read.called)
             self.assertTrue(is_up)
@@ -209,12 +209,12 @@ class TestDevices(unittest.TestCase):
         with mock.patch('__builtin__.open') as open_mock:
             open_mock.return_value = mock.MagicMock(spec=file)
             file_handle = open_mock.return_value.__enter__.return_value
-            file_handle.read.return_value = 'down\n'
+            file_handle.read.return_value = '0x1002\n'
 
             is_up = devices.interface_up(tap)
 
             open_mock.assert_called_with(
-                '/sys/class/net/%s/operstate' % tap, 'r'
+                '/sys/class/net/%s/flags' % tap, 'r'
             )
             self.assertTrue(file_handle.read.called)
             self.assertFalse(is_up)
