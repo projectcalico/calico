@@ -8,7 +8,7 @@
 Calico provides an end--to--end IP network that interconnects the end
 points [#end_points]_ in a scale--out or cloud environment. To do that, it needs
 an *interconnect fabric* to provide the physical networking layer on
-which Calico operates. [#interconnect_fabric]_
+which Calico operates [#interconnect_fabric]_
 
 While Calico is designed to work with any underlying interconnect
 fabric that can support IP traffic, the fabric that has the least
@@ -58,31 +58,40 @@ interconnect network fabric discussion.
 Overview of current common IP scale--out fabric architectures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-There are a few approaches to building an IP fabric for a scale--out
+There are two approaches to building an IP fabric for a scale--out
 infrastructure. However, all of them, to date, have assumed that the
 edge router in the infrastructure is the top of rack (TOR) switch. In
 the Calico model, that function is pushed to the compute server itself.
 
-Furthermore, in a virtualized environment in an IP fabric, the actual
+Furthermore, in most current virtualized environments, the actual
 end point is not addressed by the fabric. If it is a VM, it is usually
 encapsulated in an overlay, and if it is a container, it may be
 encapsulated in an overlay, or NATed by some form of proxy, such as is
 done in the `weave <http://www.weave.works/>`__ project network model,
 or the router in standard `docker <http://www.docker.io/>`__ networking.
 
-Those approaches are enumerated here below.
+The two approaches are outlined below, in this technical note, we will
+cover the second option, as it is more common in the scale--out
+world.  If there is interest in the first approach, please contact
+Project Calico, and we can discuss, and if there is enough interest,
+maybe we will do another technical note on that approach.  If you know
+of other approaches in use, we would be happy to host a guest
+technical note.
 
 #. The routing infrastructure is based on some form of IGP. Due to the
    limitations in scale of IGP networks (see the `why
-   bgp <http://www.projectcalico.org/why-bgp/>`__ post for discussion of
-   this topic, this is infrequently found in the wild, and will not be
-   considered further here, as a Calico network based on an IGP-based
-   infrastructure network would be either very constrained in size, or
-   have to be very carefully designed. This will work up to a certain
-   scale, but is highly dependent on the implementation of the IGP that
-   is in use. If you have questions about an IGP--based IP fabric
-   architecture, please contact the Project Calico team and we will try
-   and help.
+   bgp post <http://www.projectcalico.org/why-bgp/>`__ for discussion of
+   this topic.  The project Calico team does not believe that using an
+   IGP to distribute end--point reachability information will
+   adequitely scale in a Calico environment.  However, it is possible
+   to use a combination of IGP and BGP in the interconnect fabric,
+   where an IGP communicates the path to the *next--hop* router (in
+   Calico, this is often the destination compute server) and BGP is
+   used to distribute the actual next--hop for a given end--point.
+   This is a valid model, and, in fact is the most common approach in
+   a widely distributed IP network (say a carrier's WAN network).  The
+   design of these networks is somewhat complex though, and will not
+   be addressed further in this technical note. [#igp_punt]_
 
 #. A BGP fabric where all of the TOR switches are in a single
    `Autonomous
@@ -379,7 +388,7 @@ If a Calico user is interested in the AS per compute server, the Project
 Calico team would be very interested in discussing the deployment of
 that model.
 
-.. [#end_point]
+.. [#end_points]
    In Calico's terminology, an end point is an IP address and interface.
    It could refer to a VM, a container, or even a process bound to an IP
    address running on a bare metal server.
@@ -389,6 +398,12 @@ that model.
    (v)Router (in almost all cases, the compute servers) nodes, as well
    as any other elements in the fabric (*e.g.* bare metal servers,
    border routers, and appliances).
+
+.. [#igp_punt]
+   If there is interest in a discussion of this approach, please let
+   us know.  The Project Calico team could either arrange a
+   discussion, or if there was enough interest, publish a follow--up
+   tech note.
 
 .. [4]
    However those tools are available if a given Calico instance needs to
