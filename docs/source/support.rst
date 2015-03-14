@@ -11,18 +11,9 @@ There are three support mechanisms for Calico:
 -  Pull Requests. These allow you to contribute fixes and enhancements
    back to Calico.
 
-Mailing List
-------------
-
-The mailing list is managed
-`here <http://lists.projectcalico.org/listinfo/calico>`__. When posting,
-please try to:
-
--  provide a clear subject line.
--  provide as much diagnostic information as possible.
-
-You're much more likely to get your question answered quickly and
-correctly that way!
+Information about the mailing list and pull requests can be found on our
+:doc:`involved` page, as they are also how to get proactively involved in
+Calico development.
 
 Issues
 ------
@@ -34,19 +25,3 @@ repository page in GitHub and click the Issues tab at the top.
 
 Remember to do a search for existing issues covering your problem before
 raising a new one!
-
-Pull Requests
--------------
-
-Calico follows the "Fork & Pull" model of collaborative development,
-with changes being offered to the main Calico codebase via Pull
-Requests. If you're interested in contributing,
-
--  thanks!
--  see the `GitHub
-   docs <https://help.github.com/articles/using-pull-requests>`__ for
-   how to create a Pull Request
--  check our `Contributor
-   Guidelines <https://github.com/Metaswitch/calico-docs/wiki/Contribution-Guidelines>`__
-   for more information.
-

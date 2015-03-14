@@ -1,14 +1,11 @@
-Calico Fuel Integration
-=======================
+Integration with Mirantis Fuel 5.1
+==================================
 
-This document describes how we've integrated Calico into the Mirantis
-Fuel system for rapidly deploying an OpenStack cluster.
+This document describes our experimental integration of Calico with the
+Mirantis Fuel system for rapidly deploying an OpenStack cluster.
 
-Document Structure
-------------------
-
-The rest of this document is presented in sections covering the
-following aspects of our integration work.
+It is presented in sections covering the following aspects of our integration
+work.
 
 - Objective: The system that we are aiming to deploy.
 - Cluster Deployment: The procedure to follow to deploy such a system.
@@ -358,4 +355,3 @@ In the OpenStack configuration:
 - There is a router configured, that Calico doesn't require.
 - There are networks configured with subnets 192.168.111.0/24 and
   172.18.203.0/24, which Calico doesn't require.
-

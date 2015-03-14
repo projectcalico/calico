@@ -1,52 +1,64 @@
 Getting Involved
 ================
 
-Getting Started
----------------
+Mailing List
+------------
 
--  :doc:`opens-install-inst`
--  :doc:`verification`
+The Calico mailing list is managed `here
+<http://lists.projectcalico.org/listinfo/calico>`__.  You're welcome to
+subscribe and to post any Calico-related discussion to this list, including
+problems, ideas, or requirements.  When reporting a problem, please try to:
 
-Getting Source Code
--------------------
+-  provide a clear subject line
+-  provide as much diagnostic information as possible.
 
-All of the source code is on `GitHub <https://github.com/Metaswitch>`__,
-in the following repositories, separated by function
+That will help us (or anyone else) to answer your question quickly and
+correctly.
 
-Product Code
-~~~~~~~~~~~~
+Read the Source, Luke!
+----------------------
 
--  `calico <https://github.com/Metaswitch/calico>`__ - the Felix agent,
-   the ACL manager, and the officially-supported orchestrator plugins.
--  `calico-neutron <https://github.com/Metaswitch/calico-neutron>`__ -
-   Calico-specific patched version of OpenStack Neutron.
--  `calico-nova <https://github.com/Metaswitch/calico-nova>`__ -
-   Calico-specific patched version of OpenStack Nova.
--  `calico-dnsmasq <https://github.com/Metaswitch/calico-dnsmasq>`__ -
-   Calico-specific patched version of dnsmasq.
+All Calico's code is on `GitHub <https://github.com/Metaswitch>`__, in the
+following repositories, separated by function.
 
-Infrastructure
-~~~~~~~~~~~~~~
+- `calico <https://github.com/Metaswitch/calico>`__ - All of the core Calico
+  code except for that specific to Docker/container environments: the Felix
+  agent, the ACL manager, the OpenStack plugin; testing for all of those; and
+  the source for Calico's documentation.
 
--  `calico-chef <https://github.com/Metaswitch/calico-chef>`__ - Chef
-   cookbooks for installing test versions of OpenStack-using-Calico.
+- `calico-docker <https://github.com/Metaswitch/calico-docker>`__ - Calico code
+  and components specific to Docker/container environments: the lightweight
+  orchestrator for Docker environments, Powerstrip adapter, and so on; and
+  instructions for demonstrating Calico networking in various container
+  environments.
+
+- `calico-neutron <https://github.com/Metaswitch/calico-neutron>`__ -
+  Calico-specific patched version of OpenStack Neutron.
+
+- `calico-nova <https://github.com/Metaswitch/calico-nova>`__ - Calico-specific
+  patched version of OpenStack Nova.
+
+- `calico-dnsmasq <https://github.com/Metaswitch/calico-dnsmasq>`__ -
+  Calico-specific patched version of Dnsmasq.
+
+- `calico-chef <https://github.com/Metaswitch/calico-chef>`__ - Chef cookbooks
+  for installing test versions of OpenStack-using-Calico.
 
 Contributing
 ------------
 
-You can contribute by making a GitHub pull request. See :doc:`contribute`
-for details.
+Calico follows the "Fork & Pull" model of collaborative development, with
+changes being offered to the main Calico codebase via Pull Requests.  So you
+can contribute a fix, change or enhancement by forking one of our repositories
+and making a GitHub pull request.  If you're interested in doing that:
 
-Support
--------
+-  Thanks!
+-  See the `GitHub
+   docs <https://help.github.com/articles/using-pull-requests>`__ for
+   how to create a Pull Request.
+-  Check our contribution guidelines for more information.
 
-If you want help or to help others, check out :doc:`support`.
+.. toctree::
+   :maxdepth: 1
 
-License and Acknowledgements
-----------------------------
-
-Calico's license is documented in
-`LICENSE.txt <https://github.com/Metaswitch/calico-docs/blob/master/LICENSE.txt>`__.
-
-It also makes use of other open source components as acknowledged in
-`README.txt <https://github.com/Metaswitch/calico-docs/blob/master/README.txt>`__.
+   contribute

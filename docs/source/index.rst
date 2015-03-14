@@ -20,6 +20,7 @@ see here:
    datapath
    addressing
    security-model
+   license
 
 Calico is an open source project, and we'd love you to get involved.  Whether
 that might be by reading and participating on our mailing list, or by diving
@@ -31,21 +32,33 @@ the following.
    :maxdepth: 2
 
    involved
-   architecture
-   configuring-calico
+   understanding
 
 Calico as a networking model is applicable to a multitude of cloud systems,
 including those that use either containers or virtual machines as their basic
 workload unit.  Correspondingly, if you want to try out Calico, there are
 several options for how you can easily do that, with different systems.  The
-following pages describe how to deploy configure Calico for those options.
+following pages describe how to deploy and configure Calico for those options.
 
 .. toctree::
    :maxdepth: 2
 
    openstack
+   docker
+   next-steps
    support
-   contribute
    faq
-   technical-details
-   futures
+
+Future Plans
+------------
+
+This section of the documentation covers proposals for the future of Calico.
+Feel free to use these documents to get an understanding of how the Calico team
+plan to add new features and functionality.  Please also do let us know if any
+of these are of particular interest to you, or if you have other Calico-related
+requirements that are not yet covered here.
+
+.. toctree::
+   :maxdepth: 2
+
+   overlap-ips
