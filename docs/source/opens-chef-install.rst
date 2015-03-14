@@ -55,12 +55,15 @@ Prepare Your OpenStack Nodes
 The default Ubuntu 14.04 installation may have hosts configuration that
 causes problems for the Chef installation. We recommend ensuring the
 following preparation is performed on each OpenStack node prior to
-starting the bootstrap process: - Ensure your hostname is correctly set.
-Edit the /etc/hostname file and set the correct name for each node
-(names must be unique). - Ensure your loopback IP and OpenStack DNS
-entries are configured. Edit the /etc/hosts file: - Set the loopback IP
-address to 127.0.0.1. - Set your hostname IP address to your static IP.
-- Configure the hostnames / IPs of the other OpenStack nodes.
+starting the bootstrap process:
+
+   -  Ensure your hostname is correctly set. Edit the ``/etc/hostname`` file
+      and set the correct name for each node (names must be unique).
+   -  Ensure your loopback IP and OpenStack DNS entries are configured. Edit
+      the ``/etc/hosts`` file:
+         -  Set the loopback IP address to 127.0.0.1.
+         -  Set your hostname IP address to your static IP.
+   -  Configure the hostnames / IPs of the other OpenStack nodes.
 
 If you are using VMWare and VMs for each of these machines (for
 testing), ensure the VM setting allows the VM to expose hardware
@@ -148,15 +151,15 @@ up your deployment, perform the following steps:
 
 2. Bootstrap at least two further machines with the ``compute`` role.
 
-Note that this procedure works best when you assign all your compute
-machines the ``compute`` role *before* executing their run lists. This
-way you'll only need to execute the run list for each compute machine
-once.
+   Note that this procedure works best when you assign all your compute
+   machines the ``compute`` role *before* executing their run lists. This
+   way you'll only need to execute the run list for each compute machine
+   once.
 
-If you execute the run list for a compute machine before all the compute
-machines have been assigned their role, you'll need to re-run the
-run-list once all compute machines are present. The ``compute`` role
-builds up config that relies on knowing all the other ``compute`` nodes.
+   If you execute the run list for a compute machine before all the compute
+   machines have been assigned their role, you'll need to re-run the
+   run-list once all compute machines are present. The ``compute`` role
+   builds up config that relies on knowing all the other ``compute`` nodes.
 
 3. Play with Calico!
 

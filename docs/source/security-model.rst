@@ -17,7 +17,7 @@ then passes them over the Calico ACL API to the relevant Felix agent. That
 Felix agent then programs the rules into the kernel using ``iptables`` and
 ``ipsets`` commands.
 
-Security in OpenStack is controlled by 3 objects: networks, routers and
+Security in OpenStack is controlled by three objects: networks, routers and
 security groups. Calico **only** uses security groups for
 security configuration: networks and routers have no impact. The following
 subsections go into this in more detail, and discuss how these concepts map
@@ -29,7 +29,7 @@ Groups
 A security group is a collection of rules that may be applied to Neutron ports.
 The default action to perform on a packet (both in and outbound) is always
 DENY. In addition to the default rule, the user configures exceptions that
-allow traffic. These exceptioins carry the following information::
+allow traffic. These exceptions carry the following information::
 
     allow IPv4|IPv6 [<protocol> [<port range>]] traffic from/to <cidr>|<group>
 

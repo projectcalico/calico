@@ -4,9 +4,9 @@ Calico API Design
 *Author's Note: This is a work in progress with some known issues. If
 something in this document strikes you as odd, please consult the list
 of outstanding issues at the bottom of the document before commenting.
-However, if it's not already mentioned, please do comment through our
-`mailing list <http://lists.projectcalico.org/listinfo/calico>`__ and
-`community <http://www.projectcalico.org/community/>`__. Feedback is
+However, if it's not already mentioned, please do comment through our*
+`mailing list <http://lists.projectcalico.org/listinfo/calico>`__ *and*
+`community <http://www.projectcalico.org/community/>`__. *Feedback is
 welcomed!*
 
 A simplified diagram of the current Calico architecture plan looks like

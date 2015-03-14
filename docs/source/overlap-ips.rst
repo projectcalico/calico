@@ -12,13 +12,13 @@ different tenant.
 RFC 6877
 --------
 
-464XLAT is specified by https://tools.ietf.org/html/rfc6877 and
-describes how an IPv4-based application on a client device can access
+464XLAT is specified by `RFC 6877 <https://tools.ietf.org/html/rfc6877>`__
+and describes how an IPv4-based application on a client device can access
 IPv4-based services somewhere in the Internet, via an IPv6 network.
 
 -  An IPv4 packet sent from the client's application is translated
-   (statelessly, per https://tools.ietf.org/html/rfc6145) into an IPv6
-   packet.
+   (statelessly, per `RFC 6145 <https://tools.ietf.org/html/rfc6145>`__)
+   into an IPv6 packet.
 
    ::
 
@@ -30,7 +30,7 @@ IPv4-based services somewhere in the Internet, via an IPv6 network.
    server.
 
 -  The IPv6 packet is translated back into an IPv4 packet. This step
-   needs to be stateful (per https://tools.ietf.org/html/rfc6146)
+   needs to be stateful (per `RFC 6146 <https://tools.ietf.org/html/rfc6146>`__)
    because an arbitrary number of clients can connect to the server, and
    it isn't possible to map all their possible IPv6 addresses onto a
    range of IPv4 addresses in any way that's reversible without state.
@@ -112,7 +112,7 @@ There are many possible mappings between tenants and address spaces.
 -  Between these extremes, it is also possible for an address space to
    be shared by a specific group of tenants.
 
-Also note that a given tenant may use multiple address spaces - for
+Also note that a given tenant may use multiple address spaces – for
 example, one that is private to itself, and one that is shared.
 
 Compute host processing

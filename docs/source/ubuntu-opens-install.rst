@@ -174,9 +174,9 @@ Compute Node Install
 
 On a compute node, perform the following steps:
 
-1. Make the changes to SELinux and QEMU config that are described at
-   http://wiki.libvirt.org/page/Guest\_won%27t\_start\_-\ *warning:*\ could\_not\_open\_/dev/net/tun\_%28%27generic\_ethernet%27\_interface%29,
-   to allow VM interfaces with type='ethernet'.
+1. Make the changes to SELinux and QEMU config that are described in
+   `this libvirt Wiki page <http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface)>`__,
+   to allow VM interfaces with ``type='ethernet'``.
 
    Disable SELinux if it's running. SELinux isn't installed by default
    on Ubuntu - you can check its status by running ``sestatus``. If this
@@ -211,14 +211,14 @@ On a compute node, perform the following steps:
 
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
-Remove the line setting ``service_neutron_metadata_proxy`` or
-``service_metadata_proxy`` to ``True``, if there is one.
+   Remove the line setting ``service_neutron_metadata_proxy`` or
+   ``service_metadata_proxy`` to ``True``, if there is one.
 
-Restart nova compute.
+   Restart nova compute.
 
-::
+   ::
 
-        service nova-compute restart
+           service nova-compute restart
 
 3. If they're running, stop the Open vSwitch services:
 
@@ -227,13 +227,13 @@ Restart nova compute.
        service openvswitch-switch stop
        service neutron-plugin-openvswitch-agent stop
 
-Then, prevent the services running if you reboot:
+   Then, prevent the services running if you reboot:
 
-::
+   ::
 
-        sudo sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
-        sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
-        sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
+           sudo sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
+           sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
+           sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
 
 4. Install some extra packages.
 
@@ -264,8 +264,8 @@ Then, prevent the services running if you reboot:
 
        apt-get install calico-compute
 
-This step may prompt you to save your IPTables rules to make them
-persistent on restart - hit yes.
+   This step may prompt you to save your IPTables rules to make them
+   persistent on restart – hit yes.
 
 8. Configure BIRD. By default Calico assumes that you'll be deploying a
    route reflector to avoid the need for a full BGP mesh. To this end,
@@ -284,13 +284,13 @@ And/or for IPv6 connectivity between compute hosts:
 
         calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
-Note that you'll also need to configure your route reflector to allow
-connections from the compute node as a route reflector client. This
-configuration is outside the scope of this install document.
+   Note that you'll also need to configure your route reflector to allow
+   connections from the compute node as a route reflector client. This
+   configuration is outside the scope of this install document.
 
-If you *are* configuring a full BGP mesh you'll need to handle the BGP
-configuration appropriately. You should consult the relevant
-documentation for your chosen BGP stack.
+   If you *are* configuring a full BGP mesh you'll need to handle the BGP
+   configuration appropriately. You should consult the relevant
+   documentation for your chosen BGP stack.
 
 9.  Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
     supplied sample config at ``/etc/calico/felix.cfg.example``. Then,
