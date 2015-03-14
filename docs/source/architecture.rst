@@ -9,3 +9,4 @@ Contents:
    arch-overview
    arch-felix-and-acl
    l2-interconnectFabric
+   l3-interconnectFabric
