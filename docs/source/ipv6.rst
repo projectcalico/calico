@@ -42,20 +42,20 @@ snapshot thereafter instead of the original image.
 For example, starting from the Ubuntu 14.04 cloud image, the following
 changes will suffice to meet the requirements just listed.
 
--  In /etc/network/interfaces.d/eth0.cfg, add:
+-  In ``/etc/network/interfaces.d/eth0.cfg``, add:
 
    ::
 
        iface eth0 inet6 dhcp
                accept_ra 1
 
--  In /sbin/dhclient-script, add at the start of the script:
+-  In ``/sbin/dhclient-script``, add at the start of the script:
 
    ::
 
        new_ip6_prefixlen=128
 
--  In /etc/sysctl.d, create a file named 30-eth0-rs-delay.conf with
+-  In ``/etc/sysctl.d``, create a file named ``30-eth0-rs-delay.conf`` with
    contents:
 
    ::

@@ -111,41 +111,41 @@ Compute Node Install
 
 On a compute node, perform the following steps:
 
-1. Make the changes to SELinux and QEMU config that are described at
-   http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29,
+1. Make the changes to SELinux and QEMU config that are described in `this
+   libvirt Wiki page <http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29>`__,
    to allow VM interfaces with ``type='ethernet'``.
 
    ::
 
        setenforce permissive
 
-Edit ``/etc/selinux/config`` and change the ``SELINUX=`` line to the
-following:
+   Edit ``/etc/selinux/config`` and change the ``SELINUX=`` line to the
+   following:
 
-::
+   ::
 
-        SELINUX=permissive
+           SELINUX=permissive
 
-In ``/etc/libvirt/qemu.conf``, add or edit the following four options
-(in particular note the ``/dev/net/tun`` in ``cgroup_device_acl``):
+   In ``/etc/libvirt/qemu.conf``, add or edit the following four options
+   (in particular note the ``/dev/net/tun`` in ``cgroup_device_acl``):
 
-::
+   ::
 
-        clear_emulator_capabilities = 0
-        user = "root"
-        group = "root"
-        cgroup_device_acl = [
-             "/dev/null", "/dev/full", "/dev/zero",
-             "/dev/random", "/dev/urandom",
-             "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
-             "/dev/rtc", "/dev/hpet", "/dev/net/tun",
-        ]
+           clear_emulator_capabilities = 0
+           user = "root"
+           group = "root"
+           cgroup_device_acl = [
+                "/dev/null", "/dev/full", "/dev/zero",
+                "/dev/random", "/dev/urandom",
+                "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
+                "/dev/rtc", "/dev/hpet", "/dev/net/tun",
+           ]
 
-Then restart libvirt to pick up the changes:
+   Then restart libvirt to pick up the changes:
 
-::
+   ::
 
-        service libvirtd restart
+           service libvirtd restart
 
 2. Open ``/etc/nova/nova.conf`` and remove the line that reads:
 
@@ -153,14 +153,14 @@ Then restart libvirt to pick up the changes:
 
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
-Remove the line setting ``service_neutron_metadata_proxy`` or
-``service_metadata_proxy`` to ``True``, if there is one.
+   Remove the line setting ``service_neutron_metadata_proxy`` or
+   ``service_metadata_proxy`` to ``True``, if there is one.
 
-Restart nova compute.
+   Restart nova compute.
 
-::
+   ::
 
-        service openstack-nova-compute restart
+           service openstack-nova-compute restart
 
 3. If they're running, stop the Open vSwitch services:
 
@@ -169,12 +169,12 @@ Restart nova compute.
        service neutron-openvswitch-agent stop
        service openvswitch stop
 
-Then, prevent the services running if you reboot:
+   Then, prevent the services running if you reboot:
 
-::
+   ::
 
-        chkconfig openvswitch off
-        chkconfig neutron-openvswitch-agent off
+           chkconfig openvswitch off
+           chkconfig neutron-openvswitch-agent off
 
 4. Run ``yum update``. This will bring in Calico-specific updates to the
    OpenStack packages and to ``dnsmasq``.
@@ -191,12 +191,12 @@ Then, prevent the services running if you reboot:
 
        yum install openstack-neutron
 
-Open ``/etc/neutron/dhcp_agent.ini``. In the ``[DEFAULT]`` section, add
-the following line (removing any existing ``interface_driver =`` line):
+   Open ``/etc/neutron/dhcp_agent.ini``. In the ``[DEFAULT]`` section, add
+   the following line (removing any existing ``interface_driver =`` line):
 
-::
+   ::
 
-        interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
+           interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
 7.  Restart and enable the DHCP agent, and stop and disable the L3
     agent.
@@ -263,23 +263,23 @@ the following line (removing any existing ``interface_driver =`` line):
     Unless your deployment needs to peer with other BGP routers, this
     can be chosen arbitrarily.
 
-Note that you'll also need to configure your route reflector to allow
-connections from the compute node as a route reflector client. This
-configuration is outside the scope of this install document.
+   Note that you'll also need to configure your route reflector to allow
+   connections from the compute node as a route reflector client. This
+   configuration is outside the scope of this install document.
 
-Ensure BIRD (and/or BIRD 6 for IPv6) is running:
+   Ensure BIRD (and/or BIRD 6 for IPv6) is running:
 
-::
+   ::
 
-        service bird restart
-        service bird6 restart
+           service bird restart
+           service bird6 restart
 
-Finally ensure BIRD starts on reboot by running one or both of:
+   Finally ensure BIRD starts on reboot by running one or both of:
 
-::
+   ::
 
-        chkconfig bird on
-        chkconfig bird6 on
+           chkconfig bird on
+           chkconfig bird6 on
 
 12. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example`` and edit it:
