@@ -5,7 +5,7 @@ If you're interested in trying out Calico but you don't have much
 familiarity with installing OpenStack, you can install an
 OpenStack-with-Calico deployment using Chef. If you're familiar with
 Chef, this is the fastest way to get a quick test environment for
-playing around with Project Calico.
+playing around with Calico.
 
 This install procedure has only been tested on Ubuntu 14.04. Other
 versions of Ubuntu may also work successfully. It is unlikely that this
@@ -23,8 +23,8 @@ node and at least two compute nodes. All the compute nodes are connected
 in a BGP mesh, no BGP route reflector is required. This is the simplest
 possible configuration for Calico.
 
-Note that this is **not** a production install of Project Calico or of
-OpenStack. It is intended for trial and testing purposes only.
+Note that this is **not** a production install of Calico or of OpenStack.
+It is intended for trial and testing purposes only.
 
 How To Use It: For Chef Newbies
 -------------------------------
@@ -162,4 +162,3 @@ up your deployment, perform the following steps:
    builds up config that relies on knowing all the other ``compute`` nodes.
 
 3. Play with Calico!
-
