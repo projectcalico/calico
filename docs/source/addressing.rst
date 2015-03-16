@@ -29,7 +29,7 @@ IPv6.
 
 Within the shared address spaces there may be ranges of IP addresses (both v4
 and v6) that are routable from outside the data center.  Other shared network
-IP address ranges will not be routable from outside: they are potentially
+IP address ranges will not be routable from outside: they are
 potentially accessible from all other workloads within the data center, but not
 from the Internet.  This is all under the control of the data center operators,
 as it is they who provision the shared network.
