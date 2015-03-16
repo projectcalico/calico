@@ -225,7 +225,7 @@ class CalicoTransportEtcd(CalicoTransport):
 
                 # Map the protocol field from Neutron to etcd format.
                 if rule['protocol'] is None:
-                    raise UnsupportedError('protocol None')
+                    pass
                 elif rule['protocol'] == 'icmp':
                     etcd_rule['protocol'] = {'IPv4': 'icmp',
                                              'IPv6': 'icmpv6'}[ethertype]
