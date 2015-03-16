@@ -22,7 +22,6 @@ import eventlet
 from eventlet.green import zmq
 import json
 import time
-from zmq.error import Again
 
 # OpenStack imports.
 from oslo.config import cfg
@@ -338,13 +337,12 @@ class CalicoTransport0MQ(CalicoTransport):
                 LOG.info("Response: %s" % rsp)
             else:
                 LOG.error("Response: %s" % rsp)
-        except Again:
-            LOG.error("No response from Felix within allowed time (%sms)" %
-                      ENDPOINT_RESPONSE_TIMEOUT)
-            self._clear_socket_to_felix_peer(hostname)
-            raise FelixUnavailable(op, port['id'], hostname)
-        except:
-            LOG.exception("Exception receiving ENDPOINT* response from Felix")
+        except Exception as e:
+            if isinstance(e, zmq.ZMQError) and e.errno == zmq.EAGAIN:
+                LOG.error("No response from Felix within allowed time (%sms)" %
+                          ENDPOINT_RESPONSE_TIMEOUT)
+            else:
+                LOG.exception("Exception receiving ENDPOINT* rsp from Felix")
             self._clear_socket_to_felix_peer(hostname)
             raise FelixUnavailable(op, port['id'], hostname)
 
@@ -387,14 +385,13 @@ class CalicoTransport0MQ(CalicoTransport):
                 else:
                     LOG.error("Unexpected response from Felix on %s: %s"
                               % (hostname, rsp))
-            except Again:
-                LOG.error("No response from Felix within allowed time (%sms)" %
+            except Exception as e:
+                if isinstance(e, zmq.ZMQError) and e.errno == zmq.EAGAIN:
+                    LOG.error("No rsp from Felix within allowed time (%sms)" %
                           HEARTBEAT_RESPONSE_TIMEOUT)
-                self._clear_socket_to_felix_peer(hostname)
-                return
-            except:
-                LOG.exception("Exception receiving HEARTBEAT from Felix on %s"
-                              % hostname)
+                else:
+                    LOG.exception("Exception rcving HEARTBEAT from Felix on %s"
+                                  % hostname)
                 self._clear_socket_to_felix_peer(hostname)
                 return
 
