@@ -184,7 +184,7 @@ class CalicoTransport0MQ(CalicoTransport):
                 # the message content.
                 peer = message[0]
                 rq = json.loads(message[2].decode('utf-8'))
-                LOG.info("Felix-ROUTER RX [%s] %s" % (peer, rq))
+                LOG.info("Felix-ROUTER RX %s" % rq)
 
                 if rq['type'] == 'RESYNCSTATE':
                     # It's a RESYNCSTATE request.
@@ -419,7 +419,7 @@ class CalicoTransport0MQ(CalicoTransport):
                 # the message content.
                 peer = message[0]
                 rq = json.loads(message[2].decode('utf-8'))
-                LOG.info("ACL-GET RX [%s] %s" % (peer, rq))
+                LOG.info("ACL-GET RX %s" % rq)
 
                 if rq['type'] == 'GETGROUPS':
                     # It's a GETGROUPS request.
