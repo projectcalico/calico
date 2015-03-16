@@ -17,19 +17,6 @@ see here:
    :maxdepth: 2
 
    home
-   license
-
-Calico is an open source project, and we'd love you to get involved.  Whether
-that might be by reading and participating on our mailing list, or by diving
-into the code to propose enhancements or integrate with other systems.  To see
-the options for getting involved with Calico the project, please take a look at
-the following.
-
-.. toctree::
-   :maxdepth: 2
-
-   involved
-   understanding
 
 Calico as a networking model is applicable to a multitude of cloud systems,
 including those that use either containers or virtual machines as their basic
@@ -41,10 +28,27 @@ following pages describe how to deploy and configure Calico for those options.
    :maxdepth: 2
 
    using
-   faq
 
-Future Plans
-------------
+Calico is an open source project, and we'd love you to get involved.  Whether
+that might be by reading and participating on our mailing list, or by diving
+into the code to propose enhancements or integrate with other systems.  To see
+the options for getting involved with Calico the project, please take a look at
+the following.
+
+.. toctree::
+   :maxdepth: 2
+
+   understanding
+
+.. toctree::
+   :maxdepth: 2
+
+   involved
+
+.. toctree::
+   :maxdepth: 2
+
+   faq
 
 This section of the documentation covers proposals for the future of Calico.
 Feel free to use these documents to get an understanding of how the Calico team
@@ -56,3 +60,11 @@ requirements that are not yet covered here.
    :maxdepth: 2
 
    future
+
+Calico stands on the shoulders of many open source projects, as well as being
+open source itself.
+
+.. toctree::
+   :maxdepth: 2
+
+   license
