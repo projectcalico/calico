@@ -49,12 +49,6 @@ Does Calico work with IPv6?
 
 Yes!  We have demonstrated IPv6 with Calico on Openstack and Docker/Powerstrip.
 
-Why in Calico do we configure Neutron/ML2 to use 'local' and 'flat' networks?
------------------------------------------------------------------------------
-
-We aren't completely sure of the difference between local and flat, but these
-settings are what we use in our testing.
-
 Is Calico compliant with PCI/DSS requirements?
 ----------------------------------------------
 
