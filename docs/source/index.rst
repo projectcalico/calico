@@ -17,9 +17,6 @@ see here:
    :maxdepth: 2
 
    home
-   datapath
-   addressing
-   security-model
    license
 
 Calico is an open source project, and we'd love you to get involved.  Whether
