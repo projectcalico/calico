@@ -41,6 +41,10 @@ input.
    :maxdepth: 2
 
    involved
+
+.. toctree::
+   :maxdepth: 1
+
    faq
 
 Calico is under active and rapid development.  Here are our thoughts on some of
