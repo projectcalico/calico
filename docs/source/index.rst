@@ -40,10 +40,7 @@ following pages describe how to deploy and configure Calico for those options.
 .. toctree::
    :maxdepth: 2
 
-   openstack
-   docker
-   next-steps
-   support
+   deploy
    faq
 
 Future Plans
