@@ -40,7 +40,7 @@ following pages describe how to deploy and configure Calico for those options.
 .. toctree::
    :maxdepth: 2
 
-   deploy
+   using
    faq
 
 Future Plans

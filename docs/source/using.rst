@@ -1,5 +1,5 @@
-Deploying and Running Calico
-============================
+Using Calico
+============
 
 .. toctree::
    :maxdepth: 2
