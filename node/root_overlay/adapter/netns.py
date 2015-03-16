@@ -42,6 +42,8 @@ PROC_ALIAS = "proc_host"
 """The alias for /proc.  This is useful when the filesystem is containerized.
 """
 
+IF_PREFIX = "cali"
+
 
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
@@ -65,7 +67,7 @@ def remove_endpoint(ep_id):
     :param ep_id: The endpoint ID to remove
     :return: Nothing
     """
-    iface = "cali" + ep_id[:11]
+    iface = IF_PREFIX + ep_id[:11]
     call("ip link delete %s" % iface, shell=True)
 
 
@@ -96,7 +98,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     ep_id = uuid.uuid1().hex
 
     # TODO - need to handle containers exiting straight away...
-    iface = "cali" + ep_id[:11]
+    iface = IF_PREFIX + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]
 
     # Provision the networking

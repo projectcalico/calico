@@ -4,6 +4,7 @@ import socket
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
+from node.root_overlay.adapter.netns import IF_PREFIX
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
@@ -80,7 +81,7 @@ class Endpoint(object):
 
     def to_json(self):
         json_dict = {"state": self.state,
-                     "name": "cali" + self.ep_id[:11],
+                     "name": IF_PREFIX + self.ep_id[:11],
                      "mac": self.mac,
                      "profile_id": self.profile_id,
                      "ipv4_nets": [str(net) for net in self.ipv4_nets],
@@ -135,7 +136,7 @@ class DatastoreClient(object):
             self.etcd_client.read(config_dir)
         except KeyError:
             # Didn't exist, create it now.
-            self.etcd_client.set(config_dir + "InterfacePrefix", "veth")
+            self.etcd_client.set(config_dir + "InterfacePrefix", IF_PREFIX)
             self.etcd_client.set(config_dir + "LogSeverityFile", "DEBUG")
 
     def create_host(self, bird_ip, bird6_ip):
