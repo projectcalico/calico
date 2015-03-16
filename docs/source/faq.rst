@@ -5,6 +5,29 @@ This page contains answers to several frequently asked technical questions
 about Calico. It is updated on a regular basis: please check back for more
 information.
 
+"Why use Calico?"
+-----------------
+
+See also http://www.projectcalico.org/why-calico/
+The problem Calico tries to solve is the networking of workloads (VMs,
+containers, etc) in a high scale environment.  Existing L2 based methods for
+solving this problem have problems at high scale.  Compared to these, we think
+Calico is more scalable, simpler and more flexible.  We think you should look
+into it if you have more than a handful of nodes on a single site.
+
+"Does Calico work with IPv6?"
+-----------------------------
+
+Yes!  We have demonstrated IPv6 with Calico on Openstack and Docker/Powerstrip.
+
+"Is Calico compliant with PCI/DSS requirements?"
+------------------------------------------------
+
+PCI certification applies to the whole end-to-end system, of which Calico would
+be a part.  We understand that most current solutions use VLANs, but after
+studying the PCI requirements documents, we believe that Calico does meet those
+requirements and that nothing in the documents *mandates* the use of VLANs.
+
 "How Does Calico Maintain Saved State?"
 ---------------------------------------
 
