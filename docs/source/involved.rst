@@ -1,6 +1,12 @@
 Getting Involved
 ================
 
+Calico is an open source project, and we'd love you to get involved.  Whether
+that might be by reading and participating on our mailing list, or by diving
+into the code to propose enhancements or integrate with other systems.  To see
+the options for getting involved with Calico the project, please take a look at
+the following.
+
 Mailing List
 ------------
 

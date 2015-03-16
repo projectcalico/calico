@@ -18,43 +18,33 @@ see here:
 
    home
 
-Calico as a networking model is applicable to a multitude of cloud systems,
-including those that use either containers or virtual machines as their basic
-workload unit.  Correspondingly, if you want to try out Calico, there are
-several options for how you can easily do that, with different systems.  The
-following pages describe how to deploy and configure Calico for those options.
+Keen to try out Calico for yourself?  The following pages describe various
+options for how you can deploy and run Calico.
 
 .. toctree::
    :maxdepth: 2
 
    using
 
-Calico is an open source project, and we'd love you to get involved.  Whether
-that might be by reading and participating on our mailing list, or by diving
-into the code to propose enhancements or integrate with other systems.  To see
-the options for getting involved with Calico the project, please take a look at
-the following.
+If you'd like to learn more about how Calico works 'under the hood', please
+take a look at the following.
 
 .. toctree::
    :maxdepth: 2
 
    understanding
 
+Calico is an open source project and we would value your help, involvement and
+input.
+
 .. toctree::
    :maxdepth: 2
 
    involved
-
-.. toctree::
-   :maxdepth: 2
-
    faq
 
-This section of the documentation covers proposals for the future of Calico.
-Feel free to use these documents to get an understanding of how the Calico team
-plan to add new features and functionality.  Please also do let us know if any
-of these are of particular interest to you, or if you have other Calico-related
-requirements that are not yet covered here.
+Calico is under active and rapid development.  Here are our thoughts on some of
+the features that Calico doesn't support today, but likely will do soon.
 
 .. toctree::
    :maxdepth: 2
