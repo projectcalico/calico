@@ -1,5 +1,6 @@
+[![Circle CI](https://circleci.com/gh/Metaswitch/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/Metaswitch/calico-docker/tree/master)
 # Calico on docker
-Calico can provide networking in a Docker environment. Each container gets it's own IP, there is no ecapsulation and it can support massive scale. For more details see http://www.projectcalico.org/technical/
+Calico can provide networking in a Docker environment. Each container gets it's own IP, there is no encapsulation and it can support massive scale. For more details see http://www.projectcalico.org/technical/
 
 Development is very active at the moment so please Star this project and check back often.
 
@@ -43,31 +44,37 @@ Finally, we provide a command line tool, `calicoctl`, which configures and start
 
 ```
 Usage:
-  calicoctl master --ip=<IP>
-                   [--etcd=<ETCD_AUTHORITY>]
-                   [--master-image=<DOCKER_IMAGE_NAME>]
-  calicoctl node --ip=<IP>
-                 [--etcd=<ETCD_AUTHORITY>]
-                 [--node-image=<DOCKER_IMAGE_NAME>]
-  calicoctl status [--etcd=<ETCD_AUTHORITY>]
-  calicoctl reset [--etcd=<ETCD_AUTHORITY>]
-  calicoctl version [--etcd=<ETCD_AUTHORITY>]
-  calicoctl addgroup <GROUP>  [--etcd=<ETCD_AUTHORITY>]
-  calicoctl addtogroup <CONTAINER_ID> <GROUP>
-                       [--etcd=<ETCD_AUTHORITY>]
-  calicoctl diags
+  calicoctl master --ip=<IP> [--master-image=<DOCKER_IMAGE_NAME>]
+  calicoctl master stop [--force]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node stop [--force]
   calicoctl status
+  calicoctl shownodes [--detailed]
+  calicoctl group show [--detailed]
+  calicoctl group add <GROUP>
+  calicoctl group remove <GROUP>
+  calicoctl group addmember <GROUP> <CONTAINER>
+  calicoctl group removemember <GROUP> <CONTAINER>
+  calicoctl ipv4 pool add <CIDR>
+  calicoctl ipv4 pool del <CIDR>
+  calicoctl ipv4 pool show
+  calicoctl ipv6 pool add <CIDR>
+  calicoctl ipv6 pool del <CIDR>
+  calicoctl ipv6 pool show
+  calicoctl container add <CONTAINER> <IP>
+  calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
+  calicoctl diags
+
 Options:
  --ip=<IP>                The local management address to use.
- --etcd=<ETCD_AUTHORITY>  The location of the etcd service as
-                          host:port [default: 127.0.0.1:4001]
+ --ip6=<IP6>              The local IPv6 management address to use.
  --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
                           Calico's master container
-                          [default: calico/master:v0.0.6]
+                          [default: calico/master:latest]
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
-                          [default: calico/node:v0.0.6]
+                          [default: calico/node:latest]
 
 ```
 

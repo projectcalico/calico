@@ -5,7 +5,7 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
@@ -17,6 +17,9 @@ Usage:
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
+  calicoctl ipv6 pool add <CIDR>
+  calicoctl ipv6 pool del <CIDR>
+  calicoctl ipv6 pool show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -24,6 +27,7 @@ Usage:
 
 Options:
  --ip=<IP>                The local management address to use.
+ --ip6=<IP6>              The local IPv6 management address to use.
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
@@ -49,19 +53,19 @@ from node.root_overlay.adapter import netns
 
 
 hostname = socket.gethostname()
-
-# Directly use Command._create() because the magic-import sh.mkdir.bake()
-# fails in pyinstaller.
-mkdir = sh.Command._create('mkdir')
 try:
+    mkdir = sh.Command._create('mkdir')
     docker = sh.Command._create('docker')
-except sh.CommandNotFound:
-    docker = None  # We'll tell the user about it later.
-modprobe = sh.Command._create('modprobe')
-grep = sh.Command._create('grep')
+    modprobe = sh.Command._create('modprobe')
+    grep = sh.Command._create('grep')
+    sysctl = sh.Command._create("sysctl")
+except sh.CommandNotFound as e:
+    print "Missing command: %s" % e.message
+    
 mkdir_p = mkdir.bake('-p')
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
+DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
 
 def get_container_info(container_name):
@@ -106,7 +110,11 @@ def container_add(container_name, ip):
     """
     client = DatastoreClient()
 
-    info = get_container_info(container_name)
+    try:
+        info = get_container_info(container_name)
+    except KeyError as e:
+        print e.message
+        sys.exit(1)
     container_id = info["Id"]
 
     # Check if the container already exists
@@ -116,25 +124,41 @@ def container_add(container_name, ip):
         # Calico doesn't know about this container.  Continue.
         pass
     else:
-        # Calico already set up networking for this container.  Since we got called with an
-        # IP address, we shouldn't just silently exit, since that would confuse the user:
-        # the container would not be reachable on that IP address.  So, raise an exception.
-        print "%s has already been configured with Calico Networking." % container_name
+        # Calico already set up networking for this container.  Since we got
+        # called with an IP address, we shouldn't just silently exit, since
+        # that would confuse the user: the container would not be reachable on
+        # that IP address.
+        print "%s has already been configured with Calico Networking." % \
+              container_name
+        sys.exit(1)
 
-    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export it.
+    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
+    # it.
     ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
     if not any([ip in pool for pool in pools]):
         print "%s is not in any configured pools" % ip
+        sys.exit(1)
 
     # Check the container is actually running.
     if not info["State"]["Running"]:
         print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # The next hop IPs for this host are stored in etcd.
+    next_hops = client.get_default_next_hops(hostname)
+    try:
+        next_hops[ip.version]
+    except KeyError:
+        print "This node is not configured for IPv%d." % ip.version
+        sys.exit(1)
 
     # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
     pid = info["State"]["Pid"]
-    endpoint = netns.set_up_endpoint(ip, pid, veth_name="eth1", proc_alias="proc")
+    endpoint = netns.set_up_endpoint(ip, pid, next_hops,
+                                     veth_name="eth1",
+                                     proc_alias="proc")
 
     # Register the endpoint
     client.create_container(hostname, container_id, endpoint)
@@ -178,8 +202,7 @@ def container_remove(container_name):
 
 def group_remove_container(container_name, group_name):
     """
-    Add a container (on this host) to the group with the given name.  This
-    removes the first endpoint on the container from the group.
+    Remove a container (on this host) from the group with the given name.  
 
     :param container_name: The Docker container name or ID.
     :param group_name:  The Calico security group name.
@@ -215,7 +238,7 @@ def node_stop(force):
         print "Current host has active endpoints so can't be stopped. Force with --force"
 
 
-def node(ip, node_image):
+def node(ip, node_image, ip6=""):
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -228,8 +251,18 @@ def node(ip, node_image):
         # If no IPv4 pools are defined, add a default.
         client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
 
-    client.create_global_config()
+    ipv6_pools = client.get_ip_pools("v6")
+    if not ipv6_pools:
+        # If no IPv6 pools are defined, add a default.
+        client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
+
+    client.create_global_config() 
     client.create_host(ip)
+
+    # Enable IP forwarding since all compute hosts are vRouters.
+    sysctl("-w", "net.ipv4.ip_forward=1")
+    sysctl("-w", "net.ipv6.conf.all.forwarding=1")
+
     try:
         docker("rm", "-f", "calico-node")
     except Exception:
@@ -239,6 +272,7 @@ def node(ip, node_image):
     output = StringIO.StringIO()
 
     docker("run", "-e",  "IP=%s" % ip,
+                  "-e",  "IP6=%s" % ip6,
                   "--name=calico-node",
                   "--restart=always",
                   "--privileged",
@@ -259,7 +293,6 @@ def node(ip, node_image):
     print "export DOCKER_HOST=localhost:%s\n" % powerstrip_port
     print "before using `docker run` for Calico networking.\n"
 
-
 def status():
     client = DatastoreClient()
     try:
@@ -277,6 +310,8 @@ def status():
     try:
         print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
                                                             "/etc/service/bird/bird.ctl"))
+        print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc6 -s "
+                                                                "/etc/service/bird6/bird6.ctl"))
     except Exception:
         print "Couldn't collect BGP Peer information"
 
@@ -460,51 +495,54 @@ echo "Done"
     # the container because it might not be running...
 
 
-def ipv4_pool_add(cidr_pool):
+def ip_pool_add(cidr_pool, version):
     """
-    Add the the given CIDR range to the IPv4 IP address allocation pool.
+    Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
     """
+    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
-        print "%s is not a valid IPv4 prefix." % cidr_pool
+        print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version == 6:
-        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+    if pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+              (cidr_pool, pool.version, version)
         return
     client = DatastoreClient()
-    client.add_ip_pool("v4", pool)
+    client.add_ip_pool("v%d" % version, pool)
 
 
-def ipv4_pool_remove(cidr_pool):
+def ip_pool_remove(cidr_pool, version):
     """
-    Add the the given CIDR range to the IPv4 IP address allocation pool.
+    Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :return: None
     """
-
+    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
-        print "%s is not a valid IPv4 prefix." % cidr_pool
+        print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version == 6:
-        print "%s is an IPv6 prefix, this command is for IPv4." % cidr_pool
+    if pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+              (cidr_pool, pool.version, version)
         return
     client = DatastoreClient()
     try:
-        client.del_ip_pool("v4", pool)
+        client.del_ip_pool("v%d" % version, pool)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
 
 
-def ipv4_pool_show(version):
+def ip_pool_show(version):
     """
-    Print a list of IPv4 allocation pools.
+    Print a list of IP allocation pools.
     :return: None
     """
     client = DatastoreClient()
@@ -513,6 +551,7 @@ def ipv4_pool_show(version):
     for pool in pools:
         x.add_row([pool])
     print x
+
 
 def validate_arguments():
     group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
@@ -550,7 +589,9 @@ if __name__ == '__main__':
             if arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
-                node(arguments["--ip"], arguments['--node-image'])
+                node_image = arguments['--node-image']
+                ip6 = arguments["--ip6"]
+                node(arguments["--ip"], node_image=node_image, ip6=ip6)
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
@@ -575,11 +616,19 @@ if __name__ == '__main__':
         elif arguments["ipv4"]:
             assert arguments["pool"]
             if arguments["add"]:
-                ipv4_pool_add(arguments["<CIDR>"])
+                ip_pool_add(arguments["<CIDR>"], version=4)
             elif arguments["del"]:
-                ipv4_pool_remove(arguments["<CIDR>"])
+                ip_pool_remove(arguments["<CIDR>"], version=4)
             elif arguments["show"]:
-                ipv4_pool_show("v4")
+                ip_pool_show("v4")
+        elif arguments["ipv6"]:
+            assert arguments["pool"]
+            if arguments["add"]:
+                ip_pool_add(arguments["<CIDR>"], version=6)
+            elif arguments["del"]:
+                ip_pool_remove(arguments["<CIDR>"], version=6)
+            elif arguments["show"]:
+                ip_pool_show("v6")
         if arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"], arguments["<IP>"])

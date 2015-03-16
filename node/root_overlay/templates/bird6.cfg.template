@@ -1,0 +1,51 @@
+router id {{getenv "IP"}};  # Use IPv4 address since router id is 4 octets, even in MP-BGP
+log "/var/log/calico/bird6.log" all;
+
+filter calico_pools {
+{{range gets "/calico/ipam/v6/pool/*"}}
+    if ( net ~ {{.Value}} ) then {
+        accept;
+    }
+{{end}}
+    reject;
+}
+
+# Configure synchronization between routing tables and kernel.
+protocol kernel {
+  learn;          # Learn all alien routes from the kernel
+  persist;        # Don't remove routes on bird shutdown
+  scan time 2;    # Scan kernel routing table every 2 seconds
+  import all;
+  device routes;
+  export all;     # Default is export none
+}
+
+# Watch interface up/down events.
+protocol device {
+  scan time 2;    # Scan interfaces every 2 seconds
+}
+
+protocol direct {
+   debug all;
+   interface "eth*", "em*", "ens*";
+}
+
+{{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.{{else}}# Peer with all neighbours.
+{{range gets "/calico/host/*/bird6_ip"}}
+# For peer {{.Key}} {{if eq .Value (getenv "IP6") }}
+# Skipping ourselves ({{getenv "IP6"}}) {{else}}
+protocol bgp {
+  debug all;
+  description "Connection to BGP peer";
+  local as 64511;
+  neighbor {{.Value}} as 64511;
+  multihop;
+  gateway recursive; # This should be the default, but just in case.
+  import filter calico_pools;
+  export filter calico_pools;
+  next hop self;    # Disable next hop processing and always advertise our
+                    # local address as nexthop
+  source address {{getenv "IP6"}};  # The local address we use for the TCP connection
+}
+{{end}}{{end}}{{end}}
+

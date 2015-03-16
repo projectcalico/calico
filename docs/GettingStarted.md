@@ -42,7 +42,7 @@ If you see ping failures, the likely culprit is a problem with then Virtualbox n
 ### Installing Calico
 If you didn't use the calico-coreos-vagrant-example Vagrantfile, you'll need to download Calico onto both servers by SSHing onto them and running
 ```
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.7/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.1.0/calicoctl
 chmod +x calicoctl
 ```
 Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
@@ -71,14 +71,14 @@ You should see output like this on the master
 ```
 core@core-01 ~ $ docker ps
 CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-077ceae44fe3        calico/node:v0.0.7     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-17a54cc8f88a        calico/master:v0.0.7   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
+077ceae44fe3        calico/node:v0.1.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+17a54cc8f88a        calico/master:v0.1.0   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
 ```
 And like this on the other hosts
 ```
 core@core-02 ~ $ docker ps
 CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
-f770a8acbb11        calico/node:v0.0.7   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+f770a8acbb11        calico/node:v0.1.0   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 ```
 
 #### Using Calico: Creating networked endpoints
@@ -156,6 +156,57 @@ Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 ```
 sudo ./calicoctl reset
 ```
+
+## IPv6
+To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
+
+On core-01
+```
+sudo ip addr add fd80:24e2:f998:72d6::1/112 dev eth1
+```
+
+On core-02
+```
+sudo ip addr add fd80:24e2:f998:72d6::2/112 dev eth1
+```
+
+Verify connectivity by pinging
+
+On core-01
+```
+ping6 fd80:24e2:f998:72d6::2
+```
+
+Then restart your calico-node processes with the `--ip6` parameter to enable v6 routing.
+
+On core-01
+```
+sudo ./calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d6::1
+```
+
+On core-02
+```
+sudo ./calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d6::2
+```
+
+Then, you can start containers with IPv6 connectivity by giving them an IPv6 address in `CALICO_IP`. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl ipv6 pool add` to change this).
+
+On core-01
+```
+docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
+sudo ./calicoctl group add GROUP_F_G
+sudo ./calicoctl group addmember GROUP_F_G workload-F
+```
+
+Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
+
+One core-02
+```
+docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
+sudo ./calicoctl group addmember GROUP_F_G workload-G
+docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
+```
+
 
 ## Troubleshooting
 

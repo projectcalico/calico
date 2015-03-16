@@ -2,7 +2,7 @@ from collections import namedtuple
 import json
 import socket
 import etcd
-from netaddr import IPNetwork, IPAddress
+from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
@@ -138,7 +138,7 @@ class DatastoreClient(object):
             self.etcd_client.set(config_dir + "InterfacePrefix", "veth")
             self.etcd_client.set(config_dir + "LogSeverityFile", "DEBUG")
 
-    def create_host(self, bird_ip):
+    def create_host(self, bird_ip, bird6_ip):
         """
         Create a new Calico host.
 
@@ -148,6 +148,7 @@ class DatastoreClient(object):
         host_path = HOST_PATH % {"hostname": hostname}
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
+        self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
         self.etcd_client.set(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
@@ -446,6 +447,35 @@ class DatastoreClient(object):
             pass
 
         return hosts
+
+    def get_default_next_hops(self, hostname):
+        """
+        Get the next hop IP addresses for default routes on the given host.
+
+        :param hostname: The hostname for which to get default route next hops.
+        :return: Dict of {ip_version: IPAddress}
+        """
+
+        host_path = HOST_PATH % {"hostname": hostname}
+        ipv4 = self.etcd_client.read(host_path + "bird_ip").value
+        ipv6 = self.etcd_client.read(host_path + "bird6_ip").value
+
+        next_hops = {}
+
+        # The IP addresses read from etcd could be blank. Only store them if
+        # they can be parsed by IPAddress
+        try:
+            next_hops[4] = IPAddress(ipv4)
+        except AddrFormatError:
+            pass
+
+        try:
+            next_hops[6] = IPAddress(ipv6)
+        except AddrFormatError:
+            pass
+
+        return next_hops
+
 
     def remove_all_data(self):
         """
