@@ -1,9 +1,9 @@
 Frequently Asked Questions
 ==========================
 
-This page contains answers to several frequently asked technical
-questions about Project Calico. It is updated on a regular basis: please
-check back for more information.
+This page contains answers to several frequently asked technical questions
+about Calico. It is updated on a regular basis: please check back for more
+information.
 
 "How Does Calico Maintain Saved State?"
 ---------------------------------------
