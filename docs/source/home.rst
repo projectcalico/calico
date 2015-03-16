@@ -35,3 +35,12 @@ networks, Calico is a lot simpler, specifically in the following ways.
   a more complex (but also less expressive) product of the networks and
   security groups that are defined for each tenant, and of any virtual
   'routers' that have been defined to allow passage between tenant networks.
+
+For more detail please check out the following pages.
+
+.. toctree::
+   :maxdepth: 2
+
+   datapath
+   addressing
+   security-model

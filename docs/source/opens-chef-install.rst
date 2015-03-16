@@ -61,8 +61,8 @@ starting the bootstrap process:
       and set the correct name for each node (names must be unique).
    -  Ensure your loopback IP and OpenStack DNS entries are configured. Edit
       the ``/etc/hosts`` file:
-         -  Set the loopback IP address to 127.0.0.1.
-         -  Set your hostname IP address to your static IP.
+      -  Set the loopback IP address to 127.0.0.1.
+      -  Set your hostname IP address to your static IP.
    -  Configure the hostnames / IPs of the other OpenStack nodes.
 
 If you are using VMWare and VMs for each of these machines (for

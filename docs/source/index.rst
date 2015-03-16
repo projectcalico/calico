@@ -17,9 +17,6 @@ see here:
    :maxdepth: 2
 
    home
-   datapath
-   addressing
-   security-model
    license
 
 Calico is an open source project, and we'd love you to get involved.  Whether
@@ -43,10 +40,7 @@ following pages describe how to deploy and configure Calico for those options.
 .. toctree::
    :maxdepth: 2
 
-   openstack
-   docker
-   next-steps
-   support
+   deploy
    faq
 
 Future Plans
@@ -61,4 +55,4 @@ requirements that are not yet covered here.
 .. toctree::
    :maxdepth: 2
 
-   overlap-ips
+   future
