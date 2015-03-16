@@ -1,6 +1,6 @@
 [![Circle CI](https://circleci.com/gh/Metaswitch/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/Metaswitch/calico-docker/tree/master)
 # Calico on docker
-Calico can provide networking in a Docker environment. Each container gets it's own IP, there is no ecapsulation and it can support massive scale. For more details see http://www.projectcalico.org/technical/
+Calico can provide networking in a Docker environment. Each container gets it's own IP, there is no encapsulation and it can support massive scale. For more details see http://www.projectcalico.org/technical/
 
 Development is very active at the moment so please Star this project and check back often.
 
