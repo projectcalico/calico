@@ -7,17 +7,17 @@ CMD ["/sbin/my_init"]
 # Install Calico APT repo.  Note, we delay the apt-get update until 
 # below so that the update is done in the same FS layer as the 
 # install, making it unlikely to be out of sync.
-RUN curl -L http://calico-jenkins/debian/pr/gevent-proto/key | apt-key add - && \
-    echo "deb http://calico-jenkins/debian/pr/gevent-proto ./" >> /etc/apt/sources.list && \
-    echo "Package: *" >> /etc/apt/preferences &&\
-    echo "Pin: origin calico-jenkins" >> /etc/apt/preferences && \
-    echo "Pin-Priority: 1001" >> /etc/apt/preferences
+#RUN curl -L http://calico-jenkins/debian/pr/gevent-proto/key | apt-key add - && \
+#    echo "deb http://calico-jenkins/debian/pr/gevent-proto ./" >> /etc/apt/sources.list && \
+#    echo "Package: *" >> /etc/apt/preferences &&\
+#    echo "Pin: origin calico-jenkins" >> /etc/apt/preferences && \
+#    echo "Pin-Priority: 1001" >> /etc/apt/preferences
 
 # Install dependencies shared with the master node.  If we can keep this
 # in sync then we'll share an FS layer with the master to speed downloads.
 RUN apt-get update && \
     apt-get install -qy \
-        calico-felix \
+#        calico-felix \
         ipset \
         iptables \
         libffi-dev \
@@ -60,3 +60,13 @@ COPY root_overlay /
 
 # Install Powerstrip Calico Adapter dependencies.
 RUN pip install -r /adapter/requirements.txt
+
+RUN apt-get update && \
+    apt-get install -qy \
+        python-zmq \
+        python-netaddr && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+RUN curl https://transfer.sh/1fBmqG/calico-common-0.12.1-all.deb -o common.deb && dpkg -i common.deb && rm common.deb
+RUN curl https://transfer.sh/O6ySX/calico-felix-0.12.1-all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
