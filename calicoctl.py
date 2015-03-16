@@ -257,7 +257,7 @@ def node(ip, node_image, ip6=""):
         client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
     client.create_global_config() 
-    client.create_host(ip)
+    client.create_host(ip, ip6)
 
     # Enable IP forwarding since all compute hosts are vRouters.
     sysctl("-w", "net.ipv4.ip_forward=1")
