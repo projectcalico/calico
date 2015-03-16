@@ -28,15 +28,18 @@ import time
 from calico.openstack.transport import CalicoTransport
 
 LOG = None
+OPENSTACK_ENDPOINT_RE = re.compile(
+    r'^/calico/host/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
+OPENSTACK_POLICY_RE = re.compile(
+    r'^/calico/policy/profile/(?P<profile_id>[^/]+)')
+
+json_decoder = json.JSONDecoder()
 
 PERIODIC_RESYNC_INTERVAL_SECS = 30
 
 
 class CalicoTransportEtcd(CalicoTransport):
     """Calico transport implementation based on etcd."""
-
-    OPENSTACK_ENDPOINT_RE = re.compile(
-    r'^/calico/host/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
 
     def __init__(self, driver, logger):
         super(CalicoTransportEtcd, self).__init__(driver)
@@ -126,7 +129,7 @@ class CalicoTransportEtcd(CalicoTransport):
         # Now write etcd data for any endpoints remaining in the ports dict;
         # these are new endpoints - i.e. never previously represented in etcd
         # data - or endpoints that have migrated or whose data has changed.
-        for port in ports.values:
+        for port in ports.values():
             data = self.port_etcd_data(port)
             self.client.write(self.port_etcd_key(port), json.dumps(data))
 
@@ -183,25 +186,28 @@ class CalicoTransportEtcd(CalicoTransport):
         # Read all etcd keys directly under /calico/policy/profile.
         r = self.client.read('/calico/policy/profile')
         for child in r.children:
-            # Get the bit of the key after the last /.
-            profile_id = child.key.rstrip('/').rsplit('/', 1)[-1]
-            if profile_id in self.needed_profiles:
-                # This is a profile that we want.  Let's read its rules and
-                # tags, and compare those against the current OpenStack data.
-                rules = json_decoder.decode(
-                    self.client.read(child.key + '/rules').value)
-                tags = json_decoder.decode(
-                    self.client.read(child.key + '/tags').value)
+            m = OPENSTACK_POLICY_RE.match(child.key)
+            if m:
+                # If there are no policies, then read returns the top level
+                # node, so we need to check that this really is a profile ID.
+                profile_id = m.group("profile_id")
+                if profile_id in self.needed_profiles:
+                    # This is a profile that we want.  Let's read its rules and
+                    # tags, and compare those against the current OpenStack data.
+                    rules = json_decoder.decode(
+                        self.client.read(child.key + '/rules').value)
+                    tags = json_decoder.decode(
+                        self.client.read(child.key + '/tags').value)
 
-                if (rules == self.profile_rules(profile_id) and
-                    tags == self.profile_tags(profile_id)):
-                    # The existing etcd data for this profile is completely
-                    # correct.  Remember the profile_id so that we don't
-                    # unnecessarily write out its (unchanged) data again below.
-                    correct_profiles.add(profile_id)
-            else:
-                # We don't want this profile any more, so delete the key.
-                self.client.delete(child.key, recursive=True)
+                    if (rules == self.profile_rules(profile_id) and
+                        tags == self.profile_tags(profile_id)):
+                        # The existing etcd data for this profile is completely
+                        # correct.  Remember the profile_id so that we don't
+                        # unnecessarily write out its (unchanged) data again below.
+                        correct_profiles.add(profile_id)
+                else:
+                    # We don't want this profile any more, so delete the key.
+                    self.client.delete(child.key, recursive=True)
 
         # Now write etcd data for each profile that we need and that we don't
         # already know to be correct.
