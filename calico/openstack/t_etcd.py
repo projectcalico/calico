@@ -237,7 +237,7 @@ class CalicoTransportEtcd(CalicoTransport):
         outbound = []
         for sgid in self.profile_tags(profile_id):
             for rule in self.sgs[sgid]['security_group_rules']:
-                LOG.info("Neutron rule %s" % rule)
+                LOG.info("Neutron rule  %s : %s", profile_id, rule)
 
                 ethertype = rule['ethertype']
                 etcd_rule = {}
