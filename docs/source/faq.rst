@@ -30,9 +30,9 @@ Is Calico compliant with PCI/DSS requirements?
 ----------------------------------------------
 
 PCI certification applies to the whole end-to-end system, of which Calico would
-be a part.  After studying the PCI requirements documents, we believe that
-Calico does meet those requirements and nothing in the documents mandates the
-use of VLANs.
+be a part.  We understand that most current solutions use VLANs, but after
+studying the PCI requirements documents, we believe that Calico does meet those
+requirements and nothing in the documents *mandates* the use of VLANs.
 
 "How Does Calico Maintain Saved State?"
 ---------------------------------------
