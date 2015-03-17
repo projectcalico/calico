@@ -264,25 +264,28 @@ class CalicoTransportEtcd(CalicoTransport):
                 # src/dst_ports is a list in which each entry can be a single
                 # number, or a string describing a port range.
                 if rule['port_range_min'] == -1:
-                    port_spec = '1:65535'
+                    port_spec = ['1:65535']
                 elif rule['port_range_min'] == rule['port_range_max']:
-                    port_spec = rule['port_range_min']
+                    if rule['port_range_min'] is not None:
+                        port_spec = [rule['port_range_min']]
+                    else:
+                        port_spec = None
                 else:
-                    port_spec = '%s:%s' % (rule['port_range_min'],
-                                           rule['port_range_max'])
+                    port_spec = ['%s:%s' % (rule['port_range_min'],
+                                            rule['port_range_max'])]
 
                 # Put it all together and add to either the inbound or the
                 # outbound list.
                 if rule['direction'] == 'ingress':
                     etcd_rule['src_tag'] = rule['remote_group_id']
                     etcd_rule['src_net'] = net
-                    etcd_rule['src_ports'] = [port_spec]
+                    etcd_rule['src_ports'] = port_spec
                     inbound.append(etcd_rule)
                     LOG.info("=> Inbound Calico rule %s" % etcd_rule)
                 else:
                     etcd_rule['dst_tag'] = rule['remote_group_id']
                     etcd_rule['dst_net'] = net
-                    etcd_rule['dst_ports'] = [port_spec]
+                    etcd_rule['dst_ports'] = port_spec
                     outbound.append(etcd_rule)
                     LOG.info("=> Outbound Calico rule %s" % etcd_rule)
 
