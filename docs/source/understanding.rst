@@ -9,4 +9,5 @@ also of considerations for deploying Calico at large scale.
 
    l2-interconnectFabric
    arch-felix-and-acl
+   calico-neutron-api
    api-proposal
