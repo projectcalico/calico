@@ -32,6 +32,7 @@ RUN apt-get update && \
 # Required by calico-felix, eventually should be removed.
         python-zmq \
         python-gevent && \
+        git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
     pip install python-etcd
@@ -41,12 +42,9 @@ RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/co
     chmod +x confd
 
 # Powerstrip
-RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz \
-            -o powerstrip.tar.gz && \
-    tar -xzf powerstrip.tar.gz && \
-    rm powerstrip.tar.gz && \
-    mv powerstrip-0.0.1 powerstrip && \
+RUN git clone https://github.com/ClusterHQ/powerstrip.git && \
     cd powerstrip && \
+    git checkout unix-socket && \
     sed -i s/2375/2377/ powerstrip.tac && \
     python setup.py install
 

@@ -284,7 +284,7 @@ def node(ip, node_image, ip6=""):
                   "--restart=always",
                   "--privileged",
                   "--net=host",  # BIRD/Felix can manipulate the base networking stack
-                  "-v", "/var/run/docker.sock:/var/run/docker.sock",  # Powerstrip access Docker
+                  "-v", "/var/run/:/host-var-run",  # Powerstrip access Docker
                   "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
                                              # networking
                   "-v", "/var/log/calico:/var/log/calico",  # Logging volume
