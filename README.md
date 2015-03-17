@@ -31,9 +31,7 @@ For a lower level integration see [Orchestrators](docs/Orchestrators.md).
 Calico connects datacenter workloads (containers, VMs, or bare metal) via IP no matter which compute host they are on.  Read about it on the
 [Project Calico website](http://www.projectcalico.org).  Endpoints are network interfaces associated with workloads.  Using calicoctl we currently only support one endpoint per container, but more than one is possible if you use the lower level APIs.
 
-The `calico-master` container needs to run in one place in your cluster.  It keeps track of all workloads & endpoints and distributes information to `calico-node` containers that run on each Docker host you'll use with Calico.  If you have read the Calico architecture, the `calico-master` service instantiates both the 
-+ ACL Manager component and the
-+ Orchestrator Plugin component, backed by an [etcd](https://github.com/coreos/etcd) datastore.
+Project Calico uses [etcd](https://github.com/coreos/etcd) to distribute information about workloads, endpoints, and policy to each Docker host.
 
 The `calico-node` service is a worker that configures the network endpoints for containers, handles IP routing, and installs policy rules.  It includes
 + Felix, the Calico worker process,
@@ -44,8 +42,6 @@ Finally, we provide a command line tool, `calicoctl`, which configures and start
 
 ```
 Usage:
-  calicoctl master --ip=<IP> [--master-image=<DOCKER_IMAGE_NAME>]
-  calicoctl master stop [--force]
   calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
@@ -69,9 +65,6 @@ Usage:
 Options:
  --ip=<IP>                The local management address to use.
  --ip6=<IP6>              The local IPv6 management address to use.
- --master-image=<DOCKER_IMAGE_NAME>  Docker image to use for
-                          Calico's master container
-                          [default: calico/master:latest]
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
@@ -79,14 +72,8 @@ Options:
 ```
 
 ## Building the calicoctl binary
-The calicoctl binary is a statically-compiled version of the calicoctl.py script in this directory.  To (re)build it:
+The calicoctl binary is a statically-compiled version of the calicoctl.py script in this directory.  To (re)build it run:
 
-* Install pip and virtualenv.  On Ubuntu:
-```
-sudo apt-get install python-pip
-sudo pip install -U virtualenv
-```
-* Run
 ```
 ./create-binary.sh
 ```
