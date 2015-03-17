@@ -4,7 +4,6 @@
  
  1. Calico service instantiation
      -  Instantiate an etcd cluster, with ideally with proxies on each Docker compute host.
-     -  Bring up one instance of the `calico-master` service using `calicoctl`
      -  Bring up one instance of the `calico-node` service on each Docker compute host in the cluster.  This is also accomplished using `calicoctl`
  2. Redirect Docker Remote API requests to `calico-node`.
     - `calico-node` exposes the Docker Remote API on port 2377, using [Powerstrip][] to trap the container create/start/stop/destroy events and program the network.
@@ -29,10 +28,6 @@ Get the calico binary onto each node. It's usually safe to just grab the latest 
 
 	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.6/calicoctl
 	chmod +x calicoctl
-
-Launch one instance of the Calico Master
-
-	sudo ./calicoctl master --ip=<IP>
 
 Launch the Calico Node service on each Docker Host you want to use with Calico.
 
@@ -64,36 +59,7 @@ It prints a local file name and a URL where the diags can be downloaded from.
 
 ## Setting Calico ACLs
 
-You can configure groups and ACLs for Calico by directly writing to the `/calico` directory in etcd. Examples of how to do this over etcd's RESTful API are given below.
-
- 	+--calico  # root namespace
-	   |--master
-	   |  `--ip  # contains IP address of calico-master service
-	   |--host
-	   |  `--<hostname>  # one for each Docker host in the cluster 
-	   |     |--bird_ip  # the IP address BIRD listens on
-	   |     `--workload
-	   |        `--docker
-	   |           `--<container-id>  # one for each container on the Docker Host
-	   |              `--endpoint
-	   |                 `--<endpoint-id>  # UUID, only one per container in this version
-	   |                    `-- (...)  # Calico endpoint info, not needed for Orchestrators
-	   `--network
-	      `--group
-	         `--<group-id>  # UUID, one for each ACL group
-	            |--name  # human readable name for the group
-	            |--member  # The endpoints that are in the group.
-	            |  |--<member-1>  # key is endpoint UUID, value is empty string
-	            |  `--<member-2>
-	            `--rule
-	               |--inbound
-	               |  |--1  # JSON encoded rules
-	               |  `--2  
-	               |--inbound_default  # only "deny" supported in this release
-	               |--outbound
-	               |  |--1  # JSON encoded rules
-	               |  `--2  
-	               `--outbound_default  # only "deny" supported in this release.
+You can configure groups and ACLs for Calico by directly writing to the `/calico` directory in etcd. See [etcdStructure](etcdStructure.md) for more detail. Examples of how to do this over etcd's RESTful API are given below.
 
 ### Managing Groups
 
