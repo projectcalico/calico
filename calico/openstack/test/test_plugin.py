@@ -44,6 +44,7 @@ sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
 sys.modules['time'] = m_time = mock.Mock()
+sys.modules['etcd'] = m_etcd = mock.Mock()
 
 
 # Define a stub class, that we will use as the base class for
@@ -403,6 +404,10 @@ class TestPlugin(unittest.TestCase):
 
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
+
+        # Use 0MQ transport.
+        self.driver.transport = t_zmq.CalicoTransport0MQ(self.driver,
+                                                         mech_calico.LOG)
 
     # Tear down after each test case.
     def tearDown(self):
