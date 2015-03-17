@@ -33,7 +33,7 @@ protocol direct {
 {{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.{{else}}# Peer with all neighbours.
 {{range gets "/calico/host/*/bird6_ip"}}
 # For peer {{.Key}} {{if eq .Value (getenv "IP6") }}
-# Skipping ourselves ({{getenv "IP6"}}) {{else}}
+# Skipping ourselves ({{getenv "IP6"}}) {{else if ne "" .Value}}
 protocol bgp {
   debug all;
   description "Connection to BGP peer";

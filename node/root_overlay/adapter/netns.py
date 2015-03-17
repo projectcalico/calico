@@ -173,7 +173,9 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     ep = Endpoint(ep_id=ep_id, state="enabled", mac=mac, felix_host=HOSTNAME)
     if network.version == 4:
         ep.ipv4_nets.add(network)
+        ep.ipv4_gateway = next_hop
     else:
         ep.ipv6_nets.add(network)
+        ep.ipv6_gateway = next_hop
     return ep
 
