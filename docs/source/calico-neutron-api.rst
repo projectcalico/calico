@@ -34,13 +34,18 @@ map to the underlay physical network directly for providing floating IPs: other
 tenants will create their own private Neutron networks as necessary.
 
 In Calico, because all traffic is L3 and routed, the role of Neutron network as
-L2 connectivity domain is not helpful. Therefore in Calico Neutron networks are
-simply containers for subnets. Best practices for operators configuring Neutron
-networks in Calico deployments can be found in
+L2 connectivity domain is not helpful. Therefore, in Calico, Neutron networks
+are simply containers for subnets. Best practices for operators configuring
+Neutron networks in Calico deployments can be found in
 :ref:`opens-external-conn-setup`.
 
-Network creation events on the API are supported by Calico, but are no-op
-actions: no programming occurs in response to them.
+It is not useful for non-administrator tenants to create their own Neutron
+networks. Although Calico will allow non-administrator tenants to create
+Neutron networks, generally speaking administrators should use Neutron quotas
+to prevent non-administrator tenants from doing this.
+
+Network creation events on the API are no-op events in Calico: a positive (2XX)
+response will be sent but no programming will actually occur.
 
 Extended Attributes: Provider Networks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -53,11 +58,11 @@ needed.
 Subnets
 -------
 
-Neutron subnets are child objects of Neutron networks. In Neutron, a subnet is
-a collection of IP addresses and other network configuration (e.g. DNS servers)
-that is associated with a single Neutron network. A single Neutron network may
-have multiple Neutron subnets associated with it. Each Neutron subnet
-represents either an IPv4 or IPv6 block of addresses.
+Neutron subnets are child objects of Neutron networks. In vanilla Neutron, a
+subnet is a collection of IP addresses and other network configuration (e.g.
+DNS servers) that is associated with a single Neutron network. A single Neutron
+network may have multiple Neutron subnets associated with it. Each Neutron
+subnet represents either an IPv4 or IPv6 block of addresses.
 
 Best practices for configuring Neutron subnets in Calico deployments can be
 found in :ref:`opens-external-conn-setup`.
@@ -75,8 +80,8 @@ Ports
 
 In vanilla Neutron, a port represents a connection from a VM to a single layer
 2 Neutron network. Obviously, the meaning of this object changes in a Calico
-deployment: instead, a port is a connection from a VM to the single shared
-layer 3 network that Calico builds in Neutron.
+deployment: instead, a port is a connection from a VM to the shared layer 3
+network that Calico builds in Neutron.
 
 All properties on a port work as normal, except for the following:
 
@@ -93,16 +98,12 @@ Extended Attributes: Port Binding Attributes
 The ``binding:host-id`` attribute works as normal. The following notes apply to
 the other attributes:
 
-``binding:vif_details``
-  No fields in this property are used by Calico, and setting them will have no
-  effect.
-
 ``binding:profile``
   This is unused in Calico.
 
 ``binding:vnic_type``
-  This field, if used, must be set to ``normal``. If set to any other value,
-  Calico will not correctly function.
+  This field, if used, **must** be set to ``normal``. If set to any other
+  value, Calico will not correctly function!
 
 Quotas
 ------
