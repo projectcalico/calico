@@ -19,11 +19,14 @@ import json
 import logging
 import logging.handlers
 import sys
-from docker import Client
-import netns
 import socket
+
+from docker import Client
 from netaddr import IPAddress, AddrFormatError
+
+import netns
 from datastore import DatastoreClient
+
 
 _log = logging.getLogger(__name__)
 

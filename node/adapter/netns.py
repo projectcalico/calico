@@ -18,10 +18,12 @@ import socket
 import logging
 import logging.handlers
 import sys
-from netaddr import IPAddress
-from datastore import Endpoint, IF_PREFIX
 import uuid
+
 from netaddr import IPNetwork, IPAddress
+
+from datastore import Endpoint, IF_PREFIX
+
 
 _log = logging.getLogger(__name__)
 

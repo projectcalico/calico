@@ -48,10 +48,10 @@ from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
-from node.root_overlay.adapter.datastore import (DatastoreClient,
-                                                 ETCD_AUTHORITY_ENV,
-                                                 ETCD_AUTHORITY_DEFAULT)
-from node.root_overlay.adapter import netns
+from node.adapter.datastore import (DatastoreClient,
+                                    ETCD_AUTHORITY_ENV,
+                                    ETCD_AUTHORITY_DEFAULT)
+from node.adapter import netns
 
 
 hostname = socket.gethostname()
