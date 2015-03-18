@@ -75,11 +75,11 @@ class CalicoTransportEtcd(CalicoTransport):
                 # Resynchronize security group data.
                 self.resync_security_groups()
 
-                # Sleep until time for next resync.
-                eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
-
             except:
                 LOG.exception("Exception in periodic resync thread")
+
+            # Sleep until time for next resync.
+            eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
 
     def resync_endpoints(self):
         # Get all current endpoints from the OpenStack database and key them on

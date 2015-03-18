@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-openstack.test.test_plugin
+openstack.test.test_plugin_zmq
 ~~~~~~~~~~~
 
-Unit test for the Calico/OpenStack Plugin.
+Unit test for the Calico/OpenStack Plugin using 0MQ transport.
 """
 import mock
 import sys
@@ -34,30 +34,11 @@ else:
 
 if 'zmq' in sys.modules:
     del sys.modules['zmq']
-sys.modules['neutron'] = m_neutron = mock.Mock()
-sys.modules['neutron.common'] = m_neutron.common
-sys.modules['neutron.openstack'] = m_neutron.openstack
-sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
-sys.modules['neutron.plugins'] = m_neutron.plugins
-sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
-sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
 sys.modules['time'] = m_time = mock.Mock()
-sys.modules['etcd'] = m_etcd = mock.Mock()
 
-
-# Define a stub class, that we will use as the base class for
-# CalicoMechanismDriver.
-class DriverBase(object):
-    def __init__(self, agent_type, vif_type, vif_details):
-        pass
-
-# Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
-# that CalicoMechanismDriver inherits from - with this stub class.
-m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
-    DriverBase
-
+import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_zmq as t_zmq
 
@@ -90,7 +71,7 @@ port2 = {'binding:vif_type': 'tap',
          'admin_state_up': True}
 
 
-class TestPlugin(unittest.TestCase):
+class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -150,10 +131,6 @@ class TestPlugin(unittest.TestCase):
 
         # Restore the real eventlet.sleep.
         t_zmq.eventlet.sleep = real_eventlet_sleep
-
-    # Ports to return when the driver asks the OpenStack database for all
-    # current ports.
-    osdb_ports = []
 
     # Setup for explicit test code control of all operations on 0MQ sockets.
     def setUp_sockets(self):
