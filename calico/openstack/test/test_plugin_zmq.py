@@ -22,10 +22,8 @@ import mock
 import sys
 import eventlet
 import eventlet.queue
-import traceback
 import json
 import inspect
-from eventlet.support import greenlets as greenlet
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
@@ -51,24 +49,6 @@ KEEP_EXISTING_REQ_SOCK = 3
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
-
-port1 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-1',
-         'id': 'DEADBEEF-1234-5678',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                        'ip_address': '10.65.0.2'}],
-         'mac_address': '00:11:22:33:44:55',
-         'admin_state_up': True}
-
-port2 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-1',
-         'id': 'FACEBEEF-1234-5678',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                        'ip_address': '10.65.0.3'}],
-         'mac_address': '00:11:22:33:44:66',
-         'admin_state_up': True}
 
 
 class TestPlugin0MQ(lib.Lib, unittest.TestCase):
@@ -249,40 +229,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.zmq_context = t_zmq.zmq.Context.return_value
         self.zmq_context.socket.side_effect = socket_created
 
-    # Setup to intercept and display logging by the code under test.
-    def setUp_logging(self):
-
-        # Print logs to stdout.
-        def log_info(msg):
-            print "       INFO %s" % msg
-            return None
-
-        def log_debug(msg):
-            print "       DEBUG %s" % msg
-            return None
-
-        def log_warn(msg):
-            print "       WARN %s" % msg
-            return None
-
-        def log_error(msg):
-            print "       ERROR %s" % msg
-            return None
-
-        def log_exception(msg):
-            print "       EXCEPTION %s" % msg
-            if sys.exc_type is not greenlet.GreenletExit:
-                traceback.print_exc()
-            return None
-
-        # Hook logging.
-        mech_calico.LOG = mock.Mock()
-        mech_calico.LOG.info.side_effect = log_info
-        mech_calico.LOG.debug.side_effect = log_debug
-        mech_calico.LOG.warn.side_effect = log_warn
-        mech_calico.LOG.error.side_effect = log_error
-        mech_calico.LOG.exception.side_effect = log_exception
-
     # Setup to intercept sleep calls made by the code under test, and hence to
     # (i) control when those expire, and (ii) allow time to appear to pass (to
     # the code under test) without actually having to wait for that time.
@@ -305,8 +251,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         sleepers = {}
 
         threads = []
-
-        print "\nTEST CASE: %s" % self.id()
 
     # Method for the test code to call when it wants to advance the simulated
     # time.
@@ -371,9 +315,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Setup to control 0MQ socket operations.
         self.setUp_sockets()
 
-        # Setup to control logging.
-        self.setUp_logging()
-
         # Setup to control the passage of time.
         self.setUp_time()
 
@@ -432,7 +373,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.call_noop_entry_points()
 
         # Process a new endpoint.
-        self.new_endpoint(port1)
+        self.new_endpoint(lib.port1)
 
         # Update an endpoint.
         self.endpoint_update()
@@ -470,7 +411,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Process a new endpoint, but don't send in the ENDPOINTCREATED
         # response.
-        self.new_endpoint(port1, flags=set([NO_ENDPOINT_RESPONSE]))
+        self.new_endpoint(lib.port1, flags=set([NO_ENDPOINT_RESPONSE]))
         self.sockets.remove(self.felix_endpoint_socket)
 
         # Let time pass to allow the felix_heartbeat_thread for the old
@@ -482,7 +423,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.felix_connect()
 
         # Now process the new endpoint successfully.
-        self.new_endpoint(port1)
+        self.new_endpoint(lib.port1)
 
     # Test when plugin sends an ENDPOINT* request and Felix does not respond
     # within ENDPOINT_RESPONSE_TIMEOUT, with a 40s delay before Felix connects
@@ -723,9 +664,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
 
-        # Prep response to next get_subnet call.
-        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
-
         # Simulate ML2 notifying creation of the new port.
         context = mock.Mock()
         context._port = port
@@ -840,13 +778,10 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Get test variation flags.
         flags = kwargs.get('flags', set())
 
-        # Prep response to get_subnet call.
-        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
-
         # Simulate ML2 notifying a port update, with contexts such that the IP
         # address is changing.
         context = mock.Mock()
-        context.original = port1.copy()
+        context.original = lib.port1.copy()
         context._port = context.original.copy()
         context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
                                              'ip_address': '10.65.0.22'}]})
@@ -869,11 +804,11 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Check ENDPOINTUPDATED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'mac': port1['mac_address'],
+            {'mac': lib.port1['mac_address'],
              'addrs': [{'properties': {'gr': False},
                         'addr': '10.65.0.22',
                         'gateway': '10.65.0.1'}],
-             'endpoint_id': port1['id'],
+             'endpoint_id': lib.port1['id'],
              'issued': current_time * 1000,
              'type': 'ENDPOINTUPDATED',
              'state': 'enabled'},
@@ -940,7 +875,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Simulate ML2 notifying a port deletion.
         context = mock.Mock()
-        context._port = port1.copy()
+        context._port = lib.port1.copy()
         context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
                                              'ip_address': '10.65.0.22'}]})
 
@@ -962,7 +897,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Check ENDPOINTDESTROYED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'endpoint_id': port1['id'],
+            {'endpoint_id': lib.port1['id'],
              'issued': current_time * 1000,
              'type': 'ENDPOINTDESTROYED'},
             t_zmq.zmq.NOBLOCK)
@@ -1119,8 +1054,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Connect a Felix, and process a new endpoint for that Felix.
         self.felix_connect()
-        self.new_endpoint(port1)
-        self.osdb_ports = [port1]
+        self.new_endpoint(lib.port1)
+        self.osdb_ports = [lib.port1]
 
         # Simulate disconnection and reconnection, in the form of a RESYNCSTATE
         # on new connection but with same hostname.  Check that the existing
@@ -1131,8 +1066,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Add another new endpoint for same hostname, and check it is processed
         # normally and notified on the new connection.
-        self.new_endpoint(port2)
-        self.osdb_ports = [port1, port2]
+        self.new_endpoint(lib.port2)
+        self.osdb_ports = [lib.port1, lib.port2]
 
         # Simulate disconnect and reconnect again, and check that both existing
         # endpoints are notified on the new active connection (#3), after the

@@ -18,6 +18,7 @@ openstack.test.test_plugin_etcd
 
 Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
+import eventlet
 import mock
 import unittest
 
@@ -54,3 +55,21 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Tell the driver to initialize.
         self.driver.initialize()
+
+        # Allow the etcd transport's resync thread to run.
+        eventlet.sleep(1)
+
+    def test_start_two_ports(self):
+        """Startup with two existing ports but no existing etcd data.
+        """
+        # Arrange for etcd reads to return nothing.
+        self.client.read.return_value = self.empty_read
+
+        # Provide two Neutron ports.
+        self.osdb_ports = [lib.port1, lib.port2]
+
+        # Tell the driver to initialize.
+        self.driver.initialize()
+
+        # Allow the etcd transport's resync thread to run.
+        eventlet.sleep(1)
