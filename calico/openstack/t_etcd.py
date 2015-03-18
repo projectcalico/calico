@@ -309,7 +309,12 @@ class CalicoTransportEtcd(CalicoTransport):
 
     def endpoint_deleted(self, port):
         # Delete the etcd key for this endpoint.
-        self.client.delete(self.port_etcd_key(port))
+        key = self.port_etcd_key(port)
+        try:
+            self.client.delete(key)
+        except KeyError:
+            # Etcd returned a KeyError; doesn't exist, so treat as success
+            pass
 
     def security_group_updated(self, sg):
         # Update the data that we're keeping for this security group.
