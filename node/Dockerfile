@@ -68,5 +68,5 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN curl https://transfer.sh/1fBmqG/calico-common-0.12.1-all.deb -o common.deb && dpkg -i common.deb && rm common.deb
-RUN curl https://transfer.sh/O6ySX/calico-felix-0.12.1-all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
+RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-common_0.12.1_all.deb -o common.deb && dpkg -i common.deb && rm common.deb
+RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-felix_0.12.1_all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
