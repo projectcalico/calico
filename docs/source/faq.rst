@@ -65,3 +65,9 @@ This makes the Calico design very simple, because we store very little
 state. All of our components can be shutdown and restarted without risk,
 because they resynchronize state as necessary. This makes modelling
 their behaviour extremely simple, reducing the complexity of bugs.
+
+How Does Calico Interact with the Neutron API?
+----------------------------------------------
+
+The :doc:`calico-neutron-api` document goes into extensive detail about how
+various Neutron API calls translate into Calico actions.
