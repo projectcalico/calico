@@ -21,9 +21,9 @@ import logging.handlers
 import sys
 from docker import Client
 import netns
-import calico_etcd
 import socket
 from netaddr import IPAddress, AddrFormatError
+from datastore import DatastoreClient
 
 _log = logging.getLogger(__name__)
 
@@ -51,7 +51,6 @@ def setup_logging(logfile):
     _log.addHandler(handler)
 
     # Propagate to loaded modules
-    calico_etcd.setup_logging(logfile)
     netns.setup_logging(logfile)
 
 
@@ -66,7 +65,7 @@ class AdapterResource(resource.Resource):
                              version="1.16")
 
         # Init an etcd client.
-        self.etcd = calico_etcd.CalicoEtcdClient()
+        self.etcd = DatastoreClient()
 
     def render_POST(self, request):
         """
