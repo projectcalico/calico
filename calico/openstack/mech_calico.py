@@ -247,16 +247,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("Endpoints for SG %s are %s" % (sg['id'], endpoints))
         return endpoints
 
-    def felix_status(self, hostname, up):
+    def felix_status(self, hostname, up, start_flag):
         # Get a DB context for this processing.
         db_context = ctx.get_admin_context()
 
         if up:
-            self.db.create_or_update_agent(db_context,
-                                           {'agent_type': AGENT_TYPE_FELIX,
-                                            'binary': '',
-                                            'host': hostname,
-                                            'topic': constants.L2_AGENT_TOPIC})
+            agent_state = {'agent_type': AGENT_TYPE_FELIX,
+                           'binary': '',
+                           'host': hostname,
+                           'topic': constants.L2_AGENT_TOPIC}
+            if start_flag:
+                agent_state['start_flag'] = True
+            self.db.create_or_update_agent(db_context, agent_state)
 
 
 class CalicoNotifierProxy(object):

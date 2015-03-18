@@ -248,7 +248,7 @@ class CalicoTransport0MQ(CalicoTransport):
                 self.felix_peer_sockets[hostname] = sock
 
                 # Tell OpenStack that Felix on this host is up.
-                self.driver.felix_status(hostname, True)
+                self.driver.felix_status(hostname, True, True)
 
                 eventlet.spawn(self.felix_heartbeat_thread, hostname, sock)
             except:
@@ -396,7 +396,7 @@ class CalicoTransport0MQ(CalicoTransport):
                 return
 
             # Felix is still there, tell OpenStack.
-            self.driver.felix_status(hostname, True)
+            self.driver.felix_status(hostname, True, False)
 
     def acl_get_thread(self):
 
