@@ -52,6 +52,9 @@ class Lib(object):
     osdb_ports = []
 
     def setUp(self):
+        # If an arg mismatch occurs, we want to see the complete diff of it.
+        self.maxDiff = 1000
+
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
 
@@ -60,4 +63,40 @@ class Lib(object):
         self.db_context = mech_calico.ctx.get_admin_context()
 
         # Arrange what the DB's get_ports will return.
-        self.db.get_ports.return_value = self.osdb_ports
+        self.db.get_ports.side_effect = lambda *args: self.osdb_ports
+
+        # Arrange what the DB's get_security_groups query will return (the
+        # default SG).
+        self.db.get_security_groups.return_value = [
+            {'id': 'SGID-default',
+             'security_group_rules': [
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1}
+             ]}
+        ]
+
+        # Prep a null response to the following
+        # _get_port_security_group_bindings call.
+        self.db._get_port_security_group_bindings.return_value = []

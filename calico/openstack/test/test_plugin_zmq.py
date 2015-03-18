@@ -365,8 +365,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
     # "test").
     def setUp(self):
 
-        self.maxDiff = 1000
-
         # Normally do not provide bind_host config.
         m_oslo.config.cfg.CONF.bind_host = None
 
@@ -379,8 +377,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Setup to control the passage of time.
         self.setUp_time()
 
-        # Create an instance of CalicoMechanismDriver.
-        self.driver = mech_calico.CalicoMechanismDriver()
+        # Do common plugin test setup.
+        super(TestPlugin0MQ, self).setUp()
 
         # Use 0MQ transport.
         self.driver.transport = t_zmq.CalicoTransport0MQ(self.driver,
@@ -516,11 +514,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
     def felix_connect(self, **kwargs):
 
-        # Hook the Neutron database.
-        self.db = mech_calico.manager.NeutronManager.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
-        self.db.get_ports.return_value = self.osdb_ports
-
         # Get test variation flags.
         flags = kwargs.get('flags', set())
 
@@ -644,42 +637,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
     # Test what happens when an ACL Manager connects to the Neutron driver.
     def acl_connect(self):
-        # Prep response to next get_security_groups query, returning the
-        # default SG.  Prep a null response to the following
-        # _get_port_security_group_bindings call.
-        self.db = mech_calico.manager.NeutronManager.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
-        self.db.get_security_groups.return_value = [
-            {'id': 'SGID-default',
-             'security_group_rules': [
-                 {'remote_group_id': 'SGID-default',
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'ingress',
-                  'ethertype': 'IPv4',
-                  'port_range_min': -1},
-                 {'remote_group_id': 'SGID-default',
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'ingress',
-                  'ethertype': 'IPv6',
-                  'port_range_min': -1},
-                 {'remote_group_id': None,
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'egress',
-                  'ethertype': 'IPv4',
-                  'port_range_min': -1},
-                 {'remote_group_id': None,
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'egress',
-                  'ethertype': 'IPv6',
-                  'port_range_min': -1}
-             ]}
-        ]
-        self.db._get_port_security_group_bindings.return_value = []
-
         # Simulate ACL Manager sending GETGROUPS request.
         getgroups = {'type': 'GETGROUPS',
                      'issued': current_time * 1000}

@@ -18,6 +18,7 @@ openstack.test.test_plugin_etcd
 
 Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
+import mock
 import unittest
 
 import calico.openstack.test.lib as lib
@@ -26,16 +27,30 @@ import calico.openstack.mech_calico as mech_calico
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
-    # Setup before each test case (= each method below whose name begins with
-    # "test").
+    def check_etcd_write(self, key, value):
+        """Print each etcd write as it occurs.
+        """
+        print "etcd write: %s\n%s" % (key, value)
+
     def setUp(self):
+        """Setup before each test case.
+        """
+        # Do common plugin test setup.
         super(TestPluginEtcd, self).setUp()
 
-    def start_of_day(self):
+        # Hook the (mock) etcd client.
+        self.client = lib.m_etcd.Client()
+        self.client.write.side_effect = self.check_etcd_write
+
+        # Prepare an empty read object.
+        self.empty_read = mock.Mock()
+        self.empty_read.children = []
+
+    def test_start_no_ports(self):
+        """Startup with no ports or existing etcd data.
+        """
+        # Arrange for etcd reads to return nothing.
+        self.client.read.return_value = self.empty_read
+
         # Tell the driver to initialize.
         self.driver.initialize()
-
-    # Mainline test.
-    def test_mainline(self):
-        # Start of day processing: initialization and socket binding.
-        self.start_of_day()
