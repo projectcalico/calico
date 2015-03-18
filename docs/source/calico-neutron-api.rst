@@ -28,15 +28,16 @@ it defines a single layer 2 connectivity graph.
 In vanilla Neutron, these can map to the underlay network in various ways,
 either by being encapsulated over it or by being directly mapped to it.
 
-Generally speaking, Networks can be created by all tenants. The administrator
-tenant will generally create some public Networks that map to the underlay
-network directly for providing floating IPs: other tenants will create their
-own private networks as necessary.
+Generally speaking, Neutron networks can be created by all tenants. The
+administrator tenant will generally create some public Neutron networks that
+map to the underlay physical network directly for providing floating IPs: other
+tenants will create their own private Neutron networks as necessary.
 
-In Calico, because all traffic is L3 and routed, the role of Network as L2
-connectivity domain is not helpful. Therefore in Calico networks are simply
-containers for subnets. Best practices for operators configuring networks in
-Calico deployments can be found in :ref:`opens-external-conn-setup`.
+In Calico, because all traffic is L3 and routed, the role of Neutron network as
+L2 connectivity domain is not helpful. Therefore in Calico Neutron networks are
+simply containers for subnets. Best practices for operators configuring Neutron
+networks in Calico deployments can be found in
+:ref:`opens-external-conn-setup`.
 
 Network creation events on the API are supported by Calico, but are no-op
 actions: no programming occurs in response to them.
@@ -44,25 +45,26 @@ actions: no programming occurs in response to them.
 Extended Attributes: Provider Networks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Provider networks are not used in Calico deployments. Setting provider network
-extended attributes will have no effect. See :doc:`opens-external-conn` to
-understand why provider networks are not needed.
+Neutron Provider networks are not used in Calico deployments. Setting provider
+network extended attributes will have no effect. See
+:doc:`opens-external-conn` to understand why Neutron provider networks are not
+needed.
 
 Subnets
 -------
 
-Subnets are child objects of Networks. In Neutron, a Subnet is a collection of
-IP addresses and other network configuration (e.g. DNS servers) that is
-associated with a single Neutron Network. A single Network may have multiple
-Subnets associated with it. Each subnet represents either an IPv4 or IPv6 block
-of addresses.
+Neutron subnets are child objects of Neutron networks. In Neutron, a subnet is
+a collection of IP addresses and other network configuration (e.g. DNS servers)
+that is associated with a single Neutron network. A single Neutron network may
+have multiple Neutron subnets associated with it. Each Neutron subnet
+represents either an IPv4 or IPv6 block of addresses.
 
-Best practices for configuring subnets in Calico deployments can be found in
-:ref:`opens-external-conn-setup`.
+Best practices for configuring Neutron subnets in Calico deployments can be
+found in :ref:`opens-external-conn-setup`.
 
-In Calico, these roles for the subnet are preserved in their entirety. All
-properties associated with these subnets are preserved and remain meaningful
-except for:
+In Calico, these roles for the Neutron subnet are preserved in their entirety.
+All properties associated with these Neutron subnets are preserved and remain
+meaningful except for:
 
 ``host_routes``
   These have no effect, as the compute nodes will route traffic immediately
@@ -72,17 +74,18 @@ Ports
 -----
 
 In vanilla Neutron, a port represents a connection from a VM to a single layer
-2 Network. Obviously, the meaning of this object changes in a Calico network:
-instead, a port is a connection from a VM to the single shared layer 3 network
-that Calico builds.
+2 Neutron network. Obviously, the meaning of this object changes in a Calico
+deployment: instead, a port is a connection from a VM to the single shared
+layer 3 network that Calico builds in Neutron.
 
 All properties on a port work as normal, except for the following:
 
 ``network_id``
-  The network ID still controls which network the port is attached to, and
-  therefore still controls which subnets it will be placed in. However, as per
-  the note in :ref:`neutron-api-networks`, the network that a port is placed in
-  does not affect which machines in the network it can contact.
+  The network ID still controls which Neutron network the port is attached to,
+  and therefore still controls which Neutron subnets it will be placed in.
+  However, as per the note in :ref:`neutron-api-networks`, the Neutron network
+  that a port is placed in does not affect which machines in the deplyoment it
+  can contact.
 
 Extended Attributes: Port Binding Attributes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -114,7 +117,7 @@ individual ports. They can be used to limit the traffic a port may issue.
 
 In Calico, security groups have all the same function. Additionally, they serve
 to provide the connectivity-limiting function that in vanilla OpenStack is
-provided by Networks. For more information, see :doc:`security-model`.
+provided by Neutron networks. For more information, see :doc:`security-model`.
 
 All the attributes of security groups remain unchanged in Calico.
 
