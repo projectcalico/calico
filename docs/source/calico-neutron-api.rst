@@ -110,6 +110,10 @@ Quotas
 
 Neutron quotas function unchanged.
 
+In most deployments we recommend setting non-administrator tenant quotas for
+almost all Neutron objects to zero. For more information,
+see :ref:`opens-external-conn-setup`.
+
 Security Groups
 ---------------
 
