@@ -49,6 +49,16 @@ For example, using the shell
 
 The orchestrator should then set up Access Control Lists (ACLs) as detailed below.
 
+## Networking existing workloads
+
+If you need to add Calico networking to containers already created on the Docker Host, or need Calico networking to coexist with the standard Docker Bridge network, you can use the `container add` command.  For example, to add Calico networking to an existing container named `existing_newton` using `IP 192.168.1.32`
+
+	sudo ./calicoctl container add existing_newton 192.168.1.32
+
+This will set up Calico networking in the container's namespace as `eth1` with the configured IP address, as well as install a default route via this interface.
+
+Please note that in this set up, Calico's ACLs will only be asserted against the Calico network interface.  For example, if you use the Docker Bridge network as the other interface, containers on the same Docker Host may communicate with one another even if the Calico ACLs would otherwise prevent this.
+
 ## Collecting diags
 To collect (from the current machine only) and upload the diags, run the following command
 
