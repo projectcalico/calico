@@ -1,6 +1,0 @@
-box: wercker-labs/docker
-build:
-  steps:
-    - script:
-        name: Build binary
-        code: ./create_binary.sh
