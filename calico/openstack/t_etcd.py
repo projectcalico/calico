@@ -95,6 +95,7 @@ class CalicoTransportEtcd(CalicoTransport):
         # Read all etcd keys under /calico/host.
         r = self.client.read('/calico/host', recursive=True)
         for child in r.children:
+            LOG.debug("etcd key: %s" % child.key)
             m = OPENSTACK_ENDPOINT_RE.match(child.key)
             if m:
                 # We have a key/value pair for an OpenStack endpoint.  Extract
@@ -103,10 +104,14 @@ class CalicoTransportEtcd(CalicoTransport):
                 endpoint_id = m.group("endpoint_id")
                 hostname = m.group("hostname")
                 data = json_decoder.decode(child.value)
-
+                LOG.debug("Existing etcd endpoint data for %s on %s" % (
+                    endpoint_id,
+                    hostname
+                ))
                 if (endpoint_id in ports and
                     hostname == ports[endpoint_id]['binding:host_id'] and
                     data == self.port_etcd_data(ports[endpoint_id])):
+                    LOG.debug("Existing etcd endpoint data is correct")
                     # OpenStack still has an endpoint that exactly matches this
                     # etcd key/value.  Remember its security profile.
                     self.needed_profiles.add(data['profile_id'])
@@ -118,6 +123,7 @@ class CalicoTransportEtcd(CalicoTransport):
 
                 elif (endpoint_id not in ports or
                       hostname != ports[endpoint_id]['binding:host_id']):
+                    LOG.debug("Existing etcd endpoint key is now invalid")
                     # OpenStack no longer has an endpoint with the ID in the
                     # etcd key; or it does, but the endpoint has migrated to a
                     # different host than the one in the etcd key.  In both
@@ -186,27 +192,32 @@ class CalicoTransportEtcd(CalicoTransport):
         # Read all etcd keys directly under /calico/policy/profile.
         r = self.client.read('/calico/policy/profile', recursive=True)
         for child in r.children:
+            LOG.debug("etcd key: %s" % child.key)
             m = OPENSTACK_POLICY_RE.match(child.key)
             if m:
                 # If there are no policies, then read returns the top level
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
+                LOG.debug("Existing etcd profile data for %s" % profile_id)
                 if profile_id in self.needed_profiles:
                     # This is a profile that we want.  Let's read its rules and
                     # tags, and compare those against the current OpenStack data.
+                    profile_key = '/calico/policy/profile/' + profile_id
                     rules = json_decoder.decode(
-                        self.client.read(child.key + '/rules').value)
+                        self.client.read(profile_key + '/rules').value)
                     tags = json_decoder.decode(
-                        self.client.read(child.key + '/tags').value)
+                        self.client.read(profile_key + '/tags').value)
 
                     if (rules == self.profile_rules(profile_id) and
                         tags == self.profile_tags(profile_id)):
                         # The existing etcd data for this profile is completely
                         # correct.  Remember the profile_id so that we don't
                         # unnecessarily write out its (unchanged) data again below.
+                        LOG.debug("Existing etcd profile data is correct")
                         correct_profiles.add(profile_id)
                 else:
                     # We don't want this profile any more, so delete the key.
+                    LOG.debug("Existing etcd profile key is now invalid")
                     self.client.delete(child.key, recursive=True)
 
         # Now write etcd data for each profile that we need and that we don't
