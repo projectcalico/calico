@@ -19,6 +19,7 @@ openstack.test.test_plugin_etcd
 Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
 import eventlet
+import json
 import mock
 import unittest
 
@@ -35,6 +36,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """
         print "etcd write: %s\n%s" % (key, value)
         self.etcd_data[key] = value
+        self.recent_writes[key] = json.loads(value)
+
+    def assertEtcdWrites(self, expected):
+        self.assertEqual(self.recent_writes, expected)
+        self.recent_writes = {}
 
     def etcd_read(self, key, recursive=False):
         """Read from the accumulated etcd database.
@@ -84,6 +90,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Start with an empty etcd database.
         self.etcd_data = {}
 
+        # Start with an empty set of recent writes.
+        self.recent_writes = {}
+
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data.
         """
@@ -93,6 +102,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Allow the etcd transport's resync thread to run.
         self.give_way()
         self.simulated_time_advance(1)
+        self.assertEtcdWrites({})
 
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data.
@@ -105,3 +115,48 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Allow the etcd transport's resync thread to run.
         self.give_way()
+        self.simulated_time_advance(1)
+        expected_writes = {
+            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
+                {"name": "tapDEADBEEF-12",
+                 "profile_id": "SGID-default",
+                 "mac": "00:11:22:33:44:55",
+                 "ipv4_gateway": "10.65.0.1",
+                 "ipv4_nets": ["10.65.0.2/32"],
+                 "state": "active",
+                 "ipv6_nets": []},
+            '/calico/host/felix-host-1/workload/openstack/endpoint/FACEBEEF-1234-5678':
+                {"name": "tapFACEBEEF-12",
+                 "profile_id": "SGID-default",
+                 "mac": "00:11:22:33:44:66",
+                 "ipv4_gateway": "10.65.0.1",
+                 "ipv4_nets": ["10.65.0.3/32"],
+                 "state": "active",
+                 "ipv6_nets": []},
+            '/calico/policy/profile/SGID-default/rules':
+                {"outbound_rules": [{"dst_ports": ["1:65535"],
+                                     "protocol": -1,
+                                     "dst_tag": None,
+                                     "dst_net": "0.0.0.0/0"},
+                                    {"dst_ports": ["1:65535"],
+                                     "protocol": -1,
+                                     "dst_tag": None,
+                                     "dst_net": "::/0"}],
+                 "inbound_rules": [{"src_ports": ["1:65535"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"},
+                                   {"src_ports": ["1:65535"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"}]},
+            '/calico/policy/profile/SGID-default/tags':
+                ["SGID-default"]
+        }
+        self.assertEtcdWrites(expected_writes)
+
+        # Allow it to run again, this time auditing against the etcd data that
+        # was written on the first iteration.
+        print "\nResync with existing etcd data\n"
+        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})

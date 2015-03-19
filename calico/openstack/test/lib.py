@@ -98,7 +98,7 @@ class Lib(object):
         self.setUp_logging()
 
         # If an arg mismatch occurs, we want to see the complete diff of it.
-        self.maxDiff = 1000
+        self.maxDiff = 2000
 
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
