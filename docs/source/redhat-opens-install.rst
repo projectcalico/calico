@@ -318,17 +318,20 @@ On a compute node, perform the following steps:
 
    Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
 
-   For RHEL 7::
+   - For RHEL 7:
 
-        service bird restart
-        service bird6 restart
+   ::
 
-        chkconfig bird on
-        chkconfig bird6 on
+       service bird restart
+       service bird6 restart
+       chkconfig bird on
+       chkconfig bird6 on
 
-    For RHEL 6.5::
+   - For RHEL 6.5:
 
-        initctl start bird
+   ::
+
+       initctl start bird
 
 12. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example`` and edit it:
@@ -336,6 +339,7 @@ On a compute node, perform the following steps:
     -  Change the ``PluginAddress`` and ``ACLAddress`` settings to the
        host name or IP address of the controller node.
     -  Restart the Felix service:
+
        - on Red Hat 6.5, run ``initctl start calico-felix``.
        - on Red Hat 7, run ``systemctl restart calico-felix``.
 
