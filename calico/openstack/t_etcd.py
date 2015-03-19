@@ -31,7 +31,7 @@ LOG = None
 OPENSTACK_ENDPOINT_RE = re.compile(
     r'^/calico/host/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
 OPENSTACK_POLICY_RE = re.compile(
-    r'^/calico/policy/profile/(?P<profile_id>[^/]+)')
+    r'^/calico/policy/profile/(?P<profile_id>[^/]+)/tags')
 
 json_decoder = json.JSONDecoder()
 
