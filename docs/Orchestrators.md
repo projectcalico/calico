@@ -8,7 +8,7 @@
  2. Redirect Docker Remote API requests to `calico-node`.
     - `calico-node` exposes the Docker Remote API on port 2377, using [Powerstrip][] to trap the container create/start/stop/destroy events and program the network.
     - Pass an enviroment variable `CALICO_IP` with the desired container IP address during creation of the container.  _You may not specify the `--net` parameter as Calico will overwrite this._
-3. After creating the container, configure groups and Access Control Lists (ACLs) for the container by writing to the `/calico/network/` keyspace in the etcd cluster.
+3. After creating the container, configure profiles and Access Control Lists (ACLs) for the container by writing to the `/calico/policy/` keyspace in the etcd cluster.
 
 [Powerstrip]: https://github.com/clusterhq/powerstrip
 
@@ -69,7 +69,7 @@ It prints a local file name and a URL where the diags can be downloaded from.
 
 ## Setting Calico ACLs
 
-You can configure groups and ACLs for Calico by directly writing to the `/calico` directory in etcd. See [etcdStructure](etcdStructure.md) for more detail. Examples of how to do this over etcd's RESTful API are given below.
+You can configure profiles and ACLs for Calico by directly writing to the `/calico` directory in etcd. See [etcdStructure](etcdStructure.md) for more detail. Examples of how to do this over etcd's RESTful API are given below.
 
 ### Managing Profiles
 
@@ -77,7 +77,7 @@ To create a profile, create the directory `/calico/policy/profile/<profile_id>/`
 
 	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/policy/profile/web -d dir=true
 
-To delete a group, recursively delete the directory `/calico/policy/profile/<profile_id>/`
+To delete a profile, recursively delete the directory `/calico/policy/profile/<profile_id>/`
 
 	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/policy/profile/web?recursive=true
 
