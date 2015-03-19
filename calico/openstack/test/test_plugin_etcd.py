@@ -227,3 +227,40 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdDeletes(set())
         self.check_update_port_status_called(context)
         self.osdb_ports = [lib.port1, lib.port2]
+
+        # Migrate port1 to a different host.
+        context._port = lib.port1.copy()
+        context._port['binding:host_id'] = 'new-host'
+        context.original = lib.port1
+        self.driver.update_port_postcommit(context)
+        del expected_writes['/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678']
+        expected_writes['/calico/host/new-host/workload/openstack/endpoint/DEADBEEF-1234-5678'] = {
+            "name": "tapDEADBEEF-12",
+            "profile_id": "SGID-default",
+            "mac": "00:11:22:33:44:55",
+            "ipv4_gateway": "10.65.0.1",
+            "ipv4_nets": ["10.65.0.2/32"],
+            "state": "active",
+            "ipv6_nets": []
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set(['/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678']))
+
+        # Now resync again without updating self.osdb_ports to reflect that
+        # port1 has moved to new-host.  The effect will be as though we've
+        # missed a further update that moved port1 back to felix-host-1; this
+        # resync will now discover that.
+        print "\nResync with existing etcd data\n"
+        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        expected_writes = {
+            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
+                {"name": "tapDEADBEEF-12",
+                 "profile_id": "SGID-default",
+                 "mac": "00:11:22:33:44:55",
+                 "ipv4_gateway": "10.65.0.1",
+                 "ipv4_nets": ["10.65.0.2/32"],
+                 "state": "active",
+                 "ipv6_nets": []}
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set(['/calico/host/new-host/workload/openstack/endpoint/DEADBEEF-1234-5678']))
