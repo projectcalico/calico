@@ -13,9 +13,11 @@ Prerequisites
 Before starting this you will need the following:
 
 -  One or more machines running RHEL 6.5 or 7:
+
    - For RHEL 6.5, these machines should have OpenStack Icehouse installed on
      them.
    - For RHEL 7, these machines should have OpenStack Juno installed on them.
+
 -  SSH access to these machines.
 -  Working DNS between these machines (use ``/etc/hosts`` if you don't
    have DNS on your network).
