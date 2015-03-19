@@ -184,7 +184,7 @@ class CalicoTransportEtcd(CalicoTransport):
         correct_profiles = set()
 
         # Read all etcd keys directly under /calico/policy/profile.
-        r = self.client.read('/calico/policy/profile')
+        r = self.client.read('/calico/policy/profile', recursive=True)
         for child in r.children:
             m = OPENSTACK_POLICY_RE.match(child.key)
             if m:
