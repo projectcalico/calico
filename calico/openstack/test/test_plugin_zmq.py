@@ -30,12 +30,6 @@ if sys.version_info < (2, 7):
 else:
     import unittest
 
-if 'zmq' in sys.modules:
-    del sys.modules['zmq']
-sys.modules['oslo'] = m_oslo = mock.Mock()
-sys.modules['oslo.config'] = m_oslo.config
-sys.modules['time'] = m_time = mock.Mock()
-
 import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_zmq as t_zmq
@@ -243,7 +237,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         current_time = 0
 
         # Make time.time() return current_time.
-        m_time.time.side_effect = lambda: current_time
+        lib.m_time.time.side_effect = lambda: current_time
 
         # Reset the dict of current sleepers.  In each dict entry, the key is
         # an eventlet.Queue object and the value is the time at which the sleep
@@ -310,7 +304,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
     def setUp(self):
 
         # Normally do not provide bind_host config.
-        m_oslo.config.cfg.CONF.bind_host = None
+        lib.m_oslo.config.cfg.CONF.bind_host = None
 
         # Setup to control 0MQ socket operations.
         self.setUp_sockets()
@@ -320,10 +314,6 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Do common plugin test setup.
         super(TestPlugin0MQ, self).setUp()
-
-        # Use 0MQ transport.
-        self.driver.transport = t_zmq.CalicoTransport0MQ(self.driver,
-                                                         mech_calico.LOG)
 
     # Tear down after each test case.
     def tearDown(self):
@@ -347,7 +337,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Provide bind_host config.
         ip_addr = '192.168.1.1'
-        m_oslo.config.cfg.CONF.bind_host = ip_addr
+        lib.m_oslo.config.cfg.CONF.bind_host = ip_addr
 
         # Tell the driver to initialize.
         self.driver.initialize()

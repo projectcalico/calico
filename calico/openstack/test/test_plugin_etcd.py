@@ -24,6 +24,7 @@ import unittest
 
 import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
+import calico.openstack.t_etcd as t_etcd
 
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
@@ -38,6 +39,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """
         # Do common plugin test setup.
         super(TestPluginEtcd, self).setUp()
+
+        # Use etcd transport instead of 0MQ.
+        self.driver.transport = t_etcd.CalicoTransportEtcd(self.driver,
+                                                           mech_calico.LOG)
 
         # Hook the (mock) etcd client.
         self.client = lib.m_etcd.Client()
