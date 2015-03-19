@@ -560,7 +560,8 @@ class TestPlugin(unittest.TestCase):
                 {'agent_type': mech_calico.AGENT_TYPE_FELIX,
                  'binary': '',
                  'host': 'felix-host-1',
-                 'topic': mech_calico.constants.L2_AGENT_TOPIC})
+                 'topic': mech_calico.constants.L2_AGENT_TOPIC,
+                 'start_flag': True})
             self.db.create_or_update_agent.reset_mock()
 
         # Check RESYNCSTATE response was sent.
