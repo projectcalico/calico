@@ -30,9 +30,41 @@ import calico.openstack.t_etcd as t_etcd
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def check_etcd_write(self, key, value):
-        """Print each etcd write as it occurs.
+        """Print each etcd write as it occurs, and save into the accumulated etcd
+        database.
         """
         print "etcd write: %s\n%s" % (key, value)
+        self.etcd_data[key] = value
+
+    def etcd_read(self, key, recursive=False):
+        """Read from the accumulated etcd database.
+        """
+        # Prepare a read result object.
+        read_result = mock.Mock()
+        read_result.key = key
+
+        # Set the object's value - i.e. the value, if any, of exactly the
+        # specified key.
+        if key in self.etcd_data:
+            read_result.value = self.etcd_data[key]
+        else:
+            read_result.value = None
+
+        if recursive:
+            # Also see if this key has any children, and read those.
+            child_keys = set()
+            keylen = len(key) + 1
+            for k in self.etcd_data.keys():
+                if k[:keylen] == key + '/':
+                    child_keys.add(key + '/' + k[keylen:].split('/')[0])
+            read_result.children = [self.etcd_read(child_key, True)
+                                    for child_key in child_keys]
+
+        # Print and return the result object.
+        print "etcd read: %s\n%s\n%s" % (key,
+                                         read_result.value,
+                                         read_result.children)
+        return read_result
 
     def setUp(self):
         """Setup before each test case.
@@ -47,17 +79,14 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Hook the (mock) etcd client.
         self.client = lib.m_etcd.Client()
         self.client.write.side_effect = self.check_etcd_write
+        self.client.read.side_effect = self.etcd_read
 
-        # Prepare an empty read object.
-        self.empty_read = mock.Mock()
-        self.empty_read.children = []
+        # Start with an empty etcd database.
+        self.etcd_data = {}
 
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data.
         """
-        # Arrange for etcd reads to return nothing.
-        self.client.read.return_value = self.empty_read
-
         # Tell the driver to initialize.
         self.driver.initialize()
 
@@ -68,9 +97,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data.
         """
-        # Arrange for etcd reads to return nothing.
-        self.client.read.return_value = self.empty_read
-
         # Provide two Neutron ports.
         self.osdb_ports = [lib.port1, lib.port2]
 
