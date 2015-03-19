@@ -241,6 +241,10 @@ def node_stop(force):
 
 
 def node(ip, node_image, ip6=""):
+    if os.geteuid() != 0:
+        print >> sys.stderr, "`calicoctl node` must be run as root."
+        sys.exit(2)
+
     create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
@@ -580,10 +584,7 @@ def process_output(line):
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-    if os.geteuid() != 0:
-        print >> sys.stderr, "calicoctl must be run as root."
-        sys.exit(2)
-    elif validate_arguments():
+    if validate_arguments():
         if arguments["node"]:
             if arguments["stop"]:
                 node_stop(arguments["--force"])
