@@ -580,10 +580,7 @@ if __name__ == '__main__':
     arguments = docopt(__doc__)
     if os.geteuid() != 0:
         print >> sys.stderr, "calicoctl must be run as root."
-        exit(2)
-    elif not docker:
-        print >> sys.stderr, "The docker command wasn't found; calicoctl requires docker."
-        exit(3)
+        sys.exit(2)
     elif validate_arguments():
         if arguments["node"]:
             if arguments["stop"]:
@@ -636,5 +633,5 @@ if __name__ == '__main__':
                 container_remove(arguments["<CONTAINER>"])
     else:
         print "Couldn't validate arguments. Exiting."
-        exit(1)
+        sys.exit(1)
 
