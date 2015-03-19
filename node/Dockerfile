@@ -13,11 +13,12 @@ CMD ["/sbin/my_init"]
 #    echo "Pin: origin binaries.projectcalico.org" >> /etc/apt/preferences && \
 #    echo "Pin-Priority: 1001" >> /etc/apt/preferences
 
-# Install dependencies shared with the master node.  If we can keep this
-# in sync then we'll share an FS layer with the master to speed downloads.
 RUN apt-get update && \
     apt-get install -qy \
 #        calico-felix \
+        bird \
+        bird6 \
+        build-essential \
         ipset \
         iptables \
         libffi-dev \
@@ -27,6 +28,9 @@ RUN apt-get update && \
         python-docopt \
         python-pip \
         python-pyasn1 \
+        python-netaddr \
+# Required by calico-felix, eventually should be removed.
+        python-zmq \
         python-gevent && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
@@ -35,15 +39,6 @@ RUN apt-get update && \
 # Confd
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/confd-0.7.1-linux-amd64 -o confd && \
     chmod +x confd
-
-# Node-specific apt-get.
-RUN apt-get update && \
-    apt-get install -qy \
-        bird \
-        bird6 \
-        build-essential && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Powerstrip
 RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz \
@@ -60,13 +55,6 @@ COPY root_overlay /
 
 # Install Powerstrip Calico Adapter dependencies.
 RUN pip install -r /adapter/requirements.txt
-
-RUN apt-get update && \
-    apt-get install -qy \
-        python-zmq \
-        python-netaddr && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-common_0.12.1_all.deb -o common.deb && dpkg -i common.deb && rm common.deb
 RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-felix_0.12.1_all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
