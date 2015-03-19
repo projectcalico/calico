@@ -71,69 +71,88 @@ It prints a local file name and a URL where the diags can be downloaded from.
 
 You can configure groups and ACLs for Calico by directly writing to the `/calico` directory in etcd. See [etcdStructure](etcdStructure.md) for more detail. Examples of how to do this over etcd's RESTful API are given below.
 
-### Managing Groups
+### Managing Profiles
 
-To create a group, generate a new UUID for the group.  Then set the key `/calico/network/group/<group-id>/name` to the name of the group, where &lt;group-id&gt; is the UUID you generated.
+To create a profile, create the directory `/calico/policy/profile/<profile_id>/` where &lt;profile_id&gt; is a unique name for the profile.  For example, to create a `web` profile
 
-	web_group=`cat /proc/sys/kernel/random/uuid`
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$web_group/name -d value="Web Servers"
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/policy/profile/web -d dir=true
 
-To delete a group, recursively delete the directory `/calico/network/group/<group-id>`
+To delete a group, recursively delete the directory `/calico/policy/profile/<profile_id>/`
 
-	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/network/group/$web_group?recursive=true
+	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/policy/profile/web?recursive=true
 
-### Definining Group Rules
+### Definining Profile Rules
 
-To manage Group rules, write the rules to the `/calico/network/group/<group-id>/rule/` directory as follows.
+Profiles include a set of network access rules for inbound and outbound traffic for containers assigned that profile.
 
-ACL rules operate on inbound and outbound traffic to and endpoint in the group.  For each direction there is a default (e.g. `./rule/inbound_default`, currently only "deny" is supported), and then 1 or more exception rules (e.g. `./rule/inbound/1`) which are JSON encoded strings with the following keys:
+To manage rules, write the rules to the `/calico/policy/profile/<profile-id>/rules` key as a JSON string in the following format.
 
- - **group**: This rule allows/denies connections coming to/from a specific security group. If the "cidr" key is present, this key MUST be null.
- - **cidr**: This rule allows/denies connections coming to/from a specific subnet. If the "group" key is present, this key MUST be null.  To match all IPv4 traffic use "0.0.0.0/0".  To match all IPv6 traffic, use "::/0".
- - **protocol**: The network protocol (e.g. "udp"). To match all protocols, send null.
- - **port**: This rule only affects traffic to/from this port. Should be a JSON number, or the null (meaning all ports). Must be null for protocols that do not have ports (e.g. ICMP).
+	{
+	  "inbound": [{<rule>}, ...],
+	  "outbound": [{<rule>}, ...]
+	}
 
-Below are some example rules:
+where each entry in the inbound/outbound list is a rule object:
 
-	{"group": null, "cidr": "10.65.0.0/24", "protocol": null, "port:": null}
+	{
+	  # Optional match criteria.  These are and-ed together.
+	  "protocol": "tcp|udp|icmp|icmpv6",
 
-This rule matches all traffic to/from the 10.65.0.0/24 subnet, in all protocols, to all ports.
+	  "src_tag": "<tag name>",
+	  "src_net": "<CIDR>",
+	  "src_ports": [1234, "2048:4000"],  # List of ports or ranges.
+	      # No artificial limit on number of ports in list.
 
-	{"group": "a935e8e1-008a-4e05-af4b-4b5701df417e", "cidr": null, "protocol": null, "port": null}
+	  # As above but for destination addr/port.
+	  "dst_tag": "<tag name>",
+	  "dst_net": "<CIDR>",
+	  "dst_ports": [<list of ports / ranges>],
 
-This rule matches all traffic to/from a specific security group.
+	  "icmp_type": <int>,  # Requires "protocol" to be set to an 
+	      # ICMP type 
 
-	{"group": null, "cidr": "0.0.0.0/0", "protocol": "tcp", "port": "80"}
+	  # Action if we match, defaults to allow, if missing.
+	  "action": "deny|allow",
+	} 
 
-This rule matches all TCP traffic to/from any source to port 80.
+The rules are executed in order for each packet to/from the container.  If the packet matches a rule, the given action is executed an further rules are not executed.
 
-### Group rules worked example.
+For example, to allow incoming traffic on port 80 and block all other incomming traffic use the following.
 
-The following commands will create a group that can receive traffic only from its own members.
+	{
+	  "inbound": [{"src_ports": [80], "action": "allow"},
+	              {"action": "deny}],
+	  "outbound": [{"action": "allow"}]
+	}
 
-Create the group.
+Below are some more example rules:
 
-	group1=`cat /proc/sys/kernel/random/uuid`
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/name -d value="Group 1"
+	{"src_net": "10.65.0.0/24", "action": "allow"}
 
-Set the default inbound rule.
+This rule matches all traffic from the 10.65.0.0/24 subnet and allows it.
 
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/inbound_default -d value="deny"
+	{"dst_tag": "database", "action": "allow"}
 
-Allow inbound traffic from the group (note the escaping required since we need the shell to expand $group1).
+This rule matches all traffic to endpoints with the `database` tag (see next section) and allows it.
 
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/inbound/1 -d value="{\"group\": \"$group1\", \"cidr\": null, \"protocol\": null, \"port\": null}"
+	{"protocol": "tcp", "dst_ports": [80], "action": "deny"}
 
-Set the default outbound rule.
+This rule matches all TCP traffic to port 80 and blocks it.
 
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/outbound_default -d value="deny"
+### Working with Tags
 
-Allow outbound traffic to any IPv4 address (in this example we enclose JSON in `'`, so escaping the `"`is not required).
+A *tag* is a group or a set of Calico endpoints, and can be used as a match criterion in a rule.  You can use tags to help you manage network access permissions.  For example, lets say for a certain application there is a logging service, and both the web containers and the database containers need to be able to send it logs on port 3224.  You can create a profile for the logging service that includes an inbound rule
 
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/rule/outbound/1 -d value='{"group": null, "cidr": "0.0.0.0/0", "protocol": null, "port": null}'
+	{"src_tag": "logger", "protocol": "tcp", "dst_ports": [3224], "action": "allow"}
+	
+Then, for the web and database profiles, include `logger` in the list of tags as follows:
 
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/policy/profile/web/tags -d value=["logger"]
+	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/policy/profile/database/tags -d value=["logger"]
 
-###  Controlling Group Membership
+This will configure Calico to allow any web or database containers to access logging service containers on port 3224.
+
+###  Assigning a profile to an endpoint.
 
 After a container has been created, a node will appear in etcd
 
@@ -156,26 +175,36 @@ Example output:
 		"node": {
 			"createdIndex": 132,
 			"dir": true,
-			"key": "/calico/host/sjc-dev/workload/docker/b41eb37fae7f7bf3388e0565e1a1d014fba239424b7ca1d81b2139d54c2260cd/endpoint",
+			"key": "/calico/host/sjc-dev/workload/docker/fa1c1ba0b2ee300180f7400c9f385210d69f6bdc9e12defd677294fd844d680d/endpoint",
 			"modifiedIndex": 132,
 			"nodes": [
 				{
 					"createdIndex": 132,
 					"dir": true,
-					"key": "/calico/host/sjc-dev/workload/docker/b41eb37fae7f7bf3388e0565e1a1d014fba239424b7ca1d81b2139d54c2260cd/endpoint/97753abeb0bd11e49cac08002737b14f",
+					"key": "/calico/host/sjc-dev/workload/docker/fa1c1ba0b2ee300180f7400c9f385210d69f6bdc9e12defd677294fd844d680d/endpoint/1d9e9624cdb711e499bf08002737b14f",
 					"modifiedIndex": 132
 				}
 			]
 		}
 	}
 
-In this example, the endpoing UUID is 97753abeb0bd11e49cac08002737b14f
+In this example, the endpoing UUID is 1d9e9624cdb711e499bf08002737b14f
 
-To add an endpoint to a group, create the key `/calico/network/group/<group-id>/member/<endpoint-id>` with an empty value.  Using `$group1` from the above example:
+The value of the endpoint UUID key is a JSON object which includes endpoint properties.
 
-	curl -L -X PUT http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/member/97753abeb0bd11e49cac08002737b14f -d value=''
+	$ curl -L http://localhost:4001/v2/keys/calico/host/sjc-dev/workload/docker/fa1c1ba0b2ee300180f7400c9f385210d69f6bdc9e12defd677294fd844d680d/endpoint/1d9e9624cdb711e499bf08002737b14f | python -m json.tool
+	{
+	    "action": "get",
+	    "node": {
+	        "createdIndex": 151,
+	        "key": "/calico/host/sjc-dev/workload/docker/fa1c1ba0b2ee300180f7400c9f385210d69f6bdc9e12defd677294fd844d680d/endpoint/1d9e9624cdb711e499bf08002737b14f",
+	        "modifiedIndex": 151,
+	        "value": "{\"ipv6_gateway\": \"fd80:24e2:f998:72d6::1\", \"state\": \"active\", \"name\": \"cali1d9e9624cdb\", \"ipv4_gateway\": null, \"ipv6_nets\": [\"fd80:24e2:f998:72d6::1:1/128\"], \"profile_id\": null, \"mac\": \"32:24:81:2a:cb:bd\", \"ipv4_nets\": []}"
+	    }
+	}
 
-To remove an endpoint from the group, delete the corresponding key.
+To set the profile for the endpoint, modify the `profile_id` in the JSON and rewrite the value.
 
-	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/network/group/$group1/member/97753abeb0bd11e49cac08002737b14f
- 
+	$ curl -L http://localhost:4001/v2/keys/calico/host/sjc-dev/workload/docker/fa1c1ba0b2ee300180f7400c9f385210d69f6bdc9e12defd677294fd844d680d/endpoint/1d9e9624cdb711e499bf08002737b14f -XPUT -d value="{\"ipv6_gateway\": \"fd80:24e2:f998:72d6::1\", \"state\": \"active\", \"name\": \"cali1d9e9624cdb\", \"ipv4_gateway\": null, \"ipv6_nets\": [\"fd80:24e2:f998:72d6::1:1/128\"], \"profile_id\": \"web\", \"mac\": \"32:24:81:2a:cb:bd\", \"ipv4_nets\": []}"
+	
+(Obviously, we'd recommend you switch to using a JSON library for these manipulations in a real integration!)
