@@ -1,5 +1,5 @@
-Red Hat Enterprise Linux 7 Packaged Install Instructions
-========================================================
+Red Hat Enterprise Linux 6.5/7 Packaged Install Instructions
+============================================================
 
 The instructions come in two sections: one for installing control nodes,
 and one for installing compute nodes. Before moving on to those
@@ -12,8 +12,12 @@ Prerequisites
 
 Before starting this you will need the following:
 
--  One or more machines running RHEL 7, with OpenStack Juno installed on
-   them.
+-  One or more machines running RHEL 6.5 or 7:
+
+   - For RHEL 6.5, these machines should have OpenStack Icehouse installed on
+     them.
+   - For RHEL 7, these machines should have OpenStack Juno installed on them.
+
 -  SSH access to these machines.
 -  Working DNS between these machines (use ``/etc/hosts`` if you don't
    have DNS on your network).
@@ -24,12 +28,12 @@ Common Steps
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed here.
 
-Install OpenStack Juno
-~~~~~~~~~~~~~~~~~~~~~~
+Install OpenStack Icehouse/Juno
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you haven't already done so, install Juno with Neutron and ML2
-networking. Instructions for installing OpenStack on RHEL can be found
-`here <http://openstack.redhat.com/Main_Page>`__.
+If you haven't already done so, install Icehouse (RHEL 6.5) or Juno (RHEL 7)
+with Neutron and ML2 networking. Instructions for installing OpenStack on RHEL
+can be found `here <http://openstack.redhat.com/Main_Page>`__.
 
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,14 +41,27 @@ Configure YUM repositories
 As well as the repositories for OpenStack and EPEL
 (https://fedoraproject.org/wiki/EPEL) - which you will have already
 configured as part of the previous step - you will need to configure the
-repository for Calico:
+repository for Calico.
 
-::
+For RHEL 7::
 
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
     baseurl=http://binaries.projectcalico.org/rpm/
+    enabled=1
+    skip_if_unavailable=0
+    gpgcheck=1
+    gpgkey=http://binaries.projectcalico.org/rpm/key
+    priority=97
+    EOF
+
+For RHEL 6.5::
+
+    cat > /etc/yum.repos.d/calico.repo <<EOF
+    [calico]
+    name=Calico Repository
+    baseurl=http://binaries.projectcalico.org/rhel6/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
@@ -103,8 +120,10 @@ On a control node, perform the following steps:
    ``/etc/calico/acl_manager.cfg.example`` file and edit it:
 
    -  Change the ``PluginAddress`` to the host name or IP address of the
-      controller node. Then restart the ACL manager service with
-      ``service calico-acl-manager restart``.
+      controller node. Then restart the ACL manager service with:
+
+      - On Red Hat 6.5, ``initctl start calico-acl-manager``
+      - On Red Hat 7, ``systemctl restart calico-acl-manager``.
 
 Compute Node Install
 --------------------
@@ -218,11 +237,38 @@ On a compute node, perform the following steps:
         service openstack-nova-metadata-api restart
         chkconfig openstack-nova-metadata-api on
 
-9.  Install the BIRD BGP client:
+9.  For RHEL 7, install the BIRD BGP client from EPEL:
+    ``yum install -y bird bird6``. Then, go on to the next step.
+
+    For RHEL 6.5, BIRD needs to be built from source and installed manually.
+
+    First, download the source and build BIRD.
 
     ::
 
-        yum install -y bird bird6
+        yum install -y flex bison readline-devel ncurses-devel gcc wget
+        wget ftp://bird.network.cz/pub/bird/bird-1.4.5.tar.gz
+        tar xzvf bird-1.4.5.tar.gz
+        cd bird-1.4.5
+        ./configure
+        make
+        make install
+
+    Now, create the upstart job file for BIRD by putting the following in
+    ``/etc/init/bird.conf``
+
+    ::
+
+        description "BIRD Internet Routing Daemon"
+        start on runlevel [2345]
+        stop on runlevel [016]
+        respawn
+        pre-start script
+        /usr/local/sbin/bird -p -c /etc/bird/bird.conf
+        end script
+        script
+        /usr/local/sbin/bird -f -c /etc/bird/bird.conf
+        end script
 
 10. Install the ``calico-compute`` package:
 
@@ -263,30 +309,39 @@ On a compute node, perform the following steps:
     Unless your deployment needs to peer with other BGP routers, this
     can be chosen arbitrarily.
 
+    For RHEL 6.5, ignore any ``bird: unrecognized service`` error - we'll
+    restart BIRD later anyway.
+
    Note that you'll also need to configure your route reflector to allow
    connections from the compute node as a route reflector client. This
    configuration is outside the scope of this install document.
 
-   Ensure BIRD (and/or BIRD 6 for IPv6) is running:
+   Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
+
+   - For RHEL 7:
 
    ::
 
-           service bird restart
-           service bird6 restart
+       service bird restart
+       service bird6 restart
+       chkconfig bird on
+       chkconfig bird6 on
 
-   Finally ensure BIRD starts on reboot by running one or both of:
+   - For RHEL 6.5:
 
    ::
 
-           chkconfig bird on
-           chkconfig bird6 on
+       initctl start bird
 
 12. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example`` and edit it:
 
     -  Change the ``PluginAddress`` and ``ACLAddress`` settings to the
        host name or IP address of the controller node.
-    -  Restart the Felix service with ``service calico-felix restart``.
+    -  Restart the Felix service:
+
+       - on Red Hat 6.5, run ``initctl start calico-felix``.
+       - on Red Hat 7, run ``systemctl restart calico-felix``.
 
 Next Steps
 ----------
