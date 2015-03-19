@@ -446,7 +446,8 @@ class DatastoreClient(object):
                     ep = Endpoint.from_json(endpoint_id, child.value)
                     ep_dict = hosts[host][container_type][container_id]\
                         [endpoint_id]
-                    ep_dict["addrs"] = str(ep.ipv4_nets)
+                    ep_dict["addrs"] = [str(net) for net in
+                                        ep.ipv4_nets | ep.ipv6_nets]
                     ep_dict["mac"] = str(ep.mac)
                     ep_dict["state"] = ep.state
 

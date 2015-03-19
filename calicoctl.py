@@ -423,7 +423,12 @@ def node_show(detailed):
             for container_type, workloads in container_types.iteritems():
                 for workload, endpoints in workloads.iteritems():
                     for endpoint, data in endpoints.iteritems():
-                        x.add_row([host, container_type, workload, endpoint, data["addrs"], data["mac"],
+                        x.add_row([host,
+                                   container_type,
+                                   workload,
+                                   endpoint,
+                                   " ".join(data["addrs"]),
+                                   data["mac"],
                                    data["state"]])
     else:
         x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
