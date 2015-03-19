@@ -209,14 +209,16 @@ an set of Ethernet planes interconnecting the ToR switches, and the
 other where the core planes are also routers.  The following diagrams
 may be useful for the discussion
 
-.. figure:: _static/l3interconnectFabric/l3-fabric-diagrams-as-rack-l2-spine.*
+.. figure:: _static/l3-interconnectFabric/l3-fabric-diagrams-as-rack-l2-spine.*
+   :align: center
    :alt: A diagram showing the AS per rack model using Ethernet as the
 	 spine interconnect
 
    This diagram shows the *AS per rack model* where the ToR switches
    are physically meshed via a set of Ethernet switching planes.
 
-.. figure:: _static/l3interconnectFabric/l3-fabric-diagrams-as-rack-l3-spine.*
+.. figure:: _static/l3-interconnectFabric/l3-fabric-diagrams-as-rack-l3-spine.*
+   :align: center
    :alt: A diagram showing the AS per rack model using routers as the
 	 spine interconnect
 
@@ -224,6 +226,7 @@ may be useful for the discussion
    are physically meshed via a set of discrete BGP spine routers, each
    in their own AS.
 
+   
 
 Some standard IP fabric architectures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
