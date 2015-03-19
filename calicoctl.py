@@ -241,6 +241,7 @@ def node_stop(force):
 
 
 def node(ip, node_image, ip6=""):
+    # modprobe and sysctl require root privileges.
     if os.geteuid() != 0:
         print >> sys.stderr, "`calicoctl node` must be run as root."
         sys.exit(2)
