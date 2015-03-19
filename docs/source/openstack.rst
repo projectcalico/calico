@@ -13,7 +13,7 @@ Otherwise, if you already use OpenStack, you can install Calico by using
 
 - the packaged install for Ubuntu 14.04 - see :doc:`ubuntu-opens-install`
 
-- an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see :doc:`redhat-opens-install`
+- an RPM install for Red Hat Enterprise Linux 7 (RHEL 7 or 6.5) - see :doc:`redhat-opens-install`
 
 - our experimental integration of Calico with Mirantis Fuel 5.1 - see :doc:`fuel-integration`.
 

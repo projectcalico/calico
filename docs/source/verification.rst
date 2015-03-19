@@ -82,6 +82,14 @@ deployment is in good shape.
 Troubleshooting
 ---------------
 
+If you find that none of the advice below solves your problems, please use our
+diagnostics gathering script to generate diagnostics, and then raise a GitHub
+issue against our repository. To generate the diags, run
+
+.. code-block:: bash
+
+    $ /usr/bin/calico-diags
+
 VMs cannot DHCP
 ~~~~~~~~~~~~~~~
 
@@ -93,16 +101,16 @@ something that looks a bit like this:
 ::
 
     Chain INPUT (policy ACCEPT)
-    target     prot opt source               destination         
-    ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED 
-    ACCEPT     icmp --  anywhere             anywhere            
-    ACCEPT     all  --  anywhere             anywhere            
-    ACCEPT     tcp  --  anywhere             anywhere            state NEW tcp dpt:ssh 
-    REJECT     all  --  anywhere             anywhere            reject-with icmp-host-prohibited 
+    target     prot opt source               destination
+    ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED
+    ACCEPT     icmp --  anywhere             anywhere
+    ACCEPT     all  --  anywhere             anywhere
+    ACCEPT     tcp  --  anywhere             anywhere            state NEW tcp dpt:ssh
+    REJECT     all  --  anywhere             anywhere            reject-with icmp-host-prohibited
 
     Chain FORWARD (policy ACCEPT)
-    target     prot opt source               destination         
-    REJECT     all  --  anywhere             anywhere            reject-with icmp-host-prohibited 
+    target     prot opt source               destination
+    REJECT     all  --  anywhere             anywhere            reject-with icmp-host-prohibited
 
     Chain OUTPUT (policy ACCEPT)
     target     prot opt source               destination
