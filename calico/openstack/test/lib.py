@@ -219,20 +219,20 @@ class Lib(object):
         """Setup to intercept and display logging by the code under test.
         """
         # Print logs to stdout.
-        def log_info(msg):
-            print "       INFO %s" % msg
+        def log_info(msg, *args):
+            print "       INFO %s" % (msg % args)
             return None
-        def log_debug(msg):
-            print "       DEBUG %s" % msg
+        def log_debug(msg, *args):
+            print "       DEBUG %s" % (msg % args)
             return None
-        def log_warn(msg):
-            print "       WARN %s" % msg
+        def log_warn(msg, *args):
+            print "       WARN %s" % (msg % args)
             return None
-        def log_error(msg):
-            print "       ERROR %s" % msg
+        def log_error(msg, *args):
+            print "       ERROR %s" % (msg % args)
             return None
-        def log_exception(msg):
-            print "       EXCEPTION %s" % msg
+        def log_exception(msg, *args):
+            print "       EXCEPTION %s" % (msg % args)
             if sys.exc_type is not greenlet.GreenletExit:
                 traceback.print_exc()
             return None
