@@ -4,7 +4,6 @@ import socket
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
-from node.root_overlay.adapter.netns import IF_PREFIX
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
@@ -23,6 +22,12 @@ TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
+
+IF_PREFIX = "cali"
+"""
+prefix that appears in all Calico interface names in the root namespace. e.g.
+cali123456789ab.
+"""
 
 hostname = socket.gethostname()
 
@@ -122,7 +127,8 @@ class Vividict(dict):
 
 class DatastoreClient(object):
     """
-    An datastore client that exposes high level Calico operations needed by the calico CLI.
+    An datastore client that exposes high level Calico operations needed by the
+    calico CLI.
     """
 
     def __init__(self):

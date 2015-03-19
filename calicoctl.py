@@ -36,20 +36,22 @@ Options:
 import socket
 from subprocess import call, check_output, CalledProcessError
 import sys
-import uuid
 import StringIO
-
-from datastore import DatastoreClient, ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT
-import netaddr
 import os
 import re
+
+import netaddr
 from docopt import docopt
 import sh
 import docker as pydocker
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
-from node.root_overlay.adapter import netns
+
+from node.adapter.datastore import (DatastoreClient,
+                                    ETCD_AUTHORITY_ENV,
+                                    ETCD_AUTHORITY_DEFAULT)
+from node.adapter import netns
 
 
 hostname = socket.gethostname()

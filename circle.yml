@@ -9,4 +9,4 @@ dependencies:
     - echo "Skipped"
 test:
   override:
-    - ./create_binary.sh
+    - cd build_calicoctl && ./create_binary.sh

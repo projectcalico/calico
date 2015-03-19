@@ -18,10 +18,12 @@ import socket
 import logging
 import logging.handlers
 import sys
-from netaddr import IPAddress
-from calico_etcd import Endpoint
 import uuid
+
 from netaddr import IPNetwork, IPAddress
+
+from datastore import Endpoint, IF_PREFIX
+
 
 _log = logging.getLogger(__name__)
 
@@ -41,8 +43,6 @@ PREFIX_LEN = {4: 32, 6: 128}
 PROC_ALIAS = "proc_host"
 """The alias for /proc.  This is useful when the filesystem is containerized.
 """
-
-IF_PREFIX = "cali"
 
 
 def setup_logging(logfile):
