@@ -45,13 +45,7 @@ If you didn't use the calico-coreos-vagrant-example Vagrantfile, you'll need to 
 wget https://github.com/Metaswitch/calico-docker/releases/download/v0.1.0/calicoctl
 chmod +x calicoctl
 ```
-Calico requires some components to be run only on a single host. For these instructions, we'll designate core-01 our "master" node. All the hosts (including the master) will be able to run calico networked containers.
-
-* Start the master on `core-01`
-```
-sudo ./calicoctl master --ip=172.17.8.101
-```
-Now start calico on all the nodes (only do this after the master is started)
+Now start calico on all the nodes
 * On core-01
 ```
 sudo ./calicoctl node --ip=172.17.8.101
@@ -66,19 +60,12 @@ This will start a container. Check they are running
 sudo docker ps
 ```
 
-You should see output like this on the master
+You should see output like this on each node
 
 ```
 core@core-01 ~ $ docker ps
 CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
 077ceae44fe3        calico/node:v0.1.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-17a54cc8f88a        calico/master:v0.1.0   "/sbin/my_init"     35 minutes ago       Up 35 minutes                           calico-master
-```
-And like this on the other hosts
-```
-core@core-02 ~ $ docker ps
-CONTAINER ID        IMAGE                 COMMAND                CREATED             STATUS              PORTS               NAMES
-f770a8acbb11        calico/node:v0.1.0   "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 ```
 
 #### Using Calico: Creating networked endpoints

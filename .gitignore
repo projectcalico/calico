@@ -1,6 +1,7 @@
 dist
 build
 venv
+env
 .idea
 *.pyc
 calicoctl

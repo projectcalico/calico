@@ -4,34 +4,113 @@ import socket
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
+from node.root_overlay.adapter.netns import IF_PREFIX
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # etcd paths for Calico
-HOST_PATH = "/calico/host/%(hostname)s/"
-MASTER_PATH = "/calico/master"
-MASTER_IP_PATH = "/calico/master/ip"
-GROUPS_PATH = "/calico/network/group/"
-GROUP_PATH = "/calico/network/group/%(group_id)s/"
-GROUP_MEMBER_PATH = "/calico/network/group/%(group_id)s/member"
-CONTAINER_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/"
-ENDPOINTS_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/endpoint/"
+CONFIG_PATH = "/calico/config/"
+HOSTS_PATH = "/calico/host/"
+HOST_PATH = HOSTS_PATH + "%(hostname)s/"
+CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
+LOCAL_ENDPOINTS_PATH = HOST_PATH + "workload/docker/%(container_id)s/endpoint/"
+ALL_ENDPOINTS_PATH = HOSTS_PATH  # Read all hosts
+ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s/"
+PROFILES_PATH = "/calico/policy/profile/"
+PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
+TAGS_PATH = PROFILE_PATH + "tags"
+RULES_PATH = PROFILE_PATH + "rules"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
-ENDPOINT_PATH = "/calico/host/%(hostname)s/workload/docker/%(container_id)s/" + \
-                "endpoint/%(endpoint_id)s/"
 
 hostname = socket.gethostname()
 
 
-class Rule(namedtuple("Rule", ["group", "cidr", "protocol", "port"])):
+class Rule(dict):
     """
     A Calico inbound or outbound traffic rule.
     """
 
+    ALLOWED_KEYS = ["protocol",
+                    "src_tag",
+                    "src_ports",
+                    "src_net",
+                    "dst_tag",
+                    "dst_ports",
+                    "dst_net",
+                    "icmp_type",
+                    "action"]
+
+    def __init__(self, **kwargs):
+        super(Rule, self).__init__()
+        for key, value in kwargs.iteritems():
+            self[key] = value
+
+    def __setitem__(self, key, value):
+        if key not in Rule.ALLOWED_KEYS:
+            raise KeyError("Key %s is not allowed on Rule." % key)
+        super(Rule, self).__setitem__(key, value)
+
+    def to_json(self):
+        return json.dumps(self)
+
+
+class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
+    """
+    A set of Calico rules describing inbound and outbound network traffic
+    policy.
+    """
+
     def to_json(self):
         return json.dumps(self._asdict())
+
+
+class Endpoint(object):
+
+    def __init__(self, ep_id, state, mac, felix_host):
+        self.ep_id = ep_id
+        self.state = state
+        self.mac = mac
+
+        self.profile_id = None
+        self.ipv4_nets = set()
+        self.ipv6_nets = set()
+        self.ipv4_gateway = None
+        self.ipv6_gateway = None
+
+    def to_json(self):
+        json_dict = {"state": self.state,
+                     "name": IF_PREFIX + self.ep_id[:11],
+                     "mac": self.mac,
+                     "profile_id": self.profile_id,
+                     "ipv4_nets": [str(net) for net in self.ipv4_nets],
+                     "ipv6_nets": [str(net) for net in self.ipv6_nets],
+                     "ipv4_gateway": str(self.ipv4_gateway) if
+                                     self.ipv4_gateway else None,
+                     "ipv6_gateway": str(self.ipv6_gateway) if
+                                     self.ipv6_gateway else None}
+        return json.dumps(json_dict)
+
+    @classmethod
+    def from_json(cls, ep_id, json_str):
+        json_dict = json.loads(json_str)
+        ep = cls(ep_id=ep_id,
+                 state=json_dict["state"],
+                 mac=json_dict["mac"],
+                 felix_host=["hostname"])
+        for net in json_dict["ipv4_nets"]:
+            ep.ipv4_nets.add(IPNetwork(net))
+        for net in json_dict["ipv6_nets"]:
+            ep.ipv6_nets.add(IPNetwork(net))
+        ipv4_gw = json_dict["ipv4_gateway"]
+        if ipv4_gw:
+            ep.ipv4_gateway = IPAddress(ipv4_gw)
+        ipv6_gw = json_dict["ipv6_gateway"]
+        if ipv6_gw:
+            ep.ipv6_gateway = IPAddress(ipv6_gw)
+        ep.profile_id = json_dict["profile_id"]
+        return ep
 
 
 class Vividict(dict):
@@ -51,6 +130,15 @@ class DatastoreClient(object):
         (host, port) = etcd_authority.split(":", 1)
         self.etcd_client = etcd.Client(host=host, port=int(port))
 
+    def create_global_config(self):
+        config_dir = CONFIG_PATH
+        try:
+            self.etcd_client.read(config_dir)
+        except KeyError:
+            # Didn't exist, create it now.
+            self.etcd_client.set(config_dir + "InterfacePrefix", IF_PREFIX)
+            self.etcd_client.set(config_dir + "LogSeverityFile", "DEBUG")
+
     def create_host(self, bird_ip, bird6_ip):
         """
         Create a new Calico host.
@@ -62,6 +150,7 @@ class DatastoreClient(object):
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
+        self.etcd_client.set(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
@@ -80,35 +169,6 @@ class DatastoreClient(object):
             self.etcd_client.delete(host_path, dir=True, recursive=True)
         except KeyError:
             pass
-
-    def set_master(self, ip):
-        """
-        Record the IP address of the Calico Master.
-        :param ip: The IP address to reach Calico Master.
-        :return: nothing.
-        """
-        # update the master IP
-        self.etcd_client.write(MASTER_IP_PATH, ip)
-
-    def remove_master(self):
-        """
-        Record the IP address of the Calico Master.
-        :return: nothing.
-        """
-        try:
-            self.etcd_client.delete(MASTER_PATH)
-        except (etcd.EtcdException, KeyError):
-            pass
-
-    def get_master(self):
-        """
-        Get the IP address of the Calico Master
-        :return: The IP address to reach Calico Master or None if it can't be found.
-        """
-        try:
-            return self.etcd_client.get(MASTER_IP_PATH).value
-        except KeyError:
-            return None
 
     def get_groups_by_endpoint(self, endpoint_id):
         return []   # TODO
@@ -194,107 +254,124 @@ class DatastoreClient(object):
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
 
-    def create_group(self, group_id, name):
+    def group_exists(self, name):
         """
-        Create a security group.  In this implementation, security groups accept traffic only from
-        themselves, but can send traffic anywhere.
+        Check if a group exists.
 
-        :param group_id: Group UUID (string)
-        :param name: Human readable name for the group.
+        :param name: The name of the group.
+        :return: True if the group exists, false otherwise.
+        """
+        profile_path = PROFILE_PATH % {"profile_id": name}
+        try:
+            _ = self.etcd_client.read(profile_path)
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def create_group(self, name):
+        """
+        Create a security group.  In this implementation, security groups
+        accept traffic only from themselves, but can send traffic anywhere.
+
+        Note this will clobber any existing group with this name.
+
+        :param name: Unique string name for the group.
         :return: nothing.
         """
+        # A group is a implemented as a policy profile with a self-referencing
+        # tag.
+        profile_path = PROFILE_PATH % {"profile_id": name}
+        self.etcd_client.write(profile_path + "tags", '["%s"]' % name)
 
-        # Create the group directory.
-        group_path = GROUP_PATH % {"group_id": group_id}
-        self.etcd_client.write(group_path + "name", name)
-
-        # Default rule
-        self.etcd_client.write(group_path + "rule/inbound_default", "deny")
-        self.etcd_client.write(group_path + "rule/outbound_default", "deny")
-
-        # Allow traffic inbound from group.
-        allow_group = Rule(group=group_id, cidr=None, protocol=None, port=None)
-        self.etcd_client.write(group_path + "rule/inbound/1", allow_group.to_json())
-
-        # Allow traffic outbound to group and any address.
-        allow_any_ip = Rule(group=None, cidr="0.0.0.0/0", protocol=None, port=None)
-        self.etcd_client.write(group_path + "rule/outbound/1", allow_group.to_json())
-        self.etcd_client.write(group_path + "rule/outbound/2", allow_any_ip.to_json())
+        # Accept inbound traffic from self, allow outbound traffic to anywhere.
+        default_deny = Rule(action="deny")
+        accept_self = Rule(src_tag=name)
+        default_allow = Rule(action="allow")
+        rules = Rules(id=name,
+                      inbound_rules=[accept_self, default_deny],
+                      outbound_rules=[default_allow])
+        self.etcd_client.write(profile_path + "rules", rules.to_json())
 
     def delete_group(self, name):
         """
-        Delete a security group with a given name. If there are multiple groups with that name
-        it will just delete one of them.
+        Delete a security group with a given name.
 
-        :param name: Human readable name for the group.
-        :return: the ID of the group that was deleted, or None if the group couldn't be found.
+        :param name: Unique string name for the group.
+        :return: the ID of the group that was deleted, or None if the group
+        couldn't be found.
         """
 
-        # Find a group ID
-        group_id = self.get_group_id(name)
-        if group_id:
-            group_path = GROUP_PATH % {"group_id": group_id}
-            self.etcd_client.delete(group_path, recursive=True, dir=True)
-        return group_id
-
-    def get_group_id(self, name_to_find):
-        """
-        Get the UUID of the named group.  If multiple groups have the same name, the first matching
-        one will be returned.
-        :param name_to_find:
-        :return: string UUID for the group, or None if the name was not found.
-        """
-        for group_id, name in self.get_groups().iteritems():
-            if name_to_find == name:
-                return group_id
-        return None
+        profile_path = PROFILE_PATH % {"profile_id": name}
+        self.etcd_client.delete(profile_path, recursive=True, dir=True)
+        return
 
     def get_groups(self):
         """
         Get the all configured groups.
-        :return: a dict of group_id => name
+        :return: a set of group names
         """
-        groups = {}
+        groups = set()
         try:
-            etcd_groups = self.etcd_client.read(GROUPS_PATH, recursive=True,).leaves
+            etcd_groups = self.etcd_client.read(PROFILES_PATH,
+                                                recursive=True,).children
             for child in etcd_groups:
                 packed = child.key.split("/")
                 if len(packed) > 4:
-                    (_, _, _, _, group_id, final_key) = packed[0:6]
-                    if final_key == "name":
-                        groups[group_id] = child.value
+                    groups.add(packed[4])
         except KeyError:
             # Means the GROUPS_PATH was not set up.  So, group does not exist.
             pass
         return groups
 
-    def get_group_members(self, group_id):
+    def get_group_members(self, name):
         """
         Get the all configured groups.
+
+        :param name: Unique string name of the group.
         :return: a list of members
         """
         members = []
         try:
-            etcd_members = self.etcd_client.read(GROUP_MEMBER_PATH % {"group_id": group_id},
-                                                 recursive=True).leaves
-            for child in etcd_members:
-                final_key = child.key.split("/")[-1]
-                if final_key != "member":
-                    members.append(final_key)
+            endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
+                                              recursive=True)
         except KeyError:
-            # Means the GROUPS_MEMBER_PATH was not set up.  So, group does not exist.
-            pass
+            # Means the ALL_ENDPOINTS_PATH was not set up.  So, group has no
+            # members because there are no endpoints.
+            return members
+
+        for child in endpoints.leaves:
+            packed = child.key.split("/")
+            if len(packed) == 9:
+                ep_id = packed[-1]
+                ep = Endpoint.from_json(ep_id, child.value)
+                if ep.profile_id == name:
+                    members.append(ep.ep_id)
         return members
 
-    def add_endpoint_to_group(self, group_id, endpoint_id):
-        # Add the endpoint to the group.  ./member/ is a keyset of endpoint IDs, so write empty
-        # string as the value.
-        group_path = GROUP_PATH % {"group_id": group_id}
-        self.etcd_client.write(group_path + "member/" + endpoint_id, "")
+    def add_workload_to_group(self, group_name, container_id):
+        endpoint_id = self.get_ep_id_from_cont(container_id)
 
-    def remove_endpoint_from_group(self, group_id, endpoint_id):
-        group_path = GROUP_PATH % {"group_id": group_id}
-        self.etcd_client.delete(group_path + "member/" + endpoint_id)
+        # Change the profile on the endpoint.
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": container_id,
+                                   "endpoint_id": endpoint_id}
+        ep_json = self.etcd_client.read(ep_path).value
+        ep = Endpoint.from_json(endpoint_id, ep_json)
+        ep.profile_id = group_name
+        self.etcd_client.write(ep_path, ep.to_json())
+
+    def remove_workload_from_group(self, container_id):
+        endpoint_id = self.get_ep_id_from_cont(container_id)
+
+        # Change the profile on the endpoint.
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": container_id,
+                                   "endpoint_id": endpoint_id}
+        ep_json = self.etcd_client.read(ep_path).value
+        ep = Endpoint.from_json(endpoint_id, ep_json)
+        ep.profile_id = None
+        self.etcd_client.write(ep_path, ep.to_json())
 
     def get_ep_id_from_cont(self, container_id):
         """
@@ -303,8 +380,8 @@ class DatastoreClient(object):
         :param container_id: The Docker container ID.
         :return: Endpoint ID as a string.
         """
-        ep_path = ENDPOINTS_PATH % {"hostname": hostname,
-                                    "container_id": container_id}
+        ep_path = LOCAL_ENDPOINTS_PATH % {"hostname": hostname,
+                                          "container_id": container_id}
         try:
             endpoints = self.etcd_client.read(ep_path).leaves
         except KeyError:
@@ -329,30 +406,44 @@ class DatastoreClient(object):
 
         endpoint_path = ENDPOINT_PATH % {"hostname": hostname,
                                          "container_id": container_id,
-                                         "endpoint_id": endpoint.id}
-        self.etcd_client.write(endpoint_path + "addrs", json.dumps(endpoint.addrs))
-        self.etcd_client.write(endpoint_path + "mac", endpoint.mac)
-        self.etcd_client.write(endpoint_path + "state", endpoint.state)
+                                         "endpoint_id": endpoint.ep_id}
+        self.etcd_client.write(endpoint_path, endpoint.to_json())
 
     def get_hosts(self):
         """
         Get the all configured hosts
-        :return: a dict of hostname => {type => {endpoint_id => {"addrs" => addr, "mac" => mac,
-        "state" => state}}}
+        :return: a dict of hostname => {
+                               type => {
+                                   container_id => {
+                                       endpoint_id => {
+                                           "addrs" => addr,
+                                           "mac" => mac,
+                                           "state" => state
+                                       }
+                                   }
+                               }
+                           }
         """
         hosts = Vividict()
         try:
-            etcd_hosts = self.etcd_client.read('/calico/host', recursive=True).leaves
+            etcd_hosts = self.etcd_client.read('/calico/host',
+                                               recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if len(packed) > 4 and len(packed) < 10:
+                if len(packed) > 4 and len(packed) < 9:
                     (_, _, _, host, _) = packed[0:5]
                     if not hosts[host]:
                         hosts[host] = Vividict()
-                elif len(packed) == 10:
-                    (_, _, _, host, _, container_type, container_id, _, endpoint_id, final_key) = \
-                        packed
-                    hosts[host][container_type][container_id][endpoint_id][final_key] = child.value
+                elif len(packed) == 9:
+                    (_, _, _, host, _, container_type, container_id, _,
+                     endpoint_id) = packed
+                    ep = Endpoint.from_json(endpoint_id, child.value)
+                    ep_dict = hosts[host][container_type][container_id]\
+                        [endpoint_id]
+                    ep_dict["addrs"] = str(ep.ipv4_nets)
+                    ep_dict["mac"] = str(ep.mac)
+                    ep_dict["state"] = ep.state
+
         except KeyError:
             pass
 

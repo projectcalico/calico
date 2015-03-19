@@ -1,6 +1,4 @@
 [template]
 src = "felix.cfg.template"
 dest = "/config/felix.cfg"
-keys = [
-    "/calico/master/ip"
-]
+keys = []

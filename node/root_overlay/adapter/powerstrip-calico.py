@@ -72,17 +72,25 @@ class AdapterResource(resource.Resource):
         """
         Handle a pre-hook.
         """
-        request_content = json.loads(request.content.read())
-        if request_content["Type"] == "pre-hook":
-            return self._handle_pre_hook(request, request_content)
-        elif request_content["Type"] == "post-hook":
-            return self._handle_post_hook(request, request_content)
-        else:
-            raise Exception("unsupported hook type %s" %
-                            (request_content["Type"],))
+        _log.info("render_POST called with %s", request)
+        try:
+            request_content = json.loads(request.content.read())
+            if request_content["Type"] == "pre-hook":
+                result = self._handle_pre_hook(request, request_content)
+            elif request_content["Type"] == "post-hook":
+                result = self._handle_post_hook(request, request_content)
+            else:
+                _log.error("Unsupported hook type: %s", request_content["Type"])
+                raise Exception("unsupported hook type %s" %
+                                (request_content["Type"],))
+            _log.debug("Result: %s", result)
+            return result
+        except:
+            _log.exception("Failed to process POST")
+            raise
 
     def _handle_pre_hook(self, request, request_content):
-
+        _log.info("Handling pre-hook")
         client_request = request_content["ClientRequest"]
 
         # Only one action at this point, so just plumb directly
@@ -110,7 +118,6 @@ class AdapterResource(resource.Resource):
         :param client_request: Powerstrip ClientRequest object as dictionary from JSON.
         :returns: None
         """
-
         try:
             uri = client_request["Request"]
             _log.info("Intercepted %s, starting network.", uri)

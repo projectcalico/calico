@@ -21,6 +21,7 @@ import sys
 from netaddr import IPAddress
 from calico_etcd import Endpoint
 import uuid
+from netaddr import IPNetwork, IPAddress
 
 _log = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ PREFIX_LEN = {4: 32, 6: 128}
 PROC_ALIAS = "proc_host"
 """The alias for /proc.  This is useful when the filesystem is containerized.
 """
+
+IF_PREFIX = "cali"
 
 
 def setup_logging(logfile):
@@ -64,7 +67,7 @@ def remove_endpoint(ep_id):
     :param ep_id: The endpoint ID to remove
     :return: Nothing
     """
-    iface = "tap" + ep_id[:11]
+    iface = IF_PREFIX + ep_id[:11]
     call("ip link delete %s" % iface, shell=True)
 
 
@@ -95,7 +98,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     ep_id = uuid.uuid1().hex
 
     # TODO - need to handle containers exiting straight away...
-    iface = "tap" + ep_id[:11]
+    iface = IF_PREFIX + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]
 
     # Provision the networking
@@ -166,8 +169,13 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                        (cpid, veth_name), shell=True).strip()
 
     # Return an Endpoint
-    return Endpoint(id=ep_id,
-                    addrs=[{"addr": str(ip), "gateway": str(next_hop)}],
-                    state="enabled",
-                    mac=mac)
+    network = IPNetwork(IPAddress(ip))
+    ep = Endpoint(ep_id=ep_id, state="enabled", mac=mac, felix_host=HOSTNAME)
+    if network.version == 4:
+        ep.ipv4_nets.add(network)
+        ep.ipv4_gateway = next_hop
+    else:
+        ep.ipv6_nets.add(network)
+        ep.ipv6_gateway = next_hop
+    return ep
 
