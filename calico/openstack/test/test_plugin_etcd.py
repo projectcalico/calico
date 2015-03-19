@@ -56,20 +56,24 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         else:
             read_result.value = None
 
+        # Print and return the result object.
+        print "etcd read: %s\nvalue: %s" % (key, read_result.value)
+
         if recursive:
             # Also see if this key has any children, and read those.
-            child_keys = set()
+            read_result.children = []
             keylen = len(key) + 1
             for k in self.etcd_data.keys():
                 if k[:keylen] == key + '/':
-                    child_keys.add(key + '/' + k[keylen:].split('/')[0])
-            read_result.children = [self.etcd_read(child_key, True)
-                                    for child_key in child_keys]
+                    child = mock.Mock()
+                    child.key = k
+                    child.value = self.etcd_data[k]
+                    read_result.children.append(child)
+            print "children: %s" % [child.key
+                                    for child in read_result.children]
+        else:
+            read_result.children = None
 
-        # Print and return the result object.
-        print "etcd read: %s\n%s\n%s" % (key,
-                                         read_result.value,
-                                         read_result.children)
         return read_result
 
     def setUp(self):
