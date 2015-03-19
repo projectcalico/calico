@@ -62,7 +62,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.driver.initialize()
 
         # Allow the etcd transport's resync thread to run.
-        eventlet.sleep(1)
+        self.give_way()
+        self.simulated_time_advance(1)
 
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data.
@@ -77,4 +78,4 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.driver.initialize()
 
         # Allow the etcd transport's resync thread to run.
-        eventlet.sleep(1)
+        self.give_way()

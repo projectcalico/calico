@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,72 +34,13 @@ import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_zmq as t_zmq
 
-REAL_EVENTLET_SLEEP_TIME = 0.01
-
 # Test variation flags.
 NO_HEARTBEAT_RESPONSE = 1
 NO_ENDPOINT_RESPONSE = 2
 KEEP_EXISTING_REQ_SOCK = 3
 
-# Value used to indicate 'timeout' in poll and sleep processing.
-TIMEOUT_VALUE = object()
-
 
 class TestPlugin0MQ(lib.Lib, unittest.TestCase):
-
-    def setUpEventlet(self):
-
-        # Replacement for eventlet.sleep: sleep for some simulated passage of
-        # time (as directed by simulated_time_advance), instead of for real
-        # elapsed time.
-        def simulated_time_sleep(secs):
-
-            # Create a new queue.
-            queue = eventlet.Queue(1)
-            queue.stack = inspect.stack()[1][3]
-
-            # Add it to the dict of sleepers, together with the waking up time.
-            self.sleepers[queue] = self.current_time + secs
-
-            print "T=%s: %s: Start sleep for %ss until T=%s" % (
-                self.current_time, queue.stack, secs, self.sleepers[queue]
-            )
-
-            # Do a zero time real sleep, to allow other threads to run.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            # Block until something is posted to the queue.
-            ignored = queue.get(True)
-
-            # Wake up.
-            return None
-
-        # Replacement for eventlet.spawn: track spawned threads so that we can
-        # kill them all when a test case ends.
-        def simulated_spawn(*args):
-
-            # Do the real spawn.
-            thread = self.real_eventlet_spawn(*args)
-
-            # Remember this thread.
-            self.threads.append(thread)
-
-            # Also return it.
-            return thread
-
-        # Hook sleeping.
-        self.real_eventlet_sleep = eventlet.sleep
-        eventlet.sleep = simulated_time_sleep
-
-        # Similarly hook spawning.
-        self.real_eventlet_spawn = eventlet.spawn
-        eventlet.spawn = simulated_spawn
-
-    def tearDownEventlet(self):
-
-        # Restore the real eventlet.sleep and eventlet.spawn.
-        eventlet.sleep = self.real_eventlet_sleep
-        eventlet.spawn = self.real_eventlet_spawn
 
     # Setup for explicit test code control of all operations on 0MQ sockets.
     def setUp_sockets(self):
@@ -198,14 +139,14 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
                 # If what was added was not the timeout indication, put it back
                 # on the queue, for a following receive call.
-                if msg is not TIMEOUT_VALUE:
+                if msg is not lib.TIMEOUT_VALUE:
                     del self.sleepers[socket.rcv_queue]
                     print "Requeue: %s" % msg
                     socket.rcv_queue.put_nowait(msg)
                 else:
                     print "Poll timed out"
 
-                self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+                self.give_way()
 
                 # Return nothing.
                 return None
@@ -218,105 +159,18 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.zmq_context = t_zmq.zmq.Context.return_value
         self.zmq_context.socket.side_effect = socket_created
 
-    # Setup to intercept sleep calls made by the code under test, and hence to
-    # (i) control when those expire, and (ii) allow time to appear to pass (to
-    # the code under test) without actually having to wait for that time.
-    def setUp_time(self):
-
-        # Reset the simulated time (in seconds) that has passed since the
-        # beginning of the test.
-        self.current_time = 0
-
-        # Make time.time() return current_time.
-        lib.m_time.time.side_effect = lambda: self.current_time
-
-        # Reset the dict of current sleepers.  In each dict entry, the key is
-        # an eventlet.Queue object and the value is the time at which the sleep
-        # should complete.
-        self.sleepers = {}
-
-        self.threads = []
-
-    # Method for the test code to call when it wants to advance the simulated
-    # time.
-    def simulated_time_advance(self, secs):
-
-        while (secs > 0):
-            print "T=%s: Want to advance by %s" % (self.current_time, secs)
-
-            # Determine the time to advance to in this iteration: either the
-            # full time that we've been asked for, or the time at which the
-            # next sleeper should wake up, whichever of those is earlier.
-            wake_up_time = self.current_time + secs
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] < wake_up_time:
-                    # This sleeper will wake up before the time that we've been
-                    # asked to advance to.
-                    wake_up_time = self.sleepers[queue]
-
-            # Check if we're about to advance past any exact multiples of
-            # HEARTBEAT_SEND_INTERVAL_SECS.
-            num_acl_pub_heartbeats = (
-                int(wake_up_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) -
-                int(self.current_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
-            )
-
-            # Advance to the determined time.
-            secs -= (wake_up_time - self.current_time)
-            self.current_time = wake_up_time
-            print "T=%s" % self.current_time
-
-            # Wake up all sleepers that should now wake up.
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] <= self.current_time:
-                    print "T=%s >= %s: %s: Wake up!" % (self.current_time,
-                                                        self.sleepers[queue],
-                                                        queue.stack)
-                    del self.sleepers[queue]
-                    queue.put_nowait(TIMEOUT_VALUE)
-
-            # Allow woken (and possibly other) threads to run.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            # Handle any ACL HEARTBEAT publications.
-            for i in range(num_acl_pub_heartbeats):
-                print "Handle ACL HEARTBEAT publication"
-                pub = {'type': 'HEARTBEAT',
-                       'issued': self.current_time * 1000}
-                self.acl_pub_socket.send_multipart.assert_called_once_with(
-                    ['networkheartbeat'.encode('utf-8'),
-                     json.dumps(pub).encode('utf-8')])
-                self.acl_pub_socket.send_multipart.reset_mock()
-
     # Setup before each test case (= each method below whose name begins with
     # "test").
     def setUp(self):
 
-        # Setup to control eventlet spawning and sleeping.
-        self.setUpEventlet()
-
         # Normally do not provide bind_host config.
         lib.m_oslo.config.cfg.CONF.bind_host = None
-
-        # Setup to control 0MQ socket operations.
-        self.setUp_sockets()
-
-        # Setup to control the passage of time.
-        self.setUp_time()
 
         # Do common plugin test setup.
         super(TestPlugin0MQ, self).setUp()
 
-    # Tear down after each test case.
-    def tearDown(self):
-
-        print "\nClean up remaining green threads..."
-
-        for thread in self.threads:
-            thread.kill()
-
-        # Stop controlling eventlet spawning and sleeping.
-        self.tearDownEventlet()
+        # Setup to control 0MQ socket operations.
+        self.setUp_sockets()
 
     # Check that a socket is now bound to a specified address and port, and
     # return that socket.
@@ -452,7 +306,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             ['felix-1',
              '',
              json.dumps(resync).encode('utf-8')])
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check DB got create_or_update_agent call.
         if KEEP_EXISTING_REQ_SOCK not in flags:
@@ -501,15 +355,15 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
                  'rc': 'SUCCESS'})
 
             # Yield twice to allow that response to be processed.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+            self.give_way()
+            self.give_way()
 
         # Send HEARTBEAT from Felix and check for response.
         self.felix_router_socket.rcv_queue.put_nowait(
             ['felix-1',
              '',
              json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
         self.felix_router_socket.send_multipart.assert_called_once_with(
             ['felix-1',
              '',
@@ -526,7 +380,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
         # Need another yield here, apparently, to allow felix_heartbeat_thread
         # to start running.
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Receive HEARTBEAT to Felix from the plugin, and send response.
         self.simulated_time_advance(30)
@@ -546,8 +400,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.felix_endpoint_socket.rcv_queue.put_nowait(
             {'type': 'HEARTBEAT'})
         print "Provided HEARTBEAT response from Felix on %s" % self.felix_endpoint_socket
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
         # Check DB got create_or_update_agent call.
         self.db.create_or_update_agent.assert_called_once_with(
@@ -559,7 +413,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.db.create_or_update_agent.reset_mock()
 
         # Yield to allow anything pending on other threads to come out.
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
     # Test what happens when an ACL Manager connects to the Neutron driver.
     def acl_connect(self):
@@ -570,7 +424,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             ['aclm-1',
              '',
              json.dumps(getgroups).encode('utf-8')])
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check get GETGROUPS response.
         self.acl_get_socket.send_multipart.assert_called_once_with(
@@ -609,7 +463,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             ['aclm-1',
              '',
              json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
         self.acl_get_socket.send_multipart.assert_called_once_with(
             ['aclm-1',
              '',
@@ -666,7 +520,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
                 lambda: self.driver.create_port_postcommit(context))
 
         # Yield to allow that new thread to run.
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix
         # responding successfully.
@@ -697,8 +551,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             {'type': 'ENDPOINTCREATED',
              'rc': 'SUCCESS',
              'message': ''})
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
         # Check get update_port_status call, indicating port active.
         self.db.update_port_status.assert_called_once_with(
@@ -784,7 +638,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
                 lambda: self.driver.update_port_postcommit(context))
 
         # Yield to allow that new thread to run.
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check ENDPOINTUPDATED request is sent to Felix.  Simulate Felix
         # responding successfully.
@@ -812,8 +666,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             {'type': 'ENDPOINTUPDATED',
              'rc': 'SUCCESS',
              'message': ''})
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
     # Test a rule being updated in a security group.
     def sg_rule_update(self):
@@ -877,7 +731,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
                 lambda: self.driver.delete_port_postcommit(context))
 
         # Yield to allow that new thread to run.
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check ENDPOINTDESTROYED request is sent to Felix.  Simulate Felix
         # responding successfully.
@@ -900,8 +754,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             {'type': 'ENDPOINTDESTROYED',
              'rc': 'SUCCESS',
              'message': ''})
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
         # Prep appropriate responses for next get_security_group and
         # _get_port_security_group_bindings calls.
@@ -1111,3 +965,42 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
             {mech_calico.api.NETWORK_TYPE: 'vlan'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
+
+    def simulated_time_advance(self, secs):
+        """Extend the common implementation of simulated_time_advance so that we also
+        check that the plugin publishes HEARTBEATs to the ACL Manager.
+        """
+        # Check if we're about to advance past any exact multiples of
+        # HEARTBEAT_SEND_INTERVAL_SECS.
+        num_acl_pub_heartbeats = (
+            int((self.current_time + secs) / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) -
+            int(self.current_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
+        )
+
+        while num_acl_pub_heartbeats > 0:
+            # Calculate when the next ACL HEARTBEAT should be sent.
+            next_heartbeat_time = ((int(self.current_time /
+                                        t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) + 1) *
+                                   t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
+
+            # Advance to that time.
+            next_secs = next_heartbeat_time - self.current_time
+            super(TestPlugin0MQ, self).simulated_time_advance(next_secs)
+
+            # Verify that an ACL HEARTBEAT was sent.
+            print "Handle ACL HEARTBEAT publication"
+            pub = {'type': 'HEARTBEAT',
+                   'issued': self.current_time * 1000}
+            self.acl_pub_socket.send_multipart.assert_called_once_with(
+                ['networkheartbeat'.encode('utf-8'),
+                 json.dumps(pub).encode('utf-8')])
+            self.acl_pub_socket.send_multipart.reset_mock()
+
+            # Reduce the remaining time, and expected number of heartbeats,
+            # accordingly.
+            secs -= next_secs
+            num_acl_pub_heartbeats -= 1
+
+        # If there is still any time remaining, advance by it.
+        if secs > 0:
+            super(TestPlugin0MQ, self).simulated_time_advance(secs)

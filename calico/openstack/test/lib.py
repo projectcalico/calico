@@ -18,7 +18,10 @@ openstack.test.lib
 
 Common code for Neutron driver UT.
 """
+import eventlet
+import eventlet.queue
 from eventlet.support import greenlets as greenlet
+import inspect
 import mock
 import sys
 import traceback
@@ -72,6 +75,11 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
 
 import calico.openstack.mech_calico as mech_calico
 
+REAL_EVENTLET_SLEEP_TIME = 0.01
+
+# Value used to indicate 'timeout' in poll and sleep processing.
+TIMEOUT_VALUE = object()
+
 
 class Lib(object):
 
@@ -82,6 +90,9 @@ class Lib(object):
     def setUp(self):
         # Announce the current test case.
         print "\nTEST CASE: %s" % self.id()
+
+        # Hook eventlet.
+        self.setUp_eventlet()
 
         # Hook logging.
         self.setUp_logging()
@@ -138,6 +149,72 @@ class Lib(object):
         # _get_port_security_group_bindings call.
         self.db._get_port_security_group_bindings.return_value = []
 
+    def setUp_eventlet(self):
+        """Setup to intercept sleep calls made by the code under test, and hence to
+        (i) control when those expire, and (ii) allow time to appear to pass (to
+        the code under test) without actually having to wait for that time.
+        """
+        # Reset the simulated time (in seconds) that has passed since the
+        # beginning of the test.
+        self.current_time = 0
+
+        # Make time.time() return current_time.
+        m_time.time.side_effect = lambda: self.current_time
+
+        # Reset the dict of current sleepers.  In each dict entry, the key is
+        # an eventlet.Queue object and the value is the time at which the sleep
+        # should complete.
+        self.sleepers = {}
+
+        # Reset the list of spawned eventlet threads.
+        self.threads = []
+
+        # Replacement for eventlet.sleep: sleep for some simulated passage of
+        # time (as directed by simulated_time_advance), instead of for real
+        # elapsed time.
+        def simulated_time_sleep(secs):
+
+            # Create a new queue.
+            queue = eventlet.Queue(1)
+            queue.stack = inspect.stack()[1][3]
+
+            # Add it to the dict of sleepers, together with the waking up time.
+            self.sleepers[queue] = self.current_time + secs
+
+            print "T=%s: %s: Start sleep for %ss until T=%s" % (
+                self.current_time, queue.stack, secs, self.sleepers[queue]
+            )
+
+            # Do a zero time real sleep, to allow other threads to run.
+            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+            # Block until something is posted to the queue.
+            ignored = queue.get(True)
+
+            # Wake up.
+            return None
+
+        # Replacement for eventlet.spawn: track spawned threads so that we can
+        # kill them all when a test case ends.
+        def simulated_spawn(*args):
+
+            # Do the real spawn.
+            thread = self.real_eventlet_spawn(*args)
+
+            # Remember this thread.
+            self.threads.append(thread)
+
+            # Also return it.
+            return thread
+
+        # Hook sleeping.
+        self.real_eventlet_sleep = eventlet.sleep
+        eventlet.sleep = simulated_time_sleep
+
+        # Similarly hook spawning.
+        self.real_eventlet_spawn = eventlet.spawn
+        eventlet.spawn = simulated_spawn
+
     def setUp_logging(self):
         """Setup to intercept and display logging by the code under test.
         """
@@ -167,3 +244,60 @@ class Lib(object):
         mech_calico.LOG.warn.side_effect = log_warn
         mech_calico.LOG.error.side_effect = log_error
         mech_calico.LOG.exception.side_effect = log_exception
+
+    # Tear down after each test case.
+    def tearDown(self):
+
+        print "\nClean up remaining green threads..."
+
+        for thread in self.threads:
+            thread.kill()
+
+        # Stop hooking eventlet.
+        self.tearDown_eventlet()
+
+    def tearDown_eventlet(self):
+
+        # Restore the real eventlet.sleep and eventlet.spawn.
+        eventlet.sleep = self.real_eventlet_sleep
+        eventlet.spawn = self.real_eventlet_spawn
+
+    # Method for the test code to call when it wants to advance the simulated
+    # time.
+    def simulated_time_advance(self, secs):
+
+        while (secs > 0):
+            print "T=%s: Want to advance by %s" % (self.current_time, secs)
+
+            # Determine the time to advance to in this iteration: either the
+            # full time that we've been asked for, or the time at which the
+            # next sleeper should wake up, whichever of those is earlier.
+            wake_up_time = self.current_time + secs
+            for queue in self.sleepers.keys():
+                if self.sleepers[queue] < wake_up_time:
+                    # This sleeper will wake up before the time that we've been
+                    # asked to advance to.
+                    wake_up_time = self.sleepers[queue]
+
+            # Advance to the determined time.
+            secs -= (wake_up_time - self.current_time)
+            self.current_time = wake_up_time
+            print "T=%s" % self.current_time
+
+            # Wake up all sleepers that should now wake up.
+            for queue in self.sleepers.keys():
+                if self.sleepers[queue] <= self.current_time:
+                    print "T=%s >= %s: %s: Wake up!" % (self.current_time,
+                                                        self.sleepers[queue],
+                                                        queue.stack)
+                    del self.sleepers[queue]
+                    queue.put_nowait(TIMEOUT_VALUE)
+
+            # Allow woken (and possibly other) threads to run.
+            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+    def give_way(self):
+        """Method for test code to call when it wants to allow other eventlet threads
+        to run.
+        """
+        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
