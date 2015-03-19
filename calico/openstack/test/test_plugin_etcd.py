@@ -38,9 +38,19 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.etcd_data[key] = value
         self.recent_writes[key] = json.loads(value)
 
+    def check_etcd_delete(self, key):
+        """Print each etcd delete as it occurs."""
+        print "etcd delete: %s" % key
+        del self.etcd_data[key]
+        self.recent_deletes.add(key)
+
     def assertEtcdWrites(self, expected):
         self.assertEqual(self.recent_writes, expected)
         self.recent_writes = {}
+
+    def assertEtcdDeletes(self, expected):
+        self.assertEqual(self.recent_deletes, expected)
+        self.recent_deletes = set()
 
     def etcd_read(self, key, recursive=False):
         """Read from the accumulated etcd database.
@@ -88,14 +98,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Hook the (mock) etcd client.
         self.client = lib.m_etcd.Client()
-        self.client.write.side_effect = self.check_etcd_write
         self.client.read.side_effect = self.etcd_read
+        self.client.write.side_effect = self.check_etcd_write
+        self.client.delete.side_effect = self.check_etcd_delete
 
         # Start with an empty etcd database.
         self.etcd_data = {}
 
-        # Start with an empty set of recent writes.
+        # Start with an empty set of recent writes and deletes.
         self.recent_writes = {}
+        self.recent_deletes = set()
 
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data.
@@ -164,3 +176,54 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
+        # Delete lib.port1
+        context = mock.Mock()
+        context._port = lib.port1
+        self.driver.delete_port_postcommit(context)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set(['/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678']))
+        self.osdb_ports = [lib.port2]
+
+        # Do another resync - expect no changes to the etcd data.
+        print "\nResync with existing etcd data\n"
+        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
+        # Add lib.port1 back again.
+        self.driver.create_port_postcommit(context)
+        expected_writes = {
+            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
+                {"name": "tapDEADBEEF-12",
+                 "profile_id": "SGID-default",
+                 "mac": "00:11:22:33:44:55",
+                 "ipv4_gateway": "10.65.0.1",
+                 "ipv4_nets": ["10.65.0.2/32"],
+                 "state": "active",
+                 "ipv6_nets": []},
+            '/calico/policy/profile/SGID-default/rules':
+                {"outbound_rules": [{"dst_ports": ["1:65535"],
+                                     "protocol": -1,
+                                     "dst_tag": None,
+                                     "dst_net": "0.0.0.0/0"},
+                                    {"dst_ports": ["1:65535"],
+                                     "protocol": -1,
+                                     "dst_tag": None,
+                                     "dst_net": "::/0"}],
+                 "inbound_rules": [{"src_ports": ["1:65535"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"},
+                                   {"src_ports": ["1:65535"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"}]},
+            '/calico/policy/profile/SGID-default/tags':
+                ["SGID-default"]
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+        self.check_update_port_status_called(context)
+        self.osdb_ports = [lib.port1, lib.port2]

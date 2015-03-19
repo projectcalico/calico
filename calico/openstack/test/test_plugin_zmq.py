@@ -555,11 +555,7 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.give_way()
 
         # Check get update_port_status call, indicating port active.
-        self.db.update_port_status.assert_called_once_with(
-            context._plugin_context,
-            context._port['id'],
-            mech_calico.constants.PORT_STATUS_ACTIVE)
-        self.db.update_port_status.reset_mock()
+        self.check_update_port_status_called(context)
 
         # Prep appropriate responses for next get_security_group,
         # _get_port_security_group_bindings and get_port calls.

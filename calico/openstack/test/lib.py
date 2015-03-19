@@ -98,7 +98,7 @@ class Lib(object):
         self.setUp_logging()
 
         # If an arg mismatch occurs, we want to see the complete diff of it.
-        self.maxDiff = 2000
+        self.maxDiff = None
 
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
@@ -301,3 +301,10 @@ class Lib(object):
         to run.
         """
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+    def check_update_port_status_called(self, context):
+        self.db.update_port_status.assert_called_once_with(
+            context._plugin_context,
+            context._port['id'],
+            mech_calico.constants.PORT_STATUS_ACTIVE)
+        self.db.update_port_status.reset_mock()
