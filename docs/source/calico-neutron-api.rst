@@ -14,6 +14,9 @@ will discuss the effect they have on the network. It uses the
 various objects that the Neutron API uses: see that document for more
 information about what Neutron expects more generally.
 
+Additionally, there is a section of this document that briefly covers Horizon
+actions as well: :ref:`horizon-actions`.
+
 .. _Networking API v2.0: http://developer.openstack.org/api-ref-networking-v2.html
 
 .. _neutron-api-networks:
@@ -54,6 +57,9 @@ Neutron Provider networks are not used in Calico deployments. Setting provider
 network extended attributes will have no effect. See
 :doc:`opens-external-conn` to understand why Neutron provider networks are not
 needed.
+
+
+.. _neutron-api-subnets:
 
 Subnets
 -------
@@ -126,6 +132,9 @@ provided by Neutron networks. For more information, see :doc:`security-model`.
 
 All the attributes of security groups remain unchanged in Calico.
 
+
+.. _neutron-api-routers:
+
 Layer 3 Routing: Routers and Floating IPs
 -----------------------------------------
 
@@ -144,3 +153,69 @@ to create one will fail.
 
 .. note:: It is possible that in a future version of Calico LBaaS may be
           functional. Watch this space.
+
+
+.. _horizon-actions:
+
+Horizon
+-------
+
+Horizon makes many provisioning actions available that mirror options on the
+Neutron API. This section quickly lists them, and indicates whether they can
+be used or not, and any subtleties that might be present in them.
+
+Much of the detail has been left out of this section, and is instead present in
+the relevant Neutron API sections above: please consult them for more.
+
+Section: Project
+~~~~~~~~~~~~~~~~
+
+Tab: Compute -> Instances
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When launching instances, remember that security groups are used to determine
+reachability, not networks. Choose networks based on whether you need an
+external or an internal IP address, and choose security groups based on the
+machines you'd like to talk to in the cloud. See
+:ref:`opens-external-conn-setup` for more.
+
+Tab: Compute -> Access & Security
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As noted above, tenants should ensure they configure their security groups to
+set up their connectivity appropriately.
+
+Tab: Network -> Network Topology
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For the 'Create Network' button, see the :ref:`neutron-api-networks` section.
+For the 'Create Router' button, see the :ref:`neutron-api-routers` section.
+
+Tab: Network -> Networks
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+For networks and subnets, see the sections :ref:`neutron-api-networks` and
+:ref:`neutron-api-subnets`.
+
+Tab: Network -> Routers
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Tenants should not be able to create routers, as they serve no purpose in a
+Calico network. See :ref:`neutron-api-routers` for more.
+
+Section: Admin
+~~~~~~~~~~~~~~
+
+Tab: System Panel -> Networks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the course of general operation administrators are not expected to make
+changes to their networking configuration. However, for initial network setup,
+this panel may be used to make changes. See :doc:`opens-external-conn` for
+details on how to achieve this setup.
+
+Tab: System Panel -> Routers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Administrators should not create routers, as they serve no purpose in a Calico
+network. See :ref:`neutron-api-routers` for more.
