@@ -158,20 +158,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": []},
             '/calico/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "protocol": -1,
                                      "dst_tag": None,
                                      "dst_net": "0.0.0.0/0"},
                                     {"dst_ports": ["1:65535"],
-                                     "protocol": -1,
                                      "dst_tag": None,
                                      "dst_net": "::/0"}],
                  "inbound_rules": [{"src_ports": ["1:65535"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"},
                                    {"src_ports": ["1:65535"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"}]},
             '/calico/policy/profile/SGID-default/tags':
                 ["SGID-default"]
@@ -212,20 +208,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": []},
             '/calico/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "protocol": -1,
                                      "dst_tag": None,
                                      "dst_net": "0.0.0.0/0"},
                                     {"dst_ports": ["1:65535"],
-                                     "protocol": -1,
                                      "dst_tag": None,
                                      "dst_net": "::/0"}],
                  "inbound_rules": [{"src_ports": ["1:65535"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"},
                                    {"src_ports": ["1:65535"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"}]},
             '/calico/policy/profile/SGID-default/tags':
                 ["SGID-default"]
@@ -286,20 +278,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv4_nets": []},
             '/calico/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "protocol": -1,
                                      "dst_tag": None,
                                      "dst_net": "0.0.0.0/0"},
                                     {"dst_ports": ["1:65535"],
-                                     "protocol": -1,
                                      "dst_tag": None,
                                      "dst_net": "::/0"}],
                  "inbound_rules": [{"src_ports": ["1:65535"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"},
                                    {"src_ports": ["1:65535"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"}]},
             '/calico/policy/profile/SGID-default/tags':
                 ["SGID-default"]
@@ -343,7 +331,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 {"outbound_rules": [],
                  "inbound_rules": [{"src_ports": ["5060:5061"],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"}]},
             '/calico/policy/profile/SG-1/tags':
                 ["SG-1"]
@@ -419,7 +406,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 {"outbound_rules": [],
                  "inbound_rules": [{"src_ports": [5060],
                                     "src_net": None,
-                                    "protocol": -1,
                                     "src_tag": "SGID-default"}]},
             '/calico/policy/profile/SG-1/tags':
                 ["SG-1"]
