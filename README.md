@@ -1,43 +1,42 @@
 [![Circle CI](https://circleci.com/gh/Metaswitch/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/Metaswitch/calico-docker/tree/master)
-# Calico on docker
+# Calico on Docker
 Calico can provide networking in a Docker environment. Each container gets its own IP, there is no encapsulation and it can support massive scale. For more details see http://www.projectcalico.org/technical/
 
 Development is very active at the moment so please Star this project and check back often.
 
-We welcome questions/comment/feedback (and pull requests)
+We welcome questions/comment/feedback (and pull requests).
+
 * Mailing List - http://lists.projectcalico.org/listinfo/calico
 * IRC - [#calico](http://webchat.freenode.net?randomnick=1&channels=%23calico&uio=d4)
 * For Calico-on-Docker specific issues, please [raise issues](https://github.com/Metaswitch/calico-docker/issues/new) on Github.
 
 ## Getting started
 
-To get started follow the instruction here [Getting Started](docs/GettingStarted.md). It covers setting up a couple of CoreOS servers using Vagrant to use as docker hosts.
+To get started follow the instruction here [Getting Started](docs/GettingStarted.md). They set up two CoreOS servers using Vagrant, and run Calico components in containers to provide networking between other guest containers.
 
-## Orchestrator intregration
+## Orchestrator integration
 
 For a lower level integration see [Orchestrators](docs/Orchestrators.md).
 
 ## What it covers
-+ The Calico components run Docker containers.
-+ Calico can provide network connectivity with security policy enforcement to Docker containers.
-
-+ IP-networked Docker containers available via `docker run` or the standard Docker API. We utilize the excellent [Powerstrip](https://github.com/clusterhq/powerstrip) project to make this seamless
++ The Calico components run in Docker containers.
++ Calico provides network connectivity with security policy enforcement for other Docker containers.
++ IP-networked Docker containers available via `docker run` or the standard Docker API. We use the excellent [Powerstrip](https://github.com/clusterhq/powerstrip) project to make this seamless.
 + Alongside the core services, we provide a simple commandline tool `calicoctl` for managing Calico.
 
 
 ## How does it work?
 
-Calico connects datacenter workloads (containers, VMs, or bare metal) via IP no matter which compute host they are on.  Read about it on the
-[Project Calico website](http://www.projectcalico.org).  Endpoints are network interfaces associated with workloads.  Using `calicoctl` we currently only support one endpoint per container, but more than one is possible if you use the lower level APIs.
+Calico connects datacenter workloads (containers, VMs, or bare metal) via IP no matter which compute host they are on.  Read about it on the [Project Calico website](http://www.projectcalico.org).  Endpoints are network interfaces associated with workloads.
 
 Project Calico uses [etcd](https://github.com/coreos/etcd) to distribute information about workloads, endpoints, and policy to each Docker host.
 
-The `calico-node` service is a worker that configures the network endpoints for containers, handles IP routing, and installs policy rules.  It includes
-+ Felix, the Calico worker process,
-+ BIRD, the routing process, and
+The `calico-node` service is a worker that configures the network endpoints for containers, handles IP routing, and installs policy rules.  It comprises
++ Felix, the Calico worker process
++ BIRD, the routing process
 + a [Powerstrip](https://github.com/clusterhq/powerstrip) adapter to set up networking when Docker containers are created.
 
-Finally, we provide a command line tool, `calicoctl`, which configures and starts the Calico services listed above, and allows you to interact with the Orchestrator Plugin to define and apply network and security policy to the containers you create.
+We provide a command line tool, `calicoctl`, which makes it easy to configure and start the Calico services listed above, and allows you to interact with the etcd datastore to define and apply network and security policy to the containers you create.
 
 ```
 Usage:
@@ -76,3 +75,7 @@ The calicoctl binary is a statically-compiled version of the calicoctl.py script
 ```
 ./create-binary.sh
 ```
+
+## Can a guest container have multiple networked IP addresses?
+
+Using `calicoctl` we currently only support one IP address per container, but more than one is possible if you use the lower level APIs.
