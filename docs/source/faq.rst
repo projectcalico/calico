@@ -8,12 +8,14 @@ information.
 "Why use Calico?"
 -----------------
 
-See also http://www.projectcalico.org/why-calico/
 The problem Calico tries to solve is the networking of workloads (VMs,
 containers, etc) in a high scale environment.  Existing L2 based methods for
 solving this problem have problems at high scale.  Compared to these, we think
 Calico is more scalable, simpler and more flexible.  We think you should look
 into it if you have more than a handful of nodes on a single site.
+
+For a more detailed discussion of this topic, see our blog post at 
+http://www.projectcalico.org/why-calico/.
 
 "Does Calico work with IPv6?"
 -----------------------------
