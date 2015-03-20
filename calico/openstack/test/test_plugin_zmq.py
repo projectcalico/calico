@@ -557,19 +557,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Check get update_port_status call, indicating port active.
         self.check_update_port_status_called(context)
 
-        # Prep appropriate responses for next get_security_group,
-        # _get_port_security_group_bindings and get_port calls.
-        self.db.get_security_group.return_value = {
-            'id': 'SG-1',
-            'security_group_rules': []
-        }
-        self.db._get_port_security_group_bindings.return_value = [
-            {'port_id': port['id']}
-        ]
-        self.db.get_port.return_value = context._port
-
-        # Call security_groups_member_updated with default SG ID.
-        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+        # Add this port to security group SG-1.
+        self.notify_security_group_update('SG-1', [], port, 'member')
 
         # Check get GROUPUPDATE publication indicating port added to default SG
         # ID.
@@ -667,12 +656,10 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
     # Test a rule being updated in a security group.
     def sg_rule_update(self):
-
-        # Prep appropriate responses for next get_security_group and
-        # _get_port_security_group_bindings calls.
-        self.db.get_security_group.return_value = {
-            'id': 'SG-1',
-            'security_group_rules': [
+        # Update rules for security group SG-1.
+        self.notify_security_group_update(
+            'SG-1',
+            [
                 {'remote_group_id': 'SGID-default',
                  'remote_ip_prefix': None,
                  'protocol': -1,
@@ -680,15 +667,12 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
                  'ethertype': 'IPv4',
                  'port_range_min': 5060,
                  'port_range_max': 5061}
-            ]
-        }
-        self.db._get_port_security_group_bindings.return_value = []
+            ],
+            None,
+            'rule'
+        )
 
-        # Call security_groups_member_updated with default SG ID.
-        self.db.notifier.security_groups_rule_updated(mock.Mock(), ['SG-1'])
-
-        # Check get GROUPUPDATE publication indicating port removed from
-        # default SG ID.
+        # Check get GROUPUPDATE publication reflecting the new rules.
         pub = {'rules': {'inbound': [{'cidr': None,
                                       'group': 'SGID-default',
                                       'port': [5060, 5061],
@@ -753,16 +737,8 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         self.give_way()
         self.give_way()
 
-        # Prep appropriate responses for next get_security_group and
-        # _get_port_security_group_bindings calls.
-        self.db.get_security_group.return_value = {
-            'id': 'SG-1',
-            'security_group_rules': []
-        }
-        self.db._get_port_security_group_bindings.return_value = []
-
-        # Call security_groups_member_updated with default SG ID.
-        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+        # Remove this port from security group SG-1.
+        self.notify_security_group_update('SG-1', [], None, 'member')
 
         # Check get GROUPUPDATE publication indicating port removed from
         # default SG ID.

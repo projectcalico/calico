@@ -38,11 +38,18 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.etcd_data[key] = value
         self.recent_writes[key] = json.loads(value)
 
-    def check_etcd_delete(self, key):
+    def check_etcd_delete(self, key, **kwargs):
         """Print each etcd delete as it occurs."""
         print "etcd delete: %s" % key
-        del self.etcd_data[key]
-        self.recent_deletes.add(key)
+        if kwargs.get('recursive', False):
+            keylen = len(key) + 1
+            for k in self.etcd_data.keys():
+                if k == key or k[:keylen] == key + '/':
+                    del self.etcd_data[k]
+            self.recent_deletes.add(key + '(recursive)')
+        else:
+            del self.etcd_data[key]
+            self.recent_deletes.add(key)
 
     def assertEtcdWrites(self, expected):
         self.assertEqual(self.recent_writes, expected)
@@ -264,3 +271,169 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set(['/calico/host/new-host/workload/openstack/endpoint/DEADBEEF-1234-5678']))
+
+        # Add another port with an IPv6 address.
+        context._port = lib.port3
+        self.driver.create_port_postcommit(context)
+        expected_writes = {
+            '/calico/host/felix-host-2/workload/openstack/endpoint/HELLO-1234-5678':
+                {"name": "tapHELLO-1234-",
+                 "profile_id": "SGID-default",
+                 "mac": "00:11:22:33:44:66",
+                 "ipv6_gateway": "2001:db8:a41:2::1",
+                 "ipv6_nets": ["2001:db8:a41:2::12/128"],
+                 "state": "active",
+                 "ipv4_nets": []},
+            '/calico/policy/profile/SGID-default/rules':
+                {"outbound_rules": [{"dst_ports": ["1:65535"],
+                                     "protocol": -1,
+                                     "dst_tag": None,
+                                     "dst_net": "0.0.0.0/0"},
+                                    {"dst_ports": ["1:65535"],
+                                     "protocol": -1,
+                                     "dst_tag": None,
+                                     "dst_net": "::/0"}],
+                 "inbound_rules": [{"src_ports": ["1:65535"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"},
+                                   {"src_ports": ["1:65535"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"}]},
+            '/calico/policy/profile/SGID-default/tags':
+                ["SGID-default"]
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+        self.check_update_port_status_called(context)
+        self.osdb_ports = [lib.port1, lib.port2, lib.port3]
+
+        # Create a new security group.
+        self.notify_security_group_update(
+            'SG-1',
+            [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}
+            ],
+            None,
+            'rule'
+        )
+        self.assertEtcdWrites({})
+
+        # Now change the security group for that port.
+        context.original = context._port.copy()
+        context._port['security_groups'] = ['SG-1']
+        self.driver.update_port_postcommit(context)
+        expected_writes = {
+            '/calico/host/felix-host-2/workload/openstack/endpoint/HELLO-1234-5678':
+                {"name": "tapHELLO-1234-",
+                 "profile_id": "SG-1",
+                 "mac": "00:11:22:33:44:66",
+                 "ipv6_gateway": "2001:db8:a41:2::1",
+                 "ipv6_nets": ["2001:db8:a41:2::12/128"],
+                 "state": "active",
+                 "ipv4_nets": []},
+            '/calico/policy/profile/SG-1/rules':
+                {"outbound_rules": [],
+                 "inbound_rules": [{"src_ports": ["5060:5061"],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"}]},
+            '/calico/policy/profile/SG-1/tags':
+                ["SG-1"]
+        }
+        self.assertEtcdWrites(expected_writes)
+
+        # Update what the DB's get_security_groups query should now return.
+        self.db.get_security_groups.return_value = [
+            {'id': 'SGID-default',
+             'security_group_rules': [
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': -1},
+                 {'remote_group_id': None,
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'egress',
+                  'ethertype': 'IPv6',
+                  'port_range_min': -1}
+             ]},
+            {'id': 'SG-1',
+             'security_group_rules': [
+                 {'remote_group_id': 'SGID-default',
+                  'remote_ip_prefix': None,
+                  'protocol': -1,
+                  'direction': 'ingress',
+                  'ethertype': 'IPv4',
+                  'port_range_min': 5060,
+                  'port_range_max': 5061}
+             ]}
+        ]
+
+        # Resync with all latest data - expect no etcd writes or deletes.
+        print "\nResync with existing etcd data\n"
+        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set([]))
+
+        # Change SG-1 to allow only port 5060.
+        self.notify_security_group_update(
+            'SG-1',
+            [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5060}
+            ],
+            None,
+            'rule'
+        )
+
+        # Expect an etcd write because SG-1 is now in use.
+        expected_writes = {
+            '/calico/policy/profile/SG-1/rules':
+                {"outbound_rules": [],
+                 "inbound_rules": [{"src_ports": [5060],
+                                    "src_net": None,
+                                    "protocol": -1,
+                                    "src_tag": "SGID-default"}]},
+            '/calico/policy/profile/SG-1/tags':
+                ["SG-1"]
+        }
+        self.assertEtcdWrites(expected_writes)
+
+        # Resync with only the last port.  Expect the first two ports to be
+        # cleaned up, and also SGID-default, because now only SG-1 is needed.
+        self.osdb_ports = [lib.port3]
+        self.db.get_security_groups.return_value[1]['security_group_rules'][0]['port_range_max'] = 5060
+        print "\nResync with existing etcd data\n"
+        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set([
+            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678',
+            '/calico/host/felix-host-1/workload/openstack/endpoint/FACEBEEF-1234-5678',
+            '/calico/policy/profile/SGID-default(recursive)']))

@@ -61,6 +61,17 @@ port2 = {'binding:vif_type': 'tap',
          'admin_state_up': True,
          'security_groups': ['SGID-default']}
 
+# Port with an IPv6 address.
+port3 = {'binding:vif_type': 'tap',
+         'binding:host_id': 'felix-host-2',
+         'id': 'HELLO-1234-5678',
+         'device_owner': 'compute:nova',
+         'fixed_ips': [{'subnet_id': '2001:db8:a41:2::/64',
+                        'ip_address': '2001:db8:a41:2::12'}],
+         'mac_address': '00:11:22:33:44:66',
+         'admin_state_up': True,
+         'security_groups': ['SGID-default']}
+
 
 # Define a stub class, that we will use as the base class for
 # CalicoMechanismDriver.
@@ -111,7 +122,7 @@ class Lib(object):
         self.db.get_ports.side_effect = lambda *args: self.osdb_ports
 
         # Arrange DB's get_subnet call.
-        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
+        self.db.get_subnet.side_effect = self.get_subnet
 
         # Arrange what the DB's get_security_groups query will return (the
         # default SG).
@@ -308,3 +319,33 @@ class Lib(object):
             context._port['id'],
             mech_calico.constants.PORT_STATUS_ACTIVE)
         self.db.update_port_status.reset_mock()
+
+    def get_subnet(self, context, id):
+        if ':' in id:
+            return {'gateway_ip': '2001:db8:a41:2::1'}
+        else:
+            return {'gateway_ip': '10.65.0.1'}
+
+    def notify_security_group_update(self, id, rules, port, type):
+        """Notify a new or changed security group definition.
+        """
+        # Prep appropriate responses for next get_security_group and
+        # _get_port_security_group_bindings calls.
+        self.db.get_security_group.return_value = {
+            'id': id,
+            'security_group_rules': rules
+        }
+        if port is None:
+            self.db._get_port_security_group_bindings.return_value = []
+        else:
+            self.db._get_port_security_group_bindings.return_value = [
+                {'port_id': port['id']}
+            ]
+            self.db.get_port.return_value = port
+
+        if type == 'rule':
+            # Call security_groups_rule_updated with the new or changed ID.
+            self.db.notifier.security_groups_rule_updated(mock.Mock(), [id])
+        else:
+            # Call security_groups_member_updated with the new or changed ID.
+            self.db.notifier.security_groups_member_updated(mock.Mock(), [id])
