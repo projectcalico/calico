@@ -1,3 +1,10 @@
+calico (0.14) trusty; urgency=medium
+
+  * Move documentation from separate calico-docs GitHub wiki to Read the Docs
+  * Neutron mechanism driver fixes
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Fri, 20 Mar 2015 11:12:44 +0000
+
 calico (0.13) trusty; urgency=medium
 
   * Bug fixes and enhancements to Calico components
