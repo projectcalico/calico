@@ -198,11 +198,11 @@ class CalicoTransportEtcd(CalicoTransport):
                 # If there are no policies, then read returns the top level
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
+                profile_key = '/calico/policy/profile/' + profile_id
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
                 if profile_id in self.needed_profiles:
                     # This is a profile that we want.  Let's read its rules and
                     # tags, and compare those against the current OpenStack data.
-                    profile_key = '/calico/policy/profile/' + profile_id
                     rules = json_decoder.decode(
                         self.client.read(profile_key + '/rules').value)
                     tags = json_decoder.decode(
@@ -218,7 +218,7 @@ class CalicoTransportEtcd(CalicoTransport):
                 else:
                     # We don't want this profile any more, so delete the key.
                     LOG.debug("Existing etcd profile key is now invalid")
-                    self.client.delete(child.key, recursive=True)
+                    self.client.delete(profile_key, recursive=True)
 
         # Now write etcd data for each profile that we need and that we don't
         # already know to be correct.
