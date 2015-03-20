@@ -132,8 +132,10 @@ Use the Fuel web UI to deploy an OpenStack cluster in the usual way,
 with the following guidelines.
 
 - Select non-HA controller (i.e. "Multi-node" option).
+- Select neutron with VLAN segmentation, for networking.
 - Select Ubuntu Precise as the OS.
-- Check the "Assign public network to all nodes" option.
+- Check the "Assign public network to all nodes" option (under the Settings
+  tab).
 - You'll need at least two compute nodes, for a meaningful test of
   Calico networking.
 - Network settings as advised in the following subsections.
@@ -200,7 +202,7 @@ Neutron L2 Configuration
 
 Neutron L2 Configuration is not needed in a Calico system, but we have
 left the following settings as shown, as we have not yet had time to
-simplify the web UI when Calico networking is selected.
+simplify the web UI for Calico networking.
 
 - VLAN ID range: 1000 - 1030
 - Base MAC address: fa:16:3e:00:00:00
@@ -210,7 +212,7 @@ Neutron L3 Configuration
 
 Neutron L3 Configuration is not needed in a Calico system, but we have
 left the following settings as shown, as we have not yet had time to
-simplify the web UI when Calico networking is selected.
+simplify the web UI for Calico networking.
 
 - Internal network CIDR: 192.168.111.0/24
 - Internal network gateway: 192.168.111.1
