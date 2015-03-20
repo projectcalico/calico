@@ -15,8 +15,7 @@ dist/calicoctl reset || true
 
 show_commands
 #docker run -tid --name=node2 busybox
-dist/calicoctl master --ip=172.17.8.10
-dist/calicoctl node --ip=172.17.8.10
+dist/calicoctl node --ip=127.0.0.1
 dist/calicoctl group add TEST_GROUP
 
 # Add endpoints
