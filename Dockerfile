@@ -31,8 +31,8 @@ RUN apt-get update && \
         python-netaddr \
 # Required by calico-felix, eventually should be removed.
         python-zmq \
+        unzip \
         python-gevent && \
-        git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
     pip install python-etcd
@@ -42,9 +42,10 @@ RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/co
     chmod +x confd
 
 # Powerstrip
-RUN git clone https://github.com/ClusterHQ/powerstrip.git && \
+RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/unix-socket.zip -o powerstrip.zip && \
+    unzip powerstrip.zip && \
+    mv powerstrip-unix-socket powerstrip && \
     cd powerstrip && \
-    git checkout unix-socket && \
     sed -i s/2375/2377/ powerstrip.tac && \
     python setup.py install
 
