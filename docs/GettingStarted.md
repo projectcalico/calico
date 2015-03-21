@@ -1,10 +1,10 @@
 # Getting started with Calico on Docker
 
-Calico provide IP connectivity between Docker containers on different hosts. This brief guide shows you how to get up and running using Vagrant and VirtualBox, but any 64 bit Linux servers with a recent version of Docker and etcd (available on localhost:4001) should work. If you want to get started quickly and easily then we recommend just using Vagrant.
+Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host). These instructions use Vagrant and VirtualBox to set up a pair of Docker hosts, but any 64 bit Linux servers with a recent version of Docker and etcd (available on localhost:4001) should work. If you want to get started quickly and easily then we recommend just using Vagrant.
 
-## How to install and run it.
+## Setting up a cluster of Docker hosts
 
-You can run these instructions on a Windows, Mac or Linux computer. You'll be guided through setting up a two node CoreOS cluster, creating some Calico enabled endpoints and pinging between them. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
+If you don't already have Docker hosts available, you can set some up by running the following instructions on a Windows, Mac or Linux computer. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
 
 ### Initial environment setup
 So, to get started, install Vagrant, Virtualbox and Git for your OS.
@@ -14,186 +14,177 @@ So, to get started, install Vagrant, Virtualbox and Git for your OS.
 
 Use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example for streamlined setup. Follow the instructions there (and see the <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">CoreOS documentation</a>).
 
-You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, you can run
+You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, do the following
 
-* `vagrant destroy`
+* run `vagrant destroy`
+
 * If you manually set the discovery URL in `user-data`, replace it with a fresh one.
-* `vagrant up`
+
+* run `vagrant up`
 
 To connect to your servers
 * Linux/MacOSX
-   * `vagrant ssh <hostname>`
+    * run `vagrant ssh <hostname>`
 * Windows
-   * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
-   * `vagrant putty <hostname>`
+    * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
+    * run `vagrant putty <hostname>`
 
-At this point, it's worth checking that your servers can ping each other reliably.
-* From core-01
-```
-ping 172.17.8.102
-```
-* From core-02
-```
-ping 172.17.8.101
-```
+At this point, it's worth checking that your servers can ping each other.
+
+From core-01
+
+    ping 172.17.8.102
+  
+From core-02
+
+    ping 172.17.8.101
 
 If you see ping failures, the likely culprit is a problem with then Virtualbox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
    
-### Installing Calico
-If you didn't use the calico-coreos-vagrant-example Vagrantfile, you'll need to download Calico onto both servers by SSHing onto them and running
-```
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.2.0/calicoctl
-chmod +x calicoctl
-```
+## Starting Calico services
+
+If you didn't use the calico-coreos-vagrant-example Vagrantfile, now download Calico onto both servers by SSHing onto them and running
+
+    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.2.0/calicoctl
+    chmod +x calicoctl
+
 Now start calico on all the nodes
-* On core-01
-```
-sudo ./calicoctl node --ip=172.17.8.101
-```
-* On core-02
-```
-sudo ./calicoctl node --ip=172.17.8.102
-```
+
+On core-01
+
+    sudo ./calicoctl node --ip=172.17.8.101
+
+On core-02
+
+    sudo ./calicoctl node --ip=172.17.8.102
 
 This will start a container. Check they are running
-```
-sudo docker ps
-```
+
+    sudo docker ps
 
 You should see output like this on each node
 
-```
-core@core-01 ~ $ docker ps
-CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-077ceae44fe3        calico/node:v0.2.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
-```
+    core@core-01 ~ $ docker ps
+    CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
+    077ceae44fe3        calico/node:v0.2.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 
-#### Using Calico: Creating networked endpoints
-By default containers need to be assigned IPs in the `192.168.0.0/16` range. (Use `calicoctl` commands to set up different ranges if desired)
+## Routing via Powerstrip
 
-To allow networking to be set up during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
+To allow Calico to set up networking automatically during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
 
 On both hosts run
-```
-export DOCKER_HOST=localhost:2377
-```
+
+    export DOCKER_HOST=localhost:2377
 
 (Note - this export will only persist for your current SSH session)
 
-Containers can now be started using normal docker commands, but an IP address needs to be assigned. The is done by passing in an environment variable. e.g. `docker run -e CALICO_IP=192.168.1.1 -tid --name node1 busybox`
+Later, once you have guest containers and you want to attach to them or to execute a specific command in them, you'll probably need to skip the Powerstrip proxying, such that the `docker attach` or `docker exec` command speaks directly to the Docker daemon; otherwise standard input and output don't flow cleanly to and from the container. To do that, just prefix the individual relevant command with `DOCKER_HOST=localhost:2375`.
 
-You need to connect directly to docker to attach to containers. This can be done like this
-```
-DOCKER_HOST=localhost:2375 docker attach node1
-```
+For example, `docker attach` commands should be:
 
-Hit enter a few times to get a prompt. To get back out of the container and leave it running, remember to use `Ctrl-P,Q` rather than `exit`.
+    DOCKER_HOST=localhost:2375 docker attach node1
 
-So, go ahead and start a few of containers on each host.
-* On core-01
-```
-docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox
-docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox
-docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox
-```
-* On core-02
-```
-docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox
-docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox
-```
+Also, when attaching, remember to hit Enter a few times to get a prompt to use `Ctrl-P,Q` rather than `exit` to back out of a container but still leave it running.
+
+## Creating networked endpoints
+
+Now you can start any other containers that you want within the cluster, using normal docker commands. To get Calico to network them, simply add `-e CALICO_IP=<IP address>` to specify the IP address that you want that container to have.
+
+(By default containers need to be assigned IPs in the `192.168.0.0/16` range. Use `calicoctl` commands to set up different ranges if desired)
+
+So let's go ahead and start a few of containers on each host.
+
+On core-01
+
+    docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox
+    docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox
+    docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox
+
+On core-02
+
+    docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox
+    docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox
 
 At this point, the containers have not been added to any security groups so they won't be able to communicate with any other containers.
 
 Create some security groups (this can be done on either host)
-```
-sudo ./calicoctl group add GROUP_A_C_E
-sudo ./calicoctl group add GROUP_B
-sudo ./calicoctl group add GROUP_D
-```
+
+    ./calicoctl group add GROUP_A_C_E
+    ./calicoctl group add GROUP_B
+    ./calicoctl group add GROUP_D
 
 Now add the containers to the security groups (note that `group add` works from any Calico node, but `group addmember` only works from the Calico node where the container is hosted).
-On core-01
-```
-sudo ./calicoctl group addmember GROUP_A_C_E workload-A
-sudo ./calicoctl group addmember GROUP_B  workload-B
-sudo ./calicoctl group addmember GROUP_A_C_E workload-C
-```
 
-On core-02
-```
-sudo ./calicoctl group addmember GROUP_D workload-D
-sudo ./calicoctl group addmember GROUP_A_C_E workload-E
-```
+On core-01:
 
-Now, check that A can ping C (192.168.1.3) and E (192.168.1.5)
-```
-docker exec workload-A ping -c 4 192.168.1.3
-docker exec workload-A ping -c 4 192.168.1.5
-```
+    ./calicoctl group addmember GROUP_A_C_E workload-A
+    ./calicoctl group addmember GROUP_B  workload-B
+    ./calicoctl group addmember GROUP_A_C_E workload-C
 
-Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4).
-```
-docker exec workload-A ping -c 4 192.168.1.2
-docker exec workload-A ping -c 4 192.168.1.4
-```
+On core-02:
+
+    ./calicoctl group addmember GROUP_D workload-D
+    ./calicoctl group addmember GROUP_A_C_E workload-E
+
+Now, check that A can ping C (192.168.1.3) and E (192.168.1.5):
+
+    docker exec workload-A ping -c 4 192.168.1.3
+    docker exec workload-A ping -c 4 192.168.1.5
+
+Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
+
+    docker exec workload-A ping -c 4 192.168.1.2
+    docker exec workload-A ping -c 4 192.168.1.4
 
 B and D are in their own groups so shouldn't be able to ping anyone else.
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
-```
-sudo ./calicoctl reset
-```
+
+    sudo ./calicoctl reset
+
 
 ## IPv6
 To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
 
 On core-01
-```
-sudo ip addr add fd80:24e2:f998:72d6::1/112 dev eth1
-```
+
+    sudo ip addr add fd80:24e2:f998:72d6::1/112 dev eth1
 
 On core-02
-```
-sudo ip addr add fd80:24e2:f998:72d6::2/112 dev eth1
-```
 
-Verify connectivity by pinging
+    sudo ip addr add fd80:24e2:f998:72d6::2/112 dev eth1
+
+Verify connectivity by pinging.
 
 On core-01
-```
-ping6 fd80:24e2:f998:72d6::2
-```
+
+    ping6 fd80:24e2:f998:72d6::2
 
 Then restart your calico-node processes with the `--ip6` parameter to enable v6 routing.
 
 On core-01
-```
-sudo ./calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d6::1
-```
+
+    sudo ./calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d6::1
 
 On core-02
-```
-sudo ./calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d6::2
-```
+
+    sudo ./calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d6::2
 
 Then, you can start containers with IPv6 connectivity by giving them an IPv6 address in `CALICO_IP`. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl ipv6 pool add` to change this).
 
 On core-01
-```
-docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
-sudo ./calicoctl group add GROUP_F_G
-sudo ./calicoctl group addmember GROUP_F_G workload-F
-```
+
+    docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
+    sudo ./calicoctl group add GROUP_F_G
+    sudo ./calicoctl group addmember GROUP_F_G workload-F
 
 Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
 
 One core-02
-```
-docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
-sudo ./calicoctl group addmember GROUP_F_G workload-G
-docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
-```
 
+    docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
+    sudo ./calicoctl group addmember GROUP_F_G workload-G
+    docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
 
 ## Troubleshooting
 
