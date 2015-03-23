@@ -27,3 +27,4 @@ controller and one OpenStack compute node).
    redhat-opens-install
    ubuntu-opens-install
    fuel-integration
+   worked-examples-openstack
