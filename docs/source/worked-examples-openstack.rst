@@ -10,13 +10,6 @@ deployment scenarios. In particular, this will make it easy for you to set up
 topologies and examine their connectivity to try to get an understanding of the
 way Calico networks behave.
 
-This document contains several sections, each of which demonstrates a
-representative deployment model for a kind of workload. The early examples are
-simple, containing small numbers of machines, scaling to the later examples
-that demonstrate quite complex arrangements. Each example contains diagrams
-that represent a connectivity graph, to add clarity to the textual
-descriptions.
-
 Example 1: Development Machine
 ------------------------------
 
@@ -39,10 +32,24 @@ Because the user wants to be able to reach the machine from their own laptop,
 they need the machine to be reachable from outside the data center. In
 vanilla Neutron, this would mean provisioning it with a floating IP, but in
 Calico they instead want to make sure the VM is attached to the ``external``
-network. The ``external`` network has the UUID
-``8d5dec25-a6aa-4e18-8706-a51637a428c2``.
+network. To add themseves to this network, the user needs to find out the UUID
+for it:
 
-Thus, they create the machine with the following nova boot command:
+.. code-block:: bash
+
+    $ neutron net-list
+    +--------------------------------------+----------+----------------------------------------------------------+
+    | id                                   | name     | subnets                                                  |
+    +--------------------------------------+----------+----------------------------------------------------------+
+    | 8d5dec25-a6aa-4e18-8706-a51637a428c2 | external | 54db559c-5e1d-4bdc-83b0-c479ef2a0ead 172.18.208.0/24     |
+    |                                      |          | cf6ceea0-dde0-4018-ab9a-f8f68935622b 2001:db8:a41:2::/64 |
+    | fa52b704-7b3c-4c83-8698-244807352711 | internal | 301b3e63-5324-4d62-8e22-ed8dddd50689 10.65.0.0/16        |
+    |                                      |          | bf94ccb1-c57c-4c9a-a873-c20cbfa4ecaf 2001:db8:a41:3::/64 |
+    +--------------------------------------+----------+----------------------------------------------------------+
+
+As the user can see, the ``external`` network has the UUID
+``8d5dec25-a6aa-4e18-8706-a51637a428c2``. Thus, they create the machine with
+the following nova boot command:
 
 .. code-block:: bash
 
