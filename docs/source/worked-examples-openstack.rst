@@ -14,8 +14,8 @@ Example 1: Development Machine
 ------------------------------
 
 In this example, a user wants to spin up a machine to use as a Linux
-development environment. This user is relatively simple: they want a GUI and
-SSH access, but relatively little else.
+development environment. This user has a straightforward use-case: they want a
+GUI and SSH access, but relatively little else.
 
 This user is provisioned with a single OpenStack user and single OpenStack
 tenant. Neutron will automatically provision them with a single security group,
