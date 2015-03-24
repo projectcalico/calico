@@ -5,7 +5,7 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--force-unix-socket]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
@@ -37,6 +37,7 @@ import socket
 from subprocess import call, check_output, CalledProcessError
 import sys
 import StringIO
+import time
 import os
 import re
 
@@ -240,7 +241,7 @@ def node_stop(force):
         print "Current host has active endpoints so can't be stopped. Force with --force"
 
 
-def node(ip, node_image, ip6=""):
+def node(ip, force_unix_socket, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
     if os.geteuid() != 0:
         print >> sys.stderr, "`calicoctl node` must be run as root."
@@ -275,6 +276,23 @@ def node(ip, node_image, ip6=""):
     except Exception:
         pass
 
+    new_env = os.environ.copy()
+
+    real_sock = "/var/run/docker.real.sock"
+    powerstrip_sock = "/var/run/docker.sock"
+    if force_unix_socket:
+        # Update docker to use a different unix socket, so powerstrip can run its proxy on the "normal" one.
+        # This provides simple access for existing tools to the powerstrip proxy.
+        docker_default_filename = "/etc/default/docker"
+        docker_options = 'DOCKER_OPTS="-H unix://%s"' % real_sock
+        call("grep -q -F '{docker_options}' {filename}  || echo '{docker_options}' >> {filename}".format(filename=docker_default_filename, docker_options=docker_options), shell=True)
+        call("rm -f %s" % real_sock, shell=True)
+        call("rm -f %s" % powerstrip_sock, shell=True)
+        call("restart docker", shell=True)
+        new_env["DOCKER_HOST"] = "unix://%s" % real_sock
+        while not os.path.exists(real_sock):
+            time.sleep(1)
+
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
     output = StringIO.StringIO()
 
@@ -290,15 +308,24 @@ def node(ip, node_image, ip6=""):
                   "-v", "/var/log/calico:/var/log/calico",  # Logging volume
                   "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
                   "-d",
-                  node_image, _err=process_output, _out=output).wait()
+                  node_image, _err=process_output, _out=output, _env=new_env).wait()
 
     cid = output.getvalue().strip()
     output.close()
-    powerstrip_port = "2377"
+
+    if force_unix_socket:
+        while not os.path.exists(powerstrip_sock):
+            time.sleep(1)
+        uid = os.stat(real_sock).st_uid
+        gid = os.stat(real_sock).st_gid
+        os.chown(powerstrip_sock, uid, gid)
+    else:
+        powerstrip_port = "2377"
+        print "Docker Remote API is on port %s.  Run \n" % powerstrip_port
+        print "export DOCKER_HOST=localhost:%s\n" % powerstrip_port
+        print "before using `docker run` for Calico networking.\n"
+
     print "Calico node is running with id: %s" % cid
-    print "Docker Remote API is on port %s.  Run \n" % powerstrip_port
-    print "export DOCKER_HOST=localhost:%s\n" % powerstrip_port
-    print "before using `docker run` for Calico networking.\n"
 
 def status():
     client = DatastoreClient()
@@ -597,7 +624,7 @@ if __name__ == '__main__':
             else:
                 node_image = arguments['--node-image']
                 ip6 = arguments["--ip6"]
-                node(arguments["--ip"], node_image=node_image, ip6=ip6)
+                node(arguments["--ip"], arguments["--force-unix-socket"], node_image=node_image, ip6=ip6)
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
