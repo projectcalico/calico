@@ -52,8 +52,8 @@ env.keepalive = 5
 
 HOST_PREFIX = "core"
 HOST_SUFFIX = ".us-central1-c.nimble-ratio-866"
-NUM_NODES = 6
-NUM_WORKLOADS = 50
+NUM_NODES = 100
+NUM_WORKLOADS = 250
 
 for node_number in xrange(1,NUM_NODES+1):
     env.hosts.append("%s%s%s" % (HOST_PREFIX, node_number, HOST_SUFFIX))
