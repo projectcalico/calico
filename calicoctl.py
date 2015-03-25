@@ -62,13 +62,21 @@ try:
     modprobe = sh.Command._create('modprobe')
     grep = sh.Command._create('grep')
     sysctl = sh.Command._create("sysctl")
+    restart = sh.Command._create("restart")
+    rm = sh.Command._create("rm")
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
 mkdir_p = mkdir.bake('-p')
+rm_f = rm.bake('-f')
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
+
+REAL_SOCK = "/var/run/docker.real.sock"
+POWERSTRIP_SOCK = "/var/run/docker.sock"
+DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
+DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
 
 
 def get_container_info(container_name):
@@ -240,6 +248,14 @@ def node_stop(force):
     else:
         print "Current host has active endpoints so can't be stopped. Force with --force"
 
+def clean_restart_docker(sock_to_wait_on):
+    rm_f(REAL_SOCK)
+    rm_f(POWERSTRIP_SOCK)
+    restart("docker")
+
+    # Wait for docker to create the socket
+    while not os.path.exists(sock_to_wait_on):
+        time.sleep(0.1)
 
 def node(ip, force_unix_socket, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
@@ -271,32 +287,46 @@ def node(ip, force_unix_socket, node_image, ip6=""):
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
-    try:
-        docker("rm", "-f", "calico-node")
-    except Exception:
-        pass
 
+    # The docker daemon could be in one of two states:
+    # 1) Listening on /var/run/docker.sock - the default
+    # 2) listening on /var/run/docker.real.sock - if it's been previously run with --force-unix-socket
     new_env = os.environ.copy()
+    enable_socket = "NO"
 
-    real_sock = "/var/run/docker.real.sock"
-    powerstrip_sock = "/var/run/docker.sock"
     if force_unix_socket:
         # Update docker to use a different unix socket, so powerstrip can run its proxy on the "normal" one.
         # This provides simple access for existing tools to the powerstrip proxy.
-        docker_default_filename = "/etc/default/docker"
-        docker_options = 'DOCKER_OPTS="-H unix://%s"' % real_sock
-        call("grep -q -F '{docker_options}' {filename}  || echo '{docker_options}' >> {filename}".format(filename=docker_default_filename, docker_options=docker_options), shell=True)
-        call("rm -f %s" % real_sock, shell=True)
-        call("rm -f %s" % powerstrip_sock, shell=True)
-        call("restart docker", shell=True)
-        new_env["DOCKER_HOST"] = "unix://%s" % real_sock
-        while not os.path.exists(real_sock):
-            time.sleep(1)
+
+        # Set the docker daemon to listen on the docker.real.sock by updating the config, clearing old sockets and restarting.
+        socket_config_exists = call("grep -q -F '{DOCKER_OPTIONS}' {filename}".format(filename=DOCKER_DEFAULT_FILENAME, DOCKER_OPTIONS=DOCKER_OPTIONS), shell=True) == 0
+        if not socket_config_exists:
+            with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
+                docker_config.write(DOCKER_OPTIONS)
+            clean_restart_docker(REAL_SOCK)
+
+        # At this point, docker is listening on a new port but powerstrip isn't running, so docker clients need to talk directly to docker.
+        new_env["DOCKER_HOST"] = "unix://%s" % REAL_SOCK
+        enable_socket = "YES"
+
+    else:
+        # If there is --force-unix-socket config in place, do some cleanup
+        socket_config_exists = call("grep -q -F '{DOCKER_OPTIONS}' {filename}".format(filename=DOCKER_DEFAULT_FILENAME, DOCKER_OPTIONS=DOCKER_OPTIONS), shell=True) == 0
+        if socket_config_exists:
+            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME) if DOCKER_OPTIONS not in line]
+            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+            clean_restart_docker(POWERSTRIP_SOCK)
+
+    try:
+        docker("rm", "-f", "calico-node", _env=new_env)
+    except Exception:
+        pass
 
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
     output = StringIO.StringIO()
 
-    docker("run", "-e",  "IP=%s" % ip,
+    docker("run", "-e", "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
+                  "-e",  "IP=%s" % ip,
                   "-e",  "IP6=%s" % ip6,
                   "--name=calico-node",
                   "--restart=always",
@@ -314,11 +344,11 @@ def node(ip, force_unix_socket, node_image, ip6=""):
     output.close()
 
     if force_unix_socket:
-        while not os.path.exists(powerstrip_sock):
+        while not os.path.exists(POWERSTRIP_SOCK):
             time.sleep(1)
-        uid = os.stat(real_sock).st_uid
-        gid = os.stat(real_sock).st_gid
-        os.chown(powerstrip_sock, uid, gid)
+        uid = os.stat(REAL_SOCK).st_uid
+        gid = os.stat(REAL_SOCK).st_gid
+        os.chown(POWERSTRIP_SOCK, uid, gid)
     else:
         powerstrip_port = "2377"
         print "Docker Remote API is on port %s.  Run \n" % powerstrip_port
