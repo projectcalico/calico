@@ -132,10 +132,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
         if self._port_is_endpoint_port(port):
             LOG.info("Created port: %s" % port)
+            self._get_db()
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
             self.transport.endpoint_created(port)
-            self._get_db()
             self.db.update_port_status(context._plugin_context,
                                        port['id'],
                                        constants.PORT_STATUS_ACTIVE)
