@@ -26,5 +26,6 @@ controller and one OpenStack compute node).
    opens-chef-install
    redhat-opens-install
    ubuntu-opens-install
+   juju-opens-install
    fuel-integration
    worked-examples-openstack
