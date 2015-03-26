@@ -71,7 +71,7 @@ envExport:
       to:
         - "calico-acl-manager=0"
     "nova-cloud-controller":
-      charm: "cs:~cory-bnefield/trusty/nova-cloud-controller-10"
+      charm: "cs:~cory-benfield/trusty/nova-cloud-controller-10"
       num_units: 1
       options:
         "network-manager": Neutron

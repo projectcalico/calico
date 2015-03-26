@@ -15,6 +15,8 @@ Otherwise, if you already use OpenStack, you can install Calico by using
 
 - an RPM install for Red Hat Enterprise Linux 7 (RHEL 7 or 6.5) - see :doc:`redhat-opens-install`
 
+- our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`.
+
 - our experimental integration of Calico with Mirantis Fuel 5.1 - see :doc:`fuel-integration`.
 
 In all cases, you just need at least two servers to get going (one OpenStack
