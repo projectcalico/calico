@@ -58,12 +58,12 @@ from node.adapter import netns
 hostname = socket.gethostname()
 try:
     mkdir = sh.Command._create('mkdir')
-    docker = sh.Command._create('docker')
+    rm = sh.Command._create("rm")
     modprobe = sh.Command._create('modprobe')
     grep = sh.Command._create('grep')
     sysctl = sh.Command._create("sysctl")
     restart = sh.Command._create("restart")
-    rm = sh.Command._create("rm")
+    docker = sh.Command._create('docker')
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
