@@ -1,13 +1,5 @@
-Calico etcd-based architecture
-==============================
-
-The current version of Calico is built around `etcd`_. etcd is a distributed,
-consistent key value store for shared configuration and service discovery with
-a focus on being simple, secure, fast, and reliable.
-
-In Calico, etcd is used as the data store and communication mechanism for all
-the Calico components. This data store contains all the information the various
-Calico components need to set up the Calico network.
+Calico Architecture
+===================
 
 This document discusses the various pieces of the Calico etcd-based
 architecture, with a focus on what specific role each component plays in the
@@ -26,8 +18,7 @@ Calico is made up of the following interdependent components:
   machine that hosts endpoints.
 - :ref:`calico-orchestrator-plugin`, orchestrator-specific code that tightly
   integrates Calico into that orchestrator.
-- :ref:`calico-etcd-component`, running unmodified and used by the other
-  components as a data store.
+- :ref:`calico-etcd-component`, the data store.
 - :ref:`calico-bgp-component`, a BGP client that distributes routing
   information.
 - :ref:`calico-bgp-rr-component`, an optional BGP route reflector for higher
@@ -41,27 +32,24 @@ The following sections break down each component in more detail.
 Felix
 -----
 
-Felix is the most important component in the Calico network: without it, no
-network programming can be achieved. It is a daemon that runs on every machine
-that provides endpoints: in most cases that means on nodes that host containers
-or VMs.
+Felix is a daemon that runs on every machine that provides endpoints: in most
+cases that means on nodes that host containers or VMs. It is responsible for
+programming routes and ACLs, and anything else required on the host, in order
+to provide the desired connectivity for the endpoints on that host.
 
 Depending on the specific orchestrator environment, Felix is responsible for
 some or all of the following tasks:
 
-Interface Creation and Management
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Interface Management
+~~~~~~~~~~~~~~~~~~~~
 
-In some environments, particularly containerized ones, Felix is responsible
-for creating and managing network interfaces to its endpoints. This usually
-involves creating and managing 'veth pairs': a pair of virtual Ethernet
-interfaces that behave as though they're connected together with a single
-Ethernet cable.
-
-In all cases, regardless of what kind of environment it runs in, Felix also
-programs some other information about interfaces into the kernel. In
+Felix programs some information about interfaces into the kernel in order to
+get the kernel to correctly handle the traffic emitted by that endpoint. In
 particular, it may enable `Proxy ARP`_, `Proxy NDP`_, and IP forwarding for
 interfaces that it manages.
+
+It also monitors for interfaces to appear and disappear so that it can ensure
+that the programming for those interfaces is applied at the appropriate time.
 
 .. _Proxy ARP: http://en.wikipedia.org/wiki/Proxy_ARP
 .. _Proxy NDP: http://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol
@@ -104,8 +92,7 @@ manage network tools that were built in to the orchestrator.
 A good example of an orchestrator plugin is the Calico Neutron ML2 mechanism
 driver. This component integrates with Neutron's ML2 plugin, and allows users
 to configure the Calico network by making Neutron API calls. This provides
-seamless integration with Neutron, and lowers the barrier of entry to using
-Calico.
+seamless integration with Neutron.
 
 The orchestrator plugin is repsonsible for the following tasks:
 
@@ -134,15 +121,12 @@ Felix liveness; marking certain endpoints as failed if network setup failed.
 etcd
 ----
 
-Calico uses etcd as its backing data store. etcd is a distributed key-value
-store that has a focus on consistency, ensuring that Calico can always build an
-accurate network.
+Calico uses etcd as its data store. etcd is a distributed key-value store that
+has a focus on consistency, ensuring that Calico can always build an accurate
+network.
 
 In addition to its role as Calico's primary data store, etcd also acts as a
-communication mechanism between the various components. We do this by having
-the non-etcd components watch certain points in the keyspace to ensure that
-they see any changes that have been made, allowing them to respond to those
-changes in a timely manner.
+communication mechanism between the various components.
 
 The etcd component is distributed across the entire deployment. It is divided
 into two groups of machines: the core cluster, and the proxies.
@@ -153,8 +137,8 @@ In larger deployments we scale this up, as per the `etcd admin guide`_.
 
 Additionally, on each machine that hosts either a
 :ref:`calico-felix-component` or a :ref:`calico-orchestrator-plugin`, we run
-an etcd proxy. This is an attempt to reduce load on the core cluster and to
-ensure that nodes are shielded from the specifics of the etcd cluster.
+an etcd proxy. This is reduces load on the core cluster and shields nodes from
+the specifics of the etcd cluster.
 
 etcd is responsible for performing all of the following tasks:
 
@@ -175,10 +159,11 @@ they can distribute their reads around the cluster.
 Communication
 ~~~~~~~~~~~~~
 
-etcd is also used as a communication bus between components through the
-mechanism of having various components watch keys for changes. This allows the
-act of committing state to the database to cause that state to be programmed
-into the network.
+etcd is also used as a communication bus between components. We do this by
+having the non-etcd components watch certain points in the keyspice to ensure
+that they see any changes that have been made, allowing them to respond to
+tohose changes in a timely manner. This allows the act of committing state
+to the database to cause that state to be programmed into the network.
 
 
 .. _calico-bgp-component:
@@ -215,15 +200,17 @@ BGP Route Reflector (BIRD)
 
 For larger deployments, simple BGP can become a limiting factor because it
 requires every BGP client to be connected to every other BGP client in a mesh
-topology. This requires an ever increasing number of connections that rapidly
-become tricky to maintain.
+topology. This requires an increasing number of connections that rapidly
+become tricky to maintain, due to the N^2 nature of the increase.
 
 For that reason, in larger deployments Calico will deploy a BGP route
 reflector. This component, commonly used in the Internet, acts as a central
 point to which the BGP clients connect, preventing them from needing to talk to
 every single BGP client in the cluster.
 
-For redundancy, multiple BGP route reflectors can be deployed seamlessly.
+For redundancy, multiple BGP route reflectors can be deployed seamlessly. The
+route reflectors are purely involved in the control of the network: no endpoint
+data passes through them.
 
 In Calico, this BGP component is also most commonly `BIRD`_, configured as a
 route reflector rather than as a standard BGP client.

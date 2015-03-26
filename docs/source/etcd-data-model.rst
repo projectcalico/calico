@@ -12,8 +12,9 @@ Calico components to set up the Calico network.
 This document discusses the way Calico stores its data in etcd. This data store
 and structure acts as Calico's primary external and internal API, granting
 developers exceptional control over what Calico does. This document does not
-discuss the way this data gets turned into actual network topologies by
-individual components: for more on that, see :doc:`etcd-architecture`.
+describe the components that read and write this data to provide the
+connectivity that endpoints in a Calico network want: for more on that, see
+:doc:`etcd-architecture`.
 
 .. _etcd: https://github.com/coreos/etcd
 
