@@ -187,7 +187,7 @@ Endpoints
   platforms are constrained by the number of routes they can learn.
   This is usually in range of 10,000's or 100m,000's of routes.  Route
   aggregation can help, but that is usually dependent on the
-  capabilities of the scheduler used by the orchestration software
+Ok  capabilities of the scheduler used by the orchestration software
   (*e.g.* OpenStack).
 
 A deeper discussion of these considerations can be found in the `IP
