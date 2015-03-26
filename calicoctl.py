@@ -290,30 +290,41 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
     # The docker daemon could be in one of two states:
     # 1) Listening on /var/run/docker.sock - the default
-    # 2) listening on /var/run/docker.real.sock - if it's been previously run with --force-unix-socket
+    # 2) listening on /var/run/docker.real.sock - if it's been previously run
+    #    with --force-unix-socket
     new_env = os.environ.copy()
     enable_socket = "NO"
 
     if force_unix_socket:
-        # Update docker to use a different unix socket, so powerstrip can run its proxy on the "normal" one.
-        # This provides simple access for existing tools to the powerstrip proxy.
+        # Update docker to use a different unix socket, so powerstrip can run
+        # its proxy on the "normal" one. This provides simple access for
+        # existing tools to the powerstrip proxy.
 
-        # Set the docker daemon to listen on the docker.real.sock by updating the config, clearing old sockets and restarting.
-        socket_config_exists = call("grep -q -F '{DOCKER_OPTIONS}' {filename}".format(filename=DOCKER_DEFAULT_FILENAME, DOCKER_OPTIONS=DOCKER_OPTIONS), shell=True) == 0
+        # Set the docker daemon to listen on the docker.real.sock by updating
+        # the config, clearing old sockets and restarting.
+        socket_config_exists = \
+                         DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
         if not socket_config_exists:
             with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
                 docker_config.write(DOCKER_OPTIONS)
             clean_restart_docker(REAL_SOCK)
 
-        # At this point, docker is listening on a new port but powerstrip isn't running, so docker clients need to talk directly to docker.
+        # Always remove the socket that powerstrip will use, as it gets upset
+        # otherwise.
+        rm_f(POWERSTRIP_SOCK)
+
+        # At this point, docker is listening on a new port but powerstrip isn't
+        # running, so docker clients need to talk directly to docker.
         new_env["DOCKER_HOST"] = "unix://%s" % REAL_SOCK
         enable_socket = "YES"
 
     else:
         # If there is --force-unix-socket config in place, do some cleanup
-        socket_config_exists = call("grep -q -F '{DOCKER_OPTIONS}' {filename}".format(filename=DOCKER_DEFAULT_FILENAME, DOCKER_OPTIONS=DOCKER_OPTIONS), shell=True) == 0
+        socket_config_exists = \
+                         DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
         if socket_config_exists:
-            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME) if DOCKER_OPTIONS not in line]
+            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
+                          if DOCKER_OPTIONS not in line]
             open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
             clean_restart_docker(POWERSTRIP_SOCK)
 
@@ -385,8 +396,6 @@ def reset():
 
     print "Removing all data from datastore"
     client.remove_all_data()
-
-    docker("kill", "calico-node")
 
     try:
         interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'",
