@@ -59,7 +59,7 @@ where the properties have the following meanings:
   ``"openstack"``.
 
 ``workload_id``
-  a identifier provided by the orchestrator to relate multiple endpoints that
+  an identifier provided by the orchestrator to relate multiple endpoints that
   belong to the same workload (e.g. a single VM).
 
 ``endpoint_id``

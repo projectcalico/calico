@@ -7,7 +7,7 @@ a focus on being simple, secure, fast, and reliable.
 
 In Calico, etcd is used as the data store and communication mechanism for all
 the Calico components. This data store contains all the information the various
-Calico components to set up the Calico network.
+Calico components need to set up the Calico network.
 
 This document discusses the various pieces of the Calico etcd-based
 architecture, with a focus on what specific role each component plays in the
@@ -43,8 +43,8 @@ Felix
 
 Felix is the most important component in the Calico network: without it, no
 network programming can be achieved. It is a daemon that runs on every machine
-that provides endpoints: that means on nodes that host containers or VMs in
-most cases.
+that provides endpoints: in most cases that means on nodes that host containers
+or VMs.
 
 Depending on the specific orchestrator environment, Felix is responsible for
 some or all of the following tasks:
@@ -54,7 +54,7 @@ Interface Creation and Management
 
 In some environments, particularly containerized ones, Felix is responsible
 for creating and managing network interfaces to its endpoints. This usually
-involves creating and managing 'veth pairs': a pair of virtual ethernet
+involves creating and managing 'veth pairs': a pair of virtual Ethernet
 interfaces that behave as though they're connected together with a single
 Ethernet cable.
 
@@ -77,7 +77,7 @@ ACL Programming
 ~~~~~~~~~~~~~~~
 
 Felix is also responsible for programming ACLs into the Linux kernel. These
-ACLs are used to ensure that only valid traffic can be send between
+ACLs are used to ensure that only valid traffic can be sent between
 endpoints, and ensure that endpoints are not capable of circumventing
 Calico's security measures. For more on this, see :doc:`security-model`.
 
@@ -126,8 +126,7 @@ Feedback
 
 If necessary, the orchestrator plugin will provide feedback from the Calico
 network into the orchestrator. Examples include: providing information about
-Felix liveness; marking certain endpoints as failed if network setup failed;
-and so on.
+Felix liveness; marking certain endpoints as failed if network setup failed.
 
 
 .. _calico-etcd-component:
@@ -188,9 +187,9 @@ BGP Client (BIRD)
 -----------------
 
 Calico deploys a BGP client on every node that also hosts a
-:ref:`calico-felix-component`. The role of the BGP client is read routing state
-that :ref:`calico-felix-component` programs into the kernel and distribute it
-around the data center.
+:ref:`calico-felix-component`. The role of the BGP client is to read routing
+state that :ref:`calico-felix-component` programs into the kernel and
+distribute it around the data center.
 
 In Calico, this BGP component is most commonly `BIRD`_, though any BGP client
 that can draw routes from the kernel and distribute them is suitable in this
@@ -226,7 +225,7 @@ every single BGP client in the cluster.
 
 For redundancy, multiple BGP route reflectors can be deployed seamlessly.
 
-In calico, this BGP component is also most commonly `BIRD`_, configured as a
+In Calico, this BGP component is also most commonly `BIRD`_, configured as a
 route reflector rather than as a standard BGP client.
 
 The BGP route reflector is responsible for the following tasks:
