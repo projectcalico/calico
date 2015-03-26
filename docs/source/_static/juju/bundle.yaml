@@ -1,0 +1,155 @@
+envExport:
+  services:
+    cinder:
+      charm: "cs:trusty/cinder-136"
+      num_units: 1
+      annotations:
+        "gui-x": "1045.973572253264"
+        "gui-y": "544.8983810601128"
+      to:
+        - "calico-acl-manager=0"
+    "neutron-calico":
+      charm: "cs:~cory-benfield/trusty/neutron-calico-7"
+      num_units: 0
+      annotations:
+        "gui-x": "832.4871538385408"
+        "gui-y": "175.1290576399046"
+    mysql:
+      charm: "cs:trusty/mysql-12"
+      num_units: 1
+      annotations:
+        "gui-x": "946.0883464963425"
+        "gui-y": "371.8920951236375"
+      to:
+        - "calico-acl-manager=0"
+    "rabbitmq-server":
+      charm: "cs:trusty/rabbitmq-server-19"
+      num_units: 1
+      annotations:
+        "gui-x": "746.3178949824998"
+        "gui-y": "371.8920951236375"
+      to:
+        - "calico-acl-manager=0"
+    keystone:
+      charm: "cs:trusty/keystone-0"
+      num_units: 1
+      annotations:
+        "gui-x": "646.4326692255784"
+        "gui-y": "544.8983810601128"
+      to:
+        - "calico-acl-manager=0"
+    glance:
+      charm: "cs:trusty/glance-150"
+      num_units: 1
+      annotations:
+        "gui-x": "746.3178949824998"
+        "gui-y": "717.904666996588"
+      to:
+        - "calico-acl-manager=0"
+    "openstack-dashboard":
+      charm: "cs:trusty/openstack-dashboard-32"
+      num_units: 1
+      options:
+        "ubuntu-theme": "no"
+      annotations:
+        "gui-x": "846.2031207394211"
+        "gui-y": "544.8983810601128"
+      to:
+        - "calico-acl-manager=0"
+    "calico-acl-manager":
+      charm: "cs:~cory-benfield/trusty/calico-acl-manager-6"
+      num_units: 1
+      annotations:
+        "gui-x": "1245.7440237671067"
+        "gui-y": "544.8983810601128"
+    bird:
+      charm: "cs:~cory-benfield/trusty/bird-5"
+      num_units: 1
+      annotations:
+        "gui-x": "1145.8587980101852"
+        "gui-y": "371.89209512363743"
+      to:
+        - "calico-acl-manager=0"
+    "nova-cloud-controller":
+      charm: "cs:~cory-benfield/trusty/nova-cloud-controller-10"
+      num_units: 1
+      options:
+        "network-manager": Neutron
+      annotations:
+        "gui-x": "1045.973572253264"
+        "gui-y": "198.88580918716224"
+      to:
+        - "calico-acl-manager=0"
+    "neutron-api":
+      charm: "cs:~cory-benfield/trusty/neutron-api-4"
+      num_units: 1
+      options:
+        "neutron-plugin": Calico
+        "neutron-security-groups": true
+      annotations:
+        "gui-x": "946.0883464963425"
+        "gui-y": "717.904666996588"
+      to:
+        - "calico-acl-manager=0"
+    "nova-compute":
+      charm: "cs:~cory-benfield/trusty/nova-compute-6"
+      num_units: 2
+      annotations:
+        "gui-x": "605.289700869386"
+        "gui-y": "209.8677680711291"
+  relations:
+    - - "nova-cloud-controller:image-service"
+      - "glance:image-service"
+    - - "neutron-calico:amqp"
+      - "rabbitmq-server:amqp"
+    - - "neutron-calico:neutron-plugin-api"
+      - "neutron-api:neutron-plugin-api"
+    - - "openstack-dashboard:identity-service"
+      - "keystone:identity-service"
+    - - "neutron-calico:neutron-plugin"
+      - "nova-compute:neutron-plugin"
+    - - "nova-compute:cloud-compute"
+      - "nova-cloud-controller:cloud-compute"
+    - - "nova-compute:amqp"
+      - "rabbitmq-server:amqp"
+    - - "nova-cloud-controller:identity-service"
+      - "keystone:identity-service"
+    - - "cinder:cinder-volume-service"
+      - "nova-cloud-controller:cinder-volume-service"
+    - - "cinder:amqp"
+      - "rabbitmq-server:amqp"
+    - - "glance:image-service"
+      - "cinder:image-service"
+    - - "neutron-api:neutron-api"
+      - "nova-cloud-controller:neutron-api"
+    - - "neutron-api:amqp"
+      - "rabbitmq-server:amqp"
+    - - "neutron-calico:bgp-route-reflector"
+      - "bird:bgp-route-reflector"
+    - - "neutron-calico:calico-acl-api"
+      - "calico-acl-manager:calico-acl-api"
+    - - "nova-cloud-controller:shared-db"
+      - "mysql:shared-db"
+    - - "nova-cloud-controller:amqp"
+      - "rabbitmq-server:amqp"
+    - - "neutron-api:calico-network-api"
+      - "calico-acl-manager:calico-network-api"
+    - - "nova-compute:image-service"
+      - "glance:image-service"
+    - - "glance:identity-service"
+      - "keystone:identity-service"
+    - - "mysql:shared-db"
+      - "keystone:shared-db"
+    - - "nova-compute:shared-db"
+      - "mysql:shared-db"
+    - - "glance:shared-db"
+      - "mysql:shared-db"
+    - - "mysql:shared-db"
+      - "cinder:shared-db"
+    - - "cinder:identity-service"
+      - "keystone:identity-service"
+    - - "neutron-api:shared-db"
+      - "mysql:shared-db"
+    - - "neutron-api:identity-service"
+      - "keystone:identity-service"
+  series: trusty
