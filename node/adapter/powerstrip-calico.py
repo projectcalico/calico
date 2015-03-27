@@ -31,7 +31,7 @@ from datastore import DatastoreClient
 _log = logging.getLogger(__name__)
 
 ENV_IP = "CALICO_IP"
-ENV_GROUP = "CALICO_GROUP"
+ENV_GROUP = "CALICO_PROFILE"
 
 hostname = socket.gethostname()
 
@@ -64,7 +64,7 @@ class AdapterResource(resource.Resource):
         resource.Resource.__init__(self)
 
         # Init a Docker client, to save having to do so every time a request comes in.
-        self.docker = Client(base_url='unix://var/run/docker.sock',
+        self.docker = Client(base_url='unix://host-var-run/docker.real.sock',
                              version="1.16")
 
         # Init an etcd client.
@@ -142,6 +142,7 @@ class AdapterResource(resource.Resource):
             ip_str = env_dict[ENV_IP]
             # TODO: process groups
             group = env_dict.get(ENV_GROUP, None)
+
         except KeyError as e:
             _log.warning("Key error %s, request: %s", e, client_request)
             return
@@ -158,6 +159,14 @@ class AdapterResource(resource.Resource):
                                    container_id=cid,
                                    endpoint=endpoint)
         _log.info("Finished network for container %s, IP=%s", cid, ip)
+
+        if group is not None:
+            if not self.etcd.group_exists(group):
+                _log.info("Autocreating group %s", group)
+                self.etcd.create_group(group)
+            _log.info("Adding container %s to group %s", cid, group)
+            self.etcd.add_workload_to_group(group, cid)
+            _log.info("Finished adding container %s to group %s", cid, group)
 
         return
 

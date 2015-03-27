@@ -31,6 +31,7 @@ RUN apt-get update && \
         python-netaddr \
 # Required by calico-felix, eventually should be removed.
         python-zmq \
+        git \
         python-gevent && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
@@ -40,21 +41,18 @@ RUN apt-get update && \
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/confd-0.7.1-linux-amd64 -o confd && \
     chmod +x confd
 
-# Powerstrip
-RUN curl -L https://github.com/ClusterHQ/powerstrip/archive/v0.0.1.tar.gz \
-            -o powerstrip.tar.gz && \
-    tar -xzf powerstrip.tar.gz && \
-    rm powerstrip.tar.gz && \
-    mv powerstrip-0.0.1 powerstrip && \
-    cd powerstrip && \
-    sed -i s/2375/2377/ powerstrip.tac && \
-    python setup.py install
+RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-common_0.12.1_all.deb -o common.deb && dpkg -i common.deb && rm common.deb
+RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-felix_0.12.1_all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
+
+# Install Powerstrip Calico Adapter dependencies.
+ADD node/adapter/requirements.txt /adapter/
+RUN pip install -r /adapter/requirements.txt
 
 # Copy in our custom configuration files etc.
 COPY node /
 
-# Install Powerstrip Calico Adapter dependencies.
-RUN pip install -r /adapter/requirements.txt
-
-RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-common_0.12.1_all.deb -o common.deb && dpkg -i common.deb && rm common.deb
-RUN curl https://dl.dropboxusercontent.com/u/4550074/calico-felix_0.12.1_all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
+# Powerstrip
+RUN git clone https://github.com/Metaswitch/powerstrip.git && \
+    cd powerstrip && \
+    sed -i s/2375/2377/ powerstrip.tac && \
+    python setup.py install

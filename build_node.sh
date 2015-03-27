@@ -1,1 +1,1 @@
-sudo docker build -t calico/node .
+docker build -t calico/node .
