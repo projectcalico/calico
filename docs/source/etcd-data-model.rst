@@ -1,10 +1,6 @@
 Calico etcd Data Model
 ======================
 
-The current version of Calico is built around `etcd`_. etcd is a distributed,
-consistent key value store for shared configuration and service discovery with
-a focus on being simple, secure, fast, and reliable.
-
 In Calico, etcd is used as the data store and communication mechanism for all
 the Calico components. This data store contains all the information the various
 Calico components to set up the Calico network.

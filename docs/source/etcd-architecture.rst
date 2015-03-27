@@ -131,14 +131,19 @@ communication mechanism between the various components.
 The etcd component is distributed across the entire deployment. It is divided
 into two groups of machines: the core cluster, and the proxies.
 
-In Calico, we deploy an etcd cluster. In small deployments this can be an etcd
-cluster of one, which provides no redundancy but is simple and low-overhead.
-In larger deployments we scale this up, as per the `etcd admin guide`_.
+For small deployments the core cluster can be an etcd cluster of one node
+(which would typically be co-located with the :ref:`calico-orchestrator-plugin`
+component). This deployment model is simple but provides no redundancy for
+etcd - in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
+have to rebuild the database. In larger deployments the core cluster can be
+scaled up, as per the `etcd admin guide`_.
 
 Additionally, on each machine that hosts either a
 :ref:`calico-felix-component` or a :ref:`calico-orchestrator-plugin`, we run
 an etcd proxy. This is reduces load on the core cluster and shields nodes from
-the specifics of the etcd cluster.
+the specifics of the etcd cluster. In the case where the etcd cluster has a
+member on the same machine as a :ref:`calico-orchestrator-plugin`, we can
+forgo the proxy on that machine.
 
 etcd is responsible for performing all of the following tasks:
 
@@ -148,9 +153,9 @@ Data Storage
 ~~~~~~~~~~~~
 
 etcd stores the data for the Calico network in a distributed, consistent,
-fault-tolerant manner. This set of properties ensures that the Calico network
-is always in a known-good state, while allowing for some number of the machines
-hosting etcd to fail or become unreachable.
+fault-tolerant manner (for cluster sizes of at least 3 etcd nodes). This set of
+properties ensures that the Calico network is always in a known-good state,
+while allowing for some number of the machines hosting etcd to fail or become unreachable.
 
 This distributed storage of Calico data also improves the ability of the Calico
 components to read from the database (which is their most common operation), as
