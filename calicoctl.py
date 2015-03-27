@@ -58,7 +58,6 @@ from node.adapter import netns
 hostname = socket.gethostname()
 try:
     mkdir = sh.Command._create('mkdir')
-    rm = sh.Command._create("rm")
     modprobe = sh.Command._create('modprobe')
     grep = sh.Command._create('grep')
     sysctl = sh.Command._create("sysctl")
@@ -68,7 +67,6 @@ except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
 mkdir_p = mkdir.bake('-p')
-rm_f = rm.bake('-f')
 
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
@@ -249,8 +247,11 @@ def node_stop(force):
         print "Current host has active endpoints so can't be stopped. Force with --force"
 
 def clean_restart_docker(sock_to_wait_on):
-    rm_f(REAL_SOCK)
-    rm_f(POWERSTRIP_SOCK)
+    if os.path.exists(REAL_SOCK):
+        os.remove(REAL_SOCK)
+    if os.path.exists(POWERSTRIP_SOCK):
+        os.remove(POWERSTRIP_SOCK)
+
     restart("docker")
 
     # Wait for docker to create the socket
@@ -311,7 +312,8 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
         # Always remove the socket that powerstrip will use, as it gets upset
         # otherwise.
-        rm_f(POWERSTRIP_SOCK)
+        if os.path.exists(POWERSTRIP_SOCK):
+            os.remove(POWERSTRIP_SOCK)
 
         # At this point, docker is listening on a new port but powerstrip isn't
         # running, so docker clients need to talk directly to docker.
