@@ -58,7 +58,6 @@ from node.adapter import netns
 hostname = socket.gethostname()
 try:
     modprobe = sh.Command._create('modprobe')
-    grep = sh.Command._create('grep')
     sysctl = sh.Command._create("sysctl")
     restart = sh.Command._create("restart")
     docker = sh.Command._create('docker')
@@ -366,23 +365,33 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
     print "Calico node is running with id: %s" % cid
 
+
+def grep(text, pattern):
+    return "\n".join(
+        [line for line in text.splitlines() if pattern in line ])
+
+
 def status():
-    client = DatastoreClient()
     try:
-        print(grep(docker("ps"), "-i", "calico"))
+        print "calico-node container status"
+        print(grep(docker("ps"), "calico-node"))
     except Exception:
         print "No calico containers appear to be running"
 
     try:
-        print(docker("exec", "calico-node", "/bin/bash", "-c", "apt-cache policy "
-                                                                 "calico-felix"))
+        apt_output = docker("exec", "calico-node", "/bin/bash", "-c",
+                            "apt-cache policy calico-felix").stdout
+        result = re.search(r"Installed: (.*?)\s", apt_output)
+        if result is not None:
+            print "Running felix version %s" % result.group(1)
     except Exception:
         print "Skipping felix version information as Calico node isn't running"
 
-    #If bird is running, then print bird.
     try:
+        print "IPv4 Bird (BGP) status"
         print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
                                                             "/etc/service/bird/bird.ctl"))
+        print "IPv6 Bird (BGP) status"
         print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc6 -s "
                                                                 "/etc/service/bird6/bird6.ctl"))
     except Exception:
