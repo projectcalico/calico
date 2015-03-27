@@ -34,7 +34,6 @@ Options:
 
 """
 import socket
-from subprocess import call, check_output, CalledProcessError
 import sys
 import StringIO
 import time
@@ -403,16 +402,6 @@ def reset():
 
     print "Removing all data from datastore"
     client.remove_all_data()
-
-    try:
-        interfaces_raw = check_output("ip link show | grep -Eo ' (tap(.*?)):' |grep -Eo '[^ :]+'",
-                                      shell=True)
-        print "Removing interfaces:\n%s" % interfaces_raw
-        interfaces = interfaces_raw.splitlines()
-        for interface in interfaces:
-            call("ip link delete %s" % interface, shell=True)
-    except CalledProcessError:
-        print "No interfaces to clean up"
 
 
 def group_add(group_name):
