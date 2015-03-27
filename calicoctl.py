@@ -57,7 +57,6 @@ from node.adapter import netns
 
 hostname = socket.gethostname()
 try:
-    mkdir = sh.Command._create('mkdir')
     modprobe = sh.Command._create('modprobe')
     grep = sh.Command._create('grep')
     sysctl = sh.Command._create("sysctl")
@@ -66,8 +65,6 @@ try:
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
-mkdir_p = mkdir.bake('-p')
-
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
@@ -264,7 +261,6 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         print >> sys.stderr, "`calicoctl node` must be run as root."
         sys.exit(2)
 
-    create_dirs()
     modprobe("ip6_tables")
     modprobe("xt_set")
 
@@ -646,10 +642,6 @@ def validate_arguments():
     if not ip_ok:
         print "Invalid ip argument"
     return group_ok and ip_ok and container_ip_ok
-
-
-def create_dirs():
-    mkdir_p("/var/log/calico")
 
 
 def process_output(line):
