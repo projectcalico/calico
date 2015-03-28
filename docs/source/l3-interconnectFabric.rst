@@ -315,138 +315,35 @@ routers.
 
 The real difference between the two models is that, in this model, the
 compute servers as well as the ToR switches are all independent
-autonomous systems.  To make this work at scale, the use of 4--byte AS
-numbers as discussed in :RFC:`4893`.
+autonomous systems.  To make this work at scale, the use of  four byte AS
+numbers as discussed in :RFC:`4893`.  Without using four byte AS
+numbering, the total number of ToRs and compute servers in a calico
+fabric would be limited to the approximately five thousand available
+private AS [#privateAS]_ numbers.  If four byte AS numbers are used,
+there are approximately ninety--two million private AS numbers
+available.  This should be sufficient for any given Calico fabric.
 
-Some standard IP fabric architectures
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The other difference in this model *vs.* the AS per rack model, is
+that there are no route reflectors used, as all BGP peerings are
+eBGP.  In this case, each compute server in a given rack peers with
+its ToR switch which is also acting as an eBGP router.  For two
+servers within the same rack to communicate, they will be routed
+through the ToR.  Therefore, each server will have one peering to each
+ToR it is connected to, and each ToR will have a peering with each
+compute serer that it is connected to (normally, all the compute
+servers in the rack).
 
-The Calico solution does not dictate an interconnect technology or
-architecture, as long as it can transport IP traffic. That said, we have
-identified a potential Ethernet solution as noted in `this
-post <http://www.projectcalico.org/using-ethernet-as-the-interconnect-fabric-for-a-calico-installation/>`__
-and we are now going to propose two possible IP fabric designs. Others
-are possible, and if you have developed any other designs that you find
-useful, we would love to feature their ideas in a guest blog.
-
-Both of these models use similar diagrams, so a quick key/description is
-warranted here.
-
--  Devices are outlined in a box. Functions are indicated within that
-   box.
--  Blue rectangles are Ethernet switching functions. In the case of an
-   L3 switch, the blue rectangle provides an L2 switched connection
-   between other devices and the switch's routing function.
--  Circles are BGP routers. Different colors indicate different AS's.
--  Solid blue lines are L2 links.
--  Solid orange lines are L3 links.
--  Dashed orange links are BGP iBGP peering sessions. eBGP peering
-   sessions are point--to--point over the L3 link itself.
--  Diamonds are BGP route reflection functions. They are shown *half on
-   and half off* a switch as the function may reside on the ToR switch,
-   or on a server/guest within the rack.
--  Triangles are end--points.
-
-Both of these models are based on the `IETF Internet Draft on BGP in the
-data
-center <https://tools.ietf.org/html/draft-ietf-rtgwg-bgp-routing-large-dc-00#section-5.2>`__.
-They differ in how many ASes are used in the network. They do have some
-commonality, in that both have IP links between the end points and the
-compute server vRouter. This is the same as in the `Ethernet
-fabric <http://www.projectcalico.org/using-ethernet-as-the-interconnect-fabric-for-a-calico-installation/>`__.
-
-Another commonality is that both models use an Ethernet spine
-infrastructure. While it is possible to run an L3 spine, it introduces
-complexity around AS puddling. If you remember from earlier, all iBGP
-routers must have direct reachability to one another, and must not pass
-through another AS for that connectivity. Since spine switches, in the
-classical leaf--spine architecture are *not* connected to one another,
-but are only connected to the leaves, it is difficult to build a L3
-spine that does not introduce AS puddling or unwanted paths. Therefore,
-the spines act as independent interconnection switches for the L3
-leaves.
-
-Both of these models should scale to 100's of leaf switches. The exact
-number is dependent on the capability of the leaf switches in use. If
-this number is too small, a Calico implementation should look at using
-the Ethernet fabric option, or using an L3--based spine architecture.
-That will be covered briefly in a follow--up post. As noted just above,
-this is a more *involved* architecture, so it is best approached after
-reading the blog post that discusses it, and having a good grasp of BGP
-design techniques. Reach out to the Project Calico team if you have
-questions about this.
-
-A final common point is that the L3 leaf switches use ECMP to distribute
-their traffic between all available spine switches.
-
-AS per rack model
-~~~~~~~~~~~~~~~~~
-
-The following diagram shows a two rack pod implementing this model.
-
-.. figure:: l3-fabric-l2r-l2s.png
-   :alt: AS per rack
-
-   AS per rack
-
-This is a direct adaptation of the IETF BGP for data center model. Each
-compute server connected to a leaf or spine switch (usually this is all
-the servers in a given rack) is in an Ethernet segment which has a
-routing interface in the switch. The compute servers and the ToR switch
-are in the same autonomous system, and each rack is its own unique AS.
-
-One or more (preferably two) route reflectors are deployed in the rack,
-either on the ToR itself, or on one or more compute servers in the rack.
-It would be best if those route reflectors were *not* in a VM, as there
-would be a *chicken and egg* problem with the route reflector needing to
-be reachable before it could be connected to the fabric. If a container
-is used to deploy the route reflector, it should be in the root network
-name--space for that reason.
-
-Traffic between two compute servers within a given rack would traverse
-the ToR switch, but would not be routed on the ToR switch (the compute
-servers would be the only routers in the path).
-
-Traffic that is exiting the rack (or inbound to the rack) would be
-routed via the ToR as the next hop router for the compute server.
-
-Each ToR would have an eBGP peering to all other ToR switches in the
-pod, as well as the border routers, over the L2 spine switches. Route
-reflection would not be used, as these are eBGP sessions.
-
-AS per compute server
-~~~~~~~~~~~~~~~~~~~~~
-
-The AS per rack model is a logical outgrowth of the fact that, until
-Calico, the first routing--capable aggregation point was the ToR switch.
-However, with Calico, the individual compute servers are the first
-routing aggregation point.
-
-Therefore, it is possible to take the same approach as above, but push
-the AS boundary to the individual compute server. This is also possible
-as the 4--byte AS number space has over 92,000,000 AS numbers reserved
-for private use. A diagram may help.
-
-.. figure:: l3-fabric-l3r-l2s.png
-   :alt: AS per compute server
-
-   AS per compute server
-The primary difference here is that there are no route reflectors in
-use. Each compute server is eBGP peered with it's ToR switch(es). In
-turn, the ToR switches are in eBGP peerings with one another, as in the
-earlier architecture.
-
-One benefit is that the server provisioning system does not need to
-understand rack geography (which servers are in which racks) to assign
-the AS number to a given compute server, as each compute server has a
-unique AS number. This may be easier to automate.
+The inter--ToR connectivity considerations are the same in scale and
+scope as in the AS per rack model.
 
 Recommendation
 ==============
 
 The Project Calico team urges potential Calico users to consider the
 Ethernet fabric, due to its scale and simplicity. However, if an IP
-fabric is required, we recommend, at this time, the AS per rack model.
+fabric is required or desired,  we recommend at this time, the AS per
+rack model. 
+
 If a Calico user is interested in the AS per compute server, the Project
 Calico team would be very interested in discussing the deployment of
 that model.
@@ -455,6 +352,8 @@ Appendix
 ========
 Other Options
 -------------
+
+The way the physical and logical c
 
 IP Fabric Design Considerations
 -------------------------------
@@ -602,6 +501,15 @@ today of 128,000 endpoints.
    discussion, or if there was enough interest, publish a follow--up
    tech note.
 
+.. [#privateAS]
+   The two byte AS space reserves approximately the last five thousand
+   AS numbers for private use.  There is no technical reason why other
+   AS numbers could not be used.  However the re--use of global scope
+   AS numbers within a private infrastructure is strongly
+   discouraged.  The chance for routing system failure or incorrect
+   routing is substantial, and not restricted to the entity that is
+   doing the reuse.
+   
 .. [4]
    However those tools are available if a given Calico instance needs to
    utilize those policy constructs.
