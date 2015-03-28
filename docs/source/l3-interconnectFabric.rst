@@ -465,7 +465,7 @@ network).
 
 Conveniently, large scale/Internet scale networks solved this problem
 almost 20 years ago by deploying BGP route
-reflection as described in :RFC:`rfc1966`. This is a technique
+reflection as described in :RFC:`c1966`. This is a technique
 supported by almost all BGP routers today. In a large network, a number
 of route reflectors [#rr]_ are evenly distributed and each iBGP router is
 *peered* with one or more route reflectors (usually 2 or 3). Each route
