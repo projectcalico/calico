@@ -13,8 +13,11 @@ which Calico operates [#interconnect_fabric]_
 While Calico is designed to work with any underlying interconnect
 fabric that can support IP traffic, the fabric that has the least
 considerations attached to its implementation is an Ethernet fabric as
-discussed in our earlier `technical note
-<http://project-calico.readthedocs.org/en/latest/l2-interconnectFabric.html>`__.
+discussed in our earlier `technical note`_
+
+.. _`technical note`:
+   http://docs.projectcalico.org/en/latest/l2-interconnectFabric.html 
+
 
 In most cases, the Ethernet fabric is the appropriate choice, but
 there are infrastructures 
@@ -33,11 +36,14 @@ Background
 Basic Calico architecture overview
 ----------------------------------
 
-A description of the Calico architecture can be found
-`here <http://www.projectcalico.org/technical/architecture/>`__.
+A description of the Calico architecture can be found in our
+`architectural overview`_.
 However, a brief discussion of the routing and data paths is useful for
 the discussion.
 
+.. _`architectural overview`:
+   http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html
+   
 In a Calico network, each compute server acts as a router for all of the
 end points that are hosted on that compute server. We call that function
 a vRouter. The data path is provided by the Linux kernel, the control
@@ -153,7 +159,7 @@ complexity is due to the things that you can *do* with BGP. Many uses of
 BGP involve complex policy rules, where the behavior of BGP can be
 modified to meet technical (or business, financial, political, *etc.*)
 requirements. A default Calico network does not venture into those
-areas, [4]_ and therefore is fairly straight forward.
+areas, [#bgpPolicy]_ and therefore is fairly straight forward.
 
 That said, there are a few design rules for BGP that need to be kept in
 mind when designing an IP fabric that will interconnect nodes in a
@@ -353,8 +359,28 @@ Appendix
 Other Options
 -------------
 
-The way the physical and logical c
+The way the physical and logical connectivity is laid out in this
+note, and the `Ethernet fabric note`_, The next hop router for a given
+route is always directly connected to the router receiving that
+route.  This makes the need for another protocol to distribute the
+next hop routes unecessary.
 
+.. _`Ethernet fabric note`:
+   http://docs.projectcalico.org/en/latest/l2-interconnectFabric.html 
+
+However, in many (or most) WAN BGP networks, the routers within a
+given AS may not be directly adjacent.  Therefore, a router may
+receive a route with a next hop address that it is not directly
+adjacent to.  In those cases, an IGP, such as OSPF or IS--IS, is used
+by the routers within a given AS to determine the path to the BGP next
+hop route.
+
+There may be Calico architectures where there are similar models where
+the routers within a given AS are not directly adjacent.  In those
+models, the use of an IGP in Calico may be warranted.  The
+configuration of those protocols are, however, beyond the scope of
+this technical note.
+   
 IP Fabric Design Considerations
 -------------------------------
 
@@ -391,7 +417,7 @@ iBGP) peering relationship. If they are members of different AS's, then
 they are in an *external* or eBGP relationship.
 
 BGP's original design model was that all BGP routers within a given AS
-would know how to get to one another (via static routes, IGP [5]_
+would know how to get to one another (via static routes, IGP [#igp]_
 routing protocols, or the like), and that routers in different ASs would
 not know how to reach one another unless they were directly connected.
 
@@ -399,30 +425,28 @@ Based on that design point, routers in an iBGP peering relationship
 assume that they do not transit traffic for other iBGP routers in a
 given AS (i.e. A can communicate with C, and therefore will not need to
 route through B), and therefore, do not change the *next hop* attribute
-in BGP [6]_.
+in BGP [#nh]_.
 
 A router with an eBGP peering, on the other hand, assumes that it's eBGP
 peer will not know how to reach the next hop route, and then will
 substitute its own address in the next hop field. This is often referred
 to as *next hop self*.
 
-In the Calico `Ethernet
-fabric <http://www.projectcalico.org/using-ethernet-as-the-interconnect-fabric-for-a-calico-installation/>`__
+In the Calico `Ethernet fabric`_
 model, all of the compute servers (the routers in a Calico network) are
 directly connected over one or more Ethernet network(s) and therefore
 are directly reachable. In this case, a router in the Calico network
 does not need to set *next hop self* within the Calico fabric.
 
-In the IP interconnect fabric, however, there are other routers
-in--between the Calico routers, meaning that the Calico routers will not
-have direct connectivity between themselves. Therefore, the BGP
-configuration of those intermediate routers (usually either the TOR
-and/or Spine switches) will need to set *next hop self* either by being
-configured as eBGP routers in the `multi-AS
-model <https://tools.ietf.org/html/draft-ietf-rtgwg-bgp-routing-large-dc-00#section-5.2>`__
-as discussed in the [Multiple AS model][] section, or by setting the
-*next hop self* attribute in the [Single AS model][] approach.
+.. _`Ethernet fabric`:
+   http://docs.projectcalico.org/en/latest/l2-interconnectFabric.html 
 
+The models we present in this technical note insure that all routes
+that may traverse a non--Calico router are eBGP routes, and therefore
+*next hop self* is automatically set correctly.  If a deployment of
+Calico in an IP interconnect fabric does not satisfy that constraint,
+then *next hop self* must be appropriately configured.
+   
 Route reflection
 ~~~~~~~~~~~~~~~~
 
@@ -440,10 +464,10 @@ with 1000's or 10,000's of routers (the potential size of a Calico
 network).
 
 Conveniently, large scale/Internet scale networks solved this problem
-almost 20 years ago by deploying `BGP route
-reflection <https://tools.ietf.org/html/rfc1966>`__. This is a technique
+almost 20 years ago by deploying BGP route
+reflection as described in :RFC:`rfc1966`. This is a technique
 supported by almost all BGP routers today. In a large network, a number
-of route reflectors [7]_ are evenly distributed and each iBGP router is
+of route reflectors [#rr]_ are evenly distributed and each iBGP router is
 *peered* with one or more route reflectors (usually 2 or 3). Each route
 reflector can handle 10's or 100's of route reflector clients (in
 Calico's case, the compute server), depending on the route reflector
@@ -459,18 +483,17 @@ the scope of this document.
 Endpoints
 ~~~~~~~~~
 
-The final consideration is the number of endpoints in a Calico network.
-In the `Ethernet fabric
-case <http://www.projectcalico.org/using-ethernet-as-the-interconnect-fabric-for-a-calico-installation/>`__,
-the number of endpoints is not constrained by the interconnect fabric,
-as the interconnect fabric does not *see* the actual endpoints, it only
-*sees* the actual vRouters, or compute servers. This is not the case in
-an IP fabric, however. IP networks forward by using the destination IP
-address in the packet, which, in Calico's case, is the destination
-endpoint. That means that the IP fabric nodes (ToR switches and/or spine
-switches, for example) must know the routes to each endpoint in the
-network. They learn this by participating as route reflector clients in
-the BGP mesh, just as the Calico vRouter/compute server does.
+The final consideration is the number of endpoints in a Calico
+network.  In the `Ethernet fabric`_ case the number of endpoints is
+not constrained by the interconnect fabric, as the interconnect fabric
+does not *see* the actual endpoints, it only *sees* the actual
+vRouters, or compute servers. This is not the case in an IP fabric,
+however. IP networks forward by using the destination IP address in
+the packet, which, in Calico's case, is the destination endpoint. That
+means that the IP fabric nodes (ToR switches and/or spine switches,
+for example) must know the routes to each endpoint in the
+network. They learn this by participating as route reflector clients
+in the BGP mesh, just as the Calico vRouter/compute server does.
 
 However, unlike a compute server which has a relatively unconstrained
 amount of memory, a physical switch is either memory constrained, or
@@ -510,11 +533,11 @@ today of 128,000 endpoints.
    routing is substantial, and not restricted to the entity that is
    doing the reuse.
    
-.. [4]
+.. [#bgpPolicy]
    However those tools are available if a given Calico instance needs to
    utilize those policy constructs.
 
-.. [5]
+.. [#igp]
    An Interior Gateway Protocol is a local routing protocol that does
    not cross an AS boundary. The primary IGPs in use today are OSPF and
    IS--IS. While complex iBGP networks still use IGP routing protocols,
@@ -522,7 +545,7 @@ today of 128,000 endpoints.
    many routers in it. Therefore, in the data center case, the use of an
    IGP can often be disposed of.
 
-.. [6]
+.. [#nh]
    A Next hop is an attribute of a route announced by a routing
    protocol. In simple terms a route is defined by a *target*, or the
    destination that is to be reached, and a *next hop*, which is the
@@ -530,7 +553,7 @@ today of 128,000 endpoints.
    characteristics in a route, but those are well beyond the scope of
    this post.
 
-.. [7]
+.. [#rr]
    A route reflector may be a physical router, a software appliance, or
    simply a BGP daemon. It only processes routing messages, and does not
    pass actual data plane traffic. However, some route reflectors are
