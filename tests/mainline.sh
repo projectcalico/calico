@@ -14,7 +14,6 @@ docker run -d -p 4001:4001 --name etcd quay.io/coreos/etcd:v0.4.6
 dist/calicoctl reset || true
 
 show_commands
-#docker run -tid --name=node2 busybox
 dist/calicoctl node --ip=127.0.0.1
 dist/calicoctl group add TEST_GROUP
 
@@ -26,7 +25,6 @@ echo "Waiting for powerstrip to come up"
 done
 docker run -e CALICO_IP=192.168.1.1 -tid --name=node1 busybox
 docker run -e CALICO_IP=192.168.1.2 -tid --name=node2 busybox 
-#dist/calicoctl container add node2 192.168.1.2
 
 dist/calicoctl group addmember TEST_GROUP node1
 dist/calicoctl group addmember TEST_GROUP node2

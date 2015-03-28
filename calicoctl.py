@@ -35,7 +35,6 @@ Options:
 """
 import socket
 import sys
-import StringIO
 import time
 import os
 import re
@@ -43,7 +42,8 @@ import re
 import netaddr
 from docopt import docopt
 import sh
-import docker as pydocker
+import docker
+import docker.utils
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
@@ -55,11 +55,16 @@ from node.adapter import netns
 
 
 hostname = socket.gethostname()
+client = DatastoreClient()
+DOCKER_VERSION = "1.16"
+docker_client = docker.Client(version=DOCKER_VERSION,
+                              base_url=os.getenv("DOCKER_HOST",
+                                                 "unix://var/run/docker.sock"))
+
 try:
     modprobe = sh.Command._create('modprobe')
     sysctl = sh.Command._create("sysctl")
     restart = sh.Command._create("restart")
-    docker = sh.Command._create('docker')
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
@@ -71,7 +76,6 @@ POWERSTRIP_SOCK = "/var/run/docker.sock"
 DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
 DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
 
-
 def get_container_info(container_name):
     """
     Get the full container info array from a partial ID or name.
@@ -79,10 +83,9 @@ def get_container_info(container_name):
     :param container_name: The partial ID or name of the container.
     :return: The container info array
     """
-    docker_client = pydocker.Client(version="1.16")
     try:
         info = docker_client.inspect_container(container_name)
-    except pydocker.errors.APIError as e:
+    except docker.errors.APIError as e:
         if e.response.status_code == 404:
             # Re-raise as a key error for consistency.
             raise KeyError("Container %s was not found." % container_name)
@@ -112,8 +115,6 @@ def container_add(container_name, ip):
     :param container_name: The name or ID of the container.
     :param ip: An IPAddress object with the desired IP to assign.
     """
-    client = DatastoreClient()
-
     try:
         info = get_container_info(container_name)
     except KeyError as e:
@@ -182,7 +183,6 @@ def container_remove(container_name):
     :param container_name: The name or ID of the container.
     """
     # Resolve the name to ID.
-    client = DatastoreClient()
     container_id = get_container_id(container_name)
 
     # Find the endpoint ID. We need this to find any ACL rules
@@ -212,8 +212,6 @@ def group_remove_container(container_name, group_name):
     :param group_name:  The Calico security group name.
     :return: None.
     """
-    client = DatastoreClient()
-
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
@@ -226,20 +224,20 @@ def group_remove_container(container_name, group_name):
         print "%s is not a member of %s" % (container_name, group_name)
         sys.exit(1)
 
+
 def node_stop(force):
-    client = DatastoreClient()
     if force or len(client.get_hosts()[hostname]["docker"]) == 0:
         client.remove_host()
-
-        # This next line can fail, since the container is needed for the connection to
-        # docker.
         try:
-            docker("stop", "calico-node")
-        except Exception:
-            pass
+            docker_client.stop("calico-node")
+        except docker.errors.APIError as e:
+            if e.response.status_code != 404:
+                raise
+
         print "Node stopped and all configuration removed"
     else:
         print "Current host has active endpoints so can't be stopped. Force with --force"
+
 
 def clean_restart_docker(sock_to_wait_on):
     if os.path.exists(REAL_SOCK):
@@ -253,6 +251,7 @@ def clean_restart_docker(sock_to_wait_on):
     while not os.path.exists(sock_to_wait_on):
         time.sleep(0.1)
 
+
 def node(ip, force_unix_socket, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
     if os.geteuid() != 0:
@@ -263,32 +262,31 @@ def node(ip, force_unix_socket, node_image, ip6=""):
     modprobe("xt_set")
 
     # Set up etcd
-    client = DatastoreClient()
-
     ipv4_pools = client.get_ip_pools("v4")
-    if not ipv4_pools:
-        # If no IPv4 pools are defined, add a default.
-        client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
-
     ipv6_pools = client.get_ip_pools("v6")
+
+    # Create default pools if required
+    if not ipv4_pools:
+        client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
     if not ipv6_pools:
-        # If no IPv6 pools are defined, add a default.
         client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
-    client.create_global_config() 
+    client.create_global_config()
     client.create_host(ip, ip6)
 
     # Enable IP forwarding since all compute hosts are vRouters.
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
-
     # The docker daemon could be in one of two states:
     # 1) Listening on /var/run/docker.sock - the default
     # 2) listening on /var/run/docker.real.sock - if it's been previously run
     #    with --force-unix-socket
-    new_env = os.environ.copy()
     enable_socket = "NO"
+
+    # We might need to talk to a different docker endpoint, so create some
+    # client flexibility.
+    node_docker_client = docker_client
 
     if force_unix_socket:
         # Update docker to use a different unix socket, so powerstrip can run
@@ -298,7 +296,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         # Set the docker daemon to listen on the docker.real.sock by updating
         # the config, clearing old sockets and restarting.
         socket_config_exists = \
-                         DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
         if not socket_config_exists:
             with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
                 docker_config.write(DOCKER_OPTIONS)
@@ -311,13 +309,13 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
         # At this point, docker is listening on a new port but powerstrip isn't
         # running, so docker clients need to talk directly to docker.
-        new_env["DOCKER_HOST"] = "unix://%s" % REAL_SOCK
+        node_docker_client = docker.Client(version=DOCKER_VERSION,
+                                      base_url="unix://%s" % REAL_SOCK)
         enable_socket = "YES"
-
     else:
         # If there is --force-unix-socket config in place, do some cleanup
         socket_config_exists = \
-                         DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
         if socket_config_exists:
             good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
                           if DOCKER_OPTIONS not in line]
@@ -325,30 +323,54 @@ def node(ip, force_unix_socket, node_image, ip6=""):
             clean_restart_docker(POWERSTRIP_SOCK)
 
     try:
-        docker("rm", "-f", "calico-node", _env=new_env)
-    except Exception:
-        pass
+        node_docker_client.remove_container("calico-node", force=True)
+    except docker.errors.APIError as e:
+        if e.response.status_code != 404:
+            raise
 
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
-    output = StringIO.StringIO()
 
-    docker("run", "-e", "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
-                  "-e",  "IP=%s" % ip,
-                  "-e",  "IP6=%s" % ip6,
-                  "--name=calico-node",
-                  "--restart=always",
-                  "--privileged",
-                  "--net=host",  # BIRD/Felix can manipulate the base networking stack
-                  "-v", "/var/run/:/host-var-run",  # Powerstrip access Docker
-                  "-v", "/proc:/proc_host",  # Powerstrip Calico needs access to proc to set up
-                                             # networking
-                  "-v", "/var/log/calico:/var/log/calico",  # Logging volume
-                  "-e", "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
-                  "-d",
-                  node_image, _err=process_output, _out=output, _env=new_env).wait()
+    environment = [
+        "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
+        "IP=%s" % ip,
+        "IP6=%s" % ip6,
+        "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+    ]
 
-    cid = output.getvalue().strip()
-    output.close()
+    binds = {
+        "/var/run":
+            {
+                "bind": "/host-var-run",
+                "ro": False
+            },
+        "/proc":
+            {
+                "bind": "/proc_host",
+                "ro": False
+            },
+        "/var/log/calico":
+            {
+                "bind": "/var/log/calico",
+                "ro": False
+            }
+    }
+
+    host_config = docker.utils.create_host_config(privileged=True,
+                                                  restart_policy={"Name": "Always"},
+                                                  network_mode="host",
+                                                  binds=binds)
+
+    container = node_docker_client.create_container(node_image,
+                                               name="calico-node",
+                                               detach=True,
+                                               environment=environment,
+                                               host_config=host_config,
+                                               volumes=["/host-var-run",
+                                                        "/proc_host",
+                                                        "/var/log/calico"])
+    cid = container["Id"]
+
+    node_docker_client.start(container)
 
     if force_unix_socket:
         while not os.path.exists(POWERSTRIP_SOCK):
@@ -371,35 +393,34 @@ def grep(text, pattern):
 
 
 def status():
-    try:
-        print "calico-node container status"
-        print(grep(docker("ps"), "calico-node"))
-    except Exception:
-        print "No calico containers appear to be running"
+    calico_node_info = filter(lambda container: "/calico-node" in container["Names"],
+                              docker_client.containers())
+    if len(calico_node_info) == 0:
+        print "calico-node container not running"
+    else:
+        print "calico-node container is running. Status: %s" % \
+              calico_node_info[0]["Status"]
 
-    try:
-        apt_output = docker("exec", "calico-node", "/bin/bash", "-c",
-                            "apt-cache policy calico-felix").stdout
+        apt_output = docker_client.execute("calico-node", ["/bin/bash", "-c",
+                            "apt-cache policy calico-felix"])
         result = re.search(r"Installed: (.*?)\s", apt_output)
         if result is not None:
             print "Running felix version %s" % result.group(1)
-    except Exception:
-        print "Skipping felix version information as Calico node isn't running"
 
-    try:
         print "IPv4 Bird (BGP) status"
-        print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc -s "
-                                                            "/etc/service/bird/bird.ctl"))
+        print(docker_client.execute("calico-node",
+                                    ["/bin/bash", "-c",
+                                     "echo show protocols | "
+                                     "birdc -s /etc/service/bird/bird.ctl"]))
         print "IPv6 Bird (BGP) status"
-        print(docker("exec", "calico-node", "/bin/bash",  "-c", "echo show protocols | birdc6 -s "
-                                                                "/etc/service/bird6/bird6.ctl"))
-    except Exception:
-        print "Couldn't collect BGP Peer information"
+        print(docker_client.execute("calico-node",
+                                    ["/bin/bash", "-c",
+                                     "echo show protocols | "
+                                     "birdc6 -s "
+                                     "/etc/service/bird6/bird6.ctl"]))
 
 
 def reset():
-    client = DatastoreClient()
-
     print "Removing all data from datastore"
     client.remove_all_data()
 
@@ -410,7 +431,6 @@ def group_add(group_name):
     :param group_name: The name for the group.
     :return: None.
     """
-    client = DatastoreClient()
     # Check if the group exists.
     if client.group_exists(group_name):
         print "Group %s already exists." % group_name
@@ -429,7 +449,6 @@ def group_add_container(container_name, group_name):
     :param group_name:  The Calico security group name.
     :return: None.
     """
-    client = DatastoreClient()
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
@@ -442,7 +461,6 @@ def group_add_container(container_name, group_name):
 
 def group_remove(group_name):
     #TODO - Don't allow removing a group that has endpoints in it.
-    client = DatastoreClient()
     try:
         client.delete_group(group_name)
     except KeyError:
@@ -452,7 +470,6 @@ def group_remove(group_name):
 
 
 def group_show(detailed):
-    client = DatastoreClient()
     groups = client.get_groups()
 
     if detailed:
@@ -473,7 +490,6 @@ def group_show(detailed):
 
 
 def node_show(detailed):
-    client = DatastoreClient()
     hosts = client.get_hosts()
 
     if detailed:
@@ -586,7 +602,6 @@ def ip_pool_add(cidr_pool, version):
         print "%s is an IPv%d prefix, this command is for IPv%d." % \
               (cidr_pool, pool.version, version)
         return
-    client = DatastoreClient()
     client.add_ip_pool("v%d" % version, pool)
 
 
@@ -607,7 +622,6 @@ def ip_pool_remove(cidr_pool, version):
         print "%s is an IPv%d prefix, this command is for IPv%d." % \
               (cidr_pool, pool.version, version)
         return
-    client = DatastoreClient()
     try:
         client.del_ip_pool("v%d" % version, pool)
     except KeyError:
@@ -619,7 +633,6 @@ def ip_pool_show(version):
     Print a list of IP allocation pools.
     :return: None
     """
-    client = DatastoreClient()
     pools = client.get_ip_pools(version)
     x = PrettyTable(["CIDR"])
     for pool in pools:
