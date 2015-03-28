@@ -226,7 +226,97 @@ may be useful for the discussion
    are physically meshed via a set of discrete BGP spine routers, each
    in their own AS.
 
-   
+In this approach, every ToR---ToR or ToR---Spine (in the case of an AS
+per spine) link is an eBGP peering which means that there is no
+route--reflection possible (using standard BGP route reflectors)
+*north* of the ToR switches.
+
+If the L2 spine option is used, the result of this is that each ToR must
+either peer with every other ToR switch in the cluster (which could be
+hundreds of peers.
+
+If the AS per spine option is used, then each ToR only has to peer
+with each spine (there are usually somewhere between two and sixteen spine
+switches in a pod).  However, the spine switches must peer with all
+ToR switches (again, that would be hundreds, but most spine switches
+have more control plane capacity than the average ToR, so this might
+be more scalable in many circumstances).
+
+Within the rack, the configuration is the same for both variants, and
+is somewhat different than the configuration north of the ToR.
+
+Every router within the rack, which, in the case of Calico is every
+compute server, shares the same AS as the ToR that they are connected
+to.  That connection is in the form of an Ethernet switching layer.
+Each router in the rack must be directly connected to enable the AS to
+remain contiguous.  The ToR's *router* function is then connected to
+that Ethernet switching layer as well.  The actual configuration of
+this is dependent on the ToR in use, but usually it means that the
+ports that are connected to the compute servers are treated as
+*subnet* or *segment* ports, and then the ToR's *router* function has
+a single interface into that subnet.
+
+This configuration allows each compute server to connect to each other
+compute server in the rack without going through the ToR router, but
+it will, of course, go through the ToR switching function.  The
+compute servers and the ToR router could all be directly meshed, or a
+route reflector could be used within the rack, either hosted on the
+ToR itself, or as a virtual function hosted on one or more compute
+servers within the rack.
+
+The ToR, as the eBGP router re--distributes all of the routes from
+other ToRs as well as routes external to the data center to the
+compute servers that are in its AS, and announces all of the routes
+from within the AS (rack) to the other ToRs and the larger world.
+This means that each compute server will see the ToR as the next hop for
+all external routes, and the individual compute servers are the next
+hop for all routes external to the rack.
+
+The *AS per Compute Server* model
+---------------------------------
+
+This model takes the concept of an AS per rack to its logical
+conclusion.  In the earlier referenced `IETF draft`_ the assumption in
+the overall model is that the ToR is first tier aggregating and
+routing element.  In Calico, the ToR, if it is an L3 router, is
+actually the second tier.  Remember, in Calico, the compute server is
+always the first/last router for an endpoint, and is also the
+first/last point of aggregation.
+
+.. _`IETF draft`:
+   https://tools.ietf.org/html/draft-ietf-rtgwg-bgp-routing-large-dc
+
+Therefore, if we follow the architecture of the draft, the compute
+server, not the ToR should be the AS boundary.  The differences can be
+seen in the following two diagrams.
+
+.. figure:: _static/l3-interconnectFabric/l3-fabric-diagrams-as-server-l2-spine.*
+   :align: center
+   :alt: A diagram showing the AS per compute server model using
+	 Ethernet as the spine interconnect
+
+   This diagram shows the *AS per compute server model* where the ToR
+   switches are physically meshed via a set of Ethernet switching
+   planes.
+
+.. figure:: _static/l3-interconnectFabric/l3-fabric-diagrams-as-server-l3-spine.*
+   :align: center
+   :alt: A diagram showing the AS per compute server model using
+	 routers as the spine interconnect
+
+   This diagram shows the *AS per compute server model* where the ToR
+   switches are physically connected to a set of independent routing planes.
+
+As can be seen in these diagrams, there are still the same two
+variants as in the *AS per rack* model, one where the spine switches
+provide a set of independent Ethernet planes to interconnect the ToR
+switches, and the other where that is done by a set of independent
+routers.
+
+The real difference between the two models is that, in this model, the
+compute servers as well as the ToR switches are all independent
+autonomous systems.  To make this work at scale, the use of 4--byte AS
+numbers as discussed in :RFC:`4893`.
 
 Some standard IP fabric architectures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
