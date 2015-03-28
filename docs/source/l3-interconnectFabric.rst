@@ -13,7 +13,7 @@ which Calico operates [#interconnect_fabric]_
 While Calico is designed to work with any underlying interconnect
 fabric that can support IP traffic, the fabric that has the least
 considerations attached to its implementation is an Ethernet fabric as
-discussed in our earlier `technical note`_
+discussed in our earlier `technical note`_.
 
 .. _`technical note`:
    http://docs.projectcalico.org/en/latest/l2-interconnectFabric.html 
