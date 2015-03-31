@@ -5,10 +5,10 @@
  Where large-scale IP networks and hardware collide
 ----------------------------------------------------
 
-Calico provides an end-to-end IP network that interconnects the end
-points [#end_points]_ in a scale-out or cloud environment. To do that, it needs
-an *interconnect fabric* to provide the physical networking layer on
-which Calico operates [#interconnect_fabric]_
+Calico provides an end-to-end IP network that interconnects the
+endpoints [#endpoints]_ in a scale-out or cloud environment. To do that,
+it needs an *interconnect fabric* to provide the physical networking
+layer on which Calico operates [#interconnect_fabric]_.
 
 While Calico is designed to work with any underlying interconnect
 fabric that can support IP traffic, the fabric that has the least
@@ -45,14 +45,14 @@ the discussion.
    http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html
 
 In a Calico network, each compute server acts as a router for all of the
-end points that are hosted on that compute server. We call that function
+endpoints that are hosted on that compute server. We call that function
 a vRouter. The data path is provided by the Linux kernel, the control
 plane by a BGP protocol server, and management plane by Calico's
 on-server agent, *Felix*.
 
 Each end-point can only communicate through its local vRouter, and the
 first and last *hop* in any Calico packet flow is an IP router hop
-through a vRouter. Each vRouter announces all of the end points it is
+through a vRouter. Each vRouter announces all of the endpoints it is
 attached to to all the other vRouters and other routers on the
 infrastructure fabric, using BGP, usually with BGP route reflectors to
 increase scale. A discussion of why we use BGP can be found in the `Why
@@ -72,7 +72,7 @@ edge router in the infrastructure is the top of rack (TOR) switch. In
 the Calico model, that function is pushed to the compute server itself.
 
 Furthermore, in most current virtualized environments, the actual
-end point is not addressed by the fabric. If it is a VM, it is usually
+endpoint is not addressed by the fabric. If it is a VM, it is usually
 encapsulated in an overlay, and if it is a container, it may be
 encapsulated in an overlay, or NATed by some form of proxy, such as is
 done in the `weave <http://www.weave.works/>`__ project network model,
@@ -104,7 +104,7 @@ technical note.
 #. The other model, and the one that this note concerns it self with,
    is one where the routing infrastructure is based entirely on BGP.
    In this model, the IP network is "tight enough" or has a small
-   enough diameter that BGP can be used to distribute end point
+   enough diameter that BGP can be used to distribute endpoint
    routes, and the paths to the next-hops for those routes is known
    to all of the routers in the network (in a Calico network this
    includes the compute servers).  This is the network model that this
@@ -507,8 +507,8 @@ today of 128,000 endpoints.
 
 
 
-.. [#end_points]
-   In Calico's terminology, an end point is an IP address and interface.
+.. [#endpoints]
+   In Calico's terminology, an endpoint is an IP address and interface.
    It could refer to a VM, a container, or even a process bound to an IP
    address running on a bare metal server.
 
