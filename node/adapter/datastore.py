@@ -361,7 +361,7 @@ class DatastoreClient(object):
         # Change the profile on the endpoint.
         ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = group_name
-        self.set_endpoint(hostname, container_id, endpoint_id)
+        self.set_endpoint(hostname, container_id, ep)
 
     def remove_workload_from_group(self, container_id):
         endpoint_id = self.get_ep_id_from_cont(container_id)
@@ -369,7 +369,7 @@ class DatastoreClient(object):
         # Change the profile on the endpoint.
         ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = None
-        self.set_endpoint(hostname, container_id, endpoint_id)
+        self.set_endpoint(hostname, container_id, ep)
 
     def get_ep_id_from_cont(self, container_id):
         """
