@@ -191,7 +191,7 @@ Route reflection
 Endpoints
   In a Calico network, each endpoint is a route.  Hardware networking
   platforms are constrained by the number of routes they can learn.
-  This is usually in range of 10,000's or 100m,000's of routes.  Route
+  This is usually in range of 10,000's or 100,000's of routes.  Route
   aggregation can help, but that is usually dependent on the
   capabilities of the scheduler used by the orchestration software
   (*e.g.* OpenStack).
@@ -213,7 +213,7 @@ Routing Area Working Group draft on BGP use in data centers`_.
 As mentioned earlier, there are two versions of this model, one with
 an set of Ethernet planes interconnecting the ToR switches, and the
 other where the core planes are also routers.  The following diagrams
-may be useful for the discussion
+may be useful for the discussion.
 
 .. figure:: _static/l3-interconnectFabric/l3-fabric-diagrams-as-rack-l2-spine.*
    :align: center
