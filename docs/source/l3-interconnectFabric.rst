@@ -48,7 +48,7 @@ In a Calico network, each compute server acts as a router for all of the
 end points that are hosted on that compute server. We call that function
 a vRouter. The data path is provided by the Linux kernel, the control
 plane by a BGP protocol server, and management plane by Calico's
-on-server agent, *felix*.
+on-server agent, *Felix*.
 
 Each end-point can only communicate through its local vRouter, and the
 first and last *hop* in any Calico packet flow is an IP router hop
