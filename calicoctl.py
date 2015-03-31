@@ -11,6 +11,8 @@ Usage:
   calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
   calicoctl profile <PROFILE> tag show
+  calicoctl profile <PROFILE> tag add <TAG>
+  calicoctl profile <PROFILE> tag remove <TAG>
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile add <PROFILE>
@@ -415,7 +417,7 @@ def profile_add(profile_name):
     """
     # Check if the profile exists.
     if client.profile_exists(profile_name):
-        print "Group %s already exists." % profile_name
+        print "Profile %s already exists." % profile_name
     else:
         # Create the profile.
         client.create_profile(profile_name)
@@ -435,7 +437,7 @@ def profile_add_container(container_name, profile_name):
     container_id = get_container_id(container_name)
 
     if not client.profile_exists(profile_name):
-        print "Group with name %s was not found." % profile_name
+        print "Profile with name %s was not found." % profile_name
         return
 
     client.add_workload_to_profile(profile_name, container_id)
@@ -482,6 +484,46 @@ def profile_tag_show(name):
 
     for tag in profile.tags:
         print tag
+
+
+def profile_tag_add(name, tag):
+    """
+    Add a tag to the profile.
+    :param name: Profile name
+    :param tag: Tag name
+    :return: None
+    """
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    profile.tags.add(tag)
+    client.profile_update_tags(profile)
+    print "Tag %s added to profile %s" % (tag, name)
+
+
+def profile_tag_remove(name, tag):
+    """
+    Remove a tag from the profile.
+    :param name: Profile name
+    :param tag: Tag name
+    :return: None
+    """
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    try:
+        profile.tags.remove(tag)
+    except KeyError:
+        print "Tag %s is not on profile %s" % (tag, name)
+        sys.exit(1)
+    client.profile_update_tags(profile)
+    print "Tag %s removed from profile %s" % (tag, name)
 
 
 def profile_rule_show(name, human_readable=False):
@@ -664,18 +706,22 @@ def ip_pool_show(version):
 
 def validate_arguments():
     profile_ok = (arguments["<PROFILE>"] is None or
-                re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+                  re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+    tag_ok = (arguments["<TAG>"] is None or
+              re.match("^\w+$", arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
         arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
     container_ip_ok = arguments["<IP>"] is None or netaddr.valid_ipv4(
         arguments["<IP>"]) or netaddr.valid_ipv6(arguments["<IP>"])
 
     if not profile_ok:
-        print "Groups must be <30 character long and can only container " \
+        print "Profile names must be <30 character long and can only contain " \
               "numbers, letters and underscore."
+    if not tag_ok:
+        print "Tags names can only container numbers, letters and underscore."
     if not ip_ok:
         print "Invalid ip argument"
-    return profile_ok and ip_ok and container_ip_ok
+    return profile_ok and ip_ok and container_ip_ok and tag_ok
 
 
 def process_output(line):
@@ -700,12 +746,19 @@ if __name__ == '__main__':
         elif arguments["reset"]:
             reset()
         elif arguments["profile"]:
-            if arguments["add"]:
+            if arguments["tag"]:
+                if arguments["show"]:
+                    profile_tag_show(arguments["<PROFILE>"])
+                elif arguments["add"]:
+                    profile_tag_add(arguments["<PROFILE>"],
+                                    arguments["<TAG>"])
+                elif arguments["remove"]:
+                    profile_tag_remove(arguments["<PROFILE>"],
+                                       arguments["<TAG>"])
+            elif arguments["add"]:
                 profile_add(arguments["<PROFILE>"])
             elif arguments["remove"]:
                 profile_remove(arguments["<PROFILE>"])
-            elif arguments["tag"]:
-                profile_tag_show(arguments["<PROFILE>"])
             elif arguments["rule"]:
                 if arguments["show"]:
                     profile_rule_show(arguments["<PROFILE>"],

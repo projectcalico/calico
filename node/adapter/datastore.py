@@ -440,6 +440,26 @@ class DatastoreClient(object):
                     members.append(ep.ep_id)
         return members
 
+    def profile_update_tags(self, profile):
+        """
+        Write the tags set on the Profile to the data store.  This creates the
+        profile if it doesn't exist and is idempotent.
+        :param profile: The Profile object to update, with tags stored on it.
+        :return: None
+        """
+        tags_path = TAGS_PATH % {"profile_id": profile.name}
+        self.etcd_client.write(tags_path, json.dumps(list(profile.tags)))
+
+    def profile_update_rules(self, profile):
+        """
+        Write the rules on the Profile to the data store.  This creates the
+        profile if it doesn't exist and is idempotent.
+        :param profile: The Profile object to update, with rules stored on it.
+        :return: None
+        """
+        rules_path = RULES_PATH % {"profile_id": profile.name}
+        self.etcd_client.write(rules_path, profile.rules.to_json())
+
     def add_workload_to_profile(self, profile_name, container_id):
         endpoint_id = self.get_ep_id_from_cont(container_id)
 
