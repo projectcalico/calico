@@ -1,13 +1,9 @@
 from netaddr import IPAddress
 from datastore import DatastoreClient
-IP_ASSIGNMENT_PATH = "/calico/ipam/%(version)s/assignment/%(pool)s"
 
-class RandomAssignment(object):
-    """
-    Assign IP addresses at random.
-    """
-    def allocate(pool, assigned):
-        pass
+IP_ASSIGNMENT_PATH = "/calico/ipam/%(version)s/assignment/%(pool)s"
+IP_ASSIGNMENT_KEY = IP_ASSIGNMENT_PATH + "/%(address)s"
+
 
 class SequentialAssignment(object):
     """
@@ -55,7 +51,7 @@ class SequentialAssignment(object):
 
 
 class IPAMClient(DatastoreClient):
-    def assign_address(self, pool, address, version="v4"):
+    def assign_address(self, pool, address):
         """
         Attempt to assign an IPAddress in a pool.
         Fails if the address is already assigned.
@@ -63,17 +59,13 @@ class IPAMClient(DatastoreClient):
 
         :param IPNetwork pool: The pool that the assignment is from.
         :param IPAddress address: The address to assign.
-        :param str version: The IP version of the pool
 
         :return: True if the allocation succeeds, false otherwise.
         :rtype: bool
         """
-        #TODO - can the version be worked out from the pool.
-        directory = IP_ASSIGNMENT_PATH % {"version": version,
-                                          "pool": str(pool).replace("/", "-")
-                                        }
-        key = directory + "/" + str(address)
-
+        key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
+                                   "pool": str(pool).replace("/", "-"),
+                                   "address": address}
         try:
             self.etcd_client.write(key, "", prevExist=False)
         except KeyError:
@@ -81,21 +73,19 @@ class IPAMClient(DatastoreClient):
         else:
             return True
 
-    def unassign_address(self, pool, address, version="v4"):
+    def unassign_address(self, pool, address):
         """
         Unassign an IP from a pool.
 
-        :param pool:
-        :param address:
-        :param version:
+        :param IPNetwork pool: The pool that the assignment is from.
+        :param IPAddress address: The address to unassign.
+
         :return: True if the address was unassigned, false otherwise.
         :rtype: bool
         """
-        directory = IP_ASSIGNMENT_PATH % {"version": version,
-                                          "pool": str(pool).replace("/", "-")
-                                        }
-        key = directory + "/" + str(address)
-
+        key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
+                                   "pool": str(pool).replace("/", "-"),
+                                   "address": address}
         try:
             self.etcd_client.delete(key)
         except KeyError:
@@ -103,16 +93,14 @@ class IPAMClient(DatastoreClient):
         else:
             return True
 
-    def get_assigned_addresses(self, pool, version="v4"):
+    def get_assigned_addresses(self, pool):
         """
         :param IPNetwork pool: The pool to get assignments for.
         :return: The assigned addresses from the pool
         :rtype dict of [str, str]
         """
-        #TODO - make sure the assignment stuff is created/deleted when pools
-        #  are created/deleted
-        directory = IP_ASSIGNMENT_PATH % {"version": version,
-                                    "pool": str(pool).replace("/", "-")}
+        directory = IP_ASSIGNMENT_PATH % {"version": "v%s" % pool.version,
+                                          "pool": str(pool).replace("/", "-")}
         try:
             nodes = self.etcd_client.read(directory).children
         except KeyError:
