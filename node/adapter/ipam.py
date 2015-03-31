@@ -1,5 +1,6 @@
+from netaddr import IPAddress
 from datastore import DatastoreClient
-
+IP_ASSIGNMENT_PATH = "/calico/ipam/%(version)s/assignment/%(pool)s"
 
 class RandomAssignment(object):
     """
@@ -15,38 +16,34 @@ class SequentialAssignment(object):
 
     def __init__(self):
         # Init an etcd client.
-        self.etcd = DatastoreClient()
+        self.etcd = IPAMClient()
 
     def allocate(self, pool):
         """
         Attempt to allocate an IP address from the provided pool.
 
-        :param pool: The pool to allocate from (an IPNetwork)
-        :return: An IP address which has been allocated (a string) or None
+        :param IPNetwork pool: The pool to allocate from
+        :return: An IP address which has been allocated or None
         if allocation failed.
+        :rtype str:
         """
         while True:
-            already_assigned = self.etcd.get_assigned_addresses(pool)
-            new_assignment = already_assigned.copy()
+            assigned_addresses = self.etcd.get_assigned_addresses(pool)
 
-            assigned_address = self._get_next(pool, already_assigned)
-            if assigned_address is None:
+            candidate_address = self._get_next(pool, assigned_addresses)
+            if candidate_address is None:
                 # the pool is full, we can't allocate an address
                 return None
             else:
                 # We've found an address to try.
-                # Attempt to write the address to the datastore.
-                new_assignment[assigned_address] = ""
-
-                if self.etcd.update_assigned_address(pool,
-                                                     already_assigned,
-                                                     new_assignment):
-                    return assigned_address
+                if self.etcd.assign_address(pool,
+                                            IPAddress(candidate_address)):
+                    return candidate_address
 
     def _get_next(self, pool, assigned):
         """
         Gets the next address in a range.
-        :param pool: The pool to allocate from (an IPNetwork)
+        :param IPNetwork pool: The pool to allocate from
         :return: the next IP address to try (a string), or None if the pool
                  is full.
         """
@@ -55,3 +52,76 @@ class SequentialAssignment(object):
             if addr_string not in assigned:
                 return addr_string
         return None
+
+
+class IPAMClient(DatastoreClient):
+    def assign_address(self, pool, address, version="v4"):
+        """
+        Attempt to assign an IPAddress in a pool.
+        Fails if the address is already assigned.
+        The directory for storing assignments in this pool must already exist.
+
+        :param IPNetwork pool: The pool that the assignment is from.
+        :param IPAddress address: The address to assign.
+        :param str version: The IP version of the pool
+
+        :return: True if the allocation succeeds, false otherwise.
+        :rtype: bool
+        """
+        #TODO - can the version be worked out from the pool.
+        directory = IP_ASSIGNMENT_PATH % {"version": version,
+                                          "pool": str(pool).replace("/", "-")
+                                        }
+        key = directory + "/" + str(address)
+
+        try:
+            self.etcd_client.write(key, "", prevExist=False)
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def unassign_address(self, pool, address, version="v4"):
+        """
+        Unassign an IP from a pool.
+
+        :param pool:
+        :param address:
+        :param version:
+        :return: True if the address was unassigned, false otherwise.
+        :rtype: bool
+        """
+        directory = IP_ASSIGNMENT_PATH % {"version": version,
+                                          "pool": str(pool).replace("/", "-")
+                                        }
+        key = directory + "/" + str(address)
+
+        try:
+            self.etcd_client.delete(key)
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def get_assigned_addresses(self, pool, version="v4"):
+        """
+        :param IPNetwork pool: The pool to get assignments for.
+        :return: The assigned addresses from the pool
+        :rtype dict of [str, str]
+        """
+        #TODO - make sure the assignment stuff is created/deleted when pools
+        #  are created/deleted
+        directory = IP_ASSIGNMENT_PATH % {"version": version,
+                                    "pool": str(pool).replace("/", "-")}
+        try:
+            nodes = self.etcd_client.read(directory).children
+        except KeyError:
+            # Path doesn't exist so configure now.
+            self.etcd_client.write(directory, None, dir=True)
+            return {}
+        else:
+            addresses = {}
+            for child in nodes:
+                if not child.dir:
+                    addresses[child.key.split("/")[-1]] = ""
+            return addresses

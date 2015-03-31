@@ -48,14 +48,14 @@ from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
-from node.adapter.datastore import (DatastoreClient,
-                                    ETCD_AUTHORITY_ENV,
+from node.adapter.datastore import (ETCD_AUTHORITY_ENV,
                                     ETCD_AUTHORITY_DEFAULT)
+from node.adapter.ipam import IPAMClient
 from node.adapter import netns
 
 
 hostname = socket.gethostname()
-client = DatastoreClient()
+client = IPAMClient()
 DOCKER_VERSION = "1.16"
 docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
@@ -142,7 +142,11 @@ def container_add(container_name, ip):
     ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
-    if not any([ip in pool for pool in pools]):
+    for candidate_pool in pools:
+        if ip in candidate_pool:
+            pool = candidate_pool
+
+    if pool is None:
         print "%s is not in any configured pools" % ip
         sys.exit(1)
 
@@ -157,6 +161,11 @@ def container_add(container_name, ip):
         next_hops[ip.version]
     except KeyError:
         print "This node is not configured for IPv%d." % ip.version
+        sys.exit(1)
+
+    # Assign the IP
+    if not client.assign_address(pool, ip):
+        print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
     # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
@@ -374,7 +383,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
     if force_unix_socket:
         while not os.path.exists(POWERSTRIP_SOCK):
-            time.sleep(1)
+            time.sleep(0.1)
         uid = os.stat(REAL_SOCK).st_uid
         gid = os.stat(REAL_SOCK).st_gid
         os.chown(POWERSTRIP_SOCK, uid, gid)

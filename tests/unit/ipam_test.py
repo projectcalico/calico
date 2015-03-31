@@ -1,10 +1,9 @@
-from netaddr import IPNetwork
-from node.adapter import datastore
+from netaddr import IPNetwork, IPAddress
 from nose.tools import assert_equal, assert_true
-from node.adapter.ipam import SequentialAssignment
+from node.adapter.ipam import SequentialAssignment, IPAMClient
 
 pool = IPNetwork("192.168.0.0/16")
-client = datastore.DatastoreClient()
+client = IPAMClient()
 
 class TestIPAM:
     def setup(self):
@@ -19,8 +18,15 @@ class TestIPAM:
         assert_equal(none_assigned, {})
 
         one_assigned = {"192.168.0.1": ""}
-        assert_true(client.update_assigned_address(pool, {}, one_assigned))
+        assert_true(client.assign_address(pool, IPAddress("192.168.0.1")))
         assert_equal(client.get_assigned_addresses(pool), one_assigned)
+
+    def test_remove_assignment(self):
+        address = IPAddress("192.168.0.1")
+        assert_equal(client.get_assigned_addresses(pool), {})
+        assert_true(client.assign_address(pool, address))
+        assert_true(client.unassign_address(pool, address))
+        assert_equal(client.get_assigned_addresses(pool), {})
 
     def test_sequential_assignment(self):
         assigner = SequentialAssignment()

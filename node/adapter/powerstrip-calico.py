@@ -143,7 +143,7 @@ class AdapterResource(resource.Resource):
 
             if ip_str.lower() == "auto":
                 ip_str = self.assign_ipv4()
-            # TODO: process groups
+
             group = env_dict.get(ENV_GROUP, None)
 
         except KeyError as e:
