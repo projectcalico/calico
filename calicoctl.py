@@ -117,8 +117,8 @@ def container_add(container_name, ip):
     """
     try:
         info = get_container_info(container_name)
-    except KeyError as e:
-        print e.message
+    except KeyError as err:
+        print err.message
         sys.exit(1)
     container_id = info["Id"]
 
@@ -177,8 +177,8 @@ def container_remove(container_name):
 
     The container may be left in a state without any working networking.
     The container can't be removed if there are ACLs that refer to it.
-    If there is a network adaptor in the host namespace used by the container then it's
-    removed.
+    If there is a network adaptor in the host namespace used by the container
+    then it is removed.
 
     :param container_name: The name or ID of the container.
     """
@@ -194,7 +194,8 @@ def container_remove(container_name):
 
     groups = client.get_groups_by_endpoint(endpoint_id)
     if len(groups) > 0:
-        print "Container %s is in security groups %s. Can't remove." % (container_name, groups)
+        print "Container %s is in security groups %s. Can't remove." % \
+              (container_name, groups)
 
     # Remove the endpoint
     netns.remove_endpoint(endpoint_id)
@@ -203,6 +204,7 @@ def container_remove(container_name):
     client.remove_container(container_id)
 
     print "Removed Calico interface from %s" % container_name
+
 
 def group_remove_container(container_name, group_name):
     """
@@ -219,8 +221,8 @@ def group_remove_container(container_name, group_name):
         # Remove the endpoint from the group.
         client.remove_workload_from_group(container_id)
         print "Remove %s from %s" % (container_name, group_name)
-    except KeyError as e:
-        print e
+    except KeyError as err:
+        print err
         print "%s is not a member of %s" % (container_name, group_name)
         sys.exit(1)
 
@@ -230,13 +232,14 @@ def node_stop(force):
         client.remove_host()
         try:
             docker_client.stop("calico-node")
-        except docker.errors.APIError as e:
-            if e.response.status_code != 404:
+        except docker.errors.APIError as err:
+            if err.response.status_code != 404:
                 raise
 
         print "Node stopped and all configuration removed"
     else:
-        print "Current host has active endpoints so can't be stopped. Force with --force"
+        print "Current host has active endpoints so can't be stopped." + \
+              " Force with --force"
 
 
 def clean_restart_docker(sock_to_wait_on):
@@ -310,10 +313,11 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         # At this point, docker is listening on a new port but powerstrip isn't
         # running, so docker clients need to talk directly to docker.
         node_docker_client = docker.Client(version=DOCKER_VERSION,
-                                      base_url="unix://%s" % REAL_SOCK)
+                                           base_url="unix://%s" % REAL_SOCK)
         enable_socket = "YES"
     else:
-        # If there is --force-unix-socket config in place, do some cleanup
+        # Not using the unix socket.  If there is --force-unix-socket config in
+        # place, do some cleanup
         socket_config_exists = \
             DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
         if socket_config_exists:
@@ -324,8 +328,8 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
     try:
         node_docker_client.remove_container("calico-node", force=True)
-    except docker.errors.APIError as e:
-        if e.response.status_code != 404:
+    except docker.errors.APIError as err:
+        if err.response.status_code != 404:
             raise
 
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
@@ -355,19 +359,21 @@ def node(ip, force_unix_socket, node_image, ip6=""):
             }
     }
 
-    host_config = docker.utils.create_host_config(privileged=True,
-                                                  restart_policy={"Name": "Always"},
-                                                  network_mode="host",
-                                                  binds=binds)
+    host_config = docker.utils.create_host_config(
+        privileged=True,
+        restart_policy={"Name": "Always"},
+        network_mode="host",
+        binds=binds)
 
-    container = node_docker_client.create_container(node_image,
-                                               name="calico-node",
-                                               detach=True,
-                                               environment=environment,
-                                               host_config=host_config,
-                                               volumes=["/host-var-run",
-                                                        "/proc_host",
-                                                        "/var/log/calico"])
+    container = node_docker_client.create_container(
+        node_image,
+        name="calico-node",
+        detach=True,
+        environment=environment,
+        host_config=host_config,
+        volumes=["/host-var-run",
+                 "/proc_host",
+                 "/var/log/calico"])
     cid = container["Id"]
 
     node_docker_client.start(container)
@@ -388,12 +394,12 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
 
 def grep(text, pattern):
-    return "\n".join(
-        [line for line in text.splitlines() if pattern in line ])
+    return "\n".join([line for line in text.splitlines() if pattern in line])
 
 
 def status():
-    calico_node_info = filter(lambda container: "/calico-node" in container["Names"],
+    calico_node_info = filter(lambda container: "/calico-node" in
+                              container["Names"],
                               docker_client.containers())
     if len(calico_node_info) == 0:
         print "calico-node container not running"
@@ -402,7 +408,7 @@ def status():
               calico_node_info[0]["Status"]
 
         apt_output = docker_client.execute("calico-node", ["/bin/bash", "-c",
-                            "apt-cache policy calico-felix"])
+                                           "apt-cache policy calico-felix"])
         result = re.search(r"Installed: (.*?)\s", apt_output)
         if result is not None:
             print "Running felix version %s" % result.group(1)
@@ -421,7 +427,7 @@ def status():
 
 
 def reset():
-    print "Removing all data from datastore"
+    print "Removing all data from data store"
     client.remove_all_data()
 
 
@@ -437,13 +443,13 @@ def group_add(group_name):
     else:
         # Create the group.
         client.create_group(group_name)
-        print "Created group %s" % (group_name)
+        print "Created group %s" % group_name
 
 
 def group_add_container(container_name, group_name):
     """
-    Add a container (on this host) to the group with the given name.  This adds the first
-    endpoint on the container to the group.
+    Add a container (on this host) to the group with the given name.  This adds
+    the first endpoint on the container to the group.
 
     :param container_name: The Docker container name or ID.
     :param group_name:  The Calico security group name.
@@ -459,14 +465,15 @@ def group_add_container(container_name, group_name):
     client.add_workload_to_group(group_name, container_id)
     print "Added %s to %s" % (container_name, group_name)
 
+
 def group_remove(group_name):
-    #TODO - Don't allow removing a group that has endpoints in it.
+    # TODO - Don't allow removing a group that has endpoints in it.
     try:
         client.delete_group(group_name)
     except KeyError:
         print "Couldn't find group with name %s" % group_name
     else:
-        print "Deleted group %s" % (group_name)
+        print "Deleted group %s" % group_name
 
 
 def group_show(detailed):
@@ -493,11 +500,12 @@ def node_show(detailed):
     hosts = client.get_hosts()
 
     if detailed:
-        x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID", "Addresses",
-                         "MAC", "State"])
+        x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID",
+                         "Addresses", "MAC", "State"])
         for host, container_types in hosts.iteritems():
             if not container_types:
-                x.add_row([host, "None", "None", "None", "None", "None", "None"])
+                x.add_row([host, "None", "None", "None",
+                           "None", "None", "None"])
                 continue
             for container_type, workloads in container_types.iteritems():
                 for workload, endpoints in workloads.iteritems():
@@ -581,8 +589,8 @@ echo "Done"
     bash = sh.Command._create('bash')
     bash(_in=script, _err=process_output, _out=process_output).wait()
     # TODO: reimplement this in Python
-    # TODO: ipset might not be installed on the host. But we don't want to gather the diags in
-    # the container because it might not be running...
+    # TODO: ipset might not be installed on the host. But we don't want to
+    # gather the diags in the container because it might not be running...
 
 
 def ip_pool_add(cidr_pool, version):
@@ -641,15 +649,16 @@ def ip_pool_show(version):
 
 
 def validate_arguments():
-    group_ok = arguments["<GROUP>"] is None or re.match("^\w{1,30}$", arguments["<GROUP>"])
+    group_ok = (arguments["<GROUP>"] is None or
+                re.match("^\w{1,30}$", arguments["<GROUP>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
         arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
     container_ip_ok = arguments["<IP>"] is None or netaddr.valid_ipv4(
         arguments["<IP>"]) or netaddr.valid_ipv6(arguments["<IP>"])
 
     if not group_ok:
-        print "Groups must be <30 character long and can only container numbers, letters and " \
-              "underscore."
+        print "Groups must be <30 character long and can only container " \
+              "numbers, letters and underscore."
     if not ip_ok:
         print "Invalid ip argument"
     return group_ok and ip_ok and container_ip_ok
@@ -668,7 +677,10 @@ if __name__ == '__main__':
             else:
                 node_image = arguments['--node-image']
                 ip6 = arguments["--ip6"]
-                node(arguments["--ip"], arguments["--force-unix-socket"], node_image=node_image, ip6=ip6)
+                node(arguments["--ip"],
+                     arguments["--force-unix-socket"],
+                     node_image=node_image,
+                     ip6=ip6)
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
@@ -714,4 +726,3 @@ if __name__ == '__main__':
     else:
         print "Couldn't validate arguments. Exiting."
         sys.exit(1)
-
