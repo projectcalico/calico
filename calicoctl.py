@@ -9,11 +9,13 @@ Usage:
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
-  calicoctl group show [--detailed]
-  calicoctl group add <GROUP>
-  calicoctl group remove <GROUP>
-  calicoctl group addmember <GROUP> <CONTAINER>
-  calicoctl group removemember <GROUP> <CONTAINER>
+  calicoctl profile show [--detailed]
+  calicoctl profile <PROFILE> tag show
+  calicoctl profile <PROFILE> rule show
+  calicoctl profile <PROFILE> rule json
+  calicoctl profile add <PROFILE>
+  calicoctl profile remove <PROFILE>
+  calicoctl profile addmember <PROFILE> <CONTAINER>
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
@@ -38,6 +40,7 @@ import sys
 import time
 import os
 import re
+import json
 
 import netaddr
 from docopt import docopt
@@ -176,7 +179,6 @@ def container_remove(container_name):
     Remove a container (on this host) from Calico networking.
 
     The container may be left in a state without any working networking.
-    The container can't be removed if there are ACLs that refer to it.
     If there is a network adaptor in the host namespace used by the container
     then it is removed.
 
@@ -192,11 +194,6 @@ def container_remove(container_name):
         print "Container %s doesn't contain any endpoints" % container_name
         return
 
-    groups = client.get_groups_by_endpoint(endpoint_id)
-    if len(groups) > 0:
-        print "Container %s is in security groups %s. Can't remove." % \
-              (container_name, groups)
-
     # Remove the endpoint
     netns.remove_endpoint(endpoint_id)
 
@@ -204,27 +201,6 @@ def container_remove(container_name):
     client.remove_container(container_id)
 
     print "Removed Calico interface from %s" % container_name
-
-
-def group_remove_container(container_name, group_name):
-    """
-    Remove a container (on this host) from the group with the given name.  
-
-    :param container_name: The Docker container name or ID.
-    :param group_name:  The Calico security group name.
-    :return: None.
-    """
-    # Resolve the name to ID.
-    container_id = get_container_id(container_name)
-
-    try:
-        # Remove the endpoint from the group.
-        client.remove_workload_from_group(container_id)
-        print "Remove %s from %s" % (container_name, group_name)
-    except KeyError as err:
-        print err
-        print "%s is not a member of %s" % (container_name, group_name)
-        sys.exit(1)
 
 
 def node_stop(force):
@@ -431,58 +407,58 @@ def reset():
     client.remove_all_data()
 
 
-def group_add(group_name):
+def profile_add(profile_name):
     """
-    Create a security group with the given name.
-    :param group_name: The name for the group.
+    Create a policy profile with the given name.
+    :param profile_name: The name for the profile.
     :return: None.
     """
-    # Check if the group exists.
-    if client.group_exists(group_name):
-        print "Group %s already exists." % group_name
+    # Check if the profile exists.
+    if client.profile_exists(profile_name):
+        print "Group %s already exists." % profile_name
     else:
-        # Create the group.
-        client.create_group(group_name)
-        print "Created group %s" % group_name
+        # Create the profile.
+        client.create_profile(profile_name)
+        print "Created profile %s" % profile_name
 
 
-def group_add_container(container_name, group_name):
+def profile_add_container(container_name, profile_name):
     """
-    Add a container (on this host) to the group with the given name.  This adds
-    the first endpoint on the container to the group.
+    Add a container (on this host) to the profile with the given name.  This adds
+    the first endpoint on the container to the profile.
 
     :param container_name: The Docker container name or ID.
-    :param group_name:  The Calico security group name.
+    :param profile_name:  The Calico policy profile name.
     :return: None.
     """
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
-    if not client.group_exists(group_name):
-        print "Group with name %s was not found." % group_name
+    if not client.profile_exists(profile_name):
+        print "Group with name %s was not found." % profile_name
         return
 
-    client.add_workload_to_group(group_name, container_id)
-    print "Added %s to %s" % (container_name, group_name)
+    client.add_workload_to_profile(profile_name, container_id)
+    print "Added %s to %s" % (container_name, profile_name)
 
 
-def group_remove(group_name):
-    # TODO - Don't allow removing a group that has endpoints in it.
+def profile_remove(profile_name):
+    # TODO - Don't allow removing a profile that has endpoints in it.
     try:
-        client.delete_group(group_name)
+        client.delete_profile(profile_name)
     except KeyError:
-        print "Couldn't find group with name %s" % group_name
+        print "Couldn't find profile with name %s" % profile_name
     else:
-        print "Deleted group %s" % group_name
+        print "Deleted profile %s" % profile_name
 
 
-def group_show(detailed):
-    groups = client.get_groups()
+def profile_show(detailed):
+    profiles = client.get_profile_names()
 
     if detailed:
         x = PrettyTable(["Name", "Endpoint ID"])
-        for name in groups:
-            members = client.get_group_members(name)
+        for name in profiles:
+            members = client.get_profile_members(name)
             if members:
                 for member in members:
                     x.add_row([name, member])
@@ -490,10 +466,48 @@ def group_show(detailed):
                 x.add_row([name, "No members"])
     else:
         x = PrettyTable(["Name"])
-        for name in groups:
+        for name in profiles:
             x.add_row([name])
 
     print x
+
+
+def profile_tag_show(name):
+    """Show the tags on the profile."""
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    for tag in profile.tags:
+        print tag
+
+
+def profile_rule_show(name, human_readable=False):
+    """Show the rules on the profile."""
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    if human_readable:
+        print "Inbound rules:"
+        i = 1
+        for rule in profile.rules.inbound_rules:
+            print " %3d %s" % (i, rule.pprint())
+            i += 1
+        print "Outbound rules:"
+        i = 1
+        for rule in profile.rules.outbound_rules:
+            print " %3d %s" % (i, rule.pprint())
+            i += 1
+    else:
+        json.dump(profile.rules._asdict(),
+                  sys.stdout,
+                  indent=2)
+        print ""
 
 
 def node_show(detailed):
@@ -649,19 +663,19 @@ def ip_pool_show(version):
 
 
 def validate_arguments():
-    group_ok = (arguments["<GROUP>"] is None or
-                re.match("^\w{1,30}$", arguments["<GROUP>"]))
+    profile_ok = (arguments["<PROFILE>"] is None or
+                re.match("^\w{1,30}$", arguments["<PROFILE>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
         arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
     container_ip_ok = arguments["<IP>"] is None or netaddr.valid_ipv4(
         arguments["<IP>"]) or netaddr.valid_ipv6(arguments["<IP>"])
 
-    if not group_ok:
+    if not profile_ok:
         print "Groups must be <30 character long and can only container " \
               "numbers, letters and underscore."
     if not ip_ok:
         print "Invalid ip argument"
-    return group_ok and ip_ok and container_ip_ok
+    return profile_ok and ip_ok and container_ip_ok
 
 
 def process_output(line):
@@ -685,19 +699,25 @@ if __name__ == '__main__':
             status()
         elif arguments["reset"]:
             reset()
-        elif arguments["group"]:
+        elif arguments["profile"]:
             if arguments["add"]:
-                group_add(arguments["<GROUP>"])
-            if arguments["remove"]:
-                group_remove(arguments["<GROUP>"])
-            if arguments["show"]:
-                group_show(arguments["--detailed"])
-            if arguments["addmember"]:
-                group_add_container(arguments["<CONTAINER>"],
-                                    arguments["<GROUP>"])
-            if arguments["removemember"]:
-                group_remove_container(arguments["<CONTAINER>"],
-                                       arguments["<GROUP>"])
+                profile_add(arguments["<PROFILE>"])
+            elif arguments["remove"]:
+                profile_remove(arguments["<PROFILE>"])
+            elif arguments["tag"]:
+                profile_tag_show(arguments["<PROFILE>"])
+            elif arguments["rule"]:
+                if arguments["show"]:
+                    profile_rule_show(arguments["<PROFILE>"],
+                                      human_readable=True)
+                elif arguments["json"]:
+                    profile_rule_show(arguments["<PROFILE>"],
+                                      human_readable=False)
+            elif arguments["show"]:
+                profile_show(arguments["--detailed"])
+            elif arguments["addmember"]:
+                profile_add_container(arguments["<CONTAINER>"],
+                                    arguments["<PROFILE>"])
         elif arguments["diags"]:
             save_diags()
         elif arguments["shownodes"]:

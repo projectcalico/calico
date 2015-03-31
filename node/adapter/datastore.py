@@ -60,6 +60,38 @@ class Rule(dict):
     def to_json(self):
         return json.dumps(self)
 
+    def pprint(self):
+        """Human readable description."""
+        out = [self["action"]]
+        if "protocol" in self:
+            out.append(self["protocol"])
+        if "icmp_type" in self:
+            out.extend(["type", self["icmp_type"]])
+
+        if ("src_tag" in self or
+            "src_ports" in self or
+            "src_net" in self):
+            out.append("from")
+        if "src_tag" in self:
+            out.extend(["tag", self["src_tag"]])
+        elif "src_net" in self:
+            out.append(self["src_net"])
+        if "src_ports" in self:
+            out.extend(["ports", self["src_ports"]])
+
+        if ("dst_tag" in self or
+            "dst_ports" in self or
+            "dst_net" in self):
+            out.append("to")
+        if "dst_tag" in self:
+            out.extend(["tag", self["dst_tag"]])
+        elif "dst_net" in self:
+            out.append(self["dst_net"])
+        if "dst_ports" in self:
+            out.extend(["ports", self["dst_ports"]])
+
+        return " ".join(out)
+
 
 class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
     """
@@ -69,6 +101,20 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
 
     def to_json(self):
         return json.dumps(self._asdict())
+
+    @classmethod
+    def from_json(cls, json_str):
+        json_dict = json.loads(json_str)
+        inbound_rules = []
+        for rule in json_dict["inbound_rules"]:
+            inbound_rules.append(Rule(**rule))
+        outbound_rules = []
+        for rule in json_dict["outbound_rules"]:
+            outbound_rules.append(Rule(**rule))
+        rules = cls(id=json_dict["id"],
+                    inbound_rules=inbound_rules,
+                    outbound_rules=outbound_rules)
+        return rules
 
 
 class Endpoint(object):
@@ -116,6 +162,17 @@ class Endpoint(object):
             ep.ipv6_gateway = IPAddress(ipv6_gw)
         ep.profile_id = json_dict["profile_id"]
         return ep
+
+
+class Profile(object):
+    """A Calico policy profile."""
+
+    def __init__(self, name):
+        self.name = name
+        self.tags = set()
+
+        # Default to empty lists of rules.
+        self.rules = Rules(name, [], [])
 
 
 class Vividict(dict):
@@ -176,9 +233,6 @@ class DatastoreClient(object):
         except KeyError:
             pass
 
-    def get_groups_by_endpoint(self, endpoint_id):
-        return []   # TODO
-
     def get_ip_pools(self, version):
         """
         Get the configured IP pools.
@@ -220,8 +274,9 @@ class DatastoreClient(object):
 
     def add_ip_pool(self, version, pool):
         """
-        Add the given pool to the list of IP allocation pools.  If the pool already exists, this
-        method completes silently without modifying the list of pools.
+        Add the given pool to the list of IP allocation pools.  If the pool
+        already exists, this method completes silently without modifying the
+        list of pools.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
@@ -242,8 +297,8 @@ class DatastoreClient(object):
 
     def del_ip_pool(self, version, pool):
         """
-        Delete the given CIDR range from the list of pools.  If the pool does not exist, raise a
-        etcd.EtcdKeyNotFound:.
+        Delete the given CIDR range from the list of pools.  If the pool does
+        not exist, raise a etcd.EtcdKeyNotFound:.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
@@ -260,12 +315,12 @@ class DatastoreClient(object):
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
 
-    def group_exists(self, name):
+    def profile_exists(self, name):
         """
-        Check if a group exists.
+        Check if a profile exists.
 
-        :param name: The name of the group.
-        :return: True if the group exists, false otherwise.
+        :param name: The name of the profile.
+        :return: True if the profile exists, false otherwise.
         """
         profile_path = PROFILE_PATH % {"profile_id": name}
         try:
@@ -275,36 +330,35 @@ class DatastoreClient(object):
         else:
             return True
 
-    def create_group(self, name):
+    def create_profile(self, name):
         """
-        Create a security group.  In this implementation, security groups
-        accept traffic only from themselves, but can send traffic anywhere.
+        Create a policy profile.  By default, containers in a profile
+        accept traffic only from other containers in that profile, but can send
+        traffic anywhere.
 
-        Note this will clobber any existing group with this name.
+        Note this will clobber any existing profile with this name.
 
-        :param name: Unique string name for the group.
+        :param name: Unique string name for the profile.
         :return: nothing.
         """
-        # A group is a implemented as a policy profile with a self-referencing
-        # tag.
         profile_path = PROFILE_PATH % {"profile_id": name}
         self.etcd_client.write(profile_path + "tags", '["%s"]' % name)
 
         # Accept inbound traffic from self, allow outbound traffic to anywhere.
         default_deny = Rule(action="deny")
-        accept_self = Rule(src_tag=name)
+        accept_self = Rule(action="allow", src_tag=name)
         default_allow = Rule(action="allow")
         rules = Rules(id=name,
                       inbound_rules=[accept_self, default_deny],
                       outbound_rules=[default_allow])
         self.etcd_client.write(profile_path + "rules", rules.to_json())
 
-    def delete_group(self, name):
+    def delete_profile(self, name):
         """
-        Delete a security group with a given name.
+        Delete a policy profile with a given name.
 
-        :param name: Unique string name for the group.
-        :return: the ID of the group that was deleted, or None if the group
+        :param name: Unique string name for the profile.
+        :return: the ID of the profile that was deleted, or None if the profile
         couldn't be found.
         """
 
@@ -312,29 +366,60 @@ class DatastoreClient(object):
         self.etcd_client.delete(profile_path, recursive=True, dir=True)
         return
 
-    def get_groups(self):
+    def get_profile_names(self):
         """
-        Get the all configured groups.
-        :return: a set of group names
+        Get the all configured profiles.
+        :return: a set of profile names
         """
-        groups = set()
+        profiles = set()
         try:
-            etcd_groups = self.etcd_client.read(PROFILES_PATH,
+            etcd_profiles = self.etcd_client.read(PROFILES_PATH,
                                                 recursive=True,).children
-            for child in etcd_groups:
+            for child in etcd_profiles:
                 packed = child.key.split("/")
                 if len(packed) > 4:
-                    groups.add(packed[4])
+                    profiles.add(packed[4])
         except KeyError:
-            # Means the GROUPS_PATH was not set up.  So, group does not exist.
+            # Means the PROFILES_PATH was not set up.  So, profile does not exist.
             pass
-        return groups
+        return profiles
 
-    def get_group_members(self, name):
+    def get_profile(self, name):
         """
-        Get the all configured groups.
+        Get a Profile object representing the named profile from the data
+        store.
 
-        :param name: Unique string name of the group.
+        :param name: The name of the profile.
+        :return: A Profile object.
+        """
+        profile_path = PROFILE_PATH % {"profile_id": name}
+        # Note: raises KeyError if profile doesn't exist.
+        _ = self.etcd_client.read(profile_path)
+        profile = Profile(name)
+
+        tags_path = TAGS_PATH % {"profile_id": name}
+        try:
+            tags_result = self.etcd_client.read(tags_path)
+            tags = json.loads(tags_result.value)
+            profile.tags = set(tags)
+        except KeyError:
+            pass
+
+        rules_path = RULES_PATH % {"profile_id": name}
+        try:
+            rules_result = self.etcd_client.read(rules_path)
+            rules = Rules.from_json(rules_result.value)
+            profile.rules = rules
+        except KeyError:
+            pass
+
+        return profile
+
+    def get_profile_members(self, name):
+        """
+        Get the all configured profiles.
+
+        :param name: Unique string name of the profile.
         :return: a list of members
         """
         members = []
@@ -342,7 +427,7 @@ class DatastoreClient(object):
             endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
                                               recursive=True)
         except KeyError:
-            # Means the ALL_ENDPOINTS_PATH was not set up.  So, group has no
+            # Means the ALL_ENDPOINTS_PATH was not set up.  So, profile has no
             # members because there are no endpoints.
             return members
 
@@ -355,7 +440,7 @@ class DatastoreClient(object):
                     members.append(ep.ep_id)
         return members
 
-    def add_workload_to_group(self, group_name, container_id):
+    def add_workload_to_profile(self, profile_name, container_id):
         endpoint_id = self.get_ep_id_from_cont(container_id)
 
         # Change the profile on the endpoint.
@@ -364,10 +449,10 @@ class DatastoreClient(object):
                                    "endpoint_id": endpoint_id}
         ep_json = self.etcd_client.read(ep_path).value
         ep = Endpoint.from_json(endpoint_id, ep_json)
-        ep.profile_id = group_name
+        ep.profile_id = profile_name
         self.etcd_client.write(ep_path, ep.to_json())
 
-    def remove_workload_from_group(self, container_id):
+    def remove_workload_from_profile(self, container_id):
         endpoint_id = self.get_ep_id_from_cont(container_id)
 
         # Change the profile on the endpoint.
@@ -392,25 +477,26 @@ class DatastoreClient(object):
             endpoints = self.etcd_client.read(ep_path).leaves
         except KeyError:
             # Re-raise with better message
-            raise KeyError("Container with ID %s was not found." % container_id)
+            raise KeyError("Container with ID %s was not found." %
+                           container_id)
 
         # Get the first endpoint & ID
         endpoint = endpoints.next()
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
         return endpoint_id
 
-    def create_container(self, hostname, container_id, endpoint):
+    def create_container(self, target_host, container_id, endpoint):
         """
-        Set up a container in the /calico/ namespace on this host.  This function assumes 1
-        container, with 1 endpoint.
+        Set up a container in the /calico/ namespace on this host.  This
+        function assumes 1 container, with 1 endpoint.
 
-        :param hostname: The hostname for the Docker hosting this container.
+        :param target_host: The hostname for the Docker hosting this container.
         :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
         :return: Nothing
         """
 
-        endpoint_path = ENDPOINT_PATH % {"hostname": hostname,
+        endpoint_path = ENDPOINT_PATH % {"hostname": target_host,
                                          "container_id": container_id,
                                          "endpoint_id": endpoint.ep_id}
         self.etcd_client.write(endpoint_path, endpoint.to_json())
@@ -436,7 +522,7 @@ class DatastoreClient(object):
                                                recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if len(packed) > 4 and len(packed) < 9:
+                if 9 > len(packed) > 4:
                     (_, _, _, host, _) = packed[0:5]
                     if not hosts[host]:
                         hosts[host] = Vividict()
@@ -483,7 +569,6 @@ class DatastoreClient(object):
             pass
 
         return next_hops
-
 
     def remove_all_data(self):
         """
