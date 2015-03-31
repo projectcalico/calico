@@ -101,7 +101,7 @@ context.
    magnitude. Even in very large pods (say twenty thousand servers), the
    Ethernet network would still only see a few tens of thousands of end
    points. Well within the scale of any competent data center Ethernet
-   top of rack (TOR) switch.
+   top of rack (ToR) switch.
 
 #. High rate of *churn*. In a classical Ethernet data center fabric,
    there is a *churn* event each time an end point is created,
@@ -188,15 +188,15 @@ below.
 I am not showing the end points in this diagram, and the end points
 would be unaware of anything in the fabric (as noted above).
 
-In the particular case of this diagram, each TOR is segmented into four
-logical switches (possibly by using 'port VLANs'), [#vswitch]_ and each compute
-server has a connection to each of those logical switches. We will call
-those logical switches by their color. Each TOR would then have a blue,
-green, orange, and red logical switch. Those 'colors' would be members
-of a given *plane*, so there would be a blue plane, a green plane, an
-orange plane, and a red plane. Each plane would have a dedicated spine
-switch. and each TOR in a given spine would be connected to its spine,
-and only its spine.
+In the particular case of this diagram, each ToR is segmented into
+four logical switches (possibly by using 'port VLANs'), [#vswitch]_
+and each compute server has a connection to each of those logical
+switches. We will identify those logical switches by their color. Each
+ToR would then have a blue, green, orange, and red logical
+switch. Those 'colors' would be members of a given *plane*, so there
+would be a blue plane, a green plane, an orange plane, and a red
+plane. Each plane would have a dedicated spine switch. and each ToR in
+a given spine would be connected to its spine, and only its spine.
 
 Each plane would constitute an IP network, so the blue plane would be
 2001:db8:1000::/36, the green would be 2001:db8:2000::/36, and the
@@ -240,7 +240,7 @@ that one plane would fail. The remaining planes would stay running.
    VMs as distinct from containers).
 
 .. [#vswitch]
-   I am using logical switches in this example. Physical TORs could also
+   We are using logical switches in this example. Physical ToRs could also
    be used, or a mix of the two (say 2 logical switches hosted on each
    physical switch).
 
