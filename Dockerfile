@@ -52,6 +52,9 @@ RUN pip install -r /adapter/requirements.txt
 COPY node /
 
 # Powerstrip
+# Note that we are on a Metaswitch-customized version of Powerstrip that allows
+# configuration to either listen on a UNIX socket, or a TCP socket for Docker,
+# depending on an environment variable.
 RUN git clone https://github.com/Metaswitch/powerstrip.git && \
     cd powerstrip && \
     sed -i s/2375/2377/ powerstrip.tac && \
