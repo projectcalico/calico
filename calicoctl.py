@@ -10,14 +10,14 @@ Usage:
   calicoctl status
   calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
+  calicoctl profile add <PROFILE>
+  calicoctl profile remove <PROFILE>
   calicoctl profile <PROFILE> tag show
   calicoctl profile <PROFILE> tag add <TAG>
   calicoctl profile <PROFILE> tag remove <TAG>
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
-  calicoctl profile add <PROFILE>
-  calicoctl profile remove <PROFILE>
-  calicoctl profile addmember <PROFILE> <CONTAINER>
+  calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
@@ -768,9 +768,9 @@ if __name__ == '__main__':
                                       human_readable=False)
             elif arguments["show"]:
                 profile_show(arguments["--detailed"])
-            elif arguments["addmember"]:
+            elif arguments["member"]:
                 profile_add_container(arguments["<CONTAINER>"],
-                                    arguments["<PROFILE>"])
+                                      arguments["<PROFILE>"])
         elif arguments["diags"]:
             save_diags()
         elif arguments["shownodes"]:
