@@ -50,7 +50,7 @@ a vRouter. The data path is provided by the Linux kernel, the control
 plane by a BGP protocol server, and management plane by Calico's
 on-server agent, *Felix*.
 
-Each end-point can only communicate through its local vRouter, and the
+Each endpoint can only communicate through its local vRouter, and the
 first and last *hop* in any Calico packet flow is an IP router hop
 through a vRouter. Each vRouter announces all of the endpoints it is
 attached to to all the other vRouters and other routers on the
@@ -90,12 +90,12 @@ technical note.
    limitations in scale of IGP networks (see the `why
    BGP post <http://www.projectcalico.org/why-bgp/>`__ for discussion of
    this topic.  The project Calico team does not believe that using an
-   IGP to distribute end-point reachability information will
+   IGP to distribute endpoint reachability information will
    adequately scale in a Calico environment.  However, it is possible
    to use a combination of IGP and BGP in the interconnect fabric,
    where an IGP communicates the path to the *next-hop* router (in
    Calico, this is often the destination compute server) and BGP is
-   used to distribute the actual next-hop for a given end-point.
+   used to distribute the actual next-hop for a given endpoint.
    This is a valid model, and, in fact is the most common approach in
    a widely distributed IP network (say a carrier's backbone network).  The
    design of these networks is somewhat complex though, and will not
