@@ -96,7 +96,7 @@ implemented in Calico.
      Proxy NDP to ensure that routes to all machines go via the compute host.
 
    - rather than using DHCPv6 to allocate IPv6 addresses, we allocate the IPv6
-     address directly to the container interface betfore we move it into the
+     address directly to the container interface before we move it into the
      container.
 
 -  BIRD6 runs between the compute hosts to distribute routes.

@@ -14,13 +14,13 @@ solving this problem have problems at high scale.  Compared to these, we think
 Calico is more scalable, simpler and more flexible.  We think you should look
 into it if you have more than a handful of nodes on a single site.
 
-For a more detailed discussion of this topic, see our blog post at 
-http://www.projectcalico.org/why-calico/.
+For a more detailed discussion of this topic, see our blog post at
+`Why Calico? <http://www.projectcalico.org/why-calico/>`__.
 
 "Does Calico work with IPv6?"
 -----------------------------
 
-Yes!  We have demonstrated IPv6 with Calico on Openstack and Docker/Powerstrip.
+Yes!  We have demonstrated IPv6 with Calico on OpenStack and Docker/Powerstrip.
 
 "Is Calico compliant with PCI/DSS requirements?"
 ------------------------------------------------

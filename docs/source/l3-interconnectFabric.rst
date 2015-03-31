@@ -91,7 +91,7 @@ technical note.
    BGP post <http://www.projectcalico.org/why-bgp/>`__ for discussion of
    this topic.  The project Calico team does not believe that using an
    IGP to distribute end--point reachability information will
-   adequitely scale in a Calico environment.  However, it is possible
+   adequately scale in a Calico environment.  However, it is possible
    to use a combination of IGP and BGP in the interconnect fabric,
    where an IGP communicates the path to the *next--hop* router (in
    Calico, this is often the destination compute server) and BGP is
@@ -336,7 +336,7 @@ its ToR switch which is also acting as an eBGP router.  For two
 servers within the same rack to communicate, they will be routed
 through the ToR.  Therefore, each server will have one peering to each
 ToR it is connected to, and each ToR will have a peering with each
-compute serer that it is connected to (normally, all the compute
+compute server that it is connected to (normally, all the compute
 servers in the rack).
 
 The inter--ToR connectivity considerations are the same in scale and
@@ -363,7 +363,7 @@ The way the physical and logical connectivity is laid out in this
 note, and the `Ethernet fabric note`_, The next hop router for a given
 route is always directly connected to the router receiving that
 route.  This makes the need for another protocol to distribute the
-next hop routes unecessary.
+next hop routes unnecessary.
 
 .. _`Ethernet fabric note`:
    http://docs.projectcalico.org/en/latest/l2-interconnectFabric.html 

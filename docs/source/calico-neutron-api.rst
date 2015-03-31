@@ -89,7 +89,7 @@ All properties on a port work as normal, except for the following:
   The network ID still controls which Neutron network the port is attached to,
   and therefore still controls which Neutron subnets it will be placed in.
   However, as per the note in :ref:`neutron-api-networks`, the Neutron network
-  that a port is placed in does not affect which machines in the deplyoment it
+  that a port is placed in does not affect which machines in the deployment it
   can contact.
 
 Extended Attributes: Port Binding Attributes

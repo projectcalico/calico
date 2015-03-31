@@ -293,7 +293,7 @@ cluster that results from following the above procedure with HEAD
 commit 854d2353 from `our fork of the Fuel library
 <https://github.com/Metaswitch/fuel-library>`__.
 Reading this section should not be required in order to demonstrate or
-understand Openstack and Calico function, but it may be useful as a reference
+understand OpenStack and Calico function, but it may be useful as a reference
 if a newly deployed system does not appear to be behaving correctly.
 
 Elements required for Calico function

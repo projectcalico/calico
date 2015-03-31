@@ -265,7 +265,7 @@ Request: ENDPOINTCREATED
       messages that are triggered by such a request from other
       ENDPOINTCREATED messages. Should be ``null`` if this message is
       not triggered by a "RESYNCSTATE" message.
-   -  *issued*: A unix timestamp with millisecond or better precision
+   -  *issued*: A Unix timestamp with millisecond or better precision
       corresponding to the time the request was issued.
 
 This request is an indication that the plugin or orchestrator has
@@ -275,7 +275,7 @@ all systems to carry data about an endpoint if Felix has requested state
 resynchronisation (see the "RESYNCSTATE" message below).
 
 When state resynchronisation is in progress, no ``ENDPOINTCREATED``
-messages for new endpoint creation (i.e. with *resnyc\_id* equal to
+messages for new endpoint creation (i.e. with *resync\_id* equal to
 ``null``) can be sent until the state resynchronisation has completed.
 
 Response: ENDPOINTCREATED
@@ -325,7 +325,7 @@ Request: ENDPOINTUPDATED
       values, "enabled" and "disabled". A endpoint that is "enabled" is
       reachable on its virtual network: an endpoint that is "disabled"
       is not.
-   -  *issued*: A unix timestamp with millisecond or better precision
+   -  *issued*: A Unix timestamp with millisecond or better precision
       corresponding to the time the request was issued.
 
 This request asks Felix to update the state of a given endpoint. Any of
@@ -360,7 +360,7 @@ Request: ENDPOINTDESTROYED
 
    -  *endpoint\_id*: The UUID4 uniquely identifying the endpoint to
       destroy.
-   -  *issued*: A unix timestamp with millisecond or better precision
+   -  *issued*: A Unix timestamp with millisecond or better precision
       corresponding to the time the request was issued.
 
 This request asks Felix to destroy an endpoint. It instructs Felix to
@@ -393,10 +393,10 @@ Request: RESYNCSTATE
    its body:
 
    -  *resync\_id*: A unique string identifier for this state
-      resychronisation request. This identifier will be included on all
+      resynchronization request. This identifier will be included on all
       the triggered ``ENDPOINTCREATED`` messages, and can be used to
       identify them.
-   -  *issued*: A unix timestamp with millisecond or better precision
+   -  *issued*: A Unix timestamp with millisecond or better precision
       corresponding to the time the request was issued.
    -  *hostname*: The hostname of the Felix issuing the request.
 
@@ -596,7 +596,7 @@ Request: GETACLSTATE
 
 -  **Type**: ``GETACLSTATE``
 -  **Direction**: Felix → ACL Manager
--  **Body**: A ``GETACLSTATE`` request contains the fillowing fields in
+-  **Body**: A ``GETACLSTATE`` request contains the following fields in
    its body:
 
    -  *endpoint\_id*: The UUID4 representing the endpoint whose ACLs
@@ -653,7 +653,7 @@ Publication: HEARTBEAT
       indicating when the heartbeat was issued.
 
 Each Calico network has a single ``aclheartbeat`` subscription running
-between the ACL manager and all the Felices. This subscription never has
+between the ACL manager and all the Felixes. This subscription never has
 ACLs published on it. Instead, every 30 seconds the ACL manager
 publishes a single heartbeat message.
 
@@ -857,7 +857,7 @@ changed, and contains the entire rules state for that security group,
 including the rules and memberships.
 
 This message is also issued to notify the ACL manager about new security
-groups, and to inform it of whem a security group has been removed. New
+groups, and to inform it of when a security group has been removed. New
 security groups are notified simply by sending a notification of their
 rules and members. The removal of a security group is notified by
 sending a ``GROUPUPDATE`` for the group with an empty *members* object.
@@ -935,7 +935,7 @@ object with the following keys:
    specific security group. If the *cidr* key is present, this key MUST
    be ``null``.
 -  *cidr*: This rule allows/denies connections coming to/from a specific
-   subnet. If the *group* key is present, ths key MUST be ``null``.
+   subnet. If the *group* key is present, this key MUST be ``null``.
 -  *protocol*: The network protocol (e.g. "udp"). To match all
    protocols, send ``null``.
 -  *port*: This rule only affects traffic to/from this port. Should be a

@@ -18,12 +18,12 @@ This means that the standard tools used to transport IP, such as MPLS
 and Ethernet can be used in a Calico network.
 
 In this note, I'm going to focus on Ethernet as the interconnect
-network. Talking to most at--scale cloud operators, they have converted
+network. Talking to most at-scale cloud operators, they have converted
 to IP fabrics, and as will cover in the next blog post that
 infrastructure will work for Calico as well. However, the concerns that
 drove most of those operators to IP as the interconnection network in
 their pods are largely ameliorated by Project Calico, allowing Ethernet
-to be viably considered as a Calico interconnect, even in large--scale
+to be viably considered as a Calico interconnect, even in large-scale
 deployments.
 
 Concerns over Ethernet at scale
@@ -36,7 +36,7 @@ deployment. Although there have been
 `attempts <http://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html>`__
 `to
 address <http://en.wikipedia.org/wiki/Virtual_Private_LAN_Service>`__
-these issues, the scale--out networking community has, largely abandoned
+these issues, the scale-out networking community has, largely abandoned
 Ethernet for anything other than providing physical point-to-point links
 in the networking fabric. The principal reasons for Ethernet failures at
 large scale are:
@@ -50,7 +50,7 @@ large scale are:
 #. High rate of *churn* or change in the network. With that many end
    points, most of them being ephemeral (such as virtual machines or
    containers), there is a large amount of *churn* in the network. That
-   load of re--learning paths can be a substantial burden on the control
+   load of re-learning paths can be a substantial burden on the control
    plane processor of most Ethernet switches.
 
 #. High volumes of broadcast traffic. As each node on the Ethernet
@@ -90,7 +90,7 @@ Internet peering points, where large fractions of Internet traffic is
 exchanged. The switches only see the routers from the various ISPs, not
 those ISPs' customers' nodes. We leverage the same effect in Calico.
 
-To take the issues outlined above, let's re--visit them in a Calico
+To take the issues outlined above, let's revisit them in a Calico
 context.
 
 #. Large numbers of end points. In a Calico network, the Ethernet
@@ -124,7 +124,7 @@ context.
    Ethernet fabric, period. In fact, the only broadcast traffic that
    should be seen in the Ethernet fabric is the ARPs of the compute
    servers locating each other. If the traffic pattern is fairly
-   consistent, the steady--state ARP rate should be almost zero. Even in
+   consistent, the steady-state ARP rate should be almost zero. Even in
    a pathological case, the ARP rate should be well within normal
    accepted boundaries.
 
@@ -154,7 +154,7 @@ fabric topology become possible.
 We assume that an Ethernet fabric for Calico would most likely be
 constructed as a *leaf/spine* architecture. Other options are possible,
 but the *leaf/spine* is the predominant architectural model in use in
-scale--out infrastructure today.
+scale-out infrastructure today.
 
 Since Calico is an IP routed fabric, a Calico network can use
 `ECMP <http://en.wikipedia.org/wiki/Equal-cost_multi-path_routing>`__ to
