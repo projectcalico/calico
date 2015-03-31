@@ -183,9 +183,9 @@ With Calico networking, in addition:
 - BGP sessions are established, between BIRD instances on the compute
   nodes and on the route reflector, using these management IP
   addresses
-- data between VMs on different compute nodes is routed using these
+- Data between VMs on different compute nodes is routed using these
   management IP addresses, which means that it flows via the compute
-  nodes' =eth0= interfaces.
+  nodes' ``eth0`` interfaces.
 
 Storage
 ~~~~~~~
@@ -222,8 +222,8 @@ simplify the web UI for Calico networking.
 Configure BGP route reflector on the controller
 -----------------------------------------------
 
-Once the deployment is complete - and also, if you later add more
-compute nodes to the deployment - you need to update the BGP route
+Once the deployment is complete -- and also, if you later add more
+compute nodes to the deployment -- you need to update the BGP route
 reflector configuration on the controller node.
 
 To do this, log onto the controller node and run::
@@ -255,8 +255,8 @@ Also in the OpenStack web UI, under Admin, System Info, Network
 Agents, verify that there is an instance of 'Felix (Calico agent)'
 running on each compute node, and that its Status is Up.
 
-Under Project, Instances, launch a batch of VMs - enough of them to
-ensure that there will be at least one VM on each compute node - with
+Under Project, Instances, launch a batch of VMs -- enough of them to
+ensure that there will be at least one VM on each compute node -- with
 the following details.
 
 - Flavor: m1.tiny
@@ -290,7 +290,8 @@ Detailed Observations
 
 This section records some more detailed notes about the state of the
 cluster that results from following the above procedure with HEAD
-commit 854d2353 from https://github.com/Metaswitch/fuel-library.
+commit 854d2353 from `our fork of the Fuel library
+<https://github.com/Metaswitch/fuel-library>`__.
 Reading this section should not be required in order to demonstrate or
 understand Openstack and Calico function, but it may be useful as a reference
 if a newly deployed system does not appear to be behaving correctly.

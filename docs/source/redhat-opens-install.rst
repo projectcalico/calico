@@ -277,10 +277,10 @@ On a compute node, perform the following steps:
         yum install calico-compute
 
 11. Configure BIRD. Calico includes useful configuration scripts that
-    will create BIRD config files for simple topologies - either a
+    will create BIRD config files for simple topologies -- either a
     peering between a single pair of compute nodes, or to a route
     reflector (to avoid the need for a full BGP mesh in networks with
-    more than 2 compute nodes). If your topology is more complex, please
+    more than two compute nodes). If your topology is more complex, please
     consult the relevant documentation for your chosen BGP stack or ask
     the mailing list if you have questions about how BGP relates to
     Calico.
@@ -297,8 +297,8 @@ On a compute node, perform the following steps:
 
         /usr/bin/calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <peer_ipv6> <bgp_as_number>
 
-    ``<compute_node_ipv4>`` and \`' are the IPv4/6 addresses of the
-    compute host, used as next hops and router ids.
+    ``<compute_node_ipv4>`` and ``<compute_node_ipv6>`` are the IPv4/6
+    addresses of the compute host, used as next hops and router ids.
 
     ``<peer_ipv4>`` and ``<peer_ipv6>`` are the IP address of your
     single other compute node, or the route reflector as described
@@ -309,7 +309,7 @@ On a compute node, perform the following steps:
     Unless your deployment needs to peer with other BGP routers, this
     can be chosen arbitrarily.
 
-    For RHEL 6.5, ignore any ``bird: unrecognized service`` error - we'll
+    For RHEL 6.5, ignore any ``bird: unrecognized service`` error -- we'll
     restart BIRD later anyway.
 
    Note that you'll also need to configure your route reflector to allow
@@ -320,18 +320,18 @@ On a compute node, perform the following steps:
 
    - For RHEL 7:
 
-   ::
+     ::
 
-       service bird restart
-       service bird6 restart
-       chkconfig bird on
-       chkconfig bird6 on
+         service bird restart
+         service bird6 restart
+         chkconfig bird on
+         chkconfig bird6 on
 
    - For RHEL 6.5:
 
-   ::
+     ::
 
-       initctl start bird
+         initctl start bird
 
 12. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example`` and edit it:
@@ -340,8 +340,8 @@ On a compute node, perform the following steps:
        host name or IP address of the controller node.
     -  Restart the Felix service:
 
-       - on Red Hat 6.5, run ``initctl start calico-felix``.
-       - on Red Hat 7, run ``systemctl restart calico-felix``.
+       - on RHEL 6.5, run ``initctl start calico-felix``.
+       - on RHEL 7, run ``systemctl restart calico-felix``.
 
 Next Steps
 ----------

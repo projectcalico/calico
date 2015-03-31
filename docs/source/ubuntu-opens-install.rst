@@ -278,9 +278,9 @@ On a compute node, perform the following steps:
 
        calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
 
-And/or for IPv6 connectivity between compute hosts:
+   And/or for IPv6 connectivity between compute hosts:
 
-::
+   ::
 
         calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
