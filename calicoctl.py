@@ -190,11 +190,7 @@ def container_remove(container_name):
     The container may be left in a state without any working networking.
     The container can't be removed if there are ACLs that refer to it.
     If there is a network adaptor in the host namespace used by the container
-<<<<<<< HEAD
-    then it's removed.
-=======
     then it is removed.
->>>>>>> origin/master
 
     :param container_name: The name or ID of the container.
     """
