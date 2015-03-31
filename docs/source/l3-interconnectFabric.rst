@@ -50,7 +50,7 @@ a vRouter. The data path is provided by the Linux kernel, the control
 plane by a BGP protocol server, and management plane by Calico's
 on-server agent, *felix*.
 
-Each end-point can only communicate through it's local vRouter, and the
+Each end-point can only communicate through its local vRouter, and the
 first and last *hop* in any Calico packet flow is an IP router hop
 through a vRouter. Each vRouter announces all of the end points it is
 attached to to all the other vRouters and other routers on the
@@ -177,7 +177,7 @@ AS continuity
 
 Next hop behavior
   By default BGP routers do not change the *next hop* of a route if it
-  is peering with another router in it's same AS.  The inverse is also
+  is peering with another router in its same AS.  The inverse is also
   true, a BGP router will set itself as the *next hop* of a route if
   it is peering with a router in another AS.
 
@@ -402,7 +402,7 @@ through another *network* or AS number will not work without a lot of
 policy changes to the BGP routers.
 
 Another corollary of that rule is that a BGP router will not propagate a
-route to a peer if the route has an AS in it's path that is the same AS
+route to a peer if the route has an AS in its path that is the same AS
 as the peer. This prevents loops from forming in the network. The effect
 of this prevents two routers in the same AS from transiting another
 router (either in that AS or not).
@@ -427,7 +427,7 @@ given AS (i.e. A can communicate with C, and therefore will not need to
 route through B), and therefore, do not change the *next hop* attribute
 in BGP [#nh]_.
 
-A router with an eBGP peering, on the other hand, assumes that it's eBGP
+A router with an eBGP peering, on the other hand, assumes that its eBGP
 peer will not know how to reach the next hop route, and then will
 substitute its own address in the next hop field. This is often referred
 to as *next hop self*.
@@ -502,7 +502,7 @@ many *routes* it can handle. The current industry standard for modern
 commodity switches is in the range of 128,000 routes. This means that,
 without other routing *tricks*, such as aggregation, a Calico
 installation that uses an IP fabric will be limited to the routing table
-size of it's constituent network hardware, with a reasonable upper limit
+size of its constituent network hardware, with a reasonable upper limit
 today of 128,000 endpoints.
 
 
