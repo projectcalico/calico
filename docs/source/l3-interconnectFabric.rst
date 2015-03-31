@@ -88,7 +88,7 @@ technical note.
 
 #. The routing infrastructure is based on some form of IGP. Due to the
    limitations in scale of IGP networks (see the `why
-   bgp post <http://www.projectcalico.org/why-bgp/>`__ for discussion of
+   BGP post <http://www.projectcalico.org/why-bgp/>`__ for discussion of
    this topic.  The project Calico team does not believe that using an
    IGP to distribute end--point reachability information will
    adequitely scale in a Calico environment.  However, it is possible
