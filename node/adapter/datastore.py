@@ -22,6 +22,7 @@ TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
 IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
+IP_ASSIGNMENT_PATH = "/calico/ipam/%(version)s/assignment/%(pool)s"
 
 IF_PREFIX = "cali"
 """
@@ -501,3 +502,49 @@ class DatastoreClient(object):
         container_path = CONTAINER_PATH % {"hostname": hostname,
                                            "container_id": container_id}
         self.etcd_client.delete(container_path, recursive=True, dir=True)
+
+    def update_assigned_address(self, pool, already_assigned, new_assignment):
+        """
+        Attempt to write a JSON representation of an IP address assignment.
+        Fails if the assignments have changed since the address was allocated.
+
+        The etcd key must already exist.
+
+        :param pool: The pool (an IPNetwork) that the assignment is from.
+        :param already_assigned: The previous assignment, a dict.
+        :param new_assignment:  The new assignment, a dict.
+
+        :return: True if the allocation succeeds, false otherwise.
+        """
+        key = IP_ASSIGNMENT_PATH % {"version": "v4",
+                                    "pool": str(pool).replace("/", "-")}
+        value = json.dumps(new_assignment)
+        prev_value = json.dumps(already_assigned)
+
+        try:
+            self.etcd_client.test_and_set(key, value, prev_value)
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_assigned_addresses(self, pool):
+        """
+        Get
+        :param pool: The pool (an IPNetwork) to get assignments for.
+        :return: A dict of Ip Addresses (strings) -> "" for assigned
+        addresses
+        """
+        #TODO - make sure the assignment stuff is created/deleted when pools
+        #  are created/deleted
+        key = IP_ASSIGNMENT_PATH % {"version": "v4",
+                                    "pool": str(pool).replace("/", "-")}
+        try:
+            value = self.etcd_client.read(key).value
+        except KeyError:
+            # Path doesn't exist so configure now.
+            self.etcd_client.write(key, json.dumps({}))
+            return {}
+        else:
+            return json.loads(value)
+

@@ -26,7 +26,7 @@ from netaddr import IPAddress, AddrFormatError
 
 import netns
 from datastore import DatastoreClient
-
+from ipam import SequentialAssignment
 
 _log = logging.getLogger(__name__)
 
@@ -140,6 +140,9 @@ class AdapterResource(resource.Resource):
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
             ip_str = env_dict[ENV_IP]
+
+            if ip_str.lower() == "auto":
+                ip_str = self.assign_ipv4()
             # TODO: process groups
             group = env_dict.get(ENV_GROUP, None)
 
@@ -169,6 +172,23 @@ class AdapterResource(resource.Resource):
             _log.info("Finished adding container %s to group %s", cid, group)
 
         return
+
+
+    def assign_ipv4(self):
+        """
+        Assign a IPv4 address from the configured pools.
+        :return: An IP address as a string, or None if an IP couldn't be
+                 assigned
+        """
+        ip = None
+
+        # For each configured pool, attempt to assign an IP before giving up.
+        for pool in self.etcd.get_ip_pools("v4"):
+            assigner = SequentialAssignment()
+            ip = assigner.allocate(pool)
+            if ip is not None:
+                break
+        return ip
 
 
 def _client_request_net_none(client_request):
