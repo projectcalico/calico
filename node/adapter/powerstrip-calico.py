@@ -168,10 +168,8 @@ class AdapterResource(resource.Resource):
                     return
 
         next_hop_ips = self.etcd.get_default_next_hops(hostname)
-        endpoint = netns.set_up_endpoint(ip=ip, cpid=pid, next_hop_ips=next_hop_ips)
-        self.etcd.create_container(hostname=hostname,
-                                   container_id=cid,
-                                   endpoint=endpoint)
+        endpoint = netns.set_up_endpoint(ip, pid, next_hop_ips)
+        self.etcd.set_endpoint(hostname, cid, endpoint)
         _log.info("Finished network for container %s, IP=%s", cid, ip)
 
         if group is not None:
