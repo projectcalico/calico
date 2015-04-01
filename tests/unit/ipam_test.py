@@ -5,7 +5,7 @@ from node.adapter.ipam import SequentialAssignment, IPAMClient
 pool = IPNetwork("192.168.0.0/16")
 client = IPAMClient()
 
-class TestIPAM:
+class TestIPAMClient:
     def setup(self):
         client.remove_all_data()
 

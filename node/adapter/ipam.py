@@ -60,7 +60,8 @@ class IPAMClient(DatastoreClient):
         :param IPNetwork pool: The pool that the assignment is from.
         :param IPAddress address: The address to assign.
 
-        :return: True if the allocation succeeds, false otherwise.
+        :return: True if the allocation succeeds, false otherwise. An
+        exception is thrown for any error conditions.
         :rtype: bool
         """
         key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
@@ -80,7 +81,8 @@ class IPAMClient(DatastoreClient):
         :param IPNetwork pool: The pool that the assignment is from.
         :param IPAddress address: The address to unassign.
 
-        :return: True if the address was unassigned, false otherwise.
+        :return: True if the address was unassigned, false otherwise. An
+        exception is thrown for any error conditions.
         :rtype: bool
         """
         key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,

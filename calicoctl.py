@@ -115,6 +115,7 @@ def container_add(container_name, ip):
     :param container_name: The name or ID of the container.
     :param ip: An IPAddress object with the desired IP to assign.
     """
+    # The netns manipulations must be done as root.
     if os.geteuid() != 0:
         print >> sys.stderr, "`calicoctl container add` must be run as root."
         sys.exit(2)
@@ -212,6 +213,7 @@ def container_remove(container_name):
     # Remove any IP address assignments that this endpoint has
     endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
+        assert(net.size == 1)
         ip = net.ip
         pools = client.get_ip_pools("v%s" % ip.version)
         for pool in pools:
