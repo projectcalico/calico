@@ -242,6 +242,10 @@ class CalicoTransportEtcd(CalicoTransport):
                 ethertype = rule['ethertype']
                 etcd_rule = {}
 
+                # Map the ethertype field from Neutron to etcd format.
+                etcd_rule['ip_version'] = {'IPv4': 4,
+                                           'IPv6': 6}[ethertype]
+
                 # Map the protocol field from Neutron to etcd format.
                 if rule['protocol'] is None or rule['protocol'] == -1:
                     pass
