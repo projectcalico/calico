@@ -57,7 +57,7 @@
       // key-value pairs in a JSON object
       function getJsonFromUrl() {
         var result = {};
-        var parts = location.search.substr(1).split("&")
+        var parts = location.search.substr(1).split("&");
         for (var i = 0; i < parts.length; i++) {
           var part = parts[i];
           var item = part.split("=");
@@ -75,7 +75,7 @@
         // If we have a list of search terms that are too short, then we need
         // to print a message to the user.
 
-        var strippedTerms = unescape(jsonParameters["s"]).split("+");
+        var strippedTerms = unescape(jsonParameters.s).split("+");
 
         // Beginning of the message
         var linesToWrite = [
@@ -99,7 +99,7 @@
           }
         }
 
-        if (strippedTerms.length > 1)  {
+        if (strippedTerms.length > 1) {
           linesToWrite.push(" were ");
         } else {
           linesToWrite.push(" was ");
@@ -118,7 +118,7 @@
         // tokens.
 
         // Get an array of search tokens
-        var searchTokens = unescape(jsonParameters["q"]).split("+");
+        var searchTokens = unescape(jsonParameters.q).split("+");
 
         function isLongEnough(element) { return element.length >= maxlength; }
         function isNotLongEnough(element) { return element.length < maxlength; }
@@ -133,13 +133,13 @@
           // Update the search only to use the valid tokens. If no tokens are 
           // left, don't do a search at all
           if (validTokens.length > 0) {
-            jsonParameters["q"] = validTokens.join("+");
+            jsonParameters.q = validTokens.join("+");
           } else {
-            delete jsonParameters["q"];
+            delete jsonParameters.q;
           }
 
           // Add the list of invalid tokens to the URL parameters
-          jsonParameters["s"] = invalidTokens.join("+");
+          jsonParameters.s = invalidTokens.join("+");
 
           // Construct a new URL from the updated parameters
           var urlParameters = Object.keys(jsonParameters).map(function(k) {
