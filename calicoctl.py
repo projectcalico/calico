@@ -279,6 +279,8 @@ def clean_restart_docker(sock_to_wait_on):
     while not os.path.exists(sock_to_wait_on):
         time.sleep(0.1)
 
+def module_loaded(module):
+    return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
 def node(ip, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
@@ -286,8 +288,15 @@ def node(ip, node_image, ip6=""):
         print >> sys.stderr, "`calicoctl node` must be run as root."
         sys.exit(2)
 
-    modprobe("ip6_tables")
-    modprobe("xt_set")
+    if not module_loaded("ip6_tables"):
+        print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
+                             "`modprobe ip6_tables`"
+        sys.exit(2)
+
+    if not module_loaded("xt_set"):
+        print >> sys.stderr, "module xt_set isn't loaded. Load with " \
+                             "`modprobe xt_set`"
+        sys.exit(2)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -312,8 +321,9 @@ def node(ip, node_image, ip6=""):
 
     if DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read():
         enable_socket = "YES"
-        # At this point, docker is listening on a new port but powerstrip isn't
-        # running, so docker clients need to talk directly to docker.
+        # At this point, docker is listening on a new port but powerstrip
+        # might not be running, so docker clients need to talk directly to
+        # docker.
         node_docker_client = docker.Client(version=DOCKER_VERSION,
                                            base_url="unix://%s" % REAL_SOCK)
     else:
