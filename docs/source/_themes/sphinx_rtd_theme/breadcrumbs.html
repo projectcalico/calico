@@ -7,7 +7,9 @@
     <li>{{ title }}</li>
       <li class="wy-breadcrumbs-aside">
         {% if display_github %}
+          {% if pagename != "search" %}
           <a href="https://{{ github_host|default("github.com") }}/{{ github_user }}/{{ github_repo }}/blob/{{ github_version }}{{ conf_py_path }}{{ pagename }}{{ source_suffix }}" class="fa fa-github"> Edit on GitHub</a>
+          {% endif %}
         {% elif display_bitbucket %}
           <a href="https://bitbucket.org/{{ bitbucket_user }}/{{ bitbucket_repo }}/src/{{ bitbucket_version}}{{ conf_py_path }}{{ pagename }}{{ source_suffix }}" class="fa fa-bitbucket"> Edit on Bitbucket</a>
         {% elif show_source and source_url_prefix %}
