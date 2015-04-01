@@ -312,6 +312,7 @@ def node(ip, node_image, ip6=""):
     client.create_host(ip, ip6)
 
     # Enable IP forwarding since all compute hosts are vRouters.
+    # IPv4 forwarding should be enabled already by docker.
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
