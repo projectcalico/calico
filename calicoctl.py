@@ -48,14 +48,14 @@ from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
-from node.adapter.datastore import (DatastoreClient,
-                                    ETCD_AUTHORITY_ENV,
+from node.adapter.datastore import (ETCD_AUTHORITY_ENV,
                                     ETCD_AUTHORITY_DEFAULT)
+from node.adapter.ipam import IPAMClient
 from node.adapter import netns
 
 
 hostname = socket.gethostname()
-client = DatastoreClient()
+client = IPAMClient()
 DOCKER_VERSION = "1.16"
 docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
@@ -115,6 +115,10 @@ def container_add(container_name, ip):
     :param container_name: The name or ID of the container.
     :param ip: An IPAddress object with the desired IP to assign.
     """
+    # The netns manipulations must be done as root.
+    if os.geteuid() != 0:
+        print >> sys.stderr, "`calicoctl container add` must be run as root."
+        sys.exit(2)
     try:
         info = get_container_info(container_name)
     except KeyError as err:
@@ -142,7 +146,11 @@ def container_add(container_name, ip):
     ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
-    if not any([ip in pool for pool in pools]):
+    for candidate_pool in pools:
+        if ip in candidate_pool:
+            pool = candidate_pool
+
+    if pool is None:
         print "%s is not in any configured pools" % ip
         sys.exit(1)
 
@@ -159,6 +167,11 @@ def container_add(container_name, ip):
         print "This node is not configured for IPv%d." % ip.version
         sys.exit(1)
 
+    # Assign the IP
+    if not client.assign_address(pool, ip):
+        print "IP address is already assigned in pool %s " % pool
+        sys.exit(1)
+
     # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
@@ -166,7 +179,7 @@ def container_add(container_name, ip):
                                      proc_alias="proc")
 
     # Register the endpoint
-    client.create_container(hostname, container_id, endpoint)
+    client.set_endpoint(hostname, container_id, endpoint)
 
     print "IP %s added to %s" % (ip, container_name)
 
@@ -196,6 +209,16 @@ def container_remove(container_name):
     if len(groups) > 0:
         print "Container %s is in security groups %s. Can't remove." % \
               (container_name, groups)
+
+    # Remove any IP address assignments that this endpoint has
+    endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+    for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
+        assert(net.size == 1)
+        ip = net.ip
+        pools = client.get_ip_pools("v%s" % ip.version)
+        for pool in pools:
+            if ip in pool:
+                client.unassign_address(pool, ip)
 
     # Remove the endpoint
     netns.remove_endpoint(endpoint_id)
@@ -380,7 +403,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
     if force_unix_socket:
         while not os.path.exists(POWERSTRIP_SOCK):
-            time.sleep(1)
+            time.sleep(0.1)
         uid = os.stat(REAL_SOCK).st_uid
         gid = os.stat(REAL_SOCK).st_gid
         os.chown(POWERSTRIP_SOCK, uid, gid)

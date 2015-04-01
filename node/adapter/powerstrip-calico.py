@@ -26,7 +26,7 @@ from netaddr import IPAddress, AddrFormatError
 
 import netns
 from datastore import DatastoreClient
-
+from ipam import SequentialAssignment, IPAMClient
 
 _log = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class AdapterResource(resource.Resource):
                              version="1.16")
 
         # Init an etcd client.
-        self.etcd = DatastoreClient()
+        self.etcd = IPAMClient()
 
     def render_POST(self, request):
         """
@@ -140,24 +140,36 @@ class AdapterResource(resource.Resource):
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
             ip_str = env_dict[ENV_IP]
-            # TODO: process groups
+
             group = env_dict.get(ENV_GROUP, None)
 
         except KeyError as e:
             _log.warning("Key error %s, request: %s", e, client_request)
             return
 
-        try:
-            ip = IPAddress(ip_str)
-        except AddrFormatError:
-            _log.warning("IP address %s could not be parsed" % ip_str)
-            return
+        # Just auto assign ipv4 addresses for now.
+        if ip_str.lower() == "auto":
+            ip = self.assign_ipv4()
+        else:
+            try:
+                ip = IPAddress(ip_str)
+            except AddrFormatError:
+                _log.warning("IP address %s could not be parsed" % ip_str)
+                return
+            else:
+                version = "v%s" % ip.version
+                pools = self.etcd.get_ip_pools(version)
+                for candidate_pool in pools:
+                    if ip in candidate_pool:
+                        pool = candidate_pool
+                if not self.etcd.assign_address(pool, ip):
+                    _log.warning("IP address couldn't be assigned for "
+                                 "container %s, IP=%s", cid, ip)
+                    return
 
         next_hop_ips = self.etcd.get_default_next_hops(hostname)
-        endpoint = netns.set_up_endpoint(ip=ip, cpid=pid, next_hop_ips=next_hop_ips)
-        self.etcd.create_container(hostname=hostname,
-                                   container_id=cid,
-                                   endpoint=endpoint)
+        endpoint = netns.set_up_endpoint(ip, pid, next_hop_ips)
+        self.etcd.set_endpoint(hostname, cid, endpoint)
         _log.info("Finished network for container %s, IP=%s", cid, ip)
 
         if group is not None:
@@ -169,6 +181,24 @@ class AdapterResource(resource.Resource):
             _log.info("Finished adding container %s to group %s", cid, group)
 
         return
+
+
+    def assign_ipv4(self):
+        """
+        Assign a IPv4 address from the configured pools.
+        :return: An IPAddress, or None if an IP couldn't be
+                 assigned
+        """
+        ip = None
+
+        # For each configured pool, attempt to assign an IP before giving up.
+        for pool in self.etcd.get_ip_pools("v4"):
+            assigner = SequentialAssignment()
+            ip = assigner.allocate(pool)
+            if ip is not None:
+                ip = IPAddress(ip)
+                break
+        return ip
 
 
 def _client_request_net_none(client_request):
