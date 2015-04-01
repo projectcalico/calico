@@ -167,7 +167,7 @@ class AdapterResource(resource.Resource):
             _log.info("Finished adding container %s to profile %s",
                       cid, profile)
 
-        self.datastore.create_container(hostname=hostname,
+        self.datastore.create_container(target_host=hostname,
                                         container_id=cid,
                                         endpoint=endpoint)
         _log.info("Finished network for container %s, IP=%s", cid, ip)

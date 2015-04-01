@@ -17,6 +17,7 @@ Usage:
   calicoctl profile <PROFILE> tag remove <TAG>
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
+  calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
@@ -55,7 +56,8 @@ from prettytable import PrettyTable
 
 from node.adapter.datastore import (DatastoreClient,
                                     ETCD_AUTHORITY_ENV,
-                                    ETCD_AUTHORITY_DEFAULT)
+                                    ETCD_AUTHORITY_DEFAULT,
+                                    Rules)
 from node.adapter import netns
 
 
@@ -552,6 +554,27 @@ def profile_rule_show(name, human_readable=False):
         print ""
 
 
+def profile_rule_update(name):
+    """Update the rules on the profile"""
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    # Read in the JSON from standard in.
+    rules_str = sys.stdin.read()
+    rules = Rules.from_json(rules_str)
+    if rules.id != name:
+        print 'Rules JSON "id"=%s doesn\'t match profile name %s.' % \
+              (rules.id, name)
+        sys.exit(1)
+
+    profile.rules = rules
+    client.profile_update_rules(profile)
+    print "Successfully updated rules on profile %s" % name
+
+
 def node_show(detailed):
     hosts = client.get_hosts()
 
@@ -755,10 +778,9 @@ if __name__ == '__main__':
                 elif arguments["remove"]:
                     profile_tag_remove(arguments["<PROFILE>"],
                                        arguments["<TAG>"])
-            elif arguments["add"]:
-                profile_add(arguments["<PROFILE>"])
-            elif arguments["remove"]:
-                profile_remove(arguments["<PROFILE>"])
+            elif arguments["member"]:
+                profile_add_container(arguments["<CONTAINER>"],
+                                      arguments["<PROFILE>"])
             elif arguments["rule"]:
                 if arguments["show"]:
                     profile_rule_show(arguments["<PROFILE>"],
@@ -766,11 +788,14 @@ if __name__ == '__main__':
                 elif arguments["json"]:
                     profile_rule_show(arguments["<PROFILE>"],
                                       human_readable=False)
+                elif arguments["update"]:
+                    profile_rule_update(arguments["<PROFILE>"])
+            elif arguments["add"]:
+                profile_add(arguments["<PROFILE>"])
+            elif arguments["remove"]:
+                profile_remove(arguments["<PROFILE>"])
             elif arguments["show"]:
                 profile_show(arguments["--detailed"])
-            elif arguments["member"]:
-                profile_add_container(arguments["<CONTAINER>"],
-                                      arguments["<PROFILE>"])
         elif arguments["diags"]:
             save_diags()
         elif arguments["shownodes"]:
