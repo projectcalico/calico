@@ -3,11 +3,11 @@
     "type": "DOCKER",
     "docker": {
       "image": "busybox",
-      "parameters":[{"key": "env", "value": "CALICO_IP=192.168.0.1"}, {"key": "env", "value": "CALICO_PROFILE=dev"}]
+      "parameters":[{"key": "env", "value": "CALICO_IP=auto"}, {"key": "env", "value": "CALICO_PROFILE=dev"}]
     }
   },
-  "id": "dev-1",
-  "instances": 1,
+  "id": "dev",
+  "instances": 2,
   "cpus": 0.1,
   "mem": 32,
   "uris": [],

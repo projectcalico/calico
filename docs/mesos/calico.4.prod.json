@@ -3,7 +3,7 @@
     "type": "DOCKER",
     "docker": {
       "image": "busybox",
-      "parameters":[{"key": "env", "value": "CALICO_IP=192.168.0.4"}, {"key": "env", "value": "CALICO_PROFILE=prod"}]
+      "parameters":[{"key": "env", "value": "CALICO_IP=192.168.1.4"}, {"key": "env", "value": "CALICO_PROFILE=prod"}]
     }
   },
   "id": "prod-4",
