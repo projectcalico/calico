@@ -4,8 +4,10 @@ general:
 machine:
   services:
     - docker
+dependencies:
+  override:
+    - sudo pip install -r build_calicoctl/requirements.txt
 test:
   override:
-    - docker run -d -p 4001:4001  quay.io/coreos/etcd:v2.0.8
-    - nosetests -c nose.cfg --cover-html-dir=$CIRCLE_ARTIFACTS
+    - docker run --net=host -d  quay.io/coreos/etcd:v2.0.8 && nosetests -c nose.cfg --cover-html-dir=$CIRCLE_ARTIFACTS
     - cd build_calicoctl && ./create_binary.sh
