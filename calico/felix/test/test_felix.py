@@ -24,7 +24,6 @@ from calico.felix import config
 import mock
 import sys
 import time
-import unittest
 
 import calico.felix.test.stub_etcd as stub_etcd
 sys.modules['etcd'] = stub_etcd

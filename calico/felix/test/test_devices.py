@@ -21,9 +21,14 @@ Test the device handling code.
 import logging
 import mock
 import os
-import unittest
+import sys
 import uuid
 from contextlib import nested
+
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
 
 import calico.felix.devices as devices
 import calico.felix.futils as futils
