@@ -146,6 +146,7 @@ def container_add(container_name, ip):
     ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
+    pool = None
     for candidate_pool in pools:
         if ip in candidate_pool:
             pool = candidate_pool

@@ -395,6 +395,8 @@ class DatastoreClient(object):
         """
         Get all of the details for a single endpoint.
 
+        :param hostname: The hostname that the endpoint lives on.
+        :param container_id: The container that the endpoint belongs to.
         :param endpoint_id: The ID of the endpoint
         :return:  an Endpoint Object
         """
