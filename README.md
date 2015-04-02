@@ -40,15 +40,20 @@ We provide a command line tool, `calicoctl`, which makes it easy to configure an
 
 ```
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--force-unix-socket]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
-  calicoctl group show [--detailed]
-  calicoctl group add <GROUP>
-  calicoctl group remove <GROUP>
-  calicoctl group addmember <GROUP> <CONTAINER>
-  calicoctl group removemember <GROUP> <CONTAINER>
+  calicoctl profile show [--detailed]
+  calicoctl profile add <PROFILE>
+  calicoctl profile remove <PROFILE>
+  calicoctl profile <PROFILE> tag show
+  calicoctl profile <PROFILE> tag add <TAG>
+  calicoctl profile <PROFILE> tag remove <TAG>
+  calicoctl profile <PROFILE> rule show
+  calicoctl profile <PROFILE> rule json
+  calicoctl profile <PROFILE> rule update
+  calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
@@ -66,6 +71,7 @@ Options:
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
+
 
 ```
 

@@ -31,7 +31,7 @@ from ipam import SequentialAssignment, IPAMClient
 _log = logging.getLogger(__name__)
 
 ENV_IP = "CALICO_IP"
-ENV_GROUP = "CALICO_PROFILE"
+ENV_PROFILE = "CALICO_PROFILE"
 
 hostname = socket.gethostname()
 
@@ -68,7 +68,7 @@ class AdapterResource(resource.Resource):
                              version="1.16")
 
         # Init an etcd client.
-        self.etcd = IPAMClient()
+        self.datastore = IPAMClient()
 
     def render_POST(self, request):
         """
@@ -104,7 +104,7 @@ class AdapterResource(resource.Resource):
     def _handle_post_hook(self, request, request_content):
         _log.debug("Post-hook response: %s", request_content)
 
-        # Extract ip, group, master, docker_options
+        # Extract ip, profile, master, docker_options
         client_request = request_content["ClientRequest"]
         server_response = request_content["ServerResponse"]
 
@@ -116,8 +116,10 @@ class AdapterResource(resource.Resource):
 
     def _install_endpoint(self, client_request):
         """
-        Install a Calico endpoint (veth) in the container referenced in the client request object.
-        :param client_request: Powerstrip ClientRequest object as dictionary from JSON.
+        Install a Calico endpoint (veth) in the container referenced in the
+        client request object.
+        :param client_request: Powerstrip ClientRequest object as dictionary
+        from JSON.
         :returns: None
         """
         try:
@@ -140,8 +142,7 @@ class AdapterResource(resource.Resource):
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
             ip_str = env_dict[ENV_IP]
-
-            group = env_dict.get(ENV_GROUP, None)
+            profile = env_dict.get(ENV_PROFILE, None)
 
         except KeyError as e:
             _log.warning("Key error %s, request: %s", e, client_request)
@@ -158,27 +159,30 @@ class AdapterResource(resource.Resource):
                 return
             else:
                 version = "v%s" % ip.version
-                pools = self.etcd.get_ip_pools(version)
+                pools = self.datastore.get_ip_pools(version)
                 for candidate_pool in pools:
                     if ip in candidate_pool:
                         pool = candidate_pool
-                if not self.etcd.assign_address(pool, ip):
+                if not self.datastore.assign_address(pool, ip):
                     _log.warning("IP address couldn't be assigned for "
                                  "container %s, IP=%s", cid, ip)
                     return
 
-        next_hop_ips = self.etcd.get_default_next_hops(hostname)
-        endpoint = netns.set_up_endpoint(ip, pid, next_hop_ips)
-        self.etcd.set_endpoint(hostname, cid, endpoint)
-        _log.info("Finished network for container %s, IP=%s", cid, ip)
+        next_hop_ips = self.datastore.get_default_next_hops(hostname)
+        endpoint = netns.set_up_endpoint(ip=ip,
+                                         cpid=pid,
+                                         next_hop_ips=next_hop_ips)
+        if profile is not None:
+            if not self.datastore.profile_exists(profile):
+                _log.info("Autocreating profile %s", profile)
+                self.datastore.create_profile(profile)
+            _log.info("Adding container %s to profile %s", cid, profile)
+            endpoint.profile_id = profile
+            _log.info("Finished adding container %s to profile %s",
+                      cid, profile)
 
-        if group is not None:
-            if not self.etcd.group_exists(group):
-                _log.info("Autocreating group %s", group)
-                self.etcd.create_group(group)
-            _log.info("Adding container %s to group %s", cid, group)
-            self.etcd.add_workload_to_group(group, cid)
-            _log.info("Finished adding container %s to group %s", cid, group)
+        self.datastore.set_endpoint(hostname, cid, endpoint)
+        _log.info("Finished network for container %s, IP=%s", cid, ip)
 
         return
 
@@ -192,7 +196,7 @@ class AdapterResource(resource.Resource):
         ip = None
 
         # For each configured pool, attempt to assign an IP before giving up.
-        for pool in self.etcd.get_ip_pools("v4"):
+        for pool in self.datastore.get_ip_pools("v4"):
             assigner = SequentialAssignment()
             ip = assigner.allocate(pool)
             if ip is not None:
