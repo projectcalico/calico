@@ -93,8 +93,12 @@ class CalicoTransportEtcd(CalicoTransport):
         self.needed_profiles = set()
 
         # Read all etcd keys under /calico/host.
-        r = self.client.read('/calico/host', recursive=True)
-        for child in r.children:
+        try:
+            children = self.client.read('/calico/host',
+                                        recursive=True).children
+        except KeyError:
+            children = []
+        for child in children:
             LOG.debug("etcd key: %s" % child.key)
             m = OPENSTACK_ENDPOINT_RE.match(child.key)
             if m:
@@ -190,8 +194,12 @@ class CalicoTransportEtcd(CalicoTransport):
         correct_profiles = set()
 
         # Read all etcd keys directly under /calico/policy/profile.
-        r = self.client.read('/calico/policy/profile', recursive=True)
-        for child in r.children:
+        try:
+            children = self.client.read('/calico/policy/profile',
+                                        recursive=True).children
+        except KeyError:
+            children = []
+        for child in children:
             LOG.debug("etcd key: %s" % child.key)
             m = OPENSTACK_POLICY_RE.match(child.key)
             if m:
