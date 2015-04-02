@@ -36,7 +36,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """
         print "etcd write: %s\n%s" % (key, value)
         self.etcd_data[key] = value
-        self.recent_writes[key] = json.loads(value)
+        try:
+            self.recent_writes[key] = json.loads(value)
+        except ValueError:
+            self.recent_writes[key] = value
 
     def check_etcd_delete(self, key, **kwargs):
         """Print each etcd delete as it occurs."""
@@ -125,7 +128,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Allow the etcd transport's resync thread to run.
         self.give_way()
         self.simulated_time_advance(1)
-        self.assertEtcdWrites({})
+        self.assertEtcdWrites({'/calico/config/InterfacePrefix': 'tap'})
 
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data.
@@ -140,6 +143,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.give_way()
         self.simulated_time_advance(1)
         expected_writes = {
+            '/calico/config/InterfacePrefix': 'tap',
             '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
                  "profile_id": "SGID-default",
@@ -182,7 +186,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # was written on the first iteration.
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
-        self.assertEtcdWrites({})
+        self.assertEtcdWrites({'/calico/config/InterfacePrefix': 'tap'})
         self.assertEtcdDeletes(set())
 
         # Delete lib.port1
@@ -196,7 +200,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Do another resync - expect no changes to the etcd data.
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
-        self.assertEtcdWrites({})
+        self.assertEtcdWrites({'/calico/config/InterfacePrefix': 'tap'})
         self.assertEtcdDeletes(set())
 
         # Add lib.port1 back again.
@@ -260,6 +264,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
         expected_writes = {
+            '/calico/config/InterfacePrefix': 'tap',
             '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
                  "profile_id": "SGID-default",
@@ -394,7 +399,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Resync with all latest data - expect no etcd writes or deletes.
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
-        self.assertEtcdWrites({})
+        self.assertEtcdWrites({'/calico/config/InterfacePrefix': 'tap'})
         self.assertEtcdDeletes(set([]))
 
         # Change SG-1 to allow only port 5060.
@@ -432,7 +437,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.db.get_security_groups.return_value[1]['security_group_rules'][0]['port_range_max'] = 5060
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
-        self.assertEtcdWrites({})
+        self.assertEtcdWrites({'/calico/config/InterfacePrefix': 'tap'})
         self.assertEtcdDeletes(set([
             '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678',
             '/calico/host/felix-host-1/workload/openstack/endpoint/FACEBEEF-1234-5678',

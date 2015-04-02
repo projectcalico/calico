@@ -69,6 +69,9 @@ class CalicoTransportEtcd(CalicoTransport):
     def periodic_resync_thread(self):
         while True:
             try:
+                # Write non-default config that Felices need.
+                self.provide_felix_config()
+
                 # Resynchronize endpoint data.
                 self.resync_endpoints()
 
@@ -341,3 +344,11 @@ class CalicoTransportEtcd(CalicoTransport):
             if sg['id'] in self.profile_tags(profile_id):
                 # Write etcd data for this profile.
                 self.write_profile_to_etcd(profile_id)
+
+    def provide_felix_config(self):
+        # Specify the prefix of the TAP interfaces that Felix should
+        # look for and work with.  This config setting does not have a
+        # default value, because different cloud systems will do
+        # different things.  Here we provide the prefix that Neutron
+        # uses.
+        self.client.write('/calico/config/InterfacePrefix', 'tap')
