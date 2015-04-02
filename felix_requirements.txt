@@ -1,2 +1,4 @@
-pyzmq
+gevent
+greenlet
 netaddr
+python-etcd
