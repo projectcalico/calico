@@ -38,7 +38,7 @@ stable build of Calico following the instructions
 [here](http://www.projectcalico.org/download/).
 
 Technical documentation is
-[here](https://github.com/Metaswitch/calico-docs/wiki);
+[on ReadTheDocs](http://docs.projectcalico.org/);
 if you are going to contribute to the project, you'll also need to run the
 [tests](doc/CalicoUTs.md).
 
@@ -96,7 +96,7 @@ OpenStack plugin, you'll also need to install Neutron: doing that is outside
 the scope of this article.
 
 To run the unit tests, you'll also need to type:
-    
+
     pip install nose mock
 
 Then, still at the root of the calico directory, run:

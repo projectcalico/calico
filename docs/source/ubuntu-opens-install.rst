@@ -304,6 +304,5 @@ On a compute node, perform the following steps:
 Next Steps
 ----------
 
-Now you've installed Calico, `this
-article <https://github.com/Metaswitch/calico-docs/wiki/Installation-Instructions#next-steps>`__
-details how to configure networks and use your new deployment.
+Now you've installed Calico, :doc:`next-steps` details how to configure
+networks and use your new deployment.

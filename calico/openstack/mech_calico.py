@@ -20,8 +20,8 @@
 #
 # This module is the OpenStack-specific implementation of the Plugin component
 # of the new Calico architecture (described by the "Felix, the Calico Plugin
-# and the Calico ACL Manager" wiki page at
-# https://github.com/Metaswitch/calico-docs/wiki).
+# and the Calico ACL Manager" document at
+# http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html).
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 
