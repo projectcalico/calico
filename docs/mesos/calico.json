@@ -1,8 +1,8 @@
 {
-  "id": "etcd",
+  "id": "calico",
   "instances": 1,
   "cpus": 0.1,
   "mem": 256,
-  "uris": ["https://github.com/coreos/etcd/releases/download/v2.0.8/etcd-v2.0.8-linux-amd64.tar.gz"],
-  "cmd": "etcd-v2.0.8-linux-amd64/etcd"
+  "uris": ["https://circle-artifacts.com/gh/Metaswitch/calico-docker/139/artifacts/0/home/ubuntu/calico-docker/dist/calicoctl"],
+  "cmd": "sudo rm -f /var/run/docker.sock && ./calicoctl node --ip=127.0.0.1 && sleep 9999999999"
 }
