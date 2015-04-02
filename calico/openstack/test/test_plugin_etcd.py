@@ -99,10 +99,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Do common plugin test setup.
         super(TestPluginEtcd, self).setUp()
 
-        # Use etcd transport instead of 0MQ.
-        self.driver.transport = t_etcd.CalicoTransportEtcd(self.driver,
-                                                           mech_calico.LOG)
-
         # Hook the (mock) etcd client.
         self.client = lib.m_etcd.Client()
         self.client.read.side_effect = self.etcd_read

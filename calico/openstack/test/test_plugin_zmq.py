@@ -169,6 +169,11 @@ class TestPlugin0MQ(lib.Lib, unittest.TestCase):
         # Do common plugin test setup.
         super(TestPlugin0MQ, self).setUp()
 
+        # Use 0MQ transport instead of etcd.
+        self.driver.transport = t_zmq.CalicoTransport0MQ(self.driver,
+                                                         mech_calico.LOG)
+
+
         # Setup to control 0MQ socket operations.
         self.setUp_sockets()
 
