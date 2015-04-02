@@ -9,3 +9,4 @@ simplejson
 docker-py
 netaddr
 prettytable
+mock
