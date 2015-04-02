@@ -37,8 +37,7 @@ To get started, you first need a working installation of
 stable build of Calico following the instructions
 [here](http://www.projectcalico.org/download/).
 
-Technical documentation is
-[on ReadTheDocs](http://docs.projectcalico.org/);
+Technical documentation is [here](http://docs.projectcalico.org/);
 if you are going to contribute to the project, you'll also need to run the
 [tests](doc/CalicoUTs.md).
 
