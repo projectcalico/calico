@@ -1,4 +1,5 @@
 pyinstaller
+coverage
 infi.docopt_completion
 docopt
 sh

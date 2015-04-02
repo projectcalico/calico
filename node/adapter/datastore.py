@@ -464,25 +464,17 @@ class DatastoreClient(object):
         endpoint_id = self.get_ep_id_from_cont(container_id)
 
         # Change the profile on the endpoint.
-        ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                   "container_id": container_id,
-                                   "endpoint_id": endpoint_id}
-        ep_json = self.etcd_client.read(ep_path).value
-        ep = Endpoint.from_json(endpoint_id, ep_json)
+        ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = profile_name
-        self.etcd_client.write(ep_path, ep.to_json())
+        self.set_endpoint(hostname, container_id, ep)
 
     def remove_workload_from_profile(self, container_id):
         endpoint_id = self.get_ep_id_from_cont(container_id)
 
         # Change the profile on the endpoint.
-        ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                   "container_id": container_id,
-                                   "endpoint_id": endpoint_id}
-        ep_json = self.etcd_client.read(ep_path).value
-        ep = Endpoint.from_json(endpoint_id, ep_json)
+        ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = None
-        self.etcd_client.write(ep_path, ep.to_json())
+        self.set_endpoint(hostname, container_id, ep)
 
     def get_ep_id_from_cont(self, container_id):
         """
@@ -505,21 +497,34 @@ class DatastoreClient(object):
         (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
         return endpoint_id
 
-    def create_container(self, target_host, container_id, endpoint):
+    def get_endpoint(self, hostname, container_id, endpoint_id):
         """
-        Set up a container in the /calico/ namespace on this host.  This
-        function assumes 1 container, with 1 endpoint.
+        Get all of the details for a single endpoint.
+
+        :param hostname: The hostname that the endpoint lives on.
+        :param container_id: The container that the endpoint belongs to.
+        :param endpoint_id: The ID of the endpoint
+        :return:  an Endpoint Object
+        """
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": container_id,
+                                   "endpoint_id": endpoint_id}
+        ep_json = self.etcd_client.read(ep_path).value
+        ep = Endpoint.from_json(endpoint_id, ep_json)
+        return ep
+
+    def set_endpoint(self, hostname, container_id, endpoint):
+        """
+        Write a single endpoint object to the datastore.
 
         :param target_host: The hostname for the Docker hosting this container.
         :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
-        :return: Nothing
         """
-
-        endpoint_path = ENDPOINT_PATH % {"hostname": target_host,
-                                         "container_id": container_id,
-                                         "endpoint_id": endpoint.ep_id}
-        self.etcd_client.write(endpoint_path, endpoint.to_json())
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": container_id,
+                                   "endpoint_id": endpoint.ep_id}
+        self.etcd_client.write(ep_path, endpoint.to_json())
 
     def get_hosts(self):
         """
@@ -606,3 +611,6 @@ class DatastoreClient(object):
         container_path = CONTAINER_PATH % {"hostname": hostname,
                                            "container_id": container_id}
         self.etcd_client.delete(container_path, recursive=True, dir=True)
+
+
+
