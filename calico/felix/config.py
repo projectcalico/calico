@@ -29,111 +29,94 @@ import logging
 import socket
 
 from calico import common
+from calico.felix import fetcd
 
 # Logger
 log = logging.getLogger(__name__)
 
+# Convert log level names into python log levels.
+LOGLEVELS = {"none":      None,
+             "debug":     logging.DEBUG,
+             "info":      logging.INFO,
+             "warn":      logging.WARNING,
+             "warning":   logging.WARNING,
+             "err":       logging.ERROR,
+             "error":     logging.ERROR,
+             "crit":      logging.CRITICAL,
+             "critical":  logging.CRITICAL}
+
+
 class ConfigException(Exception):
-    def __init__(self, message, path):
+    def __init__(self, message, source):
         super(ConfigException, self).__init__(message)
-        self.message = message
-        self.file_path = path
+        self.source = source
 
     def __str__(self):
-        return "%s (file path : %s)" % (self.message, self.file_path)
+        return "%s (data source : %s)" % (self.message, self.source)
 
 class Config(object):
     def __init__(self, config_path):
+        """
+        Create a config.
+        :raises EtcdException
+        """
         self._KnownSections = set()
         self._KnownObjects  = set()
 
-        self._config_path   = config_path
+        self._config_path = config_path
+        self._items = {}
 
         self.read_cfg_file(config_path)
 
-        self.EP_RETRY_INT_MS = int(
-            self.get_cfg_entry("global",
-                               "EndpointRetryTimeMillis",
-                               500))
-        self.RESYNC_INT_SEC  = int(
-            self.get_cfg_entry("global",
-                               "ResyncIntervalSecs",
-                               1800))
+        self.ETCD_PORT = self.get_cfg_entry("global", "EtcdPort", 4001)
 
-        self.HOSTNAME        = self.get_cfg_entry("global",
-                                                  "FelixHostname",
-                                                  socket.gethostname())
+        self.HOSTNAME = self.get_cfg_entry("global",
+                                           "FelixHostname",
+                                           socket.gethostname())
 
-        self.PLUGIN_ADDR     = self.get_cfg_entry("global",
-                                                  "PluginAddress")
-        self.ACL_ADDR        = self.get_cfg_entry("global",
-                                                  "ACLAddress")
-        self.METADATA_IP     = self.get_cfg_entry("global",
-                                                  "MetadataAddr",
-                                                  "127.0.0.1")
-        self.METADATA_PORT   = self.get_cfg_entry("global",
-                                                  "MetadataPort",
-                                                  "8775")
-        self.LOCAL_ADDR      = self.get_cfg_entry("global",
-                                                  "LocalAddress",
-                                                  "*")
-        self.LOGFILE         = self.get_cfg_entry("log",
-                                                  "LogFilePath",
-                                                  "None")
-        self.LOGLEVFILE      = self.get_cfg_entry("log",
-                                                  "LogSeverityFile",
-                                                  "INFO")
-        self.LOGLEVSYS       = self.get_cfg_entry("log",
-                                                  "LogSeveritySys",
-                                                  "ERROR")
-        self.LOGLEVSCR       = self.get_cfg_entry("log",
-                                                  "LogSeverityScreen",
-                                                  "ERROR")
+        cfg_dict = fetcd.load_config(self.HOSTNAME,
+                                     self.ETCD_PORT)
 
-        self.CONN_TIMEOUT_MS   = int(
-            self.get_cfg_entry("connection",
-                               "ConnectionTimeoutMillis",
-                               40000))
-        self.CONN_KEEPALIVE_MS = int(
-            self.get_cfg_entry("connection",
-                               "ConnectionKeepaliveIntervalMillis",
-                               5000))
+        self.METADATA_IP = cfg_dict.pop("MetadataAddr", "127.0.0.1")
+        self.METADATA_PORT = cfg_dict.pop("MetadataPort", "8775")
+        self.RESYNC_INT_SEC = int(cfg_dict.pop("ResyncIntervalSecs", "1800"))
+        self.IFACE_PREFIX = cfg_dict.pop("InterfacePrefix", None)
+        self.LOGFILE = cfg_dict.pop("LogFilePath", "/var/log/calico/felix.log")
+        self.LOGLEVFILE = cfg_dict.pop("LogSeverityFile", "INFO")
+        self.LOGLEVSYS = cfg_dict.pop("LogSeveritySys", "ERROR")
+        self.LOGLEVSCR = cfg_dict.pop("LogSeverityScreen", "ERROR")
+
+        self.LOGLEVFILE = LOGLEVELS.get(self.LOGLEVFILE.lower(), logging.DEBUG)
+        self.LOGLEVSYS  = LOGLEVELS.get(self.LOGLEVSYS.lower(), logging.DEBUG)
+        self.LOGLEVSCR  = LOGLEVELS.get(self.LOGLEVSCR.lower(), logging.DEBUG)
 
         self.validate_cfg()
 
-        self.warn_unused_cfg()
-
-        # Finally, convert log level names into python log levels.
-        loglevels = {"none":      None,
-                     "debug":     logging.DEBUG,
-                     "info":      logging.INFO,
-                     "warn":      logging.WARNING,
-                     "warning":   logging.WARNING,
-                     "err":       logging.ERROR,
-                     "error":     logging.ERROR,
-                     "crit":      logging.CRITICAL,
-                     "critical":  logging.CRITICAL}
-
-        self.LOGLEVFILE = loglevels[self.LOGLEVFILE.lower()]
-        self.LOGLEVSYS  = loglevels[self.LOGLEVSYS.lower()]
-        self.LOGLEVSCR  = loglevels[self.LOGLEVSCR.lower()]
+        self.warn_unused_cfg(cfg_dict)
 
     def read_cfg_file(self, config_file):
         self._parser = ConfigParser.ConfigParser()
         self._parser.read(config_file)
 
         # Build up the list of sections.
-        self._items = {}
         for section in self._parser.sections():
             self._items[section] = dict(self._parser.items(section))
+
+        if not self._items:
+            log.warning("Configuration file %s empty or does not exist",
+                        config_file)
+
 
     def get_cfg_entry(self, section, name, default=None):
         name    = name.lower()
         section = section.lower()
 
         if section not in self._items:
-            raise ConfigException("Section %s missing from config file" %
-                                  section, self._config_path)
+            if default is not None:
+                return default
+            else:
+                raise ConfigException("Section %s missing from config file" %
+                                      section, self._config_path)
 
         item = self._items[section]
 
@@ -163,22 +146,13 @@ class Config(object):
 
             if not common.validate_port(self.METADATA_PORT):
                 raise ConfigException("Invalid MetadataPort value : %s" %
-                                      self.METADATA_PORT, self._config_path)
+                                      self.METADATA_PORT,
+                                      "etcd:/calico/config/MetadataPort")
 
-        #*********************************************************************#
-        #* Now the plugin and ACL manager addresses. These are allowed to be *#
-        #* IP addresses, or DNS resolvable hostnames.                        *#
-        #*********************************************************************#
-        self.validate_addr("PluginAddress", self.PLUGIN_ADDR)
-        self.validate_addr("ACLAddress", self.ACL_ADDR)
 
-        #*********************************************************************#
-        #* Bind address must be * or an IPv4 address. We allow hostnames,    *#
-        #* but resolve them before use.                                      *#
-        #*********************************************************************#
-        if self.LOCAL_ADDR != "*":
-            self.LOCAL_ADDR = self.validate_addr("LocalAddress",
-                                                 self.LOCAL_ADDR)
+        if self.IFACE_PREFIX is None:
+            raise ConfigException("Missing InterfacePrefix value",
+                                  "etcd:/calico/config/InterfacePrefix")
 
         #*********************************************************************#
         #* Log file may be "None" (the literal string, either provided or as *#
@@ -188,15 +162,20 @@ class Config(object):
             # Metadata is not required.
             self.LOGFILE = None
 
-    def warn_unused_cfg(self):
+    def warn_unused_cfg(self, cfg_dict):
         #*********************************************************************#
         #* Firewall that no unexpected items in the config file - i.e. ones  *#
         #* we have not used.                                                 *#
         #*********************************************************************#
         for section in self._items.keys():
             for lKey in self._items[section].keys():
-                log.warning("Got unexpected item %s=%s in %s" %
-                             (lKey, self._items[section][lKey], self._config_path))
+                log.warning("Got unexpected item %s=%s in %s",
+                            lKey, self._items[section][lKey], self._config_path)
+
+        for lKey in cfg_dict:
+            log.warning("Got unexpected etcd config item %s=%s",
+                        lKey, cfg_dict[lKey])
+
 
     def validate_addr(self, name, addr):
         """

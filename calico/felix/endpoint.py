@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2014 Metaswitch Networks
+# Copyright (c) 2015 Metaswitch Networks
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -13,344 +13,439 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
 """
 felix.endpoint
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
-Contains Felix logic to manage endpoints and their configuration.
+Endpoint management.
 """
-from calico import common
-from calico.felix import devices
-from calico.felix import frules
-from calico.felix import futils
-from calico.felix.exceptions import (InvalidRequest,
-                                     InconsistentIPVersion,
-                                     InvalidAddress)
-from netaddr import IPAddress
 import logging
+from subprocess import CalledProcessError
+from calico.felix import devices, futils
+from calico.felix.actor import actor_event
+from calico.felix.futils import FailedSystemCall
+from calico.felix.futils import IPV4
+from calico.felix.refcount import ReferenceManager, RefCountedActor
+from calico.felix.fiptables import DispatchChains
+from calico.felix.profilerules import RulesManager
+from calico.felix.frules import (CHAIN_TO_PREFIX, profile_to_chain_name,
+                                 CHAIN_FROM_PREFIX, commented_drop_fragment)
 
-log = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 
-class Address(object):
-    """
-    An address as reported to Felix by the plugin (ignoring fields that Felix
-    does not use). The input *fields* parameter is the fields from the API
-    ENDPOINTCREATED (or other ENDPOINT*) request, of which we just need the
-    address and gateway.
 
-    Raises KeyError if there is a missing "addr" field in the parameters.
+class EndpointManager(ReferenceManager):
+    def __init__(self, config, ip_type,
+                 iptables_updater,
+                 dispatch_chains,
+                 rules_manager):
+        super(EndpointManager, self).__init__(qualifier=ip_type)
 
-    """
-    def __init__(self, fields):
-        # Two things can go wrong here, addr key doesn't exist, or the IP
-        # address is not valid.  In both cases, the caller will deal with the
-        # exception thrown.
-        try:
-            self.ip = IPAddress(fields['addr'])
-        except KeyError:
-            raise InvalidAddress()
+        # Configuration and version to use
+        self.config = config
+        self.ip_type = ip_type
+        self.ip_version = futils.IP_TYPE_TO_VERSION[ip_type]
 
-        self.version = self.ip.version
+        # Peers/utility classes.
+        self.iptables_updater = iptables_updater
+        self.dispatch_chains = dispatch_chains
+        self.rules_mgr = rules_manager
 
-        # The gateway is used by Felix to set up NDP proxy.  It is required
-        # for IPv6 addresses unless the deployment has some other mechanism
-        # for endpoints to learn the gateway's MAC address, such as Router
-        # Advertisements from a DHCP6 service (typical OpenStack mechanism).
-        # However, we would always expect the gateway to be provided on the
-        # API. If no gateway is provided, log a warning.
-        try:
-            self.gateway = IPAddress(fields['gateway'])
-        except KeyError:
-            log.warning("No gateway provided with address")
-            self.gateway = None
+        # Endpoints that are in use; LocalEndpoint actors referenced by
+        # endpoint_id.
+        self.endpoints_by_id = {}
+        self.endpoint_id_by_iface_name = {}
+
+    def _create(self, object_id):
+        """
+        Overrides ReferenceManager._create()
+        """
+        return LocalEndpoint(self.config,
+                             object_id,
+                             self.ip_type,
+                             self.iptables_updater,
+                             self.dispatch_chains,
+                             self.rules_mgr)
+
+    def _on_object_started(self, endpoint_id, obj):
+        """
+        Callback from a LocalEndpoint to report that it has started.
+        Overrides ReferenceManager._on_object_started
+        """
+        ep = self.endpoints_by_id.get(endpoint_id)
+        obj.on_endpoint_update(ep, async=True)
+
+    @actor_event
+    def apply_snapshot(self, endpoints_by_id):
+        missing_endpoints = set(self.endpoints_by_id.keys())
+        for endpoint_id, endpoint in endpoints_by_id.iteritems():
+            self.on_endpoint_update(endpoint_id, endpoint)
+            missing_endpoints.discard(endpoint_id)
+            self._maybe_yield()
+        for endpoint_id in missing_endpoints:
+            self.on_endpoint_update(endpoint_id, None)
+            self._maybe_yield()
+
+    @actor_event
+    def on_endpoint_update(self, endpoint_id, endpoint):
+        """
+        Event to indicate that an endpoint has been updated (including creation
+        or deletion).
+
+        :param str endpoint_id: The endpoint ID in question.
+        :endpoint dict[str]: Dictionary of all endpoint data. If None, the
+                             endpoint is to be deleted.
+        """
+        if self._is_starting_or_live(endpoint_id):
+            # Local endpoint thread is running; tell it of the change.
+            self.objects_by_id[endpoint_id].on_endpoint_update(endpoint,
+                                                               async=True)
+        if endpoint is None:
+            # Deletion. Remove from the list.
+            _log.info("Endpoint %s deleted", endpoint_id)
+            old_ep = self.endpoints_by_id.pop(endpoint_id, {})
+            if old_ep.get("name") in self.endpoint_id_by_iface_name:
+                self.endpoint_id_by_iface_name.pop(old_ep.get("name"))
+            if self._is_starting_or_live(endpoint_id):
+                # Local endpoint is running, so remove our reference.
+                self.decref(endpoint_id)
         else:
-            # If, for some reason, the IP version on the address and gateway
-            # don't match, we will fail to program the proxy.  So, better to
-            # fail the API request now.
-            if self.gateway.version != self.ip.version:
-                raise InconsistentIPVersion(
-                    "IP %s is not the same IP version as gateway %s" %
-                    (self.ip, self.gateway))
+            # Creation or modification
+            _log.info("Endpoint %s modified or created", endpoint_id)
+            self.endpoints_by_id[endpoint_id] = endpoint
+            self.endpoint_id_by_iface_name[endpoint["name"]] = endpoint_id
 
+        if endpoint and endpoint["host"] == self.config.HOSTNAME:
+            _log.debug("Endpoint is local, ensuring it is active.")
+            if not self._is_starting_or_live(endpoint_id):
+                # This will trigger _on_object_activated to pass the endpoint
+                # we just saved off to the endpoint.
+                self.get_and_incref(endpoint_id)
 
-class Endpoint(object):
-    """
-    Endpoint represents an endpoint in a Calico network, managed by a specific
-    instance of Felix.
-    """
-    STATE_ENABLED  = "enabled"
-    STATE_DISABLED = "disabled"
-    STATES         = [STATE_ENABLED, STATE_DISABLED]
-
-    def __init__(self, uuid, mac, interface, prefix):
-        self.uuid = uuid.encode('ascii')
-        self.mac = mac.encode('ascii')
-        self.interface = interface.encode('ascii')
-        self.suffix = interface.replace(prefix, "", 1)
-
-        # Dictionary of Address objects, keyed by the IPAddress.
-        self.addresses = {}
-
-        #*********************************************************************#
-        #* pending_resync is set True when we have triggered a resync and    *#
-        #* this particular endpoint has NOT received an update for that      *#
-        #* resync. This allows us to spot when an endpoint should be removed *#
-        #* (because the resync says it no longer exists).                    *#
-        #*********************************************************************#
-        self.pending_resync = False
-
-        #*********************************************************************#
-        #* ACL data structure. This is set to "None" when there are no ACLs  *#
-        #* (before the ACL manager has told us about them for a new          *#
-        #* endpoint), and is otherwise set to the acls field from the        *#
-        #* ACLUPDATE request for the endpoint.                               *#
-        #*                                                                   *#
-        #* Critically, we do not update ACLs until we have got the first     *#
-        #* GETACLUPDATE. If this is a new endpoint, that is fine - no        *#
-        #* traffic can enter or leave the endpoint IPs until the ACLs are    *#
-        #* first set up. If this is not a new endpoint, then we should leave *#
-        #* any ACLs in place from when they were last configured.            *#
-        #*********************************************************************#
-        self.acl_data = None
-
-        # Assume disabled until we know different
-        self.state = Endpoint.STATE_DISABLED
-
-    def remove(self, iptables_state):
+    @actor_event
+    def on_interface_update(self, name):
         """
-        Delete a programmed endpoint. Remove the routes, then the rules.
+        Called when an interface is created or changes state.
+
+        The interface may be any interface on the host, not necessarily
+        one managed by any endpoint of this server.
         """
-        if devices.interface_exists(self.interface):
-            for type in (futils.IPV4, futils.IPV6):
-                try:
-                    ips = devices.list_interface_ips(type, self.interface)
-                    for ip in ips:
-                        devices.del_route(type, ip, self.interface)
-                except futils.FailedSystemCall:
-                    # There is a window where the interface gets deleted under
-                    # our feet. If it has gone now, ignore the error, otherwise
-                    # rethrow it.
-                    if devices.interface_exists(self.interface):
-                        raise
-                    break
+        try:
+            endpoint_id = self.endpoint_id_by_iface_name[name]
+            _log.info("Endpoint %s received interface update for %s",
+                      endpoint_id, name)
+            if self._is_starting_or_live(endpoint_id):
+                # LocalEndpoint is running, so tell it about the change.
+                ep = self.objects_by_id[endpoint_id]
+                ep.on_interface_update(async=True)
 
-        frules.del_rules(iptables_state, self.suffix, futils.IPV4)
-        frules.del_rules(iptables_state, self.suffix, futils.IPV6)
+        except KeyError:
+            _log.debug("Update on interface %s that we do not care about",
+                       name)
 
-    def program_endpoint(self, iptables_state):
+
+class LocalEndpoint(RefCountedActor):
+
+    def __init__(self, config, endpoint_id, ip_type, iptables_updater,
+                 dispatch_chains, rules_manager):
+        super(LocalEndpoint, self).__init__(qualifier="%s(%s)" %
+                                            (endpoint_id, ip_type))
+        assert isinstance(dispatch_chains, DispatchChains)
+        assert isinstance(rules_manager, RulesManager)
+
+        self.endpoint_id = endpoint_id
+
+        self.config = config
+        self.ip_type = ip_type
+        self.ip_version = futils.IP_TYPE_TO_VERSION[ip_type]
+        self.iptables_updater = iptables_updater
+        self.dispatch_chains = dispatch_chains
+        self.rules_mgr = rules_manager
+
+        # Will be filled in as we learn about the OS interface and the
+        # endpoint config.
+        self.endpoint = None
+        self._iface_name = None
+        self._suffix = None
+
+        # Track whether the last attempt to program the dataplane succeeded.
+        # We'll force a reprogram next time we get a kick.
+        self._failed = False
+
+    @actor_event
+    def on_endpoint_update(self, endpoint):
         """
-        Given an endpoint, make the programmed state match the desired state,
-        setting up rules and creating chains and ipsets, but not putting
-        content into the ipsets (leaving that for frules.update_acls).
-
-        Note that if acl_data is none, we have not received any ACLs, and so
-        we just leave the ACLs in place until we do. If there are none because
-        this is a new endpoint, then we leave the endpoint with all routing
-        disabled until we know better.
-
-        The logic here is that we should create the routes and basic rules, but
-        not the ACLs - leaving the ACLs as they were or with no access
-        permitted if none. That is because we have the information for the
-        former (routes and IP addresses for the endpoint) but not the latter
-        (ACLs). However this split only makes sense at the point where the ACLs
-        must have a default rule of "deny", so when issue39 is fully resolved
-        this method should only be called when the ACLs are available too.
-
-        Returns True if the endpoint needs to be retried (because the tap
-        interface does not exist yet).
+        Called when this endpoint has received an update.
+        :param dict[str] endpoint: endpoint parameter dictionary.
         """
-        # Declare some utility functions
-        def add_routes(routes, type):
-            for route in routes:
-                log.info("Add route to %s address %s for interface %s",
-                         type, route, self.interface)
-                devices.add_route(type, route, self.interface, self.mac)
+        _log.debug("Endpoint updated: %s", endpoint)
+        if endpoint and not self.endpoint:
+            # This is the first time we have seen the endpoint, so extract the
+            # interface name and endpoint ID.
+            self._iface_name = endpoint["name"]
+            self._suffix = interface_to_suffix(self.config,
+                                               self._iface_name)
+        was_ready = self._ready
 
-        def remove_routes(routes, type):
-            for route in routes:
-                log.info("Remove extra %s route to address %s for interface %s",
-                         type, route, self.interface)
-                devices.del_route(type, route, self.interface)
+        old_profile_id = self.endpoint and self.endpoint["profile_id"]
+        new_profile_id = endpoint and endpoint["profile_id"]
+        if old_profile_id != new_profile_id:
+            if old_profile_id:
+                # Clean up the old profile.
+                self.rules_mgr.decref(old_profile_id)
+            if new_profile_id is not None:
+                _log.debug("Acquiring new profile %s", new_profile_id)
+                self.rules_mgr.get_and_incref(new_profile_id, async=True)
 
-        if not devices.interface_exists(self.interface):
-            if self.state == Endpoint.STATE_ENABLED:
-                log.error("Unable to configure non-existent interface %s",
-                          self.interface)
-                return True
+        # Store off the endpoint we were passed.
+        self.endpoint = endpoint
+
+        if endpoint:
+            # Configure the network interface; may fail if not there yet (in
+            # which case we'll just do it when the interface comes up).
+            self._configure_interface()
+        else:
+            # Remove the network programming.
+            self._deconfigure_interface()
+
+        self._maybe_update(was_ready)
+        _log.debug("%s finished processing update", self)
+
+    @actor_event
+    def on_unreferenced(self):
+        """
+        Overrides RefCountedActor:on_unreferenced.
+        """
+        _log.info("%s now unreferenced, cleaning up", self)
+        assert not self._ready, "Should be deleted before being unreffed."
+        self._notify_cleanup_complete()
+
+    @actor_event
+    def on_interface_update(self):
+        """
+        Actor event to report that the interface is either up or changed.
+        """
+        _log.info("Endpoint %s received interface kick", self.endpoint_id)
+        self._configure_interface()
+
+    @property
+    def _missing_deps(self):
+        """
+        Returns a list of missing dependencies.
+        """
+        missing_deps = []
+        if not self.endpoint:
+            missing_deps.append("endpoint")
+        elif self.endpoint.get("state", "active") != "active":
+            missing_deps.append("endpoint active")
+        elif not self.endpoint.get("profile_id"):
+            missing_deps.append("profile")
+        return missing_deps
+
+    @property
+    def _ready(self):
+        """
+        Returns whether this LocalEndpoint has any dependencies preventing it
+        programming its rules.
+        """
+        return not self._missing_deps
+
+    def _maybe_update(self, was_ready):
+        """
+        Update the relevant programming for this endpoint.
+
+        :param bool was_ready: Whether this endpoint has already been
+                               successfully configured.
+        """
+        is_ready = self._ready
+        if not is_ready:
+            _log.debug("%s not ready, waiting on %s", self, self._missing_deps)
+        if self._failed or is_ready != was_ready:
+            ifce_name = self._iface_name
+            if is_ready:
+                # We've got all the info and everything is active.
+                if self._failed:
+                    _log.warn("Retrying programming after a failure")
+                self._failed = False  # Ready to try again...
+                _log.info("%s became ready to program.", self)
+                self._update_chains()
+                self.dispatch_chains.on_endpoint_added(
+                    self._iface_name, self.endpoint_id, async=True)
             else:
-                # No interface, but disabled. This is not an error, and there
-                # is nothing to do.
-                log.debug("Interface missing when disabling endpoint %s",
-                          self.uuid)
-                return False
+                # We were active but now we're not, withdraw the dispatch rule
+                # and our chain.  We must do this to allow iptables to remove
+                # the profile chain.
+                _log.info("%s became unready.", self)
+                self._failed = False  # Don't care any more.
 
-        # If the interface is down, we can't configure it.
-        if not devices.interface_up(self.interface):
-            log.error("Unable to configure interface %s: interface is down.",
-                      self.interface)
-            return True
+                self.dispatch_chains.on_endpoint_removed(ifce_name,
+                                                         async=True)
+                self._remove_chains()
 
-        # Configure the interface.
-        if self.state == Endpoint.STATE_ENABLED:
-            devices.configure_interface(self.interface)
+    def _update_chains(self):
+        updates, deps = _get_endpoint_rules(
+            self._suffix,
+            self._iface_name,
+            self.ip_version,
+            self.endpoint.get("ipv%s_nets" % self.ip_version, []),
+            self.endpoint["mac"],
+            self.endpoint["profile_id"])
+        try:
+            self.iptables_updater.rewrite_chains("filter",
+                                                 updates, deps, async=False)
+        except CalledProcessError:
+            _log.exception("Failed to program chains for %s. Removing.", self)
+            self._failed = True
+            self._remove_chains()
 
-            # List the IPv6 gateways to see if we need proxy NDP.
-            ipv6_gateways = [addr.gateway for addr in self.addresses.values()
-                             if addr.version is 6]
-            if ipv6_gateways:
-                devices.configure_interface_ipv6(self.interface, ipv6_gateways)
+    def _remove_chains(self):
+        try:
+            self.iptables_updater.delete_chains("filter",
+                                                chain_names(self._suffix),
+                                                async=True)
+        except CalledProcessError:
+            _log.exception("Failed to delete chains for %s", self)
+            self._failed = True
 
-            # Build up list of addresses that should be present
-            ipv4_intended = set([str(addr.ip)
-                                 for addr in self.addresses.values()
-                                 if addr.version is 4])
-            ipv6_intended = set([str(addr.ip)
-                                 for addr in self.addresses.values()
-                                 if addr.version is 6])
+    def _configure_interface(self):
+        """
+        Applies sysctls and routes to the interface.
+        """
+        try:
+            if self.ip_type == IPV4:
+                devices.configure_interface_ipv4(self._iface_name)
+                nets_key = "ipv4_nets"
+            else:
+                ipv6_gw = self.endpoint.get("ipv6_gateway", None)
+                devices.configure_interface_ipv6(self._iface_name, ipv6_gw)
+                nets_key = "ipv6_nets"
+
+            ips = set()
+            for ip in self.endpoint.get(nets_key, []):
+                ips.add(futils.net_to_ip(ip))
+            devices.set_routes(self.ip_type, ips,
+                               self._iface_name,
+                               self.endpoint["mac"])
+
+        except (IOError, FailedSystemCall, CalledProcessError):
+            if not devices.interface_exists(self._iface_name):
+                _log.info("Interface %s for %s does not exist yet",
+                           self._iface_name, self.endpoint_id)
+            elif not devices.interface_up(self._iface_name):
+                _log.info("Interface %s for %s is not up yet",
+                           self._iface_name, self.endpoint_id)
+            else:
+                # OK, that really should not happen.
+                _log.exception("Failed to configure interface %s for %s",
+                               self._iface_name, self.endpoint_id)
+                raise
+
+    def _deconfigure_interface(self):
+        """
+        Removes routes from the interface.
+        """
+        try:
+            devices.set_routes(self.ip_type, set(), self._iface_name, None)
+
+        except (IOError, FailedSystemCall, CalledProcessError):
+            if not devices.interface_exists(self._iface_name):
+                # Deleted under our feet - so the rules are gone.
+                _log.debug("Interface %s for %s deleted",
+                           self._iface_name, self.endpoint_id)
+            else:
+                # An error deleting the rules. Log and continue.
+                _log.exception("Cannot delete rules for interface %s for %s",
+                               self._iface_name, self.endpoint_id)
+
+    def __str__(self):
+        return ("Endpoint<%s,id=%s,iface=%s>" %
+                (self.ip_type, self.endpoint_id,
+                 self._iface_name or "unknown"))
+
+
+def interface_to_suffix(config, iface_name):
+    suffix = iface_name.replace(config.IFACE_PREFIX, "", 1)
+    # The suffix is surely not very long, but make sure.
+    suffix = futils.uniquely_shorten(suffix, 16)
+    return suffix
+
+
+def chain_names(endpoint_suffix):
+    to_chain_name = (CHAIN_TO_PREFIX + endpoint_suffix)
+    from_chain_name = (CHAIN_FROM_PREFIX + endpoint_suffix)
+    return to_chain_name, from_chain_name
+
+
+def _get_endpoint_rules(suffix, iface, ip_version, local_ips, mac, profile_id):
+    to_chain_name, from_chain_name = chain_names(suffix)
+
+    to_chain = ["--flush %s" % to_chain_name]
+    if ip_version == 6:
+        #  In ipv6 only, there are 6 rules that need to be created first.
+        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 130
+        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 131
+        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 132
+        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp router-advertisement
+        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-solicitation
+        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-advertisement
+        #
+        #  These rules are ICMP types 130, 131, 132, 134, 135 and 136, and can
+        #  be created on the command line with something like :
+        #     ip6tables -A plw -j RETURN --protocol ipv6-icmp --icmpv6-type 130
+        for icmp_type in ["130", "131", "132", "134", "135", "136"]:
+            to_chain.append("--append %s --jump RETURN "
+                            "--protocol ipv6-icmp "
+                            "--icmpv6-type %s" % (to_chain_name, icmp_type))
+    to_chain.append("--append %s --match conntrack --ctstate INVALID "
+                    "--jump DROP" % to_chain_name)
+    to_chain.append("--append %s --match conntrack "
+                    "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+                    to_chain_name)
+    assert profile_id, "Profile ID should be set, not %s" % profile_id
+    profile_in_chain = profile_to_chain_name("inbound", profile_id)
+    to_chain.append("--append %s --goto %s" %
+                    (to_chain_name, profile_in_chain))
+    to_deps = set([profile_in_chain])
+
+    # Now the chain that manages packets from the interface...
+    from_chain = ["--flush %s" % from_chain_name]
+    if ip_version == 6:
+        # In ipv6 only, allows all ICMP traffic from this endpoint to anywhere.
+        from_chain.append("--append %s --protocol ipv6-icmp" % from_chain_name)
+
+    # Conntrack rules.
+    from_chain.append("--append %s --match conntrack --ctstate INVALID "
+                      "--jump DROP" % from_chain_name)
+    from_chain.append("--append %s --match conntrack "
+                      "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+                      from_chain_name)
+
+    if ip_version == 4:
+        from_chain.append("--append %s --protocol udp --sport 68 --dport 67 "
+                          "--jump RETURN" % from_chain_name)
+    else:
+        assert ip_version == 6
+        from_chain.append("--append %s --protocol udp --sport 546 --dport 547 "
+                          "--jump RETURN" % from_chain_name)
+
+    # Anti-spoofing rules.  Only allow traffic from known (IP, MAC) pairs to
+    # get to the profile chain, drop other traffic.
+    profile_out_chain = profile_to_chain_name("outbound", profile_id)
+    from_deps = set([profile_out_chain])
+    for ip in local_ips:
+        if "/" in ip:
+            cidr = ip
         else:
-            # Disabled endpoint; we should remove all the routes.
-            ipv4_intended = set()
-            ipv6_intended = set()
+            cidr = "%s/32" % ip if ip_version == 4 else "%s/128" % ip
+        # Note use of --goto rather than --jump; this means that when the
+        # profile chain returns, it will return the chain that called us, not
+        # this chain.
+        from_chain.append("--append %s --src %s --match mac --mac-source %s "
+                          "--goto %s" % (from_chain_name, cidr,
+                                         mac.upper(), profile_out_chain))
+    from_chain.append(commented_drop_fragment(from_chain_name,
+                                              "Anti-spoof DROP:"))
 
-        ipv4_existing = devices.list_interface_ips(futils.IPV4, self.interface)
-        ipv6_existing = devices.list_interface_ips(futils.IPV6, self.interface)
-
-        # Determine the addresses that won't be changed.
-        unchanged = ((ipv4_intended & ipv4_existing) |
-                     (ipv6_intended & ipv6_existing))
-
-        log.debug("Already got routes for %s for interface %s",
-                  unchanged, self.interface)
-
-        #*********************************************************************#
-        #* Add and remove routes. Add any route we need but don't have, and  *#
-        #* remove any route we have but don't need. These operations are     *#
-        #* fast because they operate on sets.                                *#
-        #*********************************************************************#
-        add_routes(ipv4_intended - ipv4_existing, futils.IPV4)
-        add_routes(ipv6_intended - ipv6_existing, futils.IPV6)
-        remove_routes(ipv4_existing - ipv4_intended, futils.IPV4)
-        remove_routes(ipv6_existing - ipv6_intended, futils.IPV6)
-
-        #*********************************************************************#
-        #* Set up the rules for this endpoint, not including ACLs. Note that *#
-        #* if the endpoint is disabled, then it has no permitted addresses,  *#
-        #* so it cannot send any data.                                       *#
-        #*********************************************************************#
-        frules.set_ep_specific_rules(iptables_state,
-                                     self.suffix, self.interface, futils.IPV4,
-                                     ipv4_intended, self.mac)
-        frules.set_ep_specific_rules(iptables_state,
-                                     self.suffix, self.interface, futils.IPV6,
-                                     ipv6_intended, self.mac)
-
-        #*********************************************************************#
-        #* If we have just disabled / enabled an endpoint, we may need to    *#
-        #* enable / disable incoming traffic. update_acls makes this         *#
-        #* decision.                                                         *#
-        #*********************************************************************#
-        self.update_acls()
-
-        return False
-
-    def update_acls(self):
-        """
-        Updates the ACL state for an endpoint, setting all the rules and IP
-        sets appropriately.
-        """
-        if self.state == Endpoint.STATE_DISABLED:
-            # Disabled endpoint - bar all traffic.
-            log.debug("Set up empty ACLs for %s" % (self.suffix))
-            default = {'inbound_default': 'DENY',
-                       'inbound': [],
-                       'outbound_default': 'DENY',
-                       'outbound': []}
-            acls    = {'v4': default, 'v6': default}
-        elif self.acl_data is None:
-            # No ACLs received; hold off until we get some.
-            log.debug("No ACLs available yet for endpoint %s" % self.suffix)
-            return
-        else:
-            log.debug("ACLs for %s are %s" % (self.suffix, self.acl_data))
-            acls = self.acl_data
-
-        inbound     = acls['v4']['inbound']
-        in_default  = acls['v4']['inbound_default']
-        outbound    = acls['v4']['outbound']
-        out_default = acls['v4']['outbound_default']
-
-        frules.set_acls(self.suffix, futils.IPV4,
-                        inbound, in_default,
-                        outbound, out_default)
-
-        inbound     = acls['v6']['inbound']
-        in_default  = acls['v6']['inbound_default']
-        outbound    = acls['v6']['outbound']
-        out_default = acls['v6']['outbound_default']
-
-        frules.set_acls(self.suffix, futils.IPV6,
-                        inbound, in_default,
-                        outbound, out_default)
-
-    def store_update(self, fields):
-        """
-        Update an endpoint's MAC, state and addresses with the contents of an
-        ENDPOINT* API message.
-
-        :param fields: dictionary of Endpoint Update API fields.
-        :return: None.
-        :throws: InvalidRequest if unsuccessful.
-        """
-
-        try:
-            mac = fields['mac']
-        except KeyError:
-            raise InvalidRequest('Missing "mac" field', fields)
-
-        try:
-            state = fields['state']
-        except KeyError:
-            raise InvalidRequest('Missing "state" field', fields)
-
-        try:
-            addrs = fields['addrs']
-        except KeyError:
-            raise InvalidRequest('Missing "addrs" field', fields)
-
-        addresses = {}
-
-        for addr in addrs:
-            try:
-                address = Address(addr)
-            except InconsistentIPVersion as err:
-                # exception has an operator-suitable error message.
-                log.error("For endpoint %s, %s", self.uuid, err)
-                raise InvalidRequest(str(err),
-                                     fields)
-            except InvalidAddress:
-                log.error("Invalid address for endpoint %s : %s",
-                          self.uuid, fields)
-                raise InvalidRequest("Invalid address for endpoint",
-                                     fields)
-
-            if address.ip in addresses:
-                # The IP is listed multiple times in the message.  This is
-                # an error.
-                log.error("IP %s listed multiple times in message for endpoint"
-                          " %s : %s", address.ip, self.uuid, fields)
-                raise InvalidRequest("IP %s listed multiple times in message "
-                                     "for endpoint %s" %
-                                     (address.ip, self.uuid), fields)
-
-            # All error checks passed on this addr.
-            addresses[address.ip] = address
-
-        if state not in Endpoint.STATES:
-            log.error("Invalid state %s for endpoint %s : %s",
-                      state, self.uuid, fields)
-            raise InvalidRequest('Invalid state "%s"' % state, fields)
-
-        self.addresses = addresses
-        self.mac = mac.encode('ascii')
-        self.state = state.encode('ascii')
+    updates = {to_chain_name: to_chain, from_chain_name: from_chain}
+    deps = {to_chain_name: to_deps, from_chain_name: from_deps}
+    return updates, deps

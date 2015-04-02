@@ -20,20 +20,14 @@ Test the device handling code.
 """
 import logging
 import mock
-import sys
 import os
+import unittest
 import uuid
+from contextlib import nested
 
 import calico.felix.devices as devices
 import calico.felix.futils as futils
 import calico.felix.test.stub_utils as stub_utils
-from contextlib import nested
-from netaddr import IPAddress
-
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
 
 # Logger
 log = logging.getLogger(__name__)
@@ -136,11 +130,11 @@ class TestDevices(unittest.TestCase):
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
 
-    def test_configure_interface_mainline(self):
+    def test_configure_interface_ipv4_mainline(self):
         m_open = mock.mock_open()
         tap = "tap" + str(uuid.uuid4())[:11]
         with mock.patch('__builtin__.open', m_open, create=True):
-            devices.configure_interface(tap)
+            devices.configure_interface_ipv4(tap)
         calls = [mock.call('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb'),
                  M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,
                  mock.call('/proc/sys/net/ipv4/conf/%s/proxy_arp' % tap, 'wb'),
@@ -161,24 +155,23 @@ class TestDevices(unittest.TestCase):
         m_open = mock.mock_open()
         rc = futils.CommandOutput("", "")
         if_name = "tap3e5a2b34222"
-        proxy_targets = [IPAddress("2001::3:4"),
-                         IPAddress("2001:3::4")]
+        proxy_target = "2001::3:4"
 
         open_patch = mock.patch('__builtin__.open', m_open, create=True)
-        m_check_call = mock.patch('calico.felix.futils.check_call', return_value=rc)
+        m_check_call = mock.patch('calico.felix.futils.check_call',
+                                  return_value=rc)
 
         with nested(open_patch, m_check_call) as (_, m_check_call):
-            devices.configure_interface_ipv6(if_name, proxy_targets)
-            calls = [mock.call('/proc/sys/net/ipv6/conf/%s/proxy_ndp' % if_name,
+            devices.configure_interface_ipv6(if_name, proxy_target)
+            calls = [mock.call('/proc/sys/net/ipv6/conf/%s/proxy_ndp' %
+                               if_name,
                                'wb'),
                      M_ENTER,
                      mock.call().write('1'),
                      M_CLEAN_EXIT]
             m_open.assert_has_calls(calls)
-            ip_calls = []
-            for target in proxy_targets:
-                ip_calls.append(mock.call(["ip", "-6", "neigh", "add", "proxy",
-                                           str(target), "dev", if_name]))
+            ip_calls = [mock.call(["ip", "-6", "neigh", "add", "proxy",
+                                   str(proxy_target), "dev", if_name])]
             m_check_call.assert_has_calls(ip_calls)
 
     def test_interface_up1(self):
@@ -190,12 +183,12 @@ class TestDevices(unittest.TestCase):
         with mock.patch('__builtin__.open') as open_mock:
             open_mock.return_value = mock.MagicMock(spec=file)
             file_handle = open_mock.return_value.__enter__.return_value
-            file_handle.read.return_value = '0x1003\n'
+            file_handle.read.return_value = 'up\n'
 
             is_up = devices.interface_up(tap)
 
             open_mock.assert_called_with(
-                '/sys/class/net/%s/flags' % tap, 'r'
+                '/sys/class/net/%s/operstate' % tap, 'r'
             )
             self.assertTrue(file_handle.read.called)
             self.assertTrue(is_up)
@@ -209,12 +202,12 @@ class TestDevices(unittest.TestCase):
         with mock.patch('__builtin__.open') as open_mock:
             open_mock.return_value = mock.MagicMock(spec=file)
             file_handle = open_mock.return_value.__enter__.return_value
-            file_handle.read.return_value = '0x1002\n'
+            file_handle.read.return_value = 'down\n'
 
             is_up = devices.interface_up(tap)
 
             open_mock.assert_called_with(
-                '/sys/class/net/%s/flags' % tap, 'r'
+                '/sys/class/net/%s/operstate' % tap, 'r'
             )
             self.assertTrue(file_handle.read.called)
             self.assertFalse(is_up)
