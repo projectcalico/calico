@@ -538,15 +538,11 @@ def profile_rule_show(name, human_readable=False):
 
     if human_readable:
         print "Inbound rules:"
-        i = 1
-        for rule in profile.rules.inbound_rules:
+        for i, rule in enumerate(profile.rules.inbound_rules, start=1):
             print " %3d %s" % (i, rule.pprint())
-            i += 1
         print "Outbound rules:"
-        i = 1
-        for rule in profile.rules.outbound_rules:
+        for i, rule in enumerate(profile.rules.outbound_rules, start=1):
             print " %3d %s" % (i, rule.pprint())
-            i += 1
     else:
         json.dump(profile.rules._asdict(),
                   sys.stdout,
