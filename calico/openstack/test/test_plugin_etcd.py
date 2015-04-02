@@ -72,6 +72,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             read_result.value = self.etcd_data[key]
         else:
             read_result.value = None
+            if not recursive:
+                raise KeyError(key)
 
         # Print and return the result object.
         print "etcd read: %s\nvalue: %s" % (key, read_result.value)
@@ -88,6 +90,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                     read_result.children.append(child)
             print "children: %s" % [child.key
                                     for child in read_result.children]
+            if read_result.value is None and read_result.children == []:
+                raise KeyError(key)
         else:
             read_result.children = None
 
