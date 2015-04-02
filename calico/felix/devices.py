@@ -185,12 +185,17 @@ def set_routes(ip_type, ips, interface, mac=None):
 def interface_up(if_name):
     """
     Checks whether a given interface is up.
-    """
-    with open('/sys/class/net/%s/operstate' % if_name, 'r') as f:
-        state = f.read()
-    _log.debug("Interface %s is in state %s", if_name, state)
 
-    return 'up' in state
+    Check this by examining the interface flags and looking for whether the
+    IFF_UP flag has been set. IFF_UP is the flag 0x01, so read in the flags
+    (represented by a hexadecimal integer) and check if the 1 bit is set.
+    """
+    with open('/sys/class/net/%s/flags' % if_name, 'r') as f:
+        flags = f.read().strip()
+
+    _log.debug("Interface %s has flags %s", if_name, flags)
+
+    return bool(int(flags, 16) & 1)
 
 
 # These constants map to constants in the Linux kernel. This is a bit poor, but
