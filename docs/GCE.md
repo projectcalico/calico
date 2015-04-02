@@ -38,7 +38,7 @@ gcloud compute instances create core1 core2 --image https://www.googleapis.com/c
 You can get the cloud-config*.yaml files from the tests/scale directory of this repo.
 
 ## Setting up GCE networking
-In order for routing to work correctly between hosts, you must notify GCE of the network address configuration you are using for your endpoints. For this demo we do this by manually running the `gcloud` utility; a production instance would almost certainly use the RESTful API. In these instructions, we'll assume that you plan on hosting addresses in the 192.168.1.0/24 range on core1, and addresses in the 192.168.2.0/24 range on core2 . The instructions for doing this are as follows.
+In order for routing to work correctly between hosts, you must notify GCE of the network address configuration you are using for your endpoints. For this demo we do this by manually running the `gcloud` utility; a production instance would almost certainly use the RESTful API. In these instructions, we'll assume that you plan on hosting addresses in the 192.168.1.0/24 range on core1, and addresses in the 192.168.2.0/24 range on core2. The instructions for doing this are as follows.
 
 
 Install each route in turn.
@@ -49,9 +49,10 @@ gcloud compute routes create ip-192-168-2-0 --next-hop-instance core2 --next-hop
 Note that this assumes that your hosts are called `core1` and `core2` in zone `us-central1-a`; change as appropriate for your configuration.
 
 Now verify that you can view your instances and lists.
-
+```
 gcloud compute instances list
 gcloud compute routes list
+```
 
 When you come to create endpoints (i.e. test containers) they will be able to ping one another but not do TCP or UDP because the GCE firewalls do not permit it. To enable this, add a firewall rule to allow all traffic to/from 192.168.0.0/16
 ```
@@ -79,4 +80,6 @@ Now, you can just follow the standard getting started instructions for downloadi
 ## (Optional) Enabling traffic from countainers to the internet
  The test endpoints will be unable to access the internet - that is because the internal range we are using is not routable. Hence to get external connectivity, SNAT is called for using the following `iptables` rule (on both hosts).
 
-        iptables -t nat -A POSTROUTING -s 192.168.0.0/16 ! -d 192.168.0.0/16 -j MASQUERADE
+```
+iptables -t nat -A POSTROUTING -s 192.168.0.0/16 ! -d 192.168.0.0/16 -j MASQUERADE
+```
