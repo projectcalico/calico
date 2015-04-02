@@ -48,6 +48,7 @@ SHORTENED_PREFIX = "_"
 class FailedSystemCall(Exception):
     def __init__(self, message, args, retcode, stdout, stderr):
         super(FailedSystemCall, self).__init__(message)
+        self.message = message
         self.args = args
         self.retcode = retcode
         self.stdout = stdout

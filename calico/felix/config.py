@@ -49,6 +49,7 @@ LOGLEVELS = {"none":      None,
 class ConfigException(Exception):
     def __init__(self, message, source):
         super(ConfigException, self).__init__(message)
+        self.message = message
         self.source = source
 
     def __str__(self):
