@@ -55,10 +55,21 @@ class Rule(dict):
     def __setitem__(self, key, value):
         if key not in Rule.ALLOWED_KEYS:
             raise KeyError("Key %s is not allowed on Rule." % key)
+
+        # Convert any CIDR strings to netaddr before inserting them.
+        if key in ("src_net", "dst_net") and isinstance(value, str):
+            value = IPNetwork(value)
         super(Rule, self).__setitem__(key, value)
 
     def to_json(self):
-        return json.dumps(self)
+
+        # Convert IPNetworks to strings
+        json_dict = self.copy()
+        if "dst_net" in json_dict:
+            json_dict["dst_net"] = str(json_dict["dst_net"])
+        if "src_net" in json_dict:
+            json_dict["src_net"] = str(json_dict["src_net"])
+        return json.dumps(json_dict)
 
     def pprint(self):
         """Human readable description."""
@@ -66,7 +77,7 @@ class Rule(dict):
         if "protocol" in self:
             out.append(self["protocol"])
         if "icmp_type" in self:
-            out.extend(["type", self["icmp_type"]])
+            out.extend(["type", str(self["icmp_type"])])
 
         if ("src_tag" in self or
             "src_ports" in self or
@@ -75,9 +86,9 @@ class Rule(dict):
         if "src_tag" in self:
             out.extend(["tag", self["src_tag"]])
         elif "src_net" in self:
-            out.append(self["src_net"])
+            out.append(str(self["src_net"]))
         if "src_ports" in self:
-            out.extend(["ports", self["src_ports"]])
+            out.extend(["ports", str(self["src_ports"])])
 
         if ("dst_tag" in self or
             "dst_ports" in self or
@@ -86,9 +97,9 @@ class Rule(dict):
         if "dst_tag" in self:
             out.extend(["tag", self["dst_tag"]])
         elif "dst_net" in self:
-            out.append(self["dst_net"])
+            out.append(str(self["dst_net"]))
         if "dst_ports" in self:
-            out.extend(["ports", self["dst_ports"]])
+            out.extend(["ports", str(self["dst_ports"])])
 
         return " ".join(out)
 

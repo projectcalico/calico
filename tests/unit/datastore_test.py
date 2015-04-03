@@ -5,6 +5,69 @@ import unittest
 from mock import patch, Mock
 from node.adapter.datastore import DatastoreClient, Rule, Profile, Rules
 from etcd import Client as EtcdClient
+from netaddr import IPNetwork
+import json
+
+
+class TestRule(unittest.TestCase):
+
+    def test_create(self):
+        rule1 = Rule(action="allow",
+                     src_tag="TEST",
+                     src_ports=[300, 400])
+        self.assertDictEqual({"action": "allow",
+                              "src_tag": "TEST",
+                              "src_ports": [300, 400]}, rule1)
+
+    def test_to_json(self):
+        rule1 = Rule(action="deny",
+                     dst_net=IPNetwork("192.168.13.0/24"))
+        json_str = rule1.to_json()
+        expected = json.dumps({"action": "deny",
+                               "dst_net": "192.168.13.0/24"})
+        self.assertEqual(json_str, expected)
+
+        rule2 = Rule(action="deny",
+                     src_net="192.168.13.0/24")
+        json_str = rule2.to_json()
+        expected = json.dumps({"action": "deny",
+                               "src_net": "192.168.13.0/24"})
+        self.assertEqual(json_str, expected)
+
+    def test_wrong_keys(self):
+        try:
+            Rule(action="deny", dst_nets="192.168.13.0/24")
+        except KeyError:
+            pass
+        else:
+            self.assertTrue(False, "Should raise key error.")
+
+    def test_pprint(self):
+        rule1 = Rule(action="allow",
+                     src_tag="TEST",
+                     src_ports=[300, 400])
+        self.assertEqual("allow from tag TEST ports [300, 400]",
+                         rule1.pprint())
+
+        rule2 = Rule(action="allow",
+                     dst_tag="TEST",
+                     dst_ports=[300, 400],
+                     protocol="udp")
+        self.assertEqual("allow udp to tag TEST ports [300, 400]",
+                         rule2.pprint())
+
+        rule3 = Rule(action="deny",
+                     src_net=IPNetwork("fd80::4:0/112"),
+                     dst_ports=[80])
+        self.assertEqual("deny from fd80::4:0/112 to ports [80]",
+                         rule3.pprint())
+
+        rule4 = Rule(action="allow",
+                     protocol="icmp",
+                     icmp_type=8,
+                     src_net=IPNetwork("10/8"))
+        self.assertEqual("allow icmp type 8 from 10.0.0.0/8",
+                         rule4.pprint())
 
 
 class TestDatastoreClient(unittest.TestCase):
