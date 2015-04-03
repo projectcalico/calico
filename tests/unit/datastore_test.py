@@ -3,9 +3,13 @@ __author__ = 'sjc'
 
 import unittest
 from mock import patch, Mock
-from node.adapter.datastore import DatastoreClient, Rule, Profile, Rules
+from node.adapter.datastore import (DatastoreClient,
+                                    Rule,
+                                    Profile,
+                                    Rules,
+                                    Endpoint)
 from etcd import Client as EtcdClient
-from netaddr import IPNetwork
+from netaddr import IPNetwork, IPAddress
 import json
 
 
@@ -68,6 +72,66 @@ class TestRule(unittest.TestCase):
                      src_net=IPNetwork("10/8"))
         self.assertEqual("allow icmp type 8 from 10.0.0.0/8",
                          rule4.pprint())
+
+
+class TestEndpoint(unittest.TestCase):
+
+    def test_to_json(self):
+        endpoint1 = Endpoint("aabbccddeeff112233",
+                            "active",
+                            "11-22-33-44-55-66")
+        self.assertEqual(endpoint1.ep_id, "aabbccddeeff112233")
+        self.assertEqual(endpoint1.state, "active")
+        self.assertEqual(endpoint1.mac, "11-22-33-44-55-66")
+        self.assertEqual(endpoint1.profile_id, None)
+        expected = {"state": "active",
+                    "name": "caliaabbccddeef",
+                    "mac": "11-22-33-44-55-66",
+                    "profile_id": None,
+                    "ipv4_nets": [],
+                    "ipv6_nets": [],
+                    "ipv4_gateway": None,
+                    "ipv6_gateway": None}
+        self.assertDictEqual(json.loads(endpoint1.to_json()), expected)
+
+        endpoint1.profile_id = "TEST12"
+        endpoint1.ipv4_nets.add(IPNetwork("192.168.1.23/32"))
+        endpoint1.ipv4_gateway = IPAddress("192.168.1.1")
+        expected["profile_id"] = "TEST12"
+        expected["ipv4_nets"] = ["192.168.1.23/32"]
+        expected["ipv4_gateway"] = "192.168.1.1"
+        self.assertDictEqual(json.loads(endpoint1.to_json()), expected)
+
+    def test_from_json(self):
+        ep_id = "aabbccddeeff112233"
+        expected = {"state": "active",
+                    "name": "caliaabbccddeef",
+                    "mac": "11-22-33-44-55-66",
+                    "profile_id": "TEST23",
+                    "ipv4_nets": ["192.168.3.2/32", "10.3.4.23/32"],
+                    "ipv6_nets": ["fd20::4:2:1/128"],
+                    "ipv4_gateway": "10.3.4.2",
+                    "ipv6_gateway": "2001:2:4a::1"}
+        endpoint = Endpoint.from_json(ep_id, json.dumps(expected))
+        self.assertEqual(endpoint.state, "active")
+        self.assertEqual(endpoint.ep_id, ep_id)
+        self.assertEqual(endpoint.mac, "11-22-33-44-55-66")
+        self.assertEqual(endpoint.profile_id, "TEST23")
+        self.assertEqual(endpoint.ipv4_gateway, IPAddress("10.3.4.2"))
+        self.assertEqual(endpoint.ipv6_gateway, IPAddress("2001:2:4a::1"))
+        self.assertSetEqual(endpoint.ipv4_nets, {IPNetwork("192.168.3.2/32"),
+                                                 IPNetwork("10.3.4.23/32")})
+        self.assertSetEqual(endpoint.ipv6_nets, {IPNetwork("fd20::4:2:1/128")})
+
+        endpoint2 = Endpoint.from_json(ep_id, endpoint.to_json())
+        self.assertEqual(endpoint.state, endpoint2.state)
+        self.assertEqual(endpoint.ep_id, endpoint2.ep_id)
+        self.assertEqual(endpoint.mac, endpoint2.mac)
+        self.assertEqual(endpoint.profile_id, endpoint2.profile_id)
+        self.assertEqual(endpoint.ipv4_gateway, endpoint2.ipv4_gateway)
+        self.assertEqual(endpoint.ipv6_gateway, endpoint2.ipv6_gateway)
+        self.assertSetEqual(endpoint.ipv4_nets, endpoint2.ipv4_nets)
+        self.assertSetEqual(endpoint.ipv6_nets, endpoint2.ipv6_nets)
 
 
 class TestDatastoreClient(unittest.TestCase):
