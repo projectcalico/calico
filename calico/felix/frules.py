@@ -20,11 +20,15 @@ Felix rule management, including iptables and ipsets.
 """
 import logging
 from subprocess import CalledProcessError
+import itertools
 from calico.felix import futils
 import re
 
 _log = logging.getLogger(__name__)
 
+# Maximum number of port entries in a "multiport" match rule.  Ranges count for
+# 2 entries.
+MAX_MULTIPORT_ENTRIES = 15
 
 # Chain names
 CHAIN_PREROUTING = "felix-PREROUTING"
@@ -146,11 +150,11 @@ def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
         for r in rules:
             rule_version = r.get('ip_version')
             if rule_version is None or rule_version == ip_version:
-                fragments.append(rule_to_iptables_fragment(chain_name, r,
-                                                           ip_version,
-                                                           tag_to_ipset,
-                                                           on_allow=on_allow,
-                                                           on_deny=on_deny))
+                fragments.extend(rule_to_iptables_fragments(chain_name, r,
+                                                            ip_version,
+                                                            tag_to_ipset,
+                                                            on_allow=on_allow,
+                                                            on_deny=on_deny))
         fragments.append(commented_drop_fragment(chain_name,
                                                  "Default DROP rule:"))
         return fragments
@@ -167,8 +171,81 @@ def commented_drop_fragment(chain_name, comment):
             (chain_name, comment))
 
 
-def rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
-                              on_allow="ACCEPT", on_deny="DROP"):
+def rule_to_iptables_fragments(chain_name, rule, ip_version, tag_to_ipset,
+                               on_allow="ACCEPT", on_deny="DROP"):
+    """
+    Convert a rule dict to a list of iptables fragments suitable to use with
+    iptables-restore.
+
+    Most rules result in result list containing one item.
+
+    :param str chain_name: Name of the chain this rule belongs to (used in the
+           --append)
+    :param dict[str,str|list|int] rule: Rule dict.
+    :param str on_allow: iptables action to use when the rule allows traffic.
+           For example: "ACCEPT" or "RETURN".
+    :param str on_deny: iptables action to use when the rule denies traffic.
+           For example: "DROP".
+    :return list[str]: iptables --append fragments.
+    """
+
+    # Check we've not got any unknown fields.
+    unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
+    assert not unknown_keys, "Unknown keys: %s" % ", ".join(unknown_keys)
+
+    # Ports are special, we have a limit on the number of ports that can go in
+    # one rule so we need to break up rules with a lot of ports into chunks.
+    # We take the cross product of the chunks to cover all the combinations.
+    # If there are not ports or if there are only a few ports then the cross
+    # product ends up with only one entry.
+    src_ports = rule.get("src_ports", [])
+    dst_ports = rule.get("dst_ports", [])
+    src_port_chunks = _split_port_lists(src_ports)
+    dst_port_chunks = _split_port_lists(dst_ports)
+    rule_copy = dict(rule)  # Only need a shallow copy so we can replace ports.
+    fragments = []
+    for src_ports, dst_ports in itertools.product(src_port_chunks,
+                                                  dst_port_chunks):
+        rule_copy["src_ports"] = src_ports
+        rule_copy["dst_ports"] = dst_ports
+        frag = _rule_to_iptables_fragment(chain_name, rule_copy, ip_version,
+                                          tag_to_ipset,  on_allow=on_allow,
+                                          on_deny=on_deny)
+        fragments.append(frag)
+    return fragments
+
+
+def _split_port_lists(ports):
+    """
+    Splits a list of ports and port ranges into chunks that are
+    small enough to use with the multiport match.
+
+    :param list[str|int] ports: list of ports or ranges, specified with
+                                ":"; for example, '1024:6000'
+    :return list[list[str]]: list of chunks.  If the input is empty, then
+                             returns a list containing a single empty list.
+    """
+    chunks = []
+    chunk = []
+    for port_or_range in ports:
+        port_or_range = str(port_or_range)  # Defensive, support ints too.
+        if ":" in port_or_range:
+            # This is a range, which counts for 2 entries.
+            num_entries = 2
+        else:
+            # Just a port.
+            num_entries = 1
+        if len(chunk) + num_entries > MAX_MULTIPORT_ENTRIES:
+            chunks.append(chunk)
+            chunk = []
+        chunk.append(port_or_range)
+    if chunk or not chunks:
+        chunks.append(chunk)
+    return chunks
+
+
+def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
+                               on_allow="ACCEPT", on_deny="DROP"):
     """
     Convert a rule dict to an iptables fragment suitable to use with
     iptables-restore.
@@ -180,7 +257,7 @@ def rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
            For example: "ACCEPT" or "RETURN".
     :param str on_deny: iptables action to use when the rule denies traffic.
            For example: "DROP".
-    :returns: iptables --append fragment.
+    :returns list[str]: list of iptables --append fragments.
     """
 
     # Check we've not got any unknown fields.
@@ -221,8 +298,8 @@ def rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
             assert proto in ["tcp", "udp"], "Protocol %s not supported with " \
                                             "%s (%s)" % (proto, ports_key, rule)
             ports = ','.join([str(p) for p in rule[ports_key]])
-            # multiport only supports 15 ports.
-            # TODO: return multiple rules if we have too many ports
+            # multiport only supports 15 ports.  The calling function should
+            # have taken care of that.
             assert ports.count(",") + ports.count(":") < 15, "Too many ports"
             append("--match multiport", "--%s-ports" % direction, ports)
 
