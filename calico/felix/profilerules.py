@@ -58,6 +58,8 @@ class RulesManager(ReferenceManager):
 
     @actor_event
     def apply_snapshot(self, rules_by_profile_id):
+        _log.info("Rules manager applying snapshot; %s rules",
+                  len(rules_by_profile_id))
         missing_ids = set(self.rules_by_profile_id.keys())
         for profile_id, profile in rules_by_profile_id.iteritems():
             self.on_rules_update(profile_id, profile)  # Skips queue
@@ -70,10 +72,13 @@ class RulesManager(ReferenceManager):
     def on_rules_update(self, profile_id, profile):
         _log.debug("Processing update to %s", profile_id)
         if profile_id is not None:
+            _log.debug("Profile not None, storing it")
             self.rules_by_profile_id[profile_id] = profile
         else:
+            _log.debug("Profile is None, removing it")
             self.rules_by_profile_id.pop(profile_id, None)
         if self._is_starting_or_live(profile_id):
+            _log.debug("Profile is active, kicking the ProfileRules.")
             ap = self.objects_by_id[profile_id]
             ap.on_profile_update(profile, async=True)
 
@@ -106,7 +111,7 @@ class ProfileRules(RefCountedActor):
         Update the programmed iptables configuration with the new
         profile.
         """
-        _log.debug("Profile update to %s: %s", self.id, profile)
+        _log.debug("%s: Profile update: %s", self, profile)
         assert profile is None or profile["id"] == self.id
         assert not self.dead, "Shouldn't receive updates after we're dead."
 
@@ -141,16 +146,18 @@ class ProfileRules(RefCountedActor):
         Called to tell us that this profile is no longer needed.  Removes
         our iptables configuration.
         """
-        self.dead = True
-        chains = []
-        for direction in ["inbound", "outbound"]:
-            chain_name = profile_to_chain_name(direction, self.id)
-            chains.append(chain_name)
-        self._iptables_updater.delete_chains("filter", chains, async=False)
-        self.ipset_refs.discard_all()
-        self.ipset_refs = None # Break ref cycle.
-        self._profile = None
-        self._notify_cleanup_complete()
+        try:
+            self.dead = True
+            chains = []
+            for direction in ["inbound", "outbound"]:
+                chain_name = profile_to_chain_name(direction, self.id)
+                chains.append(chain_name)
+            self._iptables_updater.delete_chains("filter", chains, async=False)
+            self.ipset_refs.discard_all()
+            self.ipset_refs = None # Break ref cycle.
+            self._profile = None
+        finally:
+            self._notify_cleanup_complete()
 
     def _update_chains(self):
         """

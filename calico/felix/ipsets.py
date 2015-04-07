@@ -280,9 +280,11 @@ class ActiveIpset(RefCountedActor):
 
     @actor_event
     def on_unreferenced(self):
-        if self.set_exists:
-            futils.check_call(["ipset", "destroy", self.name])
-        self._notify_cleanup_complete()
+        try:
+            if self.set_exists:
+                futils.check_call(["ipset", "destroy", self.name])
+        finally:
+            self._notify_cleanup_complete()
 
     def _finish_msg_batch(self, batch, results):
         # No need to combine members of the batch (although we could). None of

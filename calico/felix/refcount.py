@@ -69,6 +69,8 @@ class ReferenceManager(Actor):
         if callback:
             self.pending_ref_callbacks[object_id].add(callback)
         obj.ref_count += 1
+        _log.debug("Reference count for %s object %s is %d",
+                   self.name, object_id, obj.ref_count)
 
         # Depending on state of object, may need to start it or immediately
         # call back.
@@ -140,7 +142,6 @@ class ReferenceManager(Actor):
         Starts the actor with the given ID if it is present and there
         are no pending cleanups for that ID.
         """
-        _log.debug("Checking whether we can start object %s", obj_id)
         obj = self.objects_by_id.get(obj_id)
         if (obj and
                 obj.ref_mgmt_state == CREATED and
@@ -149,6 +150,11 @@ class ReferenceManager(Actor):
             obj.ref_mgmt_state = STARTING
             obj.start()
             self._on_object_started(obj_id, obj)
+        elif obj_id in self.stopping_objects_by_id:
+            _log.info("Cannot start object %s because we're waiting for an "
+                      "object with that ID to stop.", obj_id)
+        elif obj and obj.ref_mgmt_state != CREATED:
+            _log.debug("Not starting object %s; it's already started", obj_id)
 
     def _maybe_notify_referrers(self, object_id):
         """
@@ -160,8 +166,8 @@ class ReferenceManager(Actor):
         if obj and obj.ref_mgmt_state == LIVE:
             _log.debug("Object %s is LIVE, notifying referrers", object_id)
             for cb in self.pending_ref_callbacks[object_id]:
-                gevent.spawn(cb, object_id, obj)
-            self.pending_ref_callbacks.pop(object_id)
+                cb(object_id, obj)
+            self.pending_ref_callbacks.pop(object_id, None)
         else:
             _log.debug("Cannot notify referrers for %s; object state: %s",
                        object_id, obj.ref_mgmt_state)
