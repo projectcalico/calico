@@ -81,6 +81,16 @@ class EndpointManager(ReferenceManager):
     @actor_event
     def apply_snapshot(self, endpoints_by_id):
         missing_endpoints = set(self.endpoints_by_id.keys())
+
+        # Tell the dispatch chains about the local endpoints in advance so
+        # that we don't flap the dispatch chain at start-of-day.
+        local_iface_name_to_ep_id = {}
+        for ep_id, ep in endpoints_by_id.iteritems():
+            if ep and ep["host"] == self.config.HOSTNAME and ep.get("name"):
+                local_iface_name_to_ep_id[ep.get("name")] = ep_id
+        self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id,
+                                            async=True)
+
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
             self.on_endpoint_update(endpoint_id, endpoint)
             missing_endpoints.discard(endpoint_id)

@@ -59,6 +59,16 @@ class DispatchChains(Actor):
         self._dirty = False
 
     @actor_event
+    def apply_snapshot(self, iface_to_ep_id):
+        _log.info("Applying dispatch chains snapshot.")
+        if self.iface_to_ep_id != iface_to_ep_id:
+            self.iface_to_ep_id = dict(iface_to_ep_id)  # Take a copy.
+        # Always reprogram the chain, even if it's empty.  This makes sure that
+        # we resync and it stops the iptables layer from marking our chain as
+        # missing.
+        self._dirty = True
+
+    @actor_event
     def on_endpoint_added(self, iface_name, endpoint_id):
         """
         Message sent to us by the LocalEndpoint to tell us its
