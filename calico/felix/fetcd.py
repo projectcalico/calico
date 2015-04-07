@@ -242,8 +242,6 @@ class EtcdWatcher(Actor):
 
     def _load_config_dict(self):
         """
-        TODO: Add watching of the config, probably not required for MVP.
-
         Load configuration detail for this host from etcd.
         :returns: a dictionary of key to parameters
         :raises EtcdException: if a read from etcd fails and we may fall out of

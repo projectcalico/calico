@@ -362,7 +362,7 @@ class IptablesUpdater(Actor):
                                "as stubs.")
                     e = None
                     final_result = ResultOrExc(None, None)
-                    # FIXME not that chains are still in dataplane.
+                    # FIXME note that chains are still in dataplane so that _update_indexes doesn't think they're gone.
                     self._update_indexes()
                 else:
                     _log.error("Non-retryable %s failure. RC=%s",
