@@ -422,7 +422,7 @@ class DatastoreClient(object):
 
     def get_profile_members(self, name):
         """
-        Get the all configured profiles.
+        Get all endpoint members of named profile.
 
         :param name: Unique string name of the profile.
         :return: a list of members
@@ -541,11 +541,7 @@ class DatastoreClient(object):
         :return: a dict of hostname => {
                                type => {
                                    container_id => {
-                                       endpoint_id => {
-                                           "addrs" => addr,
-                                           "mac" => mac,
-                                           "state" => state
-                                       }
+                                       endpoint_id => Endpoint
                                    }
                                }
                            }
@@ -564,13 +560,7 @@ class DatastoreClient(object):
                     (_, _, _, host, _, container_type, container_id, _,
                      endpoint_id) = packed
                     ep = Endpoint.from_json(endpoint_id, child.value)
-                    ep_dict = hosts[host][container_type][container_id]\
-                        [endpoint_id]
-                    ep_dict["addrs"] = [str(net) for net in
-                                        ep.ipv4_nets | ep.ipv6_nets]
-                    ep_dict["mac"] = str(ep.mac)
-                    ep_dict["state"] = ep.state
-
+                    hosts[host][container_type][container_id][endpoint_id] = ep
         except KeyError:
             pass
 

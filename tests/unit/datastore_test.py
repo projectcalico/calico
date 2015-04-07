@@ -20,6 +20,7 @@ IPV6_POOLS_PATH = "/calico/ipam/v6/pool/"
 TEST_PROFILE_PATH = "/calico/policy/profile/TEST/"
 ALL_PROFILES_PATH = "/calico/policy/profile/"
 ALL_ENDPOINTS_PATH = "/calico/host/"
+ALL_HOSTS_PATH = "/calico/host/"
 TEST_ENDPOINT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/endpoint/" \
                      "1234567890ab"
 TEST_CONT_ENDPOINT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/" \
@@ -655,6 +656,49 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        expected_write_json)
 
+    def test_get_hosts(self):
+        """
+        Test get_hosts with two hosts, each with two containers, each with
+        one endpoint.
+        """
+        # Reuse etcd read from test_get_profile_members_* since it's the same
+        # query.
+        self.etcd_client.read.side_effect = mock_read_4_endpoints
+        hosts = self.datastore.get_hosts()
+        self.assertEqual(len(hosts), 2)
+        self.assertTrue("TEST_HOST" in hosts)
+        self.assertTrue("TEST_HOST2" in hosts)
+        test_host = hosts["TEST_HOST"]
+        self.assertEqual(len(test_host), 1)
+        self.assertTrue("docker" in test_host)
+        test_host_workloads = test_host["docker"]
+        self.assertEqual(len(test_host_workloads), 2)
+        self.assertTrue("1234" in test_host_workloads)
+        self.assertTrue("5678" in test_host_workloads)
+        self.assertTrue(EP_56.ep_id in test_host_workloads["1234"])
+        self.assertEqual(len(test_host_workloads["1234"]), 1)
+        self.assertTrue(EP_90.ep_id in test_host_workloads["5678"])
+        self.assertEqual(len(test_host_workloads["5678"]), 1)
+
+        test_host2 = hosts["TEST_HOST2"]
+        self.assertEqual(len(test_host2), 1)
+        self.assertTrue("docker" in test_host2)
+        test_host2_workloads = test_host2["docker"]
+        self.assertEqual(len(test_host2_workloads), 2)
+        self.assertTrue("1234" in test_host2_workloads)
+        self.assertTrue("5678" in test_host2_workloads)
+        self.assertTrue(EP_78.ep_id in test_host2_workloads["1234"])
+        self.assertEqual(len(test_host2_workloads["1234"]), 1)
+        self.assertTrue(EP_12.ep_id in test_host2_workloads["5678"])
+        self.assertEqual(len(test_host2_workloads["5678"]), 1)
+
+    def test_get_hosts_key_error(self):
+        """
+        Test get_hosts() when the read returns a KeyError.
+        """
+        self.etcd_client.read.side_effect = KeyError
+        hosts = self.datastore.get_hosts()
+        self.assertDictEqual({}, hosts)
 
 
 def mock_read_2_pools(path):

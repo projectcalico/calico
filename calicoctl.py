@@ -608,14 +608,16 @@ def node_show(detailed):
                 continue
             for container_type, workloads in container_types.iteritems():
                 for workload, endpoints in workloads.iteritems():
-                    for endpoint, data in endpoints.iteritems():
+                    for ep_id, endpoint in endpoints.iteritems():
                         x.add_row([host,
                                    container_type,
                                    workload,
-                                   endpoint,
-                                   " ".join(data["addrs"]),
-                                   data["mac"],
-                                   data["state"]])
+                                   ep_id,
+                                   " ".join([str(net) for net in
+                                             endpoint.ipv4_nets |
+                                             endpoint.ipv6_nets]),
+                                   endpoint.mac,
+                                   endpoint.state])
     else:
         x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
         for host, container_types in hosts.iteritems():
