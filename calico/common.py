@@ -28,8 +28,8 @@ import itertools
 import logging
 import logging.handlers
 import netaddr
+import netaddr.core
 import os
-import re
 import sys
 
 AGENT_TYPE_CALICO = 'Calico agent'

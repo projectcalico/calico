@@ -75,6 +75,7 @@ class Config(object):
                                            "FelixHostname",
                                            socket.gethostname())
 
+        self.STARTUP_CLEANUP_DELAY = 30
         self.METADATA_IP = "127.0.0.1"
         self.METADATA_PORT = "8775"
         self.RESYNC_INT_SEC = 1800
@@ -89,6 +90,8 @@ class Config(object):
         self.LOGLEVSCR = LOGLEVELS.get(self.LOGLEVSCR.lower(), logging.DEBUG)
 
     def update_config(self, cfg_dict):
+        self.STARTUP_CLEANUP_DELAY = int(cfg_dict.pop("StartupCleanupDelay",
+                                                      "30"))
         self.METADATA_IP = cfg_dict.pop("MetadataAddr", "127.0.0.1")
         self.METADATA_PORT = cfg_dict.pop("MetadataPort", "8775")
         self.RESYNC_INT_SEC = int(cfg_dict.pop("ResyncIntervalSecs", "1800"))

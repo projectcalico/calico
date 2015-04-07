@@ -26,15 +26,16 @@ import os
 import tempfile
 
 from calico.felix import futils
-from calico.felix.futils import IPV4, IPV6
+from calico.felix.futils import IPV4, IPV6, FailedSystemCall
 from calico.felix.actor import actor_event
 from calico.felix.refcount import ReferenceManager, RefCountedActor
 import re
 
 _log = logging.getLogger(__name__)
 
-IPSET_PREFIX = { IPV4: "felix-v4-", IPV6: "felix-v6-" }
-IPSET_TMP_PREFIX = { IPV4: "felix-tmp-v4-", IPV6: "felix-tmp-v6-" }
+FELIX_PFX = "felix-"
+IPSET_PREFIX = { IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-" }
+IPSET_TMP_PREFIX = { IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-" }
 
 
 def tag_to_ipset_name(ip_type, tag, tmp=False):
@@ -111,6 +112,29 @@ class IpsetManager(ReferenceManager):
         for ep_id in missing_endpoints:
             self.on_endpoint_update(ep_id, None)
             self._maybe_yield()
+
+    @actor_event
+    def cleanup(self):
+        """
+        Clean up left-over ipsets that existed at start-of-day.
+        """
+        all_ipsets = list_ipset_names()
+        # only clean up our own rubbish.
+        felix_ipsets = set([n for n in all_ipsets if n.startswith(FELIX_PFX)])
+        whitelist = set()
+        for ipset in self.objects_by_id.values():
+            # Ask the ipset for all the names it may use and whitelist.
+            whitelist.update(ipset.owned_ipset_names())
+        ipsets_to_delete = felix_ipsets - whitelist
+        # Delete the ipsets before we return.  We can't queue these up since
+        # that could conflict if someone increffed one of the ones we're about
+        # to delete.
+        for ipset_name in ipsets_to_delete:
+            try:
+                futils.check_call(["ipset", "destroy", ipset_name])
+            except FailedSystemCall:
+                _log.exception("Failed to clean up dead ipset %s, will"
+                               "retry on next cleanup.", ipset_name)
 
     @actor_event
     def on_tags_update(self, profile_id, tags):
@@ -258,6 +282,16 @@ class ActiveIpset(RefCountedActor):
         # Notified ready?
         self.notified_ready = False
 
+    def owned_ipset_names(self):
+        """
+        This method is safe to call from another greenlet; it only accesses
+        immutable state.
+
+        :return: set of name of ipsets that this Actor owns and manages.  the
+                 sets may or may not be present.
+        """
+        return set([self.name, self.tmpname])
+
     @actor_event
     def replace_members(self, members):
         _log.info("Replacing members of ipset %s", self.name)
@@ -283,6 +317,8 @@ class ActiveIpset(RefCountedActor):
         try:
             if self.set_exists:
                 futils.check_call(["ipset", "destroy", self.name])
+            if self.tmpset_exists:
+                futils.check_call(["ipset", "destroy", self.tmpname])
         finally:
             self._notify_cleanup_complete()
 
@@ -363,14 +399,14 @@ def list_ipset_names():
     List all names of ipsets. Note that this is *not* the same as the ipset
     list command which lists contents too (hence the name change).
     """
-    data  = futils.check_call(["ipset", "list"]).stdout
+    data = futils.check_call(["ipset", "list"]).stdout
     lines = data.split("\n")
 
     names = []
 
     for line in lines:
         words = line.split()
-        if (len(words) > 1 and words[0] == "Name:"):
+        if len(words) > 1 and words[0] == "Name:":
             names.append(words[1])
 
     return names

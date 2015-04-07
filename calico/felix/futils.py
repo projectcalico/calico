@@ -76,8 +76,8 @@ def call_silent(args):
 
 def check_call(args):
     """
-    Substitute for the subprocess.check_call funtion. It has the following useful
-    characteristics.
+    Substitute for the subprocess.check_call function. It has the following
+    useful characteristics.
 
     - If the return code is non-zero, it throws an exception on error (and
       expects the caller to handle it). That exception contains the command

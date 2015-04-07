@@ -20,14 +20,18 @@ felix.splitter
 Simple object that just splits notifications out for IPv4 and IPv6.
 """
 import logging
+import gevent
 
 _log = logging.getLogger(__name__)
 
 
 class UpdateSplitter(object):
-    def __init__(self, ipsets_mgrs, rules_managers, endpoint_managers):
+    def __init__(self, config, ipsets_mgrs, rules_managers, endpoint_managers,
+                 iptables_updaters):
 
+        self.config = config
         self.ipsets_mgrs = ipsets_mgrs
+        self.iptables_updaters = iptables_updaters
         self.rules_mgrs = rules_managers
         self.endpoint_mgrs = endpoint_managers
 
@@ -53,10 +57,37 @@ class UpdateSplitter(object):
         for ep_mgr in self.endpoint_mgrs:
             ep_mgr.apply_snapshot(endpoints_by_id, async=True)
 
-        # TODO: Start of day mark and sweep.
         _log.info("Applying snapshot. DONE. %s rules, %s tags, "
                   "%s endpoints", len(rules_by_prof_id), len(tags_by_prof_id),
                   len(endpoints_by_id))
+
+        # Since we don't wait for all the above processing to finish, set a
+        # timer to clean up orphaned ipsets and tables later.  If the snapshot
+        # takes longer than this timer to apply then we might do the cleanup
+        # before the snapshot is finished.  That would cause dropped packets
+        # until applying the snapshot finishes.
+        gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
+                           self.trigger_cleanup)
+
+    def trigger_cleanup(self):
+        """
+        Called from a separate greenlet, asks the managers to clean up
+        unused ipsets and iptables.
+        """
+        _log.info("Triggering a cleanup of orphaned ipsets/chains")
+        try:
+            # Need to clean up iptables first because they reference ipsets
+            # and force them to stay alive.
+            for ipt_updater in self.iptables_updaters:
+                ipt_updater.cleanup(async=False)
+        except Exception:
+            _log.exception("iptables cleanup failed, will retry on resync.")
+        try:
+            # It's still worth a try to clean up any ipsets that we can.
+            for ipset_mgr in self.ipsets_mgrs:
+                ipset_mgr.cleanup(async=False)
+        except Exception:
+            _log.exception("ipsets cleanup failed, will retry on resync.")
 
     def on_rules_update(self, profile_id, rules):
         """

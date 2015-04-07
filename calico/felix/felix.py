@@ -71,10 +71,11 @@ def _main_greenlet(config):
                                         v6_dispatch_chains,
                                         v6_rules_manager)
 
-        update_splitter = UpdateSplitter([v4_ipset_mgr, v6_ipset_mgr],
-                                         [v4_rules_manager,
-                                          v6_rules_manager],
-                                         [v4_ep_manager, v6_ep_manager])
+        update_splitter = UpdateSplitter(config,
+                                         [v4_ipset_mgr, v6_ipset_mgr],
+                                         [v4_rules_manager, v6_rules_manager],
+                                         [v4_ep_manager, v6_ep_manager],
+                                         [v4_updater, v6_updater])
         iface_watcher = InterfaceWatcher(update_splitter)
         etcd_watcher = EtcdWatcher(config, update_splitter)
 
