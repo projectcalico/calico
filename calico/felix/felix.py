@@ -111,6 +111,9 @@ def _main_greenlet(config):
             etcd_watcher.greenlet
         ]
 
+        # Block until etcd config is present and tells us to proceed.
+        etcd_watcher.load_config_and_wait_for_ready(async=False)
+
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
         install_global_rules(config, v4_updater, v6_updater)
@@ -166,11 +169,6 @@ def main():
                 pass
 
             raise
-
-        common.complete_logging(config.LOGFILE,
-                                config.LOGLEVFILE,
-                                config.LOGLEVSYS,
-                                config.LOGLEVSCR)
 
         _log.info("Felix initializing")
         gevent.spawn(_main_greenlet, config).join()  # Should never return

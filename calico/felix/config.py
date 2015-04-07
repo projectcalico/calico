@@ -75,9 +75,20 @@ class Config(object):
                                            "FelixHostname",
                                            socket.gethostname())
 
-        cfg_dict = fetcd.load_config(self.HOSTNAME,
-                                     self.ETCD_PORT)
+        self.METADATA_IP = "127.0.0.1"
+        self.METADATA_PORT = "8775"
+        self.RESYNC_INT_SEC = 1800
+        self.IFACE_PREFIX = None
+        self.LOGFILE = "/var/log/calico/felix.log"
+        self.LOGLEVFILE = "INFO"
+        self.LOGLEVSYS = "ERROR"
+        self.LOGLEVSCR = "ERROR"
 
+        self.LOGLEVFILE = LOGLEVELS.get(self.LOGLEVFILE.lower(), logging.DEBUG)
+        self.LOGLEVSYS = LOGLEVELS.get(self.LOGLEVSYS.lower(), logging.DEBUG)
+        self.LOGLEVSCR = LOGLEVELS.get(self.LOGLEVSCR.lower(), logging.DEBUG)
+
+    def update_config(self, cfg_dict):
         self.METADATA_IP = cfg_dict.pop("MetadataAddr", "127.0.0.1")
         self.METADATA_PORT = cfg_dict.pop("MetadataPort", "8775")
         self.RESYNC_INT_SEC = int(cfg_dict.pop("ResyncIntervalSecs", "1800"))
@@ -88,8 +99,8 @@ class Config(object):
         self.LOGLEVSCR = cfg_dict.pop("LogSeverityScreen", "ERROR")
 
         self.LOGLEVFILE = LOGLEVELS.get(self.LOGLEVFILE.lower(), logging.DEBUG)
-        self.LOGLEVSYS  = LOGLEVELS.get(self.LOGLEVSYS.lower(), logging.DEBUG)
-        self.LOGLEVSCR  = LOGLEVELS.get(self.LOGLEVSCR.lower(), logging.DEBUG)
+        self.LOGLEVSYS = LOGLEVELS.get(self.LOGLEVSYS.lower(), logging.DEBUG)
+        self.LOGLEVSCR = LOGLEVELS.get(self.LOGLEVSCR.lower(), logging.DEBUG)
 
         self.validate_cfg()
 

@@ -23,12 +23,12 @@ import etcd
 import itertools
 import json
 import logging
+import gevent
 import re
 from types import StringTypes
 from urllib3.exceptions import ReadTimeoutError
 
 from calico import common
-from calico.felix.futils import logging_exceptions
 from calico.felix.actor import Actor, actor_event
 
 _log = logging.getLogger(__name__)
@@ -41,6 +41,10 @@ TAGS_RE = re.compile(
     r'^/calico/policy/profile/(?P<profile_id>[^/]+)/tags')
 ENDPOINT_RE = re.compile(
     r'^/calico/host/(?P<hostname>[^/]+)/.+/endpoint/(?P<endpoint_id>[^/]+)')
+DB_READY_FLAG_PATH = "/calico/config/Ready"
+
+
+RETRY_DELAY = 5
 
 
 class ValidationFailed(Exception):
@@ -52,11 +56,51 @@ class EtcdWatcher(Actor):
         super(EtcdWatcher, self).__init__()
         self.update_splitter = update_splitter
         self.config = config
+        self.client = None
 
-    # TODO: PLW surely we don't need logging_exceptions here? If we do, don't we
-    # need it on all actor events?
     @actor_event
-    @logging_exceptions
+    def load_config_and_wait_for_ready(self):
+        _log.info("Waiting for etcd to be ready and for config to be present.")
+        configured = False
+        while not configured:
+            self._reconnect()
+            try:
+                db_ready = self.client.read(DB_READY_FLAG_PATH,
+                                            timeout=10).value
+            except KeyError:
+                _log.warn("Ready flag not present in etcd, waiting...")
+                db_ready = "false"
+            except EtcdException:
+                _log.exception("Failed to retrieve ready flag from etcd, "
+                               "waiting...")
+                db_ready = "false"
+
+            if db_ready == "true":
+                _log.info("etcd is ready, doing initial load.")
+            else:
+                _log.warning("etcd not ready.  Will retry.")
+                gevent.sleep(RETRY_DELAY)
+                continue
+
+            try:
+                config_dict = self._load_config_dict()
+            except (KeyError, EtcdException):
+                _log.exception("Failed to read config.  Will retry.")
+                gevent.sleep(RETRY_DELAY)
+                continue
+
+            self.config.update_config(config_dict)
+            common.complete_logging(self.config.LOGFILE,
+                                    self.config.LOGLEVFILE,
+                                    self.config.LOGLEVSYS,
+                                    self.config.LOGLEVSCR)
+            configured = True
+
+    def _reconnect(self):
+        _log.info("(Re)connecting to etcd...")
+        self.client = etcd.Client('localhost', self.config.ETCD_PORT)
+
+    @actor_event
     def watch_etcd(self):
         """
         Loads the snapshot from etcd and then monitors etcd for changes.
@@ -70,17 +114,17 @@ class EtcdWatcher(Actor):
                 sync.
         """
         while True:
-            client = etcd.Client('localhost', self.config.ETCD_PORT)
-
-            # TODO handle GR flag and missing /calico/ node.
+            self._reconnect()
+            self.load_config_and_wait_for_ready()
 
             # Load initial dump from etcd.  First just get all the endpoints and
             # profiles by id.  The response contains a generation ID allowing us
             # to then start polling for updates without missing any.
-            initial_dump = client.read("/calico/", recursive=True)
+            initial_dump = self.client.read("/calico/", recursive=True)
             rules_by_id = {}
             tags_by_id = {}
             endpoints_by_id = {}
+            still_ready = False
             for child in initial_dump.children:
                 profile_id, rules = parse_if_rules(child)
                 if profile_id:
@@ -95,6 +139,20 @@ class EtcdWatcher(Actor):
                     endpoints_by_id[endpoint_id] = endpoint
                     continue
 
+                # Double-check the flag hasn't changed since we read it before.
+                if child.key == DB_READY_FLAG_PATH:
+                    if child.value == "true":
+                        still_ready = True
+                    else:
+                        _log.warning("Aborting resync because ready flag was"
+                                     "unset since we read it.")
+                        continue
+
+            if not still_ready:
+                _log.warn("Aborting resync; ready flag no longer present.")
+                continue
+
+
             # Actually apply the snapshot. This does not return anything, but
             # just sends the relevant messages to the relevant threads to make
             # all the processing occur.
@@ -107,9 +165,9 @@ class EtcdWatcher(Actor):
             del tags_by_id
             del endpoints_by_id
 
-            # On first call, the etcd_index seems to be the high-water mark for the
-            # data returned whereas the modified index just tells us when the key
-            # was modified.
+            # On first call, the etcd_index seems to be the high-water mark
+            # for the data returned whereas the modified index just tells us
+            # when the key was modified.
             _log.info("Initial etcd index: %s; modifiedIndex: %s",
                       initial_dump.etcd_index, initial_dump.modifiedIndex)
             next_etcd_index = initial_dump.etcd_index + 1
@@ -117,12 +175,13 @@ class EtcdWatcher(Actor):
             continue_polling = True
             while continue_polling:
                 try:
-                    _log.debug("About to wait for etcd update %s", next_etcd_index)
-                    response = client.read("/calico/",
-                                           wait=True,
-                                           waitIndex=next_etcd_index,
-                                           recursive=True,
-                                           timeout=0)
+                    _log.debug("About to wait for etcd update %s",
+                               next_etcd_index)
+                    response = self.client.read("/calico/",
+                                                wait=True,
+                                                waitIndex=next_etcd_index,
+                                                recursive=True,
+                                                timeout=0)
                     _log.debug("etcd response: %r", response)
                 except ReadTimeoutError:
                     _log.warning("Read from etcd timed out, retrying.")
@@ -136,12 +195,14 @@ class EtcdWatcher(Actor):
                     _log.exception("Failed to read from etcd. wait_index=%s",
                                    next_etcd_index)
                     raise
-                # Defensive, the etcd_index returned on subsequent requests is the
-                # one that we waited on and the modifiedIndex is the index at
-                # which the key's value was changed. Just in case there's a corner
-                # case where we get an old modifiedIndex, make sure we always
-                # increase the index.
-                next_etcd_index = max(response.modifiedIndex, next_etcd_index + 1)
+                # Defensive: ensure that, no matter what, we always
+                # monotonically increase the index we poll on.
+                if response.modifiedIndex < next_etcd_index:
+                    _log.error("Modified index on response < value we polled "
+                               "on: %s < %s", response.modifiedIndex,
+                               next_etcd_index)
+                next_etcd_index = max(response.modifiedIndex,
+                                      next_etcd_index + 1)
 
                 # TODO: regex parsing getting messy.
                 profile_id, rules = parse_if_rules(response)
@@ -160,6 +221,12 @@ class EtcdWatcher(Actor):
                     self.update_splitter.on_endpoint_update(endpoint_id, endpoint)
                     continue
 
+                if response.key == DB_READY_FLAG_PATH:
+                    if response.value != "true":
+                        _log.warning("DB became unready, triggering a resync")
+                        continue_polling = False
+                        continue
+
                 _log.debug("Response action: %s, key: %s",
                            response.action, response.key)
                 if response.action not in ("set", "create"):
@@ -170,6 +237,31 @@ class EtcdWatcher(Actor):
                                  "resync.", response.action, response.key)
                     continue_polling = False
 
+    def _load_config_dict(self):
+        """
+        TODO: Add watching of the config, probably not required for MVP.
+
+        Load configuration detail for this host from etcd.
+        :returns: a dictionary of key to paarameters
+        :raises EtcdException: if a read from etcd fails and we may fall out of
+                sync.
+        """
+        config_dict = {}
+
+        # Load initial dump from etcd.  First just get all the endpoints and
+        # profiles by id.  The response contains a generation ID allowing us
+        # to then start polling for updates without missing any.
+        global_cfg = self.client.read("/calico/config/")
+        host_cfg = self.client.read("/calico/host/%s/config/" %
+                                    self.config.HOSTNAME)
+
+        for child in itertools.chain(global_cfg.children, host_cfg.children):
+            _log.info("Got config parameter : %s=%s", child.key, str(child.value))
+            key = child.key.rsplit("/").pop()
+            value = str(child.value)
+            config_dict[key] = value
+
+        return config_dict
 
 # Intern JSON keys as we load them to reduce occupancy.
 def intern_dict(d):
@@ -431,30 +523,3 @@ def validate_tags(tags):
     if issues:
         raise ValidationFailed(" ".join(issues))
 
-
-def load_config(host, port):
-    """
-    TODO: Add watching of the config, probably not required for MVP.
-
-    Load configuration detail for this host from etcd.
-    :returns: a dictionary of key to paarameters
-    :raises EtcdException: if a read from etcd fails and we may fall out of
-            sync.
-    """
-    client = etcd.Client(port=port)
-
-    config_dict = {}
-
-    # Load initial dump from etcd.  First just get all the endpoints and
-    # profiles by id.  The response contains a generation ID allowing us
-    # to then start polling for updates without missing any.
-    global_cfg = client.read("/calico/config/")
-    host_cfg = client.read("/calico/host/%s/config/" % host)
-
-    for child in itertools.chain(global_cfg.children, host_cfg.children):
-        _log.info("Got config parameter : %s=%s", child.key, str(child.value))
-        key = child.key.rsplit("/").pop()
-        value = str(child.value)
-        config_dict[key] = value
-
-    return config_dict

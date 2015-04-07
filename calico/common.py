@@ -181,6 +181,7 @@ def complete_logging(logfile=None,
 
     # If default_logging got called already, we'll have some loggers in place.
     # Update their levels.
+    file_handler = None
     for handler in root_logger.handlers[:]:
         if isinstance(handler, logging.handlers.SysLogHandler):
             if syslog_level is None:
@@ -192,16 +193,22 @@ def complete_logging(logfile=None,
                 root_logger.removeHandler(handler)
             else:
                 handler.setLevel(stream_level)
+        elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+            file_handler = handler
+            if file_level is None:
+                root_logger.removeHandler(handler)
+            else:
+                handler.setLevel(file_level)
 
     # If we've been given a log file, log to file as well.
     if logfile and file_level is not None:
-        mkdir_p(os.path.dirname(logfile))
-
-        formatter = logging.Formatter(FORMAT_STRING)
-        file_handler = logging.handlers.TimedRotatingFileHandler(
-            logfile, when="D", backupCount=10
-        )
-        file_handler.setLevel(file_level)
-        file_handler.setFormatter(formatter)
-        file_handler.addFilter(GreenletFilter())
-        root_logger.addHandler(file_handler)
+        if not file_handler:
+            mkdir_p(os.path.dirname(logfile))
+            formatter = logging.Formatter(FORMAT_STRING)
+            file_handler = logging.handlers.TimedRotatingFileHandler(
+                logfile, when="D", backupCount=10
+            )
+            file_handler.addFilter(GreenletFilter())
+            file_handler.setLevel(file_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)

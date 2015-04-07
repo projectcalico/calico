@@ -352,3 +352,5 @@ class CalicoTransportEtcd(CalicoTransport):
         # different things.  Here we provide the prefix that Neutron
         # uses.
         self.client.write('/calico/config/InterfacePrefix', 'tap')
+        # TODO Set this flag only once we're really ready!
+        self.client.write("/calico/config/Ready", 'true')
