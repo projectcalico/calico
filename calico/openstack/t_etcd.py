@@ -292,15 +292,21 @@ class CalicoTransportEtcd(CalicoTransport):
                 # Put it all together and add to either the inbound or the
                 # outbound list.
                 if rule['direction'] == 'ingress':
-                    etcd_rule['src_tag'] = rule['remote_group_id']
-                    etcd_rule['src_net'] = net
-                    etcd_rule['src_ports'] = port_spec
+                    if rule['remote_group_id'] is not None:
+                        etcd_rule['src_tag'] = rule['remote_group_id']
+                    if net is not None:
+                        etcd_rule['src_net'] = net
+                    if port_spec is not None:
+                        etcd_rule['dst_ports'] = port_spec
                     inbound.append(etcd_rule)
                     LOG.info("=> Inbound Calico rule %s" % etcd_rule)
                 else:
-                    etcd_rule['dst_tag'] = rule['remote_group_id']
-                    etcd_rule['dst_net'] = net
-                    etcd_rule['dst_ports'] = port_spec
+                    if rule['remote_group_id'] is not None:
+                        etcd_rule['dst_tag'] = rule['remote_group_id']
+                    if net is not None:
+                        etcd_rule['dst_net'] = net
+                    if port_spec is not None:
+                        etcd_rule['dst_ports'] = port_spec
                     outbound.append(etcd_rule)
                     LOG.info("=> Outbound Calico rule %s" % etcd_rule)
 
