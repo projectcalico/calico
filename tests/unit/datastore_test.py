@@ -350,8 +350,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
-        with patch("node.adapter.datastore.hostname", "TEST_HOST"):
-            self.datastore.create_host(bird_ip, bird6_ip)
+        self.datastore.create_host("TEST_HOST", bird_ip, bird6_ip)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
                            call(TEST_HOST_PATH + "/config/marker",
@@ -376,8 +375,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
-        with patch("node.adapter.datastore.hostname", "TEST_HOST"):
-            self.datastore.create_host(bird_ip, bird6_ip)
+        self.datastore.create_host("TEST_HOST", bird_ip, bird6_ip)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
                            call(TEST_HOST_PATH + "/config/marker",
@@ -388,18 +386,16 @@ class TestDatastoreClient(unittest.TestCase):
                                                 any_order=True)
         self.assertEqual(self.etcd_client.write.call_count, 4)
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_remove_host_mainline(self):
         """
         Test remove_host() when the key exists.
         :return:
         """
-        self.datastore.remove_host()
+        self.datastore.remove_host("TEST_HOST")
         self.etcd_client.delete.assert_called_once_with(TEST_HOST_PATH + "/",
                                                         dir=True,
                                                         recursive=True)
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_remove_host_doesnt_exist(self):
         """
         Remove host when it doesn't exist.  Check it doesn't throw an
@@ -407,7 +403,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.delete.side_effect = KeyError
-        self.datastore.remove_host()
+        self.datastore.remove_host("TEST_HOST")
 
     def test_get_ip_pools(self):
         """
@@ -612,16 +608,14 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        EP_12.to_json())
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_get_ep_id_from_cont(self):
         """
         Test get_ep_id_from_cont() when container and endpoint exist.
         """
         self.etcd_client.read.side_effect = mock_read_2_ep_for_cont
-        ep_id = self.datastore.get_ep_id_from_cont("1234")
+        ep_id = self.datastore.get_ep_id_from_cont("TEST_HOST", "1234")
         self.assertEqual(ep_id, EP_12.ep_id)
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_get_ep_id_from_cont_no_ep(self):
         """
         Test get_ep_id_from_cont() when the container exists, but there are
@@ -630,9 +624,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_0_ep_for_cont
         self.assertRaises(NoEndpointForContainer,
                           self.datastore.get_ep_id_from_cont,
-                          "1234")
+                          "TEST_HOST", "1234")
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_get_ep_id_from_cont_no_cont(self):
         """
         Test get_ep_id_from_cont() when the container doesn't exist.
@@ -640,9 +633,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = KeyError
         self.assertRaises(KeyError,
                           self.datastore.get_ep_id_from_cont,
-                          "1234")
+                          "TEST_HOST", "1234")
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_add_workload_to_profile(self):
         """
         Test add_workload_to_profile() when the workload exists.
@@ -658,13 +650,12 @@ class TestDatastoreClient(unittest.TestCase):
                 self.assertTrue(False)
 
         self.etcd_client.read.side_effect = mock_read
-        self.datastore.add_workload_to_profile("UNITTEST", "1234")
+        self.datastore.add_workload_to_profile("TEST_HOST", "UNITTEST", "1234")
         ep.profile_id = "UNITTEST"
         expected_write_json = ep.to_json()
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        expected_write_json)
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_remove_workload_from_profile(self):
         """
         Test remove_workload_from_profile() when the workload exists.
@@ -680,7 +671,7 @@ class TestDatastoreClient(unittest.TestCase):
                 self.assertTrue(False)
 
         self.etcd_client.read.side_effect = mock_read
-        self.datastore.remove_workload_from_profile("1234")
+        self.datastore.remove_workload_from_profile("TEST_HOST", "1234")
         ep.profile_id = None
         expected_write_json = ep.to_json()
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
@@ -781,12 +772,11 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.side_effect = KeyError
         self.datastore.remove_all_data()  # should not throw exception.
 
-    @patch("node.adapter.datastore.hostname", "TEST_HOST")
     def test_remove_container(self):
         """
         Test remove_container()
         """
-        self.datastore.remove_container("1234")
+        self.datastore.remove_container("TEST_HOST", "1234")
         self.etcd_client.delete.assert_called_once_with(TEST_CONT_PATH,
                                                         recursive=True,
                                                         dir=True)

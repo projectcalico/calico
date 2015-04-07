@@ -135,7 +135,7 @@ def container_add(container_name, ip):
 
     # Check if the container already exists
     try:
-        _ = client.get_ep_id_from_cont(container_id)
+        _ = client.get_ep_id_from_cont(hostname, container_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
@@ -207,7 +207,7 @@ def container_remove(container_name):
 
     # Find the endpoint ID. We need this to find any ACL rules
     try:
-        endpoint_id = client.get_ep_id_from_cont(container_id)
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
     except KeyError:
         print "Container %s doesn't contain any endpoints" % container_name
         return
@@ -226,14 +226,14 @@ def container_remove(container_name):
     netns.remove_endpoint(endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(container_id)
+    client.remove_container(hostname, container_id)
 
     print "Removed Calico interface from %s" % container_name
 
 
 def node_stop(force):
     if force or len(client.get_hosts()[hostname]["docker"]) == 0:
-        client.remove_host()
+        client.remove_host(hostname)
         try:
             docker_client.stop("calico-node")
         except docker.errors.APIError as err:
@@ -279,7 +279,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
     client.ensure_global_config()
-    client.create_host(ip, ip6)
+    client.create_host(hostname, ip, ip6)
 
     # Enable IP forwarding since all compute hosts are vRouters.
     sysctl("-w", "net.ipv4.ip_forward=1")
@@ -466,7 +466,7 @@ def profile_add_container(container_name, profile_name):
         print "Profile with name %s was not found." % profile_name
         return
 
-    client.add_workload_to_profile(profile_name, container_id)
+    client.add_workload_to_profile(hostname, profile_name, container_id)
     print "Added %s to %s" % (container_name, profile_name)
 
 

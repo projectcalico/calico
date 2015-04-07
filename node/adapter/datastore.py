@@ -1,6 +1,5 @@
 from collections import namedtuple
 import json
-import socket
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
@@ -28,8 +27,6 @@ IF_PREFIX = "cali"
 prefix that appears in all Calico interface names in the root namespace. e.g.
 cali123456789ab.
 """
-
-hostname = socket.gethostname()
 
 
 class Rule(dict):
@@ -215,11 +212,13 @@ class DatastoreClient(object):
             self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
             self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
 
-    def create_host(self, bird_ip, bird6_ip):
+    def create_host(self, hostname, bird_ip, bird6_ip):
         """
         Create a new Calico host.
 
+        :param hostname: The name of the host to create.
         :param bird_ip: The IP address BIRD should listen on.
+        :param bird6_ip: The IP address BIRD6 should listen on.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
@@ -235,9 +234,10 @@ class DatastoreClient(object):
             self.etcd_client.write(workload_dir, None, dir=True)
         return
 
-    def remove_host(self):
+    def remove_host(self, hostname):
         """
         Remove a Calico host.
+        :param hostname: The name of the host to remove.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
@@ -386,7 +386,8 @@ class DatastoreClient(object):
                 if len(packed) > 4:
                     profiles.add(packed[4])
         except KeyError:
-            # Means the PROFILES_PATH was not set up.  So, profile does not exist.
+            # Means the PROFILES_PATH was not set up.  So, profile does not
+            # exist.
             pass
         return profiles
 
@@ -466,26 +467,40 @@ class DatastoreClient(object):
         rules_path = RULES_PATH % {"profile_id": profile.name}
         self.etcd_client.write(rules_path, profile.rules.to_json())
 
-    def add_workload_to_profile(self, profile_name, container_id):
-        endpoint_id = self.get_ep_id_from_cont(container_id)
+    def add_workload_to_profile(self, hostname, profile_name, container_id):
+        """
+
+        :param hostname: The host the workload is on.
+        :param profile_name: The profile to add the workload to.
+        :param container_id: The Docker container ID of the workload.
+        :return: None.
+        """
+        endpoint_id = self.get_ep_id_from_cont(hostname, container_id)
 
         # Change the profile on the endpoint.
         ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = profile_name
         self.set_endpoint(hostname, container_id, ep)
 
-    def remove_workload_from_profile(self, container_id):
-        endpoint_id = self.get_ep_id_from_cont(container_id)
+    def remove_workload_from_profile(self, hostname, container_id):
+        """
+
+        :param hostname: The name of the host the container is on.
+        :param container_id: The Docker container ID.
+        :return: None.
+        """
+        endpoint_id = self.get_ep_id_from_cont(hostname, container_id)
 
         # Change the profile on the endpoint.
         ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = None
         self.set_endpoint(hostname, container_id, ep)
 
-    def get_ep_id_from_cont(self, container_id):
+    def get_ep_id_from_cont(self, hostname, container_id):
         """
         Get a single endpoint ID from a container ID.
 
+        :param hostname: The host the container is on.
         :param container_id: The Docker container ID.
         :return: Endpoint ID as a string.
         """
@@ -527,7 +542,7 @@ class DatastoreClient(object):
         """
         Write a single endpoint object to the datastore.
 
-        :param target_host: The hostname for the Docker hosting this container.
+        :param hostname: The hostname for the Docker hosting this container.
         :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
         """
@@ -607,7 +622,13 @@ class DatastoreClient(object):
         except KeyError:
             pass
 
-    def remove_container(self, container_id):
+    def remove_container(self, hostname, container_id):
+        """
+        Remove a container from the datastore.
+        :param hostname: The name of the host the container is on.
+        :param container_id: The Docker container ID.
+        :return: None.
+        """
         container_path = CONTAINER_PATH % {"hostname": hostname,
                                            "container_id": container_id}
         self.etcd_client.delete(container_path, recursive=True, dir=True)
