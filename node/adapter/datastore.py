@@ -57,7 +57,7 @@ class Rule(dict):
             raise KeyError("Key %s is not allowed on Rule." % key)
 
         # Convert any CIDR strings to netaddr before inserting them.
-        if key in ("src_net", "dst_net") and isinstance(value, str):
+        if key in ("src_net", "dst_net"):
             value = IPNetwork(value)
         if key == "action" and value not in ("allow", "deny"):
             raise ValueError("'%s' is not allowed for key 'action'" % value)
@@ -81,9 +81,7 @@ class Rule(dict):
         if "icmp_type" in self:
             out.extend(["type", str(self["icmp_type"])])
 
-        if ("src_tag" in self or
-            "src_ports" in self or
-            "src_net" in self):
+        if "src_tag" in self or "src_ports" in self or "src_net" in self:
             out.append("from")
         if "src_tag" in self:
             out.extend(["tag", self["src_tag"]])
@@ -92,9 +90,7 @@ class Rule(dict):
         if "src_ports" in self:
             out.extend(["ports", str(self["src_ports"])])
 
-        if ("dst_tag" in self or
-            "dst_ports" in self or
-            "dst_net" in self):
+        if "dst_tag" in self or "dst_ports" in self or "dst_net" in self:
             out.append("to")
         if "dst_tag" in self:
             out.extend(["tag", self["dst_tag"]])
@@ -205,14 +201,19 @@ class DatastoreClient(object):
         (host, port) = etcd_authority.split(":", 1)
         self.etcd_client = etcd.Client(host=host, port=int(port))
 
-    def create_global_config(self):
+    def ensure_global_config(self):
+        """
+        Ensure the global config settings for Calico exist, creating them with
+        defaults if they don't.
+        :return: None.
+        """
         config_dir = CONFIG_PATH
         try:
             self.etcd_client.read(config_dir)
         except KeyError:
             # Didn't exist, create it now.
-            self.etcd_client.set(config_dir + "InterfacePrefix", IF_PREFIX)
-            self.etcd_client.set(config_dir + "LogSeverityFile", "DEBUG")
+            self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
+            self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
 
     def create_host(self, bird_ip, bird6_ip):
         """

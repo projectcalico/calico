@@ -25,6 +25,8 @@ TEST_ENDPOINT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/endpoint/" \
                      "1234567890ab"
 TEST_CONT_ENDPOINT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/" \
                           "endpoint/"
+TEST_CONT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/"
+CONFIG_PATH = "/calico/config/"
 
 # 4 endpoints, with 2 TEST profile and 2 UNIT profile.
 EP_56 = Endpoint("567890abcdef", "active", "11-22-33-44-55-66")
@@ -109,9 +111,11 @@ class TestRule(unittest.TestCase):
 
         rule3 = Rule(action="deny",
                      src_net=IPNetwork("fd80::4:0/112"),
-                     dst_ports=[80])
-        self.assertEqual("deny from fd80::4:0/112 to ports [80]",
-                         rule3.pprint())
+                     dst_ports=[80],
+                     dst_net=IPNetwork("fd80::23:0/112"))
+        self.assertEqual(
+            "deny from fd80::4:0/112 to fd80::23:0/112 ports [80]",
+            rule3.pprint())
 
         rule4 = Rule(action="allow",
                      protocol="icmp",
@@ -200,6 +204,25 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore = DatastoreClient()
         m_etcd_client.assert_called_once_with(host="127.0.0.2", port=4002)
 
+    def test_ensure_global_config(self):
+        """
+        Test ensure_global_config when it doesn't already exist.
+        """
+        self.etcd_client.read.side_effect = KeyError
+        self.datastore.ensure_global_config()
+        expected_writes = [call(CONFIG_PATH + "InterfacePrefix", "cali"),
+                           call(CONFIG_PATH + "LogSeverityFile", "DEBUG")]
+        self.etcd_client.write.assert_has_calls(expected_writes,
+                                                any_order=True)
+
+    def test_ensure_global_config_exists(self):
+        """
+        Test ensure_global_config() when it already exists.
+        """
+        self.datastore.ensure_global_config()
+        self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
+        self.assertFalse(self.etcd_client.write.called)
+
     def test_get_profile(self):
         """
         Test getting a named profile that exists.
@@ -217,7 +240,9 @@ class TestDatastoreClient(unittest.TestCase):
                 result.value = """
 {
   "id": "TEST",
-  "inbound_rules": [],
+  "inbound_rules": [
+    {"action": "allow", "src_net": "192.168.1.0/24", "src_ports": [200,2001]}
+  ],
   "outbound_rules": [
     {"action": "allow", "src_tag": "TEST", "src_ports": [200,2001]}
   ]
@@ -231,11 +256,14 @@ class TestDatastoreClient(unittest.TestCase):
         profile = self.datastore.get_profile("TEST")
         self.assertEqual(profile.name, "TEST")
         self.assertSetEqual({"TAG1", "TAG2", "TAG3"}, profile.tags)
-        self.assertEqual([], profile.rules.inbound_rules)
-        rule = Rule(action="allow",
-                    src_tag="TEST",
-                    src_ports=[200, 2001])
-        self.assertEqual(rule, profile.rules.outbound_rules[0])
+        self.assertEqual(Rule(action="allow",
+                              src_net=IPNetwork("192.168.1.0/24"),
+                              src_ports=[200, 2001]),
+                         profile.rules.inbound_rules[0])
+        self.assertEqual(Rule(action="allow",
+                              src_tag="TEST",
+                              src_ports=[200, 2001]),
+                         profile.rules.outbound_rules[0])
 
         self.assertRaises(KeyError, self.datastore.get_profile, "TEST2")
 
@@ -605,7 +633,7 @@ class TestDatastoreClient(unittest.TestCase):
                           "1234")
 
     @patch("node.adapter.datastore.hostname", "TEST_HOST")
-    def test_get_ep_id_from_cont_no_ep(self):
+    def test_get_ep_id_from_cont_no_cont(self):
         """
         Test get_ep_id_from_cont() when the container doesn't exist.
         """
@@ -620,6 +648,7 @@ class TestDatastoreClient(unittest.TestCase):
         Test add_workload_to_profile() when the workload exists.
         """
         ep = Endpoint.from_json(EP_12.ep_id, EP_12.to_json())
+
         def mock_read(path):
             if path == TEST_CONT_ENDPOINT_PATH:
                 return mock_read_2_ep_for_cont(path)
@@ -641,6 +670,7 @@ class TestDatastoreClient(unittest.TestCase):
         Test remove_workload_from_profile() when the workload exists.
         """
         ep = Endpoint.from_json(EP_12.ep_id, EP_12.to_json())
+
         def mock_read(path):
             if path == TEST_CONT_ENDPOINT_PATH:
                 return mock_read_2_ep_for_cont(path)
@@ -699,6 +729,67 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = KeyError
         hosts = self.datastore.get_hosts()
         self.assertDictEqual({}, hosts)
+
+    def test_get_default_next_hops(self):
+        """
+        Test get_default_next_hops when both are present.
+        """
+        def mock_read(path):
+            result = Mock(spec=EtcdResult)
+            if path == TEST_HOST_PATH + "/bird_ip":
+                result.value = "192.168.24.1"
+                return result
+            if path == TEST_HOST_PATH + "/bird6_ip":
+                result.value = "fd30:4500::1"
+                return result
+            assert False
+        self.etcd_client.read.side_effect = mock_read
+        next_hops = self.datastore.get_default_next_hops("TEST_HOST")
+        self.assertDictEqual(next_hops, {4: IPAddress("192.168.24.1"),
+                                         6: IPAddress("fd30:4500::1")})
+
+    def test_get_default_next_hops_missing(self):
+        """
+        Test get_default_next_hops when both are missing.
+        """
+        def mock_read(path):
+            result = Mock(spec=EtcdResult)
+            if path == TEST_HOST_PATH + "/bird_ip":
+                result.value = ""
+                return result
+            if path == TEST_HOST_PATH + "/bird6_ip":
+                result.value = ""
+                return result
+            assert False
+        self.etcd_client.read.side_effect = mock_read
+        next_hops = self.datastore.get_default_next_hops("TEST_HOST")
+        self.assertDictEqual(next_hops, {})
+
+    def test_remove_all_data(self):
+        """
+        Test remove_all_data() when /calico does exist.
+        """
+        self.datastore.remove_all_data()
+        self.etcd_client.delete.assert_called_once_with("/calico",
+                                                        recursive=True,
+                                                        dir=True)
+
+    def test_remove_all_data_key_error(self):
+        """
+        Test remove_all_data() when delete() throws a KeyError.
+        """
+        self.etcd_client.delete.side_effect = KeyError
+        self.datastore.remove_all_data()  # should not throw exception.
+
+    @patch("node.adapter.datastore.hostname", "TEST_HOST")
+    def test_remove_container(self):
+        """
+        Test remove_container()
+        """
+        self.datastore.remove_container("1234")
+        self.etcd_client.delete.assert_called_once_with(TEST_CONT_PATH,
+                                                        recursive=True,
+                                                        dir=True)
 
 
 def mock_read_2_pools(path):
