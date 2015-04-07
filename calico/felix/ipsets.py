@@ -120,12 +120,17 @@ class IpsetManager(ReferenceManager):
         """
         all_ipsets = list_ipset_names()
         # only clean up our own rubbish.
-        felix_ipsets = set([n for n in all_ipsets if n.startswith(FELIX_PFX)])
+        pfx = IPSET_PREFIX[self.ip_type]
+        tmppfx = IPSET_TMP_PREFIX[self.ip_type]
+        felix_ipsets = set([n for n in all_ipsets if n.startswith(pfx) or
+                                                     n.startswith(tmppfx)])
         whitelist = set()
         for ipset in self.objects_by_id.values():
             # Ask the ipset for all the names it may use and whitelist.
             whitelist.update(ipset.owned_ipset_names())
+        _log.debug("Whitelisted ipsets: %s", whitelist)
         ipsets_to_delete = felix_ipsets - whitelist
+        _log.debug("Deleting ipsets: %s", ipsets_to_delete)
         # Delete the ipsets before we return.  We can't queue these up since
         # that could conflict if someone increffed one of the ones we're about
         # to delete.
@@ -133,7 +138,7 @@ class IpsetManager(ReferenceManager):
             try:
                 futils.check_call(["ipset", "destroy", ipset_name])
             except FailedSystemCall:
-                _log.exception("Failed to clean up dead ipset %s, will"
+                _log.exception("Failed to clean up dead ipset %s, will "
                                "retry on next cleanup.", ipset_name)
 
     @actor_event
