@@ -17,7 +17,85 @@
 felix.actor
 ~~~~~~~~~~~
 
-Actor infrastructure used in Felix.
+A queue-based Actor framework that supports efficient handling of
+batches of messages.  Each Actor instance has its own greenlet
+and a queue of pending messages.  Messages are sent by making calls
+to a method decorated by the @actor_event decorator.
+
+When an actor_event-decorated method is called from another greenlet
+the method call is wrapped up as a Message object and put on the
+queue.
+
+Note: callers must specify the async=True/False argument when calling
+a actor_event-decorated method.  If async=True is passed, the method
+returns an AsyncResult.  If async=False is passed, the method blocks
+until the result is available and returns it as-is. As a convenience,
+Actors may call their own decorated methods without passing async=...;
+such calls are treated as normal, synchronous method calls.
+
+Each time it is scheduled, the main loop of the Actor
+
+* pulls all pending messages off the queue as a batch
+* notifies the subclass that a batch is about to start via
+  _start_msg_batch()
+* executes each of the actor_event method calls from the batch in order
+* notifies the subclass that the batch is finished by calling
+  _finish_msg_batch()
+* publishes the results from the batch via AsyncResults, allowing
+  callers to check for exceptions or receive a result.
+
+Simple actors
+~~~~~~~~~~~~~
+
+A simple Actor may ignore the start/finish_msg_batch calls and do
+all its work in the actor_event-decorated methods, ensuring that
+all its invariants are restored by the end of each call.
+
+Supporting batches
+~~~~~~~~~~~~~~~~~~
+
+For an actor that can handle a batch more efficiently, it may
+initialize some per-batch state in the start_msg_batch function,
+update the state from its actor_event methods and then "commit"
+the state in _finish_msg_batch().
+
+Since moving the commit stage to _finish_msg_batch() can make
+it hard to report errors to the correct AsyncResult, the framework
+supports the ability to split a batch of work and retry it from
+the beginning.  To make use of that function, an Actor must:
+
+* take part in batching
+* have actor_event methods that only affect the per-batch state
+  (i.e. it must defer its side effects to the _finish_msg_batch()
+  method)
+* raise SplitBatchAndRetry from its _finish_msg_batch() method,
+  ensuring, of course, that it did not leave any resources
+  partially-modified.
+
+Thread safety
+~~~~~~~~~~~~~
+
+While the framework makes it easy to avoid shared state, there are
+some gotchas:
+
+* Using the async=False feature blocks the current greenlet until the
+  one it is calling into returns a result.  This can also cause deadlock
+  if there are call cycles.
+
+* We deliberately use unbounded queues for queueing up messages between
+  actors. Bounding the queues would allow deadlock since the sending actor
+  can block on a full queue and the receiving actor may be blocked on the
+  queue of the sender, trying to send another message.
+
+Unhandled Exceptions
+~~~~~~~~~~~~~~~~~~~~
+
+The framework keeps track of pending AsyncResults and tries to detect
+callbacks that were GCed with a pending exception.  If is detects such
+an exception, it terminates the process on the assumption that
+an unhandled exception implies a bug and may leave the system in an
+inconsistent state.
+
 """
 import collections
 import functools
@@ -37,15 +115,259 @@ from gevent.queue import Queue
 _log = logging.getLogger(__name__)
 
 
-DEFAULT_QUEUE_SIZE = 10
-
 ResultOrExc = collections.namedtuple("ResultOrExc", ("result", "exception"))
 
 # Local storage to allow diagnostics.
 actor_storage = gevent.local.local()
 
+
+class Actor(object):
+    """
+    Class that contains a queue and a greenlet serving that queue.
+    """
+
+    batch_delay = None
+    """
+    Delay in seconds imposed after receiving first message before processing
+    the messages in a batch.  Higher values encourage batching.
+    """
+
+    max_ops_before_yield = 10000
+    """Number of calls to self._maybe_yield before it yields"""
+
+    def __init__(self, qualifier=None):
+        self._event_queue = Queue()
+        self.greenlet = gevent.Greenlet(self._loop)
+        self._op_count = 0
+        self._current_msg = None
+        self.started = False
+
+        # Message being processed; purely for logging.
+        self.msg_uuid = None
+
+        # Logging parameters
+        self.qualifier = qualifier
+        if qualifier:
+            self.name = "%s(%s)" % (self.__class__.__name__, qualifier)
+        else:
+            self.name = self.__class__.__name__
+
+    # TODO: Can we just start the greenlet always?
+    # There is some craziness about actors that are in CREATED state, where
+    # pending a previous iteration shutting down.
+    # PLW: I agree that the answer here is probably no, but not sure if we
+    # could somehow simplify the code in this area.
+    def start(self):
+        assert not self.greenlet, "Already running"
+        _log.debug("Starting %s", self)
+        self.started = True
+        self.greenlet.start()
+        return self
+
+    def _loop(self):
+        """
+        Main greenlet loop, repeatedly runs _step().  Doesn't return normally.
+        """
+        actor_storage.name = self.name
+        actor_storage.msg_uuid = None
+
+        try:
+            while True:
+                self._step()
+        except:
+            _log.exception("Exception killed %s", self)
+            raise
+
+    def _step(self):
+        """
+        Run one iteration of the event loop for this actor.  Mainly
+        broken out to allow the UTs to single-step an Actor.
+
+        It also has the beneficial side effect of introducing a new local
+        scope so that our variables die before we block next time.
+        """
+        # Block waiting for work.
+        msg = self._event_queue.get()
+        actor_storage.msg_uuid = msg.uuid
+
+        # Then, once we get some, opportunistically pull as much work off the
+        # queue as possible.  We call this a batch.
+        batch = [msg]
+        if self.batch_delay:
+            # If requested by our subclass, delay the start of the batch to
+            # allow more work to accumulate.
+            gevent.sleep(self.batch_delay)
+        while not self._event_queue.empty():
+            # We're the only ones getting from the queue so this should
+            # never fail.
+            batch.append(self._event_queue.get_nowait())
+
+        # Start with one batch on the queue but we may get asked to split it
+        # if an error occurs.
+        batches = [batch]
+        num_splits = 0
+        while batches:
+            # Process the first batch on our queue of batches.  Invariant:
+            # we'll either process this batch to completion and discard it or
+            # we'll put all the messages back into the batch queue in the same
+            # order but with a first batch that is half the size and the
+            # rest of its messages at the start of the second batch.
+            batch = batches.pop(0)
+            # Give subclass a chance to filter the batch/update its state.
+            batch = self._start_msg_batch(batch)
+            assert batch is not None, "_start_msg_batch() should return batch."
+            results = []  # Will end up same length as batch.
+            for msg in batch:
+                _log.debug("Message %s recd by %s from %s, queue length %d",
+                           msg, msg.recipient, msg.caller,
+                           self._event_queue.qsize())
+                self._current_msg = msg
+                try:
+                    # Actually execute the per-message method and record its
+                    # result.
+                    result = msg.method()
+                except BaseException as e:
+                    _log.exception("Exception processing %s", msg)
+                    results.append(ResultOrExc(None, e))
+                else:
+                    results.append(ResultOrExc(result, None))
+                finally:
+                    self._current_msg = None
+            try:
+                # Give subclass a chance to post-process the batch.
+                _log.debug("Finishing message batch")
+                self._finish_msg_batch(batch, results)
+            except SplitBatchAndRetry:
+                # The subclass couldn't process the batch as is (probably
+                # because a failure occurred and it couldn't figure out which
+                # message caused the problem).  Split the batch into two and
+                # re-run it.
+                _log.warn("Splitting batch to retry.")
+                self.__split_batch(batch, batches)
+                num_splits += 1  # For diags.
+                continue
+            except BaseException as e:
+                # Most-likely a bug.  Report failure to all callers.
+                _log.exception("_finish_msg_batch failed.")
+                results = [(None, e)] * len(results)
+
+            # Batch complete and finalized, set all the results.
+            assert len(batch) == len(results)
+            for msg, (result, exc) in zip(batch, results):
+                for future in msg.results:
+                    if exc is not None:
+                        future.set_exception(exc)
+                    else:
+                        future.set(result)
+        if num_splits > 0:
+            _log.warn("Split batches complete. Number of splits: %s",
+                      num_splits)
+
+    @staticmethod
+    def __split_batch(current_batch, remaining_batches):
+        """
+        Splits batch in half and prepends it to the list of remaining
+        batches. Modifies remaining_batches in-place.
+
+        :param list[Message] current_batch: list of messages that's currently
+               being processed.
+        :param list[list[Message]] remaining_batches: list of batches
+               still to process.
+        """
+        assert len(current_batch) > 1, "Batch too small to split"
+        # Split the batch.
+        split_point = len(current_batch) // 2
+        _log.debug("Split-point = %s", split_point)
+        first_half = current_batch[:split_point]
+        second_half = current_batch[split_point:]
+        if remaining_batches:
+            # Optimization: there's another batch already queued,
+            # push the second half of this batch onto the front of
+            # that one.
+            _log.debug("Split batch but found a subsequent batch, "
+                       "coalescing with that.")
+            next_batch = remaining_batches[0]
+            next_batch[:0] = second_half
+        else:
+            _log.debug("Split batch but no more batches in queue.")
+            remaining_batches[:0] = [second_half]
+        remaining_batches[:0] = [first_half]
+
+    def _start_msg_batch(self, batch):
+        """
+        Called before processing a batch of messages to give subclasses
+        a chance to filter the batch.  Implementations must ensure that
+        every AsyncResult in the batch is correctly set.  Usually, that
+        means combining them into one list.
+
+        It is usually easier to build up a batch of changes to make in the
+        @actor_event-decorated methods and then process them in
+        _finish_msg_batch().
+
+        Intended to be overridden.  This implementation simply returns the
+        input batch.
+
+        :param list[Message] batch:
+        """
+        return batch
+
+    def _finish_msg_batch(self, batch, results):
+        """
+        Called after a batch of events have been processed from the queue
+        before results are set.
+
+        Intended to be overridden.  This implementation does nothing.
+
+        Exceptions raised by this method are propagated to all messages in the
+        batch, overriding the existing results.  It is recommended that the
+        implementation catches appropriate exceptions and maps them back
+        to the correct entry in results.
+
+        :param list[ResultOrExc] results: Pairs of (result, exception)
+            representing the result of each message-processing function.
+            Only one of the values is set.  Updates to the list alter the
+            result send to any waiting listeners.
+        :param list[Message] batch: The input batch, always the same length as
+            results.
+        """
+        pass
+
+    def _maybe_yield(self):
+        """
+        With some probability, yields processing to another greenlet.
+        (Utility method to be called from the actor's greenlet during
+        long-running operations.)
+        """
+        self._op_count += 1
+        if self._op_count >= self.max_ops_before_yield:
+            gevent.sleep()
+            self._op_count = 0
+
+    def __str__(self):
+        return self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s>" % (
+            self._event_queue.qsize(),
+            bool(self.greenlet),
+            self._current_msg
+        )
+
+
+class SplitBatchAndRetry(Exception):
+    """
+    Exception that may be raised by _finish_msg_batch() to cause the
+    batch of messages to be split, each message to be re-executed and
+    then the smaller batches delivered to _finish_msg_batch() again.
+    """
+    pass
+
+
+def wait_and_check(async_results):
+    for r in async_results:
+        r.get()
+
+
 _refs = {}
 _ref_idx = 0
+
 
 class Message(object):
     """
@@ -62,6 +384,7 @@ class Message(object):
     def __str__(self):
         data = ("%s (%s)" % (self.uuid, self.name))
         return data
+
 
 class ExceptionTrackingRef(weakref.ref):
     """
@@ -167,8 +490,8 @@ def actor_event(fn):
         on_same_greenlet = (self.greenlet == gevent.getcurrent())
 
         if on_same_greenlet and not async:
-            # Bypass the queue if we're already on the same greenlet, or we would
-            # deadlock by waiting for ourselves.
+            # Bypass the queue if we're already on the same greenlet, or we
+            # would deadlock by waiting for ourselves.
             return fn(self, *args, **kwargs)
 
         # async must be specified, unless on the same actor.
@@ -187,259 +510,10 @@ def actor_event(fn):
 
         _log.debug("Message %s sent by %s to %s, queue length %d",
                    msg, caller, self.name, self._event_queue.qsize())
-        # TODO (PLW): I still think this should not block. We can ensure that
-        # it does not block trivially by setting the queue size to be 0, and
-        # that would surely have lower occupancy than creating a new greenlet
-        # every time we want to put a message onto the queue. I'm not really
-        # with the logic of why we would ever want to block as the queues get
-        # busy; not convinced it really does imply back pressure.
-        # Incidentally, queue length is 10, which is clearly incredibly low (I
-        # think 1000 is a way more plausible level at which I would think our
-        # queues are full). We should discuss that, unless you just agree!
-        self._event_queue.put(msg,
-                              block=True,
-                              timeout=60)
+        self._event_queue.put(msg, block=False)
         if async:
             return result
         else:
             return result.get()
     queue_fn.func = fn
     return queue_fn
-
-
-class Actor(object):
-    """
-    Class that contains a queue and a greenlet serving that queue.
-    """
-
-    queue_size = DEFAULT_QUEUE_SIZE
-    """Maximum length of the event queue before caller will be blocked."""
-
-    batch_delay = None
-    """
-    Delay in seconds imposed after receiving first message before processing
-    the messages in a batch.  Higher values encourage batching.
-    """
-
-    max_ops_before_yield = 10000
-    """Number of calls to self._maybe_yield before it yields"""
-
-    def __init__(self, queue_size=None, qualifier=None):
-        queue_size = queue_size or self.queue_size
-        self._event_queue = Queue(maxsize=queue_size)
-        self.greenlet = gevent.Greenlet(self._loop)
-        self._op_count = 0
-        self._current_msg = None
-        self.started = False
-
-        # Message being processed; purely for logging.
-        self.msg_uuid = None
-
-        # Logging parameters
-        self.qualifier = qualifier
-        if qualifier:
-            self.name = "%s(%s)" % (self.__class__.__name__, qualifier)
-        else:
-            self.name = self.__class__.__name__
-
-    # TODO: Can we just start the greenlet always?
-    # There is some craziness about actors that are in CREATED state, where
-    # pending a previous iteration shutting down.
-    # PLW: I agree that the answer here is probably no, but not sure if we
-    # could somehow simplify the code in this area.
-    def start(self):
-        assert not self.greenlet, "Already running"
-        _log.debug("Starting %s", self)
-        self.started = True
-        self.greenlet.start()
-        return self
-
-    def _loop(self):
-        """
-        Main greenlet loop, repeatedly runs _step().  Doesn't return normally.
-        """
-        actor_storage.name = self.name
-        actor_storage.msg_uuid = None
-
-        try:
-            while True:
-                self._step()
-        except:
-            _log.exception("Exception killed %s", self)
-            raise
-
-    def _step(self):
-        """
-        Run one iteration of the event loop for this actor.  Mainly
-        broken out to allow the UTs to single-step an Actor.
-
-        It also has the subtle side effect of introducing a new local
-        scope so that our variables die before we block next time.
-        """
-        # Block waiting for work.
-        msg = self._event_queue.get()
-        actor_storage.msg_uuid = msg.uuid
-
-        # Then, once we get some, opportunistically pull as much work off the
-        # queue as possible.  We call this a batch.
-        batch = [msg]
-        if self.batch_delay and not self._event_queue.full():
-            # If requested by our subclass, delay the start of the batch to
-            # allow more work to accumulate.
-            # PLW: why do we do this batch_delay? To me it seems that we only
-            # need to do batching if events are arriving faster than we can
-            # process them, so why both add complexity and add delay?
-            gevent.sleep(self.batch_delay)
-        while not self._event_queue.empty():
-            # We're the only ones getting from the queue so this should
-            # never fail.
-            batch.append(self._event_queue.get_nowait())
-
-        # Start with one batch on the queue but we may get asked to split it
-        # if an error occurs.
-        batches = [batch]
-        num_splits = 0
-        while batches:
-            # Process the first batch on our queue of batches.  Invariant:
-            # we'll either process this batch to completion and discard it or
-            # we'll put all the messages back into the batch queue in the same
-            # order but batched differently.
-            batch = batches.pop(0)
-            # Give subclass a chance to filter the batch/update its state.
-            batch = self._start_msg_batch(batch)
-            assert batch is not None, "_start_msg_batch() should return batch."
-            results = []  # Will end up same length as batch.
-            for msg in batch:
-                _log.debug("Message %s recd by %s from %s, queue length %d",
-                           msg, msg.recipient, msg.caller,
-                           self._event_queue.qsize())
-                self._current_msg = msg
-                try:
-                    # Actually execute the per-message method and record its
-                    # result.
-                    result = msg.method()
-                except BaseException as e:
-                    _log.exception("Exception processing %s", msg)
-                    results.append(ResultOrExc(None, e))
-                else:
-                    results.append(ResultOrExc(result, None))
-                finally:
-                    self._current_msg = None
-            try:
-                # Give subclass a chance to post-process the batch.
-                _log.debug("Finishing message batch")
-                self._finish_msg_batch(batch, results)
-            except SplitBatchAndRetry:
-                # The subclass couldn't process the batch as is (probably
-                # because a failure occurred and it couldn't figure out which
-                # message caused the problem).  Split the batch into two and
-                # re-run it.
-                _log.warn("Splitting batch to retry.")
-                self._split_batch(batch, batches)
-
-                num_splits += 1
-                continue
-            except BaseException as e:
-                # Report failure to all.
-                _log.exception("_finish_msg_batch failed.")
-                results = [(None, e)] * len(results)
-
-            # Batch complete and finalized, set all the results.
-            assert len(batch) == len(results)
-            for msg, (result, exc) in zip(batch, results):
-                for future in msg.results:
-                    if exc is not None:
-                        future.set_exception(exc)
-                    else:
-                        future.set(result)
-        if num_splits > 0:
-            _log.warn("Split batches complete. Number of splits: %s",
-                      num_splits)
-
-    @staticmethod
-    def _split_batch(batch, batches):
-        assert len(batch) > 1, "Batch too small to split"
-        # Split the batch.
-        split_point = len(batch) // 2
-        _log.debug("Split-point = %s", split_point)
-        batch_a = batch[:split_point]
-        batch_b = batch[split_point:]
-        if batches:
-            # Optimization: there's another batch already queued,
-            # push the second half of this batch onto the front of
-            # that one.
-            _log.debug("Split batch but found a subsequent batch, "
-                       "coalescing with that.")
-            next_batch = batches[0]
-            next_batch[:0] = batch_b
-        else:
-            _log.debug("Split batch but no more batches in queue.")
-            batches[:0] = [batch_b]
-        batches[:0] = [batch_a]
-
-    def _start_msg_batch(self, batch):
-        """
-        Called before processing a batch of messages to give subclasses
-        a chance to filter the batch.  Implementations must ensure that
-        every AsyncResult in the batch is correctly set.  Usually, that
-        means combining them into one list.
-
-        It is usually easier to build up a batch of changes to make in the
-        @actor_event-decorated methods and then process them in
-        _post_process_msg_batch().
-        PLW: post_process_msg_batch does not exist? Probably _finish_msg_batch.
-
-        Intended to be overridden.  This implementation simply returns the
-        input batch.
-
-        :param list[Message] batch:
-        """
-        return batch
-
-    def _finish_msg_batch(self, batch, results):
-        """
-        Called after a batch of events have been processed from the queue
-        before results are set.
-
-        Intended to be overridden.  This implementation does nothing.
-
-        Exceptions raised by this method are propagated to all messages in the
-        batch, overriding the existing results.  It is recommended that the
-        implementation catches appropriate exceptions and maps them back
-        to the correct entry in results.
-
-        :param list[ResultOrExc] results: Pairs of (result, exception)
-            representing the result of each message-processing function.
-            Only one of the values is set.  Updates to the list alter the
-            result send to any waiting listeners.
-        :param list[Message] batch: The input batch, always the same length as
-            results.
-        """
-        pass
-
-    def _maybe_yield(self):
-        self._op_count += 1
-        if self._op_count >= self.max_ops_before_yield:
-            gevent.sleep()
-            self._op_count = 0
-
-    def __str__(self):
-        return self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s>" % (
-            self._event_queue.qsize(),
-            bool(self.greenlet),
-            self._current_msg
-        )
-
-
-class SplitBatchAndRetry(Exception):
-    """
-    Exception that may be raised by _finish_msg_batch() to cause the
-    batch of messages to be split, each message to be re-executed and
-    then the smaller batches delivered to _finish_msg_batch() again.
-    """
-    pass
-
-
-def wait_and_check(async_results):
-    for r in async_results:
-        r.get()

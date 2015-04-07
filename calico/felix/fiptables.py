@@ -48,7 +48,6 @@ class DispatchChains(Actor):
     add/remove them from the chains.
     """
 
-    queue_size = 1000
     batch_delay = 0.1
 
     def __init__(self, config, ip_version, iptables_updater):
@@ -312,9 +311,9 @@ class IptablesUpdater(Actor):
                     final_result = ResultOrExc(None, e)
                 if cb:
                     if batch[0].method.keywords.get("suppress_exc"):
-                        gevent.spawn(cb, None)
+                        cb(None)
                     else:
-                        gevent.spawn(e, None)
+                        cb(e)
                 results[0] = final_result
             else:
                 _log.error("Non-retryable error from a combined batch, "

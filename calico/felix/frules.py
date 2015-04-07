@@ -222,7 +222,7 @@ def rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
                                             "%s (%s)" % (proto, ports_key, rule)
             ports = ','.join([str(p) for p in rule[ports_key]])
             # multiport only supports 15 ports.
-            # TODO: return multiple rules if we have more than one port
+            # TODO: return multiple rules if we have too many ports
             assert ports.count(",") + ports.count(":") < 15, "Too many ports"
             append("--match multiport", "--%s-ports" % direction, ports)
 

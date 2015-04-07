@@ -179,8 +179,7 @@ class TestActor(BaseTestCase):
                 (m_full, m_put):
             m_full.return_value = True
             self._actor.do_a(async=True)
-            self.assertTrue(m_put.call_args[1]["block"])
-            self.assertEqual(m_put.call_args[1]["timeout"], 60)
+            self.assertFalse(m_put.call_args[1]["block"])
 
     def test_loop_coverage(self):
         with mock.patch.object(self._actor, "_step", autospec=True) as m_step:
@@ -223,9 +222,8 @@ class TestExcpetionTracking(BaseTestCase):
 
 
 class ActorForTesting(actor.Actor):
-    def __init__(self, queue_size=None, qualifier=None):
-        super(ActorForTesting, self).__init__(queue_size=queue_size,
-                                              qualifier=qualifier)
+    def __init__(self, qualifier=None):
+        super(ActorForTesting, self).__init__(qualifier=qualifier)
         self.actions = []
         self._batch_actions = []
         self.batches = []
