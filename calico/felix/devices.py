@@ -38,7 +38,9 @@ _log = logging.getLogger(__name__)
 
 def interface_exists(interface):
     """
-    Returns True if interface device exists.
+    Checks if an interface exists.
+    :param str interface: Interface name
+    :returns: True if interface device exists
     """
     return os.path.exists("/sys/class/net/" + interface)
 
@@ -46,7 +48,9 @@ def interface_exists(interface):
 def list_interface_ips(ip_type, interface):
     """
     List IP addresses for which there are routes to a given interface.
-    Returns a set with all addresses for which there is a route to the device.
+    :param str ip_type: IP type, either futils.IPV4 or futils.IPV6
+    :param str interface: Interface name
+    :returns: a set of all addresses for which there is a route to the device.
     """
     ips = set()
 
@@ -90,7 +94,7 @@ def configure_interface_ipv4(if_name):
     localhost, and enable proxy ARP.
 
     :param if_name: The name of the interface to configure.
-    :return: None
+    :returns: None
     """
     with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % if_name, 'wb') as f:
         f.write('1')
@@ -111,7 +115,7 @@ def configure_interface_ipv6(if_name, proxy_target):
     :param if_name: The name of the interface to configure.
     :param proxy_target: IPv6 address which is proxied on this interface for
     NDP.
-    :return: None
+    :returns: None
     :raises: FailedSystemCall
     """
     with open("/proc/sys/net/ipv6/conf/%s/proxy_ndp" % if_name, 'wb') as f:
@@ -189,11 +193,23 @@ def interface_up(if_name):
     Check this by examining the interface flags and looking for whether the
     IFF_UP flag has been set. IFF_UP is the flag 0x01, so read in the flags
     (represented by a hexadecimal integer) and check if the 1 bit is set.
-    """
-    with open('/sys/class/net/%s/flags' % if_name, 'r') as f:
-        flags = f.read().strip()
 
-    _log.debug("Interface %s has flags %s", if_name, flags)
+    :param str if_name: Interface name
+    :returns: True if interface up, False if down or cannot detect
+    """
+    flags_file = '/sys/class/net/%s/flags' % if_name
+
+    try:
+        with open(flags_file, 'r') as f:
+            flags = f.read().strip()
+
+            _log.debug("Interface %s has flags %s", if_name, flags)
+    except IOError:
+        # If we fail to check that the interface is up, then it has probably
+        # gone under our feet or is flapping.
+        _log.exception("Cannot check flags for interface %s (%s) - assume down",
+                       if_name, flags_file)
+        return False
 
     return bool(int(flags, 16) & 1)
 
