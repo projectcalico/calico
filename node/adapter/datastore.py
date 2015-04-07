@@ -15,7 +15,7 @@ HOST_PATH = HOSTS_PATH + "%(hostname)s/"
 CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
 LOCAL_ENDPOINTS_PATH = HOST_PATH + "workload/docker/%(container_id)s/endpoint/"
 ALL_ENDPOINTS_PATH = HOSTS_PATH  # Read all hosts
-ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s/"
+ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s"
 PROFILES_PATH = "/calico/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
@@ -59,6 +59,8 @@ class Rule(dict):
         # Convert any CIDR strings to netaddr before inserting them.
         if key in ("src_net", "dst_net") and isinstance(value, str):
             value = IPNetwork(value)
+        if key == "action" and value not in ("allow", "deny"):
+            raise ValueError("'%s' is not allowed for key 'action'" % value)
         super(Rule, self).__setitem__(key, value)
 
     def to_json(self):
@@ -223,7 +225,7 @@ class DatastoreClient(object):
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
-        self.etcd_client.set(host_path + "config/marker", "created")
+        self.etcd_client.write(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
@@ -251,14 +253,7 @@ class DatastoreClient(object):
         :return: List of netaddr.IPNetwork IP pools.
         """
         assert version in ("v4", "v6")
-        pools = []
-        try:
-            pools = self._get_ip_pools_with_keys(version).keys()
-        except KeyError:
-            # No pools defined yet, return empty list.
-            pass
-
-        return pools
+        return self._get_ip_pools_with_keys(version).keys()
 
     def _get_ip_pools_with_keys(self, version):
         """
@@ -308,7 +303,7 @@ class DatastoreClient(object):
     def del_ip_pool(self, version, pool):
         """
         Delete the given CIDR range from the list of pools.  If the pool does
-        not exist, raise a etcd.EtcdKeyNotFound:.
+        not exist, raise a KeyError.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
@@ -384,7 +379,7 @@ class DatastoreClient(object):
         profiles = set()
         try:
             etcd_profiles = self.etcd_client.read(PROFILES_PATH,
-                                                recursive=True,).children
+                                                  recursive=True).children
             for child in etcd_profiles:
                 packed = child.key.split("/")
                 if len(packed) > 4:
@@ -503,9 +498,13 @@ class DatastoreClient(object):
                            container_id)
 
         # Get the first endpoint & ID
-        endpoint = endpoints.next()
-        (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
-        return endpoint_id
+        try:
+            endpoint = endpoints.next()
+            (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
+            return endpoint_id
+        except StopIteration:
+            raise NoEndpointForContainer(
+                "Container with ID %s has no endpoints." % container_id)
 
     def get_endpoint(self, hostname, container_id, endpoint_id):
         """
@@ -553,7 +552,7 @@ class DatastoreClient(object):
         """
         hosts = Vividict()
         try:
-            etcd_hosts = self.etcd_client.read('/calico/host',
+            etcd_hosts = self.etcd_client.read(HOSTS_PATH,
                                                recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
@@ -623,4 +622,9 @@ class DatastoreClient(object):
         self.etcd_client.delete(container_path, recursive=True, dir=True)
 
 
-
+class NoEndpointForContainer(Exception):
+    """
+    Tried to get the endpoint associated with a container that has no
+    endpoints.
+    """
+    pass
