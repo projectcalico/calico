@@ -48,6 +48,7 @@ KNOWN_RULE_KEYS = set([
     "dst_tag",
     "dst_ports",
     "icmp_type",
+    "ip_version",
 ])
 
 
