@@ -32,7 +32,7 @@ Because the user wants to be able to reach the machine from their own laptop,
 they need the machine to be reachable from outside the data center. In
 vanilla Neutron, this would mean provisioning it with a floating IP, but in
 Calico they instead want to make sure the VM is attached to the ``external``
-network. To add themseves to this network, the user needs to find out the UUID
+network. To add themselves to this network, the user needs to find out the UUID
 for it:
 
 .. code-block:: bash
