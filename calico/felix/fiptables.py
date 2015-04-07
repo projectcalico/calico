@@ -524,7 +524,7 @@ def parse_ipt_save(raw_save_output):
     """
     Parses the output from iptables-save to extract the set of
     currently-active chains.
-    :return: dict mapping table name to set of chain names in that table.
+    :returns: dict mapping table name to set of chain names in that table.
     """
     chains = defaultdict(set)
     table = None

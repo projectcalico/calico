@@ -278,8 +278,8 @@ class RefHelper(object):
 
     def iteritems(self):
         """
-        :return: iterator over pairs of the currently valid references.  Not
-                 safe for concurrent modification of the ret of IDs.
+        :returns: iterator over pairs of the currently valid references. Not
+                  safe for concurrent modification of the set of IDs.
         """
         return self.acquired_refs.iteritems()
 

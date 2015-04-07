@@ -366,7 +366,7 @@ def validate_rule_port(port):
     Valid values are an integer port, or a string range separated by a colon.
 
     :param port: the port, which is validated for type
-    :return str: None or an error string if invalid
+    :returns: None or an error string if invalid
     """
     if isinstance(port, int):
         if port < 1 or port > 65535:

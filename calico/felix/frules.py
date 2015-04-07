@@ -180,7 +180,7 @@ def rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
            For example: "ACCEPT" or "RETURN".
     :param str on_deny: iptables action to use when the rule denies traffic.
            For example: "DROP".
-    :return str: iptables --append fragment.
+    :returns: iptables --append fragment.
     """
 
     # Check we've not got any unknown fields.
