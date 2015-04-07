@@ -236,6 +236,9 @@ class EtcdWatcher(Actor):
                     _log.warning("Unexpected action %s to %s; triggering "
                                  "resync.", response.action, response.key)
                     continue_polling = False
+                if "/config/" in response.key:
+                    _log.info("Change of config, doing a resync.")
+                    continue_polling = False
 
     def _load_config_dict(self):
         """
