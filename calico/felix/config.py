@@ -24,12 +24,13 @@ On instantiation, this module automatically parses the configuration file and
 builds a singleton configuration object. Other modules should just import the
 Config object and use the fields within it.
 """
+import os
+
 import ConfigParser
 import logging
 import socket
 
 from calico import common
-from calico.felix import fetcd
 
 # Logger
 log = logging.getLogger(__name__)
@@ -69,7 +70,8 @@ class Config(object):
 
         self.read_cfg_file(config_path)
 
-        self.ETCD_PORT = self.get_cfg_entry("global", "EtcdPort", 4001)
+        self.ETCD_HOST = self.get_cfg_entry("global", "EtcdHost", "localhost")
+        self.ETCD_PORT = int(self.get_cfg_entry("global", "EtcdPort", "4001"))
 
         self.HOSTNAME = self.get_cfg_entry("global",
                                            "FelixHostname",
@@ -121,10 +123,17 @@ class Config(object):
             log.warning("Configuration file %s empty or does not exist",
                         config_file)
 
-
     def get_cfg_entry(self, section, name, default=None):
-        name    = name.lower()
+        name = name.lower()
         section = section.lower()
+
+        env_var = ("%s_%s" % (section, name)).upper()
+        log.debug("Looking for environment variable override %s", env_var)
+        if env_var in os.environ:
+            value = os.environ[env_var]
+            log.info("Environment variable %s=%r overrides config file: %s/%s",
+                     env_var, value, section, name)
+            return value
 
         if section not in self._items:
             if default is not None:
