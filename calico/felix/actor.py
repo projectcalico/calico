@@ -193,25 +193,30 @@ class Actor(object):
         # Then, once we get some, opportunistically pull as much work off the
         # queue as possible.  We call this a batch.
         batch = [msg]
-        if self.batch_delay:
-            # If requested by our subclass, delay the start of the batch to
-            # allow more work to accumulate.
-            gevent.sleep(self.batch_delay)
-        while not self._event_queue.empty():
-            # We're the only ones getting from the queue so this should
-            # never fail.
-            batch.append(self._event_queue.get_nowait())
-
-        # Start with one batch on the queue but we may get asked to split it
-        # if an error occurs.
         batches = [batch]
+        if not msg.needs_own_batch:
+            # Try to pull some more work off the queue to combine into a
+            # batch.
+            if self.batch_delay:
+                # If requested by our subclass, delay the start of the batch to
+                # allow more work to accumulate.
+                gevent.sleep(self.batch_delay)
+            while not self._event_queue.empty():
+                # We're the only ones getting from the queue so this should
+                # never fail.
+                msg = self._event_queue.get_nowait()
+                if msg.needs_own_batch:
+                    batch = []
+                    batches.append(batch)
+                batch.append(msg)
+
         num_splits = 0
         while batches:
             # Process the first batch on our queue of batches.  Invariant:
             # we'll either process this batch to completion and discard it or
             # we'll put all the messages back into the batch queue in the same
             # order but with a first batch that is half the size and the
-            # rest of its messages at the start of the second batch.
+            # rest of its messages in the second batch.
             batch = batches.pop(0)
             # Give subclass a chance to filter the batch/update its state.
             batch = self._start_msg_batch(batch)
@@ -280,16 +285,17 @@ class Actor(object):
         _log.debug("Split-point = %s", split_point)
         first_half = current_batch[:split_point]
         second_half = current_batch[split_point:]
-        if remaining_batches:
-            # Optimization: there's another batch already queued,
-            # push the second half of this batch onto the front of
-            # that one.
-            _log.debug("Split batch but found a subsequent batch, "
+        if remaining_batches and not remaining_batches[0][0].needs_own_batch:
+            # Optimization: there's another batch already queued and
+            # it also contains batchable messages push the second
+            # half of this batch onto the front of that one.
+            _log.debug("Split batch and found a subsequent batch, "
                        "coalescing with that.")
             next_batch = remaining_batches[0]
             next_batch[:0] = second_half
         else:
-            _log.debug("Split batch but no more batches in queue.")
+            _log.debug("Split batch but cannot prepend to next batch, adding "
+                       "both splits to start of queue.")
             remaining_batches[:0] = [second_half]
         remaining_batches[:0] = [first_half]
 
@@ -373,12 +379,14 @@ class Message(object):
     """
     Message passed to an actor.
     """
-    def __init__(self, method, results, caller_path, recipient):
+    def __init__(self, method, results, caller_path, recipient,
+                 needs_own_batch):
         self.uuid = uuid.uuid4().hex[:12]
         self.method = method
         self.results = results
         self.caller = caller_path
         self.name = method.func.__name__
+        self.needs_own_batch = needs_own_batch
         self.recipient = recipient
 
     def __str__(self):
@@ -470,7 +478,7 @@ class TrackedAsyncResult(AsyncResult):
         return result
 
 
-def actor_message():
+def actor_message(needs_own_batch=False):
     def decorator(fn):
         method_name = fn.__name__
         @functools.wraps(fn)
@@ -506,7 +514,8 @@ def actor_message():
             # OK, so build the message and put it on the queue.
             partial = functools.partial(fn, self, *args, **kwargs)
             result = TrackedAsyncResult(method_name)
-            msg = Message(partial, [result], caller, self.name)
+            msg = Message(partial, [result], caller, self.name,
+                          needs_own_batch=needs_own_batch)
             result.set_msg(msg)
 
             _log.debug("Message %s sent by %s to %s, queue length %d",

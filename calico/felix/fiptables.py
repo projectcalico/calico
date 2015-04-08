@@ -121,7 +121,8 @@ class IptablesUpdater(Actor):
         if callback:
             self._completion_callbacks.append(callback)
 
-    @actor_message()
+    # Does direct table manipulation, forbid batching with other messages.
+    @actor_message(needs_own_batch=True)
     def ensure_rule_inserted(self, rule_fragment):
         """
         Runs the given rule fragment, prefixed with --insert.  If the
@@ -158,22 +159,23 @@ class IptablesUpdater(Actor):
         if callback:
             self._completion_callbacks.append(callback)
 
-    @actor_message()
+    # It's much simpler to do cleanup in its own batch so that it doesn't have
+    # to worry about in-flight updates.
+    @actor_message(needs_own_batch=True)
     def cleanup(self):
         """
-        Trigger clean up
+        Tries to clean up any left-over chains from a previous run that
+        are no longer required.
         """
-        # TODO Best effort and repeat to clean up now-unreffed chains
+        # TODO: Best effort and repeat to clean up now-unreffed chains
+        # FIXME: until we can do best-effort, only delete unreferenced chains
         unreferenced_chains = self._load_unreferenced_chains()
-        orphan_chains = (unreferenced_chains -
-                         self.explicitly_prog_chains)
+        orphans = unreferenced_chains - self.explicitly_prog_chains
         # Filter out chains that are already touched by this batch.  Note:
         # We do not try to filter out chains that are referenced but not
         # explicitly programmed, we'll catch those in _finish_msg_batch()
         # and reprogram them as a stub.
-        chains_to_delete = [c for c in orphan_chains
-                            if (c not in self._batch.affected_chains and
-                                c.startswith(FELIX_PREFIX))]
+        chains_to_delete = [c for c in orphans if c.startswith(FELIX_PREFIX)]
         # SMC: It'd be nice if we could do a best-effort delete on these
         # chains but that's hard to do since they'll all be processed as
         # one atomic iptables-restore.
