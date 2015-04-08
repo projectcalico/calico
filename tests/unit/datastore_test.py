@@ -211,7 +211,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = KeyError
         self.datastore.ensure_global_config()
         expected_writes = [call(CONFIG_PATH + "InterfacePrefix", "cali"),
-                           call(CONFIG_PATH + "LogSeverityFile", "DEBUG")]
+                           call(CONFIG_PATH + "LogSeverityFile", "DEBUG"),
+                           call(CONFIG_PATH + "Ready", "true")]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
 

@@ -211,6 +211,7 @@ class DatastoreClient(object):
             # Didn't exist, create it now.
             self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
             self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
+            self.etcd_client.write(config_dir + "Ready", "true")
 
     def create_host(self, hostname, bird_ip, bird6_ip):
         """

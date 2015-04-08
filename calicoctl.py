@@ -343,6 +343,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         "IP=%s" % ip,
         "IP6=%s" % ip6,
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+        "FELIX_ETCDADDR=%s" % etcd_authority,  # etcd host:port
     ]
 
     binds = {
