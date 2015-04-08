@@ -53,36 +53,19 @@ class ValidationFailed(Exception):
 
 
 class EtcdWatcher(Actor):
-    def __init__(self, config, update_splitter):
+    def __init__(self, config):
         super(EtcdWatcher, self).__init__()
-        self.update_splitter = update_splitter
         self.config = config
         self.client = None
+        self.my_config_prefix = None
 
     @actor_event
-    def load_config_and_wait_for_ready(self):
+    def load_config(self):
         _log.info("Waiting for etcd to be ready and for config to be present.")
         configured = False
         while not configured:
             self._reconnect()
-            try:
-                db_ready = self.client.read(DB_READY_FLAG_PATH,
-                                            timeout=10).value
-            except KeyError:
-                _log.warn("Ready flag not present in etcd, waiting...")
-                db_ready = "false"
-            except EtcdException:
-                _log.exception("Failed to retrieve ready flag from etcd, "
-                               "waiting...")
-                db_ready = "false"
-
-            if db_ready == "true":
-                _log.info("etcd is ready, doing initial load.")
-            else:
-                _log.warning("etcd not ready.  Will retry.")
-                gevent.sleep(RETRY_DELAY)
-                continue
-
+            self.wait_for_ready()
             try:
                 config_dict = self._load_config_dict()
             except (KeyError, EtcdException):
@@ -96,6 +79,32 @@ class EtcdWatcher(Actor):
                                     self.config.LOGLEVSYS,
                                     self.config.LOGLEVSCR)
             configured = True
+        self.my_config_prefix = ("/calico/host/%s/config/" %
+                                 self.config.HOSTNAME)
+
+    @actor_event
+    def wait_for_ready(self):
+        _log.info("Waiting for etcd to be ready and for config to be present.")
+        ready = False
+        while not ready:
+            try:
+                db_ready = self.client.read(DB_READY_FLAG_PATH,
+                                            timeout=10).value
+            except KeyError:
+                _log.warn("Ready flag not present in etcd, waiting...")
+                db_ready = "false"
+            except EtcdException:
+                _log.exception("Failed to retrieve ready flag from etcd, "
+                               "waiting...")
+                db_ready = "false"
+
+            if db_ready == "true":
+                _log.info("etcd is ready.")
+                ready = True
+            else:
+                _log.info("etcd not ready.  Will retry.")
+                gevent.sleep(RETRY_DELAY)
+                continue
 
     def _reconnect(self):
         _log.info("(Re)connecting to etcd...")
@@ -109,7 +118,7 @@ class EtcdWatcher(Actor):
         self.client = etcd.Client(host, port)
 
     @actor_event
-    def watch_etcd(self):
+    def watch_etcd(self, update_splitter):
         """
         Loads the snapshot from etcd and then monitors etcd for changes.
         Posts events to the UpdateSplitter.
@@ -118,7 +127,7 @@ class EtcdWatcher(Actor):
         """
         while True:
             self._reconnect()
-            self.load_config_and_wait_for_ready()
+            self.wait_for_ready()
 
             # Load initial dump from etcd.  First just get all the endpoints and
             # profiles by id.  The response contains a generation ID allowing us
@@ -159,9 +168,9 @@ class EtcdWatcher(Actor):
             # Actually apply the snapshot. This does not return anything, but
             # just sends the relevant messages to the relevant threads to make
             # all the processing occur.
-            self.update_splitter.apply_snapshot(rules_by_id,
-                                                tags_by_id,
-                                                endpoints_by_id)
+            update_splitter.apply_snapshot(rules_by_id,
+                                           tags_by_id,
+                                           endpoints_by_id)
 
             # These read only objects are no longer required, so tidy them up.
             del rules_by_id
@@ -228,19 +237,18 @@ class EtcdWatcher(Actor):
                 profile_id, rules = parse_if_rules(response)
                 if profile_id:
                     _log.info("Scheduling profile update %s", profile_id)
-                    self.update_splitter.on_rules_update(profile_id, rules)
+                    update_splitter.on_rules_update(profile_id, rules)
                     continue
                 profile_id, tags = parse_if_tags(response)
                 if profile_id:
                     _log.info("Scheduling profile update %s", profile_id)
-                    self.update_splitter.on_tags_update(profile_id, tags)
+                    update_splitter.on_tags_update(profile_id, tags)
                     continue
                 endpoint_id, endpoint = parse_if_endpoint(self.config,
                                                           response)
                 if endpoint_id:
                     _log.info("Scheduling endpoint update %s", endpoint_id)
-                    self.update_splitter.on_endpoint_update(endpoint_id,
-                                                            endpoint)
+                    update_splitter.on_endpoint_update(endpoint_id, endpoint)
                     continue
 
                 if response.key == DB_READY_FLAG_PATH:
@@ -258,8 +266,15 @@ class EtcdWatcher(Actor):
                     _log.warning("Unexpected action %s to %s; triggering "
                                  "resync.", response.action, response.key)
                     continue_polling = False
-                if "/config/" in response.key:
-                    _log.info("Change of config, doing a resync.")
+                if response.key.startswith("/calico/config"):
+                    _log.warning("Global config changed but we don't "
+                                 "yet support dynamic config key=%s",
+                                 response.key)
+                    continue_polling = False
+                if response.key.startswith(self.my_config_prefix):
+                    _log.warning("Config for this felix changed but we don't "
+                                 "yet support dynamic config key=%s",
+                                 response.key)
                     continue_polling = False
 
     def _load_config_dict(self):

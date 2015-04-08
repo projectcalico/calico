@@ -42,7 +42,7 @@ class TestException(Exception):
 
 class TestBasic(BaseTestCase):
 
-    @mock.patch("calico.felix.fetcd.EtcdWatcher.load_config_and_wait_for_ready")
+    @mock.patch("calico.felix.fetcd.EtcdWatcher.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
     @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())

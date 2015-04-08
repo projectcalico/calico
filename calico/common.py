@@ -147,7 +147,7 @@ def default_logging():
     else:
         # Probably unit tests running on windows.
         syslog_handler = logging.handlers.SysLogHandler()
-    syslog_handler.setLevel(logging.DEBUG) # FIXME Temporarily log at DEBUG
+    syslog_handler.setLevel(logging.INFO)
     syslog_handler.setFormatter(syslog_formatter)
 
     root_logger.addHandler(syslog_handler)
