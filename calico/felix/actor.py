@@ -20,14 +20,14 @@ felix.actor
 A queue-based Actor framework that supports efficient handling of
 batches of messages.  Each Actor instance has its own greenlet
 and a queue of pending messages.  Messages are sent by making calls
-to a method decorated by the @actor_event decorator.
+to a method decorated by the @actor_message decorator.
 
-When an actor_event-decorated method is called from another greenlet
+When an actor_message-decorated method is called from another greenlet
 the method call is wrapped up as a Message object and put on the
 queue.
 
 Note: callers must specify the async=True/False argument when calling
-a actor_event-decorated method.  If async=True is passed, the method
+a actor_message-decorated method.  If async=True is passed, the method
 returns an AsyncResult.  If async=False is passed, the method blocks
 until the result is available and returns it as-is. As a convenience,
 Actors may call their own decorated methods without passing async=...;
@@ -38,7 +38,7 @@ Each time it is scheduled, the main loop of the Actor
 * pulls all pending messages off the queue as a batch
 * notifies the subclass that a batch is about to start via
   _start_msg_batch()
-* executes each of the actor_event method calls from the batch in order
+* executes each of the actor_message method calls from the batch in order
 * notifies the subclass that the batch is finished by calling
   _finish_msg_batch()
 * publishes the results from the batch via AsyncResults, allowing
@@ -48,7 +48,7 @@ Simple actors
 ~~~~~~~~~~~~~
 
 A simple Actor may ignore the start/finish_msg_batch calls and do
-all its work in the actor_event-decorated methods, ensuring that
+all its work in the actor_message-decorated methods, ensuring that
 all its invariants are restored by the end of each call.
 
 Supporting batches
@@ -56,7 +56,7 @@ Supporting batches
 
 For an actor that can handle a batch more efficiently, it may
 initialize some per-batch state in the start_msg_batch function,
-update the state from its actor_event methods and then "commit"
+update the state from its actor_message methods and then "commit"
 the state in _finish_msg_batch().
 
 Since moving the commit stage to _finish_msg_batch() can make
@@ -65,7 +65,7 @@ supports the ability to split a batch of work and retry it from
 the beginning.  To make use of that function, an Actor must:
 
 * take part in batching
-* have actor_event methods that only affect the per-batch state
+* have actor_message methods that only affect the per-batch state
   (i.e. it must defer its side effects to the _finish_msg_batch()
   method)
 * raise SplitBatchAndRetry from its _finish_msg_batch() method,
@@ -301,7 +301,7 @@ class Actor(object):
         means combining them into one list.
 
         It is usually easier to build up a batch of changes to make in the
-        @actor_event-decorated methods and then process them in
+        @actor_message-decorated methods and then process them in
         _finish_msg_batch().
 
         Intended to be overridden.  This implementation simply returns the
@@ -470,50 +470,52 @@ class TrackedAsyncResult(AsyncResult):
         return result
 
 
-def actor_event(fn):
-    method_name = fn.__name__
-    @functools.wraps(fn)
-    def queue_fn(self, *args, **kwargs):
-        # Get call information for logging purposes.
-        calling_file, line_no, func, _ = traceback.extract_stack()[-2]
-        calling_file = os.path.basename(calling_file)
-        calling_path = "%s:%s:%s" % (calling_file, line_no, func)
-        try:
-            caller = "%s (processing %s)" % (actor_storage.name,
-                                             actor_storage.msg_uuid)
-        except AttributeError:
-            caller = calling_path
+def actor_message():
+    def decorator(fn):
+        method_name = fn.__name__
+        @functools.wraps(fn)
+        def queue_fn(self, *args, **kwargs):
+            # Get call information for logging purposes.
+            calling_file, line_no, func, _ = traceback.extract_stack()[-2]
+            calling_file = os.path.basename(calling_file)
+            calling_path = "%s:%s:%s" % (calling_file, line_no, func)
+            try:
+                caller = "%s (processing %s)" % (actor_storage.name,
+                                                 actor_storage.msg_uuid)
+            except AttributeError:
+                caller = calling_path
 
-        # Figure out our arguments.
-        async_set = "async" in kwargs
-        async = kwargs.pop("async", False)
-        on_same_greenlet = (self.greenlet == gevent.getcurrent())
+            # Figure out our arguments.
+            async_set = "async" in kwargs
+            async = kwargs.pop("async", False)
+            on_same_greenlet = (self.greenlet == gevent.getcurrent())
 
-        if on_same_greenlet and not async:
-            # Bypass the queue if we're already on the same greenlet, or we
-            # would deadlock by waiting for ourselves.
-            return fn(self, *args, **kwargs)
+            if on_same_greenlet and not async:
+                # Bypass the queue if we're already on the same greenlet, or we
+                # would deadlock by waiting for ourselves.
+                return fn(self, *args, **kwargs)
 
-        # async must be specified, unless on the same actor.
-        assert async_set, "All cross-actor event calls must specify async arg."
+            # async must be specified, unless on the same actor.
+            assert async_set, "All cross-actor event calls must specify async arg."
 
-        if (not on_same_greenlet and
-                not async and
-                _log.isEnabledFor(logging.DEBUG)):
-            _log.debug("BLOCKING CALL: %s", calling_path)
+            if (not on_same_greenlet and
+                    not async and
+                    _log.isEnabledFor(logging.DEBUG)):
+                _log.debug("BLOCKING CALL: %s", calling_path)
 
-        # OK, so build the message and put it on the queue.
-        partial = functools.partial(fn, self, *args, **kwargs)
-        result = TrackedAsyncResult(method_name)
-        msg = Message(partial, [result], caller, self.name)
-        result.set_msg(msg)
+            # OK, so build the message and put it on the queue.
+            partial = functools.partial(fn, self, *args, **kwargs)
+            result = TrackedAsyncResult(method_name)
+            msg = Message(partial, [result], caller, self.name)
+            result.set_msg(msg)
 
-        _log.debug("Message %s sent by %s to %s, queue length %d",
-                   msg, caller, self.name, self._event_queue.qsize())
-        self._event_queue.put(msg, block=False)
-        if async:
-            return result
-        else:
-            return result.get()
-    queue_fn.func = fn
-    return queue_fn
+            _log.debug("Message %s sent by %s to %s, queue length %d",
+                       msg, caller, self.name, self._event_queue.qsize())
+            self._event_queue.put(msg, block=False)
+            if async:
+                return result
+            else:
+                return result.get()
+        queue_fn.func = fn
+        return queue_fn
+    return decorator

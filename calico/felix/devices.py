@@ -20,7 +20,7 @@ Utility functions for managing devices in Felix.
 """
 import logging
 import collections
-from calico.felix.actor import Actor, actor_event
+from calico.felix.actor import Actor, actor_message
 import gevent
 from gevent import subprocess
 import os
@@ -238,7 +238,7 @@ class InterfaceWatcher(Actor):
         self.update_splitter = update_splitter
         self.interfaces = {}
 
-    @actor_event
+    @actor_message()
     def watch_interfaces(self):
         """
         Detects when interfaces appear, sending notifications to the update

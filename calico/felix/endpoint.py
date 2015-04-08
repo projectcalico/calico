@@ -22,7 +22,7 @@ Endpoint management.
 import logging
 from subprocess import CalledProcessError
 from calico.felix import devices, futils
-from calico.felix.actor import actor_event
+from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4
 from calico.felix.refcount import ReferenceManager, RefCountedActor
@@ -78,7 +78,7 @@ class EndpointManager(ReferenceManager):
         ep = self.endpoints_by_id.get(endpoint_id)
         obj.on_endpoint_update(ep, async=True)
 
-    @actor_event
+    @actor_message()
     def apply_snapshot(self, endpoints_by_id):
         missing_endpoints = set(self.endpoints_by_id.keys())
 
@@ -99,7 +99,7 @@ class EndpointManager(ReferenceManager):
             self.on_endpoint_update(endpoint_id, None)
             self._maybe_yield()
 
-    @actor_event
+    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
         Event to indicate that an endpoint has been updated (including creation
@@ -136,7 +136,7 @@ class EndpointManager(ReferenceManager):
                 self.local_endpoint_ids.add(endpoint_id)
                 self.get_and_incref(endpoint_id)
 
-    @actor_event
+    @actor_message()
     def on_interface_update(self, name):
         """
         Called when an interface is created or changes state.
@@ -186,7 +186,7 @@ class LocalEndpoint(RefCountedActor):
         # We'll force a reprogram next time we get a kick.
         self._failed = False
 
-    @actor_event
+    @actor_message()
     def on_endpoint_update(self, endpoint):
         """
         Called when this endpoint has received an update.
@@ -225,7 +225,7 @@ class LocalEndpoint(RefCountedActor):
         self._maybe_update(was_ready)
         _log.debug("%s finished processing update", self)
 
-    @actor_event
+    @actor_message()
     def on_unreferenced(self):
         """
         Overrides RefCountedActor:on_unreferenced.
@@ -234,7 +234,7 @@ class LocalEndpoint(RefCountedActor):
         assert not self._ready, "Should be deleted before being unreffed."
         self._notify_cleanup_complete()
 
-    @actor_event
+    @actor_message()
     def on_interface_update(self):
         """
         Actor event to report that the interface is either up or changed.

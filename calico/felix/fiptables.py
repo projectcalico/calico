@@ -31,7 +31,7 @@ from gevent import subprocess
 import gevent
 
 from calico.felix import frules
-from calico.felix.actor import (Actor, actor_event, ResultOrExc,
+from calico.felix.actor import (Actor, actor_message, ResultOrExc,
                                 SplitBatchAndRetry)
 from calico.felix.frules import FELIX_PREFIX
 
@@ -94,7 +94,7 @@ class IptablesUpdater(Actor):
                                                   "--table", self.table])
         return extract_unreffed_chains(raw_ipt_output)
 
-    @actor_event
+    @actor_message()
     def rewrite_chains(self, update_calls_by_chain,
                        dependent_chains, callback=None, suppress_exc=False):
         """
@@ -121,7 +121,7 @@ class IptablesUpdater(Actor):
         if callback:
             self._completion_callbacks.append(callback)
 
-    @actor_event
+    @actor_message()
     def ensure_rule_inserted(self, rule_fragment):
         """
         Runs the given rule fragment, prefixed with --insert.  If the
@@ -148,7 +148,7 @@ class IptablesUpdater(Actor):
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
 
-    @actor_event
+    @actor_message()
     def delete_chains(self, chain_names, callback=None):
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
@@ -158,7 +158,7 @@ class IptablesUpdater(Actor):
         if callback:
             self._completion_callbacks.append(callback)
 
-    @actor_event
+    @actor_message()
     def cleanup(self):
         """
         Trigger clean up

@@ -20,7 +20,7 @@ Actor that controls the top-level dispatch chains that dispatch to
 per-endpoint chains.
 """
 import logging
-from calico.felix.actor import Actor, actor_event
+from calico.felix.actor import Actor, actor_message
 from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
 
 _log = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class DispatchChains(Actor):
         self.iface_to_ep_id = {}
         self._dirty = False
 
-    @actor_event
+    @actor_message()
     def apply_snapshot(self, iface_to_ep_id):
         """
         Replaces all known interface/endpoint mappings with the given
@@ -62,7 +62,7 @@ class DispatchChains(Actor):
         # missing.
         self._dirty = True
 
-    @actor_event
+    @actor_message()
     def on_endpoint_added(self, iface_name, endpoint_id):
         """
         Message sent to us by the LocalEndpoint to tell us we should
@@ -80,7 +80,7 @@ class DispatchChains(Actor):
             self.iface_to_ep_id[iface_name] = endpoint_id
             self._dirty = True
 
-    @actor_event
+    @actor_message()
     def on_endpoint_removed(self, iface_name):
         """
         Removes the mapping for the given interface name.

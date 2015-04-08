@@ -20,7 +20,7 @@ ProfileRules actor, handles local profile chains.
 """
 
 import logging
-from calico.felix.actor import actor_event
+from calico.felix.actor import actor_message
 from calico.felix.frules import (profile_to_chain_name,
                                  rules_to_chain_rewrite_lines)
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
@@ -56,7 +56,7 @@ class RulesManager(ReferenceManager):
                    profile_or_none)
         active_profile.on_profile_update(profile_or_none, async=True)
 
-    @actor_event
+    @actor_message()
     def apply_snapshot(self, rules_by_profile_id):
         _log.info("Rules manager applying snapshot; %s rules",
                   len(rules_by_profile_id))
@@ -68,7 +68,7 @@ class RulesManager(ReferenceManager):
         for dead_profile_id in missing_ids:
             self.on_rules_update(dead_profile_id, None)
 
-    @actor_event
+    @actor_message()
     def on_rules_update(self, profile_id, profile):
         _log.debug("Processing update to %s", profile_id)
         if profile_id is not None:
@@ -105,7 +105,7 @@ class ProfileRules(RefCountedActor):
         """
         self.dead = False
 
-    @actor_event
+    @actor_message()
     def on_profile_update(self, profile):
         """
         Update the programmed iptables configuration with the new
@@ -140,7 +140,7 @@ class ProfileRules(RefCountedActor):
             _log.debug("Ready to program rules for %s", self.id)
             self._update_chains()
 
-    @actor_event
+    @actor_message()
     def on_unreferenced(self):
         """
         Called to tell us that this profile is no longer needed.  Removes

@@ -30,7 +30,7 @@ from urllib3 import Timeout
 from urllib3.exceptions import ReadTimeoutError
 
 from calico import common
-from calico.felix.actor import Actor, actor_event
+from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class EtcdWatcher(Actor):
         self.client = None
         self.my_config_prefix = None
 
-    @actor_event
+    @actor_message()
     def load_config(self):
         _log.info("Waiting for etcd to be ready and for config to be present.")
         configured = False
@@ -82,7 +82,7 @@ class EtcdWatcher(Actor):
         self.my_config_prefix = ("/calico/host/%s/config/" %
                                  self.config.HOSTNAME)
 
-    @actor_event
+    @actor_message()
     def wait_for_ready(self):
         _log.info("Waiting for etcd to be ready and for config to be present.")
         ready = False
@@ -117,7 +117,7 @@ class EtcdWatcher(Actor):
             port = 4001
         self.client = etcd.Client(host, port)
 
-    @actor_event
+    @actor_message()
     def watch_etcd(self, update_splitter):
         """
         Loads the snapshot from etcd and then monitors etcd for changes.

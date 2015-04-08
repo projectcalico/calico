@@ -30,7 +30,7 @@ from gevent.event import AsyncResult
 import mock
 from mock import Mock, MagicMock, patch
 
-from calico.felix.actor import actor_event, ResultOrExc, SplitBatchAndRetry
+from calico.felix.actor import actor_message, ResultOrExc, SplitBatchAndRetry
 from calico.felix.test.base import BaseTestCase
 from calico.felix import endpoint
 from calico.felix import config
