@@ -195,7 +195,8 @@ class EtcdWatcher(Actor):
                     # hierarchy; look at the message.  We only log the stack
                     # trace for errors we're not expecting to avoid copious
                     # log spam.
-                    if e.message == "No more machines in the cluster":
+                    msg = (e.message or "unknown").lower()
+                    if "no more machines" in msg:
                         # This error comes from python-etcd when it can't
                         # connect to any servers.  When we retry, it should
                         # reconnect.
@@ -203,7 +204,7 @@ class EtcdWatcher(Actor):
                         # That'd recover from errors caused by resource
                         # exhaustion/leaks.
                         _log.error("Connection to etcd failed, will retry.")
-                    elif "requested index is outdated" in e.message:
+                    elif "requested index is outdated" in msg:
                         # Error from etcd itself, this is fatal for our event
                         # poll, we have to do a full resync.
                         _log.error("Fell too far behind current etcd index, "
