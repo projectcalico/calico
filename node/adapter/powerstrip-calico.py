@@ -25,7 +25,6 @@ from docker import Client
 from netaddr import IPAddress, AddrFormatError
 
 import netns
-from datastore import DatastoreClient
 from ipam import SequentialAssignment, IPAMClient
 
 _log = logging.getLogger(__name__)
@@ -40,8 +39,9 @@ LISTEN_PORT = 2378
 
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(filename)s.%(name)s %(lineno)d: '
-                                  '%(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(filename)s.%(name)s %(lineno)d: '
+        '%(message)s')
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
@@ -63,7 +63,8 @@ class AdapterResource(resource.Resource):
     def __init__(self):
         resource.Resource.__init__(self)
 
-        # Init a Docker client, to save having to do so every time a request comes in.
+        # Init a Docker client, to save having to do so every time a request
+        # comes in.
         self.docker = Client(base_url='unix://host-var-run/docker.sock',
                              version="1.16")
 
@@ -82,7 +83,8 @@ class AdapterResource(resource.Resource):
             elif request_content["Type"] == "post-hook":
                 result = self._handle_post_hook(request, request_content)
             else:
-                _log.error("Unsupported hook type: %s", request_content["Type"])
+                _log.error("Unsupported hook type: %s",
+                           request_content["Type"])
                 raise Exception("unsupported hook type %s" %
                                 (request_content["Type"],))
             _log.debug("Result: %s", result)
@@ -95,8 +97,10 @@ class AdapterResource(resource.Resource):
         _log.info("Handling pre-hook")
         client_request = request_content["ClientRequest"]
 
-        # Only one action at this point, so just plumb directly
-        _client_request_net_none(client_request)
+        if _calico_ip_in_request(client_request):
+            # Calico IP was defined in the request, so override the net portion
+            # of the HostConfig
+            _client_request_net_none(client_request)
 
         return json.dumps({"PowerstripProtocolVersion": 1,
                            "ModifiedClientRequest": client_request})
@@ -145,7 +149,9 @@ class AdapterResource(resource.Resource):
             profile = env_dict.get(ENV_PROFILE, None)
 
         except KeyError as e:
-            _log.warning("Key error %s, request: %s", e, client_request)
+            # This error is benign for missing ENV_IP, since it means not to
+            # set up Calico networking for this container.
+            _log.info("Key error %s, request: %s", e, client_request)
             return
 
         # Just auto assign ipv4 addresses for now.
@@ -186,7 +192,6 @@ class AdapterResource(resource.Resource):
 
         return
 
-
     def assign_ipv4(self):
         """
         Assign a IPv4 address from the configured pools.
@@ -205,11 +210,47 @@ class AdapterResource(resource.Resource):
         return ip
 
 
+def _calico_ip_in_request(client_request):
+    """
+    Examine a ClientRequest object to determine whether the ENV_IP environment
+    variable is present.
+
+    We don't set up Calico networking for container requests if the ENV_IP
+    variable is absent.
+
+    :param client_request:
+    :return: True if ENV_IP variable is defined, False otherwise.
+    """
+    try:
+        # Body is passed as a string, so deserialize it to JSON.
+        body = json.loads(client_request["Body"])
+
+        env = body["Env"]
+    except KeyError:
+        _log.warning("Client request object had no 'Env' in 'Body': %s",
+                     client_request)
+        return False
+
+    _log.info("Request Env: %s", env)
+
+    # env is a list of strings of the form 'VAR=value'.  We want an exact match
+    # on our VAR, so search for it including the = sign at the beginning of the
+    # string.  (Should be faster than compiling a regex and avoids the
+    # dependency).
+    search = ENV_IP + "="
+    l = len(search)
+    for line in env:
+        if line[0:l] == search:
+            return True
+    return False
+
+
 def _client_request_net_none(client_request):
     """
     Modify the client_request in place to set net=None Docker option.
 
-    :param client_request: Powerstrip ClientRequest object as dictionary from JSON
+    :param client_request: Powerstrip ClientRequest object as dictionary from
+    JSON
     :return: None
     """
     try:
@@ -217,13 +258,15 @@ def _client_request_net_none(client_request):
         body = json.loads(client_request["Body"])
 
         host_config = body["HostConfig"]
-        _log.debug("Original NetworkMode: %s", host_config.get("NetworkMode", "<unset>"))
+        _log.debug("Original NetworkMode: %s",
+                   host_config.get("NetworkMode", "<unset>"))
         host_config["NetworkMode"] = "none"
 
         # Re-serialize the updated body.
         client_request["Body"] = json.dumps(body)
     except KeyError as e:
-        _log.warning("Error setting net=none: %s, request was %s", e, client_request)
+        _log.warning("Error setting net=none: %s, request was %s",
+                     e, client_request)
 
 
 def get_adapter():
@@ -248,7 +291,8 @@ def env_to_dictionary(env_list):
 
 if __name__ == "__main__":
     setup_logging("/var/log/calico/powerstrip-calico.log")
-    # Listen only on the loopback so we don't expose the adapter outside the host.
+    # Listen only on the loopback so we don't expose the adapter outside the
+    # host.
     reactor.listenTCP(LISTEN_PORT, get_adapter(), interface="127.0.0.1")
     reactor.run()
 
