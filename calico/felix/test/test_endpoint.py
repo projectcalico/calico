@@ -22,7 +22,8 @@ import logging
 import itertools
 from contextlib import nested
 from calico.felix.endpoint import EndpointManager
-from calico.felix.fiptables import IptablesUpdater, DispatchChains
+from calico.felix.fiptables import IptablesUpdater
+from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from gevent.event import AsyncResult
 

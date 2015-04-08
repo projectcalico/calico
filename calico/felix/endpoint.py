@@ -26,7 +26,7 @@ from calico.felix.actor import actor_event
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4
 from calico.felix.refcount import ReferenceManager, RefCountedActor
-from calico.felix.fiptables import DispatchChains
+from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (CHAIN_TO_PREFIX, profile_to_chain_name,
                                  CHAIN_FROM_PREFIX, commented_drop_fragment)
@@ -305,8 +305,7 @@ class LocalEndpoint(RefCountedActor):
             self.endpoint["mac"],
             self.endpoint["profile_id"])
         try:
-            self.iptables_updater.rewrite_chains("filter",
-                                                 updates, deps, async=False)
+            self.iptables_updater.rewrite_chains(updates, deps, async=False)
         except CalledProcessError:
             _log.exception("Failed to program chains for %s. Removing.", self)
             self._failed = True
@@ -314,8 +313,7 @@ class LocalEndpoint(RefCountedActor):
 
     def _remove_chains(self):
         try:
-            self.iptables_updater.delete_chains("filter",
-                                                chain_names(self._suffix),
+            self.iptables_updater.delete_chains(chain_names(self._suffix),
                                                 async=True)
         except CalledProcessError:
             _log.exception("Failed to delete chains for %s", self)

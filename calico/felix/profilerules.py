@@ -152,7 +152,7 @@ class ProfileRules(RefCountedActor):
             for direction in ["inbound", "outbound"]:
                 chain_name = profile_to_chain_name(direction, self.id)
                 chains.append(chain_name)
-            self._iptables_updater.delete_chains("filter", chains, async=False)
+            self._iptables_updater.delete_chains(chains, async=False)
             self.ipset_refs.discard_all()
             self.ipset_refs = None # Break ref cycle.
             self._profile = None
@@ -183,8 +183,7 @@ class ProfileRules(RefCountedActor):
                 on_allow="RETURN")
         _log.debug("Queueing programming for rules %s: %s", self.id,
                    updates)
-        self._iptables_updater.rewrite_chains("filter", updates, {},
-                                              async=False)
+        self._iptables_updater.rewrite_chains(updates, {}, async=False)
         # TODO Isolate exceptions from programming the chains to this profile.
         # PLW: Radical thought - could we just say that the profile should be
         # OK, and therefore we don't care? In other words, do we need to handle

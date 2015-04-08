@@ -70,7 +70,8 @@ def profile_to_chain_name(inbound_or_outbound, profile_id):
                                              inbound_or_outbound[:1])
 
 
-def install_global_rules(config, v4_updater, v6_updater):
+def install_global_rules(config, v4_filter_updater, v6_filter_updater,
+                         v4_nat_updater):
     """
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change (such as the rules that send all
@@ -98,19 +99,15 @@ def install_global_rules(config, v4_updater, v6_updater):
                       "--destination 169.254.169.254/32 "
                       "--jump DNAT --to-destination %s:%s" %
                       (config.METADATA_IP, config.METADATA_PORT))
-    v4_updater.rewrite_chains("nat", {CHAIN_PREROUTING: nat_pr}, {},
-                              async=False)
-
-    v4_updater.ensure_rule_inserted("nat",
-                                    "PREROUTING --jump %s" % CHAIN_PREROUTING,
-                                    async=False)
+    v4_nat_updater.rewrite_chains({CHAIN_PREROUTING: nat_pr}, {}, async=False)
+    v4_nat_updater.ensure_rule_inserted(
+        "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
 
     # Now the filter table. This needs to have calico-filter-FORWARD and
     # calico-filter-INPUT chains, which we must create before adding any
     # rules that send to them.
-    for iptables_updater in [v4_updater, v6_updater]:
+    for iptables_updater in [v4_filter_updater, v6_filter_updater]:
         iptables_updater.rewrite_chains(
-            "filter",
             {
                 CHAIN_FORWARD: [
                     "--append %s --jump %s --in-interface %s" %
@@ -135,11 +132,9 @@ def install_global_rules(config, v4_updater, v6_updater):
             },
             async=False)
         iptables_updater.ensure_rule_inserted(
-            "filter",
             "INPUT --jump %s" % CHAIN_INPUT,
             async=False)
         iptables_updater.ensure_rule_inserted(
-            "filter",
             "FORWARD --jump %s" % CHAIN_FORWARD,
             async=False)
 
