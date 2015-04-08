@@ -107,12 +107,7 @@ class EtcdWatcher(Actor):
         Loads the snapshot from etcd and then monitors etcd for changes.
         Posts events to the UpdateSplitter.
 
-        Intended to be used as a greenlet.  Intended to be restarted if
-        it raises an exception.
-
         :returns: Does not return.
-        :raises EtcdException: if a read from etcd fails and we may fall out of
-                sync.
         """
         while True:
             self._reconnect()
