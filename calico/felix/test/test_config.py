@@ -32,8 +32,6 @@ class TestConig(unittest.TestCase):
         """
         Test environment variables override config options,
         """
-        with patch.dict("os.environ", {"GLOBAL_ETCDHOST": "testhost",
-                                       "GLOBAL_ETCDPORT": "1234"}):
+        with patch.dict("os.environ", {"FELIX_ETCDADDR": "testhost:1234"}):
             cfg = config.Config("/tmp/felix.cfg")
-        self.assertEqual(cfg.ETCD_HOST, "testhost")
-        self.assertEqual(cfg.ETCD_PORT, 1234)
+        self.assertEqual(cfg.ETCD_ADDR, "testhost:1234")

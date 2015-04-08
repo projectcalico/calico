@@ -70,8 +70,8 @@ class Config(object):
 
         self.read_cfg_file(config_path)
 
-        self.ETCD_HOST = self.get_cfg_entry("global", "EtcdHost", "localhost")
-        self.ETCD_PORT = int(self.get_cfg_entry("global", "EtcdPort", "4001"))
+        self.ETCD_ADDR = self.get_cfg_entry("global", "EtcdAddr",
+                                            "localhost:4001")
 
         self.HOSTNAME = self.get_cfg_entry("global",
                                            "FelixHostname",
@@ -127,7 +127,10 @@ class Config(object):
         name = name.lower()
         section = section.lower()
 
-        env_var = ("%s_%s" % (section, name)).upper()
+        # We're assuming that there's only one section for now so we don't
+        # need the section name in the environment variable name.
+        assert section == "global"
+        env_var = ("FELIX_%s" % name).upper()
         log.debug("Looking for environment variable override %s", env_var)
         if env_var in os.environ:
             value = os.environ[env_var]

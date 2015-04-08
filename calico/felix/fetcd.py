@@ -98,8 +98,14 @@ class EtcdWatcher(Actor):
 
     def _reconnect(self):
         _log.info("(Re)connecting to etcd...")
-        self.client = etcd.Client(self.config.ETCD_HOST,
-                                  self.config.ETCD_PORT)
+        etcd_addr = self.config.ETCD_ADDR
+        if ":" in etcd_addr:
+            host, port = etcd_addr.split(":")
+            port = int(port)
+        else:
+            host = etcd_addr
+            port = 4001
+        self.client = etcd.Client(host, port)
 
     @actor_event
     def watch_etcd(self):
