@@ -211,6 +211,24 @@ reflector meshes. Each compute server, border router, *etc.* would need
 to be a route reflector client of at least one route reflector in each
 plane, and very preferably two or more in each plane.
 
+A diagram that visualizes the route reflector environment can be found
+below.
+
+.. figure:: _static/l2-interconnectFabric/l2-rr-spine-planes.*
+   :align: center
+   :alt: route reflectors in an l2 spine plane architecture
+
+   A diagram showing the route reflector topology in the l2 spine
+   plane architecture.  The dashed diamonds are the route reflectors,
+   with one or more per L2 spine plane.  All compute servers are
+   peered to all route reflectors, and all the route reflectors in a
+   given plane are also meshed.  However, the route reflectors in each
+   spine plane are not meshed together (*e.g.* the *blue* route
+   reflectors are not peered or meshed with the *red* route
+   reflectors.  The route reflectors themselves could be daemons
+   running on the actual compute servers or on other dedicated or
+   networking hardware.
+
 These route reflectors could be dedicated hardware connected to the
 spine switches (or the spine switches themselves), or physical or
 virtual route reflectors connected to the necessary logical leaf
