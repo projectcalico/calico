@@ -272,7 +272,8 @@ class IptablesUpdater(Actor):
         input_lines = ["*%s" % self.table]
         for chain in self._batch.affected_chains:
             input_lines.append(":%s -" % chain)
-        for chain_name in self._batch.chains_to_stub_out:
+        for chain_name in (self._batch.chains_to_stub_out |
+                           self._batch.chains_to_delete):
             input_lines.extend(_stub_drop_rules(chain_name))
         for chain_name, chain_updates in self._batch.updates.iteritems():
             input_lines.extend(chain_updates)
