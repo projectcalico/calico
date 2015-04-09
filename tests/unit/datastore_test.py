@@ -1,7 +1,6 @@
-__author__ = 'sjc'
+__author__ = 'spike@projectcalico.org'
 
 
-import unittest
 from mock import patch, Mock, call
 from node.adapter.datastore import (DatastoreClient,
                                     Rule,
@@ -13,6 +12,8 @@ from etcd import Client as EtcdClient
 from etcd import EtcdResult
 from netaddr import IPNetwork, IPAddress
 import json
+from nose.tools import *
+import unittest
 
 TEST_HOST_PATH = "/calico/host/TEST_HOST"
 IPV4_POOLS_PATH = "/calico/ipam/v4/pool/"
@@ -48,9 +49,9 @@ class TestRule(unittest.TestCase):
         rule1 = Rule(action="allow",
                      src_tag="TEST",
                      src_ports=[300, 400])
-        self.assertDictEqual({"action": "allow",
-                              "src_tag": "TEST",
-                              "src_ports": [300, 400]}, rule1)
+        assert_dict_equal({"action": "allow",
+                           "src_tag": "TEST",
+                           "src_ports": [300, 400]}, rule1)
 
     def test_to_json(self):
         """
@@ -61,36 +62,28 @@ class TestRule(unittest.TestCase):
         json_str = rule1.to_json()
         expected = json.dumps({"action": "deny",
                                "dst_net": "192.168.13.0/24"})
-        self.assertEqual(json_str, expected)
+        assert_equal(json_str, expected)
 
         rule2 = Rule(action="deny",
                      src_net="192.168.13.0/24")
         json_str = rule2.to_json()
         expected = json.dumps({"action": "deny",
                                "src_net": "192.168.13.0/24"})
-        self.assertEqual(json_str, expected)
+        assert_equal(json_str, expected)
 
+    @raises(KeyError)
     def test_wrong_keys(self):
         """
         Test that instantiating a Rule with mistyped keys fails.
         """
-        try:
-            Rule(action="deny", dst_nets="192.168.13.0/24")
-        except KeyError:
-            pass
-        else:
-            self.assertTrue(False, "Should raise key error.")
+        _ = Rule(action="deny", dst_nets="192.168.13.0/24")
 
+    @raises(ValueError)
     def test_wrong_value(self):
         """
         Test that instantiating a Rule with action not allow|deny will fail.
         """
-        try:
-            Rule(action="accept")
-        except ValueError:
-            pass
-        else:
-            self.assertTrue(False, "Should raise value error.")
+        _ = Rule(action="accept")
 
     def test_pprint(self):
         """
@@ -99,21 +92,21 @@ class TestRule(unittest.TestCase):
         rule1 = Rule(action="allow",
                      src_tag="TEST",
                      src_ports=[300, 400])
-        self.assertEqual("allow from tag TEST ports [300, 400]",
-                         rule1.pprint())
+        assert_equal("allow from tag TEST ports [300, 400]",
+                     rule1.pprint())
 
         rule2 = Rule(action="allow",
                      dst_tag="TEST",
                      dst_ports=[300, 400],
                      protocol="udp")
-        self.assertEqual("allow udp to tag TEST ports [300, 400]",
-                         rule2.pprint())
+        assert_equal("allow udp to tag TEST ports [300, 400]",
+                     rule2.pprint())
 
         rule3 = Rule(action="deny",
                      src_net=IPNetwork("fd80::4:0/112"),
                      dst_ports=[80],
                      dst_net=IPNetwork("fd80::23:0/112"))
-        self.assertEqual(
+        assert_equal(
             "deny from fd80::4:0/112 to fd80::23:0/112 ports [80]",
             rule3.pprint())
 
@@ -121,8 +114,8 @@ class TestRule(unittest.TestCase):
                      protocol="icmp",
                      icmp_type=8,
                      src_net=IPNetwork("10/8"))
-        self.assertEqual("allow icmp type 8 from 10.0.0.0/8",
-                         rule4.pprint())
+        assert_equal("allow icmp type 8 from 10.0.0.0/8",
+                     rule4.pprint())
 
 
 class TestEndpoint(unittest.TestCase):
@@ -134,10 +127,10 @@ class TestEndpoint(unittest.TestCase):
         endpoint1 = Endpoint("aabbccddeeff112233",
                              "active",
                              "11-22-33-44-55-66")
-        self.assertEqual(endpoint1.ep_id, "aabbccddeeff112233")
-        self.assertEqual(endpoint1.state, "active")
-        self.assertEqual(endpoint1.mac, "11-22-33-44-55-66")
-        self.assertEqual(endpoint1.profile_id, None)
+        assert_equal(endpoint1.ep_id, "aabbccddeeff112233")
+        assert_equal(endpoint1.state, "active")
+        assert_equal(endpoint1.mac, "11-22-33-44-55-66")
+        assert_equal(endpoint1.profile_id, None)
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
@@ -146,7 +139,7 @@ class TestEndpoint(unittest.TestCase):
                     "ipv6_nets": [],
                     "ipv4_gateway": None,
                     "ipv6_gateway": None}
-        self.assertDictEqual(json.loads(endpoint1.to_json()), expected)
+        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
 
         endpoint1.profile_id = "TEST12"
         endpoint1.ipv4_nets.add(IPNetwork("192.168.1.23/32"))
@@ -154,7 +147,7 @@ class TestEndpoint(unittest.TestCase):
         expected["profile_id"] = "TEST12"
         expected["ipv4_nets"] = ["192.168.1.23/32"]
         expected["ipv4_gateway"] = "192.168.1.1"
-        self.assertDictEqual(json.loads(endpoint1.to_json()), expected)
+        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
 
     def test_from_json(self):
         """
@@ -172,25 +165,25 @@ class TestEndpoint(unittest.TestCase):
                     "ipv4_gateway": "10.3.4.2",
                     "ipv6_gateway": "2001:2:4a::1"}
         endpoint = Endpoint.from_json(ep_id, json.dumps(expected))
-        self.assertEqual(endpoint.state, "active")
-        self.assertEqual(endpoint.ep_id, ep_id)
-        self.assertEqual(endpoint.mac, "11-22-33-44-55-66")
-        self.assertEqual(endpoint.profile_id, "TEST23")
-        self.assertEqual(endpoint.ipv4_gateway, IPAddress("10.3.4.2"))
-        self.assertEqual(endpoint.ipv6_gateway, IPAddress("2001:2:4a::1"))
-        self.assertSetEqual(endpoint.ipv4_nets, {IPNetwork("192.168.3.2/32"),
-                                                 IPNetwork("10.3.4.23/32")})
-        self.assertSetEqual(endpoint.ipv6_nets, {IPNetwork("fd20::4:2:1/128")})
+        assert_equal(endpoint.state, "active")
+        assert_equal(endpoint.ep_id, ep_id)
+        assert_equal(endpoint.mac, "11-22-33-44-55-66")
+        assert_equal(endpoint.profile_id, "TEST23")
+        assert_equal(endpoint.ipv4_gateway, IPAddress("10.3.4.2"))
+        assert_equal(endpoint.ipv6_gateway, IPAddress("2001:2:4a::1"))
+        assert_set_equal(endpoint.ipv4_nets, {IPNetwork("192.168.3.2/32"),
+                                              IPNetwork("10.3.4.23/32")})
+        assert_set_equal(endpoint.ipv6_nets, {IPNetwork("fd20::4:2:1/128")})
 
         endpoint2 = Endpoint.from_json(ep_id, endpoint.to_json())
-        self.assertEqual(endpoint.state, endpoint2.state)
-        self.assertEqual(endpoint.ep_id, endpoint2.ep_id)
-        self.assertEqual(endpoint.mac, endpoint2.mac)
-        self.assertEqual(endpoint.profile_id, endpoint2.profile_id)
-        self.assertEqual(endpoint.ipv4_gateway, endpoint2.ipv4_gateway)
-        self.assertEqual(endpoint.ipv6_gateway, endpoint2.ipv6_gateway)
-        self.assertSetEqual(endpoint.ipv4_nets, endpoint2.ipv4_nets)
-        self.assertSetEqual(endpoint.ipv6_nets, endpoint2.ipv6_nets)
+        assert_equal(endpoint.state, endpoint2.state)
+        assert_equal(endpoint.ep_id, endpoint2.ep_id)
+        assert_equal(endpoint.mac, endpoint2.mac)
+        assert_equal(endpoint.profile_id, endpoint2.profile_id)
+        assert_equal(endpoint.ipv4_gateway, endpoint2.ipv4_gateway)
+        assert_equal(endpoint.ipv6_gateway, endpoint2.ipv6_gateway)
+        assert_set_equal(endpoint.ipv4_nets, endpoint2.ipv4_nets)
+        assert_set_equal(endpoint.ipv6_nets, endpoint2.ipv6_nets)
 
 
 class TestDatastoreClient(unittest.TestCase):
@@ -221,7 +214,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.datastore.ensure_global_config()
         self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
-        self.assertFalse(self.etcd_client.write.called)
+        assert_false(self.etcd_client.write.called)
 
     def test_get_profile(self):
         """
@@ -254,18 +247,18 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read
 
         profile = self.datastore.get_profile("TEST")
-        self.assertEqual(profile.name, "TEST")
-        self.assertSetEqual({"TAG1", "TAG2", "TAG3"}, profile.tags)
-        self.assertEqual(Rule(action="allow",
-                              src_net=IPNetwork("192.168.1.0/24"),
-                              src_ports=[200, 2001]),
-                         profile.rules.inbound_rules[0])
-        self.assertEqual(Rule(action="allow",
-                              src_tag="TEST",
-                              src_ports=[200, 2001]),
-                         profile.rules.outbound_rules[0])
+        assert_equal(profile.name, "TEST")
+        assert_set_equal({"TAG1", "TAG2", "TAG3"}, profile.tags)
+        assert_equal(Rule(action="allow",
+                          src_net=IPNetwork("192.168.1.0/24"),
+                          src_ports=[200, 2001]),
+                     profile.rules.inbound_rules[0])
+        assert_equal(Rule(action="allow",
+                          src_tag="TEST",
+                          src_ports=[200, 2001]),
+                     profile.rules.outbound_rules[0])
 
-        self.assertRaises(KeyError, self.datastore.get_profile, "TEST2")
+        assert_raises(KeyError, self.datastore.get_profile, "TEST2")
 
     def test_get_profile_no_tags_or_rules(self):
         """
@@ -281,10 +274,10 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read
 
         profile = self.datastore.get_profile("TEST")
-        self.assertEqual(profile.name, "TEST")
-        self.assertSetEqual(set(), profile.tags)
-        self.assertEqual([], profile.rules.inbound_rules)
-        self.assertEqual([], profile.rules.outbound_rules)
+        assert_equal(profile.name, "TEST")
+        assert_set_equal(set(), profile.tags)
+        assert_equal([], profile.rules.inbound_rules)
+        assert_equal([], profile.rules.outbound_rules)
 
     def test_profile_update_tags(self):
         """
@@ -357,7 +350,7 @@ class TestDatastoreClient(unittest.TestCase):
                                 "created")]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        self.assertEqual(self.etcd_client.write.call_count, 3)
+        assert_equal(self.etcd_client.write.call_count, 3)
 
     def test_create_host_mainline(self):
         """
@@ -384,7 +377,7 @@ class TestDatastoreClient(unittest.TestCase):
                                 None, dir=True)]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        self.assertEqual(self.etcd_client.write.call_count, 4)
+        assert_equal(self.etcd_client.write.call_count, 4)
 
     def test_remove_host_mainline(self):
         """
@@ -412,8 +405,8 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
         pools = self.datastore.get_ip_pools("v4")
-        self.assertSetEqual({IPNetwork("192.168.3.0/24"),
-                             IPNetwork("192.168.5.0/24")}, set(pools))
+        assert_set_equal({IPNetwork("192.168.3.0/24"),
+                          IPNetwork("192.168.5.0/24")}, set(pools))
 
     def test_get_ip_pools_no_key(self):
         """
@@ -421,12 +414,12 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         def mock_read(path):
-            self.assertEqual(path, IPV4_POOLS_PATH)
+            assert_equal(path, IPV4_POOLS_PATH)
             raise KeyError()
 
         self.etcd_client.read.side_effect = mock_read
         pools = self.datastore.get_ip_pools("v4")
-        self.assertListEqual([], pools)
+        assert_list_equal([], pools)
 
     def test_get_ip_pools_no_pools(self):
         """
@@ -436,7 +429,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_no_pools
         pools = self.datastore.get_ip_pools("v4")
-        self.assertListEqual([], pools)
+        assert_list_equal([], pools)
 
     def test_add_ip_pool(self):
         """
@@ -461,7 +454,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         pool = IPNetwork("192.168.3.5/24")
         self.datastore.add_ip_pool("v4", pool)
-        self.assertFalse(self.etcd_client.write.called)
+        assert_false(self.etcd_client.write.called)
 
     def test_del_ip_pool_exists(self):
         """
@@ -481,30 +474,30 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
         pool = IPNetwork("192.168.100.1/24")
-        self.assertRaises(KeyError, self.datastore.del_ip_pool, "v4", pool)
-        self.assertFalse(self.etcd_client.delete.called)
+        assert_raises(KeyError, self.datastore.del_ip_pool, "v4", pool)
+        assert_false(self.etcd_client.delete.called)
 
     def test_profile_exists_true(self):
         """
         Test profile_exists() when it does.
         """
         def mock_read(path):
-            self.assertEqual(path, TEST_PROFILE_PATH)
+            assert_equal(path, TEST_PROFILE_PATH)
             return Mock(spec=EtcdResult)
 
         self.etcd_client.read.side_effect = mock_read
-        self.assertTrue(self.datastore.profile_exists("TEST"))
+        assert_true(self.datastore.profile_exists("TEST"))
 
     def test_profile_exists_false(self):
         """
         Test profile_exists() when it doesn't exist.
         """
         def mock_read(path):
-            self.assertEqual(path, TEST_PROFILE_PATH)
+            assert_equal(path, TEST_PROFILE_PATH)
             raise KeyError()
 
         self.etcd_client.read.side_effect = mock_read
-        self.assertFalse(self.datastore.profile_exists("TEST"))
+        assert_false(self.datastore.profile_exists("TEST"))
 
     def test_create_profile(self):
         """
@@ -535,7 +528,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_profiles
         profiles = self.datastore.get_profile_names()
-        self.assertSetEqual(profiles, {"UNIT", "TEST"})
+        assert_set_equal(profiles, {"UNIT", "TEST"})
 
     def test_get_profile_names_no_key(self):
         """
@@ -544,7 +537,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_profiles_key_error
         profiles = self.datastore.get_profile_names()
-        self.assertSetEqual(profiles, set())
+        assert_set_equal(profiles, set())
 
     def test_get_profile_names_no_profiles(self):
         """
@@ -552,7 +545,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_no_profiles
         profiles = self.datastore.get_profile_names()
-        self.assertSetEqual(profiles, set())
+        assert_set_equal(profiles, set())
 
     def test_get_profile_members(self):
         """
@@ -560,15 +553,15 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_4_endpoints
         members = self.datastore.get_profile_members("TEST")
-        self.assertSetEqual({"567890abcdef", "7890abcdef12"},
-                            set(members))
+        assert_set_equal({"567890abcdef", "7890abcdef12"},
+                         set(members))
 
         members = self.datastore.get_profile_members("UNIT")
-        self.assertSetEqual({"90abcdef1234", "1234567890ab"},
-                            set(members))
+        assert_set_equal({"90abcdef1234", "1234567890ab"},
+                         set(members))
 
         members = self.datastore.get_profile_members("UNIT_TEST")
-        self.assertSetEqual(set(), set(members))
+        assert_set_equal(set(), set(members))
 
     def test_get_profile_members_no_key(self):
         """
@@ -576,7 +569,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_endpoints_key_error
         members = self.datastore.get_profile_members("UNIT_TEST")
-        self.assertSetEqual(set(), set(members))
+        assert_set_equal(set(), set(members))
 
     def test_get_endpoint_exists(self):
         """
@@ -585,20 +578,20 @@ class TestDatastoreClient(unittest.TestCase):
         ep = Endpoint("1234567890ab", "active", "11-22-33-44-55-66")
         self.etcd_client.read.side_effect = mock_read_for_endpoint(ep)
         ep2 = self.datastore.get_endpoint("TEST_HOST", "1234", "1234567890ab")
-        self.assertEqual(ep.to_json(), ep2.to_json())
-        self.assertEqual(ep.ep_id, ep2.ep_id)
+        assert_equal(ep.to_json(), ep2.to_json())
+        assert_equal(ep.ep_id, ep2.ep_id)
 
     def test_get_endpoint_doesnt_exist(self):
         """
         Test get_endpoint() for an endpoint that doesn't exist.
         """
         def mock_read(path):
-            self.assertEqual(path, TEST_ENDPOINT_PATH)
+            assert_equal(path, TEST_ENDPOINT_PATH)
             raise KeyError()
         self.etcd_client.read.side_effect = mock_read
-        self.assertRaises(KeyError,
-                          self.datastore.get_endpoint,
-                          "TEST_HOST", "1234", "1234567890ab")
+        assert_raises(KeyError,
+                      self.datastore.get_endpoint,
+                      "TEST_HOST", "1234", "1234567890ab")
 
     def test_set_endpoint(self):
         """
@@ -614,7 +607,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_ep_for_cont
         ep_id = self.datastore.get_ep_id_from_cont("TEST_HOST", "1234")
-        self.assertEqual(ep_id, EP_12.ep_id)
+        assert_equal(ep_id, EP_12.ep_id)
 
     def test_get_ep_id_from_cont_no_ep(self):
         """
@@ -622,18 +615,18 @@ class TestDatastoreClient(unittest.TestCase):
         no endpoints.
         """
         self.etcd_client.read.side_effect = mock_read_0_ep_for_cont
-        self.assertRaises(NoEndpointForContainer,
-                          self.datastore.get_ep_id_from_cont,
-                          "TEST_HOST", "1234")
+        assert_raises(NoEndpointForContainer,
+                      self.datastore.get_ep_id_from_cont,
+                      "TEST_HOST", "1234")
 
     def test_get_ep_id_from_cont_no_cont(self):
         """
         Test get_ep_id_from_cont() when the container doesn't exist.
         """
         self.etcd_client.read.side_effect = KeyError
-        self.assertRaises(KeyError,
-                          self.datastore.get_ep_id_from_cont,
-                          "TEST_HOST", "1234")
+        assert_raises(KeyError,
+                      self.datastore.get_ep_id_from_cont,
+                      "TEST_HOST", "1234")
 
     def test_add_workload_to_profile(self):
         """
@@ -647,7 +640,7 @@ class TestDatastoreClient(unittest.TestCase):
             elif path == TEST_CONT_ENDPOINT_PATH + ep.ep_id:
                 return mock_read_for_endpoint(ep)(path)
             else:
-                self.assertTrue(False)
+                assert_true(False)
 
         self.etcd_client.read.side_effect = mock_read
         self.datastore.add_workload_to_profile("TEST_HOST", "UNITTEST", "1234")
@@ -668,7 +661,7 @@ class TestDatastoreClient(unittest.TestCase):
             elif path == TEST_CONT_ENDPOINT_PATH + ep.ep_id:
                 return mock_read_for_endpoint(ep)(path)
             else:
-                self.assertTrue(False)
+                assert_true(False)
 
         self.etcd_client.read.side_effect = mock_read
         self.datastore.remove_workload_from_profile("TEST_HOST", "1234")
@@ -686,32 +679,32 @@ class TestDatastoreClient(unittest.TestCase):
         # query.
         self.etcd_client.read.side_effect = mock_read_4_endpoints
         hosts = self.datastore.get_hosts()
-        self.assertEqual(len(hosts), 2)
-        self.assertTrue("TEST_HOST" in hosts)
-        self.assertTrue("TEST_HOST2" in hosts)
+        assert_equal(len(hosts), 2)
+        assert_true("TEST_HOST" in hosts)
+        assert_true("TEST_HOST2" in hosts)
         test_host = hosts["TEST_HOST"]
-        self.assertEqual(len(test_host), 1)
-        self.assertTrue("docker" in test_host)
+        assert_equal(len(test_host), 1)
+        assert_true("docker" in test_host)
         test_host_workloads = test_host["docker"]
-        self.assertEqual(len(test_host_workloads), 2)
-        self.assertTrue("1234" in test_host_workloads)
-        self.assertTrue("5678" in test_host_workloads)
-        self.assertTrue(EP_56.ep_id in test_host_workloads["1234"])
-        self.assertEqual(len(test_host_workloads["1234"]), 1)
-        self.assertTrue(EP_90.ep_id in test_host_workloads["5678"])
-        self.assertEqual(len(test_host_workloads["5678"]), 1)
+        assert_equal(len(test_host_workloads), 2)
+        assert_true("1234" in test_host_workloads)
+        assert_true("5678" in test_host_workloads)
+        assert_true(EP_56.ep_id in test_host_workloads["1234"])
+        assert_equal(len(test_host_workloads["1234"]), 1)
+        assert_true(EP_90.ep_id in test_host_workloads["5678"])
+        assert_equal(len(test_host_workloads["5678"]), 1)
 
         test_host2 = hosts["TEST_HOST2"]
-        self.assertEqual(len(test_host2), 1)
-        self.assertTrue("docker" in test_host2)
+        assert_equal(len(test_host2), 1)
+        assert_true("docker" in test_host2)
         test_host2_workloads = test_host2["docker"]
-        self.assertEqual(len(test_host2_workloads), 2)
-        self.assertTrue("1234" in test_host2_workloads)
-        self.assertTrue("5678" in test_host2_workloads)
-        self.assertTrue(EP_78.ep_id in test_host2_workloads["1234"])
-        self.assertEqual(len(test_host2_workloads["1234"]), 1)
-        self.assertTrue(EP_12.ep_id in test_host2_workloads["5678"])
-        self.assertEqual(len(test_host2_workloads["5678"]), 1)
+        assert_equal(len(test_host2_workloads), 2)
+        assert_true("1234" in test_host2_workloads)
+        assert_true("5678" in test_host2_workloads)
+        assert_true(EP_78.ep_id in test_host2_workloads["1234"])
+        assert_equal(len(test_host2_workloads["1234"]), 1)
+        assert_true(EP_12.ep_id in test_host2_workloads["5678"])
+        assert_equal(len(test_host2_workloads["5678"]), 1)
 
     def test_get_hosts_key_error(self):
         """
@@ -719,7 +712,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = KeyError
         hosts = self.datastore.get_hosts()
-        self.assertDictEqual({}, hosts)
+        assert_dict_equal({}, hosts)
 
     def test_get_default_next_hops(self):
         """
@@ -736,8 +729,8 @@ class TestDatastoreClient(unittest.TestCase):
             assert False
         self.etcd_client.read.side_effect = mock_read
         next_hops = self.datastore.get_default_next_hops("TEST_HOST")
-        self.assertDictEqual(next_hops, {4: IPAddress("192.168.24.1"),
-                                         6: IPAddress("fd30:4500::1")})
+        assert_dict_equal(next_hops, {4: IPAddress("192.168.24.1"),
+                                      6: IPAddress("fd30:4500::1")})
 
     def test_get_default_next_hops_missing(self):
         """
@@ -754,7 +747,7 @@ class TestDatastoreClient(unittest.TestCase):
             assert False
         self.etcd_client.read.side_effect = mock_read
         next_hops = self.datastore.get_default_next_hops("TEST_HOST")
-        self.assertDictEqual(next_hops, {})
+        assert_dict_equal(next_hops, {})
 
     def test_remove_all_data(self):
         """
