@@ -50,7 +50,14 @@ def _main_greenlet(config):
     its children if desired.
     """
     try:
-        _log.info("Creating actors.")
+        _log.info("Connecting to etcd to get our configuration.")
+        etcd_watcher = EtcdWatcher(config)
+        etcd_watcher.start()
+        # Ask the EtcdWatcher to fill in the global config object before we
+        # proceed.  We don't yet support config updates.
+        etcd_watcher.load_config(async=False)
+
+        _log.info("Configuration loaded, starting actors...")
         v4_updater = IptablesUpdater(ip_version=4)
         v4_ipset_mgr = IpsetManager(IPV4)
         v4_rules_manager = RulesManager(4, v4_updater, v4_ipset_mgr)
@@ -77,7 +84,6 @@ def _main_greenlet(config):
                                          [v4_ep_manager, v6_ep_manager],
                                          [v4_updater, v6_updater])
         iface_watcher = InterfaceWatcher(update_splitter)
-        etcd_watcher = EtcdWatcher(config, update_splitter)
 
         _log.info("Starting actors.")
         v4_updater.start()
@@ -93,7 +99,6 @@ def _main_greenlet(config):
         v6_ep_manager.start()
 
         iface_watcher.start()
-        etcd_watcher.start()
 
         monitored_items = [
             v4_updater.greenlet,
@@ -112,9 +117,6 @@ def _main_greenlet(config):
             etcd_watcher.greenlet
         ]
 
-        # Block until etcd config is present and tells us to proceed.
-        etcd_watcher.load_config_and_wait_for_ready(async=False)
-
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
         install_global_rules(config, v4_updater, v6_updater)
@@ -124,11 +126,13 @@ def _main_greenlet(config):
         _log.info("Starting polling for interface and etcd updates.")
         f = iface_watcher.watch_interfaces(async=True)
         monitored_items.append(f)
-        f = etcd_watcher.watch_etcd(async=True)
+        f = etcd_watcher.watch_etcd(update_splitter, async=True)
         monitored_items.append(f)
 
         # Wait for something to fail.
+        _log.info("All top-level actors started, waiting on failures...")
         stopped_greenlets_iter = gevent.iwait(monitored_items)
+
         stopped_greenlet = next(stopped_greenlets_iter)
         try:
             stopped_greenlet.get()
