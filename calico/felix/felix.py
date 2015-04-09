@@ -95,7 +95,7 @@ def _main_greenlet(config):
         iface_watcher.start()
         etcd_watcher.start()
 
-        greenlets = [
+        monitored_items = [
             v4_updater.greenlet,
             v4_ipset_mgr.greenlet,
             v4_rules_manager.greenlet,
@@ -122,11 +122,13 @@ def _main_greenlet(config):
         # Start polling for updates. These kicks make the actors poll
         # indefinitely.
         _log.info("Starting polling for interface and etcd updates.")
-        iface_watcher.watch_interfaces(async=True)
-        etcd_watcher.watch_etcd(async=True)
+        f = iface_watcher.watch_interfaces(async=True)
+        monitored_items.append(f)
+        f = etcd_watcher.watch_etcd(async=True)
+        monitored_items.append(f)
 
         # Wait for something to fail.
-        stopped_greenlets_iter = gevent.iwait(greenlets)
+        stopped_greenlets_iter = gevent.iwait(monitored_items)
         stopped_greenlet = next(stopped_greenlets_iter)
         try:
             stopped_greenlet.get()

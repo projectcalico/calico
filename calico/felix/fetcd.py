@@ -26,6 +26,7 @@ import logging
 import gevent
 import re
 from types import StringTypes
+from urllib3 import Timeout
 from urllib3.exceptions import ReadTimeoutError
 
 from calico import common
@@ -106,12 +107,7 @@ class EtcdWatcher(Actor):
         Loads the snapshot from etcd and then monitors etcd for changes.
         Posts events to the UpdateSplitter.
 
-        Intended to be used as a greenlet.  Intended to be restarted if
-        it raises an exception.
-
         :returns: Does not return.
-        :raises EtcdException: if a read from etcd fails and we may fall out of
-                sync.
         """
         while True:
             self._reconnect()
@@ -181,28 +177,45 @@ class EtcdWatcher(Actor):
                                                 wait=True,
                                                 waitIndex=next_etcd_index,
                                                 recursive=True,
-                                                timeout=0)
+                                                timeout=Timeout(connect=10,
+                                                                read=90))
                     _log.debug("etcd response: %r", response)
                 except ReadTimeoutError:
-                    _log.warning("Read from etcd timed out, retrying.")
-                    # TODO: We are timing out 60 seconds after the initial
-                    # read, then again 60 seconds after that, for no reason I
-                    # can really see. However, a timeout of 0 is probably wrong
-                    # if that does not reestablish connections
-                    # periodically. Needs a bit more thought.
+                    # This is expected when we're doing a poll and nothing
+                    # happened.
+                    _log.debug("Read from etcd timed out, retrying.")
                     continue
-                except EtcdException:
-                    _log.exception("Failed to read from etcd. wait_index=%s",
-                                   next_etcd_index)
-                    raise
-                # Defensive: ensure that, no matter what, we always
-                # monotonically increase the index we poll on.
-                if response.modifiedIndex < next_etcd_index:
-                    _log.error("Modified index on response < value we polled "
-                               "on: %s < %s", response.modifiedIndex,
-                               next_etcd_index)
-                next_etcd_index = max(response.modifiedIndex,
-                                      next_etcd_index + 1)
+                except EtcdException as e:
+                    # Sadly, python-etcd doesn't have a clean exception
+                    # hierarchy; look at the message.  We only log the stack
+                    # trace for errors we're not expecting to avoid copious
+                    # log spam.
+                    msg = (e.message or "unknown").lower()
+                    if "no more machines" in msg:
+                        # This error comes from python-etcd when it can't
+                        # connect to any servers.  When we retry, it should
+                        # reconnect.
+                        # TODO: We should probably limit retries here and die
+                        # That'd recover from errors caused by resource
+                        # exhaustion/leaks.
+                        _log.error("Connection to etcd failed, will retry.")
+                    elif "requested index is outdated" in msg:
+                        # Error from etcd itself, this is fatal for our event
+                        # poll, we have to do a full resync.
+                        _log.error("Fell too far behind current etcd index, "
+                                   "triggering a full resync.")
+                        continue_polling = False
+                    else:
+                        # Assume any other errors are fatal.
+                        _log.exception("Unknown etcd error %r; doing resync.",
+                                       e.message)
+                        continue_polling = False
+                    # TODO: should we do a backoff here?
+                    gevent.sleep(1)
+                    continue
+
+                # Keep it simple, just poll on the next possible index.
+                next_etcd_index += 1
 
                 # TODO: regex parsing getting messy.
                 profile_id, rules = parse_if_rules(response)
@@ -215,10 +228,12 @@ class EtcdWatcher(Actor):
                     _log.info("Scheduling profile update %s", profile_id)
                     self.update_splitter.on_tags_update(profile_id, tags)
                     continue
-                endpoint_id, endpoint = parse_if_endpoint(self.config, response)
+                endpoint_id, endpoint = parse_if_endpoint(self.config,
+                                                          response)
                 if endpoint_id:
                     _log.info("Scheduling endpoint update %s", endpoint_id)
-                    self.update_splitter.on_endpoint_update(endpoint_id, endpoint)
+                    self.update_splitter.on_endpoint_update(endpoint_id,
+                                                            endpoint)
                     continue
 
                 if response.key == DB_READY_FLAG_PATH:
