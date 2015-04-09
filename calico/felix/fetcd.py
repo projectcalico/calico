@@ -466,18 +466,25 @@ def validate_rule_port(port):
             return "integer out of range"
         return None
 
-    if isinstance(port, str):
-        # Format N:M, i.e. a port range.
+    # If not an integer, must be format N:M, i.e. a port range.
+    try:
         fields = port.split(":")
-        if not len(fields) == 2:
-            return "range unparseable"
+    except AttributeError:
+        return "neither integer nor string"
+
+    if not len(fields) == 2:
+        return "range unparseable"
+
+    try:
         start = int(fields.pop(0))
         end = int(fields.pop(0))
-        if start >= end or start < 1 or end > 65535:
-            return "range invalid"
-        return None
+    except ValueError:
+        return "range invalid"
 
-    return "neither integer nor string"
+    if start >= end or start < 1 or end > 65535:
+        return "range invalid"
+
+    return None
 
 
 def parse_if_tags(etcd_node):
@@ -523,4 +530,3 @@ def validate_tags(tags):
 
     if issues:
         raise ValidationFailed(" ".join(issues))
-
