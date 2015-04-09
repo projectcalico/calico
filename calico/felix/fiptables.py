@@ -45,12 +45,52 @@ MAX_IPT_BACKOFF = 0.2
 
 class IptablesUpdater(Actor):
     """
-    Actor that maintains an iptables-restore subprocess for injecting rules
-    into iptables.
+    Actor that owns and applies updates to a particular iptables table.
+    Supports batching updates for performance and dependency tracking
+    between chains.
 
-    Note: due to the internal architecture of iptables, multiple concurrent
-    calls to iptables-restore can clobber each other.  Use one instance of this
-    class for IP v4 and one for IP v6.
+    iptables safety
+    ~~~~~~~~~~~~~~~
+
+    Concurrent access to the same table is not allowed by the
+    underlying iptables architecture so there should be one instance of
+    this class for each table.
+
+    However, this class tries to be robust against concurrent access
+    from outside the process by detecting and retrying such errors.
+
+    Batching support
+    ~~~~~~~~~~~~~~~~
+
+    This actor supports batching of multiple updates, it will apply all
+    updates that are on the queue in one, atomic, batch.  This is
+    dramatically faster than issuing single iptables requests.
+
+    If a request fails, it does a binary chop using the
+    SplitBatchAndRetry mechanism to report the error to the correct
+    request.
+
+    Dependency tracking
+    ~~~~~~~~~~~~~~~~~~~
+
+    To offload a lot of coordination complexity from the classes that
+    use this one, this class supports tracking dependencies between chains
+    and programming stubs for missing chains:
+
+    * When calling rewrite_chains() the caller must include a dict that
+      maps from chain to a set of chains it requires (i.e. the chains
+      that appear in its --jump and --goto targets).
+
+    * Any chains that are required but not present are created as "stub"
+      chains, which drop all traffic.  They are marked as such in the
+      iptables rules with an iptables comment.
+
+    * When the required chain later gets programmed, the stub rule is
+      deleted and replaced with the real contents of the chain.
+
+    * If a required chain is deleted, it is rewritten as a stub chain.
+      It is then cleaned up when it is no longer required.
+
     """
 
     queue_size = 1000
@@ -68,18 +108,25 @@ class IptablesUpdater(Actor):
             self.iptables_cmd = "ip6tables"
 
         self.explicitly_prog_chains = set()
+        """Set of chains that we've explicitly programmed."""
 
         self.required_chains = defaultdict(set)
         """Map from chain name to the set of chains that it depends on."""
         self.requiring_chains = defaultdict(set)
-        """Map from chain to the set of chains that depend on it."""
+        """Map from chain to the set of chains that depend on it.
+        Inverse of self.required_chains."""
 
+        # State tracking for the current batch.
         self._batch = None
+        """:type UpdateBatch: object used to track index changes for this
+        batch."""
         self._completion_callbacks = None
+        """List of callbacks to issue once the current batch completes."""
 
         self._reset_batched_work()  # Avoid duplicating init logic.
 
     def _reset_batched_work(self):
+        """Resets the per-batch state in preparation for a new batch."""
         self._batch = UpdateBatch(self.explicitly_prog_chains,
                                   self.required_chains,
                                   self.requiring_chains)
@@ -87,8 +134,7 @@ class IptablesUpdater(Actor):
 
     def _load_unreferenced_chains(self):
         """
-        Populates the chains_in_dataplane dict with the current set of
-        chains from the dataplane.
+        :returns list[str]: list of chains currently in the dataplane that
         """
         raw_ipt_output = subprocess.check_output([self.iptables_cmd, "--list",
                                                   "--table", self.table])
@@ -96,7 +142,7 @@ class IptablesUpdater(Actor):
 
     @actor_message()
     def rewrite_chains(self, update_calls_by_chain,
-                       dependent_chains, callback=None, suppress_exc=False):
+                       dependent_chains, callback=None):
         """
         Atomically apply a set of updates to the table.
 
@@ -190,13 +236,22 @@ class IptablesUpdater(Actor):
         start = time.time()
         modify_succeeded = False
         try:
+            # We use two passes to update the dataplane.  In the first pass,
+            # we make any updates, create new chains and replace to-be-deleted
+            # chains with stubs (in case we fail to delete them below).
             input_lines = self._calculate_ipt_modify_input()
             self._execute_iptables(input_lines)
             modify_succeeded = True
+
             try:
+                # In the second pass, we attempt to delete chains that are no
+                # longer needed.  This phase may fail if the chain is
+                # referenced by an orphaned chain that we haven't cleaned up
+                # yet.  In which case we'll clean it up next time someone
+                # calls cleanup().
                 input_lines = self._calculate_ipt_delete_input()
             except NothingToDo:
-                pass
+                _log.debug("No chains to delete.")
             else:
                 self._execute_iptables(input_lines)
         except CalledProcessError as e:
@@ -215,34 +270,34 @@ class IptablesUpdater(Actor):
                     # Such chains will be cleaned up next time we run cleanup.
                     #
                     # We can get here at start of day, before we've done our
-                    # first cleanup.
+                    # first cleanup if some chains are referenced by orphaned
+                    # chains.
                     _log.error("Failed to delete some chains.  Rewrote them "
                                "as stubs.")
                     e = None
                     final_result = ResultOrExc(None, None)
+
+                    # The modify succeeded so update the indexes.
                     self._update_indexes()
                 else:
+                    # Modify step failed.  Report the error.
                     _log.error("Non-retryable %s failure. RC=%s",
                                self.restore_cmd, e.returncode)
-                    if batch[0].method.keywords.get("suppress_exc"):
-                        final_result = ResultOrExc(None, None)
-                    else:
-                        final_result = ResultOrExc(None, e)
+                    final_result = ResultOrExc(None, e)
                 if cb:
-                    if batch[0].method.keywords.get("suppress_exc"):
-                        cb(None)
-                    else:
-                        cb(e)
+                    cb(e)
                 results[0] = final_result
             else:
                 _log.error("Non-retryable error from a combined batch, "
                            "splitting the batch to narrow down culprit.")
+                # FIXME SMC: If modify_succeeded, we don't roll back
+                # Maybe the right answer is to implement a best-effort delete
+                # function and not split the batch if the delete fails.
                 raise SplitBatchAndRetry()
         else:
             self._update_indexes()
             for c in self._completion_callbacks:
-                if c:
-                    c(None)
+                c(None)
         finally:
             self._reset_batched_work()
 
@@ -250,6 +305,10 @@ class IptablesUpdater(Actor):
         _log.debug("Batch time: %.2f %s", end - start, len(batch))
 
     def _update_indexes(self):
+        """
+        Called after successfully processing a batch, updates the
+        indexes with the values calculated by the UpdateBatch.
+        """
         self.explicitly_prog_chains = self._batch.expl_prog_chains
         self.required_chains = self._batch.required_chns
         self.requiring_chains = self._batch.requiring_chns
@@ -388,9 +447,16 @@ class UpdateBatch(object):
         self.required_chns = copy.deepcopy(old_deps)
         self.requiring_chns = copy.deepcopy(old_requiring_chains)
 
+        # Caches of expensive calculations.
         self._chains_to_stub = None
+        self._affected_chains = None
+        self._chains_to_delete = None
 
     def store_delete(self, chain):
+        """
+        Records the delete of the given chain, updating the per-batch
+        indexes as required.
+        """
         _log.debug("Storing delete of chain %s", chain)
         assert chain is not None
         # Clean up dependency index.
@@ -400,9 +466,13 @@ class UpdateBatch(object):
         # Remove any now-stale rewrite state.
         self.updates.pop(chain, None)
         self.expl_prog_chains.discard(chain)
-        self._chains_to_stub = None  # Defensive, this is now out-of-date
+        self._invalidate_cache()
 
     def store_rewrite_chain(self, chain, updates, dependencies):
+        """
+        Records the rewrite of the given chain, updating the per-batch
+        indexes as required.
+        """
         _log.debug("Storing updates to chain %s", chain)
         assert chain is not None
         assert updates is not None
@@ -414,47 +484,70 @@ class UpdateBatch(object):
         # Store off the update.
         self.updates[chain] = updates
         self.expl_prog_chains.add(chain)
-        self._chains_to_stub = None  # Defensive, this is now out-of-date
+        self._invalidate_cache()
 
     def _update_deps(self, chain, new_deps):
-        # Remove all the old deps.
+        """
+        Updates the forward/backward dependency indexes for the given
+        chain.
+        """
+        # Remove all the old deps from the reverse index..
         old_deps = self.required_chns.get(chain, set())
         for dependency in old_deps:
             self.requiring_chns[dependency].discard(chain)
             if not self.requiring_chns[dependency]:
                 del self.requiring_chns[dependency]
-        # Add in the new.
+        # Add in the new deps to the reverse index.
         for dependency in new_deps:
             self.requiring_chns[dependency].add(chain)
-        self.required_chns[chain] = new_deps
+        # And store them off in the forward index.
+        if new_deps:
+            self.required_chns[chain] = new_deps
+        else:
+            self.required_chns.pop(chain, None)
+
+    def _invalidate_cache(self):
+        self._chains_to_stub = None
+        self._affected_chains = None
+        self._chains_to_delete = None
 
     @property
     def affected_chains(self):
-        updates = set(self.updates.keys())
-        stubs = self.chains_to_stub_out
-        _log.debug("Affected chains: deletes=%s, updates=%s, stubs=%s",
-                   self._deletes, updates, stubs)
-        return self._deletes | updates | stubs
+        """
+        The set of chains that are touched by this update (whether
+        deleted, modified, or to be stubbed).
+        """
+        if self._affected_chains is None:
+            updates = set(self.updates.keys())
+            stubs = self.chains_to_stub_out
+            _log.debug("Affected chains: deletes=%s, updates=%s, stubs=%s",
+                       self._deletes, updates, stubs)
+            self._affected_chains = self._deletes | updates | stubs
+        return self._affected_chains
 
     @property
     def chains_to_stub_out(self):
         """
-        Calculates the set of chains that now need to be stubbed.
+        The set of chains that need to be stubbed as part of this update.
         """
-        if self._chains_to_stub is not None:
-            return self._chains_to_stub
-        all_required_chains = set(self.requiring_chns.keys())
-        # Don't stub out chains that we're now explicitly programming.
-        impl_required_chains = all_required_chains - self.expl_prog_chains
-        chains_to_stub = impl_required_chains - self.already_stubbed
-        self._chains_to_stub = chains_to_stub
-        return chains_to_stub
+        if self._chains_to_stub is None:
+            all_required_chains = set(self.requiring_chns.keys())
+            # Don't stub out chains that we're now explicitly programming.
+            impl_required_chains = all_required_chains - self.expl_prog_chains
+            self._chains_to_stub = impl_required_chains - self.already_stubbed
+        return self._chains_to_stub
 
     @property
     def chains_to_delete(self):
-        chains_we_dont_want = self._deletes | self.already_stubbed
-        chains_we_need = self.chains_to_stub_out | self.expl_prog_chains
-        return chains_we_dont_want - chains_we_need
+        """
+        The set of chains to actually delete from the dataplane.  Does
+        not include the chains that we need to stub out.
+        """
+        if self._chains_to_delete is None:
+            chains_we_dont_want = self._deletes | self.already_stubbed
+            chains_we_need = self.chains_to_stub_out | self.expl_prog_chains
+            self._chains_to_delete = chains_we_dont_want - chains_we_need
+        return self._chains_to_delete
 
 
 def _stub_drop_rules(chain):
