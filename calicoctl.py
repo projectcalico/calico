@@ -71,7 +71,6 @@ docker_client = docker.Client(version=DOCKER_VERSION,
 try:
     modprobe = sh.Command._create('modprobe')
     sysctl = sh.Command._create("sysctl")
-    restart = sh.Command._create("restart")
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
@@ -247,6 +246,8 @@ def node_stop(force):
 
 
 def clean_restart_docker(sock_to_wait_on):
+    restart = sh.Command._create("restart")
+
     if os.path.exists(REAL_SOCK):
         os.remove(REAL_SOCK)
     if os.path.exists(POWERSTRIP_SOCK):
@@ -321,14 +322,20 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         enable_socket = "YES"
     else:
         # Not using the unix socket.  If there is --force-unix-socket config in
-        # place, do some cleanup
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-        if socket_config_exists:
-            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
-                          if DOCKER_OPTIONS not in line]
-            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-            clean_restart_docker(POWERSTRIP_SOCK)
+        # place, try some cleanup
+        try:
+            socket_config_exists = \
+                DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+        except IOError:
+            # Can't find Docker config file.  Don't attempt to change anything.
+            # Just carry on.
+            pass
+        else:
+            if socket_config_exists:
+                good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
+                              if DOCKER_OPTIONS not in line]
+                open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+                clean_restart_docker(POWERSTRIP_SOCK)
 
     try:
         node_docker_client.remove_container("calico-node", force=True)
