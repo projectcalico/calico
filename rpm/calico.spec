@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.14
+Version:        0.15
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -259,6 +259,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Apr 10 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.15
+- Fix exception in Neutron mechanism driver
+- Many documentation changes and additions
+
 * Fri Mar 20 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.14
 - Move documentation from separate calico-docs GitHub wiki to Read the Docs
 - Neutron mechanism driver fixes

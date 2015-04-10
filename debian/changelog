@@ -1,3 +1,10 @@
+calico (0.15) trusty; urgency=medium
+
+  * Fix exception in Neutron mechanism driver
+  * Many documentation changes and additions
+
+ -- Matt Dupre <matthew.dupre@metaswitch.com>  Fri, 10 Apr 2015 15:22:03 +0000
+
 calico (0.14) trusty; urgency=medium
 
   * Move documentation from separate calico-docs GitHub wiki to Read the Docs
