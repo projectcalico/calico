@@ -15,6 +15,9 @@ import json
 from nose.tools import *
 import unittest
 
+TEST_HOST = "TEST_HOST"
+TEST_CONT_ID = "1234"
+TEST_ENDPOINT_ID = "1234567890ab"
 TEST_HOST_PATH = "/calico/host/TEST_HOST"
 IPV4_POOLS_PATH = "/calico/ipam/v4/pool/"
 IPV6_POOLS_PATH = "/calico/ipam/v6/pool/"
@@ -36,7 +39,7 @@ EP_78 = Endpoint("7890abcdef12", "active", "11-22-33-44-55-66")
 EP_78.profile_id = "TEST"
 EP_90 = Endpoint("90abcdef1234", "active", "11-22-33-44-55-66")
 EP_90.profile_id = "UNIT"
-EP_12 = Endpoint("1234567890ab", "active", "11-22-33-44-55-66")
+EP_12 = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66")
 EP_12.profile_id = "UNIT"
 
 
@@ -343,7 +346,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
-        self.datastore.create_host("TEST_HOST", bird_ip, bird6_ip)
+        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
                            call(TEST_HOST_PATH + "/config/marker",
@@ -368,7 +371,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
-        self.datastore.create_host("TEST_HOST", bird_ip, bird6_ip)
+        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
                            call(TEST_HOST_PATH + "/config/marker",
@@ -384,7 +387,7 @@ class TestDatastoreClient(unittest.TestCase):
         Test remove_host() when the key exists.
         :return:
         """
-        self.datastore.remove_host("TEST_HOST")
+        self.datastore.remove_host(TEST_HOST)
         self.etcd_client.delete.assert_called_once_with(TEST_HOST_PATH + "/",
                                                         dir=True,
                                                         recursive=True)
@@ -396,7 +399,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.delete.side_effect = KeyError
-        self.datastore.remove_host("TEST_HOST")
+        self.datastore.remove_host(TEST_HOST)
 
     def test_get_ip_pools(self):
         """
@@ -557,7 +560,7 @@ class TestDatastoreClient(unittest.TestCase):
                          set(members))
 
         members = self.datastore.get_profile_members("UNIT")
-        assert_set_equal({"90abcdef1234", "1234567890ab"},
+        assert_set_equal({"90abcdef1234", TEST_ENDPOINT_ID},
                          set(members))
 
         members = self.datastore.get_profile_members("UNIT_TEST")
@@ -575,9 +578,11 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_endpoint() for an endpoint that exists.
         """
-        ep = Endpoint("1234567890ab", "active", "11-22-33-44-55-66")
+        ep = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66")
         self.etcd_client.read.side_effect = mock_read_for_endpoint(ep)
-        ep2 = self.datastore.get_endpoint("TEST_HOST", "1234", "1234567890ab")
+        ep2 = self.datastore.get_endpoint(TEST_HOST,
+                                          TEST_CONT_ID,
+                                          TEST_ENDPOINT_ID)
         assert_equal(ep.to_json(), ep2.to_json())
         assert_equal(ep.ep_id, ep2.ep_id)
 
@@ -591,13 +596,13 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read
         assert_raises(KeyError,
                       self.datastore.get_endpoint,
-                      "TEST_HOST", "1234", "1234567890ab")
+                      TEST_HOST, TEST_CONT_ID, TEST_ENDPOINT_ID)
 
     def test_set_endpoint(self):
         """
         Test set_endpoint().
         """
-        self.datastore.set_endpoint("TEST_HOST", "1234", EP_12)
+        self.datastore.set_endpoint(TEST_HOST, TEST_CONT_ID, EP_12)
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        EP_12.to_json())
 
@@ -606,7 +611,7 @@ class TestDatastoreClient(unittest.TestCase):
         Test get_ep_id_from_cont() when container and endpoint exist.
         """
         self.etcd_client.read.side_effect = mock_read_2_ep_for_cont
-        ep_id = self.datastore.get_ep_id_from_cont("TEST_HOST", "1234")
+        ep_id = self.datastore.get_ep_id_from_cont(TEST_HOST, TEST_CONT_ID)
         assert_equal(ep_id, EP_12.ep_id)
 
     def test_get_ep_id_from_cont_no_ep(self):
@@ -617,7 +622,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_0_ep_for_cont
         assert_raises(NoEndpointForContainer,
                       self.datastore.get_ep_id_from_cont,
-                      "TEST_HOST", "1234")
+                      TEST_HOST, TEST_CONT_ID)
 
     def test_get_ep_id_from_cont_no_cont(self):
         """
@@ -626,7 +631,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = KeyError
         assert_raises(KeyError,
                       self.datastore.get_ep_id_from_cont,
-                      "TEST_HOST", "1234")
+                      TEST_HOST, TEST_CONT_ID)
 
     def test_add_workload_to_profile(self):
         """
@@ -643,7 +648,9 @@ class TestDatastoreClient(unittest.TestCase):
                 assert_true(False)
 
         self.etcd_client.read.side_effect = mock_read
-        self.datastore.add_workload_to_profile("TEST_HOST", "UNITTEST", "1234")
+        self.datastore.add_workload_to_profile(TEST_HOST,
+                                               "UNITTEST",
+                                               TEST_CONT_ID)
         ep.profile_id = "UNITTEST"
         expected_write_json = ep.to_json()
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
@@ -664,7 +671,7 @@ class TestDatastoreClient(unittest.TestCase):
                 assert_true(False)
 
         self.etcd_client.read.side_effect = mock_read
-        self.datastore.remove_workload_from_profile("TEST_HOST", "1234")
+        self.datastore.remove_workload_from_profile(TEST_HOST, TEST_CONT_ID)
         ep.profile_id = None
         expected_write_json = ep.to_json()
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
@@ -680,17 +687,17 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_4_endpoints
         hosts = self.datastore.get_hosts()
         assert_equal(len(hosts), 2)
-        assert_true("TEST_HOST" in hosts)
+        assert_true(TEST_HOST in hosts)
         assert_true("TEST_HOST2" in hosts)
-        test_host = hosts["TEST_HOST"]
+        test_host = hosts[TEST_HOST]
         assert_equal(len(test_host), 1)
         assert_true("docker" in test_host)
         test_host_workloads = test_host["docker"]
         assert_equal(len(test_host_workloads), 2)
-        assert_true("1234" in test_host_workloads)
+        assert_true(TEST_CONT_ID in test_host_workloads)
         assert_true("5678" in test_host_workloads)
-        assert_true(EP_56.ep_id in test_host_workloads["1234"])
-        assert_equal(len(test_host_workloads["1234"]), 1)
+        assert_true(EP_56.ep_id in test_host_workloads[TEST_CONT_ID])
+        assert_equal(len(test_host_workloads[TEST_CONT_ID]), 1)
         assert_true(EP_90.ep_id in test_host_workloads["5678"])
         assert_equal(len(test_host_workloads["5678"]), 1)
 
@@ -699,10 +706,10 @@ class TestDatastoreClient(unittest.TestCase):
         assert_true("docker" in test_host2)
         test_host2_workloads = test_host2["docker"]
         assert_equal(len(test_host2_workloads), 2)
-        assert_true("1234" in test_host2_workloads)
+        assert_true(TEST_CONT_ID in test_host2_workloads)
         assert_true("5678" in test_host2_workloads)
-        assert_true(EP_78.ep_id in test_host2_workloads["1234"])
-        assert_equal(len(test_host2_workloads["1234"]), 1)
+        assert_true(EP_78.ep_id in test_host2_workloads[TEST_CONT_ID])
+        assert_equal(len(test_host2_workloads[TEST_CONT_ID]), 1)
         assert_true(EP_12.ep_id in test_host2_workloads["5678"])
         assert_equal(len(test_host2_workloads["5678"]), 1)
 
@@ -728,7 +735,7 @@ class TestDatastoreClient(unittest.TestCase):
                 return result
             assert False
         self.etcd_client.read.side_effect = mock_read
-        next_hops = self.datastore.get_default_next_hops("TEST_HOST")
+        next_hops = self.datastore.get_default_next_hops(TEST_HOST)
         assert_dict_equal(next_hops, {4: IPAddress("192.168.24.1"),
                                       6: IPAddress("fd30:4500::1")})
 
@@ -746,7 +753,7 @@ class TestDatastoreClient(unittest.TestCase):
                 return result
             assert False
         self.etcd_client.read.side_effect = mock_read
-        next_hops = self.datastore.get_default_next_hops("TEST_HOST")
+        next_hops = self.datastore.get_default_next_hops(TEST_HOST)
         assert_dict_equal(next_hops, {})
 
     def test_remove_all_data(self):
@@ -769,7 +776,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test remove_container()
         """
-        self.datastore.remove_container("TEST_HOST", "1234")
+        self.datastore.remove_container(TEST_HOST, TEST_CONT_ID)
         self.etcd_client.delete.assert_called_once_with(TEST_CONT_PATH,
                                                         recursive=True,
                                                         dir=True)
