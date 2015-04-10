@@ -201,6 +201,12 @@ def container_remove(container_name):
 
     :param container_name: The name or ID of the container.
     """
+    # The netns manipulations must be done as root.
+    if os.geteuid() != 0:
+        print >> sys.stderr, "`calicoctl container remove` must be run as " \
+                             "root."
+        sys.exit(2)
+
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
