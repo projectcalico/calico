@@ -1,6 +1,5 @@
 from collections import namedtuple
 import json
-import socket
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
@@ -15,7 +14,7 @@ HOST_PATH = HOSTS_PATH + "%(hostname)s/"
 CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
 LOCAL_ENDPOINTS_PATH = HOST_PATH + "workload/docker/%(container_id)s/endpoint/"
 ALL_ENDPOINTS_PATH = HOSTS_PATH  # Read all hosts
-ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s/"
+ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s"
 PROFILES_PATH = "/calico/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
@@ -28,8 +27,6 @@ IF_PREFIX = "cali"
 prefix that appears in all Calico interface names in the root namespace. e.g.
 cali123456789ab.
 """
-
-hostname = socket.gethostname()
 
 
 class Rule(dict):
@@ -55,10 +52,23 @@ class Rule(dict):
     def __setitem__(self, key, value):
         if key not in Rule.ALLOWED_KEYS:
             raise KeyError("Key %s is not allowed on Rule." % key)
+
+        # Convert any CIDR strings to netaddr before inserting them.
+        if key in ("src_net", "dst_net"):
+            value = IPNetwork(value)
+        if key == "action" and value not in ("allow", "deny"):
+            raise ValueError("'%s' is not allowed for key 'action'" % value)
         super(Rule, self).__setitem__(key, value)
 
     def to_json(self):
-        return json.dumps(self)
+
+        # Convert IPNetworks to strings
+        json_dict = self.copy()
+        if "dst_net" in json_dict:
+            json_dict["dst_net"] = str(json_dict["dst_net"])
+        if "src_net" in json_dict:
+            json_dict["src_net"] = str(json_dict["src_net"])
+        return json.dumps(json_dict)
 
     def pprint(self):
         """Human readable description."""
@@ -66,29 +76,25 @@ class Rule(dict):
         if "protocol" in self:
             out.append(self["protocol"])
         if "icmp_type" in self:
-            out.extend(["type", self["icmp_type"]])
+            out.extend(["type", str(self["icmp_type"])])
 
-        if ("src_tag" in self or
-            "src_ports" in self or
-            "src_net" in self):
+        if "src_tag" in self or "src_ports" in self or "src_net" in self:
             out.append("from")
         if "src_tag" in self:
             out.extend(["tag", self["src_tag"]])
         elif "src_net" in self:
-            out.append(self["src_net"])
+            out.append(str(self["src_net"]))
         if "src_ports" in self:
-            out.extend(["ports", self["src_ports"]])
+            out.extend(["ports", str(self["src_ports"])])
 
-        if ("dst_tag" in self or
-            "dst_ports" in self or
-            "dst_net" in self):
+        if "dst_tag" in self or "dst_ports" in self or "dst_net" in self:
             out.append("to")
         if "dst_tag" in self:
             out.extend(["tag", self["dst_tag"]])
         elif "dst_net" in self:
-            out.append(self["dst_net"])
+            out.append(str(self["dst_net"]))
         if "dst_ports" in self:
-            out.extend(["ports", self["dst_ports"]])
+            out.extend(["ports", str(self["dst_ports"])])
 
         return " ".join(out)
 
@@ -119,7 +125,7 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
 
 class Endpoint(object):
 
-    def __init__(self, ep_id, state, mac, felix_host):
+    def __init__(self, ep_id, state, mac):
         self.ep_id = ep_id
         self.state = state
         self.mac = mac
@@ -148,8 +154,7 @@ class Endpoint(object):
         json_dict = json.loads(json_str)
         ep = cls(ep_id=ep_id,
                  state=json_dict["state"],
-                 mac=json_dict["mac"],
-                 felix_host=["hostname"])
+                 mac=json_dict["mac"])
         for net in json_dict["ipv4_nets"]:
             ep.ipv4_nets.add(IPNetwork(net))
         for net in json_dict["ipv6_nets"]:
@@ -193,27 +198,34 @@ class DatastoreClient(object):
         (host, port) = etcd_authority.split(":", 1)
         self.etcd_client = etcd.Client(host=host, port=int(port))
 
-    def create_global_config(self):
+    def ensure_global_config(self):
+        """
+        Ensure the global config settings for Calico exist, creating them with
+        defaults if they don't.
+        :return: None.
+        """
         config_dir = CONFIG_PATH
         try:
             self.etcd_client.read(config_dir)
         except KeyError:
             # Didn't exist, create it now.
-            self.etcd_client.set(config_dir + "InterfacePrefix", IF_PREFIX)
-            self.etcd_client.set(config_dir + "LogSeverityFile", "DEBUG")
+            self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
+            self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
 
-    def create_host(self, bird_ip, bird6_ip):
+    def create_host(self, hostname, bird_ip, bird6_ip):
         """
         Create a new Calico host.
 
+        :param hostname: The name of the host to create.
         :param bird_ip: The IP address BIRD should listen on.
+        :param bird6_ip: The IP address BIRD6 should listen on.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
-        self.etcd_client.set(host_path + "config/marker", "created")
+        self.etcd_client.write(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
@@ -222,9 +234,10 @@ class DatastoreClient(object):
             self.etcd_client.write(workload_dir, None, dir=True)
         return
 
-    def remove_host(self):
+    def remove_host(self, hostname):
         """
         Remove a Calico host.
+        :param hostname: The name of the host to remove.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
@@ -241,14 +254,7 @@ class DatastoreClient(object):
         :return: List of netaddr.IPNetwork IP pools.
         """
         assert version in ("v4", "v6")
-        pools = []
-        try:
-            pools = self._get_ip_pools_with_keys(version).keys()
-        except KeyError:
-            # No pools defined yet, return empty list.
-            pass
-
-        return pools
+        return self._get_ip_pools_with_keys(version).keys()
 
     def _get_ip_pools_with_keys(self, version):
         """
@@ -298,7 +304,7 @@ class DatastoreClient(object):
     def del_ip_pool(self, version, pool):
         """
         Delete the given CIDR range from the list of pools.  If the pool does
-        not exist, raise a etcd.EtcdKeyNotFound:.
+        not exist, raise a KeyError.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
@@ -374,13 +380,14 @@ class DatastoreClient(object):
         profiles = set()
         try:
             etcd_profiles = self.etcd_client.read(PROFILES_PATH,
-                                                recursive=True,).children
+                                                  recursive=True).children
             for child in etcd_profiles:
                 packed = child.key.split("/")
                 if len(packed) > 4:
                     profiles.add(packed[4])
         except KeyError:
-            # Means the PROFILES_PATH was not set up.  So, profile does not exist.
+            # Means the PROFILES_PATH was not set up.  So, profile does not
+            # exist.
             pass
         return profiles
 
@@ -417,7 +424,7 @@ class DatastoreClient(object):
 
     def get_profile_members(self, name):
         """
-        Get the all configured profiles.
+        Get all endpoint members of named profile.
 
         :param name: Unique string name of the profile.
         :return: a list of members
@@ -460,26 +467,40 @@ class DatastoreClient(object):
         rules_path = RULES_PATH % {"profile_id": profile.name}
         self.etcd_client.write(rules_path, profile.rules.to_json())
 
-    def add_workload_to_profile(self, profile_name, container_id):
-        endpoint_id = self.get_ep_id_from_cont(container_id)
+    def add_workload_to_profile(self, hostname, profile_name, container_id):
+        """
+
+        :param hostname: The host the workload is on.
+        :param profile_name: The profile to add the workload to.
+        :param container_id: The Docker container ID of the workload.
+        :return: None.
+        """
+        endpoint_id = self.get_ep_id_from_cont(hostname, container_id)
 
         # Change the profile on the endpoint.
         ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = profile_name
         self.set_endpoint(hostname, container_id, ep)
 
-    def remove_workload_from_profile(self, container_id):
-        endpoint_id = self.get_ep_id_from_cont(container_id)
+    def remove_workload_from_profile(self, hostname, container_id):
+        """
+
+        :param hostname: The name of the host the container is on.
+        :param container_id: The Docker container ID.
+        :return: None.
+        """
+        endpoint_id = self.get_ep_id_from_cont(hostname, container_id)
 
         # Change the profile on the endpoint.
         ep = self.get_endpoint(hostname, container_id, endpoint_id)
         ep.profile_id = None
         self.set_endpoint(hostname, container_id, ep)
 
-    def get_ep_id_from_cont(self, container_id):
+    def get_ep_id_from_cont(self, hostname, container_id):
         """
         Get a single endpoint ID from a container ID.
 
+        :param hostname: The host the container is on.
         :param container_id: The Docker container ID.
         :return: Endpoint ID as a string.
         """
@@ -493,9 +514,13 @@ class DatastoreClient(object):
                            container_id)
 
         # Get the first endpoint & ID
-        endpoint = endpoints.next()
-        (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
-        return endpoint_id
+        try:
+            endpoint = endpoints.next()
+            (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
+            return endpoint_id
+        except StopIteration:
+            raise NoEndpointForContainer(
+                "Container with ID %s has no endpoints." % container_id)
 
     def get_endpoint(self, hostname, container_id, endpoint_id):
         """
@@ -517,7 +542,7 @@ class DatastoreClient(object):
         """
         Write a single endpoint object to the datastore.
 
-        :param target_host: The hostname for the Docker hosting this container.
+        :param hostname: The hostname for the Docker hosting this container.
         :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
         """
@@ -532,18 +557,14 @@ class DatastoreClient(object):
         :return: a dict of hostname => {
                                type => {
                                    container_id => {
-                                       endpoint_id => {
-                                           "addrs" => addr,
-                                           "mac" => mac,
-                                           "state" => state
-                                       }
+                                       endpoint_id => Endpoint
                                    }
                                }
                            }
         """
         hosts = Vividict()
         try:
-            etcd_hosts = self.etcd_client.read('/calico/host',
+            etcd_hosts = self.etcd_client.read(HOSTS_PATH,
                                                recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
@@ -555,13 +576,7 @@ class DatastoreClient(object):
                     (_, _, _, host, _, container_type, container_id, _,
                      endpoint_id) = packed
                     ep = Endpoint.from_json(endpoint_id, child.value)
-                    ep_dict = hosts[host][container_type][container_id]\
-                        [endpoint_id]
-                    ep_dict["addrs"] = [str(net) for net in
-                                        ep.ipv4_nets | ep.ipv6_nets]
-                    ep_dict["mac"] = str(ep.mac)
-                    ep_dict["state"] = ep.state
-
+                    hosts[host][container_type][container_id][endpoint_id] = ep
         except KeyError:
             pass
 
@@ -607,10 +622,21 @@ class DatastoreClient(object):
         except KeyError:
             pass
 
-    def remove_container(self, container_id):
+    def remove_container(self, hostname, container_id):
+        """
+        Remove a container from the datastore.
+        :param hostname: The name of the host the container is on.
+        :param container_id: The Docker container ID.
+        :return: None.
+        """
         container_path = CONTAINER_PATH % {"hostname": hostname,
                                            "container_id": container_id}
         self.etcd_client.delete(container_path, recursive=True, dir=True)
 
 
-
+class NoEndpointForContainer(Exception):
+    """
+    Tried to get the endpoint associated with a container that has no
+    endpoints.
+    """
+    pass
