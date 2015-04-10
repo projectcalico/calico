@@ -238,9 +238,8 @@ def _calico_ip_in_request(client_request):
     # string.  (Should be faster than compiling a regex and avoids the
     # dependency).
     search = ENV_IP + "="
-    l = len(search)
     for line in env:
-        if line[0:l] == search:
+        if line.startswith(search):
             return True
     return False
 
