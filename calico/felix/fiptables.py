@@ -34,6 +34,7 @@ from calico.felix import frules
 from calico.felix.actor import (Actor, actor_message, ResultOrExc,
                                 SplitBatchAndRetry)
 from calico.felix.frules import FELIX_PREFIX
+from calico.felix.futils import FailedSystemCall
 
 
 _log = logging.getLogger(__name__)
@@ -135,6 +136,7 @@ class IptablesUpdater(Actor):
     def _load_unreferenced_chains(self):
         """
         :returns list[str]: list of chains currently in the dataplane that
+            are not referenced by other chains.
         """
         raw_ipt_output = subprocess.check_output([self.iptables_cmd, "--list",
                                                   "--table", self.table])
@@ -213,20 +215,27 @@ class IptablesUpdater(Actor):
         Tries to clean up any left-over chains from a previous run that
         are no longer required.
         """
-        # TODO: Best effort and repeat to clean up now-unreffed chains
-        # FIXME: until we can do best-effort, only delete unreferenced chains
-        unreferenced_chains = self._load_unreferenced_chains()
-        orphans = unreferenced_chains - self.explicitly_prog_chains
-        # Filter out chains that are already touched by this batch.  Note:
-        # We do not try to filter out chains that are referenced but not
-        # explicitly programmed, we'll catch those in _finish_msg_batch()
-        # and reprogram them as a stub.
-        chains_to_delete = [c for c in orphans if c.startswith(FELIX_PREFIX)]
-        # SMC: It'd be nice if we could do a best-effort delete on these
-        # chains but that's hard to do since they'll all be processed as
-        # one atomic iptables-restore.
-        _log.info("Found these chains to clean up: %s", chains_to_delete)
-        self.delete_chains(chains_to_delete)
+        _log.info("Cleaning up left-over iptables state.")
+        chains_we_tried_to_delete = set()
+        finished = False
+        while not finished:
+            # Try to delete all the unreferenced chains, we use a loop to
+            # ensure that we then clean up any chains that become unreferenced
+            # when we delete the previous lot.
+            unreferenced_chains = self._load_unreferenced_chains()
+            orphans = unreferenced_chains - self.explicitly_prog_chains
+            our_orphans = [c for c in orphans if c.startswith(FELIX_PREFIX)]
+            if not chains_we_tried_to_delete.issuperset(our_orphans):
+                chains_we_tried_to_delete.update(our_orphans)
+                self._delete_best_effort(our_orphans)
+            else:
+                # We've already tried to delete all the chains we found,
+                # give up.
+                _log.info("Cleanup finished, deleted %s chains, failed to "
+                          "delete these chains: %s",
+                          len(chains_we_tried_to_delete) - len(our_orphans),
+                          our_orphans)
+                finished = True
 
     def _start_msg_batch(self, batch):
         self._reset_batched_work()
@@ -234,68 +243,36 @@ class IptablesUpdater(Actor):
 
     def _finish_msg_batch(self, batch, results):
         start = time.time()
-        modify_succeeded = False
         try:
             # We use two passes to update the dataplane.  In the first pass,
             # we make any updates, create new chains and replace to-be-deleted
             # chains with stubs (in case we fail to delete them below).
-            input_lines = self._calculate_ipt_modify_input()
-            self._execute_iptables(input_lines)
-            modify_succeeded = True
-
             try:
-                # In the second pass, we attempt to delete chains that are no
-                # longer needed.  This phase may fail if the chain is
-                # referenced by an orphaned chain that we haven't cleaned up
-                # yet.  In which case we'll clean it up next time someone
-                # calls cleanup().
-                input_lines = self._calculate_ipt_delete_input()
+                input_lines = self._calculate_ipt_modify_input()
             except NothingToDo:
-                _log.debug("No chains to delete.")
+                _log.debug("Nothing to do in this batch.")
             else:
                 self._execute_iptables(input_lines)
         except CalledProcessError as e:
             if len(batch) == 1:
-                # We only executed a single message, see what remedial action
-                # we can take.
-                try:
-                    cb = self._completion_callbacks[0]
-                except IndexError:
-                    cb = None
-
-                if modify_succeeded:
-                    # We succeeded in modifying the chain(s) but failed to
-                    # delete some chains.  The chain(s) that we were trying to
-                    # delete will have been re-written as safe DROP chains.
-                    # Such chains will be cleaned up next time we run cleanup.
-                    #
-                    # We can get here at start of day, before we've done our
-                    # first cleanup if some chains are referenced by orphaned
-                    # chains.
-                    _log.error("Failed to delete some chains.  Rewrote them "
-                               "as stubs.")
-                    e = None
-                    final_result = ResultOrExc(None, None)
-
-                    # The modify succeeded so update the indexes.
-                    self._update_indexes()
-                else:
-                    # Modify step failed.  Report the error.
-                    _log.error("Non-retryable %s failure. RC=%s",
-                               self.restore_cmd, e.returncode)
-                    final_result = ResultOrExc(None, e)
-                if cb:
-                    cb(e)
+                # We only executed a single message, report the failure.
+                _log.error("Non-retryable %s failure. RC=%s",
+                           self.restore_cmd, e.returncode)
+                if self._completion_callbacks:
+                    self._completion_callbacks[0](e)
+                final_result = ResultOrExc(None, e)
                 results[0] = final_result
             else:
                 _log.error("Non-retryable error from a combined batch, "
                            "splitting the batch to narrow down culprit.")
-                # FIXME SMC: If modify_succeeded, we don't roll back
-                # Maybe the right answer is to implement a best-effort delete
-                # function and not split the batch if the delete fails.
                 raise SplitBatchAndRetry()
         else:
+            # Modify succeeded, update our indexes for next time.
             self._update_indexes()
+            # Make a best effort to delete the chains we no longer want.
+            # If we fail due to a stray reference from an orphan chain, we
+            # should catch them on the next cleanup().
+            self._delete_best_effort(self._batch.chains_to_delete)
             for c in self._completion_callbacks:
                 c(None)
         finally:
@@ -303,6 +280,43 @@ class IptablesUpdater(Actor):
 
         end = time.time()
         _log.debug("Batch time: %.2f %s", end - start, len(batch))
+
+    def _delete_best_effort(self, chains):
+        """
+        Try to delete all the chains in the input list.
+        """
+        if not chains:
+            return
+        chain_batches = [list(chains)]
+        while chain_batches:
+            batch = chain_batches.pop(0)
+            try:
+                # Try the next batch of chains...
+                self._attempt_delete(batch)
+            except (CalledProcessError, IOError, FailedSystemCall):
+                _log.warning("Deleting chains %s failed", batch)
+                if len(batch) > 1:
+                    # We were trying to delete multiple chains, split the
+                    # batch in half and put the batches back on the queue to
+                    # try again.
+                    split_point = len(batch) // 2
+                    first_half = batch[:split_point]
+                    second_half = batch[split_point:]
+                    assert len(first_half) + len(second_half) == len(batch)
+                    if chain_batches:
+                        chain_batches[0][:0] = second_half
+                    else:
+                        chain_batches[:0] = [second_half]
+                    chain_batches[:0] = [first_half]
+                else:
+                    # Only trying to delete one chain, give up.  It must still
+                    # be referenced.
+                    _log.error("Failed to delete chain %s, giving up. Maybe "
+                               "it is still referenced?", batch[0])
+
+    def _attempt_delete(self, chains):
+        input_lines = self._calculate_ipt_delete_input(chains)
+        self._execute_iptables(input_lines)
 
     def _update_indexes(self):
         """
@@ -328,7 +342,7 @@ class IptablesUpdater(Actor):
         # COMMIT
         #
         # The chains are created if they don't exist.
-        input_lines = ["*%s" % self.table]
+        input_lines = []
         for chain in self._batch.affected_chains:
             input_lines.append(":%s -" % chain)
         for chain_name in (self._batch.chains_to_stub_out |
@@ -336,10 +350,11 @@ class IptablesUpdater(Actor):
             input_lines.extend(_stub_drop_rules(chain_name))
         for chain_name, chain_updates in self._batch.updates.iteritems():
             input_lines.extend(chain_updates)
-        input_lines.append("COMMIT")
-        return input_lines
+        if not input_lines:
+            raise NothingToDo
+        return ["*%s" % self.table] + input_lines + ["COMMIT"]
 
-    def _calculate_ipt_delete_input(self):
+    def _calculate_ipt_delete_input(self, chains):
         """
         Calculate the input for phase 2 of a batch, where we actually
         try to delete chains.
@@ -347,7 +362,7 @@ class IptablesUpdater(Actor):
         input_lines = []
         found_delete = False
         input_lines.append("*%s" % self.table)
-        for chain_name in self._batch.chains_to_delete:
+        for chain_name in chains:
             # Delete the chain
             input_lines.append(":%s -" % chain_name)
             input_lines.append("--delete-chain %s" % chain_name)
