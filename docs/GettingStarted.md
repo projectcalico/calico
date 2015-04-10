@@ -45,7 +45,7 @@ If you see ping failures, the likely culprit is a problem with then Virtualbox n
 
 If you didn't use the calico-coreos-vagrant-example Vagrantfile, now download Calico onto both servers by SSHing onto them and running
 
-    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.3.0/calicoctl
+    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.3.1/calicoctl
     chmod +x calicoctl
 
 Now start calico on all the nodes
@@ -66,7 +66,7 @@ You should see output like this on each node
 
     core@core-01 ~ $ docker ps
     CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:v0.3.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+    077ceae44fe3        calico/node:v0.3.1     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 
 ## Routing via Powerstrip
 
