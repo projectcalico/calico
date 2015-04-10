@@ -383,6 +383,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         network_mode="host",
         binds=binds)
 
+    _find_or_pull_node_image(node_image)
     container = node_docker_client.create_container(
         node_image,
         name="calico-node",
@@ -409,6 +410,23 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         print "before using `docker run` for Calico networking.\n"
 
     print "Calico node is running with id: %s" % cid
+
+
+def _find_or_pull_node_image(image_name):
+    """
+    Check if Docker has a cached copy of an image, and if not, attempt to pull
+    it.
+
+    :param image_name: The full name of the image.
+    :return: None.
+    """
+    try:
+        _ = docker_client.inspect_image(image_name)
+    except docker.errors.APIError as err:
+        if err.response.status_code == 404:
+            # TODO: Display proper status bar
+            print "Pulling Docker image %s" % image_name
+            docker_client.pull(image_name)
 
 
 def grep(text, pattern):
