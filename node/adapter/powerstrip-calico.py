@@ -166,9 +166,15 @@ class AdapterResource(resource.Resource):
             else:
                 version = "v%s" % ip.version
                 pools = self.datastore.get_ip_pools(version)
+                pool = None
                 for candidate_pool in pools:
                     if ip in candidate_pool:
                         pool = candidate_pool
+                        break
+                if not pool:
+                    _log.warning("Requested IP %s isn't in any configured "
+                                 "pool. Container %s", ip, cid)
+                    return
                 if not self.datastore.assign_address(pool, ip):
                     _log.warning("IP address couldn't be assigned for "
                                  "container %s, IP=%s", cid, ip)
