@@ -140,7 +140,7 @@ class AdapterResource(resource.Resource):
             cont = self.docker.inspect_container(cid)
             _log.debug("Container info: %s", cont)
             pid = cont["State"]["Pid"]
-            _log.debug(pid)
+            _log.debug('Container PID: %s', pid)
 
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
@@ -165,11 +165,13 @@ class AdapterResource(resource.Resource):
                 return
             else:
                 version = "v%s" % ip.version
+                _log.debug('Attempting to assign IP%s address %s', version, ip)
                 pools = self.datastore.get_ip_pools(version)
                 pool = None
                 for candidate_pool in pools:
                     if ip in candidate_pool:
                         pool = candidate_pool
+                        _log.debug('Using IP pool %s', pool)
                         break
                 if not pool:
                     _log.warning("Requested IP %s isn't in any configured "
