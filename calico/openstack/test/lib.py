@@ -26,9 +26,6 @@ import mock
 import sys
 import traceback
 
-if 'zmq' in sys.modules:
-    del sys.modules['zmq']
-
 sys.modules['etcd'] = m_etcd = mock.Mock()
 sys.modules['neutron'] = m_neutron = mock.Mock()
 sys.modules['neutron.common'] = m_neutron.common

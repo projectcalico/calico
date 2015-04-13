@@ -1,33 +1,3 @@
 [global]
-# Time between retries for failed endpoint operations
-#EndpointRetryTimeMillis = 500
-# Time between complete resyncs
-#ResyncIntervalSecs = 1800
-# Hostname to use in messages - defaults to server hostname
-#FelixHostname = hostname
-# Plugin and ACL manager addresses
-PluginAddress = controller
-ACLAddress    = controller
-# Metadata IP (or host) and port. If metadata is not desired, set both
-# MetadataAddr and MetadataPort to 'None'.
-#MetadataAddr  = 127.0.0.1
-#MetadataPort  = 8775
-# Address to bind to - either "*" or an IPv4 address (or hostname)
-#LocalAddress = *
-
-[log]
-# Log file path. If LogFilePath is not set, felix will not log to file.
-LogFilePath = /var/log/calico/felix.log
-
-# Log severities for the Felix log and for syslog.
-#   Valid levels: NONE (no logging), DEBUG, INFO, WARNING, ERROR, CRITICAL
-#LogSeverityFile   = INFO
-#LogSeveritySys    = ERROR
-#LogSeverityScreen = ERROR
-
-[connection]
-# Time with no data on a connection after which we give up on the
-# remote entity
-#ConnectionTimeoutMillis = 40000
-# Time between sending of keepalives
-#ConnectionKeepaliveIntervalMillis = 5000
+EtcdAddr = localhost:4001
+FelixHostname = hostname

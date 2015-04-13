@@ -32,9 +32,7 @@ Package: calico-control
 Architecture: all
 Depends:
  calico-common (= ${binary:Version}),
- calico-acl-manager (= ${binary:Version}),
  python-six,
- python-zmq,
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico virtual networking for cloud data centers.
@@ -70,7 +68,6 @@ Architecture: all
 Depends:
  calico-common (= ${binary:Version}),
  ipset,
- python-zmq,
  python-netaddr,
  ${misc:Depends},
  ${python:Depends},
@@ -85,22 +82,3 @@ Description: Project Calico virtual networking for cloud data centers.
  Virtualization (NFV).
  .
  This package provides the Felix component.
-
-Package: calico-acl-manager
-Architecture: all
-Depends:
- calico-common (= ${binary:Version}),
- python-zmq,
- ${misc:Depends},
- ${python:Depends},
- ${shlibs:Depends}
-Description: Project Calico virtual networking for cloud data centers.
- Project Calico is an open source solution for virtual networking in
- cloud data centers. Its IP-centric architecture offers numerous
- advantages over other cloud networking approaches such as VLANs and
- overlays, including scalability, efficiency, and simplicity. It is
- designed for a wide range of environments including OpenStack,
- lightweight Linux containers (LXCs), bare metal, and Network Functions
- Virtualization (NFV).
- .
- This package provides the ACL Manager component.

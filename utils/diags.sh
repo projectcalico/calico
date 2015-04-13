@@ -51,7 +51,6 @@ ip -6 neigh > ip6neigh
 birdc show protocols 2>&1 > bird_protocols
 
 service calico-felix status 2>&1 > felix_status
-service calico-acl-manager status 2>&1 > acl_manager_status
 service neutron-server status 2>&1 > neutron_server_status
 service nova-compute status 2>&1 > nova_compute_status
 

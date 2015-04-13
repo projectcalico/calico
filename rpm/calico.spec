@@ -9,8 +9,6 @@ URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
 Source35:	calico-felix.conf
 Source45:	calico-felix.service
-Source55:	calico-acl-manager.conf
-Source65:	calico-acl-manager.service
 BuildArch:	noarch
 
 
@@ -93,7 +91,7 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, ipset, python-devel, python-zmq, python-netaddr
+Requires:       calico-common, ipset, python-devel, python-netaddr
 
 %description felix
 This package provides the Felix component.
@@ -130,46 +128,6 @@ if [ $1 -ge 1 ] ; then
 fi
 
 
-%package acl-manager
-Group:          Applications/Engineering
-Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, python-zmq
-
-%description acl-manager
-This package provides the ACL Manager component.
-
-%post acl-manager
-%if 0%{?el7}
-if [ $1 -eq 1 ] ; then
-    # Initial installation
-    /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl enable calico-acl-manager
-    /usr/bin/systemctl start calico-acl-manager
-fi
-%endif
-
-%preun acl-manager
-if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
-%if 0%{?el7}
-    /usr/bin/systemctl disable calico-acl-manager
-    /usr/bin/systemctl stop calico-acl-manager
-%else
-    /sbin/initctl stop calico-acl-manager >/dev/null 2>&1
-%endif
-fi
-
-%postun acl-manager
-if [ $1 -ge 1 ] ; then
-    # Package upgrade, not uninstall
-%if 0%{?el7}
-    /usr/bin/systemctl condrestart calico-acl-manager >/dev/null 2>&1 || :
-%else
-    /sbin/initctl restart calico-acl-manager >/dev/null 2>&1 || :
-%endif
-fi
-
-
 %prep
 %setup -q
 
@@ -194,13 +152,11 @@ install -d -m 755 %{buildroot}%{_sysconfdir}
 # For EL6, install upstart jobs
 %if 0%{?el6}
     install -p -m 755 %{SOURCE35} %{buildroot}%{_sysconfdir}/init/calico-felix.conf
-    install -p -m 755 %{SOURCE55} %{buildroot}%{_sysconfdir}/init/calico-acl-manager.conf
 %endif
 
 # For EL7, install systemd service files
 %if 0%{?el7}
     install -p -D -m 755 %{SOURCE45} %{buildroot}%{_unitdir}/calico-felix.service
-    install -p -D -m 755 %{SOURCE65} %{buildroot}%{_unitdir}/calico-acl-manager.service
 %endif
 
 # Install config and other non-Python files
@@ -242,17 +198,6 @@ rm -rf $RPM_BUILD_ROOT
     %{_unitdir}/calico-felix.service
 %else
     %{_sysconfdir}/init/calico-felix.conf
-%endif
-%doc
-
-%files acl-manager
-%defattr(-,root,root,-)
-/usr/bin/calico-acl-manager
-/etc/calico/acl_manager.cfg.example
-%if 0%{?el7}
-    %{_unitdir}/calico-acl-manager.service
-%else
-    %{_sysconfdir}/init/calico-acl-manager.conf
 %endif
 %doc
 
