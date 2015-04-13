@@ -120,7 +120,7 @@ class Config(object):
             self._items[section] = dict(self._parser.items(section))
 
         if not self._items:
-            log.warning("Configuration file %s empty or does not exist",
+            log.warning("Configuration file %s has no sections",
                         config_file)
 
     def get_cfg_entry(self, section, name, default=None):
@@ -139,20 +139,13 @@ class Config(object):
             return value
 
         if section not in self._items:
-            if default is not None:
-                return default
-            else:
-                raise ConfigException("Section %s missing from config file" %
-                                      section, self._config_path)
+            return default
 
         item = self._items[section]
 
         if name in item:
             value = item[name]
             del item[name]
-        elif default is None:
-            raise ConfigException("Variable %s not defined in section %s" %
-                                  (name, section), self._config_path)
         else:
             value = default
 
