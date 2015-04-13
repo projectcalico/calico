@@ -15,7 +15,7 @@ various objects that the Neutron API uses: see that document for more
 information about what Neutron expects more generally.
 
 Additionally, there is a section of this document that briefly covers Horizon
-actions as well: :ref:`horizon-actions`.
+actions: :ref:`horizon-actions`.
 
 .. _Networking API v2.0: http://developer.openstack.org/api-ref-networking-v2.html
 
@@ -161,8 +161,8 @@ Horizon
 -------
 
 Horizon makes many provisioning actions available that mirror options on the
-Neutron API. This section quickly lists them, and indicates whether they can
-be used or not, and any subtleties that might be present in them.
+Neutron API. This section lists them, and indicates whether they can be used or
+not, and any subtleties that might be present in them.
 
 Much of the detail has been left out of this section, and is instead present in
 the relevant Neutron API sections above: please consult them for more.
@@ -200,8 +200,8 @@ For networks and subnets, see the sections :ref:`neutron-api-networks` and
 Tab: Network -> Routers
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Tenants should not be able to create routers, as they serve no purpose in a
-Calico network. See :ref:`neutron-api-routers` for more.
+Tenants should be prevented from creating routers, as they serve no purpose in
+a Calico network. See :ref:`neutron-api-routers` for more.
 
 Section: Admin
 ~~~~~~~~~~~~~~
