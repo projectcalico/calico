@@ -1,7 +1,7 @@
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
 
 import logging
-from calico.felix.actor import actor_event
+from calico.felix.actor import actor_message
 from calico.felix.refcount import ReferenceManager, RefCountedActor, LIVE, \
     STOPPING
 from calico.felix.test.base import BaseTestCase
@@ -114,7 +114,7 @@ class RefMgrForTesting(ReferenceManager):
         obj.active = True
         obj.on_referenced(async=True)
 
-    @actor_event
+    @actor_message()
     def on_object_cleanup_complete(self, *args, **kwargs):
         self.ref_actions.append(("rm", "recv cleanup complete"))
         super(RefMgrForTesting, self).on_object_cleanup_complete(*args,
@@ -130,12 +130,12 @@ class RefCountedActorForTesting(RefCountedActor, ActorForTesting):
     def push_action(self, action):
         self.ref_actions.append((self.idx, action))
 
-    @actor_event
+    @actor_message()
     def on_referenced(self):
         self.push_action("on_referenced")
         self._notify_ready()
 
-    @actor_event
+    @actor_message()
     def on_unreferenced(self):
         self.push_action("on_unreferenced")
         super(RefCountedActorForTesting, self).on_unreferenced()

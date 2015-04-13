@@ -4,7 +4,7 @@ import functools
 
 import logging
 import weakref
-from calico.felix.actor import Actor, actor_event
+from calico.felix.actor import Actor, actor_message
 import gevent
 
 _log = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class ReferenceManager(Actor):
         self.stopping_objects_by_id = collections.defaultdict(set)
         self.pending_ref_callbacks = collections.defaultdict(set)
 
-    @actor_event
+    @actor_message()
     def get_and_incref(self, object_id, callback=None):
         """
         Acquire a reference to a ref-counted Actor, returns via callback.
@@ -77,7 +77,7 @@ class ReferenceManager(Actor):
         self._maybe_start(object_id)
         self._maybe_notify_referrers(object_id)
 
-    @actor_event
+    @actor_message()
     def on_object_startup_complete(self, object_id, obj):
         """
         Callback from a ref-counted object to tell us that it has completed
@@ -99,7 +99,7 @@ class ReferenceManager(Actor):
         obj.ref_mgmt_state = LIVE
         self._maybe_notify_referrers(object_id)
 
-    @actor_event
+    @actor_message()
     def decref(self, object_id):
         """
         Return a reference and garbage-collect the backing actor if it is no
@@ -123,7 +123,7 @@ class ReferenceManager(Actor):
             self.objects_by_id.pop(object_id)
             self.pending_ref_callbacks.pop(object_id, None)
 
-    @actor_event
+    @actor_message()
     def on_object_cleanup_complete(self, object_id, obj):
         """
         Callback from ref-counted actor to tell us that it has finished
@@ -264,7 +264,7 @@ class RefHelper(object):
         for obj_id in list(self.required_refs):
             self.discard_ref(obj_id)
 
-    @actor_event
+    @actor_message()
     def on_ref_acquired(self, obj_id, obj):
         was_ready = self.ready
         self.pending_increfs.discard(obj_id)
@@ -296,7 +296,7 @@ class RefHelper(object):
     def __getattr__(self, item):
         """
         Passes through getattr requests to the Actor to allow us to
-        use @actor_event.
+        use @actor_message.
         """
         try:
             return super(RefHelper, self).__getattr__(item)
@@ -330,7 +330,7 @@ class RefCountedActor(Actor):
         _log.debug("Notifying manager that %s is done cleaning up", self)
         self._manager.on_object_cleanup_complete(self._id, self, async=True)
 
-    @actor_event
+    @actor_message()
     def on_unreferenced(self):
         """
         Message sent by manager to tell this object to clean itself up

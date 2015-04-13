@@ -25,7 +25,7 @@ from contextlib import nested
 
 from gevent.event import AsyncResult
 import mock
-from calico.felix.actor import actor_event, ResultOrExc, SplitBatchAndRetry
+from calico.felix.actor import actor_message, ResultOrExc, SplitBatchAndRetry
 from calico.felix.test.base import BaseTestCase
 from calico.felix import actor
 
@@ -236,32 +236,32 @@ class ActorForTesting(actor.Actor):
         self.started = True
         return super(ActorForTesting, self).start()
 
-    @actor_event
+    @actor_message()
     def do_a(self):
         self._batch_actions.append("a")
         assert self._current_msg.name == "do_a"
         self._maybe_yield()
         return "a"
 
-    @actor_event
+    @actor_message()
     def do_b(self):
         self._batch_actions.append("b")
         assert self._current_msg.name == "do_b"
         return "b"
 
-    @actor_event
+    @actor_message()
     def do_c(self):
         return self.do_c1() + self.do_c2()  # Same-actor calls skip queue.
 
-    @actor_event
+    @actor_message()
     def do_c1(self):
         return "c1"
 
-    @actor_event
+    @actor_message()
     def do_c2(self):
         return "c2"
 
-    @actor_event
+    @actor_message()
     def do_exc(self):
         self._batch_actions.append("exc")
         raise EXPECTED_EXCEPTION
@@ -283,7 +283,7 @@ class ActorForTesting(actor.Actor):
         if isinstance(result, Exception):
             raise result
 
-    # Note: this would normally be an actor_event but we bypass that and
+    # Note: this would normally be an actor_message but we bypass that and
     # return our own future.
     def on_unreferenced(self, async=None):
         assert not self.unreferenced

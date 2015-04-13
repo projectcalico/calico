@@ -27,7 +27,7 @@ import tempfile
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
-from calico.felix.actor import actor_event
+from calico.felix.actor import actor_message
 from calico.felix.refcount import ReferenceManager, RefCountedActor
 import re
 
@@ -93,7 +93,7 @@ class IpsetManager(ReferenceManager):
         nets = "ipv4_nets" if self.ip_type == IPV4 else "ipv6_nets"
         return nets
 
-    @actor_event
+    @actor_message()
     def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
         missing_profile_ids = set(self.tags_by_prof_id.keys())
         for profile_id, tags in tags_by_prof_id.iteritems():
@@ -113,7 +113,7 @@ class IpsetManager(ReferenceManager):
             self.on_endpoint_update(ep_id, None)
             self._maybe_yield()
 
-    @actor_event
+    @actor_message()
     def cleanup(self):
         """
         Clean up left-over ipsets that existed at start-of-day.
@@ -141,7 +141,7 @@ class IpsetManager(ReferenceManager):
                 _log.exception("Failed to clean up dead ipset %s, will "
                                "retry on next cleanup.", ipset_name)
 
-    @actor_event
+    @actor_message()
     def on_tags_update(self, profile_id, tags):
         """
         Called when the given tag list has changed or been deleted.
@@ -188,7 +188,7 @@ class IpsetManager(ReferenceManager):
                             else:
                                 ipset.remove_member(ip, async=True)
 
-    @actor_event
+    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         old_endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
         old_prof_id = old_endpoint.get("profile_id")
@@ -297,19 +297,19 @@ class ActiveIpset(RefCountedActor):
         """
         return set([self.name, self.tmpname])
 
-    @actor_event
+    @actor_message()
     def replace_members(self, members):
         _log.info("Replacing members of ipset %s", self.name)
         assert isinstance(members, set), "Expected members to be a set"
         self.members = members
 
-    @actor_event
+    @actor_message()
     def add_member(self, member):
         _log.info("Adding member %s to ipset %s", member, self.name)
         if member not in self.members:
             self.members.add(member)
 
-    @actor_event
+    @actor_message()
     def remove_member(self, member):
         _log.info("Removing member %s from ipset %s", member, self.name)
         try:
@@ -317,7 +317,7 @@ class ActiveIpset(RefCountedActor):
         except KeyError:
             _log.info("%s was not in ipset %s", member, self.name)
 
-    @actor_event
+    @actor_message()
     def on_unreferenced(self):
         try:
             if self.set_exists:

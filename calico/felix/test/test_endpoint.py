@@ -22,14 +22,15 @@ import logging
 import itertools
 from contextlib import nested
 from calico.felix.endpoint import EndpointManager
-from calico.felix.fiptables import IptablesUpdater, DispatchChains
+from calico.felix.fiptables import IptablesUpdater
+from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from gevent.event import AsyncResult
 
 import mock
 from mock import Mock, MagicMock, patch
 
-from calico.felix.actor import actor_event, ResultOrExc, SplitBatchAndRetry
+from calico.felix.actor import actor_message, ResultOrExc, SplitBatchAndRetry
 from calico.felix.test.base import BaseTestCase
 from calico.felix import endpoint
 from calico.felix import config
