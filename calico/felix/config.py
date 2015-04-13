@@ -74,7 +74,7 @@ class Config(object):
                                             "localhost:4001")
         fields = self.ETCD_ADDR.split(":")
         if len(fields) != 2:
-            raise ConfigException("Invalid value for EtcdAddr (%s) - must be "
+            raise ConfigException("Invalid format for EtcdAddr (%s) - must be "
                                   "hostname:port" %
                                   (self.ETCD_ADDR), self._config_path)
 

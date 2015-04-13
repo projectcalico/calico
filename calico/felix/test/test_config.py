@@ -106,7 +106,8 @@ class TestConfig(unittest.TestCase):
 
         data = { "felix_invalid_port.cfg": "Invalid port in EtcdAddr",
                  "felix_invalid_addr.cfg": "Invalid or unresolvable EtcdAddr",
-                 "felix_invalid_both.cfg": "Invalid value for EtcdAddr"
+                 "felix_invalid_both.cfg": "Invalid or unresolvable EtcdAddr",
+                 "felix_invalid_format.cfg": "Invalid format for EtcdAddr"
         }
 
 
