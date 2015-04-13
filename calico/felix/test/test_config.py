@@ -18,28 +18,29 @@ felix.test.test_config
 
 Top level tests for Felix configuration.
 """
+
+from collections import namedtuple
+import etcd
 import logging
-import mock
+from mock import patch
 import socket
 import sys
 from calico.felix.config import Config, ConfigException
+from calico.felix.fetcd import EtcdWatcher
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
 else:
     import unittest
 
-import etcd
 real_client = etcd.client
 
 # Logger
 log = logging.getLogger(__name__)
 
-
 # Set of results from etcd.
 etcd_results = {}
 
-from collections import namedtuple
 EtcdChild = namedtuple('EtcdChild', ['key', 'value'])
 
 class StubEtcdResult(object):
@@ -56,10 +57,11 @@ class StubEtcd(object):
     """
     Trivial etcd stub.
     """
-    def __init__(self, port=None):
+    def __init__(self, host=None, port=None):
+        self.host = host
         self.port = port
 
-    def read(self, path):
+    def read(self, path, timeout=None):
         return etcd_results[path]
 
 
@@ -83,18 +85,16 @@ class TestConfig(unittest.TestCase):
                   "felix_extra.cfg", # extra config is just logged
                   ]
 
-        for file in files:
+        for filename in files:
             host = socket.gethostname()
             host_path = "/calico/host/%s/config/" % host
 
-            result = StubEtcdResult("/calico/config/")
-            result.add_child("InterfacePrefix", "blah")
-            result.add_child("ExtraJunk", "whatever") # ignored
 
-            result = StubEtcdResult(host_path)
-            result.add_child("ResyncIntervalSecs", "123")
-
-            config = Config("calico/felix/test/data/%s" % file)
+            config = Config("calico/felix/test/data/%s" % filename)
+            cfg_dict = { "InterfacePrefix": "blah",
+                         "ExtraJunk": "whatever", #ignored
+                         "ResyncIntervalSecs": "123" }
+            config.update_config(cfg_dict)
 
             # Test defaulting.
             self.assertEqual(config.ETCD_ADDR, "localhost:4001")
@@ -102,32 +102,19 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.IFACE_PREFIX, "blah")
             self.assertEqual(config.RESYNC_INT_SEC, 123)
 
-# TODO: Restore this test.
-# The EtcdPort option has been replaced with EtcdAddr.  Validation of this is
-# not yet implemented.
-#    def test_invalid_port(self):
-#        with self.assertRaisesRegexp(ConfigException,
-#                                     "Invalid value for EtcdPort"):
-#            config = Config("calico/felix/test/data/felix_invalid.cfg")
+    def test_invalid_port(self):
 
-    def test_override(self):
-        host = socket.gethostname()
-        host_path = "/calico/host/%s/config/" % host
+        data = { "felix_invalid_port.cfg": "Invalid port in EtcdAddr",
+                 "felix_invalid_addr.cfg": "Invalid or unresolvable EtcdAddr",
+                 "felix_invalid_both.cfg": "Invalid value for EtcdAddr"
+        }
 
-        result = StubEtcdResult("/calico/config/")
-        result.add_child("InterfacePrefix", "blah")
-        result.add_child("ResyncIntervalSecs", "246")
 
-        result = StubEtcdResult(host_path)
-        result.add_child("ResyncIntervalSecs", "123")
-
-        config = Config("calico/felix/test/data/felix_missing.cfg")
-
-        # Test defaulting.
-        self.assertEqual(config.ETCD_ADDR, "localhost:4001")
-        self.assertEqual(config.HOSTNAME, host)
-        self.assertEqual(config.IFACE_PREFIX, "blah")
-        self.assertEqual(config.RESYNC_INT_SEC, 123)
+        for filename in data:
+            log.debug("Test filename : %s", filename)
+            with self.assertRaisesRegexp(ConfigException,
+                                         data[filename]):
+                config = Config("calico/felix/test/data/%s" % filename)
 
     def test_no_logfile(self):
         # Logging to file can be excluded by explicitly saying "none"
@@ -141,11 +128,14 @@ class TestConfig(unittest.TestCase):
         result = StubEtcdResult(host_path)
 
         config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "LogFilePath": "None",
+                     "ResyncIntervalSecs": "123" }
+        config.update_config(cfg_dict)
 
-        # Test defaulting.
         self.assertEqual(config.LOGFILE, None)
 
-    def test_no_metadata(self):
+    def xtest_no_metadata(self):
         # Metadata can be excluded by explicitly saying "none"
         host = socket.gethostname()
         host_path = "/calico/host/%s/config/" % host
@@ -158,12 +148,15 @@ class TestConfig(unittest.TestCase):
         result = StubEtcdResult(host_path)
 
         config = Config("calico/felix/test/data/felix_missing.cfg")
+        etcd_watcher = EtcdWatcher(config)
+        result = etcd_watcher.load_config(async=True)
+        result.get()
 
         # Test defaulting.
         self.assertEqual(config.METADATA_IP, None)
         self.assertEqual(config.METADATA_PORT, None)
 
-    def test_bad_metadata_port(self):
+    def xtest_bad_metadata_port(self):
         with self.assertRaisesRegexp(ConfigException, "Invalid MetadataPort"):
             host = socket.gethostname()
             host_path = "/calico/host/%s/config/" % host
@@ -175,8 +168,11 @@ class TestConfig(unittest.TestCase):
             result = StubEtcdResult(host_path)
 
             config = Config("calico/felix/test/data/felix_missing.cfg")
+            etcd_watcher = EtcdWatcher(config)
+            result = etcd_watcher.load_config(async=True)
+            result.get()
 
-    def test_bad_metadata_addr(self):
+    def xtest_bad_metadata_addr(self):
         with self.assertRaisesRegexp(ConfigException,
                                      "Invalid or unresolvable MetadataAddr"):
             host = socket.gethostname()
@@ -189,9 +185,11 @@ class TestConfig(unittest.TestCase):
             result = StubEtcdResult(host_path)
 
             config = Config("calico/felix/test/data/felix_missing.cfg")
+            etcd_watcher = EtcdWatcher(config)
+            result = etcd_watcher.load_config(async=True)
+            result.get()
 
-
-    def test_blank_metadata_addr(self):
+    def xtest_blank_metadata_addr(self):
         with self.assertRaisesRegexp(ConfigException,
                                      "Blank MetadataAddr value"):
             host = socket.gethostname()
@@ -204,9 +202,12 @@ class TestConfig(unittest.TestCase):
             result = StubEtcdResult(host_path)
 
             config = Config("calico/felix/test/data/felix_missing.cfg")
+            etcd_watcher = EtcdWatcher(config)
+            result = etcd_watcher.load_config(async=True)
+            result.get()
 
 
-    def test_no_iface_prefix(self):
+    def xtest_no_iface_prefix(self):
         with self.assertRaisesRegexp(ConfigException, "Missing InterfacePrefix"):
             host = socket.gethostname()
             host_path = "/calico/host/%s/config/" % host
@@ -215,3 +216,16 @@ class TestConfig(unittest.TestCase):
             result = StubEtcdResult(host_path)
 
             config = Config("calico/felix/test/data/felix_missing.cfg")
+            etcd_watcher = EtcdWatcher(config)
+            result = etcd_watcher.load_config(async=True)
+            result.get()
+
+
+    @patch("ConfigParser.ConfigParser", autospec=True)
+    def xtest_env_var_override(self, m_ConfigParser):
+        """
+        Test environment variables override config options,
+        """
+        with patch.dict("os.environ", {"FELIX_ETCDADDR": "testhost:1234"}):
+            cfg = config.Config("/tmp/felix.cfg")
+        self.assertEqual(cfg.ETCD_ADDR, "testhost:1234")

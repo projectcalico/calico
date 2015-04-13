@@ -72,6 +72,19 @@ class Config(object):
 
         self.ETCD_ADDR = self.get_cfg_entry("global", "EtcdAddr",
                                             "localhost:4001")
+        fields = self.ETCD_ADDR.split(":")
+        if len(fields) != 2:
+            raise ConfigException("Invalid value for EtcdAddr (%s) - must be "
+                                  "hostname:port" %
+                                  (self.ETCD_ADDR), self._config_path)
+
+        self.validate_addr("EtcdAddr", fields[0])
+
+        try:
+            int(fields[1])
+        except ValueError:
+            raise ConfigException("Invalid port in EtcdAddr (%s)" %
+                                  (self.ETCD_ADDR), self._config_path)
 
         self.HOSTNAME = self.get_cfg_entry("global",
                                            "FelixHostname",
@@ -123,7 +136,7 @@ class Config(object):
             log.warning("Configuration file %s has no sections",
                         config_file)
 
-    def get_cfg_entry(self, section, name, default=None):
+    def get_cfg_entry(self, section, name, default):
         name = name.lower()
         section = section.lower()
 
@@ -174,19 +187,15 @@ class Config(object):
             raise ConfigException("Missing InterfacePrefix value",
                                   "etcd:/calico/config/InterfacePrefix")
 
-        #*********************************************************************#
-        #* Log file may be "None" (the literal string, either provided or as *#
-        #* default). In this case no log file should be written.             *#
-        #*********************************************************************#
+        # Log file may be "None" (the literal string, either provided or as
+        # default). In this case no log file should be written.
         if self.LOGFILE.lower() == "none":
             # Metadata is not required.
             self.LOGFILE = None
 
     def warn_unused_cfg(self, cfg_dict):
-        #*********************************************************************#
-        #* Firewall that no unexpected items in the config file - i.e. ones  *#
-        #* we have not used.                                                 *#
-        #*********************************************************************#
+        # Firewall that no unexpected items in the config file - i.e. ones we
+        # have not used.
         for section in self._items.keys():
             for lKey in self._items[section].keys():
                 log.warning("Got unexpected item %s=%s in %s",

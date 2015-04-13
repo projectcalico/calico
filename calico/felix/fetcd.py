@@ -115,7 +115,7 @@ class EtcdWatcher(Actor):
         else:
             host = etcd_addr
             port = 4001
-        self.client = etcd.Client(host, port)
+        self.client = etcd.Client(host=host, port=port)
 
     @actor_message()
     def watch_etcd(self, update_splitter):
