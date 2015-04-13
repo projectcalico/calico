@@ -43,7 +43,7 @@ following repositories, separated by function.
 
 - `calico <https://github.com/Metaswitch/calico>`__ - All of the core Calico
   code except for that specific to Docker/container environments: the Felix
-  agent, the ACL manager, the OpenStack plugin; testing for all of those; and
+  agent, the OpenStack plugin; testing for all of those; and
   the source for Calico's documentation.
 
 - `calico-docker <https://github.com/Metaswitch/calico-docker>`__ - Calico code
