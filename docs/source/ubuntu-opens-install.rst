@@ -177,17 +177,6 @@ On a control node, perform the following steps:
 10. Restart the neutron server process:
    ``service neutron-server restart``.
 
-11. Create the ``/etc/calico/acl_manager.cfg`` file by taking a copy of
-   the supplied sample config at
-   ``/etc/calico/acl_manager.cfg.example``. Then, in
-   ``/etc/calico/acl_manager.cfg``:
-
-   -  Change the ``PluginAddress`` to the host name or IP address of the
-      controller node.
-
-12. Restart the ACL manager service with
-   ``service calico-acl-manager restart``.
-
 Compute Node Install
 --------------------
 
@@ -347,8 +336,8 @@ On a compute node, perform the following steps:
     supplied sample config at ``/etc/calico/felix.cfg.example``. Then,
     in ``/etc/calico/felix.cfg``:
 
-    -  Change both the ``PluginAddress`` and ``ACLAddress`` settings to
-       the host name or IP address of the controller node.
+    -  Change the ``PluginAddress`` setting to the host name or IP address of
+       the controller node.
 
 15. Restart the Felix service with ``service calico-felix restart``.
 

@@ -93,20 +93,6 @@ Settings with plausible defaults
 | connection. ConnectionKeepaliveIntervalMillis   | 5000        | The length of time, in milliseconds, between each keepalive message Felix sends on the connections it sends keepalives on. For obvious reasons, should be lower than connection.ConnectionTimeoutMillis.                                                                                     |
 +-------------------------------------------------+-------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
-ACL Manager (/etc/calico/acl\_manager.cfg)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The ACL Manager runs on a single selected host within the cluster, and
-is configured by an ini-style config file at
-``/etc/calico/acl_manager.cfg``.
-
-The ACL Manager requires explicit configuration before it can run
-sensibly, because it cannot guess where the Calico Plugin might be
-running. We provide a sample at ``/etc/calico/acl_manager.cfg.example``;
-you should copy this to ``/etc/calico/acl_manager.cfg``, and edit it as
-guided by the following documentation, before starting the ACL Manager
-service.
-
 Settings that require configuration (i.e. that don't have plausible defaults)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
