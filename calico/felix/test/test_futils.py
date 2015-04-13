@@ -34,6 +34,25 @@ import calico.felix.futils as futils
 # Logger
 log = logging.getLogger(__name__)
 
+UNIQUE_SHORTEN_TESTS = [
+    # Tries to return the input string if it can.
+    ("foo", 10, "foo"),
+    ("foobarbaz1", 10, "foobarbaz1"),
+    # Too long, truncated hash
+    ("foobarbaz12", 10, '_d71c1ff3e'),
+    ("foobarbaz12", 9, '_94df2800'),
+    # Different input, different hash
+    ("foobarbaz123", 10, '_438f419f9'),
+    # This is OK, it starts with the prefix but it's the wrong length so it
+    # can't clash with our output:
+    ("_foobar", 10, "_foobar"),
+    # But this is not since it's the same length as our output and starts with
+    # a _.
+    ("_foobar", 7, "_9f4764"),
+    ("_78c38617f", 10, '_f13be85cf'),
+]
+
+
 class TestFutils(unittest.TestCase):
     def setUp(self):
         pass
@@ -99,3 +118,11 @@ class TestFutils(unittest.TestCase):
 
         self.assertEqual(expected, self.data)
 
+    def test_uniquely_shorten(self):
+        for inp, length, exp in UNIQUE_SHORTEN_TESTS:
+            output = futils.uniquely_shorten(inp, length)
+            self.assertTrue(len(output) <= length)
+            self.assertEqual(exp, output, "Input %r truncated to length %s "
+                                          "should have given output "
+                                          "%r but got %r" %
+                                          (inp, length, exp, output))

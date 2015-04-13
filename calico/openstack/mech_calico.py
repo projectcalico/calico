@@ -34,7 +34,7 @@ from neutron import context as ctx
 from neutron import manager
 
 # Calico imports.
-from calico.openstack.t_zmq import CalicoTransport0MQ
+from calico.openstack.t_etcd import CalicoTransportEtcd
 
 LOG = log.getLogger(__name__)
 
@@ -62,8 +62,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # initialize these properly when we first need them.
         self.db = None
 
-        # Use 0MQ-based transport.
-        self.transport = CalicoTransport0MQ(self, LOG)
+        # Use Etcd-based transport.
+        self.transport = CalicoTransportEtcd(self, LOG)
 
     def initialize(self):
         self.transport.initialize()
@@ -147,6 +147,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if self._port_is_endpoint_port(port):
             LOG.info("Updated port: %s" % port)
             LOG.info("Original: %s" % original)
+
             if port['binding:vif_type'] == 'unbound':
                 # This indicates part 1 of a port being migrated: the port
                 # being unbound from its old location.  The old compute host is
@@ -157,6 +158,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # 2014-February/027571.html
                 LOG.info("Migration part 1")
                 self.add_port_gateways(original, context._plugin_context)
+                self.add_port_interface_name(original)
                 self.transport.endpoint_deleted(original)
             elif original['binding:vif_type'] == 'unbound':
                 # This indicates part 2 of a port being migrated: the port
@@ -167,17 +169,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # 2014-February/027571.html
                 LOG.info("Migration part 2")
                 self.add_port_gateways(port, context._plugin_context)
+                self.add_port_interface_name(port)
                 self.transport.endpoint_created(port)
             elif original['binding:host_id'] != port['binding:host_id']:
                 # Migration as implemented in Icehouse.
                 LOG.info("Migration as implemented in Icehouse")
                 self.add_port_gateways(original, context._plugin_context)
+                self.add_port_interface_name(original)
                 self.transport.endpoint_deleted(original)
                 self.add_port_gateways(port, context._plugin_context)
+                self.add_port_interface_name(port)
                 self.transport.endpoint_created(port)
             else:
                 # This is a non-migration-related update.
                 self.add_port_gateways(port, context._plugin_context)
+                self.add_port_interface_name(port)
                 self.transport.endpoint_updated(port)
 
     def delete_port_postcommit(self, context):

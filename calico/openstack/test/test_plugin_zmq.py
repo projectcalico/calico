@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,146 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-openstack.test.test_plugin
+openstack.test.test_plugin_zmq
 ~~~~~~~~~~~
 
-Unit test for the Calico/OpenStack Plugin.
+Unit test for the Calico/OpenStack Plugin using 0MQ transport.
 """
 import mock
 import sys
 import eventlet
 import eventlet.queue
-import traceback
 import json
 import inspect
-from eventlet.support import greenlets as greenlet
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
 else:
     import unittest
 
-if 'zmq' in sys.modules:
-    del sys.modules['zmq']
-sys.modules['neutron'] = m_neutron = mock.Mock()
-sys.modules['neutron.common'] = m_neutron.common
-sys.modules['neutron.openstack'] = m_neutron.openstack
-sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
-sys.modules['neutron.plugins'] = m_neutron.plugins
-sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
-sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
-sys.modules['oslo'] = m_oslo = mock.Mock()
-sys.modules['oslo.config'] = m_oslo.config
-sys.modules['time'] = m_time = mock.Mock()
-
-
-# Define a stub class, that we will use as the base class for
-# CalicoMechanismDriver.
-class DriverBase(object):
-    def __init__(self, agent_type, vif_type, vif_details):
-        pass
-
-# Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
-# that CalicoMechanismDriver inherits from - with this stub class.
-m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
-    DriverBase
-
+import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_zmq as t_zmq
-
-REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Test variation flags.
 NO_HEARTBEAT_RESPONSE = 1
 NO_ENDPOINT_RESPONSE = 2
 KEEP_EXISTING_REQ_SOCK = 3
 
-# Value used to indicate 'timeout' in poll and sleep processing.
-TIMEOUT_VALUE = object()
 
-port1 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-1',
-         'id': 'DEADBEEF-1234-5678',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                        'ip_address': '10.65.0.2'}],
-         'mac_address': '00:11:22:33:44:55',
-         'admin_state_up': True}
-
-port2 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-1',
-         'id': 'FACEBEEF-1234-5678',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '10.65.0/24',
-                        'ip_address': '10.65.0.3'}],
-         'mac_address': '00:11:22:33:44:66',
-         'admin_state_up': True}
-
-
-class TestPlugin(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-
-        global real_eventlet_sleep
-        global real_eventlet_spawn
-
-        # Replacement for eventlet.sleep: sleep for some simulated passage of
-        # time (as directed by simulated_time_advance), instead of for real
-        # elapsed time.
-        def simulated_time_sleep(secs):
-
-            # Create a new queue.
-            queue = eventlet.Queue(1)
-            queue.stack = inspect.stack()[1][3]
-
-            # Add it to the dict of sleepers, together with the waking up time.
-            sleepers[queue] = current_time + secs
-
-            print "T=%s: %s: Start sleep for %ss until T=%s" % (
-                current_time, queue.stack, secs, sleepers[queue]
-            )
-
-            # Do a zero time real sleep, to allow other threads to run.
-            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            # Block until something is posted to the queue.
-            ignored = queue.get(True)
-
-            # Wake up.
-            return None
-
-        # Replacement for eventlet.spawn: track spawned threads so that we can
-        # kill them all when a test case ends.
-        def simulated_spawn(*args):
-
-            # Do the real spawn.
-            thread = real_eventlet_spawn(*args)
-
-            # Remember this thread.
-            threads.append(thread)
-
-            # Also return it.
-            return thread
-
-        # Hook sleeping.  We must only do this once; hence it is in setUpClass
-        # rather than in setUp.
-        real_eventlet_sleep = eventlet.sleep
-        t_zmq.eventlet.sleep = simulated_time_sleep
-
-        # Similarly hook spawning.
-        real_eventlet_spawn = eventlet.spawn
-        t_zmq.eventlet.spawn = simulated_spawn
-
-    @classmethod
-    def tearDownClass(cls):
-
-        # Restore the real eventlet.sleep.
-        t_zmq.eventlet.sleep = real_eventlet_sleep
-
-    # Ports to return when the driver asks the OpenStack database for all
-    # current ports.
-    osdb_ports = []
+class TestPlugin0MQ(lib.Lib, unittest.TestCase):
 
     # Setup for explicit test code control of all operations on 0MQ sockets.
     def setUp_sockets(self):
@@ -237,28 +125,28 @@ class TestPlugin(unittest.TestCase):
         def make_poll(socket):
 
             def poll(ms):
-                print "T=%s: Socket %s poll for %sms..." % (current_time,
+                print "T=%s: Socket %s poll for %sms..." % (self.current_time,
                                                             socket,
                                                             ms)
 
                 # Add this socket's receive queue to the set of current
                 # sleepers.
                 socket.rcv_queue.stack = inspect.stack()[1][3]
-                sleepers[socket.rcv_queue] = current_time + ms / 1000
+                self.sleepers[socket.rcv_queue] = self.current_time + ms / 1000
 
                 # Block until there's something added to the queue.
                 msg = socket.rcv_queue.get(True)
 
                 # If what was added was not the timeout indication, put it back
                 # on the queue, for a following receive call.
-                if msg is not TIMEOUT_VALUE:
-                    del sleepers[socket.rcv_queue]
+                if msg is not lib.TIMEOUT_VALUE:
+                    del self.sleepers[socket.rcv_queue]
                     print "Requeue: %s" % msg
                     socket.rcv_queue.put_nowait(msg)
                 else:
                     print "Poll timed out"
 
-                real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+                self.give_way()
 
                 # Return nothing.
                 return None
@@ -271,146 +159,23 @@ class TestPlugin(unittest.TestCase):
         self.zmq_context = t_zmq.zmq.Context.return_value
         self.zmq_context.socket.side_effect = socket_created
 
-    # Setup to intercept and display logging by the code under test.
-    def setUp_logging(self):
-
-        # Print logs to stdout.
-        def log_info(msg):
-            print "       INFO %s" % msg
-            return None
-
-        def log_debug(msg):
-            print "       DEBUG %s" % msg
-            return None
-
-        def log_warn(msg):
-            print "       WARN %s" % msg
-            return None
-
-        def log_error(msg):
-            print "       ERROR %s" % msg
-            return None
-
-        def log_exception(msg):
-            print "       EXCEPTION %s" % msg
-            if sys.exc_type is not greenlet.GreenletExit:
-                traceback.print_exc()
-            return None
-
-        # Hook logging.
-        mech_calico.LOG = mock.Mock()
-        mech_calico.LOG.info.side_effect = log_info
-        mech_calico.LOG.debug.side_effect = log_debug
-        mech_calico.LOG.warn.side_effect = log_warn
-        mech_calico.LOG.error.side_effect = log_error
-        mech_calico.LOG.exception.side_effect = log_exception
-
-    # Setup to intercept sleep calls made by the code under test, and hence to
-    # (i) control when those expire, and (ii) allow time to appear to pass (to
-    # the code under test) without actually having to wait for that time.
-    def setUp_time(self):
-
-        global current_time
-        global sleepers
-        global threads
-
-        # Reset the simulated time (in seconds) that has passed since the
-        # beginning of the test.
-        current_time = 0
-
-        # Make time.time() return current_time.
-        m_time.time.side_effect = lambda: current_time
-
-        # Reset the dict of current sleepers.  In each dict entry, the key is
-        # an eventlet.Queue object and the value is the time at which the sleep
-        # should complete.
-        sleepers = {}
-
-        threads = []
-
-        print "\nTEST CASE: %s" % self.id()
-
-    # Method for the test code to call when it wants to advance the simulated
-    # time.
-    def simulated_time_advance(self, secs):
-
-        global current_time
-
-        while (secs > 0):
-            print "T=%s: Want to advance by %s" % (current_time, secs)
-
-            # Determine the time to advance to in this iteration: either the
-            # full time that we've been asked for, or the time at which the
-            # next sleeper should wake up, whichever of those is earlier.
-            wake_up_time = current_time + secs
-            for queue in sleepers.keys():
-                if sleepers[queue] < wake_up_time:
-                    # This sleeper will wake up before the time that we've been
-                    # asked to advance to.
-                    wake_up_time = sleepers[queue]
-
-            # Check if we're about to advance past any exact multiples of
-            # HEARTBEAT_SEND_INTERVAL_SECS.
-            num_acl_pub_heartbeats = (
-                int(wake_up_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) -
-                int(current_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
-            )
-
-            # Advance to the determined time.
-            secs -= (wake_up_time - current_time)
-            current_time = wake_up_time
-            print "T=%s" % current_time
-
-            # Wake up all sleepers that should now wake up.
-            for queue in sleepers.keys():
-                if sleepers[queue] <= current_time:
-                    print "T=%s >= %s: %s: Wake up!" % (current_time,
-                                                        sleepers[queue],
-                                                        queue.stack)
-                    del sleepers[queue]
-                    queue.put_nowait(TIMEOUT_VALUE)
-
-            # Allow woken (and possibly other) threads to run.
-            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            # Handle any ACL HEARTBEAT publications.
-            for i in range(num_acl_pub_heartbeats):
-                print "Handle ACL HEARTBEAT publication"
-                pub = {'type': 'HEARTBEAT',
-                       'issued': current_time * 1000}
-                self.acl_pub_socket.send_multipart.assert_called_once_with(
-                    ['networkheartbeat'.encode('utf-8'),
-                     json.dumps(pub).encode('utf-8')])
-                self.acl_pub_socket.send_multipart.reset_mock()
-
     # Setup before each test case (= each method below whose name begins with
     # "test").
     def setUp(self):
 
-        self.maxDiff = 1000
-
         # Normally do not provide bind_host config.
-        m_oslo.config.cfg.CONF.bind_host = None
+        lib.m_oslo.config.cfg.CONF.bind_host = None
+
+        # Do common plugin test setup.
+        super(TestPlugin0MQ, self).setUp()
+
+        # Use 0MQ transport instead of etcd.
+        self.driver.transport = t_zmq.CalicoTransport0MQ(self.driver,
+                                                         mech_calico.LOG)
+
 
         # Setup to control 0MQ socket operations.
         self.setUp_sockets()
-
-        # Setup to control logging.
-        self.setUp_logging()
-
-        # Setup to control the passage of time.
-        self.setUp_time()
-
-        # Create an instance of CalicoMechanismDriver.
-        self.driver = mech_calico.CalicoMechanismDriver()
-
-    # Tear down after each test case.
-    def tearDown(self):
-
-        print "\nClean up remaining green threads..."
-
-        for thread in threads:
-            thread.kill()
 
     # Check that a socket is now bound to a specified address and port, and
     # return that socket.
@@ -426,7 +191,7 @@ class TestPlugin(unittest.TestCase):
 
         # Provide bind_host config.
         ip_addr = '192.168.1.1'
-        m_oslo.config.cfg.CONF.bind_host = ip_addr
+        lib.m_oslo.config.cfg.CONF.bind_host = ip_addr
 
         # Tell the driver to initialize.
         self.driver.initialize()
@@ -452,7 +217,7 @@ class TestPlugin(unittest.TestCase):
         self.call_noop_entry_points()
 
         # Process a new endpoint.
-        self.new_endpoint(port1)
+        self.new_endpoint(lib.port1)
 
         # Update an endpoint.
         self.endpoint_update()
@@ -490,7 +255,7 @@ class TestPlugin(unittest.TestCase):
 
         # Process a new endpoint, but don't send in the ENDPOINTCREATED
         # response.
-        self.new_endpoint(port1, flags=set([NO_ENDPOINT_RESPONSE]))
+        self.new_endpoint(lib.port1, flags=set([NO_ENDPOINT_RESPONSE]))
         self.sockets.remove(self.felix_endpoint_socket)
 
         # Let time pass to allow the felix_heartbeat_thread for the old
@@ -502,7 +267,7 @@ class TestPlugin(unittest.TestCase):
         self.felix_connect()
 
         # Now process the new endpoint successfully.
-        self.new_endpoint(port1)
+        self.new_endpoint(lib.port1)
 
     # Test when plugin sends an ENDPOINT* request and Felix does not respond
     # within ENDPOINT_RESPONSE_TIMEOUT, with a 40s delay before Felix connects
@@ -534,24 +299,19 @@ class TestPlugin(unittest.TestCase):
 
     def felix_connect(self, **kwargs):
 
-        # Hook the Neutron database.
-        self.db = mech_calico.manager.NeutronManager.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
-        self.db.get_ports.return_value = self.osdb_ports
-
         # Get test variation flags.
         flags = kwargs.get('flags', set())
 
         # Send a RESYNCSTATE.
         resync = {'type': 'RESYNCSTATE',
                   'resync_id': 'resync#1',
-                  'issued': current_time * 1000,
+                  'issued': self.current_time * 1000,
                   'hostname': 'felix-host-1'}
         self.felix_router_socket.rcv_queue.put_nowait(
             ['felix-1',
              '',
              json.dumps(resync).encode('utf-8')])
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check DB got create_or_update_agent call.
         if KEEP_EXISTING_REQ_SOCK not in flags:
@@ -587,7 +347,7 @@ class TestPlugin(unittest.TestCase):
                        'addr': ip['ip_address'],
                        'gateway': '10.65.0.1'} for ip in port['fixed_ips']],
                  'endpoint_id': port['id'],
-                 'issued': current_time * 1000,
+                 'issued': self.current_time * 1000,
                  'interface_name': 'tap' + port['id'][:11],
                  'state': 'enabled'},
                 t_zmq.zmq.NOBLOCK
@@ -600,15 +360,15 @@ class TestPlugin(unittest.TestCase):
                  'rc': 'SUCCESS'})
 
             # Yield twice to allow that response to be processed.
-            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-            real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+            self.give_way()
+            self.give_way()
 
         # Send HEARTBEAT from Felix and check for response.
         self.felix_router_socket.rcv_queue.put_nowait(
             ['felix-1',
              '',
              json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
         self.felix_router_socket.send_multipart.assert_called_once_with(
             ['felix-1',
              '',
@@ -625,7 +385,7 @@ class TestPlugin(unittest.TestCase):
 
         # Need another yield here, apparently, to allow felix_heartbeat_thread
         # to start running.
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Receive HEARTBEAT to Felix from the plugin, and send response.
         self.simulated_time_advance(30)
@@ -645,8 +405,8 @@ class TestPlugin(unittest.TestCase):
         self.felix_endpoint_socket.rcv_queue.put_nowait(
             {'type': 'HEARTBEAT'})
         print "Provided HEARTBEAT response from Felix on %s" % self.felix_endpoint_socket
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
         # Check DB got create_or_update_agent call.
         self.db.create_or_update_agent.assert_called_once_with(
@@ -658,54 +418,18 @@ class TestPlugin(unittest.TestCase):
         self.db.create_or_update_agent.reset_mock()
 
         # Yield to allow anything pending on other threads to come out.
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
     # Test what happens when an ACL Manager connects to the Neutron driver.
     def acl_connect(self):
-        # Prep response to next get_security_groups query, returning the
-        # default SG.  Prep a null response to the following
-        # _get_port_security_group_bindings call.
-        self.db = mech_calico.manager.NeutronManager.get_plugin()
-        self.db_context = mech_calico.ctx.get_admin_context()
-        self.db.get_security_groups.return_value = [
-            {'id': 'SGID-default',
-             'security_group_rules': [
-                 {'remote_group_id': 'SGID-default',
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'ingress',
-                  'ethertype': 'IPv4',
-                  'port_range_min': -1},
-                 {'remote_group_id': 'SGID-default',
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'ingress',
-                  'ethertype': 'IPv6',
-                  'port_range_min': -1},
-                 {'remote_group_id': None,
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'egress',
-                  'ethertype': 'IPv4',
-                  'port_range_min': -1},
-                 {'remote_group_id': None,
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'egress',
-                  'ethertype': 'IPv6',
-                  'port_range_min': -1}
-             ]}
-        ]
-        self.db._get_port_security_group_bindings.return_value = []
-
         # Simulate ACL Manager sending GETGROUPS request.
         getgroups = {'type': 'GETGROUPS',
-                     'issued': current_time * 1000}
+                     'issued': self.current_time * 1000}
         self.acl_get_socket.rcv_queue.put_nowait(
             ['aclm-1',
              '',
              json.dumps(getgroups).encode('utf-8')])
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check get GETGROUPS response.
         self.acl_get_socket.send_multipart.assert_called_once_with(
@@ -736,7 +460,7 @@ class TestPlugin(unittest.TestCase):
                    'group': 'SGID-default',
                    'type': 'GROUPUPDATE',
                    'members': {},
-                   'issued': current_time * 1000}
+                   'issued': self.current_time * 1000}
         self.check_acl_pub('groups', gupdate)
 
         # Send HEARTBEAT from ACL Manager and check for response.
@@ -744,7 +468,7 @@ class TestPlugin(unittest.TestCase):
             ['aclm-1',
              '',
              json.dumps({'type': 'HEARTBEAT'}).encode('utf-8')])
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
         self.acl_get_socket.send_multipart.assert_called_once_with(
             ['aclm-1',
              '',
@@ -784,9 +508,6 @@ class TestPlugin(unittest.TestCase):
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
 
-        # Prep response to next get_subnet call.
-        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
-
         # Simulate ML2 notifying creation of the new port.
         context = mock.Mock()
         context._port = port
@@ -794,17 +515,17 @@ class TestPlugin(unittest.TestCase):
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect create_port_postcommit to throw a FelixUnavailable
             # exception.
-            real_eventlet_spawn(
+            self.real_eventlet_spawn(
                 lambda: self.assertRaises(t_zmq.FelixUnavailable,
                                           self.driver.create_port_postcommit,
                                           (context)))
         else:
             # No exception expected.
-            real_eventlet_spawn(
+            self.real_eventlet_spawn(
                 lambda: self.driver.create_port_postcommit(context))
 
         # Yield to allow that new thread to run.
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check ENDPOINTCREATED request is sent to Felix.  Simulate Felix
         # responding successfully.
@@ -815,7 +536,7 @@ class TestPlugin(unittest.TestCase):
                    'addr': ip['ip_address'],
                    'gateway': '10.65.0.1'} for ip in port['fixed_ips']],
              'endpoint_id': port['id'],
-             'issued': current_time * 1000,
+             'issued': self.current_time * 1000,
              'interface_name': 'tap' + port['id'][:11],
              'resync_id': None,
              'type': 'ENDPOINTCREATED',
@@ -835,29 +556,14 @@ class TestPlugin(unittest.TestCase):
             {'type': 'ENDPOINTCREATED',
              'rc': 'SUCCESS',
              'message': ''})
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
         # Check get update_port_status call, indicating port active.
-        self.db.update_port_status.assert_called_once_with(
-            context._plugin_context,
-            context._port['id'],
-            mech_calico.constants.PORT_STATUS_ACTIVE)
-        self.db.update_port_status.reset_mock()
+        self.check_update_port_status_called(context)
 
-        # Prep appropriate responses for next get_security_group,
-        # _get_port_security_group_bindings and get_port calls.
-        self.db.get_security_group.return_value = {
-            'id': 'SG-1',
-            'security_group_rules': []
-        }
-        self.db._get_port_security_group_bindings.return_value = [
-            {'port_id': port['id']}
-        ]
-        self.db.get_port.return_value = context._port
-
-        # Call security_groups_member_updated with default SG ID.
-        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+        # Add this port to security group SG-1.
+        self.notify_security_group_update('SG-1', [], port, 'member')
 
         # Check get GROUPUPDATE publication indicating port added to default SG
         # ID.
@@ -870,7 +576,7 @@ class TestPlugin(unittest.TestCase):
                'members': {
                    port['id']: [ip['ip_address'] for ip in port['fixed_ips']]
                },
-               'issued': current_time * 1000}
+               'issued': self.current_time * 1000}
         self.check_acl_pub('groups', pub)
 
         # Exercise the notifier's general attribute proxying.
@@ -901,13 +607,10 @@ class TestPlugin(unittest.TestCase):
         # Get test variation flags.
         flags = kwargs.get('flags', set())
 
-        # Prep response to get_subnet call.
-        self.db.get_subnet.return_value = {'gateway_ip': '10.65.0.1'}
-
         # Simulate ML2 notifying a port update, with contexts such that the IP
         # address is changing.
         context = mock.Mock()
-        context.original = port1.copy()
+        context.original = lib.port1.copy()
         context._port = context.original.copy()
         context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
                                              'ip_address': '10.65.0.22'}]})
@@ -915,27 +618,27 @@ class TestPlugin(unittest.TestCase):
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect update_port_postcommit to throw a FelixUnavailable
             # exception.
-            real_eventlet_spawn(
+            self.real_eventlet_spawn(
                 lambda: self.assertRaises(t_zmq.FelixUnavailable,
                                           self.driver.update_port_postcommit,
                                           (context)))
         else:
             # No exception expected.
-            real_eventlet_spawn(
+            self.real_eventlet_spawn(
                 lambda: self.driver.update_port_postcommit(context))
 
         # Yield to allow that new thread to run.
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check ENDPOINTUPDATED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'mac': port1['mac_address'],
+            {'mac': lib.port1['mac_address'],
              'addrs': [{'properties': {'gr': False},
                         'addr': '10.65.0.22',
                         'gateway': '10.65.0.1'}],
-             'endpoint_id': port1['id'],
-             'issued': current_time * 1000,
+             'endpoint_id': lib.port1['id'],
+             'issued': self.current_time * 1000,
              'type': 'ENDPOINTUPDATED',
              'state': 'enabled'},
             t_zmq.zmq.NOBLOCK)
@@ -953,17 +656,15 @@ class TestPlugin(unittest.TestCase):
             {'type': 'ENDPOINTUPDATED',
              'rc': 'SUCCESS',
              'message': ''})
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
     # Test a rule being updated in a security group.
     def sg_rule_update(self):
-
-        # Prep appropriate responses for next get_security_group and
-        # _get_port_security_group_bindings calls.
-        self.db.get_security_group.return_value = {
-            'id': 'SG-1',
-            'security_group_rules': [
+        # Update rules for security group SG-1.
+        self.notify_security_group_update(
+            'SG-1',
+            [
                 {'remote_group_id': 'SGID-default',
                  'remote_ip_prefix': None,
                  'protocol': -1,
@@ -971,15 +672,12 @@ class TestPlugin(unittest.TestCase):
                  'ethertype': 'IPv4',
                  'port_range_min': 5060,
                  'port_range_max': 5061}
-            ]
-        }
-        self.db._get_port_security_group_bindings.return_value = []
+            ],
+            None,
+            'rule'
+        )
 
-        # Call security_groups_member_updated with default SG ID.
-        self.db.notifier.security_groups_rule_updated(mock.Mock(), ['SG-1'])
-
-        # Check get GROUPUPDATE publication indicating port removed from
-        # default SG ID.
+        # Check get GROUPUPDATE publication reflecting the new rules.
         pub = {'rules': {'inbound': [{'cidr': None,
                                       'group': 'SGID-default',
                                       'port': [5060, 5061],
@@ -990,7 +688,7 @@ class TestPlugin(unittest.TestCase):
                'group': 'SG-1',
                'type': 'GROUPUPDATE',
                'members': {},
-               'issued': current_time * 1000}
+               'issued': self.current_time * 1000}
         self.check_acl_pub('groups', pub)
 
     # Delete an endpoint.
@@ -1001,30 +699,30 @@ class TestPlugin(unittest.TestCase):
 
         # Simulate ML2 notifying a port deletion.
         context = mock.Mock()
-        context._port = port1.copy()
+        context._port = lib.port1.copy()
         context._port.update({'fixed_ips': [{'subnet_id': '10.65.0/24',
                                              'ip_address': '10.65.0.22'}]})
 
         if NO_ENDPOINT_RESPONSE in flags:
             # Expect update_port_postcommit to throw a FelixUnavailable
             # exception.
-            real_eventlet_spawn(
+            self.real_eventlet_spawn(
                 lambda: self.assertRaises(t_zmq.FelixUnavailable,
                                           self.driver.delete_port_postcommit,
                                           (context)))
         else:
             # No exception expected.
-            real_eventlet_spawn(
+            self.real_eventlet_spawn(
                 lambda: self.driver.delete_port_postcommit(context))
 
         # Yield to allow that new thread to run.
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
 
         # Check ENDPOINTDESTROYED request is sent to Felix.  Simulate Felix
         # responding successfully.
         self.felix_endpoint_socket.send_json.assert_called_once_with(
-            {'endpoint_id': port1['id'],
-             'issued': current_time * 1000,
+            {'endpoint_id': lib.port1['id'],
+             'issued': self.current_time * 1000,
              'type': 'ENDPOINTDESTROYED'},
             t_zmq.zmq.NOBLOCK)
         self.felix_endpoint_socket.send_json.reset_mock()
@@ -1041,19 +739,11 @@ class TestPlugin(unittest.TestCase):
             {'type': 'ENDPOINTDESTROYED',
              'rc': 'SUCCESS',
              'message': ''})
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-        real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        self.give_way()
+        self.give_way()
 
-        # Prep appropriate responses for next get_security_group and
-        # _get_port_security_group_bindings calls.
-        self.db.get_security_group.return_value = {
-            'id': 'SG-1',
-            'security_group_rules': []
-        }
-        self.db._get_port_security_group_bindings.return_value = []
-
-        # Call security_groups_member_updated with default SG ID.
-        self.db.notifier.security_groups_member_updated(context, ['SG-1'])
+        # Remove this port from security group SG-1.
+        self.notify_security_group_update('SG-1', [], None, 'member')
 
         # Check get GROUPUPDATE publication indicating port removed from
         # default SG ID.
@@ -1064,7 +754,7 @@ class TestPlugin(unittest.TestCase):
                'group': 'SG-1',
                'type': 'GROUPUPDATE',
                'members': {},
-               'issued': current_time * 1000}
+               'issued': self.current_time * 1000}
         self.check_acl_pub('groups', pub)
 
     def test_timing_new_endpoint(self):
@@ -1180,8 +870,8 @@ class TestPlugin(unittest.TestCase):
 
         # Connect a Felix, and process a new endpoint for that Felix.
         self.felix_connect()
-        self.new_endpoint(port1)
-        self.osdb_ports = [port1]
+        self.new_endpoint(lib.port1)
+        self.osdb_ports = [lib.port1]
 
         # Simulate disconnection and reconnection, in the form of a RESYNCSTATE
         # on new connection but with same hostname.  Check that the existing
@@ -1192,8 +882,8 @@ class TestPlugin(unittest.TestCase):
 
         # Add another new endpoint for same hostname, and check it is processed
         # normally and notified on the new connection.
-        self.new_endpoint(port2)
-        self.osdb_ports = [port1, port2]
+        self.new_endpoint(lib.port2)
+        self.osdb_ports = [lib.port1, lib.port2]
 
         # Simulate disconnect and reconnect again, and check that both existing
         # endpoints are notified on the new active connection (#3), after the
@@ -1252,3 +942,42 @@ class TestPlugin(unittest.TestCase):
             {mech_calico.api.NETWORK_TYPE: 'vlan'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
+
+    def simulated_time_advance(self, secs):
+        """Extend the common implementation of simulated_time_advance so that we also
+        check that the plugin publishes HEARTBEATs to the ACL Manager.
+        """
+        # Check if we're about to advance past any exact multiples of
+        # HEARTBEAT_SEND_INTERVAL_SECS.
+        num_acl_pub_heartbeats = (
+            int((self.current_time + secs) / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) -
+            int(self.current_time / t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
+        )
+
+        while num_acl_pub_heartbeats > 0:
+            # Calculate when the next ACL HEARTBEAT should be sent.
+            next_heartbeat_time = ((int(self.current_time /
+                                        t_zmq.HEARTBEAT_SEND_INTERVAL_SECS) + 1) *
+                                   t_zmq.HEARTBEAT_SEND_INTERVAL_SECS)
+
+            # Advance to that time.
+            next_secs = next_heartbeat_time - self.current_time
+            super(TestPlugin0MQ, self).simulated_time_advance(next_secs)
+
+            # Verify that an ACL HEARTBEAT was sent.
+            print "Handle ACL HEARTBEAT publication"
+            pub = {'type': 'HEARTBEAT',
+                   'issued': self.current_time * 1000}
+            self.acl_pub_socket.send_multipart.assert_called_once_with(
+                ['networkheartbeat'.encode('utf-8'),
+                 json.dumps(pub).encode('utf-8')])
+            self.acl_pub_socket.send_multipart.reset_mock()
+
+            # Reduce the remaining time, and expected number of heartbeats,
+            # accordingly.
+            secs -= next_secs
+            num_acl_pub_heartbeats -= 1
+
+        # If there is still any time remaining, advance by it.
+        if secs > 0:
+            super(TestPlugin0MQ, self).simulated_time_advance(secs)

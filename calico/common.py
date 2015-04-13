@@ -21,22 +21,43 @@ calico.common
 
 Calico common utilities.
 """
+import errno
+import gevent
+import gevent.local
+import itertools
 import logging
 import logging.handlers
 import netaddr
+import netaddr.core
 import os
-import re
 import sys
-import errno
 
 AGENT_TYPE_CALICO = 'Calico agent'
-FORMAT_STRING = '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s'
+FORMAT_STRING = '%(asctime)s [%(levelname)s][%(tid)d] %(name)s %(lineno)d: %(message)s'
 
 # This format string deliberately uses two different styles of format
 # specifier. The %()s form is used by the logging module: the {} form is used
 # by the code in this module. This allows us to dynamically generate the format
 # string used by the logger.
 SYSLOG_FORMAT_STRING = '{excname}: %(message)s'
+
+tid_storage = gevent.local.local()
+tid_counter = itertools.count()
+# Ought to do itertools.count(start=1), but python 2.6 does not support it.
+tid_counter.next()
+
+def greenlet_id():
+    """
+    Returns an integer greenlet ID.
+    itertools.count() is atomic, if the internet is correct.
+    http://stackoverflow.com/questions/23547604/python-counter-atomic-increment
+    """
+    try:
+        tid = tid_storage.tid
+    except:
+        tid = tid_counter.next()
+        tid_storage.tid = tid
+    return tid
 
 
 def validate_port(port):
@@ -63,7 +84,7 @@ def validate_ip_addr(addr, version):
     try:
         ip = netaddr.IPAddress(addr, version=version)
         return True
-    except (netaddr.core.AddrFormatError, ValueError):
+    except (netaddr.core.AddrFormatError, ValueError, TypeError):
         return False
 
 
@@ -76,7 +97,7 @@ def validate_cidr(cidr, version):
     try:
         ip = netaddr.IPNetwork(cidr, version=version)
         return True
-    except (netaddr.core.AddrFormatError, ValueError):
+    except (netaddr.core.AddrFormatError, ValueError, TypeError):
         return False
 
 
@@ -92,6 +113,10 @@ def mkdir_p(path):
                 pass
             else: raise
 
+class GreenletFilter(logging.Filter):
+    def filter(self, record):
+        record.tid = greenlet_id()
+        return True
 
 def default_logging():
     """
@@ -122,14 +147,16 @@ def default_logging():
     else:
         # Probably unit tests running on windows.
         syslog_handler = logging.handlers.SysLogHandler()
-    syslog_handler.setLevel(logging.ERROR)
+    syslog_handler.setLevel(logging.INFO)
     syslog_handler.setFormatter(syslog_formatter)
+
     root_logger.addHandler(syslog_handler)
 
     file_formatter = logging.Formatter(FORMAT_STRING)
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(file_formatter)
+    stream_handler.addFilter(GreenletFilter())
     root_logger.addHandler(stream_handler)
 
 
@@ -154,6 +181,7 @@ def complete_logging(logfile=None,
 
     # If default_logging got called already, we'll have some loggers in place.
     # Update their levels.
+    file_handler = None
     for handler in root_logger.handlers[:]:
         if isinstance(handler, logging.handlers.SysLogHandler):
             if syslog_level is None:
@@ -165,15 +193,22 @@ def complete_logging(logfile=None,
                 root_logger.removeHandler(handler)
             else:
                 handler.setLevel(stream_level)
+        elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+            file_handler = handler
+            if file_level is None:
+                root_logger.removeHandler(handler)
+            else:
+                handler.setLevel(file_level)
 
     # If we've been given a log file, log to file as well.
     if logfile and file_level is not None:
-        mkdir_p(os.path.dirname(logfile))
-
-        formatter = logging.Formatter(FORMAT_STRING)
-        file_handler = logging.handlers.TimedRotatingFileHandler(
-            logfile, when="D", backupCount=10
-        )
-        file_handler.setLevel(file_level)
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        if not file_handler:
+            mkdir_p(os.path.dirname(logfile))
+            formatter = logging.Formatter(FORMAT_STRING)
+            file_handler = logging.handlers.TimedRotatingFileHandler(
+                logfile, when="D", backupCount=10
+            )
+            file_handler.addFilter(GreenletFilter())
+            file_handler.setLevel(file_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)

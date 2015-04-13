@@ -19,6 +19,7 @@ felix.test.test_config
 Top level tests for Felix configuration.
 """
 import logging
+import mock
 import socket
 import sys
 from calico.felix.config import Config, ConfigException
@@ -28,83 +29,189 @@ if sys.version_info < (2, 7):
 else:
     import unittest
 
+import etcd
+real_client = etcd.client
 
 # Logger
 log = logging.getLogger(__name__)
 
+
+# Set of results from etcd.
+etcd_results = {}
+
+from collections import namedtuple
+EtcdChild = namedtuple('EtcdChild', ['key', 'value'])
+
+class StubEtcdResult(object):
+    def __init__(self, path):
+        self.children = []
+        self.path = path
+        etcd_results[path] = self
+
+    def add_child(self, key, value):
+        key = "%s/%s" % (self.path, key)
+        self.children.append(EtcdChild(key, value))
+
+class StubEtcd(object):
+    """
+    Trivial etcd stub.
+    """
+    def __init__(self, port=None):
+        self.port = port
+
+    def read(self, path):
+        return etcd_results[path]
+
+
 class TestConfig(unittest.TestCase):
     def setUp(self):
-        pass
+        # Stub out etcd.
+        etcd.Client = StubEtcd
+        etcd_results.clear()
 
-    def test_simple_good_config(self):
-        config = Config("calico/felix/test/data/felix_basic.cfg")
-        self.assertEqual(config.PLUGIN_ADDR, "localhost")
-        # We did not explicitly set HOSTNAME in this config - check defaulting.
-        self.assertEqual(config.HOSTNAME, socket.gethostname())
+    def tearDown(self):
+        # Unstub etcd.
+        etcd.Client = real_client
 
-    def test_missing_section(self):
-        with self.assertRaisesRegexp(ConfigException,
-                                     "Section log missing from config file"):
-            config = Config("calico/felix/test/data/felix_missing_section.cfg")
+    def test_default_config(self):
+        """
+        Test various ways of defaulting config.
+        """
+        files = [ "felix_missing.cfg", # does not exist
+                  "felix_empty.cfg", # empty file
+                  "felix_empty_section.cfg", # file with empty section
+                  "felix_extra.cfg", # extra config is just logged
+                  ]
 
-    def test_invalid_config(self):
-        with self.assertRaisesRegexp(ConfigException,
-                                     "not defined in section"):
-            config = Config("calico/felix/test/data/felix_invalid.cfg")
+        for file in files:
+            host = socket.gethostname()
+            host_path = "/calico/host/%s/config/" % host
 
-    def test_bad_dns_config(self):
-        with self.assertRaisesRegexp(ConfigException,
-                                     "Invalid or unresolvable MetadataAddr"):
-            config = Config("calico/felix/test/data/felix_bad_dns.cfg")
+            result = StubEtcdResult("/calico/config/")
+            result.add_child("InterfacePrefix", "blah")
+            result.add_child("ExtraJunk", "whatever") # ignored
 
-    def test_bad_port_config(self):
-        with self.assertRaisesRegexp(ConfigException, "Invalid MetadataPort"):
-            config = Config("calico/felix/test/data/felix_bad_port.cfg")
+            result = StubEtcdResult(host_path)
+            result.add_child("ResyncIntervalSecs", "123")
 
-    def test_extra_config(self):
-        # Extra data is not an error, but does log.
-        config = Config("calico/felix/test/data/felix_extra.cfg")
+            config = Config("calico/felix/test/data/%s" % file)
+
+            # Test defaulting.
+            self.assertEqual(config.ETCD_ADDR, "localhost:4001")
+            self.assertEqual(config.HOSTNAME, host)
+            self.assertEqual(config.IFACE_PREFIX, "blah")
+            self.assertEqual(config.RESYNC_INT_SEC, 123)
+
+# TODO: Restore this test.
+# The EtcdPort option has been replaced with EtcdAddr.  Validation of this is
+# not yet implemented.
+#    def test_invalid_port(self):
+#        with self.assertRaisesRegexp(ConfigException,
+#                                     "Invalid value for EtcdPort"):
+#            config = Config("calico/felix/test/data/felix_invalid.cfg")
+
+    def test_override(self):
+        host = socket.gethostname()
+        host_path = "/calico/host/%s/config/" % host
+
+        result = StubEtcdResult("/calico/config/")
+        result.add_child("InterfacePrefix", "blah")
+        result.add_child("ResyncIntervalSecs", "246")
+
+        result = StubEtcdResult(host_path)
+        result.add_child("ResyncIntervalSecs", "123")
+
+        config = Config("calico/felix/test/data/felix_missing.cfg")
+
+        # Test defaulting.
+        self.assertEqual(config.ETCD_ADDR, "localhost:4001")
+        self.assertEqual(config.HOSTNAME, host)
+        self.assertEqual(config.IFACE_PREFIX, "blah")
+        self.assertEqual(config.RESYNC_INT_SEC, 123)
+
+    def test_no_logfile(self):
+        # Logging to file can be excluded by explicitly saying "none"
+        host = socket.gethostname()
+        host_path = "/calico/host/%s/config/" % host
+
+        result = StubEtcdResult("/calico/config/")
+        result.add_child("InterfacePrefix", "blah")
+        result.add_child("LogFilePath", "NoNe")
+
+        result = StubEtcdResult(host_path)
+
+        config = Config("calico/felix/test/data/felix_missing.cfg")
+
+        # Test defaulting.
+        self.assertEqual(config.LOGFILE, None)
 
     def test_no_metadata(self):
-        # Not an error.
-        config = Config("calico/felix/test/data/felix_no_metadata.cfg")
+        # Metadata can be excluded by explicitly saying "none"
+        host = socket.gethostname()
+        host_path = "/calico/host/%s/config/" % host
+
+        result = StubEtcdResult("/calico/config/")
+        result.add_child("InterfacePrefix", "blah")
+        result.add_child("MetadataAddr", "NoNe")
+        result.add_child("MetadataPort", "123")
+
+        result = StubEtcdResult(host_path)
+
+        config = Config("calico/felix/test/data/felix_missing.cfg")
+
+        # Test defaulting.
         self.assertEqual(config.METADATA_IP, None)
         self.assertEqual(config.METADATA_PORT, None)
 
-    def test_blank_plugin(self):
-        with self.assertRaisesRegexp(ConfigException, "Blank PluginAddr"):
-            config = Config("calico/felix/test/data/felix_blank_plugin.cfg")
+    def test_bad_metadata_port(self):
+        with self.assertRaisesRegexp(ConfigException, "Invalid MetadataPort"):
+            host = socket.gethostname()
+            host_path = "/calico/host/%s/config/" % host
 
-    def test_invalid_acl(self):
+            result = StubEtcdResult("/calico/config/")
+            result.add_child("InterfacePrefix", "blah")
+            result.add_child("MetadataPort", "bloop")
+
+            result = StubEtcdResult(host_path)
+
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+
+    def test_bad_metadata_addr(self):
         with self.assertRaisesRegexp(ConfigException,
-                                     "Invalid or unresolvable ACLAddr"):
-            config = Config("calico/felix/test/data/felix_invalid_acl.cfg")
+                                     "Invalid or unresolvable MetadataAddr"):
+            host = socket.gethostname()
+            host_path = "/calico/host/%s/config/" % host
 
-    def test_localaddr_all(self):
-        # Not an error.
-        config = Config("calico/felix/test/data/felix_localaddr_all.cfg")
-        self.assertEqual(config.LOCAL_ADDR, "*")
+            result = StubEtcdResult("/calico/config/")
+            result.add_child("InterfacePrefix", "blah")
+            result.add_child("MetadataAddr", "bloop")
 
-    def test_localaddr_specific(self):
-        # Not an error.
-        config = Config("calico/felix/test/data/felix_localaddr_specific.cfg")
-        self.assertEqual(config.LOCAL_ADDR, "1.2.3.4")
+            result = StubEtcdResult(host_path)
 
-    def test_localaddr_host(self):
-        # Not an error.
-        config = Config("calico/felix/test/data/felix_localaddr_host.cfg")
-        self.assertIn("127.", config.LOCAL_ADDR)
+            config = Config("calico/felix/test/data/felix_missing.cfg")
 
-    def test_bad_localaddr(self):
+
+    def test_blank_metadata_addr(self):
         with self.assertRaisesRegexp(ConfigException,
-                                     "Invalid or unresolvable LocalAddress"):
-            config = Config("calico/felix/test/data/felix_bad_localaddr.cfg")
+                                     "Blank MetadataAddr value"):
+            host = socket.gethostname()
+            host_path = "/calico/host/%s/config/" % host
 
-    def test_nologfile(self):
-        config = Config("calico/felix/test/data/felix_nologfile.cfg")
-        self.assertIs(config.LOGFILE, None)
+            result = StubEtcdResult("/calico/config/")
+            result.add_child("InterfacePrefix", "blah")
+            result.add_child("MetadataAddr", "")
 
-    def test_nologfile2(self):
-        config = Config("calico/felix/test/data/felix_nologfile2.cfg")
-        self.assertIs(config.LOGFILE, None)
+            result = StubEtcdResult(host_path)
 
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+
+
+    def test_no_iface_prefix(self):
+        with self.assertRaisesRegexp(ConfigException, "Missing InterfacePrefix"):
+            host = socket.gethostname()
+            host_path = "/calico/host/%s/config/" % host
+
+            result = StubEtcdResult("/calico/config/")
+            result = StubEtcdResult(host_path)
+
+            config = Config("calico/felix/test/data/felix_missing.cfg")
