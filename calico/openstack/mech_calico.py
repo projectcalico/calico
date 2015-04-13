@@ -22,6 +22,7 @@
 # of the new Calico architecture (described by the "Felix, the Calico Plugin
 # and the Calico ACL Manager" document at
 # http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html).
+# TODO: Update reference to new etcd architecture document
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 
@@ -49,7 +50,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     CalicoMechanismDriver communicates information about endpoints and security
     configuration, over the Endpoint and Network APIs respectively, to the
     other components of the Calico architecture; namely to the Felix instances
-    running on each compute host, and to one or more ACL Managers.
+    running on each compute host.
     """
 
     def __init__(self):

@@ -90,9 +90,9 @@ type:
     pip install -e .
 
 This will install the code and all its dependencies, *except for Neutron*. This
-is all you need to work on Felix or the ACL Manager. If you want to work on our
-OpenStack plugin, you'll also need to install Neutron: doing that is outside
-the scope of this article.
+is all you need to work on Felix. If you want to work on our OpenStack plugin,
+you'll also need to install Neutron: doing that is outside the scope of this
+article.
 
 To run the unit tests, you'll also need to type:
 
@@ -110,7 +110,6 @@ environment variable before installing the code. Set the variable to a
 comma-separated list of the names of the components you want to install the
 dependencies for.
 
-For example, if you want to work on Felix and the ACL manager, you will want to
-set it to `felix,acl_manager`. With that set, you can then run
-`pip install -e .`, which will install the subset of the dependencies needed
-for those components.
+For example, if you want to work on Felix, you will want to set it to `felix`.
+With that set, you can then run `pip install -e .`, which will install the
+subset of the dependencies needed for those components.

@@ -75,7 +75,6 @@ setuptools.setup(
     packages = setuptools.find_packages(),
     entry_points = {
         'console_scripts': [
-            'calico-acl-manager = calico.acl_manager.acl_manager:main',
             'calico-felix = calico.felix.felix:main',
         ],
         'neutron.ml2.mechanism_drivers': [
