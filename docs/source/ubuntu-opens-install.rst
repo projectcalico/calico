@@ -70,7 +70,7 @@ Add the Calico PPA.
 
 ::
 
-    add-apt-repository ppa:project-calico/juno
+    sudo add-apt-repository ppa:project-calico/juno
 
 Common
 ^^^^^^
@@ -91,13 +91,13 @@ that are not yet available in Ubuntu 14.04. To add the PPA, run:
 
 ::
 
-    add-apt-repository ppa:cz.nic-labs/bird
+    sudo add-apt-repository ppa:cz.nic-labs/bird
 
 Once that's done, update your package manager on each machine:
 
 ::
 
-    apt-get update
+    sudo apt-get update
 
 Control Node Install
 --------------------
@@ -112,7 +112,7 @@ On a control node, perform the following steps:
 
    ::
 
-       apt-get install etcd python-etcd
+       sudo apt-get install etcd python-etcd
 
 3. Stop etcd service
    ::
@@ -122,7 +122,7 @@ On a control node, perform the following steps:
 4. Delete any existing etcd database
    ::
 
-    sudo rm -rf /var/lib/etcd/*
+       sudo rm -rf /var/lib/etcd/*
 
 5. Edit ``/etc/init/etcd.conf``:
 
@@ -150,7 +150,7 @@ On a control node, perform the following steps:
 
    ::
 
-       apt-get install calico-control
+       sudo apt-get install calico-control
 
 8. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
 
@@ -211,7 +211,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       service libvirt-bin restart
+       sudo service libvirt-bin restart
 
 2. Open ``/etc/nova/nova.conf`` and remove the line that reads:
 
@@ -226,14 +226,14 @@ On a compute node, perform the following steps:
 
    ::
 
-           service nova-compute restart
+       sudo service nova-compute restart
 
 3. If they're running, stop the Open vSwitch services:
 
    ::
 
-       service openvswitch-switch stop
-       service neutron-plugin-openvswitch-agent stop
+       sudo service openvswitch-switch stop
+       sudo service neutron-plugin-openvswitch-agent stop
 
    Then, prevent the services running if you reboot:
 
@@ -247,7 +247,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
+       sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
 
 5. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
    In the ``[DEFAULT]`` section, add the following line:
@@ -260,7 +260,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       service neutron-dhcp-agent restart
+       sudo service neutron-dhcp-agent restart
 
 6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
@@ -270,7 +270,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       apt-get install etcd python-etcd
+       sudo apt-get install etcd python-etcd
 
 8. Stop etcd service
    ::
@@ -280,7 +280,7 @@ On a compute node, perform the following steps:
 9. Delete any existing etcd database
    ::
 
-    sudo rm -rf /var/lib/etcd/*
+        sudo rm -rf /var/lib/etcd/*
 
 10. Edit ``/etc/init/etcd.conf``:
 
@@ -302,7 +302,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       apt-get install calico-compute
+       sudo apt-get install calico-compute
 
    This step may prompt you to save your IPTables rules to make them
    persistent on restart – hit yes.
@@ -316,13 +316,13 @@ On a compute node, perform the following steps:
 
    ::
 
-       calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
+       sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
 
    And/or for IPv6 connectivity between compute hosts:
 
    ::
 
-        calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
+       sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
    Note that you'll also need to configure your route reflector to allow
    connections from the compute node as a route reflector client. This
