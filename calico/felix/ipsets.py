@@ -195,8 +195,8 @@ class IpsetManager(ReferenceManager):
             new_tags = set()
             new_prof_id = None
         else:
-            new_prof_id = endpoint.get["profile_id"]
-            new_tags = self.tags_by_prof_id.get(new_prof_id, set())
+            new_prof_id = endpoint.get("profile_id")
+            new_tags = set(self.tags_by_prof_id.get(new_prof_id, []))
 
         if new_prof_id != old_prof_id:
             self._remove_profile_index(old_prof_id, endpoint_id)
