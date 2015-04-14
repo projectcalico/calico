@@ -175,7 +175,7 @@ On a control node, perform the following steps:
       set its value to 0.
 
 10. Restart the neutron server process:
-   ``service neutron-server restart``.
+   ``sudo service neutron-server restart``.
 
 Compute Node Install
 --------------------
