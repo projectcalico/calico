@@ -1,3 +1,17 @@
+.. # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+   #
+   #    Licensed under the Apache License, Version 2.0 (the "License"); you may
+   #    not use this file except in compliance with the License. You may obtain
+   #    a copy of the License at
+   #
+   #         http://www.apache.org/licenses/LICENSE-2.0
+   #
+   #    Unless required by applicable law or agreed to in writing, software
+   #    distributed under the License is distributed on an "AS IS" BASIS,
+   #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+   #    implied. See the License for the specific language governing
+   #    permissions and limitations under the License.
+
 Overlapping IPv4 address ranges
 ===============================
 
@@ -37,7 +51,7 @@ IPv4-based services somewhere in the Internet, via an IPv6 network.
 
    ::
 
-       IPv6 packet                            IPv4 packet          
+       IPv6 packet                            IPv4 packet
        SRC 2001:db8:a41:23::192.168.0.2 ----> SRC 192.168.11.5
        DST 2001:db8:a41:23::72.51.34.34       DST 72.51.34.34
 
@@ -51,7 +65,7 @@ IPv4-based services somewhere in the Internet, via an IPv6 network.
 
    ::
 
-       IPv4 packet            IPv6 packet                  
+       IPv4 packet            IPv6 packet
        SRC 72.51.34.34  ----> SRC 2001:db8:a41:23::72.51.34.34
        DST 192.168.11.5       DST 2001:db8:a41:23::192.168.0.2
 
@@ -62,7 +76,7 @@ IPv4-based services somewhere in the Internet, via an IPv6 network.
 
    ::
 
-       IPv6 packet                            IPv4 packet          
+       IPv6 packet                            IPv4 packet
        SRC 2001:db8:a41:23::72.51.34.34 ----> SRC 72.51.34.34
        DST 2001:db8:a41:23::192.168.0.2       DST 192.168.0.2
 
