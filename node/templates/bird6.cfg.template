@@ -48,7 +48,7 @@ protocol bgp {
   export filter calico_pools;
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
-  source address {{getenv "IP"}};  # The local address we use for the TCP connection
+  source address {{getenv "IP6"}};  # The local address we use for the TCP connection
 }
 {{end}}
 {{else}}
