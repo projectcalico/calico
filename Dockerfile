@@ -38,7 +38,7 @@ RUN apt-get update && \
     pip install python-etcd
 
 # Confd
-RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.7.1/confd-0.7.1-linux-amd64 -o confd && \
+RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
     chmod +x confd
 
 RUN curl https://dl.dropboxusercontent.com/u/4550074/felix-polling-workaround/calico-common_0.15_all.deb -o common.deb && dpkg -i common.deb && rm common.deb
