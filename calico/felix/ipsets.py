@@ -171,19 +171,32 @@ class IpsetManager(ReferenceManager):
             endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
             for tag_id in removed_tags:
                 for ip in self._extract_ips(endpoint):
-                    removed = self._remove_mapping(tag_id, endpoint_id, ip)
-                    if removed and self._is_starting_or_live(tag_id):
-                        _log.debug("Removing IP %s from tag %s", ip, tag_id)
-                        self.objects_by_id.remove_member(ip)
+                    self._remove_mapping(tag_id, endpoint_id, ip)
             for tag_id in added_tags:
                 for ip in self._extract_ips(endpoint):
-                    added = self._add_mapping(tag_id, endpoint_id, ip)
-                    if added and self._is_starting_or_live(tag_id):
-                        _log.debug("Adding IP %s to tag %s", ip, tag_id)
-                        self.objects_by_id.add_member(ip)
+                    self._add_mapping(tag_id, endpoint_id, ip)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
+        """
+        Update tag memberships and indexes with the new endpoint dict.
+
+        :param str endpoint_id: ID of the endpoint.
+        :param dict|NoneType endpoint: Either a dict containing endpoint
+            information or None to indicate deletion.
+
+        """
+
+        # Endpoint updates are the most complex to handle because they may
+        # change the profile ID (and hence the set of tags) as well as the
+        # ip addresses attached to the interface.  In addition, the endpoint
+        # may or may not have existed before.
+        #
+        # General approach: force all the possibilities through the same
+        # update loops by defaulting values.  For example, if there was no
+        # previous endpoint then we default old_tags to the empty set.  Then,
+        # when we calculate removed_tags, we'll get the empty set and the
+        # removal loop will be skipped.
         old_endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
         old_prof_id = old_endpoint.get("profile_id")
         if old_prof_id:
@@ -192,65 +205,57 @@ class IpsetManager(ReferenceManager):
             old_tags = set()
 
         if endpoint is None:
-            new_tags = set()
+            _log.debug("Deletion, setting new_tags to empty.")
             new_prof_id = None
+            new_tags = set()
         else:
+            _log.debug("Add/update, setting new_tags to indexed value.")
             new_prof_id = endpoint.get("profile_id")
             new_tags = set(self.tags_by_prof_id.get(new_prof_id, []))
 
         if new_prof_id != old_prof_id:
+            # Profile ID changed, or an add/delete.  the _xxx_profile_index
+            # methods ignore profile_id == None so we'll do the right thing.
+            _log.debug("Profile ID changed from %s to %s")
             self._remove_profile_index(old_prof_id, endpoint_id)
             self._add_profile_index(new_prof_id, endpoint_id)
 
+        # Since we've defaulted new/old_tags to set() if needed, we can
+        # use set operations to calculate the tag changes.
         added_tags = new_tags - old_tags
         unchanged_tags = new_tags & old_tags
         removed_tags = old_tags - new_tags
 
+        # _extract_ips() will default old/new_ips to set() if there are no IPs.
         old_ips = self._extract_ips(old_endpoint)
         new_ips = self._extract_ips(endpoint)
 
-        removed_ips_by_tag = defaultdict(set)
-        added_ips_by_tag = defaultdict(set)
-
-        # Remove *old* IPs from removed tags.
+        # Remove *all* *old* IPs from removed tags.  For a deletion only this
+        # loop will fire, removed_tags will be all tags and old_ips will be
+        # all the old IPs.
         for tag in removed_tags:
             for ip in old_ips:
-                ip_removed = self._remove_mapping(tag, endpoint_id, ip)
-                if ip_removed:
-                    removed_ips_by_tag[tag].add(ip)
+                self._remove_mapping(tag, endpoint_id, ip)
         # Change IPs in unchanged tags.
         added_ips = new_ips - old_ips
         removed_ips = old_ips - new_ips
         for tag in unchanged_tags:
             for ip in removed_ips:
-                ip_removed = self._remove_mapping(tag, endpoint_id, ip)
-                if ip_removed:
-                    removed_ips_by_tag[tag].add(ip)
+                self._remove_mapping(tag, endpoint_id, ip)
             for ip in added_ips:
-                ip_added = self._add_mapping(tag, endpoint_id, ip)
-                if ip_added:
-                    added_ips_by_tag[tag].add(ip)
+                self._add_mapping(tag, endpoint_id, ip)
         # Add *new* IPs to new tags.
         for tag in added_tags:
             for ip in new_ips:
-                ip_added = self._add_mapping(tag, endpoint_id, ip)
-                if ip_added:
-                    added_ips_by_tag[tag].add(ip)
-
-        # Pass updates to the active ipsets.
-        for tag, ip in removed_ips_by_tag.iteritems():
-            if self._is_starting_or_live(tag):
-                self.objects_by_id[tag].remove_member(ip)
-        for tag, ip in added_ips_by_tag.iteritems():
-            if self._is_starting_or_live(tag):
-                self.objects_by_id[tag].add_member(ip)
+                self._add_mapping(tag, endpoint_id, ip)
 
         _log.info("Endpoint update complete")
 
     def _remove_mapping(self, tag_id, endpoint_id, ip_address):
         """
-        Removes the given tag->endpoint->IP mapping from the
-        ip_owners_by_tag and ips_in_tag indexes.
+        Removes the tag->endpoint->IP mapping from indexes and updates
+        any ActiveIpset if the IP is no longer present in the tag.
+
         :return: True if the update resulted in removing that IP from the tag.
         """
         ep_ids = self.ip_owners_by_tag[tag_id][ip_address]
@@ -260,18 +265,26 @@ class IpsetManager(ReferenceManager):
             self.ips_in_tag[tag_id].discard(ip_address)
             del self.ip_owners_by_tag[tag_id][ip_address]
             ip_removed = True
+        if ip_removed and self._is_starting_or_live(tag_id):
+            _log.debug("Removing %s from active tag %s", ip_address, tag_id)
+            self.objects_by_id[endpoint_id].remove_member(ip_address,
+                                                          async=True)
         return ip_removed
 
     def _add_mapping(self, tag_id, endpoint_id, ip_address):
         """
-        Add the given tag->endpoint->IP mapping to the
-        ip_owners_by_tag and ips_in_tag indexes.
+        Adds the given tag->endpoint->IP mapping to the index and updates
+        the ActiveIpset if present.
+
         :return: True if the IP wasn't already in that tag.
         """
         ep_ids = self.ip_owners_by_tag[tag_id][ip_address]
         ip_added = not bool(ep_ids)
         ep_ids.add(endpoint_id)
         self.ips_in_tag[tag_id].add(ip_address)
+        if ip_added and self._is_starting_or_live(tag_id):
+            _log.debug("Adding %s to active tag %s", ip_address, tag_id)
+            self.objects_by_id[endpoint_id].add_member(ip_address, async=True)
         return ip_added
 
     def _remove_profile_index(self, prof_id, endpoint_id):
