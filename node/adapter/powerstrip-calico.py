@@ -180,7 +180,6 @@ class AdapterResource(resource.Resource):
                 if not self.datastore.assign_address(pool, ip):
                     _log.warning("IP address couldn't be assigned for "
                                  "container %s, IP=%s", cid, ip)
-                    return
 
         next_hop_ips = self.datastore.get_default_next_hops(hostname)
         endpoint = netns.set_up_endpoint(ip=ip,
