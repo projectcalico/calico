@@ -290,10 +290,16 @@ class EtcdWatcher(Actor):
         # profiles by id.  The response contains a generation ID allowing us
         # to then start polling for updates without missing any.
         global_cfg = self.client.read("/calico/config/")
-        host_cfg = self.client.read("/calico/host/%s/config/" %
-                                    self.config.HOSTNAME)
+        configs = [global_cfg]
+        try:
+            host_cfg = self.client.read("/calico/host/%s/config/" %
+                                        self.config.HOSTNAME)
+        except KeyError:
+            _log.info("No configuration overrides for this node")
+        else:
+            configs.append(host_cfg)
 
-        for child in itertools.chain(global_cfg.children, host_cfg.children):
+        for child in itertools.chain(*[cfg.children for cfg in configs]):
             _log.info("Got config parameter : %s=%s", child.key, str(child.value))
             key = child.key.rsplit("/").pop()
             value = str(child.value)
