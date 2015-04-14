@@ -33,6 +33,7 @@ Architecture: all
 Depends:
  calico-common (= ${binary:Version}),
  python-six,
+ python-gevent,
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico virtual networking for cloud data centers.
@@ -69,6 +70,7 @@ Depends:
  calico-common (= ${binary:Version}),
  ipset,
  python-netaddr,
+ python-gevent,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
