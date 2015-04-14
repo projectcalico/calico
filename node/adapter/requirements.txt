@@ -6,4 +6,4 @@ netaddr
 sh
 requests
 docker-py
-python-etcd
+python-etcd==0.3.2
