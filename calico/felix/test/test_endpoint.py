@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,5 +50,3 @@ class TestEndpointManager(BaseTestCase):
         self.m_rules_mgr = Mock(autospec=RulesManager)
         self.ep_mgr = EndpointManager(self.m_config, self.m_ipt_upds,
                                       self.m_disp_chns, self.m_rules_mgr)
-
-
