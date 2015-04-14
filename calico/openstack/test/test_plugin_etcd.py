@@ -435,3 +435,37 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678',
             '/calico/host/felix-host-1/workload/openstack/endpoint/FACEBEEF-1234-5678',
             '/calico/policy/profile/SGID-default(recursive)']))
+
+    def test_noop_entry_points(self):
+        """Call the mechanism driver entry points that are currently
+        implemented as no-ops (because Calico function does not need
+        them).
+        """
+        self.driver.initialize()
+        self.driver.update_subnet_postcommit(None)
+        self.driver.update_network_postcommit(None)
+        self.driver.delete_subnet_postcommit(None)
+        self.driver.delete_network_postcommit(None)
+        self.driver.create_network_postcommit(None)
+        self.driver.create_subnet_postcommit(None)
+        self.driver.update_network_postcommit(None)
+        self.driver.update_subnet_postcommit(None)
+
+    def test_check_segment_for_agent(self):
+        """Test calls to the mechanism driver's check_segment_for_agent entry
+        point.
+        """
+        self.driver.initialize()
+
+        # Simulate ML2 asking the driver if it can handle a port.
+        self.assertTrue(self.driver.check_segment_for_agent(
+            {mech_calico.api.NETWORK_TYPE: 'flat'},
+            mech_calico.constants.AGENT_TYPE_DHCP
+        ))
+
+        # Simulate ML2 asking the driver if it can handle a port that
+        # it can't handle.
+        self.assertFalse(self.driver.check_segment_for_agent(
+            {mech_calico.api.NETWORK_TYPE: 'vlan'},
+            mech_calico.constants.AGENT_TYPE_DHCP
+        ))
