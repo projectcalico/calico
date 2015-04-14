@@ -63,6 +63,16 @@ Add the Calico PPA.
     sudo apt-add-repository ppa:project-calico/icehouse
 
 
+Edit ``/etc/apt/preferences`` to add the following lines, whose effect
+is to prefer Calico-provided packages for Nova and Neutron even if later
+versions of those packages are released by Ubuntu.
+
+::
+
+    Package: *
+    Pin: origin launchpad.net/project-calico
+    Pin-Priority: 1001
+
 Juno
 ^^^^
 
@@ -72,9 +82,6 @@ Add the Calico PPA.
 
     sudo add-apt-repository ppa:project-calico/juno
 
-Common
-^^^^^^
-
 Edit ``/etc/apt/preferences`` to add the following lines, whose effect
 is to prefer Calico-provided packages for Nova and Neutron even if later
 versions of those packages are released by Ubuntu.
@@ -82,8 +89,11 @@ versions of those packages are released by Ubuntu.
 ::
 
     Package: *
-    Pin: release o=LP-PPA-project-calico-*
+    Pin: release -o=LP-PPA-project-calico-*
     Pin-Priority: 1001
+
+Common
+^^^^^^
 
 You will also need to add the official
 `BIRD <http://bird.network.cz/>`__ PPA. This PPA contains fixes to BIRD
