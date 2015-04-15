@@ -41,8 +41,8 @@ RUN apt-get update && \
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
     chmod +x confd
 
-RUN curl https://dl.dropboxusercontent.com/u/4550074/felix-polling-workaround/calico-common_0.15_all.deb -o common.deb && dpkg -i common.deb && rm common.deb
-RUN curl https://dl.dropboxusercontent.com/u/4550074/felix-polling-workaround/calico-felix_0.15_all.deb -o felix.deb && dpkg -i felix.deb && rm felix.deb
+RUN curl -L https://www.dropbox.com/s/zsr115cpuwv2okp/calico-common_0.15_all.deb?dl=1 -o common.deb && dpkg -i common.deb && rm common.deb
+RUN curl -L https://www.dropbox.com/s/m959ktr1274vp9p/calico-felix_0.15_all.deb?dl=1 -o felix.deb && dpkg -i felix.deb && rm felix.deb
 
 # Install Powerstrip Calico Adapter dependencies.
 ADD node/adapter/requirements.txt /adapter/
