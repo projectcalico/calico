@@ -211,7 +211,7 @@ def container_remove(container_name):
         endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
     except KeyError:
         print "Container %s doesn't contain any endpoints" % container_name
-        return
+        sys.exit(1)
 
     # Remove any IP address assignments that this endpoint has
     endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
@@ -494,7 +494,7 @@ def profile_add_container(container_name, profile_name):
 
     if not client.profile_exists(profile_name):
         print "Profile with name %s was not found." % profile_name
-        return
+        sys.exit(1)
 
     client.add_workload_to_profile(hostname, profile_name, container_id)
     print "Added %s to %s" % (container_name, profile_name)
@@ -737,11 +737,11 @@ def ip_pool_add(cidr_pool, version):
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
         print "%s is not a valid IP prefix." % cidr_pool
-        return
+        sys.exit(1)
     if "v%d" % pool.version != version:
         print "%s is an IPv%d prefix, this command is for IP%s." % \
               (cidr_pool, pool.version, version)
-        return
+        sys.exit(1)
     client.add_ip_pool(version, pool)
 
 
@@ -758,11 +758,11 @@ def ip_pool_remove(cidr_pool, version):
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
         print "%s is not a valid IP prefix." % cidr_pool
-        return
+        sys.exit(1)
     if "v%d" % pool.version != version:
         print "%s is an IPv%d prefix, this command is for IP%s." % \
               (cidr_pool, pool.version, version)
-        return
+        sys.exit(1)
     try:
         client.remove_ip_pool(version, pool)
     except KeyError:
@@ -817,11 +817,11 @@ def bgppeer_add(ip, version):
         address = IPAddress(ip)
     except AddrFormatError:
         print "%s is not a valid IP address." % address
-        return
+        sys.exit(1)
     if "v%d" % address.version != version:
         print "%s is an IPv%d prefix, this command is for IP%s." % \
               (ip, address.version, version)
-        return
+        sys.exit(1)
     client.add_bgp_peer(version, address)
 
 
@@ -837,11 +837,11 @@ def bgppeer_remove(ip, version):
         address = IPAddress(ip)
     except AddrFormatError:
         print "%s is not a valid IP address." % address
-        return
+        sys.exit(1)
     if "v%d" % address.version != version:
         print "%s is an IPv%d prefix, this command is for IP%s." % \
               (ip, address.version, version)
-        return
+        sys.exit(1)
     try:
         client.remove_bgp_peer(version, address)
     except KeyError:
