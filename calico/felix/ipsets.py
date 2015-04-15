@@ -251,26 +251,6 @@ class IpsetManager(ReferenceManager):
 
         _log.info("Endpoint update complete")
 
-    def _remove_mapping(self, tag_id, endpoint_id, ip_address):
-        """
-        Removes the tag->endpoint->IP mapping from indexes and updates
-        any ActiveIpset if the IP is no longer present in the tag.
-
-        :return: True if the update resulted in removing that IP from the tag.
-        """
-        ep_ids = self.ip_owners_by_tag[tag_id][ip_address]
-        ep_ids.discard(endpoint_id)
-        ip_removed = False
-        if not ep_ids and ip_address in self.ips_in_tag:
-            self.ips_in_tag[tag_id].discard(ip_address)
-            del self.ip_owners_by_tag[tag_id][ip_address]
-            ip_removed = True
-        if ip_removed and self._is_starting_or_live(tag_id):
-            _log.debug("Removing %s from active tag %s", ip_address, tag_id)
-            self.objects_by_id[endpoint_id].remove_member(ip_address,
-                                                          async=True)
-        return ip_removed
-
     def _add_mapping(self, tag_id, endpoint_id, ip_address):
         """
         Adds the given tag->endpoint->IP mapping to the index and updates
@@ -287,6 +267,34 @@ class IpsetManager(ReferenceManager):
             self.objects_by_id[endpoint_id].add_member(ip_address, async=True)
         return ip_added
 
+    def _remove_mapping(self, tag_id, endpoint_id, ip_address):
+        """
+        Removes the tag->endpoint->IP mapping from indexes and updates
+        any ActiveIpset if the IP is no longer present in the tag.
+
+        :return: True if the update resulted in removing that IP from the tag.
+        """
+        ep_ids = self.ip_owners_by_tag[tag_id][ip_address]
+        ep_ids.discard(endpoint_id)
+        ip_removed = False
+        if not ep_ids and ip_address in self.ips_in_tag:
+            ips_in_tag = self.ips_in_tag[tag_id]
+            ips_in_tag.discard(ip_address)
+            if not ips_in_tag:
+                del self.ips_in_tag[tag_id]
+            del self.ip_owners_by_tag[tag_id][ip_address]
+            ip_removed = True
+        if ip_removed and self._is_starting_or_live(tag_id):
+            _log.debug("Removing %s from active tag %s", ip_address, tag_id)
+            self.objects_by_id[endpoint_id].remove_member(ip_address,
+                                                          async=True)
+        return ip_removed
+
+    def _add_profile_index(self, prof_id, endpoint_id):
+        if prof_id is None:
+            return
+        self.endpoint_ids_by_profile_id[prof_id].add(endpoint_id)
+
     def _remove_profile_index(self, prof_id, endpoint_id):
         if prof_id is None:
             return
@@ -296,10 +304,6 @@ class IpsetManager(ReferenceManager):
             _log.debug("No more endpoints use profile %s", prof_id)
             del self.endpoint_ids_by_profile_id[prof_id]
 
-    def _add_profile_index(self, prof_id, endpoint_id):
-        if prof_id is None:
-            return
-        self.endpoint_ids_by_profile_id[prof_id].add(endpoint_id)
 
 class ActiveIpset(RefCountedActor):
 
