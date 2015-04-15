@@ -38,8 +38,8 @@ protocol direct {
 protocol bgp {
   debug all;
   description "Connection to BGP peer";
-  local as 64511;
-  neighbor {{.Value}} as 64511;
+  local as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{.Value}} as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import filter calico_pools;
@@ -57,8 +57,8 @@ protocol bgp {
 protocol bgp {
   debug all;
   description "Connection to BGP peer";
-  local as 64511;
-  neighbor {{.Value}} as 64511;
+  local as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{.Value}} as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import filter calico_pools;
