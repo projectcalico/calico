@@ -20,7 +20,7 @@ PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
-BGP_PEER_PATH = "/calico/config/bgp_peer_%(version)s/"
+BGP_PEER_PATH = "/calico/config/bgp_peer_rr_%(version)s/"
 
 IF_PREFIX = "cali"
 """
@@ -302,7 +302,7 @@ class DatastoreClient(object):
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
 
-    def get_bgp_peer(self, version):
+    def get_bgp_peers(self, version):
         """
         Get the configured BGP Peers
 
@@ -319,14 +319,14 @@ class DatastoreClient(object):
         Retrieve all the keys in a path and create a reverse dict
         values -> keys
 
-        :param path: The path the the keys from.
-        :return: dict of {<values>: <etcd key>} for the peers.
+        :param path: The path to get the keys from.
+        :return: dict of {<values>: <etcd key>}
         """
 
         try:
             nodes = self.etcd_client.read(path).children
         except KeyError:
-            # Path doesn't exist.  Interpret as no configured pools.
+            # Path doesn't exist.
             return {}
         else:
             values = {}
@@ -338,7 +338,9 @@ class DatastoreClient(object):
 
     def add_bgp_peer(self, version, ip):
         """
-        Add a BGP Peer
+        Add a BGP Peer.
+d
+        If the peer already exists then do nothing.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param ip: The IP address to add. (an IPAddress)
@@ -348,8 +350,8 @@ class DatastoreClient(object):
         assert isinstance(ip, IPAddress)
         bgp_peer_path = BGP_PEER_PATH % {"version": version}
 
-        # Check if the pool exists.
-        if ip in self.get_bgp_peer(version):
+        # Check if the peer exists.
+        if ip in self.get_bgp_peers(version):
             return
 
         self.etcd_client.write(bgp_peer_path, str(ip), append=True)

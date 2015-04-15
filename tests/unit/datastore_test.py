@@ -21,7 +21,7 @@ TEST_ENDPOINT_ID = "1234567890ab"
 TEST_HOST_PATH = "/calico/host/TEST_HOST"
 IPV4_POOLS_PATH = "/calico/ipam/v4/pool/"
 IPV6_POOLS_PATH = "/calico/ipam/v6/pool/"
-BGP_PEERS_PATH = "/calico/config/bgp_peer_v4/"
+BGP_PEERS_PATH = "/calico/config/bgp_peer_rr_v4/"
 TEST_PROFILE_PATH = "/calico/policy/profile/TEST/"
 ALL_PROFILES_PATH = "/calico/policy/profile/"
 ALL_ENDPOINTS_PATH = "/calico/host/"
@@ -789,7 +789,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_peers
-        peers = self.datastore.get_bgp_peer("v4")
+        peers = self.datastore.get_bgp_peers("v4")
         assert_set_equal({IPAddress("192.168.3.1"),
                           IPAddress("192.168.5.1")}, set(peers))
 
@@ -803,7 +803,7 @@ class TestDatastoreClient(unittest.TestCase):
             raise KeyError()
 
         self.etcd_client.read.side_effect = mock_read
-        peers = self.datastore.get_bgp_peer("v4")
+        peers = self.datastore.get_bgp_peers("v4")
         assert_list_equal([], peers)
 
     def test_get_bgp_peer_no_peers(self):
@@ -813,7 +813,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_no_bgppeers
-        peers = self.datastore.get_bgp_peer("v4")
+        peers = self.datastore.get_bgp_peers("v4")
         assert_list_equal([], peers)
 
     def test_add_bgp_peer(self):
@@ -849,7 +849,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_2_peers
         peer = IPAddress("192.168.3.1")
         self.datastore.remove_bgp_peer("v4", peer)
-        # 192.168.3.0 has a key ...v4/0 in the ordered list.
+        # 192.168.3.1 has a key ...v4/0 in the ordered list.
         self.etcd_client.delete.assert_called_once_with(BGP_PEERS_PATH + "0")
 
     def test_del_bgp_peer_doesnt_exist(self):
@@ -909,7 +909,7 @@ def mock_read_no_bgppeers(path):
     """
     result = Mock(spec=EtcdResult)
     assert path == BGP_PEERS_PATH
-    result.children = []
+    result.children = iter([])
     return result
 
 

@@ -19,8 +19,8 @@ Usage:
   calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl (ipv4|ipv6) pool (add|remove) <CIDR>
   calicoctl (ipv4|ipv6) pool show
-  calicoctl (ipv4|ipv6) bgppeer (add|remove) <IP>
-  calicoctl (ipv4|ipv6) bgppeer show
+  calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
+  calicoctl (ipv4|ipv6) bgppeer rr show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -851,7 +851,7 @@ def bgppeer_show(version):
     """
     Print a list BGP Peers
     """
-    peers = client.get_bgp_peer(version)
+    peers = client.get_bgp_peers(version)
     if peers:
         x = PrettyTable(["BGP Peer"], sortby="BGP Peer")
         for peer in peers:
@@ -923,7 +923,7 @@ if __name__ == '__main__':
                     ip_pool_remove(arguments["<CIDR>"], version)
                 elif arguments["show"]:
                     ip_pool_show(version)
-            elif arguments["bgppeer"]:
+            elif arguments["bgppeer"] and arguments["rr"]:
                 if arguments["add"]:
                     bgppeer_add(arguments["<IP>"], version)
                 elif arguments["remove"]:
