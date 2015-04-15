@@ -19,12 +19,12 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl ipv4 pool add <CIDR>
-  calicoctl ipv4 pool del <CIDR>
-  calicoctl ipv4 pool show
-  calicoctl ipv6 pool add <CIDR>
-  calicoctl ipv6 pool del <CIDR>
-  calicoctl ipv6 pool show
+  calicoctl (ipv4|ipv6) pool add <CIDR>
+  calicoctl (ipv4|ipv6) pool del <CIDR>
+  calicoctl (ipv4|ipv6) pool show
+  calicoctl (ipv4|ipv6) bgppeer add <IP>
+  calicoctl (ipv4|ipv6) bgppeer del <IP>
+  calicoctl (ipv4|ipv6) bgppeer show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -733,19 +733,19 @@ def ip_pool_add(cidr_pool, version):
     Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
+    :param version: v4 or v6
     :return: None
     """
-    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
         print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version != version:
-        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+    if "v%d" % pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IP%s." % \
               (cidr_pool, pool.version, version)
         return
-    client.add_ip_pool("v%d" % version, pool)
+    client.add_ip_pool(version, pool)
 
 
 def ip_pool_remove(cidr_pool, version):
@@ -753,20 +753,20 @@ def ip_pool_remove(cidr_pool, version):
     Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
+    :param version: v4 or v6
     :return: None
     """
-    assert version in (4, 6)
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
         print "%s is not a valid IP prefix." % cidr_pool
         return
-    if pool.version != version:
-        print "%s is an IPv%d prefix, this command is for IPv%d." % \
+    if "v%d" % pool.version != version:
+        print "%s is an IPv%d prefix, this command is for IP%s." % \
               (cidr_pool, pool.version, version)
         return
     try:
-        client.del_ip_pool("v%d" % version, pool)
+        client.del_ip_pool(version, pool)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
 
@@ -805,6 +805,63 @@ def validate_arguments():
 
 def process_output(line):
     sys.stdout.write(line)
+
+
+def bgppeer_add(ip, version):
+    """
+    Add the the given IP to the list of BGP Peers
+
+    :param ip: The address to add
+    :param version: v4 or v6
+    :return: None
+    """
+    try:
+        address = IPAddress(ip)
+    except AddrFormatError:
+        print "%s is not a valid IP address." % address
+        return
+    if "v%d" % address.version != version:
+        print "%s is an IPv%d prefix, this command is for IP%s." % \
+              (ip, address.version, version)
+        return
+    client.add_bgp_peer(version, address)
+
+
+def bgppeer_delete(ip, version):
+    """
+    Add the the given BGP Peer.
+
+    :param ip: The address to use.
+    :param version: v4 or v6
+    :return: None
+    """
+    try:
+        address = IPAddress(ip)
+    except AddrFormatError:
+        print "%s is not a valid IP address." % address
+        return
+    if "v%d" % address.version != version:
+        print "%s is an IPv%d prefix, this command is for IP%s." % \
+              (ip, address.version, version)
+        return
+    try:
+        client.delete_bgp_peer(version, address)
+    except KeyError:
+        print "%s is not a configured peer." % address
+
+def bgppeer_show(version):
+    """
+    Print a list BGP Peers
+    """
+    peers = client.get_bgp_peer(version)
+    if peers:
+        x = PrettyTable(["BGP Peer"], sortby="BGP Peer")
+        for peer in peers:
+            x.add_row([peer])
+        x.align = "l"
+        print x
+    else:
+        print "No BGP Peers defined."
 
 
 if __name__ == '__main__':
@@ -856,22 +913,25 @@ if __name__ == '__main__':
             save_diags()
         elif arguments["shownodes"]:
             node_show(arguments["--detailed"])
-        elif arguments["ipv4"]:
-            assert arguments["pool"]
-            if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"], version=4)
-            elif arguments["del"]:
-                ip_pool_remove(arguments["<CIDR>"], version=4)
-            elif arguments["show"]:
-                ip_pool_show("v4")
-        elif arguments["ipv6"]:
-            assert arguments["pool"]
-            if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"], version=6)
-            elif arguments["del"]:
-                ip_pool_remove(arguments["<CIDR>"], version=6)
-            elif arguments["show"]:
-                ip_pool_show("v6")
+        elif arguments["ipv4"] or arguments["ipv6"]:
+            if arguments["ipv4"]:
+                version = "v4"
+            elif arguments["ipv6"]:
+                version = "v6"
+            if arguments["pool"]:
+                if arguments["add"]:
+                    ip_pool_add(arguments["<CIDR>"], version)
+                elif arguments["del"]:
+                    ip_pool_remove(arguments["<CIDR>"], version)
+                elif arguments["show"]:
+                    ip_pool_show(version)
+            elif arguments["bgppeer"]:
+                if arguments["add"]:
+                    bgppeer_add(arguments["<IP>"], version)
+                elif arguments["del"]:
+                    bgppeer_delete(arguments["<IP>"], version)
+                elif arguments["show"]:
+                    bgppeer_show(version)
         if arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"], arguments["<IP>"])

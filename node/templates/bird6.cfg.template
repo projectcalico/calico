@@ -33,9 +33,9 @@ protocol direct {
 
 {{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
 {{else}}
-{{if ls "/calico/config/bgp_peers_ipv6"}}
+{{if ls "/calico/config/bgp_peer_v6"}}
 # Peer with configured neighbors
-{{range gets "/calico/config/bgp_peers_ipv6/*"}}
+{{range gets "/calico/config/bgp_peer_v6/*"}}
 # For peer {{.Value}}
 protocol bgp {
   debug all;

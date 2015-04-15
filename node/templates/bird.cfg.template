@@ -31,9 +31,9 @@ protocol direct {
    interface "eth*", "em*", "ens*";
 }
 
-{{if ls "/calico/config/bgp_peers"}}
+{{if ls "/calico/config/bgp_peer_v4"}}
 # Peer with configured neighbors
-{{range gets "/calico/config/bgp_peers/*"}}
+{{range gets "/calico/config/bgp_peer_v4/*"}}
 # For peer {{.Value}}
 protocol bgp {
   debug all;

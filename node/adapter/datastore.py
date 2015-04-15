@@ -20,7 +20,7 @@ PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
 IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
-IP_POOLS_PATH = "/calico/ipam/%(version)s/pool/"
+BGP_PEER_PATH = "/calico/config/bgp_peer_%(version)s/"
 
 IF_PREFIX = "cali"
 """
@@ -255,29 +255,8 @@ class DatastoreClient(object):
         :return: List of netaddr.IPNetwork IP pools.
         """
         assert version in ("v4", "v6")
-        return self._get_ip_pools_with_keys(version).keys()
-
-    def _get_ip_pools_with_keys(self, version):
-        """
-        Get configured IP pools with their etcd keys.
-
-        :param version: "v4" for IPv4, "v6" for IPv6
-        :return: dict of {<IPNetwork>: <etcd key>} for the pools.
-        """
-        pool_path = IP_POOLS_PATH % {"version": version}
-        try:
-            nodes = self.etcd_client.read(pool_path).children
-        except KeyError:
-            # Path doesn't exist.  Interpret as no configured pools.
-            return {}
-        else:
-            pools = {}
-            for child in nodes:
-                cidr = child.value
-                if cidr:
-                    pool = IPNetwork(cidr)
-                    pools[pool] = child.key
-            return pools
+        pool_path = IP_POOL_PATH % {"version": version}
+        return map(IPNetwork, self._get_path_with_keys(pool_path).keys())
 
     def add_ip_pool(self, version, pool):
         """
@@ -314,13 +293,86 @@ class DatastoreClient(object):
         assert version in ("v4", "v6")
         assert isinstance(pool, IPNetwork)
 
-        pools = self._get_ip_pools_with_keys(version)
+        pool_path = IP_POOL_PATH % {"version": version}
+        pools = self._get_path_with_keys(pool_path)
         try:
-            key = pools[pool.cidr]
+            key = pools[str(pool.cidr)]
             self.etcd_client.delete(key)
         except KeyError:
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
+
+    def get_bgp_peer(self, version):
+        """
+        Get the configured BGP Peers
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :return: List of netaddr.IPAddress IP addresses.
+        """
+        assert version in ("v4", "v6")
+        bgp_peer_path = BGP_PEER_PATH % {"version": version}
+        return map(IPAddress, self._get_path_with_keys(bgp_peer_path).keys())
+
+
+    def _get_path_with_keys(self, path):
+        """
+        Retrieve all the keys in a path and create a reverse dict
+        values -> keys
+
+        :param path: The path the the keys from.
+        :return: dict of {<values>: <etcd key>} for the peers.
+        """
+
+        try:
+            nodes = self.etcd_client.read(path).children
+        except KeyError:
+            # Path doesn't exist.  Interpret as no configured pools.
+            return {}
+        else:
+            values = {}
+            for child in nodes:
+                value = child.value
+                if value:
+                    values[value] = child.key
+            return values
+
+    def add_bgp_peer(self, version, ip):
+        """
+        Add a BGP Peer
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param ip: The IP address to add. (an IPAddress)
+        :return: Nothing
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(ip, IPAddress)
+        bgp_peer_path = BGP_PEER_PATH % {"version": version}
+
+        # Check if the pool exists.
+        if ip in self.get_bgp_peer(version):
+            return
+
+        self.etcd_client.write(bgp_peer_path, str(ip), append=True)
+
+    def delete_bgp_peer(self, version, ip):
+        """
+        Delete a BGP Peer
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param ip: The IP address to delete. (an IPAddress)
+        :return: Nothing
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(ip, IPAddress)
+        bgp_peer_path = BGP_PEER_PATH % {"version": version}
+
+        peers = self._get_path_with_keys(bgp_peer_path)
+        try:
+            key = peers[str(ip)]
+            self.etcd_client.delete(key)
+        except KeyError:
+            # Re-raise with a better error message.
+            raise KeyError("%s is not a configured peer." % ip)
 
     def profile_exists(self, name):
         """
