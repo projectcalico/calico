@@ -140,9 +140,30 @@ class IpsetManager(ReferenceManager):
             None if deleted.
         """
         _log.info("Tags for profile %s updated", profile_id)
-        old_tags = self.tags_by_prof_id.get(profile_id, [])
-        new_tags = tags or []
-        self._process_tag_updates(profile_id, set(old_tags), set(new_tags))
+
+        # General approach is to default to the empty list if the new/old
+        # tag list is missing; then add/delete falls out: all the tags will
+        # end up in either added_tags or removed_tags.
+        old_tags = set(self.tags_by_prof_id.get(profile_id, []))
+        new_tags = set(tags or [])
+
+        endpoint_ids = self.endpoint_ids_by_profile_id.get(profile_id, set())
+        added_tags = new_tags - old_tags
+        removed_tags = old_tags - new_tags
+
+        _log.debug("Endpoint IDs with this profile: %s", endpoint_ids)
+        _log.debug("Profile %s added tags: %s", profile_id, added_tags)
+        _log.debug("Profile %s removed tags: %s", profile_id, removed_tags)
+
+        for endpoint_id in endpoint_ids:
+            endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
+            ip_addrs = self._extract_ips(endpoint)
+            for tag_id in removed_tags:
+                for ip in ip_addrs:
+                    self._remove_mapping(tag_id, endpoint_id, ip)
+            for tag_id in added_tags:
+                for ip in ip_addrs:
+                    self._add_mapping(tag_id, endpoint_id, ip)
 
         if tags is None:
             _log.info("Tags for profile %s deleted", profile_id)
@@ -156,25 +177,6 @@ class IpsetManager(ReferenceManager):
         return set(map(futils.net_to_ip,
                        endpoint.get(self.nets_key, [])))
 
-    def _process_tag_updates(self, profile_id, old_tags, new_tags):
-        """
-        Updates the active ipsets associated with the change in tags
-        of the given profile ID.
-        """
-        endpoint_ids = self.endpoint_ids_by_profile_id.get(profile_id, set())
-        _log.debug("Endpoint IDs with this profile: %s", endpoint_ids)
-        added_tags = new_tags - old_tags
-        _log.debug("Profile %s added tags: %s", profile_id, added_tags)
-        removed_tags = old_tags - new_tags
-        _log.debug("Profile %s removed tags: %s", profile_id, removed_tags)
-        for endpoint_id in endpoint_ids:
-            endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
-            for tag_id in removed_tags:
-                for ip in self._extract_ips(endpoint):
-                    self._remove_mapping(tag_id, endpoint_id, ip)
-            for tag_id in added_tags:
-                for ip in self._extract_ips(endpoint):
-                    self._add_mapping(tag_id, endpoint_id, ip)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
@@ -264,7 +266,7 @@ class IpsetManager(ReferenceManager):
         self.ips_in_tag[tag_id].add(ip_address)
         if ip_added and self._is_starting_or_live(tag_id):
             _log.debug("Adding %s to active tag %s", ip_address, tag_id)
-            self.objects_by_id[endpoint_id].add_member(ip_address, async=True)
+            self.objects_by_id[tag_id].add_member(ip_address, async=True)
         return ip_added
 
     def _remove_mapping(self, tag_id, endpoint_id, ip_address):
@@ -286,8 +288,7 @@ class IpsetManager(ReferenceManager):
             ip_removed = True
         if ip_removed and self._is_starting_or_live(tag_id):
             _log.debug("Removing %s from active tag %s", ip_address, tag_id)
-            self.objects_by_id[endpoint_id].remove_member(ip_address,
-                                                          async=True)
+            self.objects_by_id[tag_id].remove_member(ip_address, async=True)
         return ip_removed
 
     def _add_profile_index(self, prof_id, endpoint_id):
