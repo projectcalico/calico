@@ -732,6 +732,7 @@ def ip_pool_add(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
+    assert version in ("v4", "v6")
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
@@ -752,6 +753,7 @@ def ip_pool_remove(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
+    assert version in ("v4", "v6")
     try:
         pool = IPNetwork(cidr_pool)
     except AddrFormatError:
