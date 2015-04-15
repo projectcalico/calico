@@ -33,15 +33,15 @@ protocol direct {
 
 {{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
 {{else}}
-{{if ls "/calico/config/bgp_peers_ipv6"}}
+{{if ls "/calico/config/bgp_peer_rr_v6"}}
 # Peer with configured neighbors
-{{range gets "/calico/config/bgp_peers_ipv6/*"}}
+{{range gets "/calico/config/bgp_peer_rr_v6/*"}}
 # For peer {{.Value}}
 protocol bgp {
   debug all;
   description "Connection to BGP peer";
-  local as 64511;
-  neighbor {{.Value}} as 64511;
+  local as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{.Value}} as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import filter calico_pools;
@@ -59,8 +59,8 @@ protocol bgp {
 protocol bgp {
   debug all;
   description "Connection to BGP peer";
-  local as 64511;
-  neighbor {{.Value}} as 64511;
+  local as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{.Value}} as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import filter calico_pools;
