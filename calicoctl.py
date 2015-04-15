@@ -17,9 +17,9 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl (ipv4|ipv6) pool (add|del) <CIDR>
+  calicoctl (ipv4|ipv6) pool (add|remove) <CIDR>
   calicoctl (ipv4|ipv6) pool show
-  calicoctl (ipv4|ipv6) bgppeer (add|del) <IP>
+  calicoctl (ipv4|ipv6) bgppeer (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
@@ -823,7 +823,7 @@ def bgppeer_add(ip, version):
     client.add_bgp_peer(version, address)
 
 
-def bgppeer_delete(ip, version):
+def bgppeer_remove(ip, version):
     """
     Add the the given BGP Peer.
 
@@ -917,15 +917,15 @@ if __name__ == '__main__':
             if arguments["pool"]:
                 if arguments["add"]:
                     ip_pool_add(arguments["<CIDR>"], version)
-                elif arguments["del"]:
+                elif arguments["remove"]:
                     ip_pool_remove(arguments["<CIDR>"], version)
                 elif arguments["show"]:
                     ip_pool_show(version)
             elif arguments["bgppeer"]:
                 if arguments["add"]:
                     bgppeer_add(arguments["<IP>"], version)
-                elif arguments["del"]:
-                    bgppeer_delete(arguments["<IP>"], version)
+                elif arguments["remove"]:
+                    bgppeer_remove(arguments["<IP>"], version)
                 elif arguments["show"]:
                     bgppeer_show(version)
         if arguments["container"]:
