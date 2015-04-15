@@ -45,7 +45,7 @@ If you see ping failures, the likely culprit is a problem with then Virtualbox n
 
 If you didn't use the calico-coreos-vagrant-example Vagrantfile, now download Calico onto both servers by SSHing onto them and running
 
-    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.2.0/calicoctl
+    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.3.2/calicoctl
     chmod +x calicoctl
 
 Now start calico on all the nodes
@@ -66,7 +66,7 @@ You should see output like this on each node
 
     core@core-01 ~ $ docker ps
     CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:v0.2.0     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+    077ceae44fe3        calico/node:v0.3.2     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 
 ## Routing via Powerstrip
 
@@ -105,26 +105,26 @@ On core-02
     docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox
     docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox
 
-At this point, the containers have not been added to any security groups so they won't be able to communicate with any other containers.
+At this point, the containers have not been added to any policy profiles so they won't be able to communicate with any other containers.
 
-Create some security groups (this can be done on either host)
+Create some profiles (this can be done on either host)
 
-    ./calicoctl group add GROUP_A_C_E
-    ./calicoctl group add GROUP_B
-    ./calicoctl group add GROUP_D
+    ./calicoctl profile add PROF_A_C_E
+    ./calicoctl profile add PROF_B
+    ./calicoctl profile add PROF_D
 
-Now add the containers to the security groups (note that `group add` works from any Calico node, but `group addmember` only works from the Calico node where the container is hosted).
+Now add the containers to the profile (note that `profile add` works from any Calico node, but `profile <PROFILE> member add` only works from the Calico node where the container is hosted).
 
 On core-01:
 
-    ./calicoctl group addmember GROUP_A_C_E workload-A
-    ./calicoctl group addmember GROUP_B  workload-B
-    ./calicoctl group addmember GROUP_A_C_E workload-C
+    ./calicoctl profile PROF_A_C_E member add workload-A
+    ./calicoctl profile PROF_B member add workload-B
+    ./calicoctl profile PROF_A_C_E member add workload-C
 
 On core-02:
 
-    ./calicoctl group addmember GROUP_D workload-D
-    ./calicoctl group addmember GROUP_A_C_E workload-E
+    ./calicoctl profile PROF_D member add workload-D
+    ./calicoctl profile PROF_A_C_E member add workload-E
 
 Now, check that A can ping C (192.168.1.3) and E (192.168.1.5):
 
@@ -136,7 +136,7 @@ Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
     docker exec workload-A ping -c 4 192.168.1.2
     docker exec workload-A ping -c 4 192.168.1.4
 
-B and D are in their own groups so shouldn't be able to ping anyone else.
+B and D are in their own profiles so shouldn't be able to ping anyone else.
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 
@@ -175,15 +175,15 @@ Then, you can start containers with IPv6 connectivity by giving them an IPv6 add
 On core-01
 
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
-    sudo ./calicoctl group add GROUP_F_G
-    sudo ./calicoctl group addmember GROUP_F_G workload-F
+    sudo ./calicoctl profile add PROF_F_G
+    sudo ./calicoctl profile PROF_F_G member add workload-F
 
 Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
 
 One core-02
 
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
-    sudo ./calicoctl group addmember GROUP_F_G workload-G
+    sudo ./calicoctl profile PROF_F_G member add workload-G
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
 
 ## Troubleshooting

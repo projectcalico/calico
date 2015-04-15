@@ -25,13 +25,12 @@ from docker import Client
 from netaddr import IPAddress, AddrFormatError
 
 import netns
-from datastore import DatastoreClient
 from ipam import SequentialAssignment, IPAMClient
 
 _log = logging.getLogger(__name__)
 
 ENV_IP = "CALICO_IP"
-ENV_GROUP = "CALICO_PROFILE"
+ENV_PROFILE = "CALICO_PROFILE"
 
 hostname = socket.gethostname()
 
@@ -40,8 +39,9 @@ LISTEN_PORT = 2378
 
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(filename)s.%(name)s %(lineno)d: '
-                                  '%(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(filename)s.%(name)s %(lineno)d: '
+        '%(message)s')
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
@@ -63,12 +63,13 @@ class AdapterResource(resource.Resource):
     def __init__(self):
         resource.Resource.__init__(self)
 
-        # Init a Docker client, to save having to do so every time a request comes in.
+        # Init a Docker client, to save having to do so every time a request
+        # comes in.
         self.docker = Client(base_url='unix://host-var-run/docker.sock',
                              version="1.16")
 
         # Init an etcd client.
-        self.etcd = IPAMClient()
+        self.datastore = IPAMClient()
 
     def render_POST(self, request):
         """
@@ -82,7 +83,8 @@ class AdapterResource(resource.Resource):
             elif request_content["Type"] == "post-hook":
                 result = self._handle_post_hook(request, request_content)
             else:
-                _log.error("Unsupported hook type: %s", request_content["Type"])
+                _log.error("Unsupported hook type: %s",
+                           request_content["Type"])
                 raise Exception("unsupported hook type %s" %
                                 (request_content["Type"],))
             _log.debug("Result: %s", result)
@@ -95,8 +97,10 @@ class AdapterResource(resource.Resource):
         _log.info("Handling pre-hook")
         client_request = request_content["ClientRequest"]
 
-        # Only one action at this point, so just plumb directly
-        _client_request_net_none(client_request)
+        if _calico_ip_in_request(client_request):
+            # Calico IP was defined in the request, so override the net portion
+            # of the HostConfig
+            _client_request_net_none(client_request)
 
         return json.dumps({"PowerstripProtocolVersion": 1,
                            "ModifiedClientRequest": client_request})
@@ -104,7 +108,7 @@ class AdapterResource(resource.Resource):
     def _handle_post_hook(self, request, request_content):
         _log.debug("Post-hook response: %s", request_content)
 
-        # Extract ip, group, master, docker_options
+        # Extract ip, profile, master, docker_options
         client_request = request_content["ClientRequest"]
         server_response = request_content["ServerResponse"]
 
@@ -116,8 +120,10 @@ class AdapterResource(resource.Resource):
 
     def _install_endpoint(self, client_request):
         """
-        Install a Calico endpoint (veth) in the container referenced in the client request object.
-        :param client_request: Powerstrip ClientRequest object as dictionary from JSON.
+        Install a Calico endpoint (veth) in the container referenced in the
+        client request object.
+        :param client_request: Powerstrip ClientRequest object as dictionary
+        from JSON.
         :returns: None
         """
         try:
@@ -134,17 +140,18 @@ class AdapterResource(resource.Resource):
             cont = self.docker.inspect_container(cid)
             _log.debug("Container info: %s", cont)
             pid = cont["State"]["Pid"]
-            _log.debug(pid)
+            _log.debug('Container PID: %s', pid)
 
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
             env_dict = env_to_dictionary(env_list)
             ip_str = env_dict[ENV_IP]
-
-            group = env_dict.get(ENV_GROUP, None)
+            profile = env_dict.get(ENV_PROFILE, None)
 
         except KeyError as e:
-            _log.warning("Key error %s, request: %s", e, client_request)
+            # This error is benign for missing ENV_IP, since it means not to
+            # set up Calico networking for this container.
+            _log.info("Key error %s, request: %s", e, client_request)
             return
 
         # Just auto assign ipv4 addresses for now.
@@ -158,30 +165,39 @@ class AdapterResource(resource.Resource):
                 return
             else:
                 version = "v%s" % ip.version
-                pools = self.etcd.get_ip_pools(version)
+                _log.debug('Attempting to assign IP%s address %s', version, ip)
+                pools = self.datastore.get_ip_pools(version)
+                pool = None
                 for candidate_pool in pools:
                     if ip in candidate_pool:
                         pool = candidate_pool
-                if not self.etcd.assign_address(pool, ip):
+                        _log.debug('Using IP pool %s', pool)
+                        break
+                if not pool:
+                    _log.warning("Requested IP %s isn't in any configured "
+                                 "pool. Container %s", ip, cid)
+                    return
+                if not self.datastore.assign_address(pool, ip):
                     _log.warning("IP address couldn't be assigned for "
                                  "container %s, IP=%s", cid, ip)
-                    return
 
-        next_hop_ips = self.etcd.get_default_next_hops(hostname)
-        endpoint = netns.set_up_endpoint(ip, pid, next_hop_ips)
-        self.etcd.set_endpoint(hostname, cid, endpoint)
+        next_hop_ips = self.datastore.get_default_next_hops(hostname)
+        endpoint = netns.set_up_endpoint(ip=ip,
+                                         cpid=pid,
+                                         next_hop_ips=next_hop_ips)
+        if profile is not None:
+            if not self.datastore.profile_exists(profile):
+                _log.info("Autocreating profile %s", profile)
+                self.datastore.create_profile(profile)
+            _log.info("Adding container %s to profile %s", cid, profile)
+            endpoint.profile_id = profile
+            _log.info("Finished adding container %s to profile %s",
+                      cid, profile)
+
+        self.datastore.set_endpoint(hostname, cid, endpoint)
         _log.info("Finished network for container %s, IP=%s", cid, ip)
 
-        if group is not None:
-            if not self.etcd.group_exists(group):
-                _log.info("Autocreating group %s", group)
-                self.etcd.create_group(group)
-            _log.info("Adding container %s to group %s", cid, group)
-            self.etcd.add_workload_to_group(group, cid)
-            _log.info("Finished adding container %s to group %s", cid, group)
-
         return
-
 
     def assign_ipv4(self):
         """
@@ -192,7 +208,7 @@ class AdapterResource(resource.Resource):
         ip = None
 
         # For each configured pool, attempt to assign an IP before giving up.
-        for pool in self.etcd.get_ip_pools("v4"):
+        for pool in self.datastore.get_ip_pools("v4"):
             assigner = SequentialAssignment()
             ip = assigner.allocate(pool)
             if ip is not None:
@@ -201,11 +217,46 @@ class AdapterResource(resource.Resource):
         return ip
 
 
+def _calico_ip_in_request(client_request):
+    """
+    Examine a ClientRequest object to determine whether the ENV_IP environment
+    variable is present.
+
+    We don't set up Calico networking for container requests if the ENV_IP
+    variable is absent.
+
+    :param client_request:
+    :return: True if ENV_IP variable is defined, False otherwise.
+    """
+    try:
+        # Body is passed as a string, so deserialize it to JSON.
+        body = json.loads(client_request["Body"])
+
+        env = body["Env"]
+    except KeyError:
+        _log.warning("Client request object had no 'Env' in 'Body': %s",
+                     client_request)
+        return False
+
+    _log.info("Request Env: %s", env)
+
+    # env is a list of strings of the form 'VAR=value'.  We want an exact match
+    # on our VAR, so search for it including the = sign at the beginning of the
+    # string.  (Should be faster than compiling a regex and avoids the
+    # dependency).
+    search = ENV_IP + "="
+    for line in env:
+        if line.startswith(search):
+            return True
+    return False
+
+
 def _client_request_net_none(client_request):
     """
     Modify the client_request in place to set net=None Docker option.
 
-    :param client_request: Powerstrip ClientRequest object as dictionary from JSON
+    :param client_request: Powerstrip ClientRequest object as dictionary from
+    JSON
     :return: None
     """
     try:
@@ -213,13 +264,15 @@ def _client_request_net_none(client_request):
         body = json.loads(client_request["Body"])
 
         host_config = body["HostConfig"]
-        _log.debug("Original NetworkMode: %s", host_config.get("NetworkMode", "<unset>"))
+        _log.debug("Original NetworkMode: %s",
+                   host_config.get("NetworkMode", "<unset>"))
         host_config["NetworkMode"] = "none"
 
         # Re-serialize the updated body.
         client_request["Body"] = json.dumps(body)
     except KeyError as e:
-        _log.warning("Error setting net=none: %s, request was %s", e, client_request)
+        _log.warning("Error setting net=none: %s, request was %s",
+                     e, client_request)
 
 
 def get_adapter():
@@ -244,7 +297,8 @@ def env_to_dictionary(env_list):
 
 if __name__ == "__main__":
     setup_logging("/var/log/calico/powerstrip-calico.log")
-    # Listen only on the loopback so we don't expose the adapter outside the host.
+    # Listen only on the loopback so we don't expose the adapter outside the
+    # host.
     reactor.listenTCP(LISTEN_PORT, get_adapter(), interface="127.0.0.1")
     reactor.run()
 

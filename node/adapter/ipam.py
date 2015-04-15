@@ -40,6 +40,7 @@ class SequentialAssignment(object):
         """
         Gets the next address in a range.
         :param IPNetwork pool: The pool to allocate from
+        :param assigned: a dict of addresses that are already assigned.
         :return: the next IP address to try (a string), or None if the pool
                  is full.
         """

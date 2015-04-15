@@ -9,11 +9,16 @@ Usage:
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
-  calicoctl group show [--detailed]
-  calicoctl group add <GROUP>
-  calicoctl group remove <GROUP>
-  calicoctl group addmember <GROUP> <CONTAINER>
-  calicoctl group removemember <GROUP> <CONTAINER>
+  calicoctl profile show [--detailed]
+  calicoctl profile add <PROFILE>
+  calicoctl profile remove <PROFILE>
+  calicoctl profile <PROFILE> tag show
+  calicoctl profile <PROFILE> tag add <TAG>
+  calicoctl profile <PROFILE> tag remove <TAG>
+  calicoctl profile <PROFILE> rule show
+  calicoctl profile <PROFILE> rule json
+  calicoctl profile <PROFILE> rule update
+  calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl ipv4 pool add <CIDR>
   calicoctl ipv4 pool del <CIDR>
   calicoctl ipv4 pool show
@@ -40,6 +45,7 @@ import sys
 import time
 import os
 import re
+import json
 
 import netaddr
 from docopt import docopt
@@ -51,7 +57,8 @@ from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
 from node.adapter.datastore import (ETCD_AUTHORITY_ENV,
-                                    ETCD_AUTHORITY_DEFAULT)
+                                    ETCD_AUTHORITY_DEFAULT,
+                                    Rules)
 from node.adapter.ipam import IPAMClient
 from node.adapter import netns
 
@@ -66,7 +73,6 @@ docker_client = docker.Client(version=DOCKER_VERSION,
 try:
     modprobe = sh.Command._create('modprobe')
     sysctl = sh.Command._create("sysctl")
-    restart = sh.Command._create("restart")
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
     
@@ -130,7 +136,7 @@ def container_add(container_name, ip):
 
     # Check if the container already exists
     try:
-        _ = client.get_ep_id_from_cont(container_id)
+        _ = client.get_ep_id_from_cont(hostname, container_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
@@ -148,6 +154,7 @@ def container_add(container_name, ip):
     ip = IPAddress(ip)
     version = "v%s" % ip.version
     pools = client.get_ip_pools(version)
+    pool = None
     for candidate_pool in pools:
         if ip in candidate_pool:
             pool = candidate_pool
@@ -191,26 +198,26 @@ def container_remove(container_name):
     Remove a container (on this host) from Calico networking.
 
     The container may be left in a state without any working networking.
-    The container can't be removed if there are ACLs that refer to it.
     If there is a network adaptor in the host namespace used by the container
     then it is removed.
 
     :param container_name: The name or ID of the container.
     """
+    # The netns manipulations must be done as root.
+    if os.geteuid() != 0:
+        print >> sys.stderr, "`calicoctl container remove` must be run as " \
+                             "root."
+        sys.exit(2)
+
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
     # Find the endpoint ID. We need this to find any ACL rules
     try:
-        endpoint_id = client.get_ep_id_from_cont(container_id)
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
     except KeyError:
         print "Container %s doesn't contain any endpoints" % container_name
         return
-
-    groups = client.get_groups_by_endpoint(endpoint_id)
-    if len(groups) > 0:
-        print "Container %s is in security groups %s. Can't remove." % \
-              (container_name, groups)
 
     # Remove any IP address assignments that this endpoint has
     endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
@@ -220,41 +227,22 @@ def container_remove(container_name):
         pools = client.get_ip_pools("v%s" % ip.version)
         for pool in pools:
             if ip in pool:
+                # Ignore failure to unassign address, since we're not
+                # enforcing assignments strictly in datastore.py.
                 client.unassign_address(pool, ip)
 
     # Remove the endpoint
     netns.remove_endpoint(endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(container_id)
+    client.remove_container(hostname, container_id)
 
     print "Removed Calico interface from %s" % container_name
 
 
-def group_remove_container(container_name, group_name):
-    """
-    Remove a container (on this host) from the group with the given name.  
-
-    :param container_name: The Docker container name or ID.
-    :param group_name:  The Calico security group name.
-    :return: None.
-    """
-    # Resolve the name to ID.
-    container_id = get_container_id(container_name)
-
-    try:
-        # Remove the endpoint from the group.
-        client.remove_workload_from_group(container_id)
-        print "Remove %s from %s" % (container_name, group_name)
-    except KeyError as err:
-        print err
-        print "%s is not a member of %s" % (container_name, group_name)
-        sys.exit(1)
-
-
 def node_stop(force):
     if force or len(client.get_hosts()[hostname]["docker"]) == 0:
-        client.remove_host()
+        client.remove_host(hostname)
         try:
             docker_client.stop("calico-node")
         except docker.errors.APIError as err:
@@ -268,6 +256,8 @@ def node_stop(force):
 
 
 def clean_restart_docker(sock_to_wait_on):
+    restart = sh.Command._create("restart")
+
     if os.path.exists(REAL_SOCK):
         os.remove(REAL_SOCK)
     if os.path.exists(POWERSTRIP_SOCK):
@@ -308,8 +298,8 @@ def node(ip, node_image, ip6=""):
     if not ipv6_pools:
         client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
-    client.create_global_config()
-    client.create_host(ip, ip6)
+    client.ensure_global_config()
+    client.create_host(hostname, ip, ip6)
 
     # Enable IP forwarding since all compute hosts are vRouters.
     # IPv4 forwarding should be enabled already by docker.
@@ -343,6 +333,7 @@ def node(ip, node_image, ip6=""):
         "IP=%s" % ip,
         "IP6=%s" % ip6,
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
+        "FELIX_ETCDADDR=%s" % etcd_authority,  # etcd host:port
     ]
 
     binds = {
@@ -369,6 +360,7 @@ def node(ip, node_image, ip6=""):
         network_mode="host",
         binds=binds)
 
+    _find_or_pull_node_image(node_image)
     container = node_docker_client.create_container(
         node_image,
         name="calico-node",
@@ -395,6 +387,23 @@ def node(ip, node_image, ip6=""):
         print "before using `docker run` for Calico networking.\n"
 
     print "Calico node is running with id: %s" % cid
+
+
+def _find_or_pull_node_image(image_name):
+    """
+    Check if Docker has a cached copy of an image, and if not, attempt to pull
+    it.
+
+    :param image_name: The full name of the image.
+    :return: None.
+    """
+    try:
+        _ = docker_client.inspect_image(image_name)
+    except docker.errors.APIError as err:
+        if err.response.status_code == 404:
+            # TODO: Display proper status bar
+            print "Pulling Docker image %s" % image_name
+            docker_client.pull(image_name)
 
 
 def grep(text, pattern):
@@ -435,58 +444,58 @@ def reset():
     client.remove_all_data()
 
 
-def group_add(group_name):
+def profile_add(profile_name):
     """
-    Create a security group with the given name.
-    :param group_name: The name for the group.
+    Create a policy profile with the given name.
+    :param profile_name: The name for the profile.
     :return: None.
     """
-    # Check if the group exists.
-    if client.group_exists(group_name):
-        print "Group %s already exists." % group_name
+    # Check if the profile exists.
+    if client.profile_exists(profile_name):
+        print "Profile %s already exists." % profile_name
     else:
-        # Create the group.
-        client.create_group(group_name)
-        print "Created group %s" % group_name
+        # Create the profile.
+        client.create_profile(profile_name)
+        print "Created profile %s" % profile_name
 
 
-def group_add_container(container_name, group_name):
+def profile_add_container(container_name, profile_name):
     """
-    Add a container (on this host) to the group with the given name.  This adds
-    the first endpoint on the container to the group.
+    Add a container (on this host) to the profile with the given name.  This adds
+    the first endpoint on the container to the profile.
 
     :param container_name: The Docker container name or ID.
-    :param group_name:  The Calico security group name.
+    :param profile_name:  The Calico policy profile name.
     :return: None.
     """
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
 
-    if not client.group_exists(group_name):
-        print "Group with name %s was not found." % group_name
+    if not client.profile_exists(profile_name):
+        print "Profile with name %s was not found." % profile_name
         return
 
-    client.add_workload_to_group(group_name, container_id)
-    print "Added %s to %s" % (container_name, group_name)
+    client.add_workload_to_profile(hostname, profile_name, container_id)
+    print "Added %s to %s" % (container_name, profile_name)
 
 
-def group_remove(group_name):
-    # TODO - Don't allow removing a group that has endpoints in it.
+def profile_remove(profile_name):
+    # TODO - Don't allow removing a profile that has endpoints in it.
     try:
-        client.delete_group(group_name)
+        client.delete_profile(profile_name)
     except KeyError:
-        print "Couldn't find group with name %s" % group_name
+        print "Couldn't find profile with name %s" % profile_name
     else:
-        print "Deleted group %s" % group_name
+        print "Deleted profile %s" % profile_name
 
 
-def group_show(detailed):
-    groups = client.get_groups()
+def profile_show(detailed):
+    profiles = client.get_profile_names()
 
     if detailed:
         x = PrettyTable(["Name", "Endpoint ID"])
-        for name in groups:
-            members = client.get_group_members(name)
+        for name in profiles:
+            members = client.get_profile_members(name)
             if members:
                 for member in members:
                     x.add_row([name, member])
@@ -494,10 +503,105 @@ def group_show(detailed):
                 x.add_row([name, "No members"])
     else:
         x = PrettyTable(["Name"])
-        for name in groups:
+        for name in profiles:
             x.add_row([name])
 
     print x
+
+
+def profile_tag_show(name):
+    """Show the tags on the profile."""
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    for tag in profile.tags:
+        print tag
+
+
+def profile_tag_add(name, tag):
+    """
+    Add a tag to the profile.
+    :param name: Profile name
+    :param tag: Tag name
+    :return: None
+    """
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    profile.tags.add(tag)
+    client.profile_update_tags(profile)
+    print "Tag %s added to profile %s" % (tag, name)
+
+
+def profile_tag_remove(name, tag):
+    """
+    Remove a tag from the profile.
+    :param name: Profile name
+    :param tag: Tag name
+    :return: None
+    """
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    try:
+        profile.tags.remove(tag)
+    except KeyError:
+        print "Tag %s is not on profile %s" % (tag, name)
+        sys.exit(1)
+    client.profile_update_tags(profile)
+    print "Tag %s removed from profile %s" % (tag, name)
+
+
+def profile_rule_show(name, human_readable=False):
+    """Show the rules on the profile."""
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    if human_readable:
+        print "Inbound rules:"
+        for i, rule in enumerate(profile.rules.inbound_rules, start=1):
+            print " %3d %s" % (i, rule.pprint())
+        print "Outbound rules:"
+        for i, rule in enumerate(profile.rules.outbound_rules, start=1):
+            print " %3d %s" % (i, rule.pprint())
+    else:
+        json.dump(profile.rules._asdict(),
+                  sys.stdout,
+                  indent=2)
+        print ""
+
+
+def profile_rule_update(name):
+    """Update the rules on the profile"""
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    # Read in the JSON from standard in.
+    rules_str = sys.stdin.read()
+    rules = Rules.from_json(rules_str)
+    if rules.id != name:
+        print 'Rules JSON "id"=%s doesn\'t match profile name %s.' % \
+              (rules.id, name)
+        sys.exit(1)
+
+    profile.rules = rules
+    client.profile_update_rules(profile)
+    print "Successfully updated rules on profile %s" % name
 
 
 def node_show(detailed):
@@ -513,14 +617,16 @@ def node_show(detailed):
                 continue
             for container_type, workloads in container_types.iteritems():
                 for workload, endpoints in workloads.iteritems():
-                    for endpoint, data in endpoints.iteritems():
+                    for ep_id, endpoint in endpoints.iteritems():
                         x.add_row([host,
                                    container_type,
                                    workload,
-                                   endpoint,
-                                   " ".join(data["addrs"]),
-                                   data["mac"],
-                                   data["state"]])
+                                   ep_id,
+                                   " ".join([str(net) for net in
+                                             endpoint.ipv4_nets |
+                                             endpoint.ipv6_nets]),
+                                   endpoint.mac,
+                                   endpoint.state])
     else:
         x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
         for host, container_types in hosts.iteritems():
@@ -678,30 +784,40 @@ def restart_docker_without_alternative_unix_socket():
     Remove any "alternative" unix socket config.
     """
     print "Examining %s" % DOCKER_DEFAULT_FILENAME
-    socket_config_exists = \
-        DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-    if socket_config_exists:
-        print "Removing socket config"
-        good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
-                      if DOCKER_OPTIONS not in line]
-        open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-        clean_restart_docker(POWERSTRIP_SOCK)
+    try:
+        socket_config_exists = \
+            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+    except IOError:
+        # Can't find Docker config file.  Don't attempt to change anything.
+        # Just carry on.
+        pass
+    else:
+        if socket_config_exists:
+            print "Removing socket config"
+            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
+                          if DOCKER_OPTIONS not in line]
+            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+            clean_restart_docker(POWERSTRIP_SOCK)
 
 
 def validate_arguments():
-    group_ok = (arguments["<GROUP>"] is None or
-                re.match("^\w{1,30}$", arguments["<GROUP>"]))
+    profile_ok = (arguments["<PROFILE>"] is None or
+                  re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+    tag_ok = (arguments["<TAG>"] is None or
+              re.match("^\w+$", arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
         arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
     container_ip_ok = arguments["<IP>"] is None or netaddr.valid_ipv4(
         arguments["<IP>"]) or netaddr.valid_ipv6(arguments["<IP>"])
 
-    if not group_ok:
-        print "Groups must be <30 character long and can only container " \
+    if not profile_ok:
+        print "Profile names must be <30 character long and can only contain " \
               "numbers, letters and underscore."
+    if not tag_ok:
+        print "Tags names can only container numbers, letters and underscore."
     if not ip_ok:
         print "Invalid ip argument"
-    return group_ok and ip_ok and container_ip_ok
+    return profile_ok and ip_ok and container_ip_ok and tag_ok
 
 
 if __name__ == '__main__':
@@ -724,19 +840,34 @@ if __name__ == '__main__':
             status()
         elif arguments["reset"]:
             reset()
-        elif arguments["group"]:
-            if arguments["add"]:
-                group_add(arguments["<GROUP>"])
-            if arguments["remove"]:
-                group_remove(arguments["<GROUP>"])
-            if arguments["show"]:
-                group_show(arguments["--detailed"])
-            if arguments["addmember"]:
-                group_add_container(arguments["<CONTAINER>"],
-                                    arguments["<GROUP>"])
-            if arguments["removemember"]:
-                group_remove_container(arguments["<CONTAINER>"],
-                                       arguments["<GROUP>"])
+        elif arguments["profile"]:
+            if arguments["tag"]:
+                if arguments["show"]:
+                    profile_tag_show(arguments["<PROFILE>"])
+                elif arguments["add"]:
+                    profile_tag_add(arguments["<PROFILE>"],
+                                    arguments["<TAG>"])
+                elif arguments["remove"]:
+                    profile_tag_remove(arguments["<PROFILE>"],
+                                       arguments["<TAG>"])
+            elif arguments["member"]:
+                profile_add_container(arguments["<CONTAINER>"],
+                                      arguments["<PROFILE>"])
+            elif arguments["rule"]:
+                if arguments["show"]:
+                    profile_rule_show(arguments["<PROFILE>"],
+                                      human_readable=True)
+                elif arguments["json"]:
+                    profile_rule_show(arguments["<PROFILE>"],
+                                      human_readable=False)
+                elif arguments["update"]:
+                    profile_rule_update(arguments["<PROFILE>"])
+            elif arguments["add"]:
+                profile_add(arguments["<PROFILE>"])
+            elif arguments["remove"]:
+                profile_remove(arguments["<PROFILE>"])
+            elif arguments["show"]:
+                profile_show(arguments["--detailed"])
         elif arguments["diags"]:
             save_diags()
         elif arguments["shownodes"]:
