@@ -18,7 +18,7 @@ felix.fetcd
 
 Etcd polling functions.
 """
-from etcd import EtcdException
+from etcd import EtcdException, EtcdClusterIdChanged
 import etcd
 import itertools
 import json
@@ -201,6 +201,11 @@ class EtcdWatcher(Actor):
                     # happened.
                     _log.debug("Read from etcd timed out, retrying.")
                     self._reconnect()
+                    continue
+                except EtcdClusterIdChanged:
+                    _log.error("Etcd cluster ID changed, reconnecting for "
+                               "full resync...")
+                    continue_polling = False
                     continue
                 except EtcdException as e:
                     # Sadly, python-etcd doesn't have a clean exception
