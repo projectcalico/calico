@@ -226,6 +226,8 @@ class IptablesUpdater(Actor):
             orphans = unreferenced_chains - self.explicitly_prog_chains
             our_orphans = [c for c in orphans if c.startswith(FELIX_PREFIX)]
             if not chains_we_tried_to_delete.issuperset(our_orphans):
+                _log.info("Cleanup found these unreferenced chains to "
+                          "delete: %s", our_orphans)
                 chains_we_tried_to_delete.update(our_orphans)
                 self._delete_best_effort(our_orphans)
             else:
@@ -292,6 +294,7 @@ class IptablesUpdater(Actor):
             batch = chain_batches.pop(0)
             try:
                 # Try the next batch of chains...
+                _log.debug("Attempting to delete chains: %s", batch)
                 self._attempt_delete(batch)
             except (CalledProcessError, IOError, FailedSystemCall):
                 _log.warning("Deleting chains %s failed", batch)
@@ -299,6 +302,7 @@ class IptablesUpdater(Actor):
                     # We were trying to delete multiple chains, split the
                     # batch in half and put the batches back on the queue to
                     # try again.
+                    _log.info("Batch was of length %s, splitting", len(batch))
                     split_point = len(batch) // 2
                     first_half = batch[:split_point]
                     second_half = batch[split_point:]
@@ -313,6 +317,9 @@ class IptablesUpdater(Actor):
                     # be referenced.
                     _log.error("Failed to delete chain %s, giving up. Maybe "
                                "it is still referenced?", batch[0])
+            else:
+                _log.debug("Deleted chains %s successfully, remaining "
+                           "batches: %s", batch, len(chain_batches))
 
     def _attempt_delete(self, chains):
         input_lines = self._calculate_ipt_delete_input(chains)

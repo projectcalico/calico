@@ -89,7 +89,7 @@ def _main_greenlet(config):
 
         _log.info("Starting actors.")
         update_splitter.start()
-        
+
         v4_filter_updater.start()
         v4_nat_updater.start()
         v4_ipset_mgr.start()
