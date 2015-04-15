@@ -281,7 +281,7 @@ class DatastoreClient(object):
         pool_path = IP_POOL_PATH % {"version": version}
         self.etcd_client.write(pool_path, str(pool), append=True)
 
-    def del_ip_pool(self, version, pool):
+    def remove_ip_pool(self, version, pool):
         """
         Delete the given CIDR range from the list of pools.  If the pool does
         not exist, raise a KeyError.
@@ -354,7 +354,7 @@ class DatastoreClient(object):
 
         self.etcd_client.write(bgp_peer_path, str(ip), append=True)
 
-    def delete_bgp_peer(self, version, ip):
+    def remove_bgp_peer(self, version, ip):
         """
         Delete a BGP Peer
 
@@ -412,7 +412,7 @@ class DatastoreClient(object):
                       outbound_rules=[default_allow])
         self.etcd_client.write(profile_path + "rules", rules.to_json())
 
-    def delete_profile(self, name):
+    def remove_profile(self, name):
         """
         Delete a policy profile with a given name.
 

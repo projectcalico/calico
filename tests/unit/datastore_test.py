@@ -463,23 +463,23 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_del_ip_pool_exists(self):
         """
-        Test del_ip_pool() when the pool does exist.
+        Test remove_ip_pool() when the pool does exist.
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
         pool = IPNetwork("192.168.3.1/24")
-        self.datastore.del_ip_pool("v4", pool)
+        self.datastore.remove_ip_pool("v4", pool)
         # 192.168.3.0/24 has a key .../v4/pool/0 in the ordered list.
         self.etcd_client.delete.assert_called_once_with(IPV4_POOLS_PATH + "0")
 
     def test_del_ip_pool_doesnt_exist(self):
         """
-        Test del_ip_pool() when the pool does not exist.
+        Test remove_ip_pool() when the pool does not exist.
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
         pool = IPNetwork("192.168.100.1/24")
-        assert_raises(KeyError, self.datastore.del_ip_pool, "v4", pool)
+        assert_raises(KeyError, self.datastore.remove_ip_pool, "v4", pool)
         assert_false(self.etcd_client.delete.called)
 
     def test_profile_exists_true(self):
@@ -522,7 +522,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test deleting a policy profile.
         """
-        self.datastore.delete_profile("TEST")
+        self.datastore.remove_profile("TEST")
         self.etcd_client.delete.assert_called_once_with(TEST_PROFILE_PATH,
                                                         recursive=True,
                                                         dir=True)
@@ -848,7 +848,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_peers
         peer = IPAddress("192.168.3.1")
-        self.datastore.delete_bgp_peer("v4", peer)
+        self.datastore.remove_bgp_peer("v4", peer)
         # 192.168.3.0 has a key ...v4/0 in the ordered list.
         self.etcd_client.delete.assert_called_once_with(BGP_PEERS_PATH + "0")
 
@@ -859,7 +859,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_peers
         peer = IPAddress("192.168.100.1")
-        assert_raises(KeyError, self.datastore.delete_bgp_peer, "v4", peer)
+        assert_raises(KeyError, self.datastore.remove_bgp_peer, "v4", peer)
         assert_false(self.etcd_client.delete.called)
 
 

@@ -503,7 +503,7 @@ def profile_add_container(container_name, profile_name):
 def profile_remove(profile_name):
     # TODO - Don't allow removing a profile that has endpoints in it.
     try:
-        client.delete_profile(profile_name)
+        client.remove_profile(profile_name)
     except KeyError:
         print "Couldn't find profile with name %s" % profile_name
     else:
@@ -762,7 +762,7 @@ def ip_pool_remove(cidr_pool, version):
               (cidr_pool, pool.version, version)
         return
     try:
-        client.del_ip_pool(version, pool)
+        client.remove_ip_pool(version, pool)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
 
@@ -841,7 +841,7 @@ def bgppeer_remove(ip, version):
               (ip, address.version, version)
         return
     try:
-        client.delete_bgp_peer(version, address)
+        client.remove_bgp_peer(version, address)
     except KeyError:
         print "%s is not a configured peer." % address
 
