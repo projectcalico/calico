@@ -141,8 +141,8 @@ def add_route(ip_type, ip, interface, mac):
     :param str mac: MAC address. May not be none unless ips is empty.
     :raises FailedSystemCall
     """
-    if mac is None and ips:
-        raise ValueError("mac must be supplied if ips is not empty")
+    if mac is None and ip:
+        raise ValueError("mac must be supplied if ip is provided")
 
     if ip_type == futils.IPV4:
         futils.check_call(['arp', '-s', ip, mac, '-i', interface])
