@@ -50,7 +50,7 @@ class TestActor(BaseTestCase):
     @mock.patch("gevent.Greenlet.start", autospec=True)
     def test_start(self, m_start):
         """
-        Tests statting the actor starts its greenlet.
+        Tests starting the actor starts its greenlet.
         """
         actor = self._actor.start()
         m_start.assert_called_once_with(self._actor.greenlet)
@@ -159,6 +159,27 @@ class TestActor(BaseTestCase):
         self.assertRaises(FinishException, f_a.get)
         self.assertRaises(FinishException, f_exc.get)
 
+    def test_own_batch(self):
+        f_a = self._actor.do_a(async=True)
+        f_b = self._actor.do_b(async=True)
+        f_own = self._actor.do_own_batch(async=True)
+        f_a2 = self._actor.do_a(async=True)
+        f_b2 = self._actor.do_b(async=True)
+
+        self.run_actor_loop()
+
+        self.assertTrue(f_a.ready())
+        self.assertTrue(f_b.ready())
+        self.assertTrue(f_own.ready())
+        self.assertTrue(f_a2.ready())
+        self.assertTrue(f_b2.ready())
+
+        self.assertEqual(self._actor.batches, [
+            ["sb", "a", "b", "fb"],
+            ["sb", "own", "fb"],
+            ["sb", "a", "b", "fb"],
+        ])
+
     def test_blocking_call(self):
         self._actor.start()  # Really start it.
         self._actor.do_a(async=False)
@@ -260,6 +281,11 @@ class ActorForTesting(actor.Actor):
     @actor_message()
     def do_c2(self):
         return "c2"
+
+    @actor_message(needs_own_batch=True)
+    def do_own_batch(self):
+        self._batch_actions.append("own")
+        return "own"
 
     @actor_message()
     def do_exc(self):

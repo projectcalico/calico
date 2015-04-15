@@ -190,10 +190,9 @@ class Actor(object):
         msg = self._event_queue.get()
         actor_storage.msg_uuid = msg.uuid
 
-        # Then, once we get some, opportunistically pull as much work off the
-        # queue as possible.  We call this a batch.
         batch = [msg]
-        batches = [batch]
+        batches = []
+
         if not msg.needs_own_batch:
             # Try to pull some more work off the queue to combine into a
             # batch.
@@ -206,9 +205,14 @@ class Actor(object):
                 # never fail.
                 msg = self._event_queue.get_nowait()
                 if msg.needs_own_batch:
+                    if batch:
+                        batches.append(batch)
+                    batches.append([msg])
                     batch = []
-                    batches.append(batch)
-                batch.append(msg)
+                else:
+                    batch.append(msg)
+        if batch:
+            batches.append(batch)
 
         num_splits = 0
         while batches:
