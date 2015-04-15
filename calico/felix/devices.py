@@ -302,6 +302,7 @@ class InterfaceWatcher(Actor):
                     rta_data = rta_data[:-1]
                     if msg_type == RTM_NEWLINK:
                         _log.debug("Detected new network interface : %s", rta_data)
-                        self.update_splitter.on_interface_update(rta_data)
+                        self.update_splitter.on_interface_update(rta_data,
+                                                                 async=True)
                     else:
                         _log.debug("Network interface has gone away : %s", rta_data)
