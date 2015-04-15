@@ -10,20 +10,16 @@ Usage:
   calicoctl status
   calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
-  calicoctl profile add <PROFILE>
-  calicoctl profile remove <PROFILE>
+  calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show
-  calicoctl profile <PROFILE> tag add <TAG>
-  calicoctl profile <PROFILE> tag remove <TAG>
+  calicoctl profile <PROFILE> tag (add|remove) <TAG>
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl (ipv4|ipv6) pool add <CIDR>
-  calicoctl (ipv4|ipv6) pool del <CIDR>
+  calicoctl (ipv4|ipv6) pool (add|del) <CIDR>
   calicoctl (ipv4|ipv6) pool show
-  calicoctl (ipv4|ipv6) bgppeer add <IP>
-  calicoctl (ipv4|ipv6) bgppeer del <IP>
+  calicoctl (ipv4|ipv6) bgppeer (add|del) <IP>
   calicoctl (ipv4|ipv6) bgppeer show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
