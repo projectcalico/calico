@@ -32,8 +32,10 @@ import netaddr.core
 import os
 import sys
 
+_log = logging.getLogger(__name__)
+
 AGENT_TYPE_CALICO = 'Calico agent'
-FORMAT_STRING = '%(asctime)s [%(levelname)s][%(tid)d] %(name)s %(lineno)d: %(message)s'
+FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lineno)d: %(message)s'
 
 # This format string deliberately uses two different styles of format
 # specifier. The %()s form is used by the logging module: the {} form is used
@@ -212,3 +214,5 @@ def complete_logging(logfile=None,
             file_handler.setLevel(file_level)
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
+
+    _log.info("Logging initialized")
