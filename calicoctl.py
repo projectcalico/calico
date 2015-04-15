@@ -225,6 +225,8 @@ def container_remove(container_name):
         pools = client.get_ip_pools("v%s" % ip.version)
         for pool in pools:
             if ip in pool:
+                # Ignore failure to unassign address, since we're not
+                # enforcing assignments strictly in datastore.py.
                 client.unassign_address(pool, ip)
 
     # Remove the endpoint
