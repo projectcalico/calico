@@ -138,8 +138,8 @@ class IptablesUpdater(Actor):
         :returns list[str]: list of chains currently in the dataplane that
             are not referenced by other chains.
         """
-        raw_ipt_output = subprocess.check_output([self.iptables_cmd, "--list",
-                                                  "--table", self.table])
+        raw_ipt_output = subprocess.check_output(
+            [self.iptables_cmd, "--wait", "--list", "--table", self.table])
         return extract_unreffed_chains(raw_ipt_output)
 
     @actor_message()
