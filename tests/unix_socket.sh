@@ -36,3 +36,5 @@ while ! DOCKER_HOST=localhost:2377 docker ps; do
 echo "Waiting for powerstrip to come up"
   sleep 1
 done
+
+echo "All passed"

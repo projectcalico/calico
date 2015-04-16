@@ -2,11 +2,8 @@ import os
 import time
 import sh
 
-
-
 REAL_SOCK = "/var/run/docker.real.sock"
 POWERSTRIP_SOCK = "/var/run/docker.sock"
-
 
 def create_restarter():
     """
@@ -14,6 +11,8 @@ def create_restarter():
     :return: A "restarter" object.
     """
     if os.path.exists(UpstartRestarter.DOCKER_DEFAULT_FILENAME):
+        return UpstartRestarter()
+    elif os.path.exists(SystemdRestarter.DOCKER_SYSTEMD_SERVICE):
         return UpstartRestarter()
     else:
         return NullRestarter()
@@ -27,21 +26,27 @@ class NullRestarter():
         print "Unsupported"
 
 
-class UpstartRestarter():
+def _clean_socks():
+    if os.path.exists(REAL_SOCK):
+        os.remove(REAL_SOCK)
+    if os.path.exists(POWERSTRIP_SOCK):
+        os.remove(POWERSTRIP_SOCK)
+
+
+class SystemdRestarter():
+    # ExecStart=/usr/bin/docker -d $OPTIONS \
     def __init__(self):
         pass
 
-    DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
-    DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
+    DOCKER_SYSTEMD_SERVICE = "/usr/lib/systemd/system/docker.service"
+    SYSTEMD_DEFAULT = "ExecStart=/usr/bin/docker -d $OPTIONS \\"
+    SYSTEMD_MODIFIED = "ExecStart=/usr/bin/docker -d $OPTIONS " \
+                       "-H unix://%s \\" % REAL_SOCK
+
     def _clean_restart_docker(self, sock_to_wait_on):
-        restart = sh.Command._create("restart")
-
-        if os.path.exists(REAL_SOCK):
-            os.remove(REAL_SOCK)
-        if os.path.exists(POWERSTRIP_SOCK):
-            os.remove(POWERSTRIP_SOCK)
-
-        restart("docker")
+        _clean_socks()
+        systemctl = sh.Command._create("systemctl")
+        systemctl("restart", "docker.service")
 
         # Wait for docker to create the socket
         while not os.path.exists(sock_to_wait_on):
@@ -49,35 +54,15 @@ class UpstartRestarter():
 
 
     def is_using_alternative_socket(self):
-        try:
-            if self.DOCKER_OPTIONS in open(
-                    self.DOCKER_DEFAULT_FILENAME).read():
-                return True
-        except IOError:
-            # Can't find Docker config file.  Don't attempt to change anything.
-            # Just carry on.
-            return False
+        if self.SYSTEMD_MODIFIED in open(self.DOCKER_SYSTEMD_SERVICE).read():
+            return True
 
     def restart_docker_with_alternative_unix_socket(self):
-        # Update docker to use a different unix socket, so powerstrip can run
-        # its proxy on the "normal" one. This provides simple access for
-        # existing tools to the powerstrip proxy.
-
-        # Set the docker daemon to listen on the docker.real.sock by updating
-        # the config, clearing old sockets and restarting.
-        try:
-            socket_config_exists = \
-                self.DOCKER_OPTIONS in open(
-                    self.DOCKER_DEFAULT_FILENAME).read()
-            if not socket_config_exists:
-                with open(self.DOCKER_DEFAULT_FILENAME, "a") as docker_config:
-                    docker_config.write(self.DOCKER_OPTIONS)
-                self._clean_restart_docker(REAL_SOCK)
-        except IOError:
-            # Can't find Docker config file.
-            print "Docker config file couldn't not be found at %s" % \
-                  self.DOCKER_DEFAULT_FILENAME
-            print "This option is currently only supported on Debian based systems"
+        if not self.is_using_alternative_socket():
+            #TODO - This needs to be a replace.
+            with open(self.DOCKER_SYSTEMD_SERVICE, "a") as docker_config:
+                docker_config.write(self.DOCKER_OPTIONS)
+            self._clean_restart_docker(REAL_SOCK)
 
         # Always remove the socket that powerstrip will use, as it gets upset
         # otherwise.
@@ -86,45 +71,50 @@ class UpstartRestarter():
 
 
     def restart_docker_without_alternative_unix_socket(self):
-        """
-        Remove any "alternative" unix socket config.
-        """
-        print "Examining %s" % self.DOCKER_DEFAULT_FILENAME
-        try:
-            socket_config_exists = \
-                self.DOCKER_OPTIONS in open(
-                    self.DOCKER_DEFAULT_FILENAME).read()
-        except IOError:
-            # Can't find Docker config file.  Don't attempt to change anything.
-            # Just carry on.
-            pass
-        else:
-            if socket_config_exists:
-                print "Removing socket config"
-                good_lines = [line for line in open(
-                    self.DOCKER_DEFAULT_FILENAME)
-                              if self.DOCKER_OPTIONS not in line]
-                open(self.DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-                self._clean_restart_docker(POWERSTRIP_SOCK)
+        if self.is_using_alternative_socket():
+            #TODO - Do the right thing here.
+            good_lines = [line for line in open(
+                self.DOCKER_SYSTEMD_SERVICE)
+                          if self.DOCKER_OPTIONS not in line]
+            open(self.DOCKER_SYSTEMD_SERVICE, 'w').writelines(good_lines)
+            self._clean_restart_docker(POWERSTRIP_SOCK)
+
+class UpstartRestarter():
+    def __init__(self):
+        pass
+
+    DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
+    DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
+
+    def _clean_restart_docker(self, sock_to_wait_on):
+        _clean_socks()
+        restart = sh.Command._create("restart")
+        restart("docker")
+
+        # Wait for docker to create the socket
+        while not os.path.exists(sock_to_wait_on):
+            time.sleep(0.1)
+
+    def is_using_alternative_socket(self):
+        if self.DOCKER_OPTIONS in open(self.DOCKER_DEFAULT_FILENAME).read():
+            return True
+
+    def restart_docker_with_alternative_unix_socket(self):
+        if not self.is_using_alternative_socket():
+            with open(self.DOCKER_DEFAULT_FILENAME, "a") as docker_config:
+                docker_config.write(self.DOCKER_OPTIONS)
+            self._clean_restart_docker(REAL_SOCK)
+
+        # Always remove the socket that powerstrip will use, as it gets upset
+        # otherwise.
+        if os.path.exists(POWERSTRIP_SOCK):
+            os.remove(POWERSTRIP_SOCK)
+
 
     def restart_docker_without_alternative_unix_socket(self):
-        """
-        Remove any "alternative" unix socket config.
-        """
-        print "Examining %s" % self.DOCKER_DEFAULT_FILENAME
-        try:
-            socket_config_exists = \
-                self.DOCKER_OPTIONS in open(
-                    self.DOCKER_DEFAULT_FILENAME).read()
-        except IOError:
-            # Can't find Docker config file.  Don't attempt to change anything.
-            # Just carry on.
-            pass
-        else:
-            if socket_config_exists:
-                print "Removing socket config"
-                good_lines = [line for line in open(
-                    self.DOCKER_DEFAULT_FILENAME)
-                              if self.DOCKER_OPTIONS not in line]
-                open(self.DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-                self._clean_restart_docker(POWERSTRIP_SOCK)
+        if self.is_using_alternative_socket():
+            good_lines = [line for line in open(
+                self.DOCKER_DEFAULT_FILENAME)
+                          if self.DOCKER_OPTIONS not in line]
+            open(self.DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+            self._clean_restart_docker(POWERSTRIP_SOCK)
