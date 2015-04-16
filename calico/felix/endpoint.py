@@ -185,6 +185,8 @@ class LocalEndpoint(RefCountedActor):
         # Track whether the last attempt to program the dataplane succeeded.
         # We'll force a reprogram next time we get a kick.
         self._failed = False
+        # And whether we've received an update since last time we programmed.
+        self._dirty = False
 
     @actor_message()
     def on_endpoint_update(self, endpoint):
@@ -206,10 +208,15 @@ class LocalEndpoint(RefCountedActor):
         if old_profile_id != new_profile_id:
             if old_profile_id:
                 # Clean up the old profile.
+                _log.info("Profile changed, decreffing old profile %s",
+                          old_profile_id)
                 self.rules_mgr.decref(old_profile_id, async=True)
             if new_profile_id is not None:
-                _log.debug("Acquiring new profile %s", new_profile_id)
+                _log.info("Acquiring new profile %s", new_profile_id)
                 self.rules_mgr.get_and_incref(new_profile_id, async=True)
+
+        if endpoint != self.endpoint:
+            self._dirty = True
 
         # Store off the endpoint we were passed.
         self.endpoint = endpoint
@@ -274,7 +281,7 @@ class LocalEndpoint(RefCountedActor):
         is_ready = self._ready
         if not is_ready:
             _log.debug("%s not ready, waiting on %s", self, self._missing_deps)
-        if self._failed or is_ready != was_ready:
+        if self._failed or self._dirty or is_ready != was_ready:
             ifce_name = self._iface_name
             if is_ready:
                 # We've got all the info and everything is active.
@@ -295,6 +302,7 @@ class LocalEndpoint(RefCountedActor):
                 self.dispatch_chains.on_endpoint_removed(ifce_name,
                                                          async=True)
                 self._remove_chains()
+            self._dirty = False
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(

@@ -192,7 +192,10 @@ class IpsetManager(ReferenceManager):
     def on_endpoint_update(self, endpoint_id, endpoint):
         old_endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
         old_prof_id = old_endpoint.get("profile_id")
-        old_tags = set(old_prof_id and self.tags_by_prof_id[old_prof_id] or [])
+        if old_prof_id:
+            old_tags = set(self.tags_by_prof_id.get(old_prof_id, []))
+        else:
+            old_tags = set()
 
         if endpoint is None:
             _log.info("Endpoint %s deleted", endpoint_id)
