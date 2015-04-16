@@ -1,4 +1,4 @@
- # Advanced Network Policy
+# Advanced Network Policy
 
 Calico endpoints are assigned their network policy by configuring them with a policy profile.  In the previous examples we created profiles and assigned endpoints to them.  By default, `calicoctl profile add` adds default config to profiles so endpoints with the profile can all communicate with one another.  In this section, we look at how to customize policy profiles for more advanced policy.
 
