@@ -352,11 +352,25 @@ class CalicoTransportEtcd(CalicoTransport):
                 self.write_profile_to_etcd(profile_id)
 
     def provide_felix_config(self):
-        # Specify the prefix of the TAP interfaces that Felix should
-        # look for and work with.  This config setting does not have a
-        # default value, because different cloud systems will do
-        # different things.  Here we provide the prefix that Neutron
-        # uses.
-        self.client.write('/calico/config/InterfacePrefix', 'tap')
-        # TODO Set this flag only once we're really ready!
-        self.client.write("/calico/config/Ready", 'true')
+        """Specify the prefix of the TAP interfaces that Felix should
+        look for and work with.  This config setting does not have a
+        default value, because different cloud systems will do
+        different things.  Here we provide the prefix that Neutron
+        uses.
+        """
+        # First read the config values, so as to avoid unnecessary
+        # writes.
+        prefix = None
+        ready = None
+        try:
+            prefix = self.client.read('/calico/config/InterfacePrefix').value
+            ready = self.client.read('/calico/config/Ready').value
+        except Exception:
+            pass
+
+        # Now write the values that need writing.
+        if prefix != 'tap':
+            self.client.write('/calico/config/InterfacePrefix', 'tap')
+        if ready != 'true':
+            # TODO Set this flag only once we're really ready!
+            self.client.write("/calico/config/Ready", 'true')
