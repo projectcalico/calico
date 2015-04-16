@@ -18,7 +18,7 @@ felix.fetcd
 
 Etcd polling functions.
 """
-from etcd import EtcdException
+from etcd import EtcdException, EtcdClusterIdChanged
 import etcd
 import itertools
 import json
@@ -197,13 +197,19 @@ class EtcdWatcher(Actor):
                                                 waitIndex=next_etcd_index,
                                                 recursive=True,
                                                 timeout=Timeout(connect=10,
-                                                                read=90))
+                                                                read=90),
+                                                check_cluster_id=True)
                     _log.debug("etcd response: %r", response)
                 except ReadTimeoutError:
                     # This is expected when we're doing a poll and nothing
                     # happened.
                     _log.debug("Read from etcd timed out, retrying.")
                     self._reconnect()
+                    continue
+                except EtcdClusterIdChanged:
+                    _log.error("Etcd cluster ID changed, reconnecting for "
+                               "full resync...")
+                    continue_polling = False
                     continue
                 except EtcdException as e:
                     # Sadly, python-etcd doesn't have a clean exception
