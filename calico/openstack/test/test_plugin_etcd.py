@@ -36,10 +36,20 @@ lib.m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
+    def maybe_reset_etcd(self):
+        if self.reset_etcd_after is not None:
+            self.reset_etcd_after -= 1
+            if self.reset_etcd_after == 0:
+                self.etcd_data = {}
+                self.reset_etcd_after = None
+                print "etcd reset"
+                self.assert_etcd_writes_deletes = False
+
     def check_etcd_write(self, key, value):
         """Print each etcd write as it occurs, and save into the accumulated etcd
         database.
         """
+        self.maybe_reset_etcd()
         print "etcd write: %s\n%s" % (key, value)
         self.etcd_data[key] = value
         try:
@@ -49,6 +59,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def check_etcd_delete(self, key, **kwargs):
         """Print each etcd delete as it occurs."""
+        self.maybe_reset_etcd()
         print "etcd delete: %s" % key
         if kwargs.get('recursive', False):
             keylen = len(key) + 1
@@ -61,16 +72,20 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.recent_deletes.add(key)
 
     def assertEtcdWrites(self, expected):
-        self.assertEqual(self.recent_writes, expected)
+        if self.assert_etcd_writes_deletes:
+            self.assertEqual(self.recent_writes, expected)
         self.recent_writes = {}
 
     def assertEtcdDeletes(self, expected):
-        self.assertEqual(self.recent_deletes, expected)
+        if self.assert_etcd_writes_deletes:
+            self.assertEqual(self.recent_deletes, expected)
         self.recent_deletes = set()
 
     def etcd_read(self, key, recursive=False):
         """Read from the accumulated etcd database.
         """
+        self.maybe_reset_etcd()
+
         # Prepare a read result object.
         read_result = mock.Mock()
         read_result.key = key
@@ -125,6 +140,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.recent_writes = {}
         self.recent_deletes = set()
 
+        # Reset the counter for when we'll reset the etcd database.
+        self.reset_etcd_after = None
+        self.assert_etcd_writes_deletes = True
+
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data.
         """
@@ -136,6 +155,13 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(1)
         self.assertEtcdWrites({'/calico/v1/config/InterfacePrefix': 'tap',
                                '/calico/v1/Ready': True})
+
+    def test_etcd_reset(self):
+        for n in range(1, 20):
+            print "\nReset etcd data after %s reads/writes/deletes\n" % n
+            self.reset_etcd_after = n
+            self.test_start_two_ports()
+            self.etcd_data = {}
 
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data.
@@ -277,7 +303,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdDeletes(set(['/calico/v1/host/new-host/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678']))
 
         # Add another port with an IPv6 address.
-        context._port = lib.port3
+        context._port = lib.port3.copy()
         self.driver.create_port_postcommit(context)
         expected_writes = {
             '/calico/v1/host/felix-host-2/workload/openstack/HELLO-1234-5678/endpoint/HELLO-1234-5678':
@@ -307,7 +333,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
         self.check_update_port_status_called(context)
-        self.osdb_ports = [lib.port1, lib.port2, lib.port3]
+        self.osdb_ports = [lib.port1, lib.port2, context._port]
 
         # Create a new security group.
         self.notify_security_group_update(
@@ -426,7 +452,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Resync with only the last port.  Expect the first two ports to be
         # cleaned up, and also SGID-default, because now only SG-1 is needed.
-        self.osdb_ports = [lib.port3]
+        self.osdb_ports = [context._port]
         self.db.get_security_groups.return_value[1]['security_group_rules'][0]['port_range_max'] = 5060
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
