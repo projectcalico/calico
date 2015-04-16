@@ -29,7 +29,6 @@ from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
 from calico.felix.actor import actor_message
 from calico.felix.refcount import ReferenceManager, RefCountedActor
-import re
 
 _log = logging.getLogger(__name__)
 
@@ -95,8 +94,11 @@ class IpsetManager(ReferenceManager):
 
     @actor_message()
     def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
+        _log.info("Applying tags snapshot. %s tags, %s endpoints",
+                  len(tags_by_prof_id), len(endpoints_by_id))
         missing_profile_ids = set(self.tags_by_prof_id.keys())
         for profile_id, tags in tags_by_prof_id.iteritems():
+            assert tags is not None
             self.on_tags_update(profile_id, tags)
             missing_profile_ids.discard(profile_id)
             self._maybe_yield()
@@ -106,18 +108,22 @@ class IpsetManager(ReferenceManager):
         del missing_profile_ids
         missing_endpoints = set(self.endpoints_by_ep_id.keys())
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
+            assert endpoint is not None
             self.on_endpoint_update(endpoint_id, endpoint)
             missing_endpoints.discard(endpoint_id)
             self._maybe_yield()
         for ep_id in missing_endpoints:
             self.on_endpoint_update(ep_id, None)
             self._maybe_yield()
+        _log.info("Tags snapshot applied: %s tags, %s endpoints",
+                  len(tags_by_prof_id), len(endpoints_by_id))
 
     @actor_message()
     def cleanup(self):
         """
         Clean up left-over ipsets that existed at start-of-day.
         """
+        _log.info("Cleaning up left-over ipsets.")
         all_ipsets = list_ipset_names()
         # only clean up our own rubbish.
         pfx = IPSET_PREFIX[self.ip_type]
