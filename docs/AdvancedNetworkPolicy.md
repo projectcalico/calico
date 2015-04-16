@@ -61,7 +61,7 @@ Modify the inbound rules as follows, leaving outbound rules as is.
         {
           "action": "allow", 
           "protocol": "tcp",
-          "src_ports": [80, 443]
+          "dst_ports": [80, 443]
         }, 
         {
           "action": "allow", 
@@ -88,7 +88,7 @@ If you show the rules you should see they have been applied.
 
     $ ./calicoctl profile WEB rule show
     Inbound rules:
-       1 allow from ports [80, 443]
+       1 allow to ports [80, 443]
        2 allow icmp
        3 deny
     Outbound rules:
@@ -108,7 +108,7 @@ Create a file `APP-rules.json` with the following contents.
         {
           "action": "allow",
           "protocol": "tcp", 
-          "src_ports": [7890],
+          "dst_ports": [7890],
           "src_tag": "APP_7890"
         }, 
         {
