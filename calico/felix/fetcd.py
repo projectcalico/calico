@@ -84,7 +84,7 @@ class EtcdWatcher(Actor):
 
     @actor_message()
     def wait_for_ready(self):
-        _log.info("Waiting for etcd to be ready and for config to be present.")
+        _log.info("Waiting for etcd to be ready...")
         ready = False
         while not ready:
             try:
@@ -126,13 +126,16 @@ class EtcdWatcher(Actor):
         :returns: Does not return.
         """
         while True:
+            _log.info("Reconnecting and loading snapshot from etcd...")
             self._reconnect()
             self.wait_for_ready()
 
-            # Load initial dump from etcd.  First just get all the endpoints and
-            # profiles by id.  The response contains a generation ID allowing us
-            # to then start polling for updates without missing any.
+            # Load initial dump from etcd.  First just get all the endpoints
+            # and profiles by id.  The response contains a generation ID
+            # allowing us to then start polling for updates without missing
+            # any.
             initial_dump = self.client.read("/calico/", recursive=True)
+            _log.info("Loaded snapshot, parsing it...")
             rules_by_id = {}
             tags_by_id = {}
             endpoints_by_id = {}
@@ -164,10 +167,10 @@ class EtcdWatcher(Actor):
                 _log.warn("Aborting resync; ready flag no longer present.")
                 continue
 
-
             # Actually apply the snapshot. This does not return anything, but
             # just sends the relevant messages to the relevant threads to make
             # all the processing occur.
+            _log.info("Snapshot parsed, passing to update splitter")
             update_splitter.apply_snapshot(rules_by_id,
                                            tags_by_id,
                                            endpoints_by_id)
@@ -180,8 +183,8 @@ class EtcdWatcher(Actor):
             # On first call, the etcd_index seems to be the high-water mark
             # for the data returned whereas the modified index just tells us
             # when the key was modified.
-            _log.info("Initial etcd index: %s; modifiedIndex: %s",
-                      initial_dump.etcd_index, initial_dump.modifiedIndex)
+            _log.info("Starting polling for updates from etcd.  Initial etcd "
+                      "index: %s.", initial_dump.etcd_index)
             next_etcd_index = initial_dump.etcd_index + 1
             del initial_dump
             continue_polling = True
@@ -260,7 +263,7 @@ class EtcdWatcher(Actor):
                     if response.value != "true":
                         _log.warning("DB became unready, triggering a resync")
                         continue_polling = False
-                        continue
+                    continue
 
                 _log.debug("Response action: %s, key: %s",
                            response.action, response.key)

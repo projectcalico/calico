@@ -58,7 +58,8 @@ def _main_greenlet(config):
         # proceed.  We don't yet support config updates.
         etcd_watcher.load_config(async=False)
 
-        _log.info("Configuration loaded, starting remaining actors...")
+        _log.info("Main greenlet: Configuration loaded, starting remaining "
+                  "actors...")
         v4_filter_updater = IptablesUpdater("filter", ip_version=4)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4)
         v4_ipset_mgr = IpsetManager(IPV4)
