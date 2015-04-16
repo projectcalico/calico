@@ -343,10 +343,12 @@ class IptablesUpdater(Actor):
         #
         # The chains are created if they don't exist.
         input_lines = []
-        for chain in self._batch.affected_chains:
+        affected_chains = self._batch.affected_chains
+        for chain in affected_chains:
             input_lines.append(":%s -" % chain)
         for chain_name in (self._batch.chains_to_stub_out |
                            self._batch.chains_to_delete):
+            assert chain_name in affected_chains
             input_lines.extend(_stub_drop_rules(chain_name))
         for chain_name, chain_updates in self._batch.updates.iteritems():
             input_lines.extend(chain_updates)
@@ -535,9 +537,10 @@ class UpdateBatch(object):
         if self._affected_chains is None:
             updates = set(self.updates.keys())
             stubs = self.chains_to_stub_out
+            deletes = self.chains_to_delete
             _log.debug("Affected chains: deletes=%s, updates=%s, stubs=%s",
-                       self._deletes, updates, stubs)
-            self._affected_chains = self._deletes | updates | stubs
+                       deletes, updates, stubs)
+            self._affected_chains = deletes | updates | stubs
         return self._affected_chains
 
     @property
@@ -546,9 +549,10 @@ class UpdateBatch(object):
         The set of chains that need to be stubbed as part of this update.
         """
         if self._chains_to_stub is None:
-            all_required_chains = set(self.requiring_chns.keys())
             # Don't stub out chains that we're now explicitly programming.
-            impl_required_chains = all_required_chains - self.expl_prog_chains
+            impl_required_chains = (self.referenced_chains -
+                                    self.expl_prog_chains)
+            # Don't stub out chains that are already stubbed.
             self._chains_to_stub = impl_required_chains - self.already_stubbed
         return self._chains_to_stub
 
@@ -559,11 +563,27 @@ class UpdateBatch(object):
         not include the chains that we need to stub out.
         """
         if self._chains_to_delete is None:
+            # We'd like to get rid of these chains if we can.
             chains_we_dont_want = self._deletes | self.already_stubbed
-            chains_we_need = self.chains_to_stub_out | self.expl_prog_chains
+            _log.debug("Chains we'd like to delete: %s", chains_we_dont_want)
+            # But we need to keep the chains that are explicitly programmed
+            # or referenced.
+            chains_we_need = self.expl_prog_chains | self.referenced_chains
+            _log.debug("Chains we still need for some reason: %s",
+                       chains_we_need)
             self._chains_to_delete = chains_we_dont_want - chains_we_need
+            _log.debug("Chains we can delete: %s", self._chains_to_delete)
         return self._chains_to_delete
 
+    @property
+    def referenced_chains(self):
+        """
+        Set of chains referred to by other chains.
+
+        Does not include chains that are explicitly programmed but not
+        referenced by anything else.
+        """
+        return set(self.requiring_chns.keys())
 
 def _stub_drop_rules(chain):
     """
