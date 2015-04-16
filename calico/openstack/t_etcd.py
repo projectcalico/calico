@@ -223,28 +223,31 @@ class CalicoTransportEtcd(CalicoTransport):
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
-                if profile_id in self.needed_profiles:
-                    # This is a profile that we want.  Let's read its rules and
-                    # tags, and compare those against the current OpenStack data.
-                    rules_key = key_for_profile_rules(profile_id)
-                    rules = json_decoder.decode(
-                        self.client.read(rules_key).value)
-                    tags_key = key_for_profile_tags(profile_id)
-                    tags = json_decoder.decode(
-                        self.client.read(tags_key).value)
+                try:
+                    if profile_id in self.needed_profiles:
+                        # This is a profile that we want.  Let's read its rules and
+                        # tags, and compare those against the current OpenStack data.
+                        rules_key = key_for_profile_rules(profile_id)
+                        rules = json_decoder.decode(
+                            self.client.read(rules_key).value)
+                        tags_key = key_for_profile_tags(profile_id)
+                        tags = json_decoder.decode(
+                            self.client.read(tags_key).value)
 
-                    if (rules == self.profile_rules(profile_id) and
-                        tags == self.profile_tags(profile_id)):
-                        # The existing etcd data for this profile is completely
-                        # correct.  Remember the profile_id so that we don't
-                        # unnecessarily write out its (unchanged) data again below.
-                        LOG.debug("Existing etcd profile data is correct")
-                        correct_profiles.add(profile_id)
-                else:
-                    # We don't want this profile any more, so delete the key.
-                    LOG.debug("Existing etcd profile key is now invalid")
-                    profile_key = key_for_profile(profile_id)
-                    self.client.delete(profile_key, recursive=True)
+                        if (rules == self.profile_rules(profile_id) and
+                            tags == self.profile_tags(profile_id)):
+                            # The existing etcd data for this profile is completely
+                            # correct.  Remember the profile_id so that we don't
+                            # unnecessarily write out its (unchanged) data again below.
+                            LOG.debug("Existing etcd profile data is correct")
+                            correct_profiles.add(profile_id)
+                    else:
+                        # We don't want this profile any more, so delete the key.
+                        LOG.debug("Existing etcd profile key is now invalid")
+                        profile_key = key_for_profile(profile_id)
+                        self.client.delete(profile_key, recursive=True)
+                except KeyError:
+                    LOG.info("Etcd data appears to have been reset")
 
         # Now write etcd data for each profile that we need and that we don't
         # already know to be correct.
