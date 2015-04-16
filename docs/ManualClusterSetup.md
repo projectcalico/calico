@@ -7,8 +7,8 @@ This document describes requirements and best practices for setting up a cluster
 2 servers (bare metal or VMs) with a modern 64-bit Linux OS, and Layer-2 network (Ethernet) connectivity between them.
 
 They must have the following software installed.
- * Docker v1.4 or greater [Installing Docker](https://docs.docker.com/installation/)
- * etcd installed and available on each node. [etcd Documentation](https://coreos.com/etcd/docs/2.0.8/)
+ * Docker v1.4 or greater: [Installing Docker](https://docs.docker.com/installation/)
+ * etcd installed and available on each node: [etcd Documentation](https://coreos.com/etcd/docs/2.0.8/)
 
 ## Best Practices
 
@@ -28,6 +28,12 @@ You should also verify each host can access etcd.  The following will return an 
 
     etcdctl ls /
 
+## Docker permissions
+
+The [example script][example-commands] assume that your ordinary user account has permission to run Docker images without `sudo`.  If you haven't done so, you can enable this by adding your user to the `docker` group and restarting your terminal.
+
+    sudo usermod -aG docker <your_username>
+
 ## Getting Calico Binaries
 
 Retrieve the `calicoctl` binary.  On each host run
@@ -39,4 +45,6 @@ Finally, preload the Calico Docker image.  This will make the demo more responsi
 
     docker pull calico/node:v0.3.2
 
-You are now ready to run the [example commands](./GettingStarted.md#calico-services).
+You are now ready to run the [example commands][example-commands].
+
+[example-commands]: ./GettingStarted.md#calico-services

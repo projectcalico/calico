@@ -3,10 +3,12 @@
 Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host).
 
 *In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
-* Set this up yourself, following instructions [Manual Cluster Setup](./ManualClusterSetup.md)
+* Set this up yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md)
 * Use [Calico CoreOS Vagrant](calico-coreos-vagrant) to start a cluster in VMs on your laptop or workstation.
 
 If you want to get started quickly and easily then we recommend just using Vagrant.
+
+If you have difficulty, try the [Troubleshooting Guide](./Troubleshooting.md).
 
 ### A note about names & addresses
 In this example, we will use the server names and IP addresses from the [Calico CoreOS Vagrant](calico-coreos-vagrant) example.
@@ -157,26 +159,5 @@ One core-02
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
     ./calicoctl profile PROF_F_G member add workload-G
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
-
-# Troubleshooting
-
-## `sudo docker run` and environment variables.
-
-If you use `sudo` for commands like `docker run`, remember that your environment variables will not be transferred to the `sudo` environment.  You can set environment variables for `sudo` commands like this.
-
-    sudo DOCKER_HOST=localhost:2377 docker run -td -e CALICO_IP=192.168.100.1 busybox
-
-## etcd.EtcdException: No more machines in the cluster
-
-If you see this exception, it means `calicoctl` can't communicate with your etcd cluster.  Ensure etcd is up and listening on `localhost:4001`
-
-## Basic checks
-Running `ip route` shows what routes have been programmed. Routes from other hosts should show that they are programmed by bird.
-
-If you have rebooted your hosts, then some configuration can get lost. It's best to run a `sudo ./calicoctl reset` and start again.
-
-If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS image is out of date.  Use `vagrant box update` to pull the new version.  I recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
-
-If you hit issues, please raise tickets. Diags can be collected with the `sudo ./calicoctl diags` command.
 
 [calico-coreos-vagrant]: https://github.com/Metaswitch/calico-coreos-vagrant-example
