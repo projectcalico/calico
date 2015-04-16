@@ -138,7 +138,7 @@ def add_route(ip_type, ip, interface, mac):
     :param ip_type: Type of IP (IPV4 or IPV6)
     :param str ip: IP address
     :param str interface: Interface name
-    :param str mac: MAC address. May not be none unless ips is empty.
+    :param str mac: MAC address. May not be None unless ip is None.
     :raises FailedSystemCall
     """
     if mac is None and ip:
