@@ -1,21 +1,30 @@
 import os
 import time
 import sh
-
+import fileinput
+import sys
 REAL_SOCK = "/var/run/docker.real.sock"
 POWERSTRIP_SOCK = "/var/run/docker.sock"
+
+
+def _replace_all(filename, search, replace):
+    for line in fileinput.input(filename, inplace=1):
+        if search in line:
+            line = line.replace(search, replace)
+        sys.stdout.write(line)
 
 def create_restarter():
     """
     Detect what init system is being used and return the appropriate handler.
     :return: A "restarter" object.
     """
-    if os.path.exists(UpstartRestarter.DOCKER_DEFAULT_FILENAME):
-        return UpstartRestarter()
-    elif os.path.exists(SystemdRestarter.DOCKER_SYSTEMD_SERVICE):
+    if os.path.exists(SystemdRestarter.DOCKER_SYSTEMD_SERVICE):
+        return SystemdRestarter()
+    elif os.path.exists(UpstartRestarter.DOCKER_DEFAULT_FILENAME):
         return UpstartRestarter()
     else:
         return NullRestarter()
+
 
 class NullRestarter():
     def is_using_alternative_socket(self):
@@ -34,7 +43,6 @@ def _clean_socks():
 
 
 class SystemdRestarter():
-    # ExecStart=/usr/bin/docker -d $OPTIONS \
     def __init__(self):
         pass
 
@@ -52,16 +60,15 @@ class SystemdRestarter():
         while not os.path.exists(sock_to_wait_on):
             time.sleep(0.1)
 
-
     def is_using_alternative_socket(self):
         if self.SYSTEMD_MODIFIED in open(self.DOCKER_SYSTEMD_SERVICE).read():
             return True
 
     def restart_docker_with_alternative_unix_socket(self):
         if not self.is_using_alternative_socket():
-            #TODO - This needs to be a replace.
-            with open(self.DOCKER_SYSTEMD_SERVICE, "a") as docker_config:
-                docker_config.write(self.DOCKER_OPTIONS)
+            _replace_all(self.DOCKER_SYSTEMD_SERVICE,
+                         self.SYSTEMD_DEFAULT,
+                         self.SYSTEMD_MODIFIED)
             self._clean_restart_docker(REAL_SOCK)
 
         # Always remove the socket that powerstrip will use, as it gets upset
@@ -69,15 +76,13 @@ class SystemdRestarter():
         if os.path.exists(POWERSTRIP_SOCK):
             os.remove(POWERSTRIP_SOCK)
 
-
     def restart_docker_without_alternative_unix_socket(self):
         if self.is_using_alternative_socket():
-            #TODO - Do the right thing here.
-            good_lines = [line for line in open(
-                self.DOCKER_SYSTEMD_SERVICE)
-                          if self.DOCKER_OPTIONS not in line]
-            open(self.DOCKER_SYSTEMD_SERVICE, 'w').writelines(good_lines)
+            _replace_all(self.DOCKER_SYSTEMD_SERVICE,
+                         self.SYSTEMD_MODIFIED,
+                         self.SYSTEMD_DEFAULT)
             self._clean_restart_docker(POWERSTRIP_SOCK)
+
 
 class UpstartRestarter():
     def __init__(self):
@@ -109,7 +114,6 @@ class UpstartRestarter():
         # otherwise.
         if os.path.exists(POWERSTRIP_SOCK):
             os.remove(POWERSTRIP_SOCK)
-
 
     def restart_docker_without_alternative_unix_socket(self):
         if self.is_using_alternative_socket():
