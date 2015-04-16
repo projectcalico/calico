@@ -134,6 +134,19 @@ On a control node, perform the following steps:
 
        sudo rm -rf /var/lib/etcd/*
 
+5. Mount a ramdisk at /var/lib/etcd:
+   ::
+
+    sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+
+6. add the following to the bottom of ``/etc/fstab`` so that the ramdisk gets
+   reinstated at boot time:
+
+   ::
+
+    tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
+
+
 5. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,

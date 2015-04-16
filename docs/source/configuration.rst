@@ -16,7 +16,7 @@ Configuring Calico
 ==================
 
 This page describes how to configure Calico. We first describe the
-configuration of the core Calico components - Felix and ACL Manager -
+configuration of the core Calico component - Felix -
 because these are needed, and configured similarly, regardless of the
 surrounding environment (OpenStack, Docker, or whatever). Then,
 depending on that surrounding environment, there will be some further
@@ -37,7 +37,7 @@ Calico components
 -----------------
 
 The core Calico component is Felix. (Please see
-:doc:`arch-felix-and-acl` for the Calico architecture.)
+:doc:`architecture` for the Calico architecture.)
 
 Felix (/etc/calico/felix.cfg)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -15,8 +15,8 @@
 Calico Component Architecture
 =============================
 
-Felix, the Calico Plugin and the Calico ACL Manager
----------------------------------------------------
+Felix and the Calico Plugin
+---------------------------
 
 This document describes the architecture of Calico, where Calico's core
 function is separated from the integration of that function
@@ -40,7 +40,7 @@ responsibilities. It is responsible for programming ACLs and routes into
 the Linux kernel. It may also be required to perform VM discovery (if it
 is not expecting to be notified of VM creation). It exchanges
 information with the Cloud Orchestration Provider via the Calico
-Plug-In, and with the Calico ACL Manager. The information it exchanges
+Plug-In. The information it exchanges
 northwards is defined by the Calico API, which is conceptually split
 into several parts (see below). Felix is in effect the portion of Calico
 that does the actual heavy lifting, turning an abstract networking model
@@ -82,25 +82,6 @@ interfaces, as in the OpenStack case) or it may be instructed to take
 ownership of interfaces by the Calico Plug-In. Exactly which flow is
 used depends on the Cloud Orchestration Provider being used.
 
-Calico ACL Manager
-^^^^^^^^^^^^^^^^^^
-
-Calico’s concept of ACLs is more complex than the apparently
-corresponding concept in some cloud OSs, e.g. Security Group
-configuration in OpenStack, because it also incorporates other concepts
-that cloud OSs may treat separately. For example – to continue the
-OpenStack case – Calico’s ACLs incorporate the implications of
-OpenStack’s tenant, network and router configurations as well as of its
-security groups. Therefore the distillation of cloud OS config into ACLs
-for each endpoint is a complex task, and one which we believe is worth
-centralizing, rather than requiring every Felix instance to do the same.
-Hence the Calico ACL Manager component.
-
-The Calico ACL manager will communicate with Felixes using the Calico
-ACL API. In particular, it will publish updates to the ACL status of
-individual machines to subscribers, as well as be able to provide
-'current state' ACL information.
-
 Calico API
 ^^^^^^^^^^
 
@@ -108,10 +89,6 @@ The Calico API is conceptually divided into three parts:
 
 -  The Calico Endpoint API - this communicates data *about* endpoints
    (such as IP addresses, MAC address, and so on)
--  The Calico ACL API - this communicates the state of ACLs for a given
-   endpoint
--  The Calico Network API - this communicates topology information to
-   the ACL manager
 
 More detail on the API is provided in :doc:`api-proposal`.
 
@@ -145,12 +122,10 @@ network.
    information about that Endpoint. In this instance the most important
    information is the IP address of the machine behind the interface and
    some unique identifier for the Endpoint.
-3. Felix receives the response over the Calico Endpoint API. It programs
-   the static route for that Endpoint into the FIB. It also enables
-   proxy ARP on the Endpoint interface and sets up any necessary NAT
+3. Felix receives the response over the Calico Endpoint API including any ACL
+   rules. It programs the static route for that Endpoint into the FIB. It also
+   enables proxy ARP on the Endpoint interface and sets up any necessary NAT
    rules for metadata acquisition.
-4. Felix then queries the Calico ACL API for ACL rules.
-5. It receives the ACL rules.
-6. Felix programs those ACL rules into the kernel.
-7. Felix signals to the Calico Plug-In that the Endpoint is successfully
+4. Felix programs those ACL rules into the kernel.
+5. Felix signals to the Calico Plug-In that the Endpoint is successfully
    provisioned (if necessary).
