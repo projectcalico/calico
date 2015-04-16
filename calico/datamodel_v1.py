@@ -76,3 +76,7 @@ def key_for_profile_rules(profile_id):
 
 def key_for_profile_tags(profile_id):
     return PROFILE_DIR + "/%s/tags" % profile_id
+
+
+def key_for_config(config_name):
+    return CONFIG_DIR + "/%s" % config_name

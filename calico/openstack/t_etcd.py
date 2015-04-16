@@ -27,7 +27,8 @@ import re
 from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  TAGS_KEY_RE, HOST_DIR, key_for_endpoint,
                                  PROFILE_DIR, key_for_profile,
-                                 key_for_profile_rules, key_for_profile_tags)
+                                 key_for_profile_rules, key_for_profile_tags,
+                                 key_for_config)
 from calico.openstack.transport import CalicoTransport
 
 LOG = None
@@ -209,15 +210,16 @@ class CalicoTransportEtcd(CalicoTransport):
                 # If there are no policies, then read returns the top level
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
-                profile_key = key_for_profile(profile_id)
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
                 if profile_id in self.needed_profiles:
                     # This is a profile that we want.  Let's read its rules and
                     # tags, and compare those against the current OpenStack data.
+                    rules_key = key_for_profile_rules(profile_id)
                     rules = json_decoder.decode(
-                        self.client.read(profile_key + '/rules').value)
+                        self.client.read(rules_key).value)
+                    tags_key = key_for_profile_tags(profile_id)
                     tags = json_decoder.decode(
-                        self.client.read(profile_key + '/tags').value)
+                        self.client.read(tags_key).value)
 
                     if (rules == self.profile_rules(profile_id) and
                         tags == self.profile_tags(profile_id)):
@@ -229,6 +231,7 @@ class CalicoTransportEtcd(CalicoTransport):
                 else:
                     # We don't want this profile any more, so delete the key.
                     LOG.debug("Existing etcd profile key is now invalid")
+                    profile_key = key_for_profile(profile_id)
                     self.client.delete(profile_key, recursive=True)
 
         # Now write etcd data for each profile that we need and that we don't
@@ -361,16 +364,17 @@ class CalicoTransportEtcd(CalicoTransport):
         # writes.
         prefix = None
         ready = None
+        iface_pfx_key = key_for_config('InterfacePrefix')
         try:
-            prefix = self.client.read(CONFIG_DIR + '/InterfacePrefix').value
+            prefix = self.client.read(iface_pfx_key).value
             ready = self.client.read(READY_KEY).value
         except etcd.EtcdKeyNotFound:
             LOG.info('%s values are missing', CONFIG_DIR)
 
         # Now write the values that need writing.
         if prefix != 'tap':
-            LOG.info('%s/InterfacePrefix -> tap', CONFIG_DIR)
-            self.client.write(CONFIG_DIR + '/InterfacePrefix', 'tap')
+            LOG.info('%s -> tap', iface_pfx_key)
+            self.client.write(iface_pfx_key, 'tap')
         if ready != 'true':
             # TODO Set this flag only once we're really ready!
             LOG.info('%s -> true', READY_KEY)
