@@ -223,7 +223,9 @@ class IptablesUpdater(Actor):
             # ensure that we then clean up any chains that become unreferenced
             # when we delete the previous lot.
             unreferenced_chains = self._load_unreferenced_chains()
-            orphans = unreferenced_chains - self.explicitly_prog_chains
+            orphans = (unreferenced_chains -
+                       self.explicitly_prog_chains -
+                       set(self.requiring_chains.keys()))
             our_orphans = [c for c in orphans if c.startswith(FELIX_PREFIX)]
             if not chains_we_tried_to_delete.issuperset(our_orphans):
                 chains_we_tried_to_delete.update(our_orphans)
