@@ -25,18 +25,13 @@ import re
 import time
 
 # Calico imports.
+from calico.datamodel_v1 import VERSION_DIR, READY_KEY, CONFIG_DIR, TAGS_KEY_RE
 from calico.openstack.transport import CalicoTransport
 
 LOG = None
-CALICO_PFX = "/calico"
-VERSION_PFX = CALICO_PFX + "/v1"
-READY_PATH = VERSION_PFX + "/Ready"
-CONFIG_PATH = VERSION_PFX + '/config'
 OPENSTACK_ENDPOINT_RE = re.compile(
-    r'^' + VERSION_PFX +
+    r'^' + VERSION_DIR +
     r'/host/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
-OPENSTACK_POLICY_RE = re.compile(
-    r'^' + VERSION_PFX + r'/policy/profile/(?P<profile_id>[^/]+)/tags')
 
 json_decoder = json.JSONDecoder()
 
@@ -102,7 +97,7 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Read all etcd keys under /calico/v1/host.
         try:
-            children = self.client.read(VERSION_PFX  + '/host',
+            children = self.client.read(VERSION_DIR  + '/host',
                                         recursive=True).children
         except etcd.EtcdKeyNotFound:
             children = []
@@ -155,7 +150,7 @@ class CalicoTransportEtcd(CalicoTransport):
             self.needed_profiles.add(data['profile_id'])
 
     def port_etcd_key(self, port):
-        return VERSION_PFX + "/host/%s/workload/openstack/endpoint/%s" % (
+        return VERSION_DIR + "/host/%s/workload/openstack/endpoint/%s" % (
             port['binding:host_id'],
             port['id']
         )
@@ -203,18 +198,18 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Read all etcd keys directly under /calico/v1/policy/profile.
         try:
-            children = self.client.read(VERSION_PFX  + '/policy/profile',
+            children = self.client.read(VERSION_DIR  + '/policy/profile',
                                         recursive=True).children
         except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
             LOG.debug("etcd key: %s" % child.key)
-            m = OPENSTACK_POLICY_RE.match(child.key)
+            m = TAGS_KEY_RE.match(child.key)
             if m:
                 # If there are no policies, then read returns the top level
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
-                profile_key = VERSION_PFX  + '/policy/profile/' + profile_id
+                profile_key = VERSION_DIR  + '/policy/profile/' + profile_id
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
                 if profile_id in self.needed_profiles:
                     # This is a profile that we want.  Let's read its rules and
@@ -242,7 +237,7 @@ class CalicoTransportEtcd(CalicoTransport):
             self.write_profile_to_etcd(profile_id)
 
     def write_profile_to_etcd(self, profile_id):
-        key = VERSION_PFX  + '/policy/profile/' + profile_id
+        key = VERSION_DIR  + '/policy/profile/' + profile_id
         self.client.write(key + '/rules',
                           json.dumps(self.profile_rules(profile_id)))
         self.client.write(key + '/tags',
@@ -368,16 +363,16 @@ class CalicoTransportEtcd(CalicoTransport):
         prefix = None
         ready = None
         try:
-            prefix = self.client.read(CONFIG_PATH + '/InterfacePrefix').value
-            ready = self.client.read(READY_PATH).value
+            prefix = self.client.read(CONFIG_DIR + '/InterfacePrefix').value
+            ready = self.client.read(READY_KEY).value
         except etcd.EtcdKeyNotFound:
-            LOG.info('%s values are missing', CONFIG_PATH)
+            LOG.info('%s values are missing', CONFIG_DIR)
 
         # Now write the values that need writing.
         if prefix != 'tap':
-            LOG.info('%s/InterfacePrefix -> tap', CONFIG_PATH)
-            self.client.write(CONFIG_PATH + '/InterfacePrefix', 'tap')
+            LOG.info('%s/InterfacePrefix -> tap', CONFIG_DIR)
+            self.client.write(CONFIG_DIR + '/InterfacePrefix', 'tap')
         if ready != 'true':
             # TODO Set this flag only once we're really ready!
-            LOG.info('%s -> true', READY_PATH)
-            self.client.write(READY_PATH, 'true')
+            LOG.info('%s -> true', READY_KEY)
+            self.client.write(READY_KEY, 'true')
