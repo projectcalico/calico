@@ -12,7 +12,7 @@ A policy profile comprises two elements: *tags* and *rules*.
 
 ## Worked Example
 
-This example assumes you have a working Calico-enabled cluster, as described in [Getting Started](/GettingStarted.md)
+This example assumes you have a working Calico-enabled cluster, as described in [Getting Started](./GettingStarted.md)
 
 Let's create a new profile and look at the default rules.
 
