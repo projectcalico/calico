@@ -1,8 +1,14 @@
 # Getting started with Calico on Docker
 
-Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host). These instructions use Vagrant and VirtualBox to set up a pair of Docker hosts, but any 64 bit Linux servers with a recent version of Docker and etcd (available on localhost:4001) should work. If you want to get started quickly and easily then we recommend just using Vagrant.
+Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host).
 
-## Setting up a cluster of Docker hosts
+*In order to run this example you will need a 2-node CoreOS cluster with Docker and etcd installed and running.*  You can do one of the following.
+* Set this up yourself, following instructions at https://coreos.com/docs/
+* Use Vagrant and Virtual Box as detailed in the next section.
+
+If you want to get started quickly and easily then we recommend just using Vagrant.  If you set up CoreOS, Docker and etcd yourself, proceed to [Starting Calico services][]
+
+## Setting up a cluster using Vagrant and Virtual Box
 
 If you don't already have Docker hosts available, you can set some up by running the following instructions on a Windows, Mac or Linux computer. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
 
@@ -40,6 +46,10 @@ From core-02
     ping 172.17.8.101
 
 If you see ping failures, the likely culprit is a problem with then Virtualbox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
+
+You should also verify each host can access etcd.  The following will return an error if etcd is not available.
+
+    etcdctl ls /
    
 ## Starting Calico services
 
@@ -136,7 +146,7 @@ Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
     docker exec workload-A ping -c 4 192.168.1.2
     docker exec workload-A ping -c 4 192.168.1.4
 
-B and D are in their own profiles so shouldn't be able to ping anyone else.
+By default, profiles are configured so that their members can communicate with one another, but workloads in other profiles cannot reach them.  B and D are in their own profiles so shouldn't be able to ping anyone else.
 
 Finally, to clean everything up (without doing a `vagrant destroy`), you can run
 
@@ -175,20 +185,30 @@ Then, you can start containers with IPv6 connectivity by giving them an IPv6 add
 On core-01
 
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
-    sudo ./calicoctl profile add PROF_F_G
-    sudo ./calicoctl profile PROF_F_G member add workload-F
+    ./calicoctl profile add PROF_F_G
+    ./calicoctl profile PROF_F_G member add workload-F
 
 Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
 
 One core-02
 
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
-    sudo ./calicoctl profile PROF_F_G member add workload-G
+    ./calicoctl profile PROF_F_G member add workload-G
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
 
-## Troubleshooting
+# Troubleshooting
 
-### Basic checks
+## `sudo docker run` and environment variables.
+
+If you use `sudo` for commands like `docker run`, remember that your environment variables will not be transferred to the `sudo` environment.  You can set environment variables for `sudo` commands like this.
+
+    sudo DOCKER_HOST=localhost:2377 docker run -td -e CALICO_IP=192.168.100.1 busybox
+
+## etcd.EtcdException: No more machines in the cluster
+
+If you see this exception, it means `calicoctl` can't communicate with your etcd cluster.  Ensure etcd is up and listening on `localhost:4001`
+
+## Basic checks
 Running `ip route` shows what routes have been programmed. Routes from other hosts should show that they are programmed by bird.
 
 If you have rebooted your hosts, then some configuration can get lost. It's best to run a `sudo ./calicoctl reset` and start again.
