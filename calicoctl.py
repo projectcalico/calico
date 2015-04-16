@@ -310,15 +310,20 @@ def node(ip, node_image, ip6=""):
     # client flexibility.
     node_docker_client = docker_client
 
-    if DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read():
-        enable_socket = "YES"
-        # At this point, docker is listening on a new port but powerstrip
-        # might not be running, so docker clients need to talk directly to
-        # docker.
-        node_docker_client = docker.Client(version=DOCKER_VERSION,
-                                           base_url="unix://%s" % REAL_SOCK)
-    else:
-        enable_socket = "NO"
+    enable_socket = "NO"
+
+    try:
+        if DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read():
+            enable_socket = "YES"
+            # At this point, docker is listening on a new port but powerstrip
+            # might not be running, so docker clients need to talk directly to
+            # docker.
+            node_docker_client = docker.Client(version=DOCKER_VERSION,
+                                               base_url="unix://%s" % REAL_SOCK)
+    except IOError:
+        # Can't find Docker config file.  Don't attempt to change anything.
+        # Just carry on.
+        pass
 
     try:
         node_docker_client.remove_container("calico-node", force=True)
@@ -360,7 +365,7 @@ def node(ip, node_image, ip6=""):
         network_mode="host",
         binds=binds)
 
-    _find_or_pull_node_image(node_image)
+    _find_or_pull_node_image(node_image, node_docker_client)
     container = node_docker_client.create_container(
         node_image,
         name="calico-node",
@@ -389,7 +394,7 @@ def node(ip, node_image, ip6=""):
     print "Calico node is running with id: %s" % cid
 
 
-def _find_or_pull_node_image(image_name):
+def _find_or_pull_node_image(image_name, client):
     """
     Check if Docker has a cached copy of an image, and if not, attempt to pull
     it.
@@ -398,12 +403,12 @@ def _find_or_pull_node_image(image_name):
     :return: None.
     """
     try:
-        _ = docker_client.inspect_image(image_name)
+        _ = client.inspect_image(image_name)
     except docker.errors.APIError as err:
         if err.response.status_code == 404:
             # TODO: Display proper status bar
             print "Pulling Docker image %s" % image_name
-            docker_client.pull(image_name)
+            client.pull(image_name)
 
 
 def grep(text, pattern):
@@ -766,12 +771,17 @@ def restart_docker_with_alternative_unix_socket():
 
     # Set the docker daemon to listen on the docker.real.sock by updating
     # the config, clearing old sockets and restarting.
-    socket_config_exists = \
-        DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-    if not socket_config_exists:
-        with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
-            docker_config.write(DOCKER_OPTIONS)
-        clean_restart_docker(REAL_SOCK)
+    try:
+        socket_config_exists = \
+            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+        if not socket_config_exists:
+            with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
+                docker_config.write(DOCKER_OPTIONS)
+            clean_restart_docker(REAL_SOCK)
+    except IOError:
+        # Can't find Docker config file.
+        print "Docker config file couldn't not be found at %s" % DOCKER_DEFAULT_FILENAME
+        print "This option is currently only supported on Debian based systems"
 
     # Always remove the socket that powerstrip will use, as it gets upset
     # otherwise.

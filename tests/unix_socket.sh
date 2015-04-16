@@ -6,7 +6,6 @@ dist/calicoctl restart-docker-without-alternative-unix-socket
 
 # Set it up
 docker rm -f etcd || true
-#DOCKER_HOST="unix:///var/run/docker.real.sock" docker rm -f etcd || true
 docker run --restart=always -d -p 4001:4001 --name etcd quay.io/coreos/etcd:v0.4.6
 
 # Run without the unix socket. Check that docker can be accessed though both
