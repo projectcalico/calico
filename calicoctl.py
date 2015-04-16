@@ -5,7 +5,7 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--force-unix-socket]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
@@ -25,6 +25,8 @@ Usage:
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
+  calicoctl restart-docker-with-alternative-unix-socket
+  calicoctl restart-docker-without-alternative-unix-socket
 
 Options:
  --ip=<IP>                The local management address to use.
@@ -263,15 +265,24 @@ def clean_restart_docker(sock_to_wait_on):
     while not os.path.exists(sock_to_wait_on):
         time.sleep(0.1)
 
+def module_loaded(module):
+    return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
-def node(ip, force_unix_socket, node_image, ip6=""):
+def node(ip, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
     if os.geteuid() != 0:
         print >> sys.stderr, "`calicoctl node` must be run as root."
         sys.exit(2)
 
-    modprobe("ip6_tables")
-    modprobe("xt_set")
+    if not module_loaded("ip6_tables"):
+        print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
+                             "`modprobe ip6_tables`"
+        sys.exit(2)
+
+    if not module_loaded("xt_set"):
+        print >> sys.stderr, "module xt_set isn't loaded. Load with " \
+                             "`modprobe xt_set`"
+        sys.exit(2)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -287,59 +298,28 @@ def node(ip, force_unix_socket, node_image, ip6=""):
     client.create_host(hostname, ip, ip6)
 
     # Enable IP forwarding since all compute hosts are vRouters.
+    # IPv4 forwarding should be enabled already by docker.
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
-
-    # The docker daemon could be in one of two states:
-    # 1) Listening on /var/run/docker.sock - the default
-    # 2) listening on /var/run/docker.real.sock - if it's been previously run
-    #    with --force-unix-socket
-    enable_socket = "NO"
 
     # We might need to talk to a different docker endpoint, so create some
     # client flexibility.
     node_docker_client = docker_client
 
-    if force_unix_socket:
-        # Update docker to use a different unix socket, so powerstrip can run
-        # its proxy on the "normal" one. This provides simple access for
-        # existing tools to the powerstrip proxy.
+    enable_socket = "NO"
 
-        # Set the docker daemon to listen on the docker.real.sock by updating
-        # the config, clearing old sockets and restarting.
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-        if not socket_config_exists:
-            with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
-                docker_config.write(DOCKER_OPTIONS)
-            clean_restart_docker(REAL_SOCK)
-
-        # Always remove the socket that powerstrip will use, as it gets upset
-        # otherwise.
-        if os.path.exists(POWERSTRIP_SOCK):
-            os.remove(POWERSTRIP_SOCK)
-
-        # At this point, docker is listening on a new port but powerstrip isn't
-        # running, so docker clients need to talk directly to docker.
-        node_docker_client = docker.Client(version=DOCKER_VERSION,
-                                           base_url="unix://%s" % REAL_SOCK)
-        enable_socket = "YES"
-    else:
-        # Not using the unix socket.  If there is --force-unix-socket config in
-        # place, try some cleanup
-        try:
-            socket_config_exists = \
-                DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-        except IOError:
-            # Can't find Docker config file.  Don't attempt to change anything.
-            # Just carry on.
-            pass
-        else:
-            if socket_config_exists:
-                good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
-                              if DOCKER_OPTIONS not in line]
-                open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-                clean_restart_docker(POWERSTRIP_SOCK)
+    try:
+        if DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read():
+            enable_socket = "YES"
+            # At this point, docker is listening on a new port but powerstrip
+            # might not be running, so docker clients need to talk directly to
+            # docker.
+            node_docker_client = docker.Client(version=DOCKER_VERSION,
+                                               base_url="unix://%s" % REAL_SOCK)
+    except IOError:
+        # Can't find Docker config file.  Don't attempt to change anything.
+        # Just carry on.
+        pass
 
     try:
         node_docker_client.remove_container("calico-node", force=True)
@@ -381,7 +361,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
         network_mode="host",
         binds=binds)
 
-    _find_or_pull_node_image(node_image)
+    _find_or_pull_node_image(node_image, node_docker_client)
     container = node_docker_client.create_container(
         node_image,
         name="calico-node",
@@ -395,7 +375,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
 
     node_docker_client.start(container)
 
-    if force_unix_socket:
+    if enable_socket == "YES":
         while not os.path.exists(POWERSTRIP_SOCK):
             time.sleep(0.1)
         uid = os.stat(REAL_SOCK).st_uid
@@ -410,7 +390,7 @@ def node(ip, force_unix_socket, node_image, ip6=""):
     print "Calico node is running with id: %s" % cid
 
 
-def _find_or_pull_node_image(image_name):
+def _find_or_pull_node_image(image_name, client):
     """
     Check if Docker has a cached copy of an image, and if not, attempt to pull
     it.
@@ -419,12 +399,12 @@ def _find_or_pull_node_image(image_name):
     :return: None.
     """
     try:
-        _ = docker_client.inspect_image(image_name)
+        _ = client.inspect_image(image_name)
     except docker.errors.APIError as err:
         if err.response.status_code == 404:
             # TODO: Display proper status bar
             print "Pulling Docker image %s" % image_name
-            docker_client.pull(image_name)
+            client.pull(image_name)
 
 
 def grep(text, pattern):
@@ -718,6 +698,7 @@ popd >/dev/null
 echo "Done"
 """
     bash = sh.Command._create('bash')
+    def process_output(line): sys.stdout.write(line)
     bash(_in=script, _err=process_output, _out=process_output).wait()
     # TODO: reimplement this in Python
     # TODO: ipset might not be installed on the host. But we don't want to
@@ -781,6 +762,52 @@ def ip_pool_show(version):
     print x
 
 
+def restart_docker_with_alternative_unix_socket():
+    # Update docker to use a different unix socket, so powerstrip can run
+    # its proxy on the "normal" one. This provides simple access for
+    # existing tools to the powerstrip proxy.
+
+    # Set the docker daemon to listen on the docker.real.sock by updating
+    # the config, clearing old sockets and restarting.
+    try:
+        socket_config_exists = \
+            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+        if not socket_config_exists:
+            with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
+                docker_config.write(DOCKER_OPTIONS)
+            clean_restart_docker(REAL_SOCK)
+    except IOError:
+        # Can't find Docker config file.
+        print "Docker config file couldn't not be found at %s" % DOCKER_DEFAULT_FILENAME
+        print "This option is currently only supported on Debian based systems"
+
+    # Always remove the socket that powerstrip will use, as it gets upset
+    # otherwise.
+    if os.path.exists(POWERSTRIP_SOCK):
+        os.remove(POWERSTRIP_SOCK)
+
+
+def restart_docker_without_alternative_unix_socket():
+    """
+    Remove any "alternative" unix socket config.
+    """
+    print "Examining %s" % DOCKER_DEFAULT_FILENAME
+    try:
+        socket_config_exists = \
+            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
+    except IOError:
+        # Can't find Docker config file.  Don't attempt to change anything.
+        # Just carry on.
+        pass
+    else:
+        if socket_config_exists:
+            print "Removing socket config"
+            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
+                          if DOCKER_OPTIONS not in line]
+            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+            clean_restart_docker(POWERSTRIP_SOCK)
+
+
 def validate_arguments():
     profile_ok = (arguments["<PROFILE>"] is None or
                   re.match("^\w{1,30}$", arguments["<PROFILE>"]))
@@ -799,10 +826,6 @@ def validate_arguments():
     if not ip_ok:
         print "Invalid ip argument"
     return profile_ok and ip_ok and container_ip_ok and tag_ok
-
-
-def process_output(line):
-    sys.stdout.write(line)
 
 
 def bgppeer_add(ip, version):
@@ -847,6 +870,7 @@ def bgppeer_remove(ip, version):
     except KeyError:
         print "%s is not a configured peer." % address
 
+
 def bgppeer_show(version):
     """
     Print a list BGP Peers
@@ -865,14 +889,17 @@ def bgppeer_show(version):
 if __name__ == '__main__':
     arguments = docopt(__doc__)
     if validate_arguments():
-        if arguments["node"]:
+        if arguments["restart-docker-with-alternative-unix-socket"]:
+            restart_docker_with_alternative_unix_socket()
+        elif arguments["restart-docker-without-alternative-unix-socket"]:
+            restart_docker_without_alternative_unix_socket()
+        elif arguments["node"]:
             if arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
                 node_image = arguments['--node-image']
                 ip6 = arguments["--ip6"]
                 node(arguments["--ip"],
-                     arguments["--force-unix-socket"],
                      node_image=node_image,
                      ip6=ip6)
         elif arguments["status"]:
