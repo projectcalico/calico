@@ -39,20 +39,40 @@ VERSION_DIR = ROOT_DIR + "/v1"
 READY_KEY = VERSION_DIR + "/Ready"
 # Global config (directory).
 CONFIG_DIR = VERSION_DIR + '/config'
+HOST_DIR = VERSION_DIR + '/host'
+POLICY_DIR = VERSION_DIR + '/policy'
+PROFILE_DIR = POLICY_DIR + "/profile"
 
 # Regex to match profile rules, capturing the profile ID in capture group
 # "profile_id".
 RULES_KEY_RE = re.compile(
-    r'^' + VERSION_DIR + r'/policy/profile/(?P<profile_id>[^/]+)/rules')
+    r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/rules')
 # Regex to match profile tags, capturing the profile ID in capture group
 # "profile_id".
 TAGS_KEY_RE = re.compile(
-    r'^' + VERSION_DIR + r'/policy/profile/(?P<profile_id>[^/]+)/tags')
+    r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/tags')
 # Regex to match endpoints, captures "hostname" and "endpoint_id".
 ENDPOINT_KEY_RE = re.compile(
-    r'^' + VERSION_DIR +
-    r'/host/(?P<hostname>[^/]+)/.+/endpoint/(?P<endpoint_id>[^/]+)')
+    r'^' + HOST_DIR +
+    r'/(?P<hostname>[^/]+)/.+/endpoint/(?P<endpoint_id>[^/]+)')
 
 
-def per_host_config_dir(hostname):
+def dir_for_per_host_config(hostname):
     return VERSION_DIR + "/host/%s/config/" % hostname
+
+
+def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
+    return (HOST_DIR + "/%s/workload/%s/%s/endpoint/%s" %
+            (host, orchestrator, workload_id, endpoint_id))
+
+
+def key_for_profile(profile_id):
+    return PROFILE_DIR + "/" + profile_id
+
+
+def key_for_profile_rules(profile_id):
+    return PROFILE_DIR + "/%s/rules" % profile_id
+
+
+def key_for_profile_tags(profile_id):
+    return PROFILE_DIR + "/%s/tags" % profile_id

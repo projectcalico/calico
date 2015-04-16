@@ -31,7 +31,7 @@ from urllib3.exceptions import ReadTimeoutError
 from calico import common
 from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  RULES_KEY_RE, TAGS_KEY_RE, ENDPOINT_KEY_RE,
-                                 per_host_config_dir)
+                                 dir_for_per_host_config)
 from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class EtcdWatcher(Actor):
                                     self.config.LOGLEVSYS,
                                     self.config.LOGLEVSCR)
             configured = True
-        self.my_config_dir = per_host_config_dir(self.config.HOSTNAME)
+        self.my_config_dir = dir_for_per_host_config(self.config.HOSTNAME)
 
     @actor_message()
     def wait_for_ready(self):

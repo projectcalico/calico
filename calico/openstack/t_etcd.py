@@ -22,10 +22,12 @@ import etcd
 import eventlet
 import json
 import re
-import time
 
 # Calico imports.
-from calico.datamodel_v1 import VERSION_DIR, READY_KEY, CONFIG_DIR, TAGS_KEY_RE
+from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
+                                 TAGS_KEY_RE, HOST_DIR, key_for_endpoint,
+                                 PROFILE_DIR, key_for_profile,
+                                 key_for_profile_rules, key_for_profile_tags)
 from calico.openstack.transport import CalicoTransport
 
 LOG = None
@@ -97,8 +99,7 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Read all etcd keys under /calico/v1/host.
         try:
-            children = self.client.read(VERSION_DIR  + '/host',
-                                        recursive=True).children
+            children = self.client.read(HOST_DIR, recursive=True).children
         except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
@@ -150,10 +151,10 @@ class CalicoTransportEtcd(CalicoTransport):
             self.needed_profiles.add(data['profile_id'])
 
     def port_etcd_key(self, port):
-        return VERSION_DIR + "/host/%s/workload/openstack/endpoint/%s" % (
-            port['binding:host_id'],
-            port['id']
-        )
+        return key_for_endpoint(port['binding:host_id'],
+                                "openstack",
+                                port['id'],  # FIXME Should be the VM's ID.
+                                port['id'])
 
     def port_etcd_data(self, port):
         # Construct the simpler port data.
@@ -198,8 +199,7 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Read all etcd keys directly under /calico/v1/policy/profile.
         try:
-            children = self.client.read(VERSION_DIR  + '/policy/profile',
-                                        recursive=True).children
+            children = self.client.read(PROFILE_DIR, recursive=True).children
         except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
@@ -209,7 +209,7 @@ class CalicoTransportEtcd(CalicoTransport):
                 # If there are no policies, then read returns the top level
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
-                profile_key = VERSION_DIR  + '/policy/profile/' + profile_id
+                profile_key = key_for_profile(profile_id)
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
                 if profile_id in self.needed_profiles:
                     # This is a profile that we want.  Let's read its rules and
@@ -237,10 +237,9 @@ class CalicoTransportEtcd(CalicoTransport):
             self.write_profile_to_etcd(profile_id)
 
     def write_profile_to_etcd(self, profile_id):
-        key = VERSION_DIR  + '/policy/profile/' + profile_id
-        self.client.write(key + '/rules',
+        self.client.write(key_for_profile_rules(profile_id),
                           json.dumps(self.profile_rules(profile_id)))
-        self.client.write(key + '/tags',
+        self.client.write(key_for_profile_tags(profile_id),
                           json.dumps(self.profile_tags(profile_id)))
 
     def profile_rules(self, profile_id):
