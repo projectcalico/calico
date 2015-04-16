@@ -747,6 +747,9 @@ def restart_docker_with_alternative_unix_socket():
     Set the docker daemon to listen on the docker.real.sock by updating
     the config, clearing old sockets and restarting.
     """
+    if os.geteuid() != 0:
+        print >> sys.stderr, "restarting docker must be run as root."
+        sys.exit(2)
     docker_restarter.restart_docker_with_alternative_unix_socket()
 
 
@@ -754,6 +757,9 @@ def restart_docker_without_alternative_unix_socket():
     """
     Remove any "alternative" unix socket config.
     """
+    if os.geteuid() != 0:
+        print >> sys.stderr, "restarting docker must be run as root."
+        sys.exit(2)
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 

@@ -54,6 +54,7 @@ class SystemdRestarter():
     def _clean_restart_docker(self, sock_to_wait_on):
         _clean_socks()
         systemctl = sh.Command._create("systemctl")
+        systemctl("daemon-reload")
         systemctl("restart", "docker.service")
 
         # Wait for docker to create the socket
