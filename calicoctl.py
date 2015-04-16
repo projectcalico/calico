@@ -66,6 +66,7 @@ DOCKER_VERSION = "1.16"
 docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
                                                  "unix://var/run/docker.sock"))
+docker_restarter = docker_restart.create_restarter()
 
 try:
     modprobe = sh.Command._create('modprobe')
@@ -288,7 +289,7 @@ def node(ip, node_image, ip6=""):
     node_docker_client = docker_client
 
     enable_socket = "NO"
-    if docker_restart.is_using_alternative_socket():
+    if docker_restarter.is_using_alternative_socket():
         enable_socket = "YES"
         # At this point, docker is listening on a new port but powerstrip
         # might not be running, so docker clients need to talk directly to
@@ -746,14 +747,14 @@ def restart_docker_with_alternative_unix_socket():
     Set the docker daemon to listen on the docker.real.sock by updating
     the config, clearing old sockets and restarting.
     """
-    docker_restart.restart_docker_with_alternative_unix_socket()
+    docker_restarter.restart_docker_with_alternative_unix_socket()
 
 
 def restart_docker_without_alternative_unix_socket():
     """
     Remove any "alternative" unix socket config.
     """
-    docker_restart.restart_docker_without_alternative_unix_socket()
+    docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
 def validate_arguments():

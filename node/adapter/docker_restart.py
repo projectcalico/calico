@@ -2,96 +2,129 @@ import os
 import time
 import sh
 
+
+
 REAL_SOCK = "/var/run/docker.real.sock"
 POWERSTRIP_SOCK = "/var/run/docker.sock"
-DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
-DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
-
-def clean_restart_docker(sock_to_wait_on):
-    restart = sh.Command._create("restart")
-
-    if os.path.exists(REAL_SOCK):
-        os.remove(REAL_SOCK)
-    if os.path.exists(POWERSTRIP_SOCK):
-        os.remove(POWERSTRIP_SOCK)
-
-    restart("docker")
-
-    # Wait for docker to create the socket
-    while not os.path.exists(sock_to_wait_on):
-        time.sleep(0.1)
 
 
-def is_using_alternative_socket():
-    try:
-        if DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read():
-            return True
-    except IOError:
-        # Can't find Docker config file.  Don't attempt to change anything.
-        # Just carry on.
+def create_restarter():
+    """
+    Detect what init system is being used and return the appropriate handler.
+    :return: A "restarter" object.
+    """
+    if os.path.exists(UpstartRestarter.DOCKER_DEFAULT_FILENAME):
+        return UpstartRestarter()
+    else:
+        return NullRestarter()
+
+class NullRestarter():
+    def is_using_alternative_socket(self):
         return False
-
-def restart_docker_with_alternative_unix_socket():
-    # Update docker to use a different unix socket, so powerstrip can run
-    # its proxy on the "normal" one. This provides simple access for
-    # existing tools to the powerstrip proxy.
-
-    # Set the docker daemon to listen on the docker.real.sock by updating
-    # the config, clearing old sockets and restarting.
-    try:
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-        if not socket_config_exists:
-            with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
-                docker_config.write(DOCKER_OPTIONS)
-            clean_restart_docker(REAL_SOCK)
-    except IOError:
-        # Can't find Docker config file.
-        print "Docker config file couldn't not be found at %s" % DOCKER_DEFAULT_FILENAME
-        print "This option is currently only supported on Debian based systems"
-
-    # Always remove the socket that powerstrip will use, as it gets upset
-    # otherwise.
-    if os.path.exists(POWERSTRIP_SOCK):
-        os.remove(POWERSTRIP_SOCK)
+    def restart_docker_with_alternative_unix_socket(self):
+        print "Unsupported"
+    def restart_docker_without_alternative_unix_socket(self):
+        print "Unsupported"
 
 
-def restart_docker_without_alternative_unix_socket():
-    """
-    Remove any "alternative" unix socket config.
-    """
-    print "Examining %s" % DOCKER_DEFAULT_FILENAME
-    try:
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-    except IOError:
-        # Can't find Docker config file.  Don't attempt to change anything.
-        # Just carry on.
+class UpstartRestarter():
+    def __init__(self):
         pass
-    else:
-        if socket_config_exists:
-            print "Removing socket config"
-            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
-                          if DOCKER_OPTIONS not in line]
-            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-            clean_restart_docker(POWERSTRIP_SOCK)
 
-def restart_docker_without_alternative_unix_socket():
-    """
-    Remove any "alternative" unix socket config.
-    """
-    print "Examining %s" % DOCKER_DEFAULT_FILENAME
-    try:
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-    except IOError:
-        # Can't find Docker config file.  Don't attempt to change anything.
-        # Just carry on.
-        pass
-    else:
-        if socket_config_exists:
-            print "Removing socket config"
-            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
-                          if DOCKER_OPTIONS not in line]
-            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-            clean_restart_docker(POWERSTRIP_SOCK)
+    DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
+    DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
+    def _clean_restart_docker(self, sock_to_wait_on):
+        restart = sh.Command._create("restart")
+
+        if os.path.exists(REAL_SOCK):
+            os.remove(REAL_SOCK)
+        if os.path.exists(POWERSTRIP_SOCK):
+            os.remove(POWERSTRIP_SOCK)
+
+        restart("docker")
+
+        # Wait for docker to create the socket
+        while not os.path.exists(sock_to_wait_on):
+            time.sleep(0.1)
+
+
+    def is_using_alternative_socket(self):
+        try:
+            if self.DOCKER_OPTIONS in open(
+                    self.DOCKER_DEFAULT_FILENAME).read():
+                return True
+        except IOError:
+            # Can't find Docker config file.  Don't attempt to change anything.
+            # Just carry on.
+            return False
+
+    def restart_docker_with_alternative_unix_socket(self):
+        # Update docker to use a different unix socket, so powerstrip can run
+        # its proxy on the "normal" one. This provides simple access for
+        # existing tools to the powerstrip proxy.
+
+        # Set the docker daemon to listen on the docker.real.sock by updating
+        # the config, clearing old sockets and restarting.
+        try:
+            socket_config_exists = \
+                self.DOCKER_OPTIONS in open(
+                    self.DOCKER_DEFAULT_FILENAME).read()
+            if not socket_config_exists:
+                with open(self.DOCKER_DEFAULT_FILENAME, "a") as docker_config:
+                    docker_config.write(self.DOCKER_OPTIONS)
+                self._clean_restart_docker(REAL_SOCK)
+        except IOError:
+            # Can't find Docker config file.
+            print "Docker config file couldn't not be found at %s" % \
+                  self.DOCKER_DEFAULT_FILENAME
+            print "This option is currently only supported on Debian based systems"
+
+        # Always remove the socket that powerstrip will use, as it gets upset
+        # otherwise.
+        if os.path.exists(POWERSTRIP_SOCK):
+            os.remove(POWERSTRIP_SOCK)
+
+
+    def restart_docker_without_alternative_unix_socket(self):
+        """
+        Remove any "alternative" unix socket config.
+        """
+        print "Examining %s" % self.DOCKER_DEFAULT_FILENAME
+        try:
+            socket_config_exists = \
+                self.DOCKER_OPTIONS in open(
+                    self.DOCKER_DEFAULT_FILENAME).read()
+        except IOError:
+            # Can't find Docker config file.  Don't attempt to change anything.
+            # Just carry on.
+            pass
+        else:
+            if socket_config_exists:
+                print "Removing socket config"
+                good_lines = [line for line in open(
+                    self.DOCKER_DEFAULT_FILENAME)
+                              if self.DOCKER_OPTIONS not in line]
+                open(self.DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+                self._clean_restart_docker(POWERSTRIP_SOCK)
+
+    def restart_docker_without_alternative_unix_socket(self):
+        """
+        Remove any "alternative" unix socket config.
+        """
+        print "Examining %s" % self.DOCKER_DEFAULT_FILENAME
+        try:
+            socket_config_exists = \
+                self.DOCKER_OPTIONS in open(
+                    self.DOCKER_DEFAULT_FILENAME).read()
+        except IOError:
+            # Can't find Docker config file.  Don't attempt to change anything.
+            # Just carry on.
+            pass
+        else:
+            if socket_config_exists:
+                print "Removing socket config"
+                good_lines = [line for line in open(
+                    self.DOCKER_DEFAULT_FILENAME)
+                              if self.DOCKER_OPTIONS not in line]
+                open(self.DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
+                self._clean_restart_docker(POWERSTRIP_SOCK)
