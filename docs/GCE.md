@@ -77,7 +77,7 @@ ip route add unreachable 192.168.0.0/16
 Now, you can just follow the standard getting started instructions for downloading calico and creating workloads. See https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#installing-calico for more details.
 
 
-## (Optional) Enabling traffic from countainers to the internet
+## (Optional) Enabling traffic from containers to the internet
  The test endpoints will be unable to access the internet - that is because the internal range we are using is not routable. Hence to get external connectivity, SNAT is called for using the following `iptables` rule (on both hosts).
 
 ```

@@ -13,7 +13,7 @@ If you want to get started quickly and easily then we recommend just using Vagra
 If you don't already have Docker hosts available, you can set some up by running the following instructions on a Windows, Mac or Linux computer. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
 
 ### Initial environment setup
-So, to get started, install Vagrant, Virtualbox and Git for your OS.
+So, to get started, install Vagrant, VirtualBox and Git for your OS.
 * https://www.virtualbox.org/wiki/Downloads (no need for the extensions, just the core package)
 * https://www.vagrantup.com/downloads.html
 * http://git-scm.com/downloads
@@ -29,7 +29,7 @@ You should now have two CoreOS servers, each running etcd in a cluster. The serv
 * run `vagrant up`
 
 To connect to your servers
-* Linux/MacOSX
+* Linux/Mac OS X
     * run `vagrant ssh <hostname>`
 * Windows
     * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
@@ -45,7 +45,7 @@ From core-02
 
     ping 172.17.8.101
 
-If you see ping failures, the likely culprit is a problem with then Virtualbox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
+If you see ping failures, the likely culprit is a problem with then VirtualBox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
 

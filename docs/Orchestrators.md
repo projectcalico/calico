@@ -7,7 +7,7 @@
      -  Bring up one instance of the `calico-node` service on each Docker compute host in the cluster.  This is also accomplished using `calicoctl`
  2. Redirect Docker Remote API requests to `calico-node`.
     - `calico-node` exposes the Docker Remote API on port 2377, using [Powerstrip][] to trap the container create/start/stop/destroy events and program the network.
-    - Pass an enviroment variable `CALICO_IP` with the desired container IP address during creation of the container.  _You may not specify the `--net` parameter as Calico will overwrite this._
+    - Pass an environment variable `CALICO_IP` with the desired container IP address during creation of the container.  _You may not specify the `--net` parameter as Calico will overwrite this._
 3. After creating the container, configure profiles and Access Control Lists (ACLs) for the container by writing to the `/calico/policy/` keyspace in the etcd cluster.
 
 [Powerstrip]: https://github.com/clusterhq/powerstrip
@@ -81,7 +81,7 @@ To delete a profile, recursively delete the directory `/calico/policy/profile/<p
 
 	curl -L -X DELETE http://127.0.0.1:4001/v2/keys/calico/policy/profile/web?recursive=true
 
-### Definining Profile Rules
+### Defining Profile Rules
 
 Profiles include a set of network access rules for inbound and outbound traffic for containers assigned that profile.
 
@@ -117,7 +117,7 @@ where each entry in the inbound/outbound list is a rule object:
 
 The rules are executed in order for each packet to/from the container.  If the packet matches a rule, the given action is executed an further rules are not executed.
 
-For example, to allow incoming traffic on port 80 and block all other incomming traffic use the following.
+For example, to allow incoming traffic on port 80 and block all other incoming traffic use the following.
 
 	{
 	  "inbound": [{"src_ports": [80], "action": "allow"},
@@ -188,7 +188,7 @@ Example output:
 		}
 	}
 
-In this example, the endpoing UUID is 1d9e9624cdb711e499bf08002737b14f
+In this example, the endpoint UUID is 1d9e9624cdb711e499bf08002737b14f
 
 The value of the endpoint UUID key is a JSON object which includes endpoint properties.
 
