@@ -2,63 +2,27 @@
 
 Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host).
 
-*In order to run this example you will need a 2-node CoreOS cluster with Docker and etcd installed and running.*  You can do one of the following.
-* Set this up yourself, following instructions at https://coreos.com/docs/
-* Use Vagrant and Virtual Box as detailed in the next section.
+*In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
+* Set this up yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md)
+* Use [Calico CoreOS Vagrant](calico-coreos-vagrant) to start a cluster in VMs on your laptop or workstation.
 
-If you want to get started quickly and easily then we recommend just using Vagrant.  If you set up CoreOS, Docker and etcd yourself, proceed to [Starting Calico services](#calico-services)
+If you want to get started quickly and easily then we recommend just using Vagrant.
 
-## Setting up a cluster using Vagrant and Virtual Box
+If you have difficulty, try the [Troubleshooting Guide](./Troubleshooting.md).
 
-If you don't already have Docker hosts available, you can set some up by running the following instructions on a Windows, Mac or Linux computer. If you've never used Vagrant, CoreOS or Etcd before then we recommend skimming their docs before running through these instructions.
+### A note about names & addresses
+In this example, we will use the server names and IP addresses from the [Calico CoreOS Vagrant](calico-coreos-vagrant) example.
 
-### Initial environment setup
-So, to get started, install Vagrant, VirtualBox and Git for your OS.
-* https://www.virtualbox.org/wiki/Downloads (no need for the extensions, just the core package)
-* https://www.vagrantup.com/downloads.html
-* http://git-scm.com/downloads
+| hostname | IP address   |
+|----------|--------------|
+| core-01  | 172.17.8.101 |
+| core-02  | 172.17.8.102 |
 
-Use the customized CoreOS-based Vagrant file from https://github.com/Metaswitch/calico-coreos-vagrant-example for streamlined setup. Follow the instructions there (and see the <a href="https://coreos.com/docs/running-coreos/platforms/vagrant/">CoreOS documentation</a>).
+If you set up your own cluster, substitute the hostnames and IP addresses assigned to your servers.
 
-You should now have two CoreOS servers, each running etcd in a cluster. The servers are named core-01 and core-02.  By default these have IP addresses 172.17.8.101 and 172.17.8.102. If you want to start again at any point, do the following
-
-* run `vagrant destroy`
-
-* If you manually set the discovery URL in `user-data`, replace it with a fresh one.
-
-* run `vagrant up`
-
-To connect to your servers
-* Linux/Mac OS X
-    * run `vagrant ssh <hostname>`
-* Windows
-    * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
-    * run `vagrant putty <hostname>`
-
-At this point, it's worth checking that your servers can ping each other.
-
-From core-01
-
-    ping 172.17.8.102
-  
-From core-02
-
-    ping 172.17.8.101
-
-If you see ping failures, the likely culprit is a problem with then VirtualBox network between the VMs.  Rebooting the host may help.  Remember to shut down the VMs first with `vagrant halt` before you reboot.
-
-You should also verify each host can access etcd.  The following will return an error if etcd is not available.
-
-    etcdctl ls /
-   
 ## Starting Calico services<a id="calico-services"></a>
 
-If you didn't use the calico-coreos-vagrant-example Vagrantfile, now download Calico onto both servers by SSHing onto them and running
-
-    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.3.2/calicoctl
-    chmod +x calicoctl
-
-Now start calico on all the nodes
+Once you have your cluster up and running, start calico on all the nodes
 
 On core-01
 
@@ -196,23 +160,4 @@ One core-02
     ./calicoctl profile PROF_F_G member add workload-G
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
 
-# Troubleshooting
-
-## `sudo docker run` and environment variables.
-
-If you use `sudo` for commands like `docker run`, remember that your environment variables will not be transferred to the `sudo` environment.  You can set environment variables for `sudo` commands like this.
-
-    sudo DOCKER_HOST=localhost:2377 docker run -td -e CALICO_IP=192.168.100.1 busybox
-
-## etcd.EtcdException: No more machines in the cluster
-
-If you see this exception, it means `calicoctl` can't communicate with your etcd cluster.  Ensure etcd is up and listening on `localhost:4001`
-
-## Basic checks
-Running `ip route` shows what routes have been programmed. Routes from other hosts should show that they are programmed by bird.
-
-If you have rebooted your hosts, then some configuration can get lost. It's best to run a `sudo ./calicoctl reset` and start again.
-
-If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS image is out of date.  Use `vagrant box update` to pull the new version.  I recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
-
-If you hit issues, please raise tickets. Diags can be collected with the `sudo ./calicoctl diags` command.
+[calico-coreos-vagrant]: https://github.com/Metaswitch/calico-coreos-vagrant-example
