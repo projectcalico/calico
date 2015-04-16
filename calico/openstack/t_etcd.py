@@ -365,12 +365,14 @@ class CalicoTransportEtcd(CalicoTransport):
         try:
             prefix = self.client.read('/calico/config/InterfacePrefix').value
             ready = self.client.read('/calico/config/Ready').value
-        except Exception:
-            LOG.info('/calico/config values need (re-)writing')
+        except KeyError:
+            LOG.info('/calico/config values are missing')
 
         # Now write the values that need writing.
         if prefix != 'tap':
+            LOG.info('/calico/config/InterfacePrefix -> tap')
             self.client.write('/calico/config/InterfacePrefix', 'tap')
         if ready != 'true':
             # TODO Set this flag only once we're really ready!
+            LOG.info('/calico/config/Ready -> true')
             self.client.write("/calico/config/Ready", 'true')
