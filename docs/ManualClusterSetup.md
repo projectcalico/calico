@@ -30,7 +30,7 @@ You should also verify each host can access etcd.  The following will return an 
 
 ## Docker permissions
 
-The [example script][example-commands] assume that your ordinary user account has permission to run Docker images without `sudo`.  If you haven't done so, you can enable this by adding your user to the `docker` group and restarting your terminal.
+The [example script][example-commands] assumes that your ordinary user account has permission to run Docker images without `sudo`.  If you haven't done so, you can enable this by adding your user to the `docker` group and restarting your terminal.
 
     sudo usermod -aG docker <your_username>
 
