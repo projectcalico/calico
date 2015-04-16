@@ -6,7 +6,7 @@ Calico provides IP connectivity between Docker containers on different hosts (as
 * Set this up yourself, following instructions at https://coreos.com/docs/
 * Use Vagrant and Virtual Box as detailed in the next section.
 
-If you want to get started quickly and easily then we recommend just using Vagrant.  If you set up CoreOS, Docker and etcd yourself, proceed to [Starting Calico services][]
+If you want to get started quickly and easily then we recommend just using Vagrant.  If you set up CoreOS, Docker and etcd yourself, proceed to [Starting Calico services](#calico-services)
 
 ## Setting up a cluster using Vagrant and Virtual Box
 
@@ -51,7 +51,7 @@ You should also verify each host can access etcd.  The following will return an 
 
     etcdctl ls /
    
-## Starting Calico services
+## Starting Calico services<a id="calico-services"></a>
 
 If you didn't use the calico-coreos-vagrant-example Vagrantfile, now download Calico onto both servers by SSHing onto them and running
 
