@@ -366,7 +366,7 @@ class CalicoTransportEtcd(CalicoTransport):
             prefix = self.client.read('/calico/config/InterfacePrefix').value
             ready = self.client.read('/calico/config/Ready').value
         except Exception:
-            pass
+            LOG.info('/calico/config values need (re-)writing')
 
         # Now write the values that need writing.
         if prefix != 'tap':
