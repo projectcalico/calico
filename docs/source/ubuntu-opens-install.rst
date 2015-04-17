@@ -150,8 +150,10 @@ On a control node, perform the following steps:
 5. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
-     substituting for ``<controller_fqdn>`` and ``<controller_ip>``
-     appropriately:
+     substituting for ``<controller_fqdn>``, ``<controller_ip>``, and
+     ``<cluster_token>`` appropriately. Each time you create a new etcd cluster
+     you should use a new cluster_token, as this is checked by Calico
+     components to check whether etcd has moved.
 
    ::
 
@@ -160,7 +162,7 @@ On a control node, perform the following steps:
                           -listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
                           -listen-peer-urls "http://0.0.0.0:2380"                                           \
                           -initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
-                          -initial-cluster-token "calicodp"                                                 \
+                          -initial-cluster-token "<cluster_token>"                                          \
                           -initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
                           -initial-cluster-state "new"
 
