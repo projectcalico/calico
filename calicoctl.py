@@ -55,8 +55,9 @@ from prettytable import PrettyTable
 from node.adapter.datastore import (ETCD_AUTHORITY_ENV,
                                     ETCD_AUTHORITY_DEFAULT,
                                     Rules)
+from node.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from node.adapter.ipam import IPAMClient
-from node.adapter import netns
+from node.adapter import netns, docker_restart
 
 
 hostname = socket.gethostname()
@@ -65,6 +66,7 @@ DOCKER_VERSION = "1.16"
 docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
                                                  "unix://var/run/docker.sock"))
+docker_restarter = docker_restart.create_restarter()
 
 try:
     modprobe = sh.Command._create('modprobe')
@@ -74,11 +76,6 @@ except sh.CommandNotFound as e:
     
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
-
-REAL_SOCK = "/var/run/docker.real.sock"
-POWERSTRIP_SOCK = "/var/run/docker.sock"
-DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
-DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
 
 def get_container_info(container_name):
     """
@@ -250,21 +247,6 @@ def node_stop(force):
         print "Current host has active endpoints so can't be stopped." + \
               " Force with --force"
 
-
-def clean_restart_docker(sock_to_wait_on):
-    restart = sh.Command._create("restart")
-
-    if os.path.exists(REAL_SOCK):
-        os.remove(REAL_SOCK)
-    if os.path.exists(POWERSTRIP_SOCK):
-        os.remove(POWERSTRIP_SOCK)
-
-    restart("docker")
-
-    # Wait for docker to create the socket
-    while not os.path.exists(sock_to_wait_on):
-        time.sleep(0.1)
-
 def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
@@ -302,24 +284,16 @@ def node(ip, node_image, ip6=""):
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
-    # We might need to talk to a different docker endpoint, so create some
-    # client flexibility.
-    node_docker_client = docker_client
-
-    enable_socket = "NO"
-
-    try:
-        if DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read():
-            enable_socket = "YES"
-            # At this point, docker is listening on a new port but powerstrip
-            # might not be running, so docker clients need to talk directly to
-            # docker.
-            node_docker_client = docker.Client(version=DOCKER_VERSION,
-                                               base_url="unix://%s" % REAL_SOCK)
-    except IOError:
-        # Can't find Docker config file.  Don't attempt to change anything.
-        # Just carry on.
-        pass
+    if docker_restarter.is_using_alternative_socket():
+        # At this point, docker is listening on a new port but powerstrip
+        # might not be running, so docker clients need to talk directly to
+        # docker.
+        node_docker_client = docker.Client(version=DOCKER_VERSION,
+                                           base_url="unix://%s" % REAL_SOCK)
+        enable_socket = "YES"
+    else:
+        node_docker_client = docker_client
+        enable_socket = "NO"
 
     try:
         node_docker_client.remove_container("calico-node", force=True)
@@ -763,49 +737,28 @@ def ip_pool_show(version):
 
 
 def restart_docker_with_alternative_unix_socket():
-    # Update docker to use a different unix socket, so powerstrip can run
-    # its proxy on the "normal" one. This provides simple access for
-    # existing tools to the powerstrip proxy.
+    """
+    Update docker to use a different unix socket, so powerstrip can run
+    its proxy on the "normal" one. This provides simple access for
+    existing tools to the powerstrip proxy.
 
-    # Set the docker daemon to listen on the docker.real.sock by updating
-    # the config, clearing old sockets and restarting.
-    try:
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-        if not socket_config_exists:
-            with open(DOCKER_DEFAULT_FILENAME, "a") as docker_config:
-                docker_config.write(DOCKER_OPTIONS)
-            clean_restart_docker(REAL_SOCK)
-    except IOError:
-        # Can't find Docker config file.
-        print "Docker config file couldn't not be found at %s" % DOCKER_DEFAULT_FILENAME
-        print "This option is currently only supported on Debian based systems"
-
-    # Always remove the socket that powerstrip will use, as it gets upset
-    # otherwise.
-    if os.path.exists(POWERSTRIP_SOCK):
-        os.remove(POWERSTRIP_SOCK)
+    Set the docker daemon to listen on the docker.real.sock by updating
+    the config, clearing old sockets and restarting.
+    """
+    if os.geteuid() != 0:
+        print >> sys.stderr, "restarting docker must be run as root."
+        sys.exit(2)
+    docker_restarter.restart_docker_with_alternative_unix_socket()
 
 
 def restart_docker_without_alternative_unix_socket():
     """
     Remove any "alternative" unix socket config.
     """
-    print "Examining %s" % DOCKER_DEFAULT_FILENAME
-    try:
-        socket_config_exists = \
-            DOCKER_OPTIONS in open(DOCKER_DEFAULT_FILENAME).read()
-    except IOError:
-        # Can't find Docker config file.  Don't attempt to change anything.
-        # Just carry on.
-        pass
-    else:
-        if socket_config_exists:
-            print "Removing socket config"
-            good_lines = [line for line in open(DOCKER_DEFAULT_FILENAME)
-                          if DOCKER_OPTIONS not in line]
-            open(DOCKER_DEFAULT_FILENAME, 'w').writelines(good_lines)
-            clean_restart_docker(POWERSTRIP_SOCK)
+    if os.geteuid() != 0:
+        print >> sys.stderr, "restarting docker must be run as root."
+        sys.exit(2)
+    docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
 def validate_arguments():
