@@ -312,7 +312,8 @@ On a compute node, perform the following steps:
 10. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
-     substituting for <controller_fqdn> and <controller_ip> appropriately:
+     substituting for ``<controller_fqdn>`` and ``<controller_ip>``
+     appropriately:
 
    ::
 
