@@ -21,7 +21,7 @@ Shared etcd data-model definitions for version 1 of the data model.
 This file is versioned.  The idea is that only back-compatible changes
 should be made to this file and non-back-compatible changes should be
 made in a new copy of the file with revved version suffix.  That allows
-us to maintain multiple copies of the data model in parllel during
+us to maintain multiple copies of the data model in parallel during
 migrations.
 """
 import logging
@@ -58,7 +58,7 @@ ENDPOINT_KEY_RE = re.compile(
 
 
 def dir_for_per_host_config(hostname):
-    return VERSION_DIR + "/host/%s/config/" % hostname
+    return HOST_DIR + "/%s/config/" % hostname
 
 
 def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
