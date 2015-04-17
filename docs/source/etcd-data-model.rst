@@ -10,7 +10,7 @@ and structure acts as Calico's primary external and internal API, granting
 developers exceptional control over what Calico does. This document does not
 describe the components that read and write this data to provide the
 connectivity that endpoints in a Calico network want: for more on that, see
-:doc:`etcd-architecture`.
+:doc:`architecture`.
 
 .. _etcd: https://github.com/coreos/etcd
 

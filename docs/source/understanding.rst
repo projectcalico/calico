@@ -25,5 +25,4 @@ also of considerations for deploying Calico at large scale.
    l3-interconnectFabric
    architecture
    calico-neutron-api
-   etcd-architecture
    etcd-data-model
