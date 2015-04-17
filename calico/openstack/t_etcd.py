@@ -151,7 +151,11 @@ class CalicoTransportEtcd(CalicoTransport):
                     # cases the etcd key is no longer valid and should be
                     # deleted.  In the migration case, data will be written
                     # below to an etcd key that incorporates the new hostname.
-                    self.client.delete(child.key)
+                    try:
+                        self.client.delete(child.key)
+                    except etcd.EtcdKeyNotFound:
+                        LOG.debug("Key %s, which we were deleting, "
+                                  "disappeared", child.key)
 
         # Now write etcd data for any endpoints remaining in the ports dict;
         # these are new endpoints - i.e. never previously represented in etcd
@@ -223,28 +227,31 @@ class CalicoTransportEtcd(CalicoTransport):
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
-                if profile_id in self.needed_profiles:
-                    # This is a profile that we want.  Let's read its rules and
-                    # tags, and compare those against the current OpenStack data.
-                    rules_key = key_for_profile_rules(profile_id)
-                    rules = json_decoder.decode(
-                        self.client.read(rules_key).value)
-                    tags_key = key_for_profile_tags(profile_id)
-                    tags = json_decoder.decode(
-                        self.client.read(tags_key).value)
+                try:
+                    if profile_id in self.needed_profiles:
+                        # This is a profile that we want.  Let's read its rules and
+                        # tags, and compare those against the current OpenStack data.
+                        rules_key = key_for_profile_rules(profile_id)
+                        rules = json_decoder.decode(
+                            self.client.read(rules_key).value)
+                        tags_key = key_for_profile_tags(profile_id)
+                        tags = json_decoder.decode(
+                            self.client.read(tags_key).value)
 
-                    if (rules == self.profile_rules(profile_id) and
-                        tags == self.profile_tags(profile_id)):
-                        # The existing etcd data for this profile is completely
-                        # correct.  Remember the profile_id so that we don't
-                        # unnecessarily write out its (unchanged) data again below.
-                        LOG.debug("Existing etcd profile data is correct")
-                        correct_profiles.add(profile_id)
-                else:
-                    # We don't want this profile any more, so delete the key.
-                    LOG.debug("Existing etcd profile key is now invalid")
-                    profile_key = key_for_profile(profile_id)
-                    self.client.delete(profile_key, recursive=True)
+                        if (rules == self.profile_rules(profile_id) and
+                            tags == self.profile_tags(profile_id)):
+                            # The existing etcd data for this profile is completely
+                            # correct.  Remember the profile_id so that we don't
+                            # unnecessarily write out its (unchanged) data again below.
+                            LOG.debug("Existing etcd profile data is correct")
+                            correct_profiles.add(profile_id)
+                    else:
+                        # We don't want this profile any more, so delete the key.
+                        LOG.debug("Existing etcd profile key is now invalid")
+                        profile_key = key_for_profile(profile_id)
+                        self.client.delete(profile_key, recursive=True)
+                except etcd.EtcdKeyNotFound:
+                    LOG.info("Etcd data appears to have been reset")
 
         # Now write etcd data for each profile that we need and that we don't
         # already know to be correct.
@@ -351,8 +358,8 @@ class CalicoTransportEtcd(CalicoTransport):
         try:
             self.client.delete(key)
         except etcd.EtcdKeyNotFound:
-            # Etcd returned a etcd.EtcdKeyNotFound; doesn't exist, so treat as success
-            pass
+            # Already gone, treat as success.
+            LOG.debug("Key %s, which we were deleting, disappeared", key)
 
     def security_group_updated(self, sg):
         # Update the data that we're keeping for this security group.
