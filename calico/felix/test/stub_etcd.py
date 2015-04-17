@@ -26,6 +26,8 @@ log = logging.getLogger(__name__)
 class EtcdException(Exception):
     pass
 
+class EtcdKeyNotFound(Exception):
+    pass
 
 #*****************************************************************************#
 #* The next few methods are not exposed to production code, but are called   *#
