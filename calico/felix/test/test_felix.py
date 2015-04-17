@@ -49,6 +49,7 @@ class TestBasic(BaseTestCase):
     def test_main_greenlet(self, m_iwait, m_IptablesUpdater, m_start, m_load):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_config = mock.Mock(spec=config.Config)
+        m_config.HOSTNAME = "myhost"
         m_config.IFACE_PREFIX = "tap"
         m_config.METADATA_IP = None
         self.assertRaises(TestException,
