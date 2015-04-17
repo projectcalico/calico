@@ -135,12 +135,16 @@ Felix liveness; marking certain endpoints as failed if network setup failed.
 etcd
 ----
 
-Calico uses etcd as its data store. etcd is a distributed key-value store that
-has a focus on consistency, ensuring that Calico can always build an accurate
+etcd is a distributed key-value store that has a focus on consistency. 
+Calico uses etcd to provide the communication between components and as a
+consistent data store, which ensures Calico can always build an accurate 
 network.
 
-In addition to its role as Calico's primary data store, etcd also acts as a
-communication mechanism between the various components.
+Depending on the orchestrator plug-in, etcd may either be the master data store
+or a lightweight mirror of a separate data store.  For example, in an
+OpenStack deployment, the OpenStack database is considered the "source of
+truth" and etcd is used to mirror information about the network to the other
+Calico components.
 
 The etcd component is distributed across the entire deployment. It is divided
 into two groups of machines: the core cluster, and the proxies.
@@ -149,8 +153,11 @@ For small deployments the core cluster can be an etcd cluster of one node
 (which would typically be co-located with the :ref:`calico-orchestrator-plugin`
 component). This deployment model is simple but provides no redundancy for
 etcd - in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
-have to rebuild the database. In larger deployments the core cluster can be
-scaled up, as per the `etcd admin guide`_.
+have to rebuild the database which, as noted for OpenStack, will simply require
+that the plug-in resynchonizes state to etcd from the OpenStack database.
+
+In larger deployments the core cluster can be scaled up, as per the 
+`etcd admin guide`_.
 
 Additionally, on each machine that hosts either a
 :ref:`calico-felix-component` or a :ref:`calico-orchestrator-plugin`, we run
