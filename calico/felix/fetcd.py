@@ -173,7 +173,8 @@ class EtcdWatcher(Actor):
             _log.info("Snapshot parsed, passing to update splitter")
             update_splitter.apply_snapshot(rules_by_id,
                                            tags_by_id,
-                                           endpoints_by_id)
+                                           endpoints_by_id,
+                                           async=False)
 
             # These read only objects are no longer required, so tidy them up.
             del rules_by_id
@@ -251,18 +252,21 @@ class EtcdWatcher(Actor):
                 profile_id, rules = parse_if_rules(response)
                 if profile_id:
                     _log.info("Scheduling profile update %s", profile_id)
-                    update_splitter.on_rules_update(profile_id, rules)
+                    update_splitter.on_rules_update(profile_id, rules,
+                                                    async=False)
                     continue
                 profile_id, tags = parse_if_tags(response)
                 if profile_id:
                     _log.info("Scheduling profile update %s", profile_id)
-                    update_splitter.on_tags_update(profile_id, tags)
+                    update_splitter.on_tags_update(profile_id, tags,
+                                                   async=False)
                     continue
                 endpoint_id, endpoint = parse_if_endpoint(self.config,
                                                           response)
                 if endpoint_id:
                     _log.info("Scheduling endpoint update %s", endpoint_id)
-                    update_splitter.on_endpoint_update(endpoint_id, endpoint)
+                    update_splitter.on_endpoint_update(endpoint_id, endpoint,
+                                                       async=False)
                     continue
 
                 if response.key == DB_READY_FLAG_PATH:
@@ -282,13 +286,13 @@ class EtcdWatcher(Actor):
                     continue_polling = False
                 if response.key.startswith("/calico/config"):
                     _log.warning("Global config changed but we don't "
-                                 "yet support dynamic config key=%s",
-                                 response.key)
+                                 "yet support dynamic config response: %s",
+                                 response)
                     continue_polling = False
                 if response.key.startswith(self.my_config_prefix):
                     _log.warning("Config for this felix changed but we don't "
-                                 "yet support dynamic config key=%s",
-                                 response.key)
+                                 "yet support dynamic config response: %s",
+                                 response)
                     continue_polling = False
 
     def _load_config_dict(self):

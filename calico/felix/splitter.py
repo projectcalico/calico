@@ -19,22 +19,26 @@ felix.splitter
 
 Simple object that just splits notifications out for IPv4 and IPv6.
 """
+import functools
 import logging
 import gevent
+from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
 
 
-class UpdateSplitter(object):
+class UpdateSplitter(Actor):
     def __init__(self, config, ipsets_mgrs, rules_managers, endpoint_managers,
                  iptables_updaters):
-
+        super(UpdateSplitter, self).__init__()
         self.config = config
         self.ipsets_mgrs = ipsets_mgrs
         self.iptables_updaters = iptables_updaters
         self.rules_mgrs = rules_managers
         self.endpoint_mgrs = endpoint_managers
+        self._cleanup_scheduled = False
 
+    @actor_message()
     def apply_snapshot(self, rules_by_prof_id, tags_by_prof_id,
                        endpoints_by_id):
         """
@@ -66,14 +70,20 @@ class UpdateSplitter(object):
         # takes longer than this timer to apply then we might do the cleanup
         # before the snapshot is finished.  That would cause dropped packets
         # until applying the snapshot finishes.
-        gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
-                           self.trigger_cleanup)
+        if not self._cleanup_scheduled:
+            _log.info("No cleanup scheduled, scheduling one.")
+            gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
+                               functools.partial(self.trigger_cleanup,
+                                                 async=True))
+            self._cleanup_scheduled = True
 
+    @actor_message()
     def trigger_cleanup(self):
         """
         Called from a separate greenlet, asks the managers to clean up
         unused ipsets and iptables.
         """
+        self._cleanup_scheduled = False
         _log.info("Triggering a cleanup of orphaned ipsets/chains")
         try:
             # Need to clean up iptables first because they reference ipsets
@@ -81,7 +91,7 @@ class UpdateSplitter(object):
             for ipt_updater in self.iptables_updaters:
                 ipt_updater.cleanup(async=False)
         except Exception:
-            _log.exception("iptables cleanup failed, will retry on resync.")
+            _log.exception("iptables cleanup failed, will retry on resync")
         try:
             # It's still worth a try to clean up any ipsets that we can.
             for ipset_mgr in self.ipsets_mgrs:
@@ -89,6 +99,7 @@ class UpdateSplitter(object):
         except Exception:
             _log.exception("ipsets cleanup failed, will retry on resync.")
 
+    @actor_message()
     def on_rules_update(self, profile_id, rules):
         """
         Process an update to the rules of the given profile.
@@ -99,6 +110,7 @@ class UpdateSplitter(object):
         for rules_mgr in self.rules_mgrs:
             rules_mgr.on_rules_update(profile_id, rules, async=True)
 
+    @actor_message()
     def on_tags_update(self, profile_id, tags):
         """
         Called when the given tag list has changed or been deleted.
@@ -109,11 +121,13 @@ class UpdateSplitter(object):
         for ipset_mgr in self.ipsets_mgrs:
             ipset_mgr.on_tags_update(profile_id, tags, async=True)
 
+    @actor_message()
     def on_interface_update(self, name):
         _log.info("Interface %s up", name)
         for endpoint_mgr in self.endpoint_mgrs:
             endpoint_mgr.on_interface_update(name, async=True)
 
+    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
         Process an update to the given endpoint.  endpoint may be None if

@@ -89,6 +89,8 @@ def _main_greenlet(config):
         iface_watcher = InterfaceWatcher(update_splitter)
 
         _log.info("Starting actors.")
+        update_splitter.start()
+
         v4_filter_updater.start()
         v4_nat_updater.start()
         v4_ipset_mgr.start()
@@ -105,6 +107,8 @@ def _main_greenlet(config):
         iface_watcher.start()
 
         monitored_items = [
+            update_splitter.greenlet,
+
             v4_nat_updater.greenlet,
             v4_filter_updater.greenlet,
             v4_nat_updater.greenlet,

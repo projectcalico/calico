@@ -138,11 +138,11 @@ def add_route(ip_type, ip, interface, mac):
     :param ip_type: Type of IP (IPV4 or IPV6)
     :param str ip: IP address
     :param str interface: Interface name
-    :param str mac: MAC address. May not be none unless ips is empty.
+    :param str mac: MAC address. May not be None unless ip is None.
     :raises FailedSystemCall
     """
-    if mac is None and ips:
-        raise ValueError("mac must be supplied if ips is not empty")
+    if mac is None and ip:
+        raise ValueError("mac must be supplied if ip is provided")
 
     if ip_type == futils.IPV4:
         futils.check_call(['arp', '-s', ip, mac, '-i', interface])
@@ -302,6 +302,7 @@ class InterfaceWatcher(Actor):
                     rta_data = rta_data[:-1]
                     if msg_type == RTM_NEWLINK:
                         _log.debug("Detected new network interface : %s", rta_data)
-                        self.update_splitter.on_interface_update(rta_data)
+                        self.update_splitter.on_interface_update(rta_data,
+                                                                 async=True)
                     else:
                         _log.debug("Network interface has gone away : %s", rta_data)
