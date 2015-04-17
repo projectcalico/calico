@@ -151,7 +151,11 @@ class CalicoTransportEtcd(CalicoTransport):
                     # cases the etcd key is no longer valid and should be
                     # deleted.  In the migration case, data will be written
                     # below to an etcd key that incorporates the new hostname.
-                    self.client.delete(child.key)
+                    try:
+                        self.client.delete(child.key)
+                    except etcd.EtcdKeyNotFound:
+                        LOG.debug("Key %s, which we were deleting, "
+                                  "disappeared", child.key)
 
         # Now write etcd data for any endpoints remaining in the ports dict;
         # these are new endpoints - i.e. never previously represented in etcd
@@ -354,8 +358,8 @@ class CalicoTransportEtcd(CalicoTransport):
         try:
             self.client.delete(key)
         except etcd.EtcdKeyNotFound:
-            # Etcd returned a etcd.EtcdKeyNotFound; doesn't exist, so treat as success
-            pass
+            # Already gone, treat as success.
+            LOG.debug("Key %s, which we were deleting, disappeared", key)
 
     def security_group_updated(self, sg):
         # Update the data that we're keeping for this security group.
