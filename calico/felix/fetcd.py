@@ -18,7 +18,7 @@ felix.fetcd
 
 Etcd polling functions.
 """
-from etcd import EtcdException, EtcdClusterIdChanged
+from etcd import EtcdException, EtcdClusterIdChanged, EtcdKeyNotFound
 import etcd
 import itertools
 import json
@@ -68,7 +68,7 @@ class EtcdWatcher(Actor):
             self.wait_for_ready()
             try:
                 config_dict = self._load_config_dict()
-            except (KeyError, EtcdException):
+            except (EtcdKeyNotFound, EtcdException):
                 _log.exception("Failed to read config.  Will retry.")
                 gevent.sleep(RETRY_DELAY)
                 continue
@@ -90,7 +90,7 @@ class EtcdWatcher(Actor):
             try:
                 db_ready = self.client.read(DB_READY_FLAG_PATH,
                                             timeout=10).value
-            except KeyError:
+            except EtcdKeyNotFound:
                 _log.warn("Ready flag not present in etcd, waiting...")
                 db_ready = "false"
             except EtcdException:
@@ -310,7 +310,7 @@ class EtcdWatcher(Actor):
         try:
             host_cfg = self.client.read("/calico/host/%s/config/" %
                                         self.config.HOSTNAME)
-        except KeyError:
+        except EtcdKeyNotFound:
             _log.info("No configuration overrides for this node")
         else:
             configs.append(host_cfg)
