@@ -24,17 +24,16 @@ import json
 import re
 
 # Calico imports.
-from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
-                                 TAGS_KEY_RE, HOST_DIR, key_for_endpoint,
-                                 PROFILE_DIR, key_for_profile,
-                                 key_for_profile_rules, key_for_profile_tags,
-                                 key_for_config)
+from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
+                                 key_for_endpoint, PROFILE_DIR,
+                                 key_for_profile, key_for_profile_rules,
+                                 key_for_profile_tags, key_for_config)
 from calico.openstack.transport import CalicoTransport
 
 LOG = None
 OPENSTACK_ENDPOINT_RE = re.compile(
-    r'^' + VERSION_DIR +
-    r'/host/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
+    r'^' + HOST_DIR +
+    r'/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
 
 json_decoder = json.JSONDecoder()
 

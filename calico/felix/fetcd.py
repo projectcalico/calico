@@ -276,11 +276,11 @@ class EtcdWatcher(Actor):
                     continue_polling = False
                 if response.key.startswith(CONFIG_DIR):
                     _log.warning("Global config changed but we don't "
-                                 "yet support dynamic config key=%s",
-                                 response.key)
+                                 "yet support dynamic config: %s",
+                                 response)
                 if response.key.startswith(self.my_config_dir):
                     _log.warning("Config for this felix changed but we don't "
-                                 "yet support dynamic config response: %s",
+                                 "yet support dynamic config: %s",
                                  response)
 
     def _load_config_dict(self):
