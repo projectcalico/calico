@@ -9,6 +9,7 @@ This document describes requirements and best practices for setting up a cluster
 They must have the following software installed.
  * Docker v1.4 or greater: [Installing Docker](https://docs.docker.com/installation/)
  * etcd installed and available on each node: [etcd Documentation](https://coreos.com/etcd/docs/2.0.8/)
+ * `ipset`, `iptables`, and `ip6tables` kernel modules.
 
 ## Best Practices
 
