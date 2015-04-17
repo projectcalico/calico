@@ -246,7 +246,7 @@ class CalicoTransportEtcd(CalicoTransport):
                         LOG.debug("Existing etcd profile key is now invalid")
                         profile_key = key_for_profile(profile_id)
                         self.client.delete(profile_key, recursive=True)
-                except KeyError:
+                except etcd.EtcdKeyNotFound:
                     LOG.info("Etcd data appears to have been reset")
 
         # Now write etcd data for each profile that we need and that we don't
