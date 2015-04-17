@@ -65,7 +65,7 @@ protocol bgp {
   neighbor {{.Value}} as {{if exists "/calico/config/bgp_as"}}{{getv "/calico/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
-  import filter calico_pools;
+  import all;
   export filter calico_pools;
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
