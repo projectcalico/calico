@@ -57,6 +57,10 @@ ENDPOINT_KEY_RE = re.compile(
     r'/(?P<hostname>[^/]+)/.+/endpoint/(?P<endpoint_id>[^/]+)')
 
 
+def dir_for_host(hostname):
+    return VERSION_DIR + "/host/%s" % hostname
+
+
 def dir_for_per_host_config(hostname):
     return HOST_DIR + "/%s/config/" % hostname
 
@@ -80,3 +84,15 @@ def key_for_profile_tags(profile_id):
 
 def key_for_config(config_name):
     return CONFIG_DIR + "/%s" % config_name
+
+
+def get_profile_id_for_profile_dir(key):
+    """
+    :param str key: etcd key.
+    :returns The profile ID if this is a profile dir or None if not.
+    """
+    key = key.rstrip('/')
+    if "/" not in key:
+        return False
+    prefix, final_node = key.rsplit("/", maxsplit=1)
+    return final_node if prefix == PROFILE_DIR else None

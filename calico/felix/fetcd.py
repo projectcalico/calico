@@ -31,7 +31,9 @@ from urllib3.exceptions import ReadTimeoutError
 from calico import common
 from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  RULES_KEY_RE, TAGS_KEY_RE, ENDPOINT_KEY_RE,
-                                 dir_for_per_host_config)
+                                 dir_for_per_host_config,
+                                 get_profile_id_for_profile_dir, dir_for_host,
+                                 PROFILE_DIR, HOST_DIR)
 from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
@@ -39,6 +41,13 @@ _log = logging.getLogger(__name__)
 
 RETRY_DELAY = 5
 
+# If we see an unhandled event (e.g. a directory deletion) for keys in any of
+# these prefixes, we'll abort our polling and resync.
+PREFIXES_TO_RESYNC_ON_CHANGE = [
+    READY_KEY,
+    PROFILE_DIR,
+    HOST_DIR,
+]
 
 class ValidationFailed(Exception):
     pass
@@ -238,7 +247,17 @@ class EtcdWatcher(Actor):
                 next_etcd_index = max(next_etcd_index,
                                       response.modifiedIndex) + 1
 
-                # TODO: regex parsing getting messy.
+                if response.action == "delete":
+                    # Handle expected directory deletions by faking events for
+                    # child nodes.
+                    profile_id = get_profile_id_for_profile_dir(response.key)
+                    if profile_id:
+                        _log.info("Delete for whole profile %s", profile_id)
+                        update_splitter.on_rules_update(profile_id, None)
+                        update_splitter.on_tags_update(profile_id, None)
+                        continue
+                    # TODO: Do we need to handle workload deletions?
+
                 profile_id, rules = parse_if_rules(response)
                 if profile_id:
                     _log.info("Scheduling profile update %s", profile_id)
@@ -267,12 +286,13 @@ class EtcdWatcher(Actor):
 
                 _log.debug("Response action: %s, key: %s",
                            response.action, response.key)
-                if response.action not in ("set", "create"):
-                    # FIXME: this check is over-broad.
+                if (response.action not in ("set", "create") and
+                        any((response.key.startswith(pfx) for pfx in
+                             PREFIXES_TO_RESYNC_ON_CHANGE))):
                     # It's purpose is to catch deletions of whole directories
                     # or other operations that we're not expecting.
-                    _log.warning("Unexpected action %s to %s; triggering "
-                                 "resync.", response.action, response.key)
+                    _log.warning("Unexpected event: %s; triggering resync.",
+                                 response)
                     continue_polling = False
                 if response.key.startswith(CONFIG_DIR):
                     _log.warning("Global config changed but we don't "
