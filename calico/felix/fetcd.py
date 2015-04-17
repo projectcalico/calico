@@ -49,7 +49,7 @@ class EtcdWatcher(Actor):
         super(EtcdWatcher, self).__init__()
         self.config = config
         self.client = None
-        self.my_config_dir = None
+        self.my_config_dir = dir_for_per_host_config(self.config.HOSTNAME)
 
     @actor_message()
     def load_config(self):
@@ -71,7 +71,6 @@ class EtcdWatcher(Actor):
                                     self.config.LOGLEVSYS,
                                     self.config.LOGLEVSCR)
             configured = True
-        self.my_config_dir = dir_for_per_host_config(self.config.HOSTNAME)
 
     @actor_message()
     def wait_for_ready(self):
