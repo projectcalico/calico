@@ -14,6 +14,8 @@ We welcome questions/comment/feedback (and pull requests).
 
 To get started follow the instruction here [Getting Started](docs/GettingStarted.md). They set up two CoreOS servers using Vagrant, and run Calico components in containers to provide networking between other guest containers.
 
+To build your own binaries, read [Building Binaries](docs/Building.md).
+
 ## Orchestrator integration
 
 For a lower level integration see [Orchestrators](docs/Orchestrators.md).
@@ -73,13 +75,6 @@ Options:
                           [default: calico/node:latest]
 
 
-```
-
-## Building the calicoctl binary
-The calicoctl binary is a statically-compiled version of the calicoctl.py script in this directory.  To (re)build it run:
-
-```
-./create-binary.sh
 ```
 
 ## Can a guest container have multiple networked IP addresses?
