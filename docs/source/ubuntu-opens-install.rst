@@ -150,18 +150,19 @@ On a control node, perform the following steps:
 5. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
-   substituting for <controller_fqdn> and <controller_ip> appropriately:
+     substituting for ``<controller_fqdn>`` and ``<controller_ip>``
+     appropriately:
 
    ::
 
-       exec /usr/bin/etcd --name="<controller_fqdn>"                                                      \
-                       --advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
-                       --listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
-                       --listen-peer-urls "http://0.0.0.0:2380"                                           \
-                       --initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
-                       --initial-cluster-token "calicodp"                                                 \
-                       --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
-                       --initial-cluster-state "new"
+       exec /usr/bin/etcd -name="<controller_fqdn>"                                                         \
+                          -advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
+                          -listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
+                          -listen-peer-urls "http://0.0.0.0:2380"                                           \
+                          -initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
+                          -initial-cluster-token "calicodp"                                                 \
+                          -initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
+                          -initial-cluster-state "new"
 
 6. Start etcd service
    ::
@@ -198,7 +199,10 @@ On a control node, perform the following steps:
       set its value to 0.
 
 10. Restart the neutron server process:
-   ``sudo service neutron-server restart``.
+
+   ::
+
+        sudo service neutron-server restart
 
 Compute Node Install
 --------------------
@@ -308,15 +312,16 @@ On a compute node, perform the following steps:
 10. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
-   substituting for <controller_fqdn> and <controller_ip> appropriately:
+     substituting for <controller_fqdn> and <controller_ip> appropriately:
 
    ::
 
-       exec /usr/bin/etcd -proxy on                                                       \
-                       -listen-client-urls http://127.0.0.1:4001                          \
-                       --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
+       exec /usr/bin/etcd -proxy on                                                         \
+                          -listen-client-urls http://127.0.0.1:4001                         \
+                          -initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
 
 11. Start etcd service
+
    ::
 
        sudo service etcd start
@@ -331,31 +336,31 @@ On a compute node, perform the following steps:
    persistent on restart – hit yes.
 
 13. Configure BIRD. By default Calico assumes that you'll be deploying a
-   route reflector to avoid the need for a full BGP mesh. To this end,
-   it includes useful configuration scripts that will prepare a BIRD
-   config file with a single peering to the route reflector. If that's
-   correct for your network, you can run either or both of the following
-   commands. For IPv4 connectivity between compute hosts:
+    route reflector to avoid the need for a full BGP mesh. To this end,
+    it includes useful configuration scripts that will prepare a BIRD
+    config file with a single peering to the route reflector. If that's
+    correct for your network, you can run either or both of the following
+    commands. For IPv4 connectivity between compute hosts:
 
    ::
 
        sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
 
-   And/or for IPv6 connectivity between compute hosts:
+    And/or for IPv6 connectivity between compute hosts:
 
    ::
 
        sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
-   Note that you'll also need to configure your route reflector to allow
-   connections from the compute node as a route reflector client. This
-   configuration is outside the scope of this install document.
+    Note that you'll also need to configure your route reflector to allow
+    connections from the compute node as a route reflector client. This
+    configuration is outside the scope of this install document.
 
-   If you *are* configuring a full BGP mesh you'll need to handle the BGP
-   configuration appropriately. You should consult the relevant
-   documentation for your chosen BGP stack.
+    If you *are* configuring a full BGP mesh you'll need to handle the BGP
+    configuration appropriately. You should consult the relevant
+    documentation for your chosen BGP stack.
 
-14.  Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
+14. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
     supplied sample config at ``/etc/calico/felix.cfg.example``.
 
 15. Restart the Felix service with ``service calico-felix restart``.
