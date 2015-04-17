@@ -253,8 +253,10 @@ class EtcdWatcher(Actor):
                     profile_id = get_profile_id_for_profile_dir(response.key)
                     if profile_id:
                         _log.info("Delete for whole profile %s", profile_id)
-                        update_splitter.on_rules_update(profile_id, None)
-                        update_splitter.on_tags_update(profile_id, None)
+                        update_splitter.on_rules_update(profile_id, None,
+                                                        async=False)
+                        update_splitter.on_tags_update(profile_id, None,
+                                                       async=False)
                         continue
                     # TODO: Do we need to handle workload deletions?
 
