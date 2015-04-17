@@ -62,7 +62,7 @@ def dir_for_host(hostname):
 
 
 def dir_for_per_host_config(hostname):
-    return HOST_DIR + "/%s/config/" % hostname
+    return HOST_DIR + "/%s/config" % hostname
 
 
 def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
@@ -94,5 +94,5 @@ def get_profile_id_for_profile_dir(key):
     key = key.rstrip('/')
     if "/" not in key:
         return False
-    prefix, final_node = key.rsplit("/", maxsplit=1)
+    prefix, final_node = key.rsplit("/", 1)
     return final_node if prefix == PROFILE_DIR else None
