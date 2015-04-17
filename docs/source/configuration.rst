@@ -147,6 +147,19 @@ configure the Neutron service.
 | dhcp\_agents\_per\_network   | 9999                                   | Allow unlimited DHCP agents per network   |
 +------------------------------+----------------------------------------+-------------------------------------------+
 
+Optionally -- depending on how you want the Calico mechanism driver to
+connect to the Etcd cluster -- you can also set the following options
+in the ``[calico]`` section of ``/etc/neutron/neutron.conf``.
+
++-----------------+-------------------+-------------------------------------------+
+| Setting         | Default Value     | Meaning                                   |
++=================+===================+===========================================+
+| etcd\_host      | localhost         | The hostname or IP of the etcd node/proxy |
++-----------------+-------------------+-------------------------------------------+
+| etcd\_port      | 4001              | The port to use for the etcd node/proxy   |
++-----------------+-------------------+-------------------------------------------+
+
+
 ML2 (.../ml2\_conf.ini)
 ^^^^^^^^^^^^^^^^^^^^^^^
 
