@@ -134,8 +134,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Allow the etcd transport's resync thread to run.
         self.give_way()
         self.simulated_time_advance(1)
-        self.assertEtcdWrites({'/calico/config/InterfacePrefix': 'tap',
-                               '/calico/config/Ready': True})
+        self.assertEtcdWrites({'/calico/v1/config/InterfacePrefix': 'tap',
+                               '/calico/v1/Ready': True})
 
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data.
@@ -150,9 +150,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.give_way()
         self.simulated_time_advance(1)
         expected_writes = {
-            '/calico/config/InterfacePrefix': 'tap',
-            '/calico/config/Ready': True,
-            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
+            '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/Ready': True,
+            '/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
                  "profile_id": "SGID-default",
                  "mac": "00:11:22:33:44:55",
@@ -160,7 +160,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv4_nets": ["10.65.0.2/32"],
                  "state": "active",
                  "ipv6_nets": []},
-            '/calico/host/felix-host-1/workload/openstack/endpoint/FACEBEEF-1234-5678':
+            '/calico/v1/host/felix-host-1/workload/openstack/FACEBEEF-1234-5678/endpoint/FACEBEEF-1234-5678':
                 {"name": "tapFACEBEEF-12",
                  "profile_id": "SGID-default",
                  "mac": "00:11:22:33:44:66",
@@ -168,7 +168,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv4_nets": ["10.65.0.3/32"],
                  "state": "active",
                  "ipv6_nets": []},
-            '/calico/policy/profile/SGID-default/rules':
+            '/calico/v1/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
                                      "ip_version": 4},
@@ -181,7 +181,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {"dst_ports": ["1:65535"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 6}]},
-            '/calico/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/SGID-default/tags':
                 ["SGID-default"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -198,7 +198,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         context._port = lib.port1
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
-        self.assertEtcdDeletes(set(['/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678']))
+        self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678']))
         self.osdb_ports = [lib.port2]
 
         # Do another resync - expect no changes to the etcd data.
@@ -210,7 +210,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Add lib.port1 back again.
         self.driver.create_port_postcommit(context)
         expected_writes = {
-            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
+            '/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
                  "profile_id": "SGID-default",
                  "mac": "00:11:22:33:44:55",
@@ -218,7 +218,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv4_nets": ["10.65.0.2/32"],
                  "state": "active",
                  "ipv6_nets": []},
-            '/calico/policy/profile/SGID-default/rules':
+            '/calico/v1/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
                                      "ip_version": 4},
@@ -231,7 +231,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {"dst_ports": ["1:65535"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 6}]},
-            '/calico/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/SGID-default/tags':
                 ["SGID-default"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -244,8 +244,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         context._port['binding:host_id'] = 'new-host'
         context.original = lib.port1
         self.driver.update_port_postcommit(context)
-        del expected_writes['/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678']
-        expected_writes['/calico/host/new-host/workload/openstack/endpoint/DEADBEEF-1234-5678'] = {
+        del expected_writes['/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678']
+        expected_writes['/calico/v1/host/new-host/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678'] = {
             "name": "tapDEADBEEF-12",
             "profile_id": "SGID-default",
             "mac": "00:11:22:33:44:55",
@@ -255,7 +255,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             "ipv6_nets": []
         }
         self.assertEtcdWrites(expected_writes)
-        self.assertEtcdDeletes(set(['/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678']))
+        self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678']))
 
         # Now resync again without updating self.osdb_ports to reflect that
         # port1 has moved to new-host.  The effect will be as though we've
@@ -264,7 +264,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
         expected_writes = {
-            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678':
+            '/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
                  "profile_id": "SGID-default",
                  "mac": "00:11:22:33:44:55",
@@ -274,13 +274,13 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": []}
         }
         self.assertEtcdWrites(expected_writes)
-        self.assertEtcdDeletes(set(['/calico/host/new-host/workload/openstack/endpoint/DEADBEEF-1234-5678']))
+        self.assertEtcdDeletes(set(['/calico/v1/host/new-host/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678']))
 
         # Add another port with an IPv6 address.
         context._port = lib.port3
         self.driver.create_port_postcommit(context)
         expected_writes = {
-            '/calico/host/felix-host-2/workload/openstack/endpoint/HELLO-1234-5678':
+            '/calico/v1/host/felix-host-2/workload/openstack/HELLO-1234-5678/endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
                  "profile_id": "SGID-default",
                  "mac": "00:11:22:33:44:66",
@@ -288,7 +288,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
                  "state": "active",
                  "ipv4_nets": []},
-            '/calico/policy/profile/SGID-default/rules':
+            '/calico/v1/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
                                      "ip_version": 4},
@@ -301,7 +301,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {"dst_ports": ["1:65535"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 6}]},
-            '/calico/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/SGID-default/tags':
                 ["SGID-default"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -331,7 +331,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         context._port['security_groups'] = ['SG-1']
         self.driver.update_port_postcommit(context)
         expected_writes = {
-            '/calico/host/felix-host-2/workload/openstack/endpoint/HELLO-1234-5678':
+            '/calico/v1/host/felix-host-2/workload/openstack/HELLO-1234-5678/endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
                  "profile_id": "SG-1",
                  "mac": "00:11:22:33:44:66",
@@ -339,12 +339,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
                  "state": "active",
                  "ipv4_nets": []},
-            '/calico/policy/profile/SG-1/rules':
+            '/calico/v1/policy/profile/SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": ["5060:5061"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 4}]},
-            '/calico/policy/profile/SG-1/tags':
+            '/calico/v1/policy/profile/SG-1/tags':
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -414,12 +414,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Expect an etcd write because SG-1 is now in use.
         expected_writes = {
-            '/calico/policy/profile/SG-1/rules':
+            '/calico/v1/policy/profile/SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": [5060],
                                     "src_tag": "SGID-default",
                                     "ip_version": 4}]},
-            '/calico/policy/profile/SG-1/tags':
+            '/calico/v1/policy/profile/SG-1/tags':
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -432,9 +432,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([
-            '/calico/host/felix-host-1/workload/openstack/endpoint/DEADBEEF-1234-5678',
-            '/calico/host/felix-host-1/workload/openstack/endpoint/FACEBEEF-1234-5678',
-            '/calico/policy/profile/SGID-default(recursive)']))
+            '/calico/v1/host/felix-host-1/workload/openstack/DEADBEEF-1234-5678/endpoint/DEADBEEF-1234-5678',
+            '/calico/v1/host/felix-host-1/workload/openstack/FACEBEEF-1234-5678/endpoint/FACEBEEF-1234-5678',
+            '/calico/v1/policy/profile/SGID-default(recursive)']))
 
     def test_noop_entry_points(self):
         """Call the mechanism driver entry points that are currently

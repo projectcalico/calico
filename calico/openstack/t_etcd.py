@@ -22,12 +22,15 @@ import etcd
 import eventlet
 import json
 import re
-import time
 
 # OpenStack imports.
 from oslo.config import cfg
 
 # Calico imports.
+from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
+                                 key_for_endpoint, PROFILE_DIR,
+                                 key_for_profile, key_for_profile_rules,
+                                 key_for_profile_tags, key_for_config)
 from calico.openstack.transport import CalicoTransport
 
 # Register Calico-specific options.
@@ -41,9 +44,8 @@ cfg.CONF.register_opts(calico_opts, 'calico')
 
 LOG = None
 OPENSTACK_ENDPOINT_RE = re.compile(
-    r'^/calico/host/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
-OPENSTACK_POLICY_RE = re.compile(
-    r'^/calico/policy/profile/(?P<profile_id>[^/]+)/tags')
+    r'^' + HOST_DIR +
+    r'/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
 
 json_decoder = json.JSONDecoder()
 
@@ -108,10 +110,9 @@ class CalicoTransportEtcd(CalicoTransport):
         # security profiles that they need.  Start with an empty set here.
         self.needed_profiles = set()
 
-        # Read all etcd keys under /calico/host.
+        # Read all etcd keys under /calico/v1/host.
         try:
-            children = self.client.read('/calico/host',
-                                        recursive=True).children
+            children = self.client.read(HOST_DIR, recursive=True).children
         except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
@@ -163,10 +164,10 @@ class CalicoTransportEtcd(CalicoTransport):
             self.needed_profiles.add(data['profile_id'])
 
     def port_etcd_key(self, port):
-        return "/calico/host/%s/workload/openstack/endpoint/%s" % (
-            port['binding:host_id'],
-            port['id']
-        )
+        return key_for_endpoint(port['binding:host_id'],
+                                "openstack",
+                                port['id'],  # FIXME Should be the VM's ID.
+                                port['id'])
 
     def port_etcd_data(self, port):
         # Construct the simpler port data.
@@ -209,28 +210,28 @@ class CalicoTransportEtcd(CalicoTransport):
         # already have correct data.
         correct_profiles = set()
 
-        # Read all etcd keys directly under /calico/policy/profile.
+        # Read all etcd keys directly under /calico/v1/policy/profile.
         try:
-            children = self.client.read('/calico/policy/profile',
-                                        recursive=True).children
+            children = self.client.read(PROFILE_DIR, recursive=True).children
         except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
             LOG.debug("etcd key: %s" % child.key)
-            m = OPENSTACK_POLICY_RE.match(child.key)
+            m = TAGS_KEY_RE.match(child.key)
             if m:
                 # If there are no policies, then read returns the top level
                 # node, so we need to check that this really is a profile ID.
                 profile_id = m.group("profile_id")
-                profile_key = '/calico/policy/profile/' + profile_id
                 LOG.debug("Existing etcd profile data for %s" % profile_id)
                 if profile_id in self.needed_profiles:
                     # This is a profile that we want.  Let's read its rules and
                     # tags, and compare those against the current OpenStack data.
+                    rules_key = key_for_profile_rules(profile_id)
                     rules = json_decoder.decode(
-                        self.client.read(profile_key + '/rules').value)
+                        self.client.read(rules_key).value)
+                    tags_key = key_for_profile_tags(profile_id)
                     tags = json_decoder.decode(
-                        self.client.read(profile_key + '/tags').value)
+                        self.client.read(tags_key).value)
 
                     if (rules == self.profile_rules(profile_id) and
                         tags == self.profile_tags(profile_id)):
@@ -242,6 +243,7 @@ class CalicoTransportEtcd(CalicoTransport):
                 else:
                     # We don't want this profile any more, so delete the key.
                     LOG.debug("Existing etcd profile key is now invalid")
+                    profile_key = key_for_profile(profile_id)
                     self.client.delete(profile_key, recursive=True)
 
         # Now write etcd data for each profile that we need and that we don't
@@ -250,10 +252,9 @@ class CalicoTransportEtcd(CalicoTransport):
             self.write_profile_to_etcd(profile_id)
 
     def write_profile_to_etcd(self, profile_id):
-        key = '/calico/policy/profile/' + profile_id
-        self.client.write(key + '/rules',
+        self.client.write(key_for_profile_rules(profile_id),
                           json.dumps(self.profile_rules(profile_id)))
-        self.client.write(key + '/tags',
+        self.client.write(key_for_profile_tags(profile_id),
                           json.dumps(self.profile_tags(profile_id)))
 
     def profile_rules(self, profile_id):
@@ -375,17 +376,18 @@ class CalicoTransportEtcd(CalicoTransport):
         # writes.
         prefix = None
         ready = None
+        iface_pfx_key = key_for_config('InterfacePrefix')
         try:
-            prefix = self.client.read('/calico/config/InterfacePrefix').value
-            ready = self.client.read('/calico/config/Ready').value
+            prefix = self.client.read(iface_pfx_key).value
+            ready = self.client.read(READY_KEY).value
         except etcd.EtcdKeyNotFound:
-            LOG.info('/calico/config values are missing')
+            LOG.info('%s values are missing', CONFIG_DIR)
 
         # Now write the values that need writing.
         if prefix != 'tap':
-            LOG.info('/calico/config/InterfacePrefix -> tap')
-            self.client.write('/calico/config/InterfacePrefix', 'tap')
+            LOG.info('%s -> tap', iface_pfx_key)
+            self.client.write(iface_pfx_key, 'tap')
         if ready != 'true':
             # TODO Set this flag only once we're really ready!
-            LOG.info('/calico/config/Ready -> true')
-            self.client.write("/calico/config/Ready", 'true')
+            LOG.info('%s -> true', READY_KEY)
+            self.client.write(READY_KEY, 'true')

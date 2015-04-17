@@ -24,25 +24,17 @@ import itertools
 import json
 import logging
 import gevent
-import re
 from types import StringTypes
 from urllib3 import Timeout
 from urllib3.exceptions import ReadTimeoutError
 
 from calico import common
+from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
+                                 RULES_KEY_RE, TAGS_KEY_RE, ENDPOINT_KEY_RE,
+                                 dir_for_per_host_config)
 from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
-
-
-# etcd path regexes
-RULES_RE = re.compile(
-    r'^/calico/policy/profile/(?P<profile_id>[^/]+)/rules')
-TAGS_RE = re.compile(
-    r'^/calico/policy/profile/(?P<profile_id>[^/]+)/tags')
-ENDPOINT_RE = re.compile(
-    r'^/calico/host/(?P<hostname>[^/]+)/.+/endpoint/(?P<endpoint_id>[^/]+)')
-DB_READY_FLAG_PATH = "/calico/config/Ready"
 
 
 RETRY_DELAY = 5
@@ -57,7 +49,7 @@ class EtcdWatcher(Actor):
         super(EtcdWatcher, self).__init__()
         self.config = config
         self.client = None
-        self.my_config_prefix = None
+        self.my_config_dir = dir_for_per_host_config(self.config.HOSTNAME)
 
     @actor_message()
     def load_config(self):
@@ -79,8 +71,6 @@ class EtcdWatcher(Actor):
                                     self.config.LOGLEVSYS,
                                     self.config.LOGLEVSCR)
             configured = True
-        self.my_config_prefix = ("/calico/host/%s/config/" %
-                                 self.config.HOSTNAME)
 
     @actor_message()
     def wait_for_ready(self):
@@ -88,7 +78,7 @@ class EtcdWatcher(Actor):
         ready = False
         while not ready:
             try:
-                db_ready = self.client.read(DB_READY_FLAG_PATH,
+                db_ready = self.client.read(READY_KEY,
                                             timeout=10).value
             except EtcdKeyNotFound:
                 _log.warn("Ready flag not present in etcd, waiting...")
@@ -134,7 +124,7 @@ class EtcdWatcher(Actor):
             # and profiles by id.  The response contains a generation ID
             # allowing us to then start polling for updates without missing
             # any.
-            initial_dump = self.client.read("/calico/", recursive=True)
+            initial_dump = self.client.read(VERSION_DIR, recursive=True)
             _log.info("Loaded snapshot, parsing it...")
             rules_by_id = {}
             tags_by_id = {}
@@ -155,7 +145,7 @@ class EtcdWatcher(Actor):
                     continue
 
                 # Double-check the flag hasn't changed since we read it before.
-                if child.key == DB_READY_FLAG_PATH:
+                if child.key == READY_KEY:
                     if child.value == "true":
                         still_ready = True
                     else:
@@ -193,7 +183,7 @@ class EtcdWatcher(Actor):
                 try:
                     _log.debug("About to wait for etcd update %s",
                                next_etcd_index)
-                    response = self.client.read("/calico/",
+                    response = self.client.read(VERSION_DIR,
                                                 wait=True,
                                                 waitIndex=next_etcd_index,
                                                 recursive=True,
@@ -269,7 +259,7 @@ class EtcdWatcher(Actor):
                                                        async=False)
                     continue
 
-                if response.key == DB_READY_FLAG_PATH:
+                if response.key == READY_KEY:
                     if response.value != "true":
                         _log.warning("DB became unready, triggering a resync")
                         continue_polling = False
@@ -284,13 +274,13 @@ class EtcdWatcher(Actor):
                     _log.warning("Unexpected action %s to %s; triggering "
                                  "resync.", response.action, response.key)
                     continue_polling = False
-                if response.key.startswith("/calico/config"):
+                if response.key.startswith(CONFIG_DIR):
                     _log.warning("Global config changed but we don't "
-                                 "yet support dynamic config response: %s",
+                                 "yet support dynamic config: %s",
                                  response)
-                if response.key.startswith(self.my_config_prefix):
+                if response.key.startswith(self.my_config_dir):
                     _log.warning("Config for this felix changed but we don't "
-                                 "yet support dynamic config response: %s",
+                                 "yet support dynamic config: %s",
                                  response)
 
     def _load_config_dict(self):
@@ -305,18 +295,17 @@ class EtcdWatcher(Actor):
         # Load initial dump from etcd.  First just get all the endpoints and
         # profiles by id.  The response contains a generation ID allowing us
         # to then start polling for updates without missing any.
-        global_cfg = self.client.read("/calico/config/")
+        global_cfg = self.client.read(CONFIG_DIR)
         configs = [global_cfg]
         try:
-            host_cfg = self.client.read("/calico/host/%s/config/" %
-                                        self.config.HOSTNAME)
+            host_cfg = self.client.read(self.my_config_dir)
         except EtcdKeyNotFound:
             _log.info("No configuration overrides for this node")
         else:
             configs.append(host_cfg)
 
         for child in itertools.chain(*[cfg.children for cfg in configs]):
-            _log.info("Got config parameter : %s=%s", child.key, str(child.value))
+            _log.info("Config parameter: %s=%s", child.key, str(child.value))
             key = child.key.rsplit("/").pop()
             value = str(child.value)
             config_dict[key] = value
@@ -330,7 +319,7 @@ json_decoder = json.JSONDecoder(object_hook=intern_dict)
 
 
 def parse_if_endpoint(config, etcd_node):
-    m = ENDPOINT_RE.match(etcd_node.key)
+    m = ENDPOINT_KEY_RE.match(etcd_node.key)
     if m:
         # Got an endpoint.
         endpoint_id = m.group("endpoint_id")
@@ -411,7 +400,7 @@ def validate_endpoint(config, endpoint):
 
 
 def parse_if_rules(etcd_node):
-    m = RULES_RE.match(etcd_node.key)
+    m = RULES_KEY_RE.match(etcd_node.key)
     if m:
         # Got some rules.
         profile_id = m.group("profile_id")
@@ -547,7 +536,7 @@ def validate_rule_port(port):
 
 
 def parse_if_tags(etcd_node):
-    m = TAGS_RE.match(etcd_node.key)
+    m = TAGS_KEY_RE.match(etcd_node.key)
     if m:
         # Got some tags.
         profile_id = m.group("profile_id")
