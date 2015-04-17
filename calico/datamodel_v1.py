@@ -58,11 +58,11 @@ ENDPOINT_KEY_RE = re.compile(
 
 
 def dir_for_host(hostname):
-    return VERSION_DIR + "/host/%s" % hostname
+    return HOST_DIR+ "/%s" % hostname
 
 
 def dir_for_per_host_config(hostname):
-    return HOST_DIR + "/%s/config" % hostname
+    return dir_for_host(hostname) + "/config"
 
 
 def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
@@ -93,6 +93,6 @@ def get_profile_id_for_profile_dir(key):
     """
     key = key.rstrip('/')
     if "/" not in key:
-        return False
+        return None
     prefix, final_node = key.rsplit("/", 1)
     return final_node if prefix == PROFILE_DIR else None
