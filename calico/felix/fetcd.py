@@ -286,31 +286,41 @@ class EtcdWatcher(Actor):
     def _load_config_dict(self):
         """
         Load configuration detail for this host from etcd.
-        :returns: a dictionary of key to parameters
-        :raises EtcdException: if a read from etcd fails and we may fall out of
-                sync.
-        """
-        config_dict = {}
 
-        # Load initial dump from etcd.  First just get all the endpoints and
-        # profiles by id.  The response contains a generation ID allowing us
-        # to then start polling for updates without missing any.
+        Merges global and per-host config.
+
+        :returns: a dictionary of key to parameters
+        :raises EtcdException: if a read from etcd fails.
+        """
+
+        # Load the global config, if this fails, we let the exception
+        # propagate.
         global_cfg = self.client.read(CONFIG_DIR)
-        configs = [global_cfg]
+        config_dict = {}
+        _update_config_dict(config_dict, global_cfg)
+        # Load the overrides for this host, if present.
         try:
             host_cfg = self.client.read(self.my_config_dir)
         except EtcdKeyNotFound:
             _log.info("No configuration overrides for this node")
         else:
-            configs.append(host_cfg)
-
-        for child in itertools.chain(*[cfg.children for cfg in configs]):
-            _log.info("Config parameter: %s=%s", child.key, str(child.value))
-            key = child.key.rsplit("/").pop()
-            value = str(child.value)
-            config_dict[key] = value
+            _update_config_dict(config_dict, host_cfg)
 
         return config_dict
+
+
+def _update_config_dict(config_dict, cfg_node):
+    """
+    Updates the config dict provided from the given etcd node, which
+    should point at a config directory.
+    """
+    for child in cfg_node.children:
+        _log.info("Config parameter: %s=%s", child.key, str(child.value))
+        key = child.key.rsplit("/").pop()
+        value = str(child.value)
+        config_dict[key] = value
+    return config_dict
+
 
 # Intern JSON keys as we load them to reduce occupancy.
 def intern_dict(d):
