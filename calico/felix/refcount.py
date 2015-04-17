@@ -55,16 +55,17 @@ class ReferenceManager(Actor):
         assert object_id is not None
 
         if object_id not in self.objects_by_id:
-            _log.debug("%s object with id %s didn't exist",
-                       self.name, object_id)
+            _log.info("%s object with id %s didn't exist, creating it.",
+                      self.name, object_id)
             obj = self._create(object_id)
             obj._manager = weakref.proxy(self)
             obj._id = object_id
             self.objects_by_id[object_id] = obj
         else:
             obj = self.objects_by_id[object_id]
-            _log.debug("%s object with id %s existed with ref count %d",
-                       self.name, object_id, obj.ref_count)
+            _log.info("%s object with id %s existed with ref count %d in "
+                      "state %s; increffing it.", self.name, object_id,
+                      obj.ref_count, obj.ref_mgmt_state)
 
         if callback:
             self.pending_ref_callbacks[object_id].add(callback)
@@ -96,6 +97,8 @@ class ReferenceManager(Actor):
             _log.info("Ignoring on_object_startup_complete for instance "
                       "in state %s", obj.ref_mgmt_state)
             return
+        _log.info("Object %s startup completed", object_id)
+        assert obj.ref_mgmt_state == STARTING
         obj.ref_mgmt_state = LIVE
         self._maybe_notify_referrers(object_id)
 
@@ -146,7 +149,7 @@ class ReferenceManager(Actor):
         if (obj and
                 obj.ref_mgmt_state == CREATED and
                 obj_id not in self.stopping_objects_by_id):
-            _log.debug("Starting object %s", obj_id)
+            _log.info("%s Starting object %s", self.name, obj_id)
             obj.ref_mgmt_state = STARTING
             obj.start()
             self._on_object_started(obj_id, obj)
@@ -164,13 +167,13 @@ class ReferenceManager(Actor):
                    object_id)
         obj = self.objects_by_id.get(object_id)
         if obj and obj.ref_mgmt_state == LIVE:
-            _log.debug("Object %s is LIVE, notifying referrers", object_id)
+            _log.info("Object %s is LIVE, notifying referrers", object_id)
             for cb in self.pending_ref_callbacks[object_id]:
                 cb(object_id, obj)
             self.pending_ref_callbacks.pop(object_id, None)
         else:
-            _log.debug("Cannot notify referrers for %s; object state: %s",
-                       object_id, obj.ref_mgmt_state)
+            _log.info("Cannot notify referrers for %s; object state: %s",
+                      object_id, obj.ref_mgmt_state)
 
     def _on_object_started(self, obj_id, obj):
         """

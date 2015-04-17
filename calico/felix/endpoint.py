@@ -111,6 +111,7 @@ class EndpointManager(ReferenceManager):
         """
         if self._is_starting_or_live(endpoint_id):
             # Local endpoint thread is running; tell it of the change.
+            _log.info("Update for live endpoint %s", endpoint_id)
             self.objects_by_id[endpoint_id].on_endpoint_update(endpoint,
                                                                async=True)
         if endpoint is None:
@@ -194,7 +195,7 @@ class LocalEndpoint(RefCountedActor):
         Called when this endpoint has received an update.
         :param dict[str] endpoint: endpoint parameter dictionary.
         """
-        _log.debug("Endpoint updated: %s", endpoint)
+        _log.info("%s updated: %s", self, endpoint)
         if endpoint and not self.endpoint:
             # This is the first time we have seen the endpoint, so extract the
             # interface name and endpoint ID.

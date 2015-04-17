@@ -159,8 +159,8 @@ class IptablesUpdater(Actor):
         """
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
-        _log.debug("Iptables update: %s\n%s", update_calls_by_chain,
-                   dependent_chains)
+        _log.info("Iptables update: %s", update_calls_by_chain)
+        _log.info("Iptables deps: %s", dependent_chains)
         for chain, updates in update_calls_by_chain.iteritems():
             # TODO: double-check whether this flush is needed.
             updates = ["--flush %s" % chain] + updates

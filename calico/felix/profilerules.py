@@ -70,15 +70,15 @@ class RulesManager(ReferenceManager):
 
     @actor_message()
     def on_rules_update(self, profile_id, profile):
-        _log.debug("Processing update to %s", profile_id)
         if profile_id is not None:
-            _log.debug("Profile not None, storing it")
+            _log.info("Rules for profile %s updated.", profile_id)
             self.rules_by_profile_id[profile_id] = profile
         else:
-            _log.debug("Profile is None, removing it")
+            _log.debug("Rules for profile %s deleted.", profile_id)
             self.rules_by_profile_id.pop(profile_id, None)
         if self._is_starting_or_live(profile_id):
-            _log.debug("Profile is active, kicking the ProfileRules.")
+            _log.info("Profile %s is active, kicking the ProfileRules.",
+                      profile_id)
             ap = self.objects_by_id[profile_id]
             ap.on_profile_update(profile, async=True)
 
@@ -104,6 +104,13 @@ class ProfileRules(RefCountedActor):
         :type dict|None: filled in by first update.  Reset to None on delete.
         """
         self.dead = False
+
+        self.chain_names = {
+            "inbound": profile_to_chain_name("inbound", profile_id),
+            "outbound": profile_to_chain_name("outbound", profile_id),
+        }
+        _log.info("Profile %s has chain names %s",
+                  profile_id, self.chain_names)
 
     @actor_message()
     def on_profile_update(self, profile):
@@ -132,12 +139,12 @@ class ProfileRules(RefCountedActor):
 
     def _maybe_update(self):
         if self.dead:
-            _log.debug("Not updating: profile is dead.")
+            _log.info("Not updating: profile is dead.")
         elif not self.ipset_refs.ready:
-            _log.debug("Can't program rules %s yet, waiting on ipsets",
-                       self.id)
+            _log.info("Can't program rules %s yet, waiting on ipsets",
+                      self.id)
         else:
-            _log.debug("Ready to program rules for %s", self.id)
+            _log.info("Ready to program rules for %s", self.id)
             self._update_chains()
 
     @actor_message()
@@ -147,10 +154,11 @@ class ProfileRules(RefCountedActor):
         our iptables configuration.
         """
         try:
+            _log.info("%s unreferenced, removing our chains", self)
             self.dead = True
             chains = []
             for direction in ["inbound", "outbound"]:
-                chain_name = profile_to_chain_name(direction, self.id)
+                chain_name = self.chain_names[direction]
                 chains.append(chain_name)
             self._iptables_updater.delete_chains(chains, async=False)
             self.ipset_refs.discard_all()
@@ -163,6 +171,7 @@ class ProfileRules(RefCountedActor):
         """
         Updates the chains in the dataplane.
         """
+        _log.info("%s Programming iptables with our chains: %s")
         updates = {}
         for direction in ("inbound", "outbound"):
             _log.debug("Updating %s chain for profile %s", direction,
@@ -171,7 +180,7 @@ class ProfileRules(RefCountedActor):
             _log.debug("Profile %s: %s", self.id, self._profile)
             rules_key = "%s_rules" % direction
             new_rules = new_profile.get(rules_key, [])
-            chain_name = profile_to_chain_name(direction, self.id)
+            chain_name = self.chain_names[direction]
             tag_to_ip_set_name = {}
             for tag, ipset in self.ipset_refs.iteritems():
                 tag_to_ip_set_name[tag] = ipset.name
