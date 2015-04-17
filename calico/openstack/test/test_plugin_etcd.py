@@ -28,6 +28,12 @@ import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
 
 
+class EtcdKeyNotFound(BaseException):
+    pass
+
+lib.m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
+
+
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def check_etcd_write(self, key, value):
@@ -76,7 +82,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         else:
             read_result.value = None
             if not recursive:
-                raise KeyError(key)
+                raise lib.m_etcd.EtcdKeyNotFound()
 
         # Print and return the result object.
         print "etcd read: %s\nvalue: %s" % (key, read_result.value)
@@ -94,7 +100,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             print "children: %s" % [child.key
                                     for child in read_result.children]
             if read_result.value is None and read_result.children == []:
-                raise KeyError(key)
+                raise lib.m_etcd.EtcdKeyNotFound()
         else:
             read_result.children = None
 

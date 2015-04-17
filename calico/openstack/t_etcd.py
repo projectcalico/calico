@@ -99,7 +99,7 @@ class CalicoTransportEtcd(CalicoTransport):
         try:
             children = self.client.read('/calico/host',
                                         recursive=True).children
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
             LOG.debug("etcd key: %s" % child.key)
@@ -200,7 +200,7 @@ class CalicoTransportEtcd(CalicoTransport):
         try:
             children = self.client.read('/calico/policy/profile',
                                         recursive=True).children
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             children = []
         for child in children:
             LOG.debug("etcd key: %s" % child.key)
@@ -336,8 +336,8 @@ class CalicoTransportEtcd(CalicoTransport):
         key = self.port_etcd_key(port)
         try:
             self.client.delete(key)
-        except KeyError:
-            # Etcd returned a KeyError; doesn't exist, so treat as success
+        except etcd.EtcdKeyNotFound:
+            # Etcd returned a etcd.EtcdKeyNotFound; doesn't exist, so treat as success
             pass
 
     def security_group_updated(self, sg):
@@ -365,7 +365,7 @@ class CalicoTransportEtcd(CalicoTransport):
         try:
             prefix = self.client.read('/calico/config/InterfacePrefix').value
             ready = self.client.read('/calico/config/Ready').value
-        except KeyError:
+        except etcd.EtcdKeyNotFound:
             LOG.info('/calico/config values are missing')
 
         # Now write the values that need writing.
