@@ -3,6 +3,19 @@ import time
 import sh
 import fileinput
 import sys
+
+"""
+Update docker to use a different unix socket, so powerstrip can run
+its proxy on the "normal" one. This provides simple access for
+existing tools to the powerstrip proxy.
+
+Set the docker daemon to listen on the docker.real.sock by updating
+the config, clearing old sockets and restarting.
+
+Currently "support" upstart (Debian/Ubuntu) and systemd (Redhat/Centos) but
+the logic for detecting and modifying config is brittle and lightly tested.
+Use with caution...
+"""
 REAL_SOCK = "/var/run/docker.real.sock"
 POWERSTRIP_SOCK = "/var/run/docker.sock"
 
@@ -12,6 +25,7 @@ def _replace_all(filename, search, replace):
         if search in line:
             line = line.replace(search, replace)
         sys.stdout.write(line)
+
 
 def create_restarter():
     """
@@ -43,9 +57,6 @@ def _clean_socks():
 
 
 class SystemdRestarter():
-    def __init__(self):
-        pass
-
     DOCKER_SYSTEMD_SERVICE = "/usr/lib/systemd/system/docker.service"
     SYSTEMD_DEFAULT = "ExecStart=/usr/bin/docker -d $OPTIONS \\"
     SYSTEMD_MODIFIED = "ExecStart=/usr/bin/docker -d $OPTIONS " \
@@ -86,9 +97,6 @@ class SystemdRestarter():
 
 
 class UpstartRestarter():
-    def __init__(self):
-        pass
-
     DOCKER_DEFAULT_FILENAME = "/etc/default/docker"
     DOCKER_OPTIONS = 'DOCKER_OPTS="-H unix://%s"' % REAL_SOCK
 

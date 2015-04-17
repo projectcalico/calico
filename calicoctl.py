@@ -284,18 +284,16 @@ def node(ip, node_image, ip6=""):
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
-    # We might need to talk to a different docker endpoint, so create some
-    # client flexibility.
-    node_docker_client = docker_client
-
-    enable_socket = "NO"
     if docker_restarter.is_using_alternative_socket():
-        enable_socket = "YES"
         # At this point, docker is listening on a new port but powerstrip
         # might not be running, so docker clients need to talk directly to
         # docker.
         node_docker_client = docker.Client(version=DOCKER_VERSION,
                                            base_url="unix://%s" % REAL_SOCK)
+        enable_socket = "YES"
+    else:
+        node_docker_client = docker_client
+        enable_socket = "NO"
 
     try:
         node_docker_client.remove_container("calico-node", force=True)
