@@ -157,14 +157,14 @@ On a control node, perform the following steps:
 
    ::
 
-       exec /usr/bin/etcd -name="<controller_fqdn>"                                                         \
-                          -advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
-                          -listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
-                          -listen-peer-urls "http://0.0.0.0:2380"                                           \
-                          -initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
-                          -initial-cluster-token "<cluster_token>"                                          \
-                          -initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
-                          -initial-cluster-state "new"
+       exec /usr/bin/etcd --name="<controller_fqdn>"                                                         \
+                          --advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
+                          --listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
+                          --listen-peer-urls "http://0.0.0.0:2380"                                           \
+                          --initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
+                          --initial-cluster-token "<cluster_token>"                                          \
+                          --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
+                          --initial-cluster-state "new"
 
 6. Start etcd service
    ::
@@ -319,9 +319,9 @@ On a compute node, perform the following steps:
 
    ::
 
-       exec /usr/bin/etcd -proxy on                                                         \
-                          -listen-client-urls http://127.0.0.1:4001                         \
-                          -initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
+       exec /usr/bin/etcd --proxy on                                                         \
+                          --listen-client-urls http://127.0.0.1:4001                         \
+                          --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
 
 11. Start etcd service
 
