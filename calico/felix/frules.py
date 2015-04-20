@@ -299,15 +299,21 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
             assert ports.count(",") + ports.count(":") < 15, "Too many ports"
             append("--match multiport", "--%s-ports" % direction, ports)
 
-    if "icmp_type" in rule and rule["icmp_type"] is not None:
+    if rule.get("icmp_type") is not None:
         icmp_type = rule["icmp_type"]
         assert isinstance(icmp_type, int), "ICMP type should be an int"
+        if "icmp_code" in rule:
+            icmp_code = rule["icmp_code"]
+            assert isinstance(icmp_code, int), "ICMP code should be an int"
+            icmp_filter = "%s/%s" % (icmp_type, icmp_code)
+        else:
+            icmp_filter = icmp_type
         if proto == "icmp" and ip_version == 4:
-            append("--match icmp", "--icmp-type", rule["icmp_type"])
+            append("--match icmp", "--icmp-type", icmp_filter)
         elif ip_version == 6:
             assert proto == "icmpv6"
             # Note variant spelling of icmp[v]6
-            append("--match icmp6", "--icmpv6-type", rule["icmp_type"])
+            append("--match icmp6", "--icmpv6-type", icmp_filter)
 
     # Add the action
     append("--jump", on_allow if rule.get("action", "allow") == "allow"

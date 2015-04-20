@@ -517,7 +517,17 @@ def validate_rules(rules):
                 issues.append("Invalid action in rule %s." % rule)
 
             icmp_type = rule.get('icmp_type')
-            #TODO: firewall the icmp_type too
+            if icmp_type is not None:
+                if not 0 <= icmp_type <= 255:
+                    issues.append("ICMP type is out of range.")
+            icmp_code = rule.get("icmp_code")
+            if icmp_code is not None:
+                if not 0 <= icmp_code <= 255:
+                    issues.append("ICMP code is out of range.")
+                if icmp_type is None:
+                    # FIXME ICMP code without ICMP type not supported by iptables
+                    # Firewall against that for now.
+                    issues.append("ICMP code specified without ICMP type.")
 
     if issues:
         raise ValidationFailed(" ".join(issues))

@@ -270,66 +270,11 @@ class CalicoTransportEtcd(CalicoTransport):
         for sgid in self.profile_tags(profile_id):
             for rule in self.sgs[sgid]['security_group_rules']:
                 LOG.info("Neutron rule  %s : %s", profile_id, rule)
-
-                ethertype = rule['ethertype']
-                etcd_rule = {}
-
-                # Map the ethertype field from Neutron to etcd format.
-                etcd_rule['ip_version'] = {'IPv4': 4,
-                                           'IPv6': 6}[ethertype]
-
-                # Map the protocol field from Neutron to etcd format.
-                if rule['protocol'] is None or rule['protocol'] == -1:
-                    pass
-                elif rule['protocol'] == 'icmp':
-                    etcd_rule['protocol'] = {'IPv4': 'icmp',
-                                             'IPv6': 'icmpv6'}[ethertype]
-                    etcd_rule['icmp_type'] = rule['port_range_min']
-                else:
-                    etcd_rule['protocol'] = rule['protocol']
-
-                # OpenStack (sometimes) represents 'any IP address' by setting
-                # both 'remote_group_id' and 'remote_ip_prefix' to None.  We
-                # translate that to an explicit 0.0.0.0/0 (for IPv4) or ::/0
-                # (for IPv6).
-                net = rule['remote_ip_prefix']
-                if not (net or rule['remote_group_id']):
-                    net = {'IPv4': '0.0.0.0/0',
-                           'IPv6': '::/0'}[ethertype]
-
-                # src/dst_ports is a list in which each entry can be a single
-                # number, or a string describing a port range.
-                if rule['port_range_min'] == -1:
-                    port_spec = ['1:65535']
-                elif rule['port_range_min'] == rule['port_range_max']:
-                    if rule['port_range_min'] is not None:
-                        port_spec = [rule['port_range_min']]
-                    else:
-                        port_spec = None
-                else:
-                    port_spec = ['%s:%s' % (rule['port_range_min'],
-                                            rule['port_range_max'])]
-
-                # Put it all together and add to either the inbound or the
-                # outbound list.
+                etcd_rule = _neutron_rule_to_etcd_rule(rule)
                 if rule['direction'] == 'ingress':
-                    if rule['remote_group_id'] is not None:
-                        etcd_rule['src_tag'] = rule['remote_group_id']
-                    if net is not None:
-                        etcd_rule['src_net'] = net
-                    if port_spec is not None:
-                        etcd_rule['dst_ports'] = port_spec
                     inbound.append(etcd_rule)
-                    LOG.info("=> Inbound Calico rule %s" % etcd_rule)
                 else:
-                    if rule['remote_group_id'] is not None:
-                        etcd_rule['dst_tag'] = rule['remote_group_id']
-                    if net is not None:
-                        etcd_rule['dst_net'] = net
-                    if port_spec is not None:
-                        etcd_rule['dst_ports'] = port_spec
                     outbound.append(etcd_rule)
-                    LOG.info("=> Outbound Calico rule %s" % etcd_rule)
 
         return {'inbound_rules': inbound, 'outbound_rules': outbound}
 
@@ -398,3 +343,73 @@ class CalicoTransportEtcd(CalicoTransport):
             # TODO Set this flag only once we're really ready!
             LOG.info('%s -> true', READY_KEY)
             self.client.write(READY_KEY, 'true')
+
+def _neutron_rule_to_etcd_rule(rule):
+    """
+    Translate a single Neutron rule dict to a single dict in our
+    etcd format.
+    """
+    ethertype = rule['ethertype']
+    etcd_rule = {}
+    # Map the ethertype field from Neutron to etcd format.
+    etcd_rule['ip_version'] = {'IPv4': 4,
+                               'IPv6': 6}[ethertype]
+    # Map the protocol field from Neutron to etcd format.
+    if rule['protocol'] is None or rule['protocol'] == -1:
+        pass
+    elif rule['protocol'] == 'icmp':
+        etcd_rule['protocol'] = {'IPv4': 'icmp',
+                                 'IPv6': 'icmpv6'}[ethertype]
+    else:
+        etcd_rule['protocol'] = rule['protocol']
+
+    # OpenStack (sometimes) represents 'any IP address' by setting
+    # both 'remote_group_id' and 'remote_ip_prefix' to None.  We
+    # translate that to an explicit 0.0.0.0/0 (for IPv4) or ::/0
+    # (for IPv6).
+    net = rule['remote_ip_prefix']
+    if not (net or rule['remote_group_id']):
+        net = {'IPv4': '0.0.0.0/0',
+               'IPv6': '::/0'}[ethertype]
+    port_spec = None
+    if rule['protocol'] == 'icmp':
+        # OpenStack stashes the ICMP match criteria in
+        # port_range_min/max.
+        icmp_type = rule['port_range_min']
+        if icmp_type is not None and icmp_type != -1:
+            etcd_rule['icmp_type'] = icmp_type
+        icmp_code = rule['port_range_max']
+        if icmp_code is not None and icmp_code != -1:
+            etcd_rule['icmp_code'] = icmp_code
+    else:
+        # src/dst_ports is a list in which each entry can be a
+        # single number, or a string describing a port range.
+        if rule['port_range_min'] == -1:
+            port_spec = ['1:65535']
+        elif rule['port_range_min'] == rule['port_range_max']:
+            if rule['port_range_min'] is not None:
+                port_spec = [rule['port_range_min']]
+        else:
+            port_spec = ['%s:%s' % (rule['port_range_min'],
+                                    rule['port_range_max'])]
+
+    # Put it all together and add to either the inbound or the
+    # outbound list.
+    if rule['direction'] == 'ingress':
+        if rule['remote_group_id'] is not None:
+            etcd_rule['src_tag'] = rule['remote_group_id']
+        if net is not None:
+            etcd_rule['src_net'] = net
+        if port_spec is not None:
+            etcd_rule['dst_ports'] = port_spec
+        LOG.info("=> Inbound Calico rule %s" % etcd_rule)
+    else:
+        if rule['remote_group_id'] is not None:
+            etcd_rule['dst_tag'] = rule['remote_group_id']
+        if net is not None:
+            etcd_rule['dst_net'] = net
+        if port_spec is not None:
+            etcd_rule['dst_ports'] = port_spec
+        LOG.info("=> Outbound Calico rule %s" % etcd_rule)
+
+    return etcd_rule
