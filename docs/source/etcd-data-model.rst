@@ -43,11 +43,6 @@ security profiles
   A security profile is an object that encapsulates a specific security policy
   that can be applied to endpoints. See :ref:`security-profile-data` for more.
 
-configuration
-  Calico stores configuration information in etcd, making it simple to add
-  further machines to a Calico deployment. See :ref:`configuration-data` for
-  more.
-
 The structure of all of this information can be found below.
 
 
@@ -243,13 +238,3 @@ policy. These tags can be referred to by rules, as shown above.
 A single tag may be associated with multiple security profiles, in which case
 it expands to reference all endpoints in all of those profiles.
 
-
-.. _configuration-data:
-
-Configuration
-~~~~~~~~~~~~~
-
-Configuration for Calico is stored in etcd as well.
-
-.. note:: The format of the configuration has not yet been finalised, and so
-          this document does not go into details. Please check back often.
