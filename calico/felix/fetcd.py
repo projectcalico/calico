@@ -215,8 +215,9 @@ class EtcdWatcher(Actor):
                 except socket.timeout:
                     # That this leaks out appears to be an artifact of running
                     # urllib3 on top of gevent.  Be defensive and reconnect.
-                    _log.debug("Raw socket.timeout leaked out of "
-                               "python-etcd.  Retrying.")
+                    _log.warning("Raw socket.timeout leaked out of "
+                                 "python-etcd.  Reconnecting...",
+                                 exc_info=True)
                     self._reconnect()
                 except HTTPError:
                     _log.exception("Unexpected error from urllib3, "
