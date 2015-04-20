@@ -49,6 +49,7 @@ protocol bgp {
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
   source address {{getenv "IP"}};  # The local address we use for the TCP connection
+  add paths on;
 }
 {{end}}
 {{else}}
@@ -70,6 +71,7 @@ protocol bgp {
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
   source address {{getenv "IP"}};  # The local address we use for the TCP connection
+  add paths on;
 }
 {{end}}{{end}}
 {{end}}

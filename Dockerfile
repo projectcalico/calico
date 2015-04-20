@@ -13,7 +13,13 @@ CMD ["/sbin/my_init"]
 #    echo "Pin: origin binaries.projectcalico.org" >> /etc/apt/preferences && \
 #    echo "Pin-Priority: 1001" >> /etc/apt/preferences
 
-RUN apt-get update && \
+# Ensure UTF-8, required for add-apt-repository call.
+RUN locale-gen en_US.UTF-8
+ENV LANG       en_US.UTF-8
+ENV LC_ALL     en_US.UTF-8
+
+RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
+    apt-get update && \
     apt-get install -qy \
 #        calico-felix \
         bird \
