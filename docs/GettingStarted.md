@@ -4,14 +4,14 @@ Calico provides IP connectivity between Docker containers on different hosts (as
 
 *In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
 * Set this up yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md)
-* Use [Calico CoreOS Vagrant](calico-coreos-vagrant) to start a cluster in VMs on your laptop or workstation.
+* Use [Calico CoreOS Vagrant][calico-coreos-vagrant] to start a cluster in VMs on your laptop or workstation.
 
 If you want to get started quickly and easily then we recommend just using Vagrant.
 
 If you have difficulty, try the [Troubleshooting Guide](./Troubleshooting.md).
 
 ### A note about names & addresses
-In this example, we will use the server names and IP addresses from the [Calico CoreOS Vagrant](calico-coreos-vagrant) example.
+In this example, we will use the server names and IP addresses from the [Calico CoreOS Vagrant][calico-coreos-vagrant] example.
 
 | hostname | IP address   |
 |----------|--------------|
