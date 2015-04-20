@@ -191,6 +191,7 @@ class EtcdWatcher(Actor):
             del initial_dump
             continue_polling = True
             while continue_polling:
+                response = None
                 try:
                     _log.debug("About to wait for etcd update %s",
                                next_etcd_index)
@@ -206,30 +207,25 @@ class EtcdWatcher(Actor):
                     _log.warning("Connection timeout when trying to  connect "
                                  "to etcd")
                     self._reconnect()
-                    continue
                 except ReadTimeoutError:
                     # This is expected when we're doing a poll and nothing
                     # happened.
                     _log.debug("Read from etcd timed out, retrying.")
                     self._reconnect()
-                    continue
                 except socket.timeout:
                     # That this leaks out appears to be an artifact of running
                     # urllib3 on top of gevent.  Be defensive and reconnect.
                     _log.debug("Raw socket.timeout leaked out of "
                                "python-etcd.  Retrying.")
                     self._reconnect()
-                    continue
                 except HTTPError:
                     _log.exception("Unexpected error from urllib3, "
                                    "reconnecting to etcd...")
                     self._reconnect()
-                    continue
                 except EtcdClusterIdChanged:
                     _log.error("Etcd cluster ID changed, reconnecting for "
                                "full resync...")
                     continue_polling = False
-                    continue
                 except EtcdEventIndexCleared:
                     # Our poll fell too far behind and etcd can no longer
                     # service our request.
@@ -258,6 +254,9 @@ class EtcdWatcher(Actor):
                     # TODO: should we do a backoff here?
                     gevent.sleep(1)
                     self._reconnect()
+
+                if not response:
+                    _log.debug("Failed to get a response from etcd.")
                     continue
 
                 # Since we're polling on a subtree, we can't just increment
