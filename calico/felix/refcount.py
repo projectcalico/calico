@@ -279,7 +279,7 @@ class RefHelper(object):
             # Deleted while we were waiting.
             _log.debug("Object %s was discarded while waiting for its ref",
                        obj_id)
-            self._ref_mgr.decref(obj_id)
+            self._ref_mgr.decref(obj_id, async=True)
         now_ready = self.ready
         if not was_ready and now_ready:
             _log.debug("Acquired all references, calling ready callback")
