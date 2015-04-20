@@ -27,24 +27,24 @@ Calico integrates seamlessly with the cloud orchestration system (such as
 OpenStack) to enable secure IP communication between virtual machines. As VMs
 are created or destroyed, their IP addresses are advertised to the rest of the
 network and they are able to send/receive data over IP just as they would with
-the native networking implementation – but with higher security,
-[scalability and performance](http://www.projectcalico.org/technical/scalability-and-performance/).
+the native networking implementation – but with higher
+[security, scalability and performance](http://www.projectcalico.org/learn/).
 
 ## How do I get started with Project Calico?
 
 To get started, you first need a working installation of
 [OpenStack](http://www.openstack.org/). Then download and install the latest
 stable build of Calico following the instructions
-[here](http://www.projectcalico.org/download/).
+[here](http://docs.projectcalico.org/en/latest/openstack.html).
 
 Technical documentation is [here](http://docs.projectcalico.org/);
 if you are going to contribute to the project, you'll also need to run the
-[tests](doc/CalicoUTs.md).
+tests.
 
 ## How can I get support for Project Calico?
 
 There are two options for getting support for Calico. You can simply
-[ask the community](http://www.projectcalico.org/community/) any question you
+[get in contact](http://www.projectcalico.org/contact/) any question you
 like – there is an active group of users and developers who will usually try
 their best to help you or point you in the right direction. Or you can work
 with one of the commercial vendors and system integrators who provide
@@ -55,7 +55,7 @@ services:
 
 - Metaswitch Networks.
 
-Please [contact us](http://www.projectcalico.org/contact-us/) if you are a
+Please [contact us](http://www.projectcalico.org/contact/) if you are a
 vendor providing commercial support services and wish to be added to this list.
 
 ## Who is behind Project Calico?
@@ -65,7 +65,7 @@ original implementation to open source and are responsible for the ongoing
 management of the project. However, it is open to any members of the community
 – individuals or organizations – to get involved and contribute code.
 
-Please [contact us](http://www.projectcalico.org/contact-us/) if you are
+Please [contact us](http://www.projectcalico.org/contact/) if you are
 interested in getting involved and contributing to the project.
 
 ## Contributing
