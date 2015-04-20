@@ -21,7 +21,7 @@ Usage:
   calicoctl (ipv4|ipv6) pool show
   calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer rr show
-  calicoctl container add <CONTAINER> <IP>
+  calicoctl container add <CONTAINER> <IP> [<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
@@ -109,7 +109,7 @@ class ConfigError(Exception):
     pass
 
 
-def container_add(container_name, ip):
+def container_add(container_name, ip, interface):
     """
     Add a container (on this host) to Calico networking with the given IP.
 
@@ -174,10 +174,13 @@ def container_add(container_name, ip):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
-    # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
+    # Actually configure the netns. Default to eth1 since eth0 is the
+    # docker bridge.
+    if interface is None:
+        interface = "eth1"
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
-                                     veth_name="eth1",
+                                     veth_name=interface,
                                      proc_alias="proc")
 
     # Register the endpoint
@@ -912,7 +915,9 @@ if __name__ == '__main__':
                     bgppeer_show(version)
         if arguments["container"]:
             if arguments["add"]:
-                container_add(arguments["<CONTAINER>"], arguments["<IP>"])
+                container_add(arguments["<CONTAINER>"],
+                              arguments["<IP>"],
+                              arguments["<INTERFACE>"])
             if arguments["remove"]:
                 container_remove(arguments["<CONTAINER>"])
     else:
