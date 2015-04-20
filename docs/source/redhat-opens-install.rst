@@ -15,6 +15,10 @@
 Red Hat Enterprise Linux 6.5/7 Packaged Install Instructions
 ============================================================
 
+.. note:: Following the change to use etcd instead of message queues to
+          communicate between components, this document may now contain out of
+          date information. We will remedy this in the near future.
+
 The instructions come in two sections: one for installing control nodes,
 and one for installing compute nodes. Before moving on to those
 sections, make sure you follow the **Common Steps** section, and if you

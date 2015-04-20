@@ -40,7 +40,6 @@ The key components on the controller node will be:
 - the standard OpenStack components for a controller, including the
   Neutron service
 - the Calico/OpenStack Plugin, as a Neutron/ML2 mechanism driver
-- the Calico ACL manager
 - a BIRD instance, acting as BGP route reflector for the compute
   nodes.
 
@@ -319,7 +318,6 @@ correctly in the cluster.
 
 On the controller:
 
-- The Calico ACL manager is correctly configured, and running.
 - The BIRD BGP route reflector has established sessions to all the
   compute nodes.
 - The Neutron service is running and has initialized the Calico ML2

@@ -75,6 +75,10 @@ allows ingress from and egress to the same security group.
 Architecture
 ------------
 
+.. note:: Following the change to use etcd instead of message queues to
+          communicate between components, this document may now contain out of
+          date information. We will remedy this in the near future.
+
 At present, the flow of security information proceeds as follows::
 
     [Configuration in OpenStack or other orchestrator] -(Plugin)-> [Calico network API] -(ACL Manager)-> [Calico ACL API] -(Felix)-> [Programmed IPTables rules]

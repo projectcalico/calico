@@ -56,54 +56,12 @@ Icehouse or Juno.
 Icehouse
 ^^^^^^^^
 
-First, you'll need to grab the public key to verify that the packages
-are ours. To obtain this key, run the following command:
-
-::
-
-    curl -L http://binaries.projectcalico.org/repo/key | apt-key add -
-
-Verify the key signature using
-
-::
-
-    apt-key finger
-
-The output should contain the following - check the fingerprint
-carefully:
-
-::
-
-    pub   2048R/60618AAE 2014-06-26
-          Key fingerprint = 4A74 6926 B70E 47C6 A8F3  56ED FE0C C70D 6061 8AAE
-    uid                  Project Calico Package Signing Key <nj@metaswitch.com>
-    sub   2048R/4E0FCDC2 2014-06-26
-
-Then edit ``/etc/apt/sources.list`` to add the following line on each
-machine:
-
-::
-
-    deb http://binaries.projectcalico.org/repo ./
-
-And edit ``/etc/apt/preferences`` to add the following lines, whose
-effect is to prefer Calico-provided packages for Nova and Neutron even
-if later versions of those packages are released by Ubuntu.
-
-::
-
-    Package: *
-    Pin: origin binaries.projectcalico.org
-    Pin-Priority: 1001
-
-Juno
-^^^^
-
 Add the Calico PPA.
 
 ::
 
-    add-apt-repository ppa:project-calico/juno
+    sudo apt-add-repository ppa:project-calico/icehouse
+
 
 Edit ``/etc/apt/preferences`` to add the following lines, whose effect
 is to prefer Calico-provided packages for Nova and Neutron even if later
@@ -115,6 +73,25 @@ versions of those packages are released by Ubuntu.
     Pin: release o=LP-PPA-project-calico-*
     Pin-Priority: 1001
 
+Juno
+^^^^
+
+Add the Calico PPA.
+
+::
+
+    sudo add-apt-repository ppa:project-calico/juno
+
+Edit ``/etc/apt/preferences`` to add the following lines, whose effect
+is to prefer Calico-provided packages for Nova and Neutron even if later
+versions of those packages are released by Ubuntu.
+
+::
+
+    Package: *
+    Pin: release -o=LP-PPA-project-calico-*
+    Pin-Priority: 1001
+
 Common
 ^^^^^^
 
@@ -124,13 +101,13 @@ that are not yet available in Ubuntu 14.04. To add the PPA, run:
 
 ::
 
-    add-apt-repository ppa:cz.nic-labs/bird
+    sudo add-apt-repository ppa:cz.nic-labs/bird
 
 Once that's done, update your package manager on each machine:
 
 ::
 
-    apt-get update
+    sudo apt-get update
 
 Control Node Install
 --------------------
@@ -141,13 +118,67 @@ On a control node, perform the following steps:
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
 
-2. Install the ``calico-control`` package:
+2. Install the ``etcd`` packages:
 
    ::
 
-       apt-get install calico-control
+       sudo apt-get install etcd python-etcd
 
-3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+3. Stop etcd service
+   ::
+
+       sudo service etcd stop
+
+4. Delete any existing etcd database
+   ::
+
+       sudo rm -rf /var/lib/etcd/*
+
+5. Mount a ramdisk at /var/lib/etcd:
+   ::
+
+    sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+
+6. add the following to the bottom of ``/etc/fstab`` so that the ramdisk gets
+   reinstated at boot time:
+
+   ::
+
+    tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
+
+
+5. Edit ``/etc/init/etcd.conf``:
+
+   - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
+     substituting for ``<controller_fqdn>``, ``<controller_ip>``, and
+     ``<cluster_token>`` appropriately. Each time you create a new etcd cluster
+     you should use a new cluster_token, as this is checked by Calico
+     components to check whether etcd has moved.
+
+   ::
+
+       exec /usr/bin/etcd --name="<controller_fqdn>"                                                         \
+                          --advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
+                          --listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
+                          --listen-peer-urls "http://0.0.0.0:2380"                                           \
+                          --initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
+                          --initial-cluster-token "<cluster_token>"                                          \
+                          --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
+                          --initial-cluster-state "new"
+
+6. Start etcd service
+   ::
+
+       sudo service etcd start
+
+
+7. Install the ``calico-control`` package:
+
+   ::
+
+       sudo apt-get install calico-control
+
+8. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
 
    -  Find the line beginning with ``type_drivers``, and change it to
       read ``type_drivers = local, flat``.
@@ -156,7 +187,7 @@ On a control node, perform the following steps:
    -  Find the line beginning with ``tenant_network_types``, and change
       it to read ``tenant_network_types = local``.
 
-4. Edit the ``/etc/neutron/neutron.conf`` file:
+9. Edit the ``/etc/neutron/neutron.conf`` file:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -169,19 +200,11 @@ On a control node, perform the following steps:
    -  Find the line for the ``rpc_workers`` setting, uncomment it and
       set its value to 0.
 
-5. Restart the neutron server process:
-   ``service neutron-server restart``.
+10. Restart the neutron server process:
 
-6. Create the ``/etc/calico/acl_manager.cfg`` file by taking a copy of
-   the supplied sample config at
-   ``/etc/calico/acl_manager.cfg.example``. Then, in
-   ``/etc/calico/acl_manager.cfg``:
+   ::
 
-   -  Change the ``PluginAddress`` to the host name or IP address of the
-      controller node.
-
-7. Restart the ACL manager service with
-   ``service calico-acl-manager restart``.
+        sudo service neutron-server restart
 
 Compute Node Install
 --------------------
@@ -217,7 +240,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       service libvirt-bin restart
+       sudo service libvirt-bin restart
 
 2. Open ``/etc/nova/nova.conf`` and remove the line that reads:
 
@@ -232,14 +255,14 @@ On a compute node, perform the following steps:
 
    ::
 
-           service nova-compute restart
+       sudo service nova-compute restart
 
 3. If they're running, stop the Open vSwitch services:
 
    ::
 
-       service openvswitch-switch stop
-       service neutron-plugin-openvswitch-agent stop
+       sudo service openvswitch-switch stop
+       sudo service neutron-plugin-openvswitch-agent stop
 
    Then, prevent the services running if you reboot:
 
@@ -253,7 +276,7 @@ On a compute node, perform the following steps:
 
    ::
 
-       apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
+       sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
 
 5. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
    In the ``[DEFAULT]`` section, add the following line:
@@ -266,54 +289,84 @@ On a compute node, perform the following steps:
 
    ::
 
-       service neutron-dhcp-agent restart
+       sudo service neutron-dhcp-agent restart
 
 6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
 
-7. Install the ``calico-compute`` package:
+7. Install the ``etcd``, ``python-etcd`` packages:
 
    ::
 
-       apt-get install calico-compute
+       sudo apt-get install etcd python-etcd
+
+8. Stop etcd service
+   ::
+
+       sudo service etcd stop
+
+9. Delete any existing etcd database
+   ::
+
+        sudo rm -rf /var/lib/etcd/*
+
+10. Edit ``/etc/init/etcd.conf``:
+
+   - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
+     substituting for ``<controller_fqdn>`` and ``<controller_ip>``
+     appropriately:
+
+   ::
+
+       exec /usr/bin/etcd --proxy on                                                         \
+                          --listen-client-urls http://127.0.0.1:4001                         \
+                          --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
+
+11. Start etcd service
+
+   ::
+
+       sudo service etcd start
+
+12. Install the ``calico-compute`` package:
+
+   ::
+
+       sudo apt-get install calico-compute
 
    This step may prompt you to save your IPTables rules to make them
    persistent on restart – hit yes.
 
-8. Configure BIRD. By default Calico assumes that you'll be deploying a
-   route reflector to avoid the need for a full BGP mesh. To this end,
-   it includes useful configuration scripts that will prepare a BIRD
-   config file with a single peering to the route reflector. If that's
-   correct for your network, you can run either or both of the following
-   commands. For IPv4 connectivity between compute hosts:
+13. Configure BIRD. By default Calico assumes that you'll be deploying a
+    route reflector to avoid the need for a full BGP mesh. To this end,
+    it includes useful configuration scripts that will prepare a BIRD
+    config file with a single peering to the route reflector. If that's
+    correct for your network, you can run either or both of the following
+    commands. For IPv4 connectivity between compute hosts:
 
-   ::
+    ::
 
-       calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
+        sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
 
-   And/or for IPv6 connectivity between compute hosts:
+    And/or for IPv6 connectivity between compute hosts:
 
-   ::
+    ::
 
-        calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
+        sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
-   Note that you'll also need to configure your route reflector to allow
-   connections from the compute node as a route reflector client. This
-   configuration is outside the scope of this install document.
+    Note that you'll also need to configure your route reflector to allow
+    connections from the compute node as a route reflector client. This
+    configuration is outside the scope of this install document.
 
-   If you *are* configuring a full BGP mesh you'll need to handle the BGP
-   configuration appropriately. You should consult the relevant
-   documentation for your chosen BGP stack.
+    If you *are* configuring a full BGP mesh you'll need to handle the BGP
+    configuration appropriately. You should consult the relevant
+    documentation for your chosen BGP stack.
 
-9.  Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
-    supplied sample config at ``/etc/calico/felix.cfg.example``. Then,
-    in ``/etc/calico/felix.cfg``:
+14. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
+    supplied sample config at ``/etc/calico/felix.cfg.example``.
 
-    -  Change both the ``PluginAddress`` and ``ACLAddress`` settings to
-       the host name or IP address of the controller node.
-
-10. Restart the Felix service with ``service calico-felix restart``.
+15. Restart the Felix service with ``service calico-felix restart``.
 
 Next Steps
 ----------

@@ -47,6 +47,10 @@ requirements and that nothing in the documents *mandates* the use of VLANs.
 "How Does Calico Maintain Saved State?"
 ---------------------------------------
 
+.. note:: Following the change to use etcd instead of message queues to
+          communicate between components, this document may now contain out of
+          date information. We will remedy this in the near future.
+
 State is saved in a few places in a Calico deployment, depending on
 whether it's global or local state.
 
