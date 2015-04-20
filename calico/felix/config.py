@@ -190,7 +190,6 @@ class Config(object):
         # Log file may be "None" (the literal string, either provided or as
         # default). In this case no log file should be written.
         if self.LOGFILE.lower() == "none":
-            # Metadata is not required.
             self.LOGFILE = None
 
     def warn_unused_cfg(self, cfg_dict):
