@@ -499,7 +499,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def test_neutron_rule_to_etcd_rule_icmp(self):
         # No type/code specified
-        self.assertNeutronToEtcd(neutron_rule({
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
             "protocol": "icmp",
         }), {
@@ -508,7 +508,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'src_net': '0.0.0.0/0',
         })
         # Type/code wildcarded, same as above.
-        self.assertNeutronToEtcd(neutron_rule({
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
             "protocol": "icmp",
             "port_range_min": -1,
@@ -519,7 +519,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'src_net': '0.0.0.0/0',
         })
         # Type and code.
-        self.assertNeutronToEtcd(neutron_rule({
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
             "protocol": "icmp",
             "port_range_min": 123,
@@ -532,7 +532,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'icmp_code': 100,
         })
         # Type and code, IPv6.
-        self.assertNeutronToEtcd(neutron_rule({
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv6",
             "protocol": "icmp",
             "port_range_min": 123,
@@ -559,7 +559,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         fetcd.validate_rules(rules)
 
 
-def neutron_rule(overrides):
+def _neutron_rule_from_dict(overrides):
     rule = {
         "ethertype": "IPv4",
         "protocol": None,
