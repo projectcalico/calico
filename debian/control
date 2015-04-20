@@ -34,6 +34,7 @@ Depends:
  calico-common (= ${binary:Version}),
  python-six,
  python-gevent,
+ python-etcd (>= 0.3.3-1calico0.15),
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico virtual networking for cloud data centers.
@@ -71,6 +72,7 @@ Depends:
  ipset,
  python-netaddr,
  python-gevent,
+ python-etcd (>= 0.3.3-1calico0.15),
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
