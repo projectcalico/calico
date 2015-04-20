@@ -22,6 +22,7 @@ import eventlet
 import json
 import mock
 import unittest
+from calico.felix import fetcd
 
 import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
@@ -547,6 +548,15 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(etcd_rule, exp_etcd_rule)
+
+        # Check felix is happy with generated rule.
+        if neutron_rule["direction"] == "ingress":
+            rules = {"inbound_rules": [neutron_rule],
+                     "outbound_rules": []}
+        else:
+            rules = {"outbound_rules": [neutron_rule],
+                     "inbound_rules": []}
+        fetcd.validate_rules(rules)
 
 
 def neutron_rule(overrides):
