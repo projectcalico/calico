@@ -1,3 +1,13 @@
+calico (0.16) trusty; urgency=medium
+
+  * Move to etcd for inter-component communications from zeromq
+    - Significant Felix enhancements to take advantage of new data model
+    - Retire ACL Manager
+    - Mechanism driver updates to take advantage of new data model
+    - Update documentation
+
+ -- Matt Dupre <matt@projectcalico.org>  Mon, 20 Apr 2015 18:07:21 +0100
+
 calico (0.15) trusty; urgency=medium
 
   * Fix exception in Neutron mechanism driver
