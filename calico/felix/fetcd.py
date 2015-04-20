@@ -22,13 +22,15 @@ import socket
 from etcd import (EtcdException, EtcdClusterIdChanged, EtcdKeyNotFound,
                   EtcdEventIndexCleared)
 import etcd
+import httplib
 import itertools
 import json
 import logging
 import gevent
 from types import StringTypes
 from urllib3 import Timeout
-from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError, HTTPError
+import urllib3.exceptions
+from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
 
 from calico import common
 from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
@@ -219,8 +221,15 @@ class EtcdWatcher(Actor):
                                  "python-etcd.  Reconnecting...",
                                  exc_info=True)
                     self._reconnect()
-                except HTTPError:
+                except urllib3.exceptions.HTTPError:
                     _log.exception("Unexpected error from urllib3, "
+                                   "reconnecting to etcd...")
+                    self._reconnect()
+                except httplib.IncompleteRead:
+                    _log.warning("Incomplete read from etcd, reconnecting...")
+                    self._reconnect()
+                except httplib.HTTPException:
+                    _log.exception("Unexpected error from httplib, "
                                    "reconnecting to etcd...")
                     self._reconnect()
                 except EtcdClusterIdChanged:
