@@ -495,3 +495,69 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             {mech_calico.api.NETWORK_TYPE: 'vlan'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
+
+    def test_neutron_rule_to_etcd_rule_icmp(self):
+        # No type/code specified
+        self.assertNeutronToEtcd(neutron_rule({
+            "ethertype": "IPv4",
+            "protocol": "icmp",
+        }), {
+            'ip_version': 4,
+            'protocol': 'icmp',
+            'src_net': '0.0.0.0/0',
+        })
+        # Type/code wildcarded, same as above.
+        self.assertNeutronToEtcd(neutron_rule({
+            "ethertype": "IPv4",
+            "protocol": "icmp",
+            "port_range_min": -1,
+            "port_range_max": -1,
+        }), {
+            'ip_version': 4,
+            'protocol': 'icmp',
+            'src_net': '0.0.0.0/0',
+        })
+        # Type and code.
+        self.assertNeutronToEtcd(neutron_rule({
+            "ethertype": "IPv4",
+            "protocol": "icmp",
+            "port_range_min": 123,
+            "port_range_max": 100,
+        }), {
+            'ip_version': 4,
+            'protocol': 'icmp',
+            'src_net': '0.0.0.0/0',
+            'icmp_type': 123,
+            'icmp_code': 100,
+        })
+        # Type and code, IPv6.
+        self.assertNeutronToEtcd(neutron_rule({
+            "ethertype": "IPv6",
+            "protocol": "icmp",
+            "port_range_min": 123,
+            "port_range_max": 100,
+        }), {
+            'ip_version': 6,
+            'protocol': 'icmpv6',
+            'src_net': '::/0',
+            'icmp_type': 123,
+            'icmp_code': 100,
+        })
+
+    def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
+        etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
+        self.assertEqual(etcd_rule, exp_etcd_rule)
+
+
+def neutron_rule(overrides):
+    rule = {
+        "ethertype": "IPv4",
+        "protocol": None,
+        "remote_ip_prefix": None,
+        "remote_group_id": None,
+        "direction": "ingress",
+        "port_range_min": None,
+        "port_range_max": None,
+    }
+    rule.update(overrides)
+    return rule
