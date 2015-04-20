@@ -284,7 +284,6 @@ class CalicoTransportEtcd(CalicoTransport):
                 elif rule['protocol'] == 'icmp':
                     etcd_rule['protocol'] = {'IPv4': 'icmp',
                                              'IPv6': 'icmpv6'}[ethertype]
-                    etcd_rule['icmp_type'] = rule['port_range_min']
                 else:
                     etcd_rule['protocol'] = rule['protocol']
 
@@ -297,18 +296,28 @@ class CalicoTransportEtcd(CalicoTransport):
                     net = {'IPv4': '0.0.0.0/0',
                            'IPv6': '::/0'}[ethertype]
 
-                # src/dst_ports is a list in which each entry can be a single
-                # number, or a string describing a port range.
-                if rule['port_range_min'] == -1:
-                    port_spec = ['1:65535']
-                elif rule['port_range_min'] == rule['port_range_max']:
-                    if rule['port_range_min'] is not None:
-                        port_spec = [rule['port_range_min']]
-                    else:
-                        port_spec = None
+                port_spec = None
+                if rule['protocol'] == 'icmp':
+                    # OpenStack stashes the ICMP match criteria in
+                    # port_range_min/max.
+                    icmp_type = rule['port_range_min']
+                    if icmp_type is not None and icmp_type != -1:
+                        etcd_rule['icmp_type'] = icmp_type
+                    icmp_code = rule['port_range_max']
+                    if icmp_code is not None and icmp_code != -1:
+                        etcd_rule['icmp_code'] = icmp_code
                 else:
-                    port_spec = ['%s:%s' % (rule['port_range_min'],
-                                            rule['port_range_max'])]
+
+                    # src/dst_ports is a list in which each entry can be a
+                    # single number, or a string describing a port range.
+                    if rule['port_range_min'] == -1:
+                        port_spec = ['1:65535']
+                    elif rule['port_range_min'] == rule['port_range_max']:
+                        if rule['port_range_min'] is not None:
+                            port_spec = [rule['port_range_min']]
+                    else:
+                        port_spec = ['%s:%s' % (rule['port_range_min'],
+                                                rule['port_range_max'])]
 
                 # Put it all together and add to either the inbound or the
                 # outbound list.
