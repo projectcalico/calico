@@ -39,7 +39,7 @@ stable build of Calico following the instructions
 
 Technical documentation is [here](http://docs.projectcalico.org/);
 if you are going to contribute to the project, you'll also need to run the
-[tests](doc/CalicoUTs.md).
+tests.
 
 ## How can I get support for Project Calico?
 
