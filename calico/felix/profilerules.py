@@ -171,7 +171,7 @@ class ProfileRules(RefCountedActor):
         """
         Updates the chains in the dataplane.
         """
-        _log.info("%s Programming iptables with our chains: %s")
+        _log.info("%s Programming iptables with our chains.", self)
         updates = {}
         for direction in ("inbound", "outbound"):
             _log.debug("Updating %s chain for profile %s", direction,
