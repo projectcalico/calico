@@ -141,8 +141,8 @@ class Endpoint(object):
                      "name": IF_PREFIX + self.ep_id[:11],
                      "mac": self.mac,
                      "profile_id": self.profile_id,
-                     "ipv4_nets": [str(net) for net in self.ipv4_nets],
-                     "ipv6_nets": [str(net) for net in self.ipv6_nets],
+                     "ipv4_nets": sorted([str(net) for net in self.ipv4_nets]),
+                     "ipv6_nets": sorted([str(net) for net in self.ipv6_nets]),
                      "ipv4_gateway": str(self.ipv4_gateway) if
                                      self.ipv4_gateway else None,
                      "ipv6_gateway": str(self.ipv6_gateway) if

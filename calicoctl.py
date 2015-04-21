@@ -21,7 +21,7 @@ Usage:
   calicoctl (ipv4|ipv6) pool show
   calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer rr show
-  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP>
+  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP> [--interface=<INTERFACE>]
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -183,8 +183,8 @@ def container_add(container_name, ip, interface):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
-    # Actually configure the netns. Default to eth1 since eth0 is the
-    # docker bridge.
+    # Actually configure the netns. Defaults to eth1 since eth0 could
+    # already be in use (e.g. by the Docker bridge)
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
                                      veth_name=interface,
@@ -602,7 +602,7 @@ def node_show(detailed):
                                    container_type,
                                    workload,
                                    ep_id,
-                                   " ".join([str(net) for net in
+                                   "\n".join([str(net) for net in
                                              endpoint.ipv4_nets |
                                              endpoint.ipv6_nets]),
                                    endpoint.mac,
@@ -870,24 +870,29 @@ def container_ip_add(container_name, ip, version, interface):
         sys.exit(1)
 
     try:
-        old_endpoint = copy.copy(endpoint)
+        old_endpoint = copy.deepcopy(endpoint)
         if address.version == 4:
-            endpoint.ipv4_nets.add(address)
+            endpoint.ipv4_nets.add(IPNetwork(address))
         else:
-            endpoint.ipv6_nets.add(address)
+            endpoint.ipv6_nets.add(IPNetwork(address))
         client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
-    except KeyError:
-        #TODO unassign the IP
-        pass
+    except (KeyError, ValueError) as e:
+        print e
+        client.unassign_address(pool, ip)
+        print "Error updating datastore. Aborting."
+        sys.exit(1)
 
     try:
-        netns.add_ip_to_interface(info["State"]["Pid"],
+        container_pid = info["State"]["Pid"]
+        netns.ensure_namespace_named(container_pid)
+        netns.add_ip_to_interface(container_pid,
                                   address,
                                   interface)
 
     except CalledProcessError:
-        # TODO Unnassign the IP and remove it from etcd
-        pass
+        print "Error updating networking in container. Aborting."
+        client.unassign_address(pool, ip)
+        sys.exit(1)
 
     print "IP %s added to %s" % (ip, container_name)
 
@@ -970,11 +975,13 @@ if __name__ == '__main__':
                 if arguments["add"]:
                     container_ip_add(arguments["<CONTAINER>"],
                                      arguments["<IP>"],
-                                     version)
+                                     version,
+                                     arguments["--interface"])
                 elif arguments["remove"]:
                     container_ip_remove(arguments["<CONTAINER>"],
                                         arguments["<IP>"],
-                                        version)
+                                        version,
+                                        arguments["--interface"])
         elif arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"],

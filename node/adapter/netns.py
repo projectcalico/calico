@@ -19,6 +19,7 @@ import logging
 import logging.handlers
 import sys
 import uuid
+import os.path
 
 from netaddr import IPNetwork, IPAddress
 
@@ -29,7 +30,7 @@ _log = logging.getLogger(__name__)
 
 HOSTNAME = socket.gethostname()
 
-VETH_NAME = "eth0"
+VETH_NAME = "eth1"
 """The name to give to the veth in the target container's namespace"""
 
 ROOT_NETNS = "1"
@@ -107,7 +108,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     namespace, as opposed to the root namespace.  If so, this method also moves
     the other end of the veth into the root namespace.
     :param veth_name: The name of the interface inside the container namespace,
-    e.g. eth0
+    e.g. eth1
     :param proc_alias: The head of the /proc filesystem on the host.
     :return: An Endpoint describing the veth just created.
     """
@@ -190,3 +191,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
         ep.ipv6_gateway = next_hop
     return ep
 
+
+def ensure_namespace_named(container_pid):
+    if not os.path.islink("/var/run/netns/%s" % container_pid):
+        check_call("ln -s /proc/%s/ns/net /var/run/netns/%s" % (container_pid, container_pid), shell=True)
