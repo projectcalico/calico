@@ -595,7 +595,7 @@ def node_show(detailed):
                     for ep_id, endpoint in endpoints.iteritems():
                         x.add_row([host,
                                    container_type,
-                                   workload,
+                                   workload[:12],
                                    ep_id,
                                    " ".join([str(net) for net in
                                              endpoint.ipv4_nets |
