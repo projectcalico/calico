@@ -59,15 +59,9 @@ Features or any changes to the codebase should be done as follows:
       privileges, merge the pull request and close the branch. Otherwise,
       make a top-level comment and assign back to the reviewer as above.
 
-Upcoming Changes
-----------------
-
-These guidelines will be revised extensively over the next few weeks as
-more infrastructure is added. In particular, automatic continuous
-integration of pull requests and commits will be added in the near
-future.
 
 .. _contributor-agreements:
+
 Contributor Agreements
 ----------------------
 
@@ -75,9 +69,9 @@ Unless you are a U.S. Government Employee (see below), you will need to `agree t
 our Individual Contributor Agreement <http://www.projectcalico.org/community/individual-contributor-agreement/>`__
 before we can accept your contribution.
 
-In addition, if you are contributing on behalf of a company or 
+In addition, if you are contributing on behalf of a company or
 organization someone at your organization needs to sign the `Corporate Contributor Agreement <http://www.projectcalico.org/community/corporate-contributor-agreement/>`__.
 
-US Government employees should not sign the Individual Contributor 
-greement.  Instead, someone with authority to sign on behalf of your 
+US Government employees should not sign the Individual Contributor
+Agreement.  Instead, someone with authority to sign on behalf of your
 agency should sign the `U.S. Government Contributor Agreement <http://www.projectcalico.org/community/us-government-contributor-agreement/>`__.
