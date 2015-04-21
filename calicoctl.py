@@ -22,7 +22,7 @@ Usage:
   calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer rr show
   calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP>
-  calicoctl container add <CONTAINER> <IP>
+  calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
@@ -30,6 +30,8 @@ Usage:
   calicoctl restart-docker-without-alternative-unix-socket
 
 Options:
+ --interface=<INTERFACE>  The name to give to the interface in the container
+                          [default: eth1]
  --ip=<IP>                The local management address to use.
  --ip6=<IP6>              The local IPv6 management address to use.
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
@@ -130,7 +132,7 @@ def get_pool(ip, version):
     return pool
 
 
-def container_add(container_name, ip):
+def container_add(container_name, ip, interface):
     """
     Add a container (on this host) to Calico networking with the given IP.
 
@@ -181,10 +183,11 @@ def container_add(container_name, ip):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
-    # Actually configure the netns.  Use eth1 since eth0 is the docker bridge.
+    # Actually configure the netns. Default to eth1 since eth0 is the
+    # docker bridge.
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
-                                     veth_name="eth1",
+                                     veth_name=interface,
                                      proc_alias="proc")
 
     # Register the endpoint
@@ -974,7 +977,9 @@ if __name__ == '__main__':
                                         version)
         elif arguments["container"]:
             if arguments["add"]:
-                container_add(arguments["<CONTAINER>"], arguments["<IP>"])
+                container_add(arguments["<CONTAINER>"],
+                              arguments["<IP>"],
+                              arguments["--interface"])
             if arguments["remove"]:
                 container_remove(arguments["<CONTAINER>"])
     else:
