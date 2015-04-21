@@ -73,5 +73,5 @@ In addition, if you are contributing on behalf of a company or
 organization someone at your organization needs to sign the `Corporate Contributor Agreement <http://www.projectcalico.org/community/corporate-contributor-agreement/>`__.
 
 US Government employees should not sign the Individual Contributor
-greement.  Instead, someone with authority to sign on behalf of your
+agreement.  Instead, someone with authority to sign on behalf of your
 agency should sign the `U.S. Government Contributor Agreement <http://www.projectcalico.org/community/us-government-contributor-agreement/>`__.
