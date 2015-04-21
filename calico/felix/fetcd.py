@@ -319,8 +319,8 @@ class EtcdWatcher(Actor):
                 if (response.action not in ("set", "create") and
                         any((response.key.startswith(pfx) for pfx in
                              PREFIXES_TO_RESYNC_ON_CHANGE))):
-                    # It's purpose is to catch deletions of whole directories
-                    # or other operations that we're not expecting.
+                    # Catch deletions of whole directories or other operations
+                    # that we're not expecting.
                     _log.warning("Unexpected event: %s; triggering resync.",
                                  response)
                     continue_polling = False
@@ -563,7 +563,7 @@ def validate_rules(rules):
                 if not 0 <= icmp_code <= 255:
                     issues.append("ICMP code is out of range.")
                 if icmp_type is None:
-                    # FIXME ICMP code without ICMP type not supported by iptables
+                    # TODO: ICMP code without ICMP type not supported by iptables
                     # Firewall against that for now.
                     issues.append("ICMP code specified without ICMP type.")
 

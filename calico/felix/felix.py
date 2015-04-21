@@ -158,21 +158,12 @@ def _main_greenlet(config):
         raise
 
 
-def watchdog():
-    while True:
-        _log.info("Still alive")
-        gevent.sleep(20)
-
-
 def main():
     try:
         # Initialise the logging with default parameters.
         common.default_logging()
 
-        # Load config
-        # FIXME: old felix used argparse but that's not in Python 2.6, so
-        # hard-coded path.
-
+        # Create configuration, reading defaults from file if it exists.
         try:
             config = Config("/etc/calico/felix.cfg")
         except:
