@@ -21,7 +21,7 @@ Usage:
   calicoctl (ipv4|ipv6) pool show
   calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer rr show
-  calicoctl container add <CONTAINER> <IP> [<INTERFACE>]
+  calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
@@ -29,6 +29,8 @@ Usage:
   calicoctl restart-docker-without-alternative-unix-socket
 
 Options:
+ --interface=<INTERFACE>  The name to give to the interface in the container
+                          [default: eth1]
  --ip=<IP>                The local management address to use.
  --ip6=<IP6>              The local IPv6 management address to use.
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
@@ -176,8 +178,6 @@ def container_add(container_name, ip, interface):
 
     # Actually configure the netns. Default to eth1 since eth0 is the
     # docker bridge.
-    if interface is None:
-        interface = "eth1"
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
                                      veth_name=interface,
@@ -917,7 +917,7 @@ if __name__ == '__main__':
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"],
                               arguments["<IP>"],
-                              arguments["<INTERFACE>"])
+                              arguments["--interface"])
             if arguments["remove"]:
                 container_remove(arguments["<CONTAINER>"])
     else:
