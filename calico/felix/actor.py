@@ -152,11 +152,6 @@ class Actor(object):
         else:
             self.name = self.__class__.__name__
 
-    # TODO: Can we just start the greenlet always?
-    # There is some craziness about actors that are in CREATED state, where
-    # pending a previous iteration shutting down.
-    # PLW: I agree that the answer here is probably no, but not sure if we
-    # could somehow simplify the code in this area.
     def start(self):
         assert not self.greenlet, "Already running"
         _log.debug("Starting %s", self)

@@ -194,10 +194,10 @@ class ProfileRules(RefCountedActor):
                    updates)
         self._iptables_updater.rewrite_chains(updates, {}, async=False)
         # TODO Isolate exceptions from programming the chains to this profile.
-        # PLW: Radical thought - could we just say that the profile should be
-        # OK, and therefore we don't care? In other words, do we need to handle
-        # the error cleverly in the short term, or could we just say that since
-        # we built the rules they really should always work.
+        # Radical thought - could we just say that the profile should be OK,
+        # and therefore we don't care? In other words, do we need to handle the
+        # error cleverly, or could we just say that since we built the rules
+        # they really should always work.
         if not self.notified_ready:
             self._notify_ready()
             self.notified_ready = True
