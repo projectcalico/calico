@@ -29,7 +29,8 @@ Features or any changes to the codebase should be done as follows:
       request is attached to the existing issue
       (see `How do you attach a new pull request to an existing issue on GitHub? <http://stackoverflow.com/questions/4528869/how-do-you-attach-a-new-pull-request-to-an-existing-issue-on-github>`__).
 
-3. Push your feature branch to GitHub.
+3. Push your feature branch to GitHub.  Note that before we can accept your changes,
+   you need to agree to one of our contributor agreements.  See :ref:`contributor-agreements`.
 
 4. Create a pull request using GitHub, from your branch to master.
 
@@ -65,3 +66,18 @@ These guidelines will be revised extensively over the next few weeks as
 more infrastructure is added. In particular, automatic continuous
 integration of pull requests and commits will be added in the near
 future.
+
+.. _contributor-agreements:
+Contributor Agreements
+----------------------
+
+Unless you are a U.S. Government Employee (see below), you will need to `agree to
+our Individual Contributor Agreement <http://www.projectcalico.org/community/individual-contributor-agreement/>`__
+before we can accept your contribution.
+
+In addition, if you are contributing on behalf of a company or organization someone
+at your organization needs to sign the `Corporate Contributor Agreement <http://www.projectcalico.org/community/corporate-contributor-agreement/>`__.
+
+US Government employees should not sign the Individual Contributor Agreement.  Instead,
+someone with authority to sign on behalf of your agency should sign the `U.S. 
+Government Contributor Agreement <http://www.projectcalico.org/community/us-government-contributor-agreement/>`__.
