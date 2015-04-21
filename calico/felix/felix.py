@@ -21,16 +21,12 @@ The main logic for Felix.
 """
 
 # Monkey-patch before we do anything else...
-from calico.felix.devices import InterfaceWatcher
-from calico.felix.endpoint import EndpointManager
-from calico.felix.fetcd import EtcdWatcher
-from calico.felix.ipsets import IpsetManager
 from gevent import monkey
 monkey.patch_all()
 
+import logging
 import os
 
-import logging
 import gevent
 
 from calico import common
@@ -41,6 +37,10 @@ from calico.felix.frules import install_global_rules
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
+from calico.felix.devices import InterfaceWatcher
+from calico.felix.endpoint import EndpointManager
+from calico.felix.fetcd import EtcdWatcher
+from calico.felix.ipsets import IpsetManager
 
 _log = logging.getLogger(__name__)
 
