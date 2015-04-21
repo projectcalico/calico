@@ -60,6 +60,6 @@ class TestIptablesUpdater(BaseTestCase):
 
     def test_extract_unreffed_chains(self):
         for inp, exp in EXTRACT_UNREF_TESTS:
-            output = fiptables._extract_unreffed_chains(inp)
+            output = fiptables._extract_our_unreffed_chains(inp)
             self.assertEqual(exp, output, "Expected\n\n%s\n\nTo parse as: %s\n"
                                           "but got: %s" % (inp, exp, output))
