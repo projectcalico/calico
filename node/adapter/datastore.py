@@ -606,6 +606,24 @@ d
                                    "endpoint_id": endpoint.ep_id}
         self.etcd_client.write(ep_path, endpoint.to_json())
 
+    def update_endpoint(self, hostname, container_id,
+                        old_endpoint, new_endpoint):
+        """
+        Update a single endpoint object to the datastore. Fails if the
+        old_endpoint that's passed in doesn't match what's in the datastore.
+
+        :param hostname: The hostname for the Docker hosting this container.
+        :param container_id: The Docker container ID.
+        :param old_endpoint: The existing endpoint to update.
+        :param new_endpoint: The Endpoint to add to the container.
+        """
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": container_id,
+                                   "endpoint_id": new_endpoint.ep_id}
+        self.etcd_client.write(ep_path,
+                               new_endpoint.to_json(),
+                               prevValue=old_endpoint.to_json())
+
     def get_hosts(self):
         """
         Get the all configured hosts

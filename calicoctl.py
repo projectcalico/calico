@@ -21,6 +21,7 @@ Usage:
   calicoctl (ipv4|ipv6) pool show
   calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer rr show
+  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP>
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -34,9 +35,10 @@ Options:
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
-
 """
+import copy
 import socket
+from subprocess import CalledProcessError
 import sys
 import time
 import os
@@ -82,16 +84,16 @@ def get_container_info(container_name):
     Get the full container info array from a partial ID or name.
 
     :param container_name: The partial ID or name of the container.
-    :return: The container info array
+    :return: The container info array, or sys.exit if not found.
     """
     try:
         info = docker_client.inspect_container(container_name)
     except docker.errors.APIError as e:
         if e.response.status_code == 404:
-            # Re-raise as a key error for consistency.
-            raise KeyError("Container %s was not found." % container_name)
+            print "Container %s was not found." % container_name
         else:
-            raise
+            print e.message
+        sys.exit(1)
     return info
 
 def get_container_id(container_name):
@@ -109,6 +111,25 @@ class ConfigError(Exception):
     pass
 
 
+def check_root():
+    if os.geteuid() != 0:
+        print >> sys.stderr, "This command must be run as root."
+        sys.exit(2)
+
+
+def get_pool(ip, version):
+    pools = client.get_ip_pools(version)
+    pool = None
+    for candidate_pool in pools:
+        if ip in candidate_pool:
+            pool = candidate_pool
+    if pool is None:
+        print "%s is not in any configured pools" % ip
+        sys.exit(1)
+
+    return pool
+
+
 def container_add(container_name, ip):
     """
     Add a container (on this host) to Calico networking with the given IP.
@@ -117,14 +138,8 @@ def container_add(container_name, ip):
     :param ip: An IPAddress object with the desired IP to assign.
     """
     # The netns manipulations must be done as root.
-    if os.geteuid() != 0:
-        print >> sys.stderr, "`calicoctl container add` must be run as root."
-        sys.exit(2)
-    try:
-        info = get_container_info(container_name)
-    except KeyError as err:
-        print err.message
-        sys.exit(1)
+    check_root()
+    info = get_container_info(container_name)
     container_id = info["Id"]
 
     # Check if the container already exists
@@ -142,24 +157,16 @@ def container_add(container_name, ip):
               container_name
         sys.exit(1)
 
-    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
-    # it.
-    ip = IPAddress(ip)
-    version = "v%s" % ip.version
-    pools = client.get_ip_pools(version)
-    pool = None
-    for candidate_pool in pools:
-        if ip in candidate_pool:
-            pool = candidate_pool
-
-    if pool is None:
-        print "%s is not in any configured pools" % ip
-        sys.exit(1)
-
     # Check the container is actually running.
     if not info["State"]["Running"]:
         print "%s is not currently running." % container_name
         sys.exit(1)
+
+    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
+    # it.
+    ip = IPAddress(ip)
+    version = "v%s" % ip.version
+    pool = get_pool(ip, version)
 
     # The next hop IPs for this host are stored in etcd.
     next_hops = client.get_default_next_hops(hostname)
@@ -197,10 +204,7 @@ def container_remove(container_name):
     :param container_name: The name or ID of the container.
     """
     # The netns manipulations must be done as root.
-    if os.geteuid() != 0:
-        print >> sys.stderr, "`calicoctl container remove` must be run as " \
-                             "root."
-        sys.exit(2)
+    check_root()
 
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
@@ -252,9 +256,7 @@ def module_loaded(module):
 
 def node(ip, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
-    if os.geteuid() != 0:
-        print >> sys.stderr, "`calicoctl node` must be run as root."
-        sys.exit(2)
+    check_root()
 
     if not module_loaded("ip6_tables"):
         print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
@@ -688,15 +690,7 @@ def ip_pool_add(cidr_pool, version):
     :return: None
     """
     assert version in ("v4", "v6")
-    try:
-        pool = IPNetwork(cidr_pool)
-    except AddrFormatError:
-        print "%s is not a valid IP prefix." % cidr_pool
-        sys.exit(1)
-    if "v%d" % pool.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (cidr_pool, pool.version, version)
-        sys.exit(1)
+    pool = check_ip_version(cidr_pool, version, IPNetwork)
     client.add_ip_pool(version, pool)
 
 
@@ -709,15 +703,7 @@ def ip_pool_remove(cidr_pool, version):
     :return: None
     """
     assert version in ("v4", "v6")
-    try:
-        pool = IPNetwork(cidr_pool)
-    except AddrFormatError:
-        print "%s is not a valid IP prefix." % cidr_pool
-        sys.exit(1)
-    if "v%d" % pool.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (cidr_pool, pool.version, version)
-        sys.exit(1)
+    pool = check_ip_version(cidr_pool, version, IPNetwork)
     try:
         client.remove_ip_pool(version, pool)
     except KeyError:
@@ -745,9 +731,7 @@ def restart_docker_with_alternative_unix_socket():
     Set the docker daemon to listen on the docker.real.sock by updating
     the config, clearing old sockets and restarting.
     """
-    if os.geteuid() != 0:
-        print >> sys.stderr, "restarting docker must be run as root."
-        sys.exit(2)
+    check_root()
     docker_restarter.restart_docker_with_alternative_unix_socket()
 
 
@@ -755,9 +739,7 @@ def restart_docker_without_alternative_unix_socket():
     """
     Remove any "alternative" unix socket config.
     """
-    if os.geteuid() != 0:
-        print >> sys.stderr, "restarting docker must be run as root."
-        sys.exit(2)
+    check_root()
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
@@ -789,16 +771,28 @@ def bgppeer_add(ip, version):
     :param version: v4 or v6
     :return: None
     """
-    try:
-        address = IPAddress(ip)
-    except AddrFormatError:
-        print "%s is not a valid IP address." % address
-        sys.exit(1)
-    if "v%d" % address.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (ip, address.version, version)
-        sys.exit(1)
+    address = check_ip_version(ip, version, IPAddress)
     client.add_bgp_peer(version, address)
+
+
+def check_ip_version(ip, version, type):
+    """
+    Parses and checks that the given IP matches the provided version.
+    :param ip: The IP (string) to check.
+    :param version: The version
+    :param type: The type of IP object (IPAddress or IPNetwork)
+    :return: The parsed object of type "type"
+    """
+    try:
+        parsed = type(ip)
+    except AddrFormatError:
+        print "%s is not a valid IP address." % ip
+        sys.exit(1)
+    if "v%d" % parsed.version != version:
+        print "%s is an IPv%d prefix, this command is for IP%s." % \
+              (parsed, parsed.version, version)
+        sys.exit(1)
+    return parsed
 
 
 def bgppeer_remove(ip, version):
@@ -809,15 +803,7 @@ def bgppeer_remove(ip, version):
     :param version: v4 or v6
     :return: None
     """
-    try:
-        address = IPAddress(ip)
-    except AddrFormatError:
-        print "%s is not a valid IP address." % address
-        sys.exit(1)
-    if "v%d" % address.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (ip, address.version, version)
-        sys.exit(1)
+    address = check_ip_version(ip, version, IPAddress)
     try:
         client.remove_bgp_peer(version, address)
     except KeyError:
@@ -837,6 +823,73 @@ def bgppeer_show(version):
         print x
     else:
         print "No BGP Peers defined."
+
+
+def container_ip_add(container_name, ip, version, interface):
+    """
+    Add an IP address to an existing calico networked container.
+
+    :param container_name: The name of the container.
+    :param ip: The IP to add
+    :param version: The IP version
+    :param interface: The name of hte interface in the container.
+    
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+
+    # The netns manipulations must be done as root.
+    check_root()
+
+    pool = get_pool(ip, version)
+
+    info = get_container_info(container_name)
+    container_id = info["Id"]
+
+    # Check the container is actually running.
+    if not info["State"]["Running"]:
+        print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # Check that the container is already networked
+    try:
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+    except KeyError:
+        print "Container is unknown to calico. Tell calico about the " \
+              "container before adding addresses."
+        sys.exit(1)
+
+    # From here, this method starts having side effects. If something
+    # fails then at least try to leave the system in a clean state.
+    if not client.assign_address(pool, ip):
+        print "IP address is already assigned in pool %s " % pool
+        sys.exit(1)
+
+    try:
+        old_endpoint = copy.copy(endpoint)
+        if address.version == 4:
+            endpoint.ipv4_nets.add(address)
+        else:
+            endpoint.ipv6_nets.add(address)
+        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+    except KeyError:
+        #TODO unassign the IP
+        pass
+
+    try:
+        netns.add_ip_to_interface(info["State"]["Pid"],
+                                  address,
+                                  interface)
+
+    except CalledProcessError:
+        # TODO Unnassign the IP and remove it from etcd
+        pass
+
+    print "IP %s added to %s" % (ip, container_name)
+
+def container_ip_remove(container_name, ip, version):
+    address = check_ip_version(ip, version, IPAddress)
 
 
 if __name__ == '__main__':
@@ -910,7 +963,16 @@ if __name__ == '__main__':
                     bgppeer_remove(arguments["<IP>"], version)
                 elif arguments["show"]:
                     bgppeer_show(version)
-        if arguments["container"]:
+            elif arguments["container"]:
+                if arguments["add"]:
+                    container_ip_add(arguments["<CONTAINER>"],
+                                     arguments["<IP>"],
+                                     version)
+                elif arguments["remove"]:
+                    container_ip_remove(arguments["<CONTAINER>"],
+                                        arguments["<IP>"],
+                                        version)
+        elif arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"], arguments["<IP>"])
             if arguments["remove"]:

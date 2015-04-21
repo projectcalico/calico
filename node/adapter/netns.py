@@ -71,6 +71,25 @@ def remove_endpoint(ep_id):
     call("ip link delete %s" % iface, shell=True)
 
 
+def add_ip_to_interface(container_pid, ip, interface_name):
+    """
+    Add an IP to an interface in a container.
+
+    :param container_pid: The PID and name of the namespace to operate in.
+    :param ip: The IPAddress to add.
+    :param interface_name: The interface to add the address to.
+    :return: None. raises CalledProcessError on error.
+    """
+    check_call("ip netns exec %(cpid)s ip -%(version)s addr add "
+               "%(addr)s/%(len)s dev %(device)s" %
+               {"cpid": container_pid,
+                "version": ip.version,
+                "len": PREFIX_LEN[ip.version],
+                "addr": ip,
+                "device": interface_name},
+               shell=True)
+
+
 def set_up_endpoint(ip, cpid, next_hop_ips,
                     in_container=False,
                     veth_name=VETH_NAME,
@@ -97,7 +116,6 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     # Generate a new endpoint ID.
     ep_id = uuid.uuid1().hex
 
-    # TODO - need to handle containers exiting straight away...
     iface = IF_PREFIX + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]
 
@@ -138,14 +156,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
         check_call("ip netns exec %s ip link set %s up" % (ROOT_NETNS, iface), shell=True)
 
     # Add an IP address.
-    check_call("ip netns exec %(cpid)s ip -%(version)s addr add "
-               "%(addr)s/%(len)s dev %(device)s" %
-               {"cpid": cpid,
-                "version": ip.version,
-                "len": PREFIX_LEN[ip.version],
-                "addr": ip,
-                "device": veth_name},
-               shell=True)
+    add_ip_to_interface(cpid, ip, veth_name)
 
     # Connected route to next hop & default route.
     next_hop = next_hop_ips[ip.version]
