@@ -315,7 +315,7 @@ def _update_config_dict(config_dict, cfg_node):
     should point at a config directory.
     """
     for child in cfg_node.children:
-        _log.info("Config parameter: %s=%s", child.key, str(child.value))
+        _log.info("Config parameter: %s=%s", child.key, child.value)
         key = child.key.rsplit("/").pop()
         value = str(child.value)
         config_dict[key] = value
