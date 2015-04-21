@@ -1,3 +1,4 @@
+pycparser==2.10
 pyinstaller
 coverage
 infi.docopt_completion
