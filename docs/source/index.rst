@@ -55,6 +55,7 @@ input.
    :maxdepth: 2
 
    involved
+   contribute
 
 .. toctree::
    :maxdepth: 1
