@@ -76,9 +76,6 @@ and making a GitHub pull request.  If you're interested in doing that:
 -  See the `GitHub
    docs <https://help.github.com/articles/using-pull-requests>`__ for
    how to create a Pull Request.
--  Check our contribution guidelines for more information.
+-  Check our :doc:`contribute` for more information.
 
-.. toctree::
-   :maxdepth: 1
 
-   contribute
