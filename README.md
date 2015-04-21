@@ -37,16 +37,16 @@ To get started, you first need a working installation of
 stable build of Calico following the instructions
 [here](http://docs.projectcalico.org/en/latest/openstack.html).
 
-Technical documentation is [here](http://docs.projectcalico.org/);
-if you are going to contribute to the project, you'll also need to run the
-tests.
+Technical documentation is [here](http://docs.projectcalico.org/). For
+information about contributing to Calico itself, see the section titled
+'Contributing' below.
 
 ## How can I get support for Project Calico?
 
 There are two options for getting support for Calico. You can simply
-[get in contact](http://www.projectcalico.org/contact/) any question you
-like – there is an active group of users and developers who will usually try
-their best to help you or point you in the right direction. Or you can work
+[get in contact](http://www.projectcalico.org/contact/) and ask any question
+you like – there is an active group of users and developers who will usually
+try their best to help you or point you in the right direction. Or you can work
 with one of the commercial vendors and system integrators who provide
 installation, integration, customization and support services for Calico.
 
