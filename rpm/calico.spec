@@ -204,7 +204,7 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Tue Apr 2015 Matt Dupre <matt@projectcalico.org> 0.16
+* Tue Apr 21 2015 Matt Dupre <matt@projectcalico.org> 0.16
 - First release with etcd
 
 * Fri Apr 10 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.15
