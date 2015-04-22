@@ -74,7 +74,7 @@ fi
 %package control
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, calico-acl-manager, python-six, python-zmq
+Requires:       calico-common, python-six
 
 %description control
 This package provides the pieces needed on a controller node.
@@ -91,7 +91,7 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, ipset, python-devel, python-netaddr
+Requires:       calico-common, ipset, python-devel, python-netaddr, python-gevent
 
 %description felix
 This package provides the Felix component.
