@@ -41,7 +41,7 @@ FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lin
 # specifier. The %()s form is used by the logging module: the {} form is used
 # by the code in this module. This allows us to dynamically generate the format
 # string used by the logger.
-SYSLOG_FORMAT_STRING = '{excname}: %(message)s'
+SYSLOG_FORMAT_STRING = '{excname}[%(process)s]: %(module)s@%(lineno)d %(message)s'
 
 tid_storage = gevent.local.local()
 tid_counter = itertools.count()

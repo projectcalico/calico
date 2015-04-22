@@ -123,7 +123,7 @@ class UpdateSplitter(Actor):
 
     @actor_message()
     def on_interface_update(self, name):
-        _log.info("Interface %s up", name)
+        _log.info("Interface %s state changed", name)
         for endpoint_mgr in self.endpoint_mgrs:
             endpoint_mgr.on_interface_update(name, async=True)
 
