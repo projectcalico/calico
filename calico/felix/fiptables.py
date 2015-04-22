@@ -254,9 +254,10 @@ class IptablesUpdater(Actor):
             try:
                 input_lines = self._calculate_ipt_modify_input()
             except NothingToDo:
-                _log.debug("Nothing to do in this batch.")
+                _log.info("%s no updates in this batch.", self)
             else:
                 self._execute_iptables(input_lines)
+                _log.info("%s Successfully processed iptables updates.", self)
         except CalledProcessError as e:
             if len(batch) == 1:
                 # We only executed a single message, report the failure.
