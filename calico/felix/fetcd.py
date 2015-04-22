@@ -18,12 +18,11 @@ felix.fetcd
 
 Etcd polling functions.
 """
-import socket
+from socket import timeout as SocketTimeout
 from etcd import (EtcdException, EtcdClusterIdChanged, EtcdKeyNotFound,
                   EtcdEventIndexCleared)
 import etcd
 import httplib
-import itertools
 import json
 import logging
 import gevent
@@ -109,7 +108,7 @@ class EtcdWatcher(Actor):
                 gevent.sleep(RETRY_DELAY)
                 continue
 
-    def _reconnect(self):
+    def _reconnect(self, copy_cluster_id=True):
         _log.info("(Re)connecting to etcd...")
         etcd_addr = self.config.ETCD_ADDR
         if ":" in etcd_addr:
@@ -118,7 +117,13 @@ class EtcdWatcher(Actor):
         else:
             host = etcd_addr
             port = 4001
-        self.client = etcd.Client(host=host, port=port)
+        if self.client and copy_cluster_id:
+            old_cluster_id = self.client.expected_cluster_id
+            _log.info("Old etcd cluster ID was %s.", old_cluster_id)
+        else:
+            old_cluster_id = None
+        self.client = etcd.Client(host=host, port=port,
+                                  expected_cluster_id=old_cluster_id)
 
     @actor_message()
     def watch_etcd(self, update_splitter):
@@ -130,7 +135,7 @@ class EtcdWatcher(Actor):
         """
         while True:
             _log.info("Reconnecting and loading snapshot from etcd...")
-            self._reconnect()
+            self._reconnect(copy_cluster_id=False)
             self.wait_for_ready()
 
             # Load initial dump from etcd.  First just get all the endpoints
@@ -138,7 +143,8 @@ class EtcdWatcher(Actor):
             # allowing us to then start polling for updates without missing
             # any.
             initial_dump = self.client.read(VERSION_DIR, recursive=True)
-            _log.info("Loaded snapshot, parsing it...")
+            _log.info("Loaded snapshot from etcd cluster %s, parsing it...",
+                      self.client.expected_cluster_id)
             rules_by_id = {}
             tags_by_id = {}
             endpoints_by_id = {}
@@ -203,44 +209,25 @@ class EtcdWatcher(Actor):
                                                 recursive=True,
                                                 timeout=Timeout(connect=10,
                                                                 read=90),
-                                                check_cluster_id=True)
+                                                check_cluster_uuid=True)
                     _log.debug("etcd response: %r", response)
-                except ConnectTimeoutError:
-                    _log.warning("Connection timeout when trying to  connect "
-                                 "to etcd")
-                    self._reconnect()
-                except ReadTimeoutError:
+                except (ReadTimeoutError, SocketTimeout) as e:
                     # This is expected when we're doing a poll and nothing
-                    # happened.
-                    _log.debug("Read from etcd timed out, retrying.")
+                    # happened. socket timeout doesn't seem to be caught by
+                    # urllib3 0.7.1.  Simply reconnect.
+                    _log.debug("Read from etcd timed out (%r), retrying.", e)
+                    # Force a reconnect to ensure urllib3 doesn't recycle the
+                    # connection.  (We were seeing this with urllib3 1.7.1.)
                     self._reconnect()
-                except socket.timeout:
-                    # That this leaks out appears to be an artifact of running
-                    # urllib3 on top of gevent.  Be defensive and reconnect.
-                    _log.warning("Raw socket.timeout leaked out of "
-                                 "python-etcd.  Reconnecting...",
-                                 exc_info=True)
+                except (ConnectTimeoutError,
+                        urllib3.exceptions.HTTPError,
+                        httplib.HTTPException):
+                    _log.warning("Low-level HTTP error, reconnecting to "
+                                 "etcd.", exc_info=True)
                     self._reconnect()
-                except urllib3.exceptions.HTTPError:
-                    _log.exception("Unexpected error from urllib3, "
-                                   "reconnecting to etcd...")
-                    self._reconnect()
-                except httplib.IncompleteRead:
-                    _log.warning("Incomplete read from etcd, reconnecting...")
-                    self._reconnect()
-                except httplib.HTTPException:
-                    _log.exception("Unexpected error from httplib, "
-                                   "reconnecting to etcd...")
-                    self._reconnect()
-                except EtcdClusterIdChanged:
-                    _log.error("Etcd cluster ID changed, reconnecting for "
-                               "full resync...")
-                    continue_polling = False
-                except EtcdEventIndexCleared:
-                    # Our poll fell too far behind and etcd can no longer
-                    # service our request.
-                    _log.error("Fell too far behind current etcd index, "
-                               "triggering a full resync.")
+                except (EtcdClusterIdChanged, EtcdEventIndexCleared) as e:
+                    _log.warning("Out of sync with etcd (%r).  Reconnecting "
+                                 "for full sync.", e)
                     continue_polling = False
                 except EtcdException as e:
                     # Sadly, python-etcd doesn't have a dedicated exception
@@ -264,6 +251,9 @@ class EtcdWatcher(Actor):
                     # TODO: should we do a backoff here?
                     gevent.sleep(1)
                     self._reconnect()
+                except:
+                    _log.exception("Unexpected exception during etcd poll")
+                    raise
 
                 if not response:
                     _log.debug("Failed to get a response from etcd.")
