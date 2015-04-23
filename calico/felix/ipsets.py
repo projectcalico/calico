@@ -370,6 +370,16 @@ class ActiveIpset(RefCountedActor):
         # We have got the set into the correct state.
         self.programmed_members = self.members.copy()
 
+    def __str__(self):
+        return self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s," \
+                                         "name=%s,id=%s>" % (
+            self._event_queue.qsize(),
+            bool(self.greenlet),
+            self._current_msg,
+            self.name,
+            self._id,
+        )
+
 
 def tag_to_ipset_name(ip_type, tag, tmp=False):
     """
