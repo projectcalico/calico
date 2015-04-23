@@ -15,10 +15,6 @@
 Red Hat Enterprise Linux 6.5/7 Packaged Install Instructions
 ============================================================
 
-.. note:: Following the change to use etcd instead of message queues to
-          communicate between components, this document may now contain out of
-          date information. We will remedy this in the near future.
-
 The instructions come in two sections: one for installing control nodes,
 and one for installing compute nodes. Before moving on to those
 sections, make sure you follow the **Common Steps** section, and if you
@@ -91,6 +87,8 @@ Note: The priority setting in ``calico.repo`` is needed so that the
 Calico repository can install Calico-enhanced versions of some of the
 OpenStack Nova and Neutron packages.
 
+.. _control-node:
+
 Control Node Install
 --------------------
 
@@ -105,13 +103,7 @@ On a control node, perform the following steps:
 2. Run ``yum update``. This will bring in Calico-specific updates to the
    OpenStack packages and to ``dnsmasq``.
 
-3. Install the ``calico-control`` package:
-
-   ::
-
-       yum install calico-control
-
-4. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
 
    -  Find the ``type_drivers`` setting and change it to read
       ``type_drivers = local, flat``.
@@ -120,7 +112,7 @@ On a control node, perform the following steps:
    -  Find the ``mechanism_drivers`` setting and change it to read
       ``mechanism_drivers = calico``.
 
-5. Edit the ``/etc/neutron/neutron.conf`` file:
+4. Edit the ``/etc/neutron/neutron.conf`` file:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -131,17 +123,126 @@ On a control node, perform the following steps:
    -  Find the lines for ``api_workers`` and ``rpc_workers``, uncomment
       them and set them both to 0.
 
-6. Restart the neutron server process:
-   ``service neutron-server restart``.
+5. Install and configure etcd. For these instructions we assume you're
+   configuring a single-node cluster on only one machine. If you plan to
+   deploy a multi-node cluster, please consult the `etcd clustering docs`_, and
+   skip to step 7.
 
-7. Create the ``/etc/calico/acl_manager.cfg`` file by copying the
-   ``/etc/calico/acl_manager.cfg.example`` file and edit it:
+   - Download, unpack, and install the binary::
 
-   -  Change the ``PluginAddress`` to the host name or IP address of the
-      controller node. Then restart the ACL manager service with:
+        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
+        tar xvf etcd-v2.0.9-linux-amd64.tar.gz
+        cd etcd-v2.0.9-linux-amd64
+        mv etcd* /usr/local/bin/
 
-      - On Red Hat 6.5, ``initctl start calico-acl-manager``
-      - On Red Hat 7, ``systemctl restart calico-acl-manager``.
+   - Create an etcd user::
+
+        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
+        chmod 700 /var/lib/etcd/
+
+   - Mount a ramdisk at /var/lib/etcd::
+
+        sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+
+   - Add the following to the bottom of ``/etc/fstab`` so that the ramdisk gets
+     reinstated at boot time::
+
+        tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
+
+   - Get etcd running by providing an init file.
+
+     For RHEL 6.5, place the following in ``/etc/init/etcd.conf``, replacing
+     ``<hostname>`` and ``<public_ip>`` with their appropriate values for the
+     machine. For ``<cluster_id>`` it can be any textual string, but make sure
+     to use a new one each time.
+
+     ::
+
+           description "etcd"
+           author "etcd maintainers"
+
+           start on stopped rc RUNLEVEL=[2345]
+           stop on runlevel [!2345]
+
+           respawn
+
+           setuid etcd
+
+           env ETCD_DATA_DIR=/var/lib/etcd
+           export ETCD_DATA_DIR
+
+           exec /usr/bin/etcd --name <hostname>                                                         \
+                              --advertise-client-urls "http://<public_ip>:2379,http://<public_ip>:4001" \
+                              --listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001              \
+                              --listen-peer-urls http://0.0.0.0:2380                                    \
+                              --initial-advertise-peer-urls "http://<public_ip>:2380"                   \
+                              --initial-cluster-token <cluster_id>                                      \
+                              --initial-cluster <hostname>=http://<public_ip>:2380                      \
+                              --initial-cluster-state new
+
+     For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
+     ``<hostname>`` and ``<public_ip>`` with their appropriate values for the
+     machine. For ``<cluster_id>`` it can be any textual string, but make sure
+     to use a new one each time.
+
+     ::
+
+           ETCD_DATA_DIR=/var/lib/etcd
+           ETCD_NAME=<hostname>
+           ETCD_ADVERTISE_CLIENT_URLS="http://<public_ip>:2379,http://<public_ip>:4001"
+           ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
+           ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+           ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
+           ETCD_INITIAL_CLUSTER_TOKEN="<cluster_id>"
+           ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
+           ETCD_INITIAL_CLUSTER_STATE=new
+
+     For RHEL 7, you then need to add the following file to
+     ``/usr/lib/systemd/system/etcd.service``::
+
+           [Unit]
+           Description=Etcd
+           After=syslog.target network.target
+
+           [Service]
+           User=root
+           ExecStart=/usr/local/bin/etcd
+           EnvironmentFile=-/etc/sysconfig/etcd
+           KillMode=process
+           Restart=always
+
+           [Install]
+           WantedBy=multi-user.target
+
+6. Launch etcd:
+
+   - On RHEL 6.5, run ``initctl start etcd``
+
+   - On RHEL 7, run ``systemctl start etcd``. Then, run
+     ``systemctl enable etcd`` to ensure it restarts after reboots.
+
+7. Install dependencies for python-etcd::
+
+        yum groupinstall 'Development Tools'
+        yum install python-devel libffi-devel openssl-devel
+
+8. Install python-etcd::
+
+        wget https://github.com/Metaswitch/python-etcd/archive/master.tar.gz
+        tar xvf master.tar.gz
+        cd python-etcd-master
+        python setup.py install
+
+9. Install the ``calico-control`` package:
+
+   ::
+
+       yum install calico-control
+
+10. Restart the neutron server process:
+    ``service neutron-server restart``.
+
+.. _etcd clustering docs: https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
 
 Compute Node Install
 --------------------
@@ -191,13 +292,19 @@ On a compute node, perform the following steps:
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
    Remove the line setting ``service_neutron_metadata_proxy`` or
-   ``service_metadata_proxy`` to ``True``, if there is one.
+   ``service_metadata_proxy`` to ``True``, if there is one. Additionally, if
+   there is a line setting ``metadata_proxy_shared_secret``, comment that line
+   out as well.
 
    Restart nova compute.
 
    ::
 
            service openstack-nova-compute restart
+
+   If this node is also a controller, additionally restart nova-api::
+
+           service openstack-nova-api restart
 
 3. If they're running, stop the Open vSwitch services:
 
@@ -288,13 +395,97 @@ On a compute node, perform the following steps:
         /usr/local/sbin/bird -f -c /etc/bird/bird.conf
         end script
 
-10. Install the ``calico-compute`` package:
+10. If this node is not a controller, install and configure etcd as an etcd
+    proxy. These assume you followed the instructions in the
+    :ref:`control-node` section of this document for your contoller: if you
+    installed etcd yourself in some other manner, skip to step 12.
+
+    - Download, unpack, and install the binary::
+
+        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
+        tar xvf etcd-v2.0.9-linux-amd64.tar.gz
+        cd etcd-v2.0.9-linux-amd64
+        mv etcd* /usr/local/bin/
+
+    - Create an etcd user::
+
+        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
+        chmod 700 /var/lib/etcd/
+
+    - Get etcd running by providing an init file.
+
+      For RHEL 6.5, place the following in ``/etc/init/etcd.conf``, replacing
+      ``<controller_hostname>`` and ``<controller_ip>`` with the values you
+      used in the :ref:`control-node` section.
+
+      ::
+
+           description "etcd"
+           author "etcd maintainers"
+
+           start on stopped rc RUNLEVEL=[2345]
+           stop on runlevel [!2345]
+
+           respawn
+
+           setuid etcd
+
+           env ETCD_DATA_DIR=/var/lib/etcd
+           export ETCD_DATA_DIR
+
+           exec /usr/bin/etcd --proxy on                                                            \
+                              --listen-client-urls http://127.0.0.1:4001                            \
+                              --initial-cluster "<controller_hostname>=http://<controller_ip>:2380"
+
+      For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
+      ``<controller_hostname>`` and ``<controller_ip>`` with the values you
+      used in the :ref:`control-node` section.
+
+      ::
+
+           ETCD_PROXY=on
+           ETCD_DATA_DIR=/var/lib/etcd
+           ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:4001"
+           ETCD_INITIAL_CLUSTER="<controller_hostname>=http://<controller_ip>:2380"
+
+      For RHEL 7, you then need to add the following file to
+      ``/usr/lib/systemd/system/etcd.service``::
+
+           [Unit]
+           Description=Etcd
+           After=syslog.target network.target
+
+           [Service]
+           User=root
+           ExecStart=/usr/local/bin/etcd
+           EnvironmentFile=-/etc/sysconfig/etcd
+           KillMode=process
+           Restart=always
+
+           [Install]
+           WantedBy=multi-user.target
+
+11. If this node is not a controller, launch etcd:
+
+    - On RHEL 6.5, run ``initctl start etcd``
+
+    - On RHEL 7, run ``systemctl start etcd``. Then, run
+      ``systemctl enable etcd`` to ensure it restarts after reboots.
+
+12. If this node is not a controller, install python-etcd::
+
+        wget https://github.com/Metaswitch/python-etcd/archive/master.tar.gz
+        tar xvf master.tar.gz
+        cd python-etcd-master
+        python setup.py install
+
+13. Install the ``calico-compute`` package:
 
     ::
 
         yum install calico-compute
 
-11. Configure BIRD. Calico includes useful configuration scripts that
+14. Configure BIRD. Calico includes useful configuration scripts that
     will create BIRD config files for simple topologies -- either a
     peering between a single pair of compute nodes, or to a route
     reflector (to avoid the need for a full BGP mesh in networks with
@@ -350,16 +541,6 @@ On a compute node, perform the following steps:
      ::
 
          initctl start bird
-
-12. Create the ``/etc/calico/felix.cfg`` file by copying
-    ``/etc/calico/felix.cfg.example`` and edit it:
-
-    -  Change the ``PluginAddress`` and ``ACLAddress`` settings to the
-       host name or IP address of the controller node.
-    -  Restart the Felix service:
-
-       - on RHEL 6.5, run ``initctl start calico-felix``.
-       - on RHEL 7, run ``systemctl restart calico-felix``.
 
 Next Steps
 ----------
