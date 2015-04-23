@@ -56,6 +56,7 @@ class IptablesUpdater(Actor):
     Concurrent access to the same table is not allowed by the
     underlying iptables architecture so there should be one instance of
     this class for each table.
+    PLW: per-table, or IP version?
 
     However, this class tries to be robust against concurrent access
     from outside the process by detecting and retrying such errors.
@@ -63,13 +64,12 @@ class IptablesUpdater(Actor):
     Batching support
     ~~~~~~~~~~~~~~~~
 
-    This actor supports batching of multiple updates, it will apply all
-    updates that are on the queue in one, atomic, batch.  This is
-    dramatically faster than issuing single iptables requests.
+    This actor supports batching of multiple updates. It applies updates that
+    are on the queue in one atomic batch. This is dramatically faster than
+    issuing single iptables requests.
 
-    If a request fails, it does a binary chop using the
-    SplitBatchAndRetry mechanism to report the error to the correct
-    request.
+    If a request fails, it does a binary chop using the SplitBatchAndRetry
+    mechanism to report the error to the correct request.
 
     Dependency tracking
     ~~~~~~~~~~~~~~~~~~~
@@ -78,23 +78,28 @@ class IptablesUpdater(Actor):
     use this one, this class supports tracking dependencies between chains
     and programming stubs for missing chains:
 
-    * When calling rewrite_chains() the caller must include a dict that
+    * When calling rewrite_chains() the caller must supply a dict that
       maps from chain to a set of chains it requires (i.e. the chains
       that appear in its --jump and --goto targets).
 
     * Any chains that are required but not present are created as "stub"
-      chains, which drop all traffic.  They are marked as such in the
+      chains, which drop all traffic. They are marked as such in the
       iptables rules with an iptables comment.
 
-    * When the required chain later gets programmed, the stub rule is
-      deleted and replaced with the real contents of the chain.
+    * When a required chain is later explicitly created, the stub chain is
+      replaced with the required contents of the chain.
 
-    * If a required chain is deleted, it is rewritten as a stub chain.
-      It is then cleaned up when it is no longer required.
+    * If a required chain is explicitly deleted, it is rewritten as a stub
+      chain.
+
+    * If a chain exists only as a stub chain to satisfy a dependency, then it
+      is cleaned up when the dependency is removed.
 
     """
 
     queue_size = 1000
+    # PLW: I don't think the batch_delay is helpful. We should just apply the
+    # changes we have as they arrive, and batch only if we are not keeping up.
     batch_delay = 0.1
 
     def __init__(self, table, ip_version=4):
@@ -108,26 +113,30 @@ class IptablesUpdater(Actor):
             self.restore_cmd = "ip6tables-restore"
             self.iptables_cmd = "ip6tables"
 
+        # PLW: Sometimes you have _ in front of private variables, sometimes
+        # not. Probably worth being consistent.
         self.explicitly_prog_chains = set()
-        """Set of chains that we've explicitly programmed."""
+        """Set of chains that have been explicitly programmed."""
 
         self.required_chains = defaultdict(set)
-        """Map from chain name to the set of chains that it depends on."""
+        """Map from chain name to the set of names of chains that it depends on."""
         self.requiring_chains = defaultdict(set)
         """Map from chain to the set of chains that depend on it.
         Inverse of self.required_chains."""
 
         # State tracking for the current batch.
+        # xxx ??? what is this?
         self._batch = None
         """:type UpdateBatch: object used to track index changes for this
         batch."""
         self._completion_callbacks = None
         """List of callbacks to issue once the current batch completes."""
 
-        self._reset_batched_work()  # Avoid duplicating init logic.
+        # Initialise _batch.
+        self._reset_batched_work()
 
     def _reset_batched_work(self):
-        """Resets the per-batch state in preparation for a new batch."""
+        """Reset the per-batch state in preparation for a new batch."""
         self._batch = UpdateBatch(self.explicitly_prog_chains,
                                   self.required_chains,
                                   self.requiring_chains)
@@ -135,6 +144,10 @@ class IptablesUpdater(Actor):
 
     def _load_unreferenced_chains(self):
         """
+        Read the list of chains in the dataplane which are not referenced.
+
+        This is called
+        PLW: cosmetic : load surely would read better as read or get?
         :returns list[str]: list of chains currently in the dataplane that
             are not referenced by other chains.
         """
@@ -150,10 +163,10 @@ class IptablesUpdater(Actor):
 
         :param update_calls_by_chain: map from chain name to list of
                iptables-style update calls,
-               e.g. {"chain_name": ["-A chain_name -j ACCEPT"]}.  Chain will
+               e.g. {"chain_name": ["-A chain_name -j ACCEPT"]}. Chain will
                be flushed.
         :param dependent_chains: map from chain name to a set of chains
-               that that chain requires to exist.  They will be created
+               that that chain requires to exist. They will be created
                (with a default drop) if they don't exist.
         :returns CalledProcessError if a problem occurred.
         """
@@ -173,24 +186,28 @@ class IptablesUpdater(Actor):
     @actor_message(needs_own_batch=True)
     def ensure_rule_inserted(self, rule_fragment):
         """
-        Runs the given rule fragment, prefixed with --insert.  If the
-        rule was already inserted, it is removed and reinserted at the
+        Runs the given rule fragment, prefixed with --insert. If the
+        rule was already present, it is removed and reinserted at the
         start of the chain.
 
-        This is intended to cover the start-up corner case where we need to
-        insert a rule into the pre-existing kernel chains.  Most code
-        should use the more robust approach of rewriting the whole chain
-        using rewrite_chains().
+        This covers the case where we need to insert a rule into the
+        pre-existing kernel chains (only). For chains that are owned by Felix,
+        use the more robust approach of rewriting the whole chain using
+        rewrite_chains().
+
+
+        :param rule_fragment: fragment to be inserted. For example,
+           "INPUT --jump felix-INPUT"
         """
         try:
-            # Make an atomic delete + insert of the rule.  If the rule already
-            # exists then this will have no effect.
+            # Do an atomic delete + insert of the rule.  If the rule already
+            # exists then the rule will be moved to the start of the chain.
             self._execute_iptables(['*%s' % self.table,
                                     '--delete %s' % rule_fragment,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
         except CalledProcessError:
-            # Assume the rule didn't exist, try inserting it.
+            # Assume the rule didn't exist. Try inserting it.
             _log.debug("Failed to do atomic delete/insert, assuming rule "
                        "wasn't programmed.")
             self._execute_iptables(['*%s' % self.table,
@@ -235,6 +252,7 @@ class IptablesUpdater(Actor):
             else:
                 # We've already tried to delete all the chains we found,
                 # give up.
+                # PLW: first format modifier should be %d
                 _log.info("Cleanup finished, deleted %s chains, failed to "
                           "delete these chains: %s",
                           len(chains_we_tried_to_delete) - len(our_orphans),
@@ -288,8 +306,11 @@ class IptablesUpdater(Actor):
 
     def _delete_best_effort(self, chains):
         """
-        Try to delete all the chains in the input list.
+        Try to delete all the chains in the input list. Any errors are silently
+        swallowed.
         """
+        # PLW: Do we really need the retry logic? It feels to me that we could
+        # argue that we should just give up when one of the chain deletions fails.
         if not chains:
             return
         chain_batches = [list(chains)]
@@ -331,7 +352,7 @@ class IptablesUpdater(Actor):
     def _update_indexes(self):
         """
         Called after successfully processing a batch, updates the
-        indexes with the values calculated by the UpdateBatch.
+        indices with the values calculated by the UpdateBatch.
         """
         self.explicitly_prog_chains = self._batch.expl_prog_chains
         self.required_chains = self._batch.required_chns
@@ -342,6 +363,8 @@ class IptablesUpdater(Actor):
         Calculate the input for phase 1 of a batch, where we only modify and
         create chains.
         """
+        # PLW: document what it raises
+
         # Valid input looks like this.
         #
         # *table
@@ -383,6 +406,7 @@ class IptablesUpdater(Actor):
         if found_delete:
             return input_lines
         else:
+            #PLW: Nothing seems to catch this exception (unlike from modify)
             raise NothingToDo()
 
     def _execute_iptables(self, input_lines):
@@ -402,6 +426,7 @@ class IptablesUpdater(Actor):
 
             # Run iptables-restore in noflush mode so that it doesn't
             # blow away all the tables we're not touching.
+            # PLW: I think we should use futils for the subprocess stuff.
             cmd = [self.restore_cmd, "--noflush", "--verbose"]
             iptables_proc = subprocess.Popen(cmd,
                                              stdin=subprocess.PIPE,
@@ -412,6 +437,7 @@ class IptablesUpdater(Actor):
             _log.debug("%s completed with RC=%s", self.restore_cmd, rc)
             num_tries += 1
             if rc == 0:
+                #PLW why don't we break here? Or even just return?
                 success = True
             else:
                 # Parse the output to determine if error is retryable.
@@ -453,6 +479,7 @@ class IptablesUpdater(Actor):
 
 
 class UpdateBatch(object):
+    #PLW: needs a docstring to say what it is and what it does!
     def __init__(self,
                  old_expl_prog_chains,
                  old_deps,
@@ -475,6 +502,7 @@ class UpdateBatch(object):
         self.requiring_chns = copy.deepcopy(old_requiring_chains)
 
         # Caches of expensive calculations.
+        # PLW: needs comment about what this is.
         self._chains_to_stub = None
         self._affected_chains = None
         self._chains_to_delete = None
@@ -608,8 +636,15 @@ def _stub_drop_rules(chain):
 def extract_unreffed_chains(raw_save_output):
     """
     Parses the output from iptables-save to extract the set of
-    unreferenced chains, which should be safe to delete.
+    unreferenced chains which are safe to delete.
     """
+    # PLW: This method is only called by load_unreferenced_chains.
+    # I think it would be better just to put it directly into that
+    # method (which is only a few lines long).
+    #
+    # PLW: This should only clean up felix chains, i.e. those starting
+    # with "felix-". I actually now realise that you do that check in
+    # cleanup, but surely cleaner to do it here.
     chains = set()
     last_line = None
     for line in raw_save_output.splitlines():
