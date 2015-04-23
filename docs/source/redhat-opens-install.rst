@@ -133,7 +133,7 @@ On a control node, perform the following steps:
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
         tar xvf etcd-v2.0.9-linux-amd64.tar.gz
         cd etcd-v2.0.9-linux-amd64
-        mv etcd* /usr/local/bin/etcd
+        mv etcd* /usr/local/bin/
 
    - Create an etcd user::
 
@@ -405,7 +405,7 @@ On a compute node, perform the following steps:
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
         tar xvf etcd-v2.0.9-linux-amd64.tar.gz
         cd etcd-v2.0.9-linux-amd64
-        mv etcd* /usr/local/bin/etcd
+        mv etcd* /usr/local/bin/
 
     - Create an etcd user::
 
