@@ -7,9 +7,9 @@ envExport:
         "gui-x": "1045.973572253264"
         "gui-y": "544.8983810601128"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     "neutron-calico":
-      charm: "cs:~cory-benfield/trusty/neutron-calico-7"
+      charm: "cs:~cory-benfield/trusty/neutron-calico-9"
       num_units: 0
       annotations:
         "gui-x": "832.4871538385408"
@@ -21,15 +21,13 @@ envExport:
         "gui-x": "946.0883464963425"
         "gui-y": "371.8920951236375"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     "rabbitmq-server":
       charm: "cs:trusty/rabbitmq-server-19"
       num_units: 1
       annotations:
         "gui-x": "746.3178949824998"
         "gui-y": "371.8920951236375"
-      to:
-        - "calico-acl-manager=0"
     keystone:
       charm: "cs:trusty/keystone-0"
       num_units: 1
@@ -37,7 +35,7 @@ envExport:
         "gui-x": "646.4326692255784"
         "gui-y": "544.8983810601128"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     glance:
       charm: "cs:trusty/glance-150"
       num_units: 1
@@ -45,7 +43,7 @@ envExport:
         "gui-x": "746.3178949824998"
         "gui-y": "717.904666996588"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     "openstack-dashboard":
       charm: "cs:trusty/openstack-dashboard-32"
       num_units: 1
@@ -55,12 +53,12 @@ envExport:
         "gui-x": "846.2031207394211"
         "gui-y": "544.8983810601128"
       to:
-        - "calico-acl-manager=0"
-    "calico-acl-manager":
-      charm: "cs:~cory-benfield/trusty/calico-acl-manager-6"
+        - "rabbitmq-server=0"
+    etcd:
+      charm: "cs:~cory-benfield/trusty/etcd-3"
       num_units: 1
       annotations:
-        "gui-x": "1245.7440237671067"
+        "gui-x": "1120.2440237671067"
         "gui-y": "544.8983810601128"
     bird:
       charm: "cs:~cory-benfield/trusty/bird-5"
@@ -69,7 +67,7 @@ envExport:
         "gui-x": "1145.8587980101852"
         "gui-y": "371.89209512363743"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     "nova-cloud-controller":
       charm: "cs:~cory-benfield/trusty/nova-cloud-controller-10"
       num_units: 1
@@ -79,9 +77,9 @@ envExport:
         "gui-x": "1045.973572253264"
         "gui-y": "198.88580918716224"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     "neutron-api":
-      charm: "cs:~cory-benfield/trusty/neutron-api-4"
+      charm: "cs:~cory-benfield/trusty/neutron-api-7"
       num_units: 1
       options:
         "neutron-plugin": Calico
@@ -90,7 +88,7 @@ envExport:
         "gui-x": "946.0883464963425"
         "gui-y": "717.904666996588"
       to:
-        - "calico-acl-manager=0"
+        - "rabbitmq-server=0"
     "nova-compute":
       charm: "cs:~cory-benfield/trusty/nova-compute-6"
       num_units: 2
@@ -100,6 +98,10 @@ envExport:
   relations:
     - - "nova-cloud-controller:image-service"
       - "glance:image-service"
+    - - "neutron-calico:etcd-peer"
+      - "etcd:etcd-peer"
+    - - "neutron-api:etcd-peer"
+      - "etcd:etcd-peer"
     - - "neutron-calico:amqp"
       - "rabbitmq-server:amqp"
     - - "neutron-calico:neutron-plugin-api"
@@ -126,14 +128,10 @@ envExport:
       - "rabbitmq-server:amqp"
     - - "neutron-calico:bgp-route-reflector"
       - "bird:bgp-route-reflector"
-    - - "neutron-calico:calico-acl-api"
-      - "calico-acl-manager:calico-acl-api"
     - - "nova-cloud-controller:shared-db"
       - "mysql:shared-db"
     - - "nova-cloud-controller:amqp"
       - "rabbitmq-server:amqp"
-    - - "neutron-api:calico-network-api"
-      - "calico-acl-manager:calico-network-api"
     - - "nova-compute:image-service"
       - "glance:image-service"
     - - "glance:identity-service"
