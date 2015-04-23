@@ -133,12 +133,21 @@ On a control node, perform the following steps:
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
         tar xvf etcd-v2.0.9-linux-amd64.tar.gz
         cd etcd-v2.0.9-linux-amd64
-        mv etcd /usr/local/bin/etcd
+        mv etcd* /usr/local/bin/etcd
 
    - Create an etcd user::
 
-        adduser --system --group --disabled-login --disabled-password --home /var/lib/etcd/ etcd
+        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
+
+   - Mount a ramdisk at /var/lib/etcd::
+
+        sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+
+   - Add the following to the bottom of ``/etc/fstab`` so that the ramdisk gets
+     reinstated at boot time::
+
+        tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
 
    - Get etcd running by providing an init file.
 
@@ -211,21 +220,26 @@ On a control node, perform the following steps:
 
    - On RHEL 7, run ``systemctl start etcd``.
 
-7. Install python-etcd::
+7. Install dependencies for python-etcd::
+
+        yum groupinstall 'Development Tools'
+        yum install python-devel libffi-devel openssl-devel
+
+8. Install python-etcd::
 
         wget https://github.com/Metaswitch/python-etcd/archive/master.tar.gz
         tar xvf master.tar.gz
         cd python-etcd-master
         python setup.py install
 
-8. Install the ``calico-control`` package:
+9. Install the ``calico-control`` package:
 
    ::
 
        yum install calico-control
 
-9. Restart the neutron server process:
-   ``service neutron-server restart``.
+10. Restart the neutron server process:
+    ``service neutron-server restart``.
 
 .. _etcd clustering docs: https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
 
@@ -277,13 +291,19 @@ On a compute node, perform the following steps:
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
    Remove the line setting ``service_neutron_metadata_proxy`` or
-   ``service_metadata_proxy`` to ``True``, if there is one.
+   ``service_metadata_proxy`` to ``True``, if there is one. Additionally, if
+   there is a line setting ``metadata_proxy_shared_secret``, comment that line
+   out as well.
 
    Restart nova compute.
 
    ::
 
            service openstack-nova-compute restart
+
+   If this node is also a controller, additionally restart nova-api::
+
+           service openstack-nova-api restart
 
 3. If they're running, stop the Open vSwitch services:
 
@@ -374,8 +394,9 @@ On a compute node, perform the following steps:
         /usr/local/sbin/bird -f -c /etc/bird/bird.conf
         end script
 
-10. Install and configure etcd as an etcd proxy. These assume you followed the
-    instructions in the :ref:`control-node` section of this document: if you
+10. If this node is not a controller, install and configure etcd as an etcd
+    proxy. These assume you followed the instructions in the
+    :ref:`control-node` section of this document for your contoller: if you
     installed etcd yourself in some other manner, skip to step 12.
 
     - Download, unpack, and install the binary::
@@ -383,11 +404,11 @@ On a compute node, perform the following steps:
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
         tar xvf etcd-v2.0.9-linux-amd64.tar.gz
         cd etcd-v2.0.9-linux-amd64
-        mv etcd /usr/local/bin/etcd
+        mv etcd* /usr/local/bin/etcd
 
     - Create an etcd user::
 
-        adduser --system --group --disabled-login --disabled-password --home /var/lib/etcd/ etcd
+        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
 
     - Get etcd running by providing an init file.
@@ -443,13 +464,13 @@ On a compute node, perform the following steps:
            [Install]
            WantedBy=multi-user.target
 
-11. Launch etcd:
+11. If this node is not a controller, launch etcd:
 
     - On RHEL 6.5, run ``initctl start etcd``
 
     - On RHEL 7, run ``systemctl start etcd``.
 
-12. Install python-etcd::
+12. If this node is not a controller, install python-etcd::
 
         wget https://github.com/Metaswitch/python-etcd/archive/master.tar.gz
         tar xvf master.tar.gz
@@ -518,16 +539,6 @@ On a compute node, perform the following steps:
      ::
 
          initctl start bird
-
-15. Create the ``/etc/calico/felix.cfg`` file by copying
-    ``/etc/calico/felix.cfg.example`` and edit it:
-
-    -  Change the ``PluginAddress`` setting to the host name or IP address of
-       the controller node.
-    -  Restart the Felix service:
-
-       - on RHEL 6.5, run ``initctl start calico-felix``.
-       - on RHEL 7, run ``systemctl restart calico-felix``.
 
 Next Steps
 ----------
