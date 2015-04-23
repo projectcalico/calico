@@ -22,8 +22,6 @@ IP sets management functions.
 from collections import defaultdict
 
 import logging
-from subprocess import CalledProcessError
-from gevent import subprocess
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
@@ -314,18 +312,12 @@ class ActiveIpset(RefCountedActor):
 
     @actor_message()
     def on_unreferenced(self):
-        # Temporary set should never be left over; just in case, try to
-        # delete it.  Silence errors, we expect this to fail unless we're
-        # cleaning up after an error.
-        futils.call_silent(["ipset", "destroy", self.tmpname])
         try:
-            if self.programmed_members is not None:
-                # We've done a programming run before, the main ipset should
-                # exist.  Delete it.
-                futils.check_call(["ipset", "destroy", self.name])
-        except FailedSystemCall:
-            _log.warning("Failed to delete ipset %s.", self.name,
-                         exc_info=True)
+            # Destroy the ipsets - ignoring any errors.
+            _log.debug("Delete ipsets %s and %s if they exist",
+                       self.name, self.tmpname)
+            futils.call_silent(["ipset", "destroy", self.name])
+            futils.call_silent(["ipset", "destroy", self.tmpname])
         finally:
             self._notify_cleanup_complete()
 
@@ -355,7 +347,7 @@ class ActiveIpset(RefCountedActor):
             create_cmd % (self.name, self.family),
             create_cmd % (self.tmpname, self.family),
 
-            # Flush the temporary set, this is a no-op unless we had a
+            # Flush the temporary set.  This is a no-op unless we had a
             # left-over temporary set before.
             "flush %s" % self.tmpname,
         ]
@@ -369,18 +361,7 @@ class ActiveIpset(RefCountedActor):
         input_lines.append("COMMIT")
 
         input_str = "\n".join(input_lines) + "\n"
-        cmd = ["ipset", "restore"]
-        process = subprocess.Popen(cmd,
-                                   stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate(input_str)
-        rc = process.wait()  # Shouldn't block, communicate already called.
-        if rc != 0:
-            _log.error("Failed to run ipset restore.\nOutput: %s\n\nErr: %s"
-                       "\n\nInput: %s",
-                       stdout, stderr, input_str)
-            raise CalledProcessError(rc, cmd)
+        futils.check_call(["ipset", "restore"], input_str=input_str)
 
         # We have got the set into the correct state.
         self.programmed_members = self.members.copy()
@@ -388,7 +369,7 @@ class ActiveIpset(RefCountedActor):
 
 def tag_to_ipset_name(ip_type, tag, tmp=False):
     """
-    Turn a tag ID in all its glory into an ipset name.
+    Turn a (possibly shortened) tag ID into an ipset name.
     """
     if not tmp:
         name = IPSET_PREFIX[ip_type] + tag

@@ -74,7 +74,8 @@ def call_silent(args):
     except FailedSystemCall as e:
         return e.retcode
 
-def check_call(args):
+
+def check_call(args, input_str=None):
     """
     Substitute for the subprocess.check_call function. It has the following
     useful characteristics.
@@ -92,7 +93,7 @@ def check_call(args):
     proc = subprocess.Popen(args,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
+    stdout, stderr = proc.communicate(input=input_str)
     retcode = proc.returncode
     if retcode:
         raise FailedSystemCall("Failed system call",
