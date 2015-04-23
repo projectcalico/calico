@@ -279,6 +279,7 @@ class ActiveIpset(RefCountedActor):
 
         # Notified ready?
         self.notified_ready = False
+        self.stopped = False
 
     def owned_ipset_names(self):
         """
@@ -312,6 +313,9 @@ class ActiveIpset(RefCountedActor):
 
     @actor_message()
     def on_unreferenced(self):
+        # Mark the object as stopped so that we don't accidentally recreate
+        # the ipset in _finish_msg_batch.
+        self.stopped = True
         try:
             # Destroy the ipsets - ignoring any errors.
             _log.debug("Delete ipsets %s and %s if they exist",
@@ -326,7 +330,7 @@ class ActiveIpset(RefCountedActor):
         # the add_members / remove_members / replace_members calls actually
         # does any work, just updating state. The _finish_msg_batch call will
         # then program the real changes.
-        if self.members != self.programmed_members:
+        if not self.stopped and self.members != self.programmed_members:
             self._sync_to_ipset()
 
         if not self.notified_ready:
