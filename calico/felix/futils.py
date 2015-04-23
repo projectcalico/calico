@@ -102,7 +102,7 @@ def check_call(args, input_str=None):
     retcode = proc.returncode
     if retcode:
         raise FailedSystemCall("Failed system call",
-                               args, retcode, stdout, stderr)
+                               args, retcode, stdout, stderr, input=input_str)
 
     return CommandOutput(stdout, stderr)
 
