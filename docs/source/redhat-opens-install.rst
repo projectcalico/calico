@@ -218,7 +218,8 @@ On a control node, perform the following steps:
 
    - On RHEL 6.5, run ``initctl start etcd``
 
-   - On RHEL 7, run ``systemctl start etcd``.
+   - On RHEL 7, run ``systemctl start etcd``. Then, run
+     ``systemctl enable etcd`` to ensure it restarts.
 
 7. Install dependencies for python-etcd::
 
@@ -468,7 +469,8 @@ On a compute node, perform the following steps:
 
     - On RHEL 6.5, run ``initctl start etcd``
 
-    - On RHEL 7, run ``systemctl start etcd``.
+    - On RHEL 7, run ``systemctl start etcd``. Then, run
+      ``systemctl enable etcd`` to ensure it restarts.
 
 12. If this node is not a controller, install python-etcd::
 
