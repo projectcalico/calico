@@ -214,7 +214,7 @@ class EtcdWatcher(Actor):
                 except (ReadTimeoutError, SocketTimeout) as e:
                     # This is expected when we're doing a poll and nothing
                     # happened. socket timeout doesn't seem to be caught by
-                    # urllib3 0.7.1.  Simply reconnect.
+                    # urllib3 1.7.1.  Simply reconnect.
                     _log.debug("Read from etcd timed out (%r), retrying.", e)
                     # Force a reconnect to ensure urllib3 doesn't recycle the
                     # connection.  (We were seeing this with urllib3 1.7.1.)
