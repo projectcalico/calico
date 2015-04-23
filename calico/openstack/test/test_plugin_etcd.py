@@ -551,10 +551,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Check felix is happy with generated rule.
         if neutron_rule["direction"] == "ingress":
-            rules = {"inbound_rules": [neutron_rule],
+            rules = {"inbound_rules": [etcd_rule],
                      "outbound_rules": []}
         else:
-            rules = {"outbound_rules": [neutron_rule],
+            rules = {"outbound_rules": [etcd_rule],
                      "inbound_rules": []}
         fetcd.validate_rules(rules)
 
