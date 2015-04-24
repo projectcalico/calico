@@ -432,7 +432,8 @@ def _get_endpoint_rules(suffix, iface, ip_version, local_ips, mac, profile_id):
     from_chain = ["--flush %s" % from_chain_name]
     if ip_version == 6:
         # In ipv6 only, allows all ICMP traffic from this endpoint to anywhere.
-        from_chain.append("--append %s --protocol ipv6-icmp" % from_chain_name)
+        from_chain.append("--append %s --protocol ipv6-icmp --jump RETURN" %
+                          from_chain_name)
 
     # Conntrack rules.
     from_chain.append("--append %s --match conntrack --ctstate INVALID "
