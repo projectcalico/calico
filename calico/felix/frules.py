@@ -302,6 +302,15 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
 
     if rule.get("icmp_type") is not None:
         icmp_type = rule["icmp_type"]
+        if icmp_type == 255:
+            # Temporary work-around for this issue:
+            # https://github.com/Metaswitch/calico/issues/451
+            # This exception will be caught by the caller, which will replace
+            # this rule with a DROP rule.  That's arguably better than
+            # forbidding this case in the validation routine, which would
+            # replace the whole chain with a DROP.
+            _log.error("Kernel doesn't support matching on ICMP type 255.")
+            raise UnsupportedICMPType()
         assert isinstance(icmp_type, int), "ICMP type should be an int"
         if "icmp_code" in rule:
             icmp_code = rule["icmp_code"]
@@ -321,3 +330,7 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
                               else on_deny)
 
     return " ".join(str(x) for x in update_fragments)
+
+
+class UnsupportedICMPType(Exception):
+    pass
