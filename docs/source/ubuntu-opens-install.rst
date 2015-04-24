@@ -147,7 +147,7 @@ On a control node, perform the following steps:
     tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
 
 
-5. Edit ``/etc/init/etcd.conf``:
+7. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
      substituting for ``<controller_fqdn>``, ``<controller_ip>``, and
@@ -166,19 +166,19 @@ On a control node, perform the following steps:
                           --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
                           --initial-cluster-state "new"
 
-6. Start etcd service
+8. Start etcd service
    ::
 
        sudo service etcd start
 
 
-7. Install the ``calico-control`` package:
+9. Install the ``calico-control`` package:
 
    ::
 
        sudo apt-get install calico-control
 
-8. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+10. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
 
    -  Find the line beginning with ``type_drivers``, and change it to
       read ``type_drivers = local, flat``.
@@ -187,7 +187,7 @@ On a control node, perform the following steps:
    -  Find the line beginning with ``tenant_network_types``, and change
       it to read ``tenant_network_types = local``.
 
-9. Edit the ``/etc/neutron/neutron.conf`` file:
+11. Edit the ``/etc/neutron/neutron.conf`` file:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -200,7 +200,7 @@ On a control node, perform the following steps:
    -  Find the line for the ``rpc_workers`` setting, uncomment it and
       set its value to 0.
 
-10. Restart the neutron server process:
+12. Restart the neutron server process:
 
    ::
 
