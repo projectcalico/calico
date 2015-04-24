@@ -53,6 +53,7 @@ KNOWN_RULE_KEYS = set([
     "dst_tag",
     "dst_ports",
     "icmp_type",
+    "icmp_code",
     "ip_version",
 ])
 
@@ -141,24 +142,18 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
 
 def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
                                  on_allow="ACCEPT", on_deny="DROP"):
-    try:
-        fragments = []
-        for r in rules:
-            rule_version = r.get('ip_version')
-            if rule_version is None or rule_version == ip_version:
-                fragments.extend(rule_to_iptables_fragments(chain_name, r,
-                                                            ip_version,
-                                                            tag_to_ipset,
-                                                            on_allow=on_allow,
-                                                            on_deny=on_deny))
-        fragments.append(commented_drop_fragment(chain_name,
-                                                 "Default DROP rule:"))
-        return fragments
-    except Exception:
-        _log.exception("Failed to convert rules to fragments: %s.  Will DROP!",
-                       rules)
-        return [commented_drop_fragment(chain_name,
-                                        "ERROR failed to parse rules DROP:")]
+    fragments = []
+    for r in rules:
+        rule_version = r.get('ip_version')
+        if rule_version is None or rule_version == ip_version:
+            fragments.extend(rule_to_iptables_fragments(chain_name, r,
+                                                        ip_version,
+                                                        tag_to_ipset,
+                                                        on_allow=on_allow,
+                                                        on_deny=on_deny))
+    fragments.append(commented_drop_fragment(chain_name,
+                                             "Default DROP rule:"))
+    return fragments
 
 
 def commented_drop_fragment(chain_name, comment):
@@ -199,16 +194,22 @@ def rule_to_iptables_fragments(chain_name, rule, ip_version, tag_to_ipset,
     src_port_chunks = _split_port_lists(src_ports)
     dst_port_chunks = _split_port_lists(dst_ports)
     rule_copy = dict(rule)  # Only need a shallow copy so we can replace ports.
-    fragments = []
-    for src_ports, dst_ports in itertools.product(src_port_chunks,
-                                                  dst_port_chunks):
-        rule_copy["src_ports"] = src_ports
-        rule_copy["dst_ports"] = dst_ports
-        frag = _rule_to_iptables_fragment(chain_name, rule_copy, ip_version,
-                                          tag_to_ipset,  on_allow=on_allow,
-                                          on_deny=on_deny)
-        fragments.append(frag)
-    return fragments
+    try:
+        fragments = []
+        for src_ports, dst_ports in itertools.product(src_port_chunks,
+                                                      dst_port_chunks):
+            rule_copy["src_ports"] = src_ports
+            rule_copy["dst_ports"] = dst_ports
+            frag = _rule_to_iptables_fragment(chain_name, rule_copy, ip_version,
+                                              tag_to_ipset,  on_allow=on_allow,
+                                              on_deny=on_deny)
+            fragments.append(frag)
+        return fragments
+    except Exception:
+        # Defensive: isolate failures to parse the rule (which has already
+        # passed validation by this point) to this chain.
+        return [commented_drop_fragment(chain_name,
+                                        "ERROR failed to parse rules DROP:")]
 
 
 def _split_port_lists(ports):
@@ -301,6 +302,15 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
 
     if rule.get("icmp_type") is not None:
         icmp_type = rule["icmp_type"]
+        if icmp_type == 255:
+            # Temporary work-around for this issue:
+            # https://github.com/Metaswitch/calico/issues/451
+            # This exception will be caught by the caller, which will replace
+            # this rule with a DROP rule.  That's arguably better than
+            # forbidding this case in the validation routine, which would
+            # replace the whole chain with a DROP.
+            _log.error("Kernel doesn't support matching on ICMP type 255.")
+            raise UnsupportedICMPType()
         assert isinstance(icmp_type, int), "ICMP type should be an int"
         if "icmp_code" in rule:
             icmp_code = rule["icmp_code"]
@@ -320,3 +330,7 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
                               else on_deny)
 
     return " ".join(str(x) for x in update_fragments)
+
+
+class UnsupportedICMPType(Exception):
+    pass

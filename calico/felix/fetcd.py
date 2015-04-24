@@ -38,6 +38,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  get_profile_id_for_profile_dir, dir_for_host,
                                  PROFILE_DIR, HOST_DIR)
 from calico.felix.actor import Actor, actor_message
+from calico.felix.frules import KNOWN_RULE_KEYS
 
 _log = logging.getLogger(__name__)
 
@@ -556,6 +557,10 @@ def validate_rules(rules):
                     # TODO: ICMP code without ICMP type not supported by iptables
                     # Firewall against that for now.
                     issues.append("ICMP code specified without ICMP type.")
+
+            unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
+            if unknown_keys:
+                issues.append("Rule contains unknown keys: %s." % unknown_keys)
 
     if issues:
         raise ValidationFailed(" ".join(issues))
