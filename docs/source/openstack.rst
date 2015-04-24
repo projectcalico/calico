@@ -23,7 +23,7 @@ If you know nothing about OpenStack and just want to try out
 Calico, you should consider the :doc:`opens-chef-install`
 which can be used on Ubuntu 14.04 to set up a Calico OpenStack system.
 
-Otherwise, if you already use OpenStack, you can install Calico by using
+Otherwise, if you already use OpenStack, you can install Calico via any of the following methods:
 
 - the packaged install for Ubuntu 14.04 - see :doc:`ubuntu-opens-install`
 
