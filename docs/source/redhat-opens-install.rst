@@ -135,7 +135,7 @@ On a control node, perform the following steps:
         cd etcd-v2.0.9-linux-amd64
         mv etcd* /usr/local/bin/
 
-   - Create an etcd user::
+   - On RHEL 7, create an etcd user::
 
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
@@ -166,19 +166,17 @@ On a control node, perform the following steps:
 
            respawn
 
-           setuid etcd
-
            env ETCD_DATA_DIR=/var/lib/etcd
            export ETCD_DATA_DIR
 
-           exec /usr/bin/etcd --name <hostname>                                                         \
-                              --advertise-client-urls "http://<public_ip>:2379,http://<public_ip>:4001" \
-                              --listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001              \
-                              --listen-peer-urls http://0.0.0.0:2380                                    \
-                              --initial-advertise-peer-urls "http://<public_ip>:2380"                   \
-                              --initial-cluster-token <cluster_id>                                      \
-                              --initial-cluster <hostname>=http://<public_ip>:2380                      \
-                              --initial-cluster-state new
+           exec /usr/local/bin/etcd --name <hostname>                                                         \
+                                    --advertise-client-urls "http://<public_ip>:2379,http://<public_ip>:4001" \
+                                    --listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001              \
+                                    --listen-peer-urls http://0.0.0.0:2380                                    \
+                                    --initial-advertise-peer-urls "http://<public_ip>:2380"                   \
+                                    --initial-cluster-token <cluster_id>                                      \
+                                    --initial-cluster <hostname>=http://<public_ip>:2380                      \
+                                    --initial-cluster-state new
 
      For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
      ``<hostname>`` and ``<public_ip>`` with their appropriate values for the
@@ -407,7 +405,7 @@ On a compute node, perform the following steps:
         cd etcd-v2.0.9-linux-amd64
         mv etcd* /usr/local/bin/
 
-    - Create an etcd user::
+    - On RHEL 7, create an etcd user::
 
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
@@ -428,14 +426,12 @@ On a compute node, perform the following steps:
 
            respawn
 
-           setuid etcd
-
            env ETCD_DATA_DIR=/var/lib/etcd
            export ETCD_DATA_DIR
 
-           exec /usr/bin/etcd --proxy on                                                            \
-                              --listen-client-urls http://127.0.0.1:4001                            \
-                              --initial-cluster "<controller_hostname>=http://<controller_ip>:2380"
+           exec /usr/local/bin/etcd --proxy on                                                            \
+                                    --listen-client-urls http://127.0.0.1:4001                            \
+                                    --initial-cluster "<controller_hostname>=http://<controller_ip>:2380"
 
       For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
       ``<controller_hostname>`` and ``<controller_ip>`` with the values you
