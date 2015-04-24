@@ -46,19 +46,22 @@ SHORTENED_PREFIX = "_"
 
 
 class FailedSystemCall(Exception):
-    def __init__(self, message, args, retcode, stdout, stderr):
+    def __init__(self, message, args, retcode, stdout, stderr, input=None):
         super(FailedSystemCall, self).__init__(message)
         self.message = message
         self.args = args
         self.retcode = retcode
         self.stdout = stdout
         self.stderr = stderr
+        self.input = input
 
     def __str__(self):
         return ("%s (retcode : %s, args : %s)\n"
                 "  stdout  : %s\n"
-                "  stderr  : %s\n" %
-                (self.message, self.retcode, self.args, self.stdout, self.stderr))
+                "  stderr  : %s\n"
+                "  input  : %s\n" %
+                (self.message, self.retcode, self.args,
+                 self.stdout, self.stderr, self.input))
 
 
 def call_silent(args):
@@ -74,7 +77,8 @@ def call_silent(args):
     except FailedSystemCall as e:
         return e.retcode
 
-def check_call(args):
+
+def check_call(args, input_str=None):
     """
     Substitute for the subprocess.check_call function. It has the following
     useful characteristics.
@@ -89,14 +93,16 @@ def check_call(args):
     """
     log.debug("Calling out to system : %s" % args)
 
+    stdin = subprocess.PIPE if input_str is not None else None
     proc = subprocess.Popen(args,
+                            stdin=stdin,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate()
+    stdout, stderr = proc.communicate(input=input_str)
     retcode = proc.returncode
     if retcode:
         raise FailedSystemCall("Failed system call",
-                               args, retcode, stdout, stderr)
+                               args, retcode, stdout, stderr, input=input_str)
 
     return CommandOutput(stdout, stderr)
 

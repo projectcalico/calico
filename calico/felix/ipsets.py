@@ -22,8 +22,6 @@ IP sets management functions.
 from collections import defaultdict
 
 import logging
-import os
-import tempfile
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
@@ -35,17 +33,6 @@ _log = logging.getLogger(__name__)
 FELIX_PFX = "felix-"
 IPSET_PREFIX = { IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-" }
 IPSET_TMP_PREFIX = { IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-" }
-
-
-def tag_to_ipset_name(ip_type, tag, tmp=False):
-    """
-    Turn a tag ID in all its glory into an ipset name.
-    """
-    if not tmp:
-        name = IPSET_PREFIX[ip_type] + tag
-    else:
-        name = IPSET_TMP_PREFIX[ip_type] + tag
-    return name
 
 
 class IpsetManager(ReferenceManager):
@@ -131,7 +118,8 @@ class IpsetManager(ReferenceManager):
         felix_ipsets = set([n for n in all_ipsets if n.startswith(pfx) or
                                                      n.startswith(tmppfx)])
         whitelist = set()
-        for ipset in self.objects_by_id.values():
+        for ipset in (self.objects_by_id.values() +
+                      self.stopping_objects_by_id.values()):
             # Ask the ipset for all the names it may use and whitelist.
             whitelist.update(ipset.owned_ipset_names())
         _log.debug("Whitelisted ipsets: %s", whitelist)
@@ -289,12 +277,9 @@ class ActiveIpset(RefCountedActor):
         # Members which really are in the ipset.
         self.programmed_members = None
 
-        # Do the sets exist?
-        self.set_exists = ipset_exists(self.name)
-        self.tmpset_exists = ipset_exists(self.tmpname)
-
         # Notified ready?
         self.notified_ready = False
+        self.stopped = False
 
     def owned_ipset_names(self):
         """
@@ -328,11 +313,15 @@ class ActiveIpset(RefCountedActor):
 
     @actor_message()
     def on_unreferenced(self):
+        # Mark the object as stopped so that we don't accidentally recreate
+        # the ipset in _finish_msg_batch.
+        self.stopped = True
         try:
-            if self.set_exists:
-                futils.check_call(["ipset", "destroy", self.name])
-            if self.tmpset_exists:
-                futils.check_call(["ipset", "destroy", self.tmpname])
+            # Destroy the ipsets - ignoring any errors.
+            _log.debug("Delete ipsets %s and %s if they exist",
+                       self.name, self.tmpname)
+            futils.call_silent(["ipset", "destroy", self.name])
+            futils.call_silent(["ipset", "destroy", self.tmpname])
         finally:
             self._notify_cleanup_complete()
 
@@ -341,7 +330,7 @@ class ActiveIpset(RefCountedActor):
         # the add_members / remove_members / replace_members calls actually
         # does any work, just updating state. The _finish_msg_batch call will
         # then program the real changes.
-        if self.members != self.programmed_members:
+        if not self.stopped and self.members != self.programmed_members:
             self._sync_to_ipset()
 
         if not self.notified_ready:
@@ -351,61 +340,56 @@ class ActiveIpset(RefCountedActor):
 
     def _sync_to_ipset(self):
         _log.debug("Setting ipset %s to %s", self.name, self.members)
-        fd, filename = tempfile.mkstemp(text=True)
-        f = os.fdopen(fd, "w")
 
-        if not self.set_exists:
-            # ipset does not exist, so just create it and put the data in it.
-            set_name = self.name
-            create = True
-            swap = False
-        elif not self.tmpset_exists:
-            # Set exists, but tmpset does not
-            set_name = self.tmpname
-            create = True
-            swap = True
-        else:
-            # Both set and tmpset exist
-            set_name = self.tmpname
-            create = False
-            swap = True
+        # We use ipset restore, which processes a batch of ipset updates.
+        # The only operation that we're sure is atomic is swapping two ipsets
+        # so we build up the complete set of members in a temporary ipset,
+        # swap it into place and then delete the old ipset.
+        create_cmd = "create %s hash:ip family %s --exist"
+        input_lines = [
+            # Ensure both the main set and the temporary set exist.
+            create_cmd % (self.name, self.family),
+            create_cmd % (self.tmpname, self.family),
 
-        if create:
-            f.write("create %s hash:ip family %s\n" % (set_name, self.family))
-        else:
-            f.write("flush %s\n" % (set_name))
+            # Flush the temporary set.  This is a no-op unless we had a
+            # left-over temporary set before.
+            "flush %s" % self.tmpname,
+        ]
+        # Add all the members to the temporary set,
+        input_lines += ["add %s %s" % (self.tmpname, m) for m in self.members]
+        # Then, atomically swap the temporary set into place.
+        input_lines.append("swap %s %s" % (self.name, self.tmpname))
+        # Finally, delete the temporary set (which was the old active set).
+        input_lines.append("destroy %s" % self.tmpname)
+        # COMMIT tells ipset restore to actually execute the changes.
+        input_lines.append("COMMIT")
 
-        for member in self.members:
-            f.write("add %s %s\n" % (set_name, member))
-
-        if swap:
-            f.write("swap %s %s\n" % (self.name, self.tmpname))
-            f.write("destroy %s\n" % (self.tmpname))
-
-        f.close()
-
-        # Load that data.
-        futils.check_call(["ipset", "restore", "-file", filename])
-
-        # By the time we get here, the set exists, and the tmpset does not if
-        # we just destroyed it after a swap (it might still exist if it did and
-        # the main set did not when we started, unlikely though that seems!).
-        self.set_exists = True
-        if swap:
-            self.tmpset_exists = False
-
-        # Tidy up the tmp file.
-        os.remove(filename)
+        input_str = "\n".join(input_lines) + "\n"
+        futils.check_call(["ipset", "restore"], input_str=input_str)
 
         # We have got the set into the correct state.
         self.programmed_members = self.members.copy()
 
+    def __str__(self):
+        return self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s," \
+                                         "name=%s,id=%s>" % (
+            self._event_queue.qsize(),
+            bool(self.greenlet),
+            self._current_msg,
+            self.name,
+            self._id,
+        )
 
-def ipset_exists(name):
+
+def tag_to_ipset_name(ip_type, tag, tmp=False):
     """
-    Check if a set of the correct name exists.
+    Turn a (possibly shortened) tag ID into an ipset name.
     """
-    return futils.call_silent(["ipset", "list", name]) == 0
+    if not tmp:
+        name = IPSET_PREFIX[ip_type] + tag
+    else:
+        name = IPSET_TMP_PREFIX[ip_type] + tag
+    return name
 
 
 def list_ipset_names():
