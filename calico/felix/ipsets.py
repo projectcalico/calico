@@ -50,26 +50,56 @@ class IpsetManager(ReferenceManager):
         self.tags_by_prof_id = {}
         self.endpoints_by_ep_id = {}
 
-        # Main index self.ip_owners_by_tag[tag][ip] == set([endpoint_id])
+        # Main index.  Since an IP address can be assigned to multiple
+        # endpoints, we need to track which endpoints reference an IP.  When
+        # we find the set of endpoints with an IP is empty, we remove the
+        # ip from the tag.
+        # ip_owners_by_tag[tag][ip] = set([endpoint_id, endpoint_id2, ...])
         self.ip_owners_by_tag = defaultdict(lambda: defaultdict(set))
-        # And the actual ip memberships
-        self.ips_in_tag = defaultdict(set)
 
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
+        # Set of tag IDs that may be out of sync.  Accumulated by the
+        # index-update functions.  We apply the updates in _finish_msg_batch().
+        # May include non-live tag IDs.
+        self._dirty_tags = set()
+
     def _create(self, tag_id):
-        # Create the ActiveIpset, and put a message on the queue that will
-        # trigger it to update the ipset as soon as it starts. Note that we do
-        # this now so that it is sure to be processed with the first batch even
-        # if other messages are arriving.
         active_ipset = ActiveIpset(futils.uniquely_shorten(tag_id, 16),
                                    self.ip_type)
-        members = self.ips_in_tag.get(tag_id, set())
-        active_ipset.replace_members(members, async=True)
         return active_ipset
 
-    def _on_object_started(self, tag_id, ipset):
+    def _on_object_started(self, tag_id, active_ipset):
         _log.debug("ActiveIpset actor for %s started", tag_id)
+        # Fill the ipset in with its members, this will trigger its first
+        # programming, after which it will call us back to tell us it is ready.
+        # We can't use self._dirty_tags to defer this in case the set becomes
+        # unreferenced before _finish_msg_batch() is called.
+        self._update_active_ipset(tag_id)
+
+    def _update_active_ipset(self, tag_id):
+        """
+        Replaces the members of the identified ActiveIpset with the
+        current set.
+
+        :param tag_id: The ID of the tag, must be an active tag.
+        """
+        assert self._is_starting_or_live(tag_id)
+        active_ipset = self.objects_by_id[tag_id]
+        members = self.ip_owners_by_tag.get(tag_id, {}).keys()
+        active_ipset.replace_members(set(members), async=True)
+
+    def _update_dirty_active_ipsets(self):
+        """
+        Updates the members of any live ActiveIpsets that are marked dirty.
+
+        Clears the set of dirty tags as a side-effect.
+        """
+        for tag_id in self._dirty_tags:
+            if self._is_starting_or_live(tag_id):
+                self._update_active_ipset(tag_id)
+            self._maybe_yield()
+        self._dirty_tags.clear()
 
     @property
     def nets_key(self):
@@ -99,6 +129,7 @@ class IpsetManager(ReferenceManager):
         for ep_id in missing_endpoints:
             self.on_endpoint_update(ep_id, None)
             self._maybe_yield()
+
         _log.info("Tags snapshot applied: %s tags, %s endpoints",
                   len(tags_by_prof_id), len(endpoints_by_id))
 
@@ -136,6 +167,10 @@ class IpsetManager(ReferenceManager):
     def on_tags_update(self, profile_id, tags):
         """
         Called when the given tag list has changed or been deleted.
+
+        Updates the indices and notifies any live ActiveIpset objects of any
+        any changes that affect them.
+
         :param list[str]|NoneType tags: List of tags for the given profile or
             None if deleted.
         """
@@ -143,14 +178,14 @@ class IpsetManager(ReferenceManager):
 
         # General approach is to default to the empty list if the new/old
         # tag list is missing; then add/delete falls out: all the tags will
-        # end up in either added_tags or removed_tags.
+        # end up in added_tags/removed_tags.
         old_tags = set(self.tags_by_prof_id.get(profile_id, []))
         new_tags = set(tags or [])
-
+        # Find the endpoints that use these tags and work out what tags have 
+        # been added/removed.
         endpoint_ids = self.endpoint_ids_by_profile_id.get(profile_id, set())
         added_tags = new_tags - old_tags
         removed_tags = old_tags - new_tags
-
         _log.debug("Endpoint IDs with this profile: %s", endpoint_ids)
         _log.debug("Profile %s added tags: %s", profile_id, added_tags)
         _log.debug("Profile %s removed tags: %s", profile_id, removed_tags)
@@ -177,11 +212,10 @@ class IpsetManager(ReferenceManager):
         return set(map(futils.net_to_ip,
                        endpoint.get(self.nets_key, [])))
 
-
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
-        Update tag memberships and indexes with the new endpoint dict.
+        Update tag memberships and indices with the new endpoint dict.
 
         :param str endpoint_id: ID of the endpoint.
         :param dict|NoneType endpoint: Either a dict containing endpoint
@@ -232,7 +266,7 @@ class IpsetManager(ReferenceManager):
         old_ips = self._extract_ips(old_endpoint)
         new_ips = self._extract_ips(endpoint)
 
-        # Remove *all* *old* IPs from removed tags.  For a deletion only this
+        # Remove *all* *old* IPs from removed tags.  For a deletion, only this
         # loop will fire, removed_tags will be all tags and old_ips will be
         # all the old IPs.
         for tag in removed_tags:
@@ -263,15 +297,13 @@ class IpsetManager(ReferenceManager):
         ep_ids = self.ip_owners_by_tag[tag_id][ip_address]
         ip_added = not bool(ep_ids)
         ep_ids.add(endpoint_id)
-        self.ips_in_tag[tag_id].add(ip_address)
-        if ip_added and self._is_starting_or_live(tag_id):
-            _log.debug("Adding %s to active tag %s", ip_address, tag_id)
-            self.objects_by_id[tag_id].add_member(ip_address, async=True)
+        if ip_added:
+            self._dirty_tags.add(tag_id)
         return ip_added
 
     def _remove_mapping(self, tag_id, endpoint_id, ip_address):
         """
-        Removes the tag->endpoint->IP mapping from indexes and updates
+        Removes the tag->endpoint->IP mapping from indices and updates
         any ActiveIpset if the IP is no longer present in the tag.
 
         :return: True if the update resulted in removing that IP from the tag.
@@ -279,31 +311,46 @@ class IpsetManager(ReferenceManager):
         ep_ids = self.ip_owners_by_tag[tag_id][ip_address]
         ep_ids.discard(endpoint_id)
         ip_removed = False
-        if not ep_ids and ip_address in self.ips_in_tag:
-            ips_in_tag = self.ips_in_tag[tag_id]
-            ips_in_tag.discard(ip_address)
-            if not ips_in_tag:
-                del self.ips_in_tag[tag_id]
+        if not ep_ids:
             del self.ip_owners_by_tag[tag_id][ip_address]
+            self._dirty_tags.add(tag_id)
             ip_removed = True
-        if ip_removed and self._is_starting_or_live(tag_id):
-            _log.debug("Removing %s from active tag %s", ip_address, tag_id)
-            self.objects_by_id[tag_id].remove_member(ip_address, async=True)
         return ip_removed
 
     def _add_profile_index(self, prof_id, endpoint_id):
-        if prof_id is None:
-            return
-        self.endpoint_ids_by_profile_id[prof_id].add(endpoint_id)
+        """
+        Notes in the index that an endpoint uses a profile.
+
+        Does nothing if profile_id == None.
+        """
+        if prof_id is not None:
+            self.endpoint_ids_by_profile_id[prof_id].add(endpoint_id)
 
     def _remove_profile_index(self, prof_id, endpoint_id):
-        if prof_id is None:
-            return
-        endpoints = self.endpoint_ids_by_profile_id[prof_id]
-        endpoints.discard(endpoint_id)
-        if not endpoints:
-            _log.debug("No more endpoints use profile %s", prof_id)
-            del self.endpoint_ids_by_profile_id[prof_id]
+        """
+        Notes in the index that an endpoint no longer uses a profile.
+
+        Does nothing if profile_id == None.
+        """
+        if prof_id is not None:
+            endpoints = self.endpoint_ids_by_profile_id[prof_id]
+            endpoints.discard(endpoint_id)
+            if not endpoints:
+                _log.debug("No more endpoints use profile %s", prof_id)
+                del self.endpoint_ids_by_profile_id[prof_id]
+
+    def _finish_msg_batch(self, batch, results):
+        """
+        Called after a batch of messages is finished, processes any
+        pending ActiveIpset member updates.
+
+        Doing that here allows us to lots of updates into one replace
+        operation.  It also avoid wasted effort if tags are flapping.
+        """
+        super(IpsetManager, self)._finish_msg_batch(batch, results)
+        _log.info("Finishing batch, sending updates to any dirty tags..")
+        self._update_dirty_active_ipsets()
+        _log.info("Finished sending updates to dirty tags.")
 
 
 class ActiveIpset(RefCountedActor):
@@ -350,20 +397,6 @@ class ActiveIpset(RefCountedActor):
         self.members = members
 
     @actor_message()
-    def add_member(self, member):
-        _log.info("Adding member %s to ipset %s", member, self.name)
-        if member not in self.members:
-            self.members.add(member)
-
-    @actor_message()
-    def remove_member(self, member):
-        _log.info("Removing member %s from ipset %s", member, self.name)
-        try:
-            self.members.remove(member)
-        except KeyError:
-            _log.info("%s was not in ipset %s", member, self.name)
-
-    @actor_message()
     def on_unreferenced(self):
         # Mark the object as stopped so that we don't accidentally recreate
         # the ipset in _finish_msg_batch.
@@ -378,10 +411,6 @@ class ActiveIpset(RefCountedActor):
             self._notify_cleanup_complete()
 
     def _finish_msg_batch(self, batch, results):
-        # No need to combine members of the batch (although we could). None of
-        # the add_members / remove_members / replace_members calls actually
-        # does any work, just updating state. The _finish_msg_batch call will
-        # then program the real changes.
         if not self.stopped and self.members != self.programmed_members:
             self._sync_to_ipset()
 
@@ -423,13 +452,16 @@ class ActiveIpset(RefCountedActor):
         self.programmed_members = self.members.copy()
 
     def __str__(self):
-        return self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s," \
-                                         "name=%s,id=%s>" % (
-            self._event_queue.qsize(),
-            bool(self.greenlet),
-            self._current_msg,
-            self.name,
-            self._id,
+        return (
+            self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s,"
+                                      "name=%s,id=%s>" %
+            (
+                self._event_queue.qsize(),
+                bool(self.greenlet),
+                self._current_msg,
+                self.name,
+                self._id,
+            )
         )
 
 
