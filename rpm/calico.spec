@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.16
+Version:        0.17
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,63 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Apr 27 2015 Neil Jerram <neil@projectcalico.org> 0.17
+- Bug fixes and improvements to Calico components
+  - Clean up config loading (code review markups).
+  - Remove references to ACL manager from RHEL docs
+  - Etcd install instructions for RHEL
+  - Be more defensive in etcd polling, catch various HTTP-related exceptions.
+  - Fix import order in felix.py to invoke gevent monkey-patch first.
+  - Fix missing arg to log message.
+  - Remove incorrect comment.
+  - Fix plugin to set only icmp_type/code and not port range for ICMP.
+  - Add UTs for ICMP rule generation.
+  - Add felix support for ICMP code, firewall values.
+  - Validate plugin data agsint felix's validation routines.
+  - Code review markups.
+  - Fix missing continue: use setting of response as a gate in fetcd.py.
+  - Increase severity of socket.timeout warning.
+  - Add httplib errors into excepts.
+  - Code review markups.
+  - Update involved.rst
+  - Update contribute.rst
+  - Tidy up line lengths
+  - Revert "Tidy up line lengths"
+  - Tidy up line lengths
+  - Don't unnecessarily pin versions
+  - Fix up a range of commnents.
+  - Cleanup toctree for contribution doc
+  - Further README cleanup
+  - The letter 'a' is tricksy
+  - Update contribute.rst
+  - RPM Version 0.16
+  - Fix RPM version
+  - Beef up syslog format, add a couple of additional logs.
+  - Debian packaging: python-gevent is not actually needed on controller
+  - RPM packaging: remove ACL manager and ZMQ deps; add python-gevent (fixes #435)
+  - Packaging: add dependency of Felix on net-tools, for the arp command (fixes #146)
+  - Make ipset uperations idempotent.
+  - Fix cluster UUID check.  Copy UUID from old client to new, fix typo in arg name.
+  - RHEL install markups
+  - Fix my own review markups
+  - Run etcd on startup
+  - After reboots
+  - Copy etcd binaries to the right place
+  - Update bundle for etcd architecture
+  - Use commit id instead of tag in tox dependency
+  - Code review markups.
+  - Prevent ActiveIpset from recreating ipset after on_unreferenced().
+  - Fix missing stdin argument to Popen, beef up diags for ActiveIpset.
+  - Code review markups.
+  - Update openstack.rst
+  - Don't setuid on RHEL 6.5.
+  - Wrapping lines
+  - Fix numbering in ubuntu-opens-install.rst
+  - Add missing jump target to ICMPv6 from endpoint rule.
+  - Add "icmp_code" to whitelist of allowed rule fields.
+  - Prevent programming of ICMP type 255, which the kernel treats as wildcard.
+  - Isolate rule parsing failure to individual rule.
+
 * Tue Apr 21 2015 Matt Dupre <matt@projectcalico.org> 0.16
 - First release with etcd
 
