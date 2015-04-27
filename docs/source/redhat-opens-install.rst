@@ -540,6 +540,15 @@ On a compute node, perform the following steps:
 
          initctl start bird
 
+15. Create the ``/etc/calico/felix.cfg`` file by copying
+    ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
+    used, but see :doc:`configuration` for more details.
+
+16. Restart the Felix service:
+
+       - on RHEL 6.5, run ``initctl start calico-felix``.
+       - on RHEL 7, run ``systemctl restart calico-felix``.
+
 Next Steps
 ----------
 
