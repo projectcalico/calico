@@ -144,6 +144,7 @@ class AdapterResource(resource.Resource):
 
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
+            env_list = env_list if env_list is not None else []
             env_dict = env_to_dictionary(env_list)
             ip_str = env_dict[ENV_IP]
             profile = env_dict.get(ENV_PROFILE, None)
