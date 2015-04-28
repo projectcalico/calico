@@ -22,7 +22,7 @@ import eventlet
 import json
 import mock
 import unittest
-from calico.felix import fetcd
+from calico import common
 
 import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
@@ -556,7 +556,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         else:
             rules = {"outbound_rules": [etcd_rule],
                      "inbound_rules": []}
-        fetcd.validate_rules(rules)
+        common.validate_rules(rules)
 
 
 def _neutron_rule_from_dict(overrides):
