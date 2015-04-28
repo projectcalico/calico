@@ -26,8 +26,6 @@ import sys
 import time
 
 import calico.felix.test.stub_etcd as stub_etcd
-sys.modules['etcd'] = stub_etcd
-
 import calico.felix.futils as futils
 import calico.felix.felix as felix
 from calico.felix.test.base import BaseTestCase
@@ -39,8 +37,18 @@ log = logging.getLogger(__name__)
 class TestException(Exception):
     pass
 
-
 class TestBasic(BaseTestCase):
+    def setUp(self):
+        super(TestBasic, self).setUp()
+        self._real_etcd = sys.modules.get('etcd', None)
+        sys.modules['etcd'] = stub_etcd
+
+    def tearDown(self):
+        super(TestBasic, self).tearDown()
+        if self._real_etcd is None:
+            sys.modules.pop('etcd')
+        else:
+            sys.modules['etcd'] = self._real_etcd
 
     @mock.patch("calico.felix.fetcd.EtcdWatcher.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
