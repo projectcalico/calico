@@ -89,7 +89,7 @@ class EndpointManager(ReferenceManager):
         for ep_id, ep in endpoints_by_id.iteritems():
             if ep and ep["host"] == self.config.HOSTNAME and ep.get("name"):
                 local_iface_name_to_ep_id[ep.get("name")] = ep_id
-        self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id,
+        self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id.keys(),
                                             async=True)
 
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
@@ -293,7 +293,7 @@ class LocalEndpoint(RefCountedActor):
                 _log.info("%s became ready to program.", self)
                 self._update_chains()
                 self.dispatch_chains.on_endpoint_added(
-                    self._iface_name, self.endpoint_id, async=True)
+                    self._iface_name, async=True)
             else:
                 # We were active but now we're not, withdraw the dispatch rule
                 # and our chain.  We must do this to allow iptables to remove
