@@ -22,6 +22,7 @@ import logging
 from subprocess import CalledProcessError
 import itertools
 from calico.felix import futils
+from calico.common import KNOWN_RULE_KEYS
 import re
 
 _log = logging.getLogger(__name__)
@@ -40,23 +41,6 @@ CHAIN_FROM_ENDPOINT = FELIX_PREFIX + "FROM-ENDPOINT"
 CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
-
-
-# Valid keys for a rule JSON dict.
-KNOWN_RULE_KEYS = set([
-    "action",
-    "protocol",
-    "src_net",
-    "src_tag",
-    "src_ports",
-    "dst_net",
-    "dst_tag",
-    "dst_ports",
-    "icmp_type",
-    "icmp_code",
-    "ip_version",
-])
-
 
 def profile_to_chain_name(inbound_or_outbound, profile_id):
     """
