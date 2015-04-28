@@ -57,17 +57,20 @@ class TestDispatchChains(BaseTestCase):
         # We only care about positional arguments
         args = args[0]
 
-        # The fact that sets are used means we can't demand ordering, so do
-        # ItemsEqual.
+        # The DispatchChains object stores the endpoints in a set, which means
+        # that when it builds the list of goto rules they can be emitted in any
+        # order. However, the DROP rule must always appear at the end. To do
+        # that, first check that the updates contain the same rules in any
+        # order (using assertItemsEqual), and then confirm that the last rule
+        # is the DROP rule.
         self.assertItemsEqual(args[0][CHAIN_TO_ENDPOINT], to_updates)
         self.assertItemsEqual(args[0][CHAIN_FROM_ENDPOINT], from_updates)
-        self.assertEqual(args[1][CHAIN_TO_ENDPOINT], to_chain_names)
-        self.assertEqual(args[1][CHAIN_FROM_ENDPOINT], from_chain_names)
-
-        # We do want to ensure that the drop rule really is last in both
-        # update lists.
         self.assertEqual(args[0][CHAIN_TO_ENDPOINT][-1], to_updates[-1])
         self.assertEqual(args[0][CHAIN_FROM_ENDPOINT][-1], from_updates[-1])
+
+        # Confirm that the dependency sets match.
+        self.assertEqual(args[1][CHAIN_TO_ENDPOINT], to_chain_names)
+        self.assertEqual(args[1][CHAIN_FROM_ENDPOINT], from_chain_names)
 
     def test_applying_snapshot_clean(self):
         """
