@@ -600,7 +600,8 @@ def node_show(detailed):
                     for ep_id, endpoint in endpoints.iteritems():
                         x.add_row([host,
                                    container_type,
-                                   workload,
+                                   # Truncate ID to 12 chars like Docker
+                                   workload[:12],
                                    ep_id,
                                    "\n".join([str(net) for net in
                                              endpoint.ipv4_nets |
