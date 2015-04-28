@@ -21,7 +21,9 @@ per-endpoint chains.
 """
 import logging
 from calico.felix.actor import Actor, actor_message
-from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
+from calico.felix.frules import (
+    CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, chain_names, interface_to_suffix
+)
 
 _log = logging.getLogger(__name__)
 
@@ -115,7 +117,6 @@ class DispatchChains(Actor):
         from_deps = set()
         dependencies = {CHAIN_TO_ENDPOINT: to_deps,
                         CHAIN_FROM_ENDPOINT: from_deps}
-        from calico.felix.endpoint import chain_names, interface_to_suffix
         for iface in self.iface_to_ep_id:
             # Add rule to global chain to direct traffic to the
             # endpoint-specific one.  Note that we use --goto, which means
@@ -139,5 +140,7 @@ class DispatchChains(Actor):
                                              async=False)
 
     def __str__(self):
-        return self.__class__.__name__ + "<ipv%s,entries=%s>" % \
+        return (
+            self.__class__.__name__ + "<ipv%s,entries=%s>" %
             (self.ip_version, len(self.iface_to_ep_id))
+        )
