@@ -77,7 +77,7 @@ class ConfigParameter(object):
     - Where the value was read from
     """
     def __init__(self, name, description, default,
-                 sources=DEFAULT_SOURCES, int=False):
+                 sources=DEFAULT_SOURCES, value_is_int=False):
         """
         Create a configuration parameter.
         :param str description: Description for logging
@@ -90,7 +90,7 @@ class ConfigParameter(object):
         self.sources = sources
         self.value = default
         self.active_source = None
-        self.value_is_int = int
+        self.value_is_int = value_is_int
 
     def set(self, value, source):
         """
@@ -108,6 +108,8 @@ class ConfigParameter(object):
             self.active_source = source
 
             if self.value_is_int:
+                # Set value before the call to int, so the ConfigException has
+                # the right value if / when it goes wrong.
                 self.value = value
                 try:
                     self.value = int(value)
@@ -134,6 +136,13 @@ class Config(object):
         - Configuration file
         - per-host etcd (/calico/vX/config)
         - global etcd (/calico/vX/host/<host>/config)
+
+        After object creation, the environment variables and config file have
+        been read, and the variables ETCD_ADDR and HOSTNAME have been set and
+        validated. The caller is then responsible for reading the remaining
+        config from etcd and calling report_etcd_config with the returned
+        values before the rest of the config structure can be used.
+
         :raises EtcdException
         """
         self.parameters = {}
@@ -144,10 +153,11 @@ class Config(object):
                            socket.gethostname(), sources = [ENV, FILE])
 
         self.add_parameter("StartupCleanupDelay", "Delay before cleanup starts",
-                           30, int = True)
+                           30, value_is_int=True)
         self.add_parameter("MetadataAddr", "Metadata IP address or hostname",
                            "127.0.0.1")
-        self.add_parameter("MetadataPort", "Metadata Port", 8775, int=True)
+        self.add_parameter("MetadataPort", "Metadata Port",
+                           8775, value_is_int=True)
         self.add_parameter("InterfacePrefix", "Interface name prefix", None)
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
@@ -246,18 +256,18 @@ class Config(object):
 
     def report_etcd_config(self, host_dict, global_dict):
         """
-        Report back configuration parameters read from etcd.
+        Report configuration parameters read from etcd to the config
+        component. This must be called only once, after configuration is
+        initially read and before the config structure is used (except for
+        ETCD_ADDR and HOSTNAME).
+
         :param host_dict: Dictionary of etcd parameters
         :param global_dict: Dictionary of global parameters
         :raises ConfigException
         """
         log.debug("Configuration reported from etcd")
-        for source in (LOCAL_ETCD, GLOBAL_ETCD):
-            if source == LOCAL_ETCD:
-                cfg_dict = host_dict
-            else:
-                cfg_dict = global_dict
-
+        for source, cfg_dict in ((LOCAL_ETCD, host_dict),
+                                 (GLOBAL_ETCD, global_dict)):
             for name, parameter in self.parameters.iteritems():
                 if source in parameter.sources and name in cfg_dict:
                     parameter.set(cfg_dict.pop(name), source)
@@ -268,8 +278,10 @@ class Config(object):
 
     def _validate_cfg(self, final=True):
         """
-        Firewall that the config is not invalid.
-        :param stage: Which source we just loaded.
+        Firewall that the config is not invalid. Called twice, once when
+        environment variables and config file have been read, and once
+        after those plus the etcd configuration have been read.
+        :param final: Is this after final etcd config has been read?
         :raises ConfigException
         """
         fields = self.ETCD_ADDR.split(":")

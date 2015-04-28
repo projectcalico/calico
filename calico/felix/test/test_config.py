@@ -35,12 +35,6 @@ else:
 log = logging.getLogger(__name__)
 
 class TestConfig(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     def test_default_config(self):
         """
         Test various ways of defaulting config.
