@@ -92,6 +92,24 @@ def add_ip_to_interface(container_pid, ip, interface_name):
                 "device": interface_name},
                shell=True)
 
+def remove_ip_from_interface(container_pid, ip, interface_name):
+    """
+    Remove an IP from an interface in a container.
+
+    :param container_pid: The PID and name of the namespace to operate in.
+    :param ip: The IPAddress to remove.
+    :param interface_name: The interface to remove the address from.
+    :return: None. raises CalledProcessError on error.
+    """
+    check_call("ip netns exec %(cpid)s ip -%(version)s addr del "
+               "%(addr)s/%(len)s dev %(device)s" %
+               {"cpid": container_pid,
+                "version": ip.version,
+                "len": PREFIX_LEN[ip.version],
+                "addr": ip,
+                "device": interface_name},
+               shell=True)
+
 
 def set_up_endpoint(ip, cpid, next_hop_ips,
                     in_container=False,

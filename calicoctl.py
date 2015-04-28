@@ -846,7 +846,7 @@ def container_ip_add(container_name, ip, version, interface):
     :param container_name: The name of the container.
     :param ip: The IP to add
     :param version: The IP version
-    :param interface: The name of hte interface in the container.
+    :param interface: The name of the interface in the container.
     
     :return: None
     """
@@ -855,7 +855,7 @@ def container_ip_add(container_name, ip, version, interface):
     # The netns manipulations must be done as root.
     enforce_root()
 
-    pool = get_pool_or_exit(ip, version)
+    pool = get_pool_or_exit(address)
 
     info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
@@ -888,7 +888,6 @@ def container_ip_add(container_name, ip, version, interface):
             endpoint.ipv6_nets.add(IPNetwork(address))
         client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
     except (KeyError, ValueError) as e:
-        print e
         client.unassign_address(pool, ip)
         print "Error updating datastore. Aborting."
         sys.exit(1)
@@ -907,8 +906,66 @@ def container_ip_add(container_name, ip, version, interface):
 
     print "IP %s added to %s" % (ip, container_name)
 
-def container_ip_remove(container_name, ip, version):
+def container_ip_remove(container_name, ip, version, interface):
+    """
+    Add an IP address to an existing calico networked container.
+
+    :param container_name: The name of the container.
+    :param ip: The IP to add
+    :param version: The IP version
+    :param interface: The name of the interface in the container.
+
+    :return: None
+    """
     address = check_ip_version(ip, version, IPAddress)
+
+    # The netns manipulations must be done as root.
+    enforce_root()
+
+    pool = get_pool_or_exit(address)
+
+    info = get_container_info_or_exit(container_name)
+    container_id = info["Id"]
+
+    # Check the container is actually running.
+    if not info["State"]["Running"]:
+        print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # Check that the container is already networked
+    try:
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+    except KeyError:
+        print "Container is unknown to calico. Tell calico about the " \
+              "container before removing addresses."
+        sys.exit(1)
+
+    try:
+        old_endpoint = copy.deepcopy(endpoint)
+        if address.version == 4:
+            endpoint.ipv4_nets.remove(IPNetwork(address))
+        else:
+            endpoint.ipv6_nets.remove(IPNetwork(address))
+        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+    except (KeyError, ValueError) as e:
+        print "Error updating datastore. Aborting."
+        sys.exit(1)
+
+    try:
+        container_pid = info["State"]["Pid"]
+        netns.ensure_namespace_named(container_pid)
+        netns.remove_ip_from_interface(container_pid,
+                                       address,
+                                       interface)
+
+    except CalledProcessError:
+        print "Error updating networking in container. Aborting."
+        sys.exit(1)
+
+    client.unassign_address(pool, ip)
+
+    print "IP %s removed from %s" % (ip, container_name)
 
 
 if __name__ == '__main__':
