@@ -21,7 +21,11 @@ sections, make sure you follow the **Common Steps** section, and if you
 want to create a combined controller and compute node, work through all
 three sections.
 
-.. warning:: We are still updating our install procedures for RHEL 6.5 following the upgrade to use etcd as a data store.  We will update the instructions below shortly, once the procedures are finalised.  In the meantime, if RHEL 6.5 is critical to you, please `let us know <http://www.projectcalico.org/contact/>`_.
+.. warning:: We are still updating our install procedures for RHEL 6.5
+             following the upgrade to use etcd as a data store.  We will update
+             the instructions below shortly, once the procedures are finalised.
+             In the meantime, if RHEL 6.5 is critical to you, please
+             `let us know <http://www.projectcalico.org/contact/>`_.
 
 Prerequisites
 -------------
@@ -55,8 +59,8 @@ Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 As well as the repositories for OpenStack and EPEL
-(https://fedoraproject.org/wiki/EPEL) - which you will have already
-configured as part of the previous step - you will need to configure the
+(https://fedoraproject.org/wiki/EPEL) -- which you will have already
+configured as part of the previous step -- you will need to configure the
 repository for Calico.
 
 For RHEL 7::
