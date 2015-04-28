@@ -332,5 +332,18 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
     return " ".join(str(x) for x in update_fragments)
 
 
+def interface_to_suffix(config, iface_name):
+    suffix = iface_name.replace(config.IFACE_PREFIX, "", 1)
+    # The suffix is surely not very long, but make sure.
+    suffix = futils.uniquely_shorten(suffix, 16)
+    return suffix
+
+
+def chain_names(endpoint_suffix):
+    to_chain_name = (CHAIN_TO_PREFIX + endpoint_suffix)
+    from_chain_name = (CHAIN_FROM_PREFIX + endpoint_suffix)
+    return to_chain_name, from_chain_name
+
+
 class UnsupportedICMPType(Exception):
     pass

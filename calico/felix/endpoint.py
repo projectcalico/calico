@@ -29,7 +29,8 @@ from calico.felix.refcount import ReferenceManager, RefCountedActor
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (CHAIN_TO_PREFIX, profile_to_chain_name,
-                                 CHAIN_FROM_PREFIX, commented_drop_fragment)
+                                 CHAIN_FROM_PREFIX, commented_drop_fragment,
+                                 interface_to_suffix, chain_names)
 
 _log = logging.getLogger(__name__)
 
@@ -382,19 +383,6 @@ class LocalEndpoint(RefCountedActor):
         return ("Endpoint<%s,id=%s,iface=%s>" %
                 (self.ip_type, self.endpoint_id,
                  self._iface_name or "unknown"))
-
-
-def interface_to_suffix(config, iface_name):
-    suffix = iface_name.replace(config.IFACE_PREFIX, "", 1)
-    # The suffix is surely not very long, but make sure.
-    suffix = futils.uniquely_shorten(suffix, 16)
-    return suffix
-
-
-def chain_names(endpoint_suffix):
-    to_chain_name = (CHAIN_TO_PREFIX + endpoint_suffix)
-    from_chain_name = (CHAIN_FROM_PREFIX + endpoint_suffix)
-    return to_chain_name, from_chain_name
 
 
 def _get_endpoint_rules(suffix, iface, ip_version, local_ips, mac, profile_id):
