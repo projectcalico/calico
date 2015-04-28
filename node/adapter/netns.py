@@ -31,7 +31,8 @@ _log = logging.getLogger(__name__)
 HOSTNAME = socket.gethostname()
 
 VETH_NAME = "eth1"
-"""The name to give to the veth in the target container's namespace"""
+"""The name to give to the veth in the target container's namespace. Default
+to eth1 because eth0 could be in use"""
 
 ROOT_NETNS = "1"
 """The pid of the root namespace.  On almost all systems, the init system is
@@ -48,7 +49,8 @@ PROC_ALIAS = "proc_host"
 
 def setup_logging(logfile):
     _log.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
@@ -122,7 +124,10 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
 
     # Provision the networking
     check_call("mkdir -p /var/run/netns", shell=True)
-    check_call("ln -s /%s/%s/ns/net /var/run/netns/%s" % (proc_alias, cpid, cpid), shell=True)
+    check_call("ln -s /%s/%s/ns/net /var/run/netns/%s" % (proc_alias,
+                                                          cpid,
+                                                          cpid),
+               shell=True)
 
     # If running in a container, set up a link to the root netns.
     if in_container:
@@ -136,7 +141,8 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     _log.debug(check_output("ls -l /var/run/netns", shell=True))
 
     # Create the veth pair and move one end into container:
-    check_call("ip link add %s type veth peer name %s" % (iface, iface_tmp), shell=True)
+    check_call("ip link add %s type veth peer name %s" % (iface, iface_tmp),
+               shell=True)
     check_call("ip link set %s up" % iface, shell=True)
     check_call("ip link set %s netns %s" % (iface_tmp, cpid), shell=True)
     _log.debug(check_output("ip netns exec %s ip link" % cpid, shell=True))
@@ -146,7 +152,8 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                                                                 iface_tmp,
                                                                 veth_name),
                shell=True)
-    check_call("ip netns exec %s ip link set %s up" % (cpid, veth_name), shell=True)
+    check_call("ip netns exec %s ip link set %s up" % (cpid, veth_name),
+               shell=True)
 
     # If in container, the iface end of the veth pair will be in the container
     # namespace.  We need to move it to the root namespace so it will
@@ -154,7 +161,8 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     if in_container:
         # Move the other end of the veth pair into the root namespace
         check_call("ip link set %s netns %s" % (iface, ROOT_NETNS), shell=True)
-        check_call("ip netns exec %s ip link set %s up" % (ROOT_NETNS, iface), shell=True)
+        check_call("ip netns exec %s ip link set %s up" % (ROOT_NETNS, iface),
+                   shell=True)
 
     # Add an IP address.
     add_ip_to_interface(cpid, ip, veth_name)
@@ -177,8 +185,9 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                shell=True)
 
     # Get the MAC address.
-    mac = check_output("ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" %
-                       (cpid, veth_name), shell=True).strip()
+    mac = check_output(
+        "ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" %
+        (cpid, veth_name), shell=True).strip()
 
     # Return an Endpoint
     network = IPNetwork(IPAddress(ip))
@@ -193,5 +202,13 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
 
 
 def ensure_namespace_named(container_pid):
+    """
+    Ensures that a namespace is named. Idempotent.
+
+    :param container_pid: The container_pid to name.
+    :return: raises CalledProcessError if naming the ns fails.
+    """
     if not os.path.islink("/var/run/netns/%s" % container_pid):
-        check_call("ln -s /proc/%s/ns/net /var/run/netns/%s" % (container_pid, container_pid), shell=True)
+        check_call("ln -s /proc/%s/ns/net /var/run/netns/%s" % (container_pid,
+                                                                container_pid),
+                   shell=True)

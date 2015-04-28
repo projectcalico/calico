@@ -81,7 +81,11 @@ except sh.CommandNotFound as e:
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
-def get_container_info(container_name):
+class ConfigError(Exception):
+    pass
+
+
+def get_container_info_or_exit(container_name):
     """
     Get the full container info array from a partial ID or name.
 
@@ -105,26 +109,33 @@ def get_container_id(container_name):
     :param container_name: The partial ID or name of the container.
     :return: The container ID as a string.
     """
-    info = get_container_info(container_name)
+    info = get_container_info_or_exit(container_name)
     return info["Id"]
 
 
-class ConfigError(Exception):
-    pass
-
-
-def check_root():
+def enforce_root():
+    """
+    Check if the current process is running as the root user.
+    :return: Nothing. sys.exit if not running as root.
+    """
     if os.geteuid() != 0:
         print >> sys.stderr, "This command must be run as root."
         sys.exit(2)
 
 
-def get_pool(ip, version):
-    pools = client.get_ip_pools(version)
+def get_pool_or_exit(ip):
+    """
+    Get the first allocation pool that an IP is in.
+
+    :param ip: The IPAddress to find the pool for.
+    :return: The pool or sys.exit
+    """
+    pools = client.get_ip_pools("v%s" % ip.version)
     pool = None
     for candidate_pool in pools:
         if ip in candidate_pool:
             pool = candidate_pool
+            break
     if pool is None:
         print "%s is not in any configured pools" % ip
         sys.exit(1)
@@ -140,8 +151,8 @@ def container_add(container_name, ip, interface):
     :param ip: An IPAddress object with the desired IP to assign.
     """
     # The netns manipulations must be done as root.
-    check_root()
-    info = get_container_info(container_name)
+    enforce_root()
+    info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
 
     # Check if the container already exists
@@ -167,8 +178,7 @@ def container_add(container_name, ip, interface):
     # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
     # it.
     ip = IPAddress(ip)
-    version = "v%s" % ip.version
-    pool = get_pool(ip, version)
+    pool = get_pool_or_exit(ip)
 
     # The next hop IPs for this host are stored in etcd.
     next_hops = client.get_default_next_hops(hostname)
@@ -207,7 +217,7 @@ def container_remove(container_name):
     :param container_name: The name or ID of the container.
     """
     # The netns manipulations must be done as root.
-    check_root()
+    enforce_root()
 
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
@@ -259,7 +269,7 @@ def module_loaded(module):
 
 def node(ip, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
-    check_root()
+    enforce_root()
 
     if not module_loaded("ip6_tables"):
         print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
@@ -735,7 +745,7 @@ def restart_docker_with_alternative_unix_socket():
     Set the docker daemon to listen on the docker.real.sock by updating
     the config, clearing old sockets and restarting.
     """
-    check_root()
+    enforce_root()
     docker_restarter.restart_docker_with_alternative_unix_socket()
 
 
@@ -743,7 +753,7 @@ def restart_docker_without_alternative_unix_socket():
     """
     Remove any "alternative" unix socket config.
     """
-    check_root()
+    enforce_root()
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
@@ -843,11 +853,11 @@ def container_ip_add(container_name, ip, version, interface):
     address = check_ip_version(ip, version, IPAddress)
 
     # The netns manipulations must be done as root.
-    check_root()
+    enforce_root()
 
-    pool = get_pool(ip, version)
+    pool = get_pool_or_exit(ip, version)
 
-    info = get_container_info(container_name)
+    info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
 
     # Check the container is actually running.
