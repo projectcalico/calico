@@ -287,8 +287,8 @@ def validate_endpoint(config, endpoint):
         gw_key = "ipv%d_gateway" % version
         try:
             gw_str = endpoint[gw_key]
-            if gw_str is not None and not common.validate_ip_addr(gw_str,
-                                                                  version):
+            if gw_str is not None and not validate_ip_addr(gw_str,
+                                                           version):
                 issues.append("%s is not a valid IPv%d gateway address." %
                               (gw_key, version))
         except KeyError:
