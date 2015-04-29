@@ -101,10 +101,16 @@ Control Node Install
 On a control node, perform the following steps:
 
 1. Delete all configured OpenStack state, in particular any instances,
-   routers, and networks (in that order) created by the install process
-   referenced above. You can do this using the web dashboard or at the
-   command line. The Calico install will fail if incompatible state is
-   left around.
+   routers, subnets and networks (in that order) created by the install
+   process referenced above. You can do this using the web dashboard or
+   at the command line.
+
+   .. hint:: The Admin and Project sections of the web dashboard both
+             have subsections for networks and routers. Some networks
+             may need to be deleted from the Admin section.
+
+   .. warning:: The Calico install will fail if incompatible state is
+                left around.
 
 2. Run ``yum update``. This will bring in Calico-specific updates to the
    OpenStack packages and to ``dnsmasq``.
@@ -146,14 +152,12 @@ On a control node, perform the following steps:
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
 
-   - Mount a ramdisk at /var/lib/etcd::
+   - Add the following line to the bottom of ``/etc/fstab``, this will mount a
+     ramdisk for etcd at startup::
 
-        sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+       tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
 
-   - Add the following to the bottom of ``/etc/fstab`` so that the ramdisk gets
-     reinstated at boot time::
-
-        tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
+   - Run ``mount -a`` to mount it now.
 
    - Get etcd running by providing an init file.
 
@@ -186,8 +190,7 @@ On a control node, perform the following steps:
 
      For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
      ``<hostname>`` and ``<public_ip>`` with their appropriate values for the
-     machine. For ``<cluster_id>`` it can be any textual string, but make sure
-     to use a new one each time.
+     machine.
 
      ::
 
@@ -197,9 +200,25 @@ On a control node, perform the following steps:
            ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
            ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
            ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
-           ETCD_INITIAL_CLUSTER_TOKEN="<cluster_id>"
            ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
            ETCD_INITIAL_CLUSTER_STATE=new
+
+     For RHEL 7, Check the ``uuidgen`` tool is installed (the output should
+     change each time)::
+
+           # uuidgen
+           11f92f19-cb5a-476f-879f-5efc34033b8b
+
+     If it is not installed, run ``yum install util-linux`` to install it.
+
+     For RHEL 7, place the following in ``/usr/local/bin/start-etcd``::
+
+           #!/bin/sh
+           export ETCD_INITIAL_CLUSTER_TOKEN=`uuidgen`
+           exec /usr/local/bin/etcd
+
+     Then run ``chmod +x /usr/local/bin/start-etcd`` to make that file
+     executable.
 
      For RHEL 7, you then need to add the following file to
      ``/usr/lib/systemd/system/etcd.service``::
@@ -210,7 +229,7 @@ On a control node, perform the following steps:
 
            [Service]
            User=root
-           ExecStart=/usr/local/bin/etcd
+           ExecStart=/usr/local/bin/start-etcd
            EnvironmentFile=-/etc/sysconfig/etcd
            KillMode=process
            Restart=always
@@ -232,8 +251,8 @@ On a control node, perform the following steps:
 
 8. Install python-etcd::
 
-        wget https://github.com/Metaswitch/python-etcd/archive/master.tar.gz
-        tar xvf master.tar.gz
+        curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        tar xvf python-etcd.tar.gz
         cd python-etcd-master
         python setup.py install
 
@@ -253,11 +272,10 @@ Compute Node Install
 
 On a compute node, perform the following steps:
 
-1. Make the changes to SELinux and QEMU config that are described in `this
-   libvirt Wiki page <http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29>`__,
-   to allow VM interfaces with ``type='ethernet'``.
-
-   ::
+1. Make changes to SELinux and QEMU config to allow VM interfaces with
+   ``type='ethernet'``  (`this
+   libvirt Wiki page <http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29>`__
+   explains why these changes are required)::
 
        setenforce permissive
 
@@ -268,8 +286,7 @@ On a compute node, perform the following steps:
 
            SELINUX=permissive
 
-   In ``/etc/libvirt/qemu.conf``, add or edit the following four options
-   (in particular note the ``/dev/net/tun`` in ``cgroup_device_acl``):
+   In ``/etc/libvirt/qemu.conf``, add or edit the following four options:
 
    ::
 
@@ -282,6 +299,9 @@ On a compute node, perform the following steps:
                 "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
                 "/dev/rtc", "/dev/hpet", "/dev/net/tun",
            ]
+
+   .. note:: The ``cgroup_device_acl`` entry is subtly different to the
+             default. It now contains ``/dev/net/tun``.
 
    Then restart libvirt to pick up the changes:
 
@@ -346,17 +366,23 @@ On a compute node, perform the following steps:
 
            interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
-7.  Restart and enable the DHCP agent, and stop and disable the L3
-    agent.
+7.  Restart and enable the DHCP agent
 
     ::
 
         service neutron-dhcp-agent restart
         chkconfig neutron-dhcp-agent on
+
+8.  Stop and disable any other routing/bridging agents such as the L3
+    routing agent or the Linux bridging agent.  These conflict with Calico.
+
+    ::
+
         service neutron-l3-agent stop
         chkconfig neutron-l3-agent off
+        ... repeat for bridging agent and any others ...
 
-8.  If this node is not a controller, install and start the Nova
+9.  If this node is not a controller, install and start the Nova
     Metadata API. This step is not required on combined compute and
     controller nodes.
 
@@ -366,7 +392,7 @@ On a compute node, perform the following steps:
         service openstack-nova-metadata-api restart
         chkconfig openstack-nova-metadata-api on
 
-9.  For RHEL 7, install the BIRD BGP client from EPEL:
+10. For RHEL 7, install the BIRD BGP client from EPEL:
     ``yum install -y bird bird6``. Then, go on to the next step.
 
     For RHEL 6.5, BIRD needs to be built from source and installed manually.
@@ -399,7 +425,7 @@ On a compute node, perform the following steps:
         /usr/local/sbin/bird -f -c /etc/bird/bird.conf
         end script
 
-10. If this node is not a controller, install and configure etcd as an etcd
+11. If this node is not a controller, install and configure etcd as an etcd
     proxy. These assume you followed the instructions in the
     :ref:`control-node` section of this document for your contoller: if you
     installed etcd yourself in some other manner, skip to step 12.
@@ -447,7 +473,7 @@ On a compute node, perform the following steps:
 
            ETCD_PROXY=on
            ETCD_DATA_DIR=/var/lib/etcd
-           ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:4001"
+           ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
            ETCD_INITIAL_CLUSTER="<controller_hostname>=http://<controller_ip>:2380"
 
       For RHEL 7, you then need to add the following file to
@@ -467,27 +493,33 @@ On a compute node, perform the following steps:
            [Install]
            WantedBy=multi-user.target
 
-11. If this node is not a controller, launch etcd:
+12. If this node is not a controller, launch etcd:
 
     - On RHEL 6.5, run ``initctl start etcd``
 
     - On RHEL 7, run ``systemctl start etcd``. Then, run
       ``systemctl enable etcd`` to ensure it restarts after reboots.
 
-12. If this node is not a controller, install python-etcd::
+13. If this node is not also a controller, install dependencies for
+    python-etcd::
 
-        wget https://github.com/Metaswitch/python-etcd/archive/master.tar.gz
-        tar xvf master.tar.gz
+        yum groupinstall 'Development Tools'
+        yum install python-devel libffi-devel openssl-devel
+
+14. If this node is not also a controller, install python-etcd::
+
+        curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        tar xvf python-etcd.tar.gz
         cd python-etcd-master
         python setup.py install
 
-13. Install the ``calico-compute`` package:
+14. Install the ``calico-compute`` package:
 
     ::
 
         yum install calico-compute
 
-14. Configure BIRD. Calico includes useful configuration scripts that
+15. Configure BIRD. Calico includes useful configuration scripts that
     will create BIRD config files for simple topologies -- either a
     peering between a single pair of compute nodes, or to a route
     reflector (to avoid the need for a full BGP mesh in networks with
@@ -544,11 +576,11 @@ On a compute node, perform the following steps:
 
          initctl start bird
 
-15. Create the ``/etc/calico/felix.cfg`` file by copying
+16. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
     used, but see :doc:`configuration` for more details.
 
-16. Restart the Felix service:
+17. Restart the Felix service:
 
        - on RHEL 6.5, run ``initctl start calico-felix``.
        - on RHEL 7, run ``systemctl restart calico-felix``.
