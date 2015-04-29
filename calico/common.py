@@ -146,7 +146,7 @@ def default_logging():
     - attaching a SysLog handler with no formatter (log to syslog), ERROR level
       only
     - attaching a StreamHandler with the Calico formatter, to log to stdout,
-      with DEBUG level
+      with ERROR level
 
     This default explicitly excludes adding logging to file. This is because
     working out what file to log to requires reading the configuration file,
@@ -165,14 +165,14 @@ def default_logging():
     else:
         # Probably unit tests running on windows.
         syslog_handler = logging.handlers.SysLogHandler()
-    syslog_handler.setLevel(logging.INFO)
+    syslog_handler.setLevel(logging.ERROR)
     syslog_handler.setFormatter(syslog_formatter)
 
     root_logger.addHandler(syslog_handler)
 
     file_formatter = logging.Formatter(FORMAT_STRING)
     stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setLevel(logging.ERROR)
     stream_handler.setFormatter(file_formatter)
     stream_handler.addFilter(GreenletFilter())
     root_logger.addHandler(stream_handler)
@@ -181,7 +181,7 @@ def default_logging():
 def complete_logging(logfile=None,
                      file_level=logging.DEBUG,
                      syslog_level=logging.ERROR,
-                     stream_level=logging.DEBUG):
+                     stream_level=logging.ERROR):
     """
     Updates the logging configuration based on learned configuration.
 
