@@ -15,7 +15,7 @@ router id @MY_IPV4_ADDRESS@;
 
 filter export_bgp {
   if ( (ifname ~ "tap*") || (ifname ~ "cali*") || (ifname ~ "dummy1") ) then {
-    if  net != 0.0.0.0/0 then accept;
+    if  net != ::/0 then accept;
   }
   reject;
 }
