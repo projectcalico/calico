@@ -608,6 +608,15 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        EP_12.to_json())
 
+    def test_update_endpoint(self):
+        """
+        Test update_endpoint().
+        """
+        self.datastore.update_endpoint(TEST_HOST, TEST_CONT_ID, EP_90, EP_12)
+        self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
+                                                       EP_12.to_json(),
+                                                       prevValue=EP_90.to_json())
+
     def test_get_ep_id_from_cont(self):
         """
         Test get_ep_id_from_cont() when container and endpoint exist.

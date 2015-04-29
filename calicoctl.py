@@ -21,6 +21,7 @@ Usage:
   calicoctl (ipv4|ipv6) pool show
   calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
   calicoctl (ipv4|ipv6) bgppeer rr show
+  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP> [--interface=<INTERFACE>]
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -36,9 +37,9 @@ Options:
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
-
 """
 import socket
+from subprocess import CalledProcessError
 import sys
 import time
 import os
@@ -79,21 +80,25 @@ except sh.CommandNotFound as e:
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 
-def get_container_info(container_name):
+class ConfigError(Exception):
+    pass
+
+
+def get_container_info_or_exit(container_name):
     """
     Get the full container info array from a partial ID or name.
 
     :param container_name: The partial ID or name of the container.
-    :return: The container info array
+    :return: The container info array, or sys.exit if not found.
     """
     try:
         info = docker_client.inspect_container(container_name)
     except docker.errors.APIError as e:
         if e.response.status_code == 404:
-            # Re-raise as a key error for consistency.
-            raise KeyError("Container %s was not found." % container_name)
+            print "Container %s was not found." % container_name
         else:
-            raise
+            print e.message
+        sys.exit(1)
     return info
 
 def get_container_id(container_name):
@@ -103,12 +108,38 @@ def get_container_id(container_name):
     :param container_name: The partial ID or name of the container.
     :return: The container ID as a string.
     """
-    info = get_container_info(container_name)
+    info = get_container_info_or_exit(container_name)
     return info["Id"]
 
 
-class ConfigError(Exception):
-    pass
+def enforce_root():
+    """
+    Check if the current process is running as the root user.
+    :return: Nothing. sys.exit if not running as root.
+    """
+    if os.geteuid() != 0:
+        print >> sys.stderr, "This command must be run as root."
+        sys.exit(2)
+
+
+def get_pool_or_exit(ip):
+    """
+    Get the first allocation pool that an IP is in.
+
+    :param ip: The IPAddress to find the pool for.
+    :return: The pool or sys.exit
+    """
+    pools = client.get_ip_pools("v%s" % ip.version)
+    pool = None
+    for candidate_pool in pools:
+        if ip in candidate_pool:
+            pool = candidate_pool
+            break
+    if pool is None:
+        print "%s is not in any configured pools" % ip
+        sys.exit(1)
+
+    return pool
 
 
 def container_add(container_name, ip, interface):
@@ -119,14 +150,8 @@ def container_add(container_name, ip, interface):
     :param ip: An IPAddress object with the desired IP to assign.
     """
     # The netns manipulations must be done as root.
-    if os.geteuid() != 0:
-        print >> sys.stderr, "`calicoctl container add` must be run as root."
-        sys.exit(2)
-    try:
-        info = get_container_info(container_name)
-    except KeyError as err:
-        print err.message
-        sys.exit(1)
+    enforce_root()
+    info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
 
     # Check if the container already exists
@@ -144,24 +169,15 @@ def container_add(container_name, ip, interface):
               container_name
         sys.exit(1)
 
-    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
-    # it.
-    ip = IPAddress(ip)
-    version = "v%s" % ip.version
-    pools = client.get_ip_pools(version)
-    pool = None
-    for candidate_pool in pools:
-        if ip in candidate_pool:
-            pool = candidate_pool
-
-    if pool is None:
-        print "%s is not in any configured pools" % ip
-        sys.exit(1)
-
     # Check the container is actually running.
     if not info["State"]["Running"]:
         print "%s is not currently running." % container_name
         sys.exit(1)
+
+    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
+    # it.
+    ip = IPAddress(ip)
+    pool = get_pool_or_exit(ip)
 
     # The next hop IPs for this host are stored in etcd.
     next_hops = client.get_default_next_hops(hostname)
@@ -176,8 +192,8 @@ def container_add(container_name, ip, interface):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
-    # Actually configure the netns. Default to eth1 since eth0 is the
-    # docker bridge.
+    # Actually configure the netns. Defaults to eth1 since eth0 could
+    # already be in use (e.g. by the Docker bridge)
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
                                      veth_name=interface,
@@ -200,10 +216,7 @@ def container_remove(container_name):
     :param container_name: The name or ID of the container.
     """
     # The netns manipulations must be done as root.
-    if os.geteuid() != 0:
-        print >> sys.stderr, "`calicoctl container remove` must be run as " \
-                             "root."
-        sys.exit(2)
+    enforce_root()
 
     # Resolve the name to ID.
     container_id = get_container_id(container_name)
@@ -255,9 +268,7 @@ def module_loaded(module):
 
 def node(ip, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
-    if os.geteuid() != 0:
-        print >> sys.stderr, "`calicoctl node` must be run as root."
-        sys.exit(2)
+    enforce_root()
 
     if not module_loaded("ip6_tables"):
         print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
@@ -601,7 +612,7 @@ def node_show(detailed):
                                    # Truncate ID to 12 chars like Docker
                                    workload[:12],
                                    ep_id,
-                                   " ".join([str(net) for net in
+                                   "\n".join([str(net) for net in
                                              endpoint.ipv4_nets |
                                              endpoint.ipv6_nets]),
                                    endpoint.mac,
@@ -692,15 +703,7 @@ def ip_pool_add(cidr_pool, version):
     :return: None
     """
     assert version in ("v4", "v6")
-    try:
-        pool = IPNetwork(cidr_pool)
-    except AddrFormatError:
-        print "%s is not a valid IP prefix." % cidr_pool
-        sys.exit(1)
-    if "v%d" % pool.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (cidr_pool, pool.version, version)
-        sys.exit(1)
+    pool = check_ip_version(cidr_pool, version, IPNetwork)
     client.add_ip_pool(version, pool)
 
 
@@ -713,15 +716,7 @@ def ip_pool_remove(cidr_pool, version):
     :return: None
     """
     assert version in ("v4", "v6")
-    try:
-        pool = IPNetwork(cidr_pool)
-    except AddrFormatError:
-        print "%s is not a valid IP prefix." % cidr_pool
-        sys.exit(1)
-    if "v%d" % pool.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (cidr_pool, pool.version, version)
-        sys.exit(1)
+    pool = check_ip_version(cidr_pool, version, IPNetwork)
     try:
         client.remove_ip_pool(version, pool)
     except KeyError:
@@ -749,9 +744,7 @@ def restart_docker_with_alternative_unix_socket():
     Set the docker daemon to listen on the docker.real.sock by updating
     the config, clearing old sockets and restarting.
     """
-    if os.geteuid() != 0:
-        print >> sys.stderr, "restarting docker must be run as root."
-        sys.exit(2)
+    enforce_root()
     docker_restarter.restart_docker_with_alternative_unix_socket()
 
 
@@ -759,9 +752,7 @@ def restart_docker_without_alternative_unix_socket():
     """
     Remove any "alternative" unix socket config.
     """
-    if os.geteuid() != 0:
-        print >> sys.stderr, "restarting docker must be run as root."
-        sys.exit(2)
+    enforce_root()
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
@@ -793,16 +784,28 @@ def bgppeer_add(ip, version):
     :param version: v4 or v6
     :return: None
     """
-    try:
-        address = IPAddress(ip)
-    except AddrFormatError:
-        print "%s is not a valid IP address." % address
-        sys.exit(1)
-    if "v%d" % address.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (ip, address.version, version)
-        sys.exit(1)
+    address = check_ip_version(ip, version, IPAddress)
     client.add_bgp_peer(version, address)
+
+
+def check_ip_version(ip, version, cls):
+    """
+    Parses and checks that the given IP matches the provided version.
+    :param ip: The IP (string) to check.
+    :param version: The version
+    :param cls: The type of IP object (IPAddress or IPNetwork)
+    :return: The parsed object of type "type"
+    """
+    try:
+        parsed = cls(ip)
+    except AddrFormatError:
+        print "%s is not a valid IP address." % ip
+        sys.exit(1)
+    if "v%d" % parsed.version != version:
+        print "%s is an IPv%d prefix, this command is for IP%s." % \
+              (parsed, parsed.version, version)
+        sys.exit(1)
+    return parsed
 
 
 def bgppeer_remove(ip, version):
@@ -813,15 +816,7 @@ def bgppeer_remove(ip, version):
     :param version: v4 or v6
     :return: None
     """
-    try:
-        address = IPAddress(ip)
-    except AddrFormatError:
-        print "%s is not a valid IP address." % address
-        sys.exit(1)
-    if "v%d" % address.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (ip, address.version, version)
-        sys.exit(1)
+    address = check_ip_version(ip, version, IPAddress)
     try:
         client.remove_bgp_peer(version, address)
     except KeyError:
@@ -841,6 +836,146 @@ def bgppeer_show(version):
         print x
     else:
         print "No BGP Peers defined."
+
+
+def container_ip_add(container_name, ip, version, interface):
+    """
+    Add an IP address to an existing Calico networked container.
+
+    :param container_name: The name of the container.
+    :param ip: The IP to add
+    :param version: The IP version ("v4" or "v6")
+    :param interface: The name of the interface in the container.
+    
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+
+    # The netns manipulations must be done as root.
+    enforce_root()
+
+    pool = get_pool_or_exit(address)
+
+    info = get_container_info_or_exit(container_name)
+    container_id = info["Id"]
+
+    # Check the container is actually running.
+    if not info["State"]["Running"]:
+        print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # Check that the container is already networked
+    try:
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+    except KeyError:
+        print "Container is unknown to Calico. Tell Calico about the " \
+              "container before adding addresses using calicoctl container add"
+        sys.exit(1)
+
+    # From here, this method starts having side effects. If something
+    # fails then at least try to leave the system in a clean state.
+    if not client.assign_address(pool, ip):
+        print "IP address is already assigned in pool %s " % pool
+        sys.exit(1)
+
+    try:
+        old_endpoint = endpoint.copy()
+        if address.version == 4:
+            endpoint.ipv4_nets.add(IPNetwork(address))
+        else:
+            endpoint.ipv6_nets.add(IPNetwork(address))
+        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+    except (KeyError, ValueError):
+        client.unassign_address(pool, ip)
+        print "Error updating datastore. Aborting."
+        sys.exit(1)
+
+    try:
+        container_pid = info["State"]["Pid"]
+        netns.ensure_namespace_named(container_pid)
+        netns.add_ip_to_interface(container_pid,
+                                  address,
+                                  interface)
+
+    except CalledProcessError:
+        print "Error updating networking in container. Aborting."
+        old_endpoint = endpoint.copy()
+        if address.version == 4:
+            endpoint.ipv4_nets.remove(IPNetwork(address))
+        else:
+            endpoint.ipv6_nets.remove(IPNetwork(address))
+        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+        client.unassign_address(pool, ip)
+        sys.exit(1)
+
+    print "IP %s added to %s" % (ip, container_name)
+
+def container_ip_remove(container_name, ip, version, interface):
+    """
+    Add an IP address to an existing Calico networked container.
+
+    :param container_name: The name of the container.
+    :param ip: The IP to add
+    :param version: The IP version ("v4" or "v6")
+    :param interface: The name of the interface in the container.
+
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+
+    # The netns manipulations must be done as root.
+    enforce_root()
+
+    pool = get_pool_or_exit(address)
+
+    info = get_container_info_or_exit(container_name)
+    container_id = info["Id"]
+
+    # Check the container is actually running.
+    if not info["State"]["Running"]:
+        print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # Check that the container is already networked
+    try:
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        if address.version == 4:
+            nets = endpoint.ipv4_nets
+        else:
+            nets = endpoint.ipv6_nets
+
+        if not IPNetwork(address) in nets:
+            print "IP address is not assigned to container. Aborting."
+            sys.exit(1)
+
+    except KeyError:
+        print "Container is unknown to Calico."
+        sys.exit(1)
+
+    try:
+        old_endpoint = endpoint.copy()
+        nets.remove(IPNetwork(address))
+        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+    except (KeyError, ValueError):
+        print "Error updating datastore. Aborting."
+        sys.exit(1)
+
+    try:
+        container_pid = info["State"]["Pid"]
+        netns.ensure_namespace_named(container_pid)
+        netns.remove_ip_from_interface(container_pid,
+                                       address,
+                                       interface)
+
+    except CalledProcessError:
+        print "Error updating networking in container. Aborting."
+        sys.exit(1)
+
+    client.unassign_address(pool, ip)
+
+    print "IP %s removed from %s" % (ip, container_name)
 
 
 if __name__ == '__main__':
@@ -914,7 +1049,18 @@ if __name__ == '__main__':
                     bgppeer_remove(arguments["<IP>"], version)
                 elif arguments["show"]:
                     bgppeer_show(version)
-        if arguments["container"]:
+            elif arguments["container"]:
+                if arguments["add"]:
+                    container_ip_add(arguments["<CONTAINER>"],
+                                     arguments["<IP>"],
+                                     version,
+                                     arguments["--interface"])
+                elif arguments["remove"]:
+                    container_ip_remove(arguments["<CONTAINER>"],
+                                        arguments["<IP>"],
+                                        version,
+                                        arguments["--interface"])
+        elif arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"],
                               arguments["<IP>"],

@@ -41,33 +41,37 @@ The `calico-node` service is a worker that configures the network endpoints for 
 We provide a command line tool, `calicoctl`, which makes it easy to configure and start the Calico services listed above, and allows you to interact with the etcd datastore to define and apply network and security policy to the containers you create.
 
 ```
+Override the host:port of the ETCD server by setting the environment variable
+ETCD_AUTHORITY [default: 127.0.0.1:4001]
+
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--force-unix-socket]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
-  calicoctl profile add <PROFILE>
-  calicoctl profile remove <PROFILE>
+  calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show
-  calicoctl profile <PROFILE> tag add <TAG>
-  calicoctl profile <PROFILE> tag remove <TAG>
+  calicoctl profile <PROFILE> tag (add|remove) <TAG>
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl ipv4 pool add <CIDR>
-  calicoctl ipv4 pool remove <CIDR>
-  calicoctl ipv4 pool show
-  calicoctl ipv6 pool add <CIDR>
-  calicoctl ipv6 pool remove <CIDR>
-  calicoctl ipv6 pool show
-  calicoctl container add <CONTAINER> <IP>
+  calicoctl (ipv4|ipv6) pool (add|remove) <CIDR>
+  calicoctl (ipv4|ipv6) pool show
+  calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
+  calicoctl (ipv4|ipv6) bgppeer rr show
+  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP> [--interface=<INTERFACE>]
+  calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
+  calicoctl restart-docker-with-alternative-unix-socket
+  calicoctl restart-docker-without-alternative-unix-socket
 
 Options:
+ --interface=<INTERFACE>  The name to give to the interface in the container
+                          [default: eth1]
  --ip=<IP>                The local management address to use.
  --ip6=<IP6>              The local IPv6 management address to use.
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
@@ -75,8 +79,10 @@ Options:
                           [default: calico/node:latest]
 
 
+
 ```
 
 ## Can a guest container have multiple networked IP addresses?
+Yes, using the calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP>
+command.
 
-Using `calicoctl` we currently only support one IP address per container, but more than one is possible if you use the lower level APIs.

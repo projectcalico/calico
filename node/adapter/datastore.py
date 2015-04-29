@@ -3,6 +3,7 @@ import json
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
+import copy
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
@@ -141,8 +142,8 @@ class Endpoint(object):
                      "name": IF_PREFIX + self.ep_id[:11],
                      "mac": self.mac,
                      "profile_id": self.profile_id,
-                     "ipv4_nets": [str(net) for net in self.ipv4_nets],
-                     "ipv6_nets": [str(net) for net in self.ipv6_nets],
+                     "ipv4_nets": sorted([str(net) for net in self.ipv4_nets]),
+                     "ipv6_nets": sorted([str(net) for net in self.ipv6_nets]),
                      "ipv4_gateway": str(self.ipv4_gateway) if
                                      self.ipv4_gateway else None,
                      "ipv6_gateway": str(self.ipv6_gateway) if
@@ -167,6 +168,9 @@ class Endpoint(object):
             ep.ipv6_gateway = IPAddress(ipv6_gw)
         ep.profile_id = json_dict["profile_id"]
         return ep
+
+    def copy(self):
+        return copy.deepcopy(self)
 
 
 class Profile(object):
@@ -605,6 +609,29 @@ d
                                    "container_id": container_id,
                                    "endpoint_id": endpoint.ep_id}
         self.etcd_client.write(ep_path, endpoint.to_json())
+
+    def update_endpoint(self, hostname, container_id,
+                        old_endpoint, new_endpoint):
+        """
+        Update a single endpoint object to the datastore. Fails if the
+        old_endpoint that's passed in doesn't match what's in the datastore.
+        Example usage:
+            old_endpoint = datastore.get_endpoint(...)
+            new_endpoint = old_endpoint.copy()
+            # modify new endpoint fields
+            datastore.update_endpoint(..., old_endpoint, new_endpoint)
+
+        :param hostname: The hostname for the Docker hosting this container.
+        :param container_id: The Docker container ID.
+        :param old_endpoint: The existing endpoint to update.
+        :param new_endpoint: The Endpoint to add to the container.
+        """
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": container_id,
+                                   "endpoint_id": new_endpoint.ep_id}
+        self.etcd_client.write(ep_path,
+                               new_endpoint.to_json(),
+                               prevValue=old_endpoint.to_json())
 
     def get_hosts(self):
         """
