@@ -57,7 +57,7 @@ dist/calicoctl container remove node1
 dist/calicoctl container remove node2
 show_commands
 
-dist/calicoctl ipv4 pool del 192.168.0.0/16
+dist/calicoctl ipv4 pool remove 192.168.0.0/16
 show_commands
 
 dist/calicoctl node stop

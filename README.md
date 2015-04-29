@@ -57,10 +57,10 @@ Usage:
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl ipv4 pool add <CIDR>
-  calicoctl ipv4 pool del <CIDR>
+  calicoctl ipv4 pool remove <CIDR>
   calicoctl ipv4 pool show
   calicoctl ipv6 pool add <CIDR>
-  calicoctl ipv6 pool del <CIDR>
+  calicoctl ipv6 pool remove <CIDR>
   calicoctl ipv6 pool show
   calicoctl container add <CONTAINER> <IP>
   calicoctl container remove <CONTAINER> [--force]
