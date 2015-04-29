@@ -26,7 +26,7 @@ echo "Waiting for powerstrip to come up"
 done
 
 dist/calicoctl container add node 192.168.1.1
-dist/calicoctl profile TEST_GROUP add member node
+dist/calicoctl profile TEST_GROUP member add node
 
 while ! ip route |grep 192.168.1.1; do
 echo "Waiting for felix to add route"
