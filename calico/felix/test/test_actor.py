@@ -207,6 +207,13 @@ class TestActor(BaseTestCase):
             m_step.side_effect = ExpectedException()
             self.assertRaises(ExpectedException, self._actor._loop)
 
+    def test_batch_delay(self):
+        self._actor.batch_delay = 1
+        with mock.patch("gevent.sleep", autospec=True) as m_sleep:
+            self._actor.do_a(async=True)
+            self.step_actor(self._actor)
+            m_sleep.assert_called_once_with(1)
+
     @mock.patch("gevent.sleep", autospec=True)
     def test_yield(self, m_sleep):
         self._actor.max_ops_before_yield = 2
