@@ -152,7 +152,7 @@ On a control node, perform the following steps:
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
 
-   - Add the following line to the bottom of ``/etc/fstab``, this will mount a
+   - Add the following line to the bottom of ``/etc/fstab``. This will mount a
      ramdisk for etcd at startup::
 
        tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
@@ -203,7 +203,7 @@ On a control node, perform the following steps:
            ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
            ETCD_INITIAL_CLUSTER_STATE=new
 
-     For RHEL 7, Check the ``uuidgen`` tool is installed (the output should
+     For RHEL 7, check the ``uuidgen`` tool is installed (the output should
      change each time)::
 
            # uuidgen
