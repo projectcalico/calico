@@ -22,7 +22,6 @@ from collections import defaultdict
 import copy
 import logging
 import random
-from subprocess import CalledProcessError
 import time
 import itertools
 import re
@@ -484,7 +483,7 @@ class _Transaction(object):
                                 old_expl_prog_chains)
 
         # Deltas.
-        self._updates = {}
+        self.updates = {}
         self._deletes = set()
 
         # New state.  These will be copied back to the IptablesUpdater
@@ -511,7 +510,7 @@ class _Transaction(object):
         # Mark for deletion.
         self._deletes.add(chain)
         # Remove any now-stale rewrite state.
-        self._updates.pop(chain, None)
+        self.updates.pop(chain, None)
         self.expl_prog_chains.discard(chain)
         self._invalidate_cache()
 
@@ -529,7 +528,7 @@ class _Transaction(object):
         # Remove any deletion, if present.
         self._deletes.discard(chain)
         # Store off the update.
-        self._updates[chain] = updates
+        self.updates[chain] = updates
         self.expl_prog_chains.add(chain)
         self._invalidate_cache()
 
@@ -565,7 +564,7 @@ class _Transaction(object):
         deleted, modified, or to be stubbed).
         """
         if self._affected_chains is None:
-            updates = set(self._updates.keys())
+            updates = set(self.updates.keys())
             stubs = self.chains_to_stub_out
             deletes = self.chains_to_delete
             _log.debug("Affected chains: deletes=%s, updates=%s, stubs=%s",
