@@ -408,24 +408,25 @@ def status():
     else:
         print "calico-node container is running. Status: %s" % \
               calico_node_info[0]["Status"]
-
-        apt_output = docker_client.execute("calico-node", ["/bin/bash", "-c",
+        apt_output = docker_client.exec_create("calico-node", ["/bin/bash", "-c",
                                            "apt-cache policy calico-felix"])
-        result = re.search(r"Installed: (.*?)\s", apt_output)
+        result = re.search(r"Installed: (.*?)\s", docker_client.exec_start(apt_output))
         if result is not None:
             print "Running felix version %s" % result.group(1)
 
         print "IPv4 Bird (BGP) status"
-        print(docker_client.execute("calico-node",
+        bird_output = docker_client.exec_create("calico-node",
                                     ["/bin/bash", "-c",
                                      "echo show protocols | "
-                                     "birdc -s /etc/service/bird/bird.ctl"]))
+                                     "birdc -s /etc/service/bird/bird.ctl"])
+        print docker_client.exec_start(bird_output)
         print "IPv6 Bird (BGP) status"
-        print(docker_client.execute("calico-node",
+        bird6_output = docker_client.exec_create("calico-node",
                                     ["/bin/bash", "-c",
                                      "echo show protocols | "
                                      "birdc6 -s "
-                                     "/etc/service/bird6/bird6.ctl"]))
+                                     "/etc/service/bird6/bird6.ctl"])
+        print docker_client.exec_start(bird6_output)
 
 
 def reset():
