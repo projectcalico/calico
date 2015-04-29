@@ -357,10 +357,9 @@ class LocalEndpoint(RefCountedActor):
                 _log.info("Interface %s for %s is not up yet",
                            self._iface_name, self.endpoint_id)
             else:
-                # OK, that really should not happen.
-                _log.exception("Failed to configure interface %s for %s",
-                               self._iface_name, self.endpoint_id)
-                raise
+                # Interface flapped back up after we failed?
+                _log.warning("Failed to configure interface %s for %s",
+                             self._iface_name, self.endpoint_id)
 
     def _deconfigure_interface(self):
         """
@@ -368,7 +367,6 @@ class LocalEndpoint(RefCountedActor):
         """
         try:
             devices.set_routes(self.ip_type, set(), self._iface_name, None)
-
         except (IOError, FailedSystemCall, CalledProcessError):
             if not devices.interface_exists(self._iface_name):
                 # Deleted under our feet - so the rules are gone.

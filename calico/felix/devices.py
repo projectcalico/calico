@@ -204,11 +204,11 @@ def interface_up(if_name):
             flags = f.read().strip()
 
             _log.debug("Interface %s has flags %s", if_name, flags)
-    except IOError:
+    except IOError as e:
         # If we fail to check that the interface is up, then it has probably
         # gone under our feet or is flapping.
-        _log.exception("Cannot check flags for interface %s (%s) - assume down",
-                       if_name, flags_file)
+        _log.warning("Cannot check flags for interface %s (%s) - assume "
+                     "down: %r.", if_name, flags_file, e)
         return False
 
     return bool(int(flags, 16) & 1)
@@ -226,11 +226,13 @@ RTM_DELLINK = 17
 
 IFLA_IFNAME = 3
 
+
 class RTNetlinkError(Exception):
     """
     How we report an error message.
     """
     pass
+
 
 class InterfaceWatcher(Actor):
     def __init__(self, update_splitter):
@@ -271,9 +273,11 @@ class InterfaceWatcher(Actor):
             # Now 16 bytes of netlink header.
             hdr = data[:16]
             data = data[16:]
-            family, _, if_type, index, flags, change = struct.unpack("=BBHiII", hdr)
+            family, _, if_type, index, flags, change = struct.unpack("=BBHiII",
+                                                                     hdr)
 
-            # Bytes left is the message length minus the two headers of 16 bytes each.
+            # Bytes left is the message length minus the two headers of 16
+            # bytes each.
             remaining = msg_len - 32
 
             while remaining:
@@ -281,8 +285,8 @@ class InterfaceWatcher(Actor):
                 # has a 4 byte header and some data.
                 rta_len, rta_type = struct.unpack("=HH", data[:4])
 
-                # This check comes from RTA_OK, and terminates a string of routing
-                # attributes.
+                # This check comes from RTA_OK, and terminates a string of
+                # routing attributes.
                 if rta_len < 4:
                     break
 
@@ -301,8 +305,10 @@ class InterfaceWatcher(Actor):
                     # presumably go away too). We do log though, just in case.
                     rta_data = rta_data[:-1]
                     if msg_type == RTM_NEWLINK:
-                        _log.debug("Detected new network interface : %s", rta_data)
+                        _log.debug("Detected new network interface : %s",
+                                   rta_data)
                         self.update_splitter.on_interface_update(rta_data,
                                                                  async=True)
                     else:
-                        _log.debug("Network interface has gone away : %s", rta_data)
+                        _log.debug("Network interface has gone away : %s",
+                                   rta_data)
