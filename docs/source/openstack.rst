@@ -28,7 +28,7 @@ following methods:
 
 - the packaged install for Ubuntu 14.04 - see :doc:`ubuntu-opens-install`
 
-- an RPM install for Red Hat Enterprise Linux 7 (RHEL 7 or 6.5) - see
+- an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see
   :doc:`redhat-opens-install`
 
 - our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`

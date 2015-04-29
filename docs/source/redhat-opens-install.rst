@@ -12,8 +12,8 @@
    #    implied. See the License for the specific language governing
    #    permissions and limitations under the License.
 
-Red Hat Enterprise Linux 6.5/7 Packaged Install Instructions
-============================================================
+Red Hat Enterprise Linux 7 Packaged Install Instructions
+========================================================
 
 The instructions come in two sections: one for installing control nodes,
 and one for installing compute nodes. Before moving on to those
@@ -21,23 +21,18 @@ sections, make sure you follow the **Common Steps** section, and if you
 want to create a combined controller and compute node, work through all
 three sections.
 
-.. warning:: We are still updating our install procedures for RHEL 6.5
-             following the upgrade to use etcd as a data store.  We will update
-             the instructions below shortly, once the procedures are finalised.
-             In the meantime, if RHEL 6.5 is critical to you, please
-             `let us know <http://www.projectcalico.org/contact/>`_.
+.. warning:: Following the upgrade to use etcd as a data store, Calico
+             currently only supports RHEL 7 and above.
+             If support on RHEL 6.x or other versions of Linux is important to
+             you, then please `let us know
+             <http://www.projectcalico.org/contact/>`_.
 
 Prerequisites
 -------------
 
 Before starting this you will need the following:
 
--  One or more machines running RHEL 6.5 or 7:
-
-   - For RHEL 6.5, these machines should have OpenStack Icehouse installed on
-     them.
-   - For RHEL 7, these machines should have OpenStack Juno installed on them.
-
+-  One or more machines running RHEL 7, with OpenStack Juno installed.
 -  SSH access to these machines.
 -  Working DNS between these machines (use ``/etc/hosts`` if you don't
    have DNS on your network).
@@ -51,9 +46,9 @@ These steps are detailed here.
 Install OpenStack Icehouse/Juno
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you haven't already done so, install Icehouse (RHEL 6.5) or Juno (RHEL 7)
-with Neutron and ML2 networking. Instructions for installing OpenStack on RHEL
-can be found `here <http://openstack.redhat.com/Main_Page>`__.
+If you haven't already done so, install Juno with Neutron and ML2 networking.
+Instructions for installing OpenStack on RHEL can be found
+`here <http://openstack.redhat.com/Main_Page>`__.
 
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,25 +58,10 @@ As well as the repositories for OpenStack and EPEL
 configured as part of the previous step -- you will need to configure the
 repository for Calico.
 
-For RHEL 7::
-
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
     baseurl=http://binaries.projectcalico.org/rpm/
-    enabled=1
-    skip_if_unavailable=0
-    gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/key
-    priority=97
-    EOF
-
-For RHEL 6.5::
-
-    cat > /etc/yum.repos.d/calico.repo <<EOF
-    [calico]
-    name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rhel6/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
@@ -147,7 +127,7 @@ On a control node, perform the following steps:
         cd etcd-v2.0.9-linux-amd64
         mv etcd* /usr/local/bin/
 
-   - On RHEL 7, create an etcd user::
+   - Create an etcd user::
 
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
@@ -161,36 +141,8 @@ On a control node, perform the following steps:
 
    - Get etcd running by providing an init file.
 
-     For RHEL 6.5, place the following in ``/etc/init/etcd.conf``, replacing
-     ``<hostname>`` and ``<public_ip>`` with their appropriate values for the
-     machine. For ``<cluster_id>`` it can be any textual string, but make sure
-     to use a new one each time.
-
-     ::
-
-           description "etcd"
-           author "etcd maintainers"
-
-           start on stopped rc RUNLEVEL=[2345]
-           stop on runlevel [!2345]
-
-           respawn
-
-           env ETCD_DATA_DIR=/var/lib/etcd
-           export ETCD_DATA_DIR
-
-           exec /usr/local/bin/etcd --name <hostname>                                                         \
-                                    --advertise-client-urls "http://<public_ip>:2379,http://<public_ip>:4001" \
-                                    --listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001              \
-                                    --listen-peer-urls http://0.0.0.0:2380                                    \
-                                    --initial-advertise-peer-urls "http://<public_ip>:2380"                   \
-                                    --initial-cluster-token <cluster_id>                                      \
-                                    --initial-cluster <hostname>=http://<public_ip>:2380                      \
-                                    --initial-cluster-state new
-
-     For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
-     ``<hostname>`` and ``<public_ip>`` with their appropriate values for the
-     machine.
+     Place the following in ``/etc/sysconfig/etcd``, replacing ``<hostname>``
+     and ``<public_ip>`` with their appropriate values for the machine.
 
      ::
 
@@ -203,15 +155,15 @@ On a control node, perform the following steps:
            ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
            ETCD_INITIAL_CLUSTER_STATE=new
 
-     For RHEL 7, check the ``uuidgen`` tool is installed (the output should
-     change each time)::
+     Check the ``uuidgen`` tool is installed (the output should change each
+     time)::
 
            # uuidgen
            11f92f19-cb5a-476f-879f-5efc34033b8b
 
      If it is not installed, run ``yum install util-linux`` to install it.
 
-     For RHEL 7, place the following in ``/usr/local/bin/start-etcd``::
+     Place the following in ``/usr/local/bin/start-etcd``::
 
            #!/bin/sh
            export ETCD_INITIAL_CLUSTER_TOKEN=`uuidgen`
@@ -220,7 +172,7 @@ On a control node, perform the following steps:
      Then run ``chmod +x /usr/local/bin/start-etcd`` to make that file
      executable.
 
-     For RHEL 7, you then need to add the following file to
+     You then need to add the following file to
      ``/usr/lib/systemd/system/etcd.service``::
 
            [Unit]
@@ -237,12 +189,10 @@ On a control node, perform the following steps:
            [Install]
            WantedBy=multi-user.target
 
-6. Launch etcd:
+6. Launch etcd and set it to restart after a reboot::
 
-   - On RHEL 6.5, run ``initctl start etcd``
-
-   - On RHEL 7, run ``systemctl start etcd``. Then, run
-     ``systemctl enable etcd`` to ensure it restarts after reboots.
+        systemctl start etcd
+        systemctl enable etcd
 
 7. Install dependencies for python-etcd::
 
@@ -392,38 +342,8 @@ On a compute node, perform the following steps:
         service openstack-nova-metadata-api restart
         chkconfig openstack-nova-metadata-api on
 
-10. For RHEL 7, install the BIRD BGP client from EPEL:
-    ``yum install -y bird bird6``. Then, go on to the next step.
-
-    For RHEL 6.5, BIRD needs to be built from source and installed manually.
-
-    First, download the source and build BIRD.
-
-    ::
-
-        yum install -y flex bison readline-devel ncurses-devel gcc wget
-        wget ftp://bird.network.cz/pub/bird/bird-1.4.5.tar.gz
-        tar xzvf bird-1.4.5.tar.gz
-        cd bird-1.4.5
-        ./configure
-        make
-        make install
-
-    Now, create the upstart job file for BIRD by putting the following in
-    ``/etc/init/bird.conf``
-
-    ::
-
-        description "BIRD Internet Routing Daemon"
-        start on runlevel [2345]
-        stop on runlevel [016]
-        respawn
-        pre-start script
-        /usr/local/sbin/bird -p -c /etc/bird/bird.conf
-        end script
-        script
-        /usr/local/sbin/bird -f -c /etc/bird/bird.conf
-        end script
+10. Install the BIRD BGP client from EPEL:
+    ``yum install -y bird bird6``
 
 11. If this node is not a controller, install and configure etcd as an etcd
     proxy. These assume you followed the instructions in the
@@ -437,35 +357,14 @@ On a compute node, perform the following steps:
         cd etcd-v2.0.9-linux-amd64
         mv etcd* /usr/local/bin/
 
-    - On RHEL 7, create an etcd user::
+    - Create an etcd user::
 
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
 
     - Get etcd running by providing an init file.
 
-      For RHEL 6.5, place the following in ``/etc/init/etcd.conf``, replacing
-      ``<controller_hostname>`` and ``<controller_ip>`` with the values you
-      used in the :ref:`control-node` section.
-
-      ::
-
-           description "etcd"
-           author "etcd maintainers"
-
-           start on stopped rc RUNLEVEL=[2345]
-           stop on runlevel [!2345]
-
-           respawn
-
-           env ETCD_DATA_DIR=/var/lib/etcd
-           export ETCD_DATA_DIR
-
-           exec /usr/local/bin/etcd --proxy on                                                            \
-                                    --listen-client-urls http://127.0.0.1:4001                            \
-                                    --initial-cluster "<controller_hostname>=http://<controller_ip>:2380"
-
-      For RHEL 7, place the following in ``/etc/sysconfig/etcd``, replacing
+      Place the following in ``/etc/sysconfig/etcd``, replacing
       ``<controller_hostname>`` and ``<controller_ip>`` with the values you
       used in the :ref:`control-node` section.
 
@@ -476,7 +375,7 @@ On a compute node, perform the following steps:
            ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
            ETCD_INITIAL_CLUSTER="<controller_hostname>=http://<controller_ip>:2380"
 
-      For RHEL 7, you then need to add the following file to
+      You then need to add the following file to
       ``/usr/lib/systemd/system/etcd.service``::
 
            [Unit]
@@ -493,12 +392,12 @@ On a compute node, perform the following steps:
            [Install]
            WantedBy=multi-user.target
 
-12. If this node is not a controller, launch etcd:
+12. If this node is not a controller, launch etcd and set it to restart after a
+    reboot::
 
-    - On RHEL 6.5, run ``initctl start etcd``
+        systemctl start etcd
+        systemctl enable etcd
 
-    - On RHEL 7, run ``systemctl start etcd``. Then, run
-      ``systemctl enable etcd`` to ensure it restarts after reboots.
 
 13. If this node is not also a controller, install dependencies for
     python-etcd::
@@ -552,29 +451,16 @@ On a compute node, perform the following steps:
     Unless your deployment needs to peer with other BGP routers, this
     can be chosen arbitrarily.
 
-    For RHEL 6.5, ignore any ``bird: unrecognized service`` error -- we'll
-    restart BIRD later anyway.
-
    Note that you'll also need to configure your route reflector to allow
    connections from the compute node as a route reflector client. This
    configuration is outside the scope of this install document.
 
    Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
 
-   - For RHEL 7:
-
-     ::
-
          service bird restart
          service bird6 restart
          chkconfig bird on
          chkconfig bird6 on
-
-   - For RHEL 6.5:
-
-     ::
-
-         initctl start bird
 
 16. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
@@ -582,8 +468,7 @@ On a compute node, perform the following steps:
 
 17. Restart the Felix service:
 
-       - on RHEL 6.5, run ``initctl start calico-felix``.
-       - on RHEL 7, run ``systemctl restart calico-felix``.
+       - run ``systemctl restart calico-felix``.
 
 Next Steps
 ----------
