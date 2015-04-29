@@ -2,8 +2,8 @@
 set -e
 set -x
 
-#CALICO="dist/calicoctl"
-CALICO="python calicoctl.py"
+CALICO="dist/calicoctl"
+#CALICO="python calicoctl.py"
 
 # Set it up
 docker rm -f node1 node2 etcd || true
@@ -50,9 +50,12 @@ $CALICO ipv4 container node1 remove 192.168.2.1
 $CALICO ipv4 container node2 remove 192.168.2.2 --interface=hello
 docker exec node1 ping 192.168.1.2 -c 1
 docker exec node2 ping 192.168.1.1 -c 1
-! docker exec node1 ping 192.168.2.2 -c 1
-! docker exec node2 ping 192.168.2.1 -c 1
+! docker exec node1 ping 192.168.2.2 -c 1 -W 1
+! docker exec node2 ping 192.168.2.1 -c 1 -W 1
 docker exec node2 ping 192.168.3.1 -c 1
 $CALICO shownodes --detailed
+
+# Check that we can't remove addresses twice
+! $CALICO ipv4 container node1 remove 192.168.2.1
 
 echo "Tests completed successfully"

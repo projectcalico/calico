@@ -3,6 +3,7 @@ import json
 import etcd
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
+import copy
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
@@ -167,6 +168,9 @@ class Endpoint(object):
             ep.ipv6_gateway = IPAddress(ipv6_gw)
         ep.profile_id = json_dict["profile_id"]
         return ep
+
+    def copy(self):
+        return copy.deepcopy(self)
 
 
 class Profile(object):
@@ -611,6 +615,11 @@ d
         """
         Update a single endpoint object to the datastore. Fails if the
         old_endpoint that's passed in doesn't match what's in the datastore.
+        Example usage:
+            old_endpoint = datastore.get_endpoint(...)
+            new_endpoint = old_endpoint.copy()
+            # modify new endpoint fields
+            datastore.update_endpoint(..., old_endpoint, new_endpoint)
 
         :param hostname: The hostname for the Docker hosting this container.
         :param container_id: The Docker container ID.

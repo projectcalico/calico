@@ -38,7 +38,6 @@ Options:
                           Calico's per-node container
                           [default: calico/node:latest]
 """
-import copy
 import socket
 from subprocess import CalledProcessError
 import sys
@@ -789,16 +788,16 @@ def bgppeer_add(ip, version):
     client.add_bgp_peer(version, address)
 
 
-def check_ip_version(ip, version, type):
+def check_ip_version(ip, version, cls):
     """
     Parses and checks that the given IP matches the provided version.
     :param ip: The IP (string) to check.
     :param version: The version
-    :param type: The type of IP object (IPAddress or IPNetwork)
+    :param cls: The type of IP object (IPAddress or IPNetwork)
     :return: The parsed object of type "type"
     """
     try:
-        parsed = type(ip)
+        parsed = cls(ip)
     except AddrFormatError:
         print "%s is not a valid IP address." % ip
         sys.exit(1)
@@ -841,11 +840,11 @@ def bgppeer_show(version):
 
 def container_ip_add(container_name, ip, version, interface):
     """
-    Add an IP address to an existing calico networked container.
+    Add an IP address to an existing Calico networked container.
 
     :param container_name: The name of the container.
     :param ip: The IP to add
-    :param version: The IP version
+    :param version: The IP version ("v4" or "v6")
     :param interface: The name of the interface in the container.
     
     :return: None
@@ -870,8 +869,8 @@ def container_ip_add(container_name, ip, version, interface):
         endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
         endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
     except KeyError:
-        print "Container is unknown to calico. Tell calico about the " \
-              "container before adding addresses."
+        print "Container is unknown to Calico. Tell Calico about the " \
+              "container before adding addresses using calicoctl container add"
         sys.exit(1)
 
     # From here, this method starts having side effects. If something
@@ -881,13 +880,13 @@ def container_ip_add(container_name, ip, version, interface):
         sys.exit(1)
 
     try:
-        old_endpoint = copy.deepcopy(endpoint)
+        old_endpoint = endpoint.copy()
         if address.version == 4:
             endpoint.ipv4_nets.add(IPNetwork(address))
         else:
             endpoint.ipv6_nets.add(IPNetwork(address))
         client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
-    except (KeyError, ValueError) as e:
+    except (KeyError, ValueError):
         client.unassign_address(pool, ip)
         print "Error updating datastore. Aborting."
         sys.exit(1)
@@ -901,6 +900,12 @@ def container_ip_add(container_name, ip, version, interface):
 
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
+        old_endpoint = endpoint.copy()
+        if address.version == 4:
+            endpoint.ipv4_nets.remove(IPNetwork(address))
+        else:
+            endpoint.ipv6_nets.remove(IPNetwork(address))
+        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
         client.unassign_address(pool, ip)
         sys.exit(1)
 
@@ -908,11 +913,11 @@ def container_ip_add(container_name, ip, version, interface):
 
 def container_ip_remove(container_name, ip, version, interface):
     """
-    Add an IP address to an existing calico networked container.
+    Add an IP address to an existing Calico networked container.
 
     :param container_name: The name of the container.
     :param ip: The IP to add
-    :param version: The IP version
+    :param version: The IP version ("v4" or "v6")
     :param interface: The name of the interface in the container.
 
     :return: None
@@ -936,19 +941,24 @@ def container_ip_remove(container_name, ip, version, interface):
     try:
         endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
         endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        if address.version == 4:
+            nets = endpoint.ipv4_nets
+        else:
+            nets = endpoint.ipv6_nets
+
+        if not IPNetwork(address) in nets:
+            print "IP address is not assigned to container. Aborting."
+            sys.exit(1)
+
     except KeyError:
-        print "Container is unknown to calico. Tell calico about the " \
-              "container before removing addresses."
+        print "Container is unknown to Calico."
         sys.exit(1)
 
     try:
-        old_endpoint = copy.deepcopy(endpoint)
-        if address.version == 4:
-            endpoint.ipv4_nets.remove(IPNetwork(address))
-        else:
-            endpoint.ipv6_nets.remove(IPNetwork(address))
+        old_endpoint = endpoint.copy()
+        nets.remove(IPNetwork(address))
         client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
-    except (KeyError, ValueError) as e:
+    except (KeyError, ValueError):
         print "Error updating datastore. Aborting."
         sys.exit(1)
 
