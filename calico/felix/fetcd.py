@@ -68,17 +68,23 @@ class EtcdWatcher(Actor):
             self._reconnect()
             self.wait_for_ready()
             try:
-                config_dict = self._load_config_dict()
+                global_cfg = self.client.read(CONFIG_DIR)
+                global_dict = _build_config_dict(global_cfg)
+
+                try:
+                    host_cfg = self.client.read(self.my_config_dir)
+                    host_dict = _build_config_dict(host_cfg)
+                except EtcdKeyNotFound:
+                    # It is not an error for there to be no per-host config;
+                    # default to empty.
+                    _log.info("No configuration overrides for this node")
+                    host_dict = {}
             except (EtcdKeyNotFound, EtcdException):
                 _log.exception("Failed to read config.  Will retry.")
                 gevent.sleep(RETRY_DELAY)
                 continue
 
-            self.config.update_config(config_dict)
-            common.complete_logging(self.config.LOGFILE,
-                                    self.config.LOGLEVFILE,
-                                    self.config.LOGLEVSYS,
-                                    self.config.LOGLEVSCR)
+            self.config.report_etcd_config(host_dict, global_dict)
             configured = True
 
     @actor_message()
@@ -320,39 +326,13 @@ class EtcdWatcher(Actor):
                                  "yet support dynamic config: %s",
                                  response)
 
-    def _load_config_dict(self):
-        """
-        Load configuration detail for this host from etcd.
-
-        Merges global and per-host config.
-
-        :returns: a dictionary of key to parameters
-        :raises EtcdException: if a read from etcd fails.
-        """
-
-        # Load the global config, if this fails, we let the exception
-        # propagate.
-        global_cfg = self.client.read(CONFIG_DIR)
-        config_dict = {}
-        _update_config_dict(config_dict, global_cfg)
-        # Load the overrides for this host, if present.
-        try:
-            host_cfg = self.client.read(self.my_config_dir)
-        except EtcdKeyNotFound:
-            _log.info("No configuration overrides for this node")
-        else:
-            _update_config_dict(config_dict, host_cfg)
-
-        return config_dict
-
-
-def _update_config_dict(config_dict, cfg_node):
+def _build_config_dict(cfg_node):
     """
     Updates the config dict provided from the given etcd node, which
     should point at a config directory.
     """
+    config_dict = {}
     for child in cfg_node.children:
-        _log.info("Config parameter: %s=%s", child.key, child.value)
         key = child.key.rsplit("/").pop()
         value = str(child.value)
         config_dict[key] = value
