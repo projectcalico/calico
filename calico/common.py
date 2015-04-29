@@ -31,6 +31,7 @@ import netaddr
 import netaddr.core
 import os
 import sys
+from types import StringTypes
 
 _log = logging.getLogger(__name__)
 

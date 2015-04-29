@@ -26,7 +26,6 @@ import httplib
 import json
 import logging
 import gevent
-from types import StringTypes
 from urllib3 import Timeout
 import urllib3.exceptions
 from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
