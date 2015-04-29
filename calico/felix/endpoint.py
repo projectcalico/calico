@@ -28,9 +28,10 @@ from calico.felix.futils import IPV4
 from calico.felix.refcount import ReferenceManager, RefCountedActor
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
-from calico.felix.frules import (CHAIN_TO_PREFIX, profile_to_chain_name,
-                                 CHAIN_FROM_PREFIX, commented_drop_fragment,
-                                 interface_to_suffix, chain_names)
+from calico.felix.frules import (
+    profile_to_chain_name, commented_drop_fragment, interface_to_suffix,
+    chain_names
+)
 
 _log = logging.getLogger(__name__)
 
@@ -308,12 +309,13 @@ class LocalEndpoint(RefCountedActor):
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(
+            self._id,
             self._suffix,
-            self._iface_name,
             self.ip_version,
             self.endpoint.get("ipv%s_nets" % self.ip_version, []),
             self.endpoint["mac"],
-            self.endpoint["profile_id"])
+            self.endpoint["profile_id"]
+        )
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
         except CalledProcessError:
@@ -383,7 +385,8 @@ class LocalEndpoint(RefCountedActor):
                  self._iface_name or "unknown"))
 
 
-def _get_endpoint_rules(suffix, iface, ip_version, local_ips, mac, profile_id):
+def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
+                        profile_id):
     to_chain_name, from_chain_name = chain_names(suffix)
 
     to_chain = ["--flush %s" % to_chain_name]
@@ -412,6 +415,10 @@ def _get_endpoint_rules(suffix, iface, ip_version, local_ips, mac, profile_id):
     profile_in_chain = profile_to_chain_name("inbound", profile_id)
     to_chain.append("--append %s --goto %s" %
                     (to_chain_name, profile_in_chain))
+    # This drop rule is not hittable, but it gives us a place to stash the
+    # comment with our ID.
+    to_chain.append(commented_drop_fragment(to_chain_name,
+                                            "Endpoint %s:" % endpoint_id))
     to_deps = set([profile_in_chain])
 
     # Now the chain that manages packets from the interface...
@@ -451,8 +458,10 @@ def _get_endpoint_rules(suffix, iface, ip_version, local_ips, mac, profile_id):
         from_chain.append("--append %s --src %s --match mac --mac-source %s "
                           "--goto %s" % (from_chain_name, cidr,
                                          mac.upper(), profile_out_chain))
-    from_chain.append(commented_drop_fragment(from_chain_name,
-                                              "Anti-spoof DROP:"))
+    drop_frag = commented_drop_fragment(from_chain_name,
+                                        "Anti-spoof DROP (endpoint %s):" %
+                                        endpoint_id)
+    from_chain.append(drop_frag)
 
     updates = {to_chain_name: to_chain, from_chain_name: from_chain}
     deps = {to_chain_name: to_deps, from_chain_name: from_deps}

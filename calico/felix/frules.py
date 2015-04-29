@@ -42,6 +42,7 @@ CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
+
 def profile_to_chain_name(inbound_or_outbound, profile_id):
     """
     Returns the name of the chain to use for a given profile. The profile ID
@@ -125,7 +126,8 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
 
 
 def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
-                                 on_allow="ACCEPT", on_deny="DROP"):
+                                 on_allow="ACCEPT", on_deny="DROP",
+                                 comment_tag=None):
     fragments = []
     for r in rules:
         rule_version = r.get('ip_version')
@@ -135,13 +137,17 @@ def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
                                                         tag_to_ipset,
                                                         on_allow=on_allow,
                                                         on_deny=on_deny))
-    fragments.append(commented_drop_fragment(chain_name,
-                                             "Default DROP rule:"))
+    tag_part = " (%s)" % comment_tag if comment_tag else ""
+    fragments.append(commented_drop_fragment(
+        chain_name,
+        "Default DROP rule%s:" % tag_part)
+    )
     return fragments
 
 
 def commented_drop_fragment(chain_name, comment):
-    assert re.match(r'[\w: ]{,256}', comment), "Invalid comment %r" % comment
+    comment = comment[:255]  # Limit imposed by iptables.
+    assert re.match(r'[\w: ]{,255}', comment), "Invalid comment %r" % comment
     return ('--append %s --jump DROP -m comment --comment "%s"' %
             (chain_name, comment))
 

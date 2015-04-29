@@ -174,13 +174,13 @@ class ProfileRules(RefCountedActor):
         _log.info("%s Programming iptables with our chains.", self)
         updates = {}
         for direction in ("inbound", "outbound"):
-            _log.debug("Updating %s chain for profile %s", direction,
-                       self.id)
-            new_profile = self._profile or {}
+            chain_name = self.chain_names[direction]
+            _log.info("Updating %s chain %r for profile %s",
+                      direction, chain_name, self.id)
             _log.debug("Profile %s: %s", self.id, self._profile)
+            new_profile = self._profile or {}
             rules_key = "%s_rules" % direction
             new_rules = new_profile.get(rules_key, [])
-            chain_name = self.chain_names[direction]
             tag_to_ip_set_name = {}
             for tag, ipset in self.ipset_refs.iteritems():
                 tag_to_ip_set_name[tag] = ipset.name
@@ -189,7 +189,8 @@ class ProfileRules(RefCountedActor):
                 new_rules,
                 self.ip_version,
                 tag_to_ip_set_name,
-                on_allow="RETURN")
+                on_allow="RETURN",
+                comment_tag=self.id)
         _log.debug("Queueing programming for rules %s: %s", self.id,
                    updates)
         self._iptables_updater.rewrite_chains(updates, {}, async=False)
