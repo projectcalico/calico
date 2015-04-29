@@ -28,6 +28,10 @@ _log = logging.getLogger(__name__)
 
 
 class UpdateSplitter(Actor):
+    """
+    Actor that takes the role of message broker, farming updates out to IPv4
+    and IPv6-specific actors.
+    """
     def __init__(self, config, ipsets_mgrs, rules_managers, endpoint_managers,
                  iptables_updaters):
         super(UpdateSplitter, self).__init__()
@@ -44,6 +48,12 @@ class UpdateSplitter(Actor):
         """
         Replaces the whole cache state with the input.  Applies deltas vs the
         current active state.
+
+        :param rules_by_prof_id: A mapping of security profile ID to profile
+            rules.
+        :param tags_by_prof_id: A mapping of security profile ID to profile
+            tags.
+        :param endpoints_by_id: A mapping of endpoint ID to endpoint data.
         """
         # Step 1: fire in data update events to the profile and tag managers
         # so they can build their indexes before we activate anything.
@@ -123,6 +133,9 @@ class UpdateSplitter(Actor):
 
     @actor_message()
     def on_interface_update(self, name):
+        """
+        Called when an interface state has changed.
+        """
         _log.info("Interface %s state changed", name)
         for endpoint_mgr in self.endpoint_mgrs:
             endpoint_mgr.on_interface_update(name, async=True)
