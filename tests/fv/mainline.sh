@@ -60,7 +60,6 @@ show_commands
 dist/calicoctl ipv4 pool remove 192.168.0.0/16
 show_commands
 
-dist/calicoctl node stop
 export DOCKER_HOST=
-dist/calicoctl master stop
+dist/calicoctl node stop
 show_commands
