@@ -21,7 +21,9 @@ per-endpoint chains.
 """
 import logging
 from calico.felix.actor import Actor, actor_message
-from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
+from calico.felix.frules import (
+    CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, chain_names, interface_to_suffix
+)
 
 _log = logging.getLogger(__name__)
 
@@ -42,28 +44,26 @@ class DispatchChains(Actor):
         self.config = config
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
-        self.iface_to_ep_id = {}
+        self.ifaces = set()
         self._dirty = False
 
     @actor_message()
-    def apply_snapshot(self, iface_to_ep_id):
+    def apply_snapshot(self, ifaces):
         """
-        Replaces all known interface/endpoint mappings with the given
-        snapshot and rewrites the chain.
+        Replaces all known interfaces with the given snapshot and rewrites the
+        chain.
 
-        :param dict[str,str] iface_to_ep_id: Mapping from interface name
-            to endpoint ID.  this class converts the endpoint ID to the
-            names of the relevant chains.
+        :param set[str] ifaces: The interface
         """
         _log.info("Applying dispatch chains snapshot.")
-        self.iface_to_ep_id = dict(iface_to_ep_id)  # Take a copy.
+        self.ifaces = set(ifaces)  # Take a copy.
         # Always reprogram the chain, even if it's empty.  This makes sure that
         # we resync and it stops the iptables layer from marking our chain as
         # missing.
         self._dirty = True
 
     @actor_message()
-    def on_endpoint_added(self, iface_name, endpoint_id):
+    def on_endpoint_added(self, iface_name):
         """
         Message sent to us by the LocalEndpoint to tell us we should
         add it to the dispatch chain.
@@ -72,13 +72,13 @@ class DispatchChains(Actor):
         chain.
 
         :param iface_name: name of the linux interface.
-        :param endpoint_id: ID of the endpoint, used to form the
-            chain names.
         """
-        _log.debug("%s ready: %s/%s", self, iface_name, endpoint_id)
-        if self.iface_to_ep_id.get(iface_name) != endpoint_id:
-            self.iface_to_ep_id[iface_name] = endpoint_id
-            self._dirty = True
+        _log.debug("%s ready: %s", self, iface_name)
+        if iface_name in self.ifaces:
+            return
+
+        self.ifaces.add(iface_name)
+        self._dirty = True
 
     @actor_message()
     def on_endpoint_removed(self, iface_name):
@@ -90,8 +90,14 @@ class DispatchChains(Actor):
         _log.debug("%s asked to remove dispatch rule %s", self, iface_name)
         # It should be present but be defensive and reprogram the chain
         # just in case if not.
-        self.iface_to_ep_id.pop(iface_name, None)
-        self._dirty = True
+        try:
+            self.ifaces.remove(iface_name)
+        except KeyError:
+            _log.warning(
+                'Attempted to remove unmanaged interface %s', iface_name
+            )
+        else:
+            self._dirty = True
 
     def _finish_msg_batch(self, batch, results):
         if self._dirty:
@@ -106,7 +112,7 @@ class DispatchChains(Actor):
         Synchronous, doesn't return until the chain is in place.
         """
         _log.info("%s Updating dispatch chain, num entries: %s", self,
-                  len(self.iface_to_ep_id))
+                  len(self.ifaces))
         to_upds = []
         from_upds = []
         updates = {CHAIN_TO_ENDPOINT: to_upds,
@@ -115,8 +121,7 @@ class DispatchChains(Actor):
         from_deps = set()
         dependencies = {CHAIN_TO_ENDPOINT: to_deps,
                         CHAIN_FROM_ENDPOINT: from_deps}
-        from calico.felix.endpoint import chain_names, interface_to_suffix
-        for iface in self.iface_to_ep_id:
+        for iface in self.ifaces:
             # Add rule to global chain to direct traffic to the
             # endpoint-specific one.  Note that we use --goto, which means
             # that the endpoint-specific chain will return to our parent
@@ -139,5 +144,7 @@ class DispatchChains(Actor):
                                              async=False)
 
     def __str__(self):
-        return self.__class__.__name__ + "<ipv%s,entries=%s>" % \
-            (self.ip_version, len(self.iface_to_ep_id))
+        return (
+            self.__class__.__name__ + "<ipv%s,entries=%s>" %
+            (self.ip_version, len(self.ifaces))
+        )
