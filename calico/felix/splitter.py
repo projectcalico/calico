@@ -49,11 +49,11 @@ class UpdateSplitter(Actor):
         Replaces the whole cache state with the input.  Applies deltas vs the
         current active state.
 
-        :param rules_by_prof_id: A mapping of security profile ID to profile
-            rules.
-        :param tags_by_prof_id: A mapping of security profile ID to profile
-            tags.
-        :param endpoints_by_id: A mapping of endpoint ID to endpoint data.
+        :param rules_by_prof_id: A dict mapping security profile ID to a list
+            of profile rules, each of which is a dict.
+        :param tags_by_prof_id: A dict mapping security profile ID to a list of
+            profile tags.
+        :param endpoints_by_id: A dict mapping endpoint ID to endpoint data.
         """
         # Step 1: fire in data update events to the profile and tag managers
         # so they can build their indexes before we activate anything.
