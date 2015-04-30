@@ -20,7 +20,7 @@ felix.actor
 A queue-based Actor framework that supports efficient handling of
 batches of messages.  Each Actor instance has its own greenlet
 and a queue of pending messages.  Messages are sent by making calls
-to a method decorated by the @actor_message decorator.
+to methods decorated by the @actor_message decorator.
 
 When an actor_message-decorated method is called from another greenlet
 the method call is wrapped up as a Message object and put on the
@@ -338,6 +338,7 @@ class Actor(object):
         pass
 
     def _maybe_yield(self):
+    # MD4: Premature optimization or really worth including?
         """
         With some probability, yields processing to another greenlet.
         (Utility method to be called from the actor's greenlet during
@@ -508,6 +509,8 @@ def actor_message(needs_own_batch=False):
             if (not on_same_greenlet and
                     not async and
                     _log.isEnabledFor(logging.DEBUG)):
+                    # MD4: I don't understand what the point of this
+                    # isEnabledFor check is.  Please remove or explain.
                 _log.debug("BLOCKING CALL: %s", calling_path)
 
             # OK, so build the message and put it on the queue.

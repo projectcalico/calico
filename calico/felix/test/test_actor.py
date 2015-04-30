@@ -227,7 +227,7 @@ class TestActor(BaseTestCase):
         actor.wait_and_check([])
 
 
-class TestExcpetionTracking(BaseTestCase):
+class TestExceptionTracking(BaseTestCase):
     def test_exception(self):
         ar = actor.TrackedAsyncResult("foo")
         ar.set_exception(Exception())

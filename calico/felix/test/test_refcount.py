@@ -2,8 +2,8 @@
 
 import logging
 from calico.felix.actor import actor_message
-from calico.felix.refcount import ReferenceManager, RefCountedActor, LIVE, \
-    STOPPING
+from calico.felix.refcount import ReferenceManager, RefCountedActor, \
+    RefHelper, LIVE, STOPPING
 from calico.felix.test.base import BaseTestCase
 from calico.felix.test.test_actor import ActorForTesting
 from gevent.event import AsyncResult
@@ -38,6 +38,7 @@ class TestReferenceManager(BaseTestCase):
         _, obj = self.call_via_cb(self._rm.get_and_incref, "foo", async=True)
         self.assertEqual(obj.ref_count, 1)
         self.assertEqual(obj.ref_mgmt_state, LIVE)
+        self.assertTrue(self._rm._is_starting_or_live("foo"))
         _, obj = self.call_via_cb(self._rm.get_and_incref, "foo", async=True)
         self.assertEqual(obj.ref_count, 2)
         self._rm.decref("foo", async=False)
@@ -52,6 +53,7 @@ class TestReferenceManager(BaseTestCase):
         self.assertEqual(new_obj.ref_count, 1)
         self.assertTrue(obj is not new_obj)
         self.assertEqual(new_obj.ref_mgmt_state, LIVE)
+        self.assertTrue(self._rm._is_starting_or_live("foo"))
 
         self.assertEqual(self._rm.ref_actions, [
             # First obj, gets increffed twice but only told about it once.
@@ -65,6 +67,14 @@ class TestReferenceManager(BaseTestCase):
             ("rm", "activate 1"),
             (1, 'on_referenced'),
         ])
+
+    def test_decref_while_starting(self):
+        # Start creating a reference, but then decref it before it's LIVE
+        obj = self._rm.get_and_incref("foo", async=True)
+        self._rm.decref("foo", async=True)
+
+        # Let all the actors run
+        _, obj = self.call_via_cb(self._rm.get_and_incref, "bar", async=True)
 
     def test_double_recreate_while_cleaning_up(self):
         def record_get(obj_id, obj):
@@ -98,11 +108,74 @@ class TestReferenceManager(BaseTestCase):
         ])
 
 
+class TestRefHelper(TestReferenceManager):
+    def setUp(self):
+        super(TestRefHelper, self).setUp()
+        self._rh = RefHelper(self._rm,
+                             self._rm,
+                             self._rm.ready_callback)
+
+    def test_no_refs(self):
+        # With no references, we're ready but haven't been notified
+        self.assertFalse(self._rm._ready_called)
+        self.assertTrue(self._rh.ready)
+
+        # Discarding non-existent references is allowed
+        self._rh.discard_ref("foo")
+
+    def test_acquire_discard_1(self):
+        # Acquire a reference to 'foo' - it won't be ready immediately
+        self._rh.acquire_ref("foo")
+        self.assertFalse(self._rm._ready_called)
+        self.assertFalse(self._rh.ready)
+
+        # Spin the actor framework - we become ready
+        _, obj = self.call_via_cb(self._rm.get_and_incref, "bar", async=True)
+        self.assertTrue(self._rm._ready_called)
+        self.assertTrue(self._rh.ready)
+        self.assertEqual(next(self._rh.iteritems())[0], "foo")
+
+        # Acquiring an already-acquired reference is idempotent
+        self._rh.acquire_ref("foo")
+        self.assertTrue(self._rh.ready)
+
+        # Discard the reference
+        self._rh.discard_ref("foo")
+        _, obj = self.call_via_cb(self._rm.get_and_incref, "baz", async=True)
+        self.assertTrue(self._rh.ready)
+
+    def test_sync_acquire_discard(self):
+        # Acquire a reference and discard it before it's become ready
+        self._rh.acquire_ref("foo")
+        self.assertFalse(self._rh.ready)
+
+        self._rh.discard_ref("foo")
+        self.assertTrue(self._rh.ready)
+
+        # Spin the actor framework
+        _, obj = self.call_via_cb(self._rm.get_and_incref, "bar", async=True)
+
+    def test_acquire_discard_2(self):
+        # Acquire two references
+        self._rh.acquire_ref("foo")
+        _, obj = self.call_via_cb(self._rm.get_and_incref, "bar", async=True)
+        self._rh.acquire_ref("baz")
+        self.assertFalse(self._rh.ready)
+        _, obj = self.call_via_cb(self._rm.get_and_incref, "bar2", async=True)
+        acq_ids = list(key for key, value in self._rh.iteritems())
+        self.assertItemsEqual(acq_ids, ["foo", "baz"])
+        self.assertTrue(self._rh.ready)
+
+        # Discard them all!
+        self._rh.discard_all()
+
+
 class RefMgrForTesting(ReferenceManager):
     def __init__(self):
         super(RefMgrForTesting, self).__init__()
         self.idx = 0
         self.ref_actions = []
+        self._ready_called = False
 
     def _create(self, object_id):
         a = RefCountedActorForTesting(self.idx, self.ref_actions)
@@ -119,6 +192,10 @@ class RefMgrForTesting(ReferenceManager):
         self.ref_actions.append(("rm", "recv cleanup complete"))
         super(RefMgrForTesting, self).on_object_cleanup_complete(*args,
                                                                  **kwargs)
+
+    @actor_message()
+    def ready_callback(self):
+        self._ready_called = True
 
 
 class RefCountedActorForTesting(RefCountedActor, ActorForTesting):
