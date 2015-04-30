@@ -33,29 +33,91 @@ task-based approach, when installing Calico with OpenStack on Ubuntu or
 Red Hat, please see :doc:`ubuntu-opens-install` or
 :doc:`redhat-opens-install`.
 
-Calico components
------------------
+Felix configuration
+-------------------
 
 The core Calico component is Felix. (Please see :doc:`architecture`
 for the Calico architecture.)
 
-Felix (/etc/calico/felix.cfg)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Configuration for Felix is read from one of four possible locations, in order,
+as follows.
 
-Felix runs on each compute host, and is configured by an ini-style
-config file at ``/etc/calico/felix.cfg``.
+1. Environment variables.
+2. The Felix configuration file.
+3. Host specific configuration in etcd.
+4. Global configuration in etcd.
 
-The settings that can be specified in this file all have sensible
-defaults, so may not require explicit editing.
+The value of any configuration parameter is the value read from the *first*
+location containing a value. If not set in any of these locations, most
+configuration parameters have defaults, and it should be rare to have to
+explicitly set them.
 
-+-----------------------+------------------------+-------------------------------------------------------------------------------------------+
-| Setting               | Default                | Meaning                                                                                   |
-+=======================+========================+===========================================================================================+
-| global.EtcdAddr       | localhost:4001         | The location of the etcd node or proxy that Felix should connect to.                      |
-+-----------------------+------------------------+-------------------------------------------------------------------------------------------+
-| global.FelixHostname  | socket.gethostname()   | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
-|                       |                        | autodetects is incorrect or does not match what the plugin will expect.                   |
-+-----------------------+------------------------+-------------------------------------------------------------------------------------------+
+In OpenStack, we recommend putting all configuration into configuration files,
+since the etcd database is transient (and may be recreated by the OpenStack
+plugin in certain error cases). However, in a Docker environment the use of
+environment variables or etcd is often more convenient.
+
+The full list of parameters which can be set is as follows.
+
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| Setting          | Default                   | Meaning                                                                                   |
++==================+===========================+===========================================================================================+
+| EtcdAddr         | localhost:4001            | The location of the etcd node or proxy that Felix should connect to.                      |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| FelixHostname    | socket.gethostname()      | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
+|                  |                           | autodetects is incorrect or does not match what the plugin will expect.                   |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| MetadataAddr     | 127.0.0.1                 | The hostname or IP of the metadata server. If a hostname, must be resolvable. To disable  |
+|                  |                           | metadata (as in most non-OpenStack deployments) set to "none" (case insensitive).         |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| MetadataPort     | 8775                      | The port of the metadata server. Ignored if MetadataAddr is "none".                       |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| InterfacePrefix  | None                      | The start of the interface name for all interfaces. This is set to "tap" on OpenStack     |
+|                  |                           | by the plugin, but must be set to "veth" on most Docker deployments.                      |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| LogFilePath      | /var/log/calico/felix.log | The full path to the felix log. Set to "none" to disable file logging.                    |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| LogSeveritySys   | ERROR                     | The log severity above which logs are sent to the syslog. Valid values are DEBUG, INFO,   |
+|                  |                           | WARNING, ERROR and CRITICAL.                                                              |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| LogSeverityFile  | INFO                      | The log severity above which logs are sent to the log file. Valid values as for           |
+|                  |                           | LogSeveritySys.                                                                           |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| LogSeverityScreen| ERROR                     | The log severity above which logs are sent to the stdout. Valid values as for             |
+|                  |                           | LogSeveritySys.                                                                           |
++------------------+---------------------------+-------------------------------------------------------------------------------------------+
+
+
+Environment variables
+^^^^^^^^^^^^^^^^^^^^^
+
+The highest priority of configuration is that read from environment
+variables. To set a configuration parameter via an environment variable, set
+the environment variable formed by taking ``FELIX_`` and appending the uppercase
+form of the variable name. For example, to set the etcd address, set the
+environment variable ``FELIX_ETCDADDR``.
+
+Configuration file
+^^^^^^^^^^^^^^^^^^
+
+On startup, Felix reads an ini-style configuration file. The path to this file
+defaults to ``/etc/calico/felix.cfg`` but can be overridden using the ``-c`` or
+``--config-file`` options on the command line. If the file exists, then it is
+read (ignoring section names) and all parameters are set from it.
+
+etcd configuration
+^^^^^^^^^^^^^^^^^^
+
+*etcd configuration cannot be used to set either EtcdAddr or FelixHostname, both of which are required before the etcd configuration can be read.*
+
+etcd configuration is read from etcd from two places.
+
+1. For a host of FelixHostname value ``HOSTNAME`` and a parameter named
+   ``NAME``, it is read from ``/calico/v1/host/HOSTNAME/config/NAME``.
+
+2. For a parameter named ``NAME``, it is read from ``/calico/v1/config/NAME``.
+
+Note that the names are case sensitive.
 
 OpenStack environment configuration
 -----------------------------------
