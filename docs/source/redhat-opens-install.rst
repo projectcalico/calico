@@ -56,7 +56,7 @@ Configure YUM repositories
 As well as the repositories for OpenStack and EPEL
 (https://fedoraproject.org/wiki/EPEL) -- which you will have already
 configured as part of the previous step -- you will need to configure the
-repository for Calico.
+repository for Calico::
 
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
