@@ -145,10 +145,13 @@ class Actor(object):
             self.name = "%s(%s)" % (self.__class__.__name__, qualifier)
         else:
             self.name = self.__class__.__name__
+        # Can't use str(self) yet, it might not be ready until subclass
+        # constructed.
+        _log.info("%s created.", self.name)
 
     def start(self):
         assert not self.greenlet, "Already running"
-        _log.debug("Starting %s", self)
+        _log.info("Starting %s", self)
         self.started = True
         self.greenlet.start()
         return self

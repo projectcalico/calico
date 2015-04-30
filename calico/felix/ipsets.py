@@ -420,6 +420,8 @@ class ActiveIpset(RefCountedActor):
             self._notify_ready()
 
     def _sync_to_ipset(self):
+        _log.info("Rewriting %s ipset %s for tag %s with %d members.",
+                  self.ip_type, self.name, self._id, len(self.members))
         _log.debug("Setting ipset %s to %s", self.name, self.members)
 
         # We use ipset restore, which processes a batch of ipset updates.

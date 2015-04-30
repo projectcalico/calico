@@ -79,8 +79,11 @@ class EtcdWatcher(Actor):
                     # default to empty.
                     _log.info("No configuration overrides for this node")
                     host_dict = {}
-            except (EtcdKeyNotFound, EtcdException):
-                _log.exception("Failed to read config.  Will retry.")
+            except (EtcdKeyNotFound, EtcdException) as e:
+                # Note: we don't log the stack trace because it's too spammy
+                # and adds little.
+                _log.error("Failed to read config. etcd may be down or the"
+                           "data model may not be ready: %r. Will retry.", e)
                 gevent.sleep(RETRY_DELAY)
                 continue
 
@@ -96,11 +99,14 @@ class EtcdWatcher(Actor):
                 db_ready = self.client.read(READY_KEY,
                                             timeout=10).value
             except EtcdKeyNotFound:
-                _log.warn("Ready flag not present in etcd, waiting...")
+                _log.warn("Ready flag not present in etcd; felix will pause "
+                          "updates until the orchestrator sets the flag.")
                 db_ready = "false"
-            except EtcdException:
-                _log.exception("Failed to retrieve ready flag from etcd, "
-                               "waiting...")
+            except EtcdException as e:
+                # Note: we don't log the
+                _log.error("Failed to retrieve ready flag from etcd (%r). "
+                           "Felix will not receive updates until the "
+                           "connection to etcd is restored.", e)
                 db_ready = "false"
 
             if db_ready == "true":

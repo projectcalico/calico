@@ -189,21 +189,23 @@ class IptablesUpdater(Actor):
         use the more robust approach of rewriting the whole chain using
         rewrite_chains().
 
-
         :param rule_fragment: fragment to be inserted. For example,
            "INPUT --jump felix-INPUT"
         """
         try:
             # Do an atomic delete + insert of the rule.  If the rule already
             # exists then the rule will be moved to the start of the chain.
+            _log.info("Attempting to move any existing instance of rule %r"
+                      "to top of chain.", rule_fragment)
             self._execute_iptables(['*%s' % self._table,
                                     '--delete %s' % rule_fragment,
                                     '--insert %s' % rule_fragment,
-                                    'COMMIT'])
+                                    'COMMIT'],
+                                   fail_log_level=logging.DEBUG)
         except FailedSystemCall:
             # Assume the rule didn't exist. Try inserting it.
-            _log.debug("Failed to do atomic delete/insert, assuming rule "
-                       "wasn't programmed.")
+            _log.info("Didn't find any existing instance of rule %r, "
+                      "inserting it instead.")
             self._execute_iptables(['*%s' % self._table,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
@@ -345,7 +347,7 @@ class IptablesUpdater(Actor):
         except NothingToDo:
             _log.debug("No chains to delete %s", chains)
         else:
-            self._execute_iptables(input_lines)
+            self._execute_iptables(input_lines, fail_log_level=logging.WARNING)
 
     def _update_indexes(self):
         """
@@ -408,7 +410,7 @@ class IptablesUpdater(Actor):
         else:
             raise NothingToDo()
 
-    def _execute_iptables(self, input_lines):
+    def _execute_iptables(self, input_lines, fail_log_level=logging.ERROR):
         """
         Runs ip(6)tables-restore with the given input.  Retries iff
         the COMMIT fails.
@@ -443,17 +445,23 @@ class IptablesUpdater(Actor):
                         backoff *= (1.5 + random.random())
                         continue
                     else:
-                        _log.error("Failed to run %s.\nOutput:\n%s\n"
-                                   "Error:\n%s\nInput was:\n%s",
-                                   self._restore_cmd, e.stdout, e.stderr,
-                                   input_str)
-                        _log.error("Out of retries: %s.", detail)
+                        _log.log(
+                            fail_log_level,
+                            "Failed to run %s.  Out of retries: %s.\n"
+                            "Output:\n%s\n"
+                            "Error:\n%s\n"
+                            "Input was:\n%s",
+                            self._restore_cmd, detail, e.stdout, e.stderr,
+                            input_str)
                 else:
-                    _log.error("Failed to run %s.\nOutput:\n%s\n"
-                               "Error:\n%s\nInput was:\n%s",
-                               self._restore_cmd, e.stdout, e.stderr,
-                               input_str)
-                    _log.error("Non-retryable error: %s", detail)
+                    _log.log(
+                        fail_log_level,
+                        "%s failed with non-retryable error: %s.\n"
+                        "Output:\n%s\n"
+                        "Error:\n%s\n"
+                        "Input was:\n%s",
+                        self._restore_cmd, detail, e.stdout, e.stderr,
+                        input_str)
                 raise
             else:
                 success = True

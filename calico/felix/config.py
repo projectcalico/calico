@@ -54,6 +54,7 @@ GLOBAL_ETCD = "Global etcd configuration"
 LOCAL_ETCD = "Host specific etcd configuration"
 DEFAULT_SOURCES = [ ENV, FILE, GLOBAL_ETCD, LOCAL_ETCD ]
 
+
 class ConfigException(Exception):
     def __init__(self, message, parameter):
         super(ConfigException, self).__init__(message)
@@ -67,6 +68,7 @@ class ConfigException(Exception):
                self.parameter.name,
                self.parameter.description,
                self.parameter.active_source)
+
 
 class ConfigParameter(object):
     """
@@ -83,7 +85,7 @@ class ConfigParameter(object):
         :param str description: Description for logging
         :param list sources: List of valid sources to try
         :param str default: Default value
-        :param bool int: Integer value?
+        :param bool value_is_int: Integer value?
         """
         self.description = description
         self.name = name
@@ -148,9 +150,9 @@ class Config(object):
         self.parameters = {}
 
         self.add_parameter("EtcdAddr", "Address and port for etcd",
-                           "localhost:4001", sources = [ENV, FILE])
+                           "localhost:4001", sources=[ENV, FILE])
         self.add_parameter("FelixHostname", "Felix compute host hostname",
-                           socket.gethostname(), sources = [ENV, FILE])
+                           socket.gethostname(), sources=[ENV, FILE])
 
         self.add_parameter("StartupCleanupDelay", "Delay before cleanup starts",
                            30, value_is_int=True)
