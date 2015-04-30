@@ -43,8 +43,8 @@ Common Steps
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed here.
 
-Install OpenStack Icehouse/Juno
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install OpenStack Juno
+~~~~~~~~~~~~~~~~~~~~~~
 
 If you haven't already done so, install Juno with Neutron and ML2 networking.
 Instructions for installing OpenStack on RHEL can be found
