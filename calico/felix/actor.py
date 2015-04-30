@@ -126,12 +126,6 @@ class Actor(object):
     Class that contains a queue and a greenlet serving that queue.
     """
 
-    batch_delay = None
-    """
-    Delay in seconds imposed after receiving first message before processing
-    the messages in a batch.  Higher values encourage batching.
-    """
-
     max_ops_before_yield = 10000
     """Number of calls to self._maybe_yield before it yields"""
 
@@ -191,10 +185,6 @@ class Actor(object):
         if not msg.needs_own_batch:
             # Try to pull some more work off the queue to combine into a
             # batch.
-            if self.batch_delay:
-                # If requested by our subclass, delay the start of the batch to
-                # allow more work to accumulate.
-                gevent.sleep(self.batch_delay)
             while not self._event_queue.empty():
                 # We're the only ones getting from the queue so this should
                 # never fail.

@@ -22,7 +22,6 @@ from collections import defaultdict
 import copy
 import logging
 import random
-from subprocess import CalledProcessError
 import time
 import itertools
 import re
@@ -30,9 +29,10 @@ import re
 from gevent import subprocess
 import gevent
 
-from calico.felix import frules
-from calico.felix.actor import (Actor, actor_message, ResultOrExc,
-                                SplitBatchAndRetry)
+from calico.felix import frules, futils
+from calico.felix.actor import (
+    Actor, actor_message, ResultOrExc, SplitBatchAndRetry
+)
 from calico.felix.frules import FELIX_PREFIX
 from calico.felix.futils import FailedSystemCall
 
@@ -55,7 +55,8 @@ class IptablesUpdater(Actor):
 
     Concurrent access to the same table is not allowed by the
     underlying iptables architecture so there should be one instance of
-    this class for each table.
+    this class for each table.  Each IP version has its own set of
+    non-conflicting tables.
 
     However, this class tries to be robust against concurrent access
     from outside the process by detecting and retrying such errors.
@@ -63,13 +64,12 @@ class IptablesUpdater(Actor):
     Batching support
     ~~~~~~~~~~~~~~~~
 
-    This actor supports batching of multiple updates, it will apply all
-    updates that are on the queue in one, atomic, batch.  This is
-    dramatically faster than issuing single iptables requests.
+    This actor supports batching of multiple updates. It applies updates that
+    are on the queue in one atomic batch. This is dramatically faster than
+    issuing single iptables requests.
 
-    If a request fails, it does a binary chop using the
-    SplitBatchAndRetry mechanism to report the error to the correct
-    request.
+    If a request fails, it does a binary chop using the SplitBatchAndRetry
+    mechanism to report the error to the correct request.
 
     Dependency tracking
     ~~~~~~~~~~~~~~~~~~~
@@ -78,69 +78,76 @@ class IptablesUpdater(Actor):
     use this one, this class supports tracking dependencies between chains
     and programming stubs for missing chains:
 
-    * When calling rewrite_chains() the caller must include a dict that
+    * When calling rewrite_chains() the caller must supply a dict that
       maps from chain to a set of chains it requires (i.e. the chains
       that appear in its --jump and --goto targets).
 
     * Any chains that are required but not present are created as "stub"
-      chains, which drop all traffic.  They are marked as such in the
+      chains, which drop all traffic. They are marked as such in the
       iptables rules with an iptables comment.
 
-    * When the required chain later gets programmed, the stub rule is
-      deleted and replaced with the real contents of the chain.
+    * When a required chain is later explicitly created, the stub chain is
+      replaced with the required contents of the chain.
 
-    * If a required chain is deleted, it is rewritten as a stub chain.
-      It is then cleaned up when it is no longer required.
+    * If a required chain is explicitly deleted, it is rewritten as a stub
+      chain.
+
+    * If a chain exists only as a stub chain to satisfy a dependency, then it
+      is cleaned up when the dependency is removed.
 
     """
 
-    queue_size = 1000
-    batch_delay = 0.1
-
     def __init__(self, table, ip_version=4):
         super(IptablesUpdater, self).__init__(qualifier="v%d" % ip_version)
-        self.table = table
+        self._table = table
         if ip_version == 4:
-            self.restore_cmd = "iptables-restore"
-            self.iptables_cmd = "iptables"
+            self._restore_cmd = "iptables-restore"
+            self._iptables_cmd = "iptables"
         else:
             assert ip_version == 6
-            self.restore_cmd = "ip6tables-restore"
-            self.iptables_cmd = "ip6tables"
+            self._restore_cmd = "ip6tables-restore"
+            self._iptables_cmd = "ip6tables"
 
-        self.explicitly_prog_chains = set()
-        """Set of chains that we've explicitly programmed."""
+        self._explicitly_prog_chains = set()
+        """Set of chains that have been explicitly programmed."""
 
-        self.required_chains = defaultdict(set)
-        """Map from chain name to the set of chains that it depends on."""
-        self.requiring_chains = defaultdict(set)
+        self._required_chains = defaultdict(set)
+        """Map from chain name to the set of names of chains that it
+        depends on."""
+        self._requiring_chains = defaultdict(set)
         """Map from chain to the set of chains that depend on it.
         Inverse of self.required_chains."""
 
-        # State tracking for the current batch.
-        self._batch = None
-        """:type UpdateBatch: object used to track index changes for this
-        batch."""
+        # Since it's fairly complex to keep track of the changes required
+        # for a particular batch and still be able to roll-back the changes
+        # to our data structures, we delegate to a per-batch object that
+        # does that calculation.
+        self._txn = None
+        """:type _Transaction: object used to track index changes
+        for this batch."""
         self._completion_callbacks = None
         """List of callbacks to issue once the current batch completes."""
 
-        self._reset_batched_work()  # Avoid duplicating init logic.
+        # Initialise _batch.
+        self._reset_batched_work()
 
     def _reset_batched_work(self):
-        """Resets the per-batch state in preparation for a new batch."""
-        self._batch = UpdateBatch(self.explicitly_prog_chains,
-                                  self.required_chains,
-                                  self.requiring_chains)
+        """Reset the per-batch state in preparation for a new batch."""
+        self._txn = _Transaction(self._explicitly_prog_chains,
+                                         self._required_chains,
+                                         self._requiring_chains)
         self._completion_callbacks = []
 
-    def _load_unreferenced_chains(self):
+    def _read_unreferenced_chains(self):
         """
+        Read the list of chains in the dataplane which are not referenced.
+
         :returns list[str]: list of chains currently in the dataplane that
             are not referenced by other chains.
         """
         raw_ipt_output = subprocess.check_output(
-            [self.iptables_cmd, "--wait", "--list", "--table", self.table])
-        return extract_unreffed_chains(raw_ipt_output)
+            [self._iptables_cmd, "--wait", "--list", "--table", self._table])
+        return _extract_unreffed_chains(raw_ipt_output)
 
     @actor_message()
     def rewrite_chains(self, update_calls_by_chain,
@@ -150,10 +157,10 @@ class IptablesUpdater(Actor):
 
         :param update_calls_by_chain: map from chain name to list of
                iptables-style update calls,
-               e.g. {"chain_name": ["-A chain_name -j ACCEPT"]}.  Chain will
+               e.g. {"chain_name": ["-A chain_name -j ACCEPT"]}. Chain will
                be flushed.
         :param dependent_chains: map from chain name to a set of chains
-               that that chain requires to exist.  They will be created
+               that that chain requires to exist. They will be created
                (with a default drop) if they don't exist.
         :returns CalledProcessError if a problem occurred.
         """
@@ -165,7 +172,7 @@ class IptablesUpdater(Actor):
             # TODO: double-check whether this flush is needed.
             updates = ["--flush %s" % chain] + updates
             deps = dependent_chains.get(chain, set())
-            self._batch.store_rewrite_chain(chain, updates, deps)
+            self._txn.store_rewrite_chain(chain, updates, deps)
         if callback:
             self._completion_callbacks.append(callback)
 
@@ -173,27 +180,31 @@ class IptablesUpdater(Actor):
     @actor_message(needs_own_batch=True)
     def ensure_rule_inserted(self, rule_fragment):
         """
-        Runs the given rule fragment, prefixed with --insert.  If the
-        rule was already inserted, it is removed and reinserted at the
+        Runs the given rule fragment, prefixed with --insert. If the
+        rule was already present, it is removed and reinserted at the
         start of the chain.
 
-        This is intended to cover the start-up corner case where we need to
-        insert a rule into the pre-existing kernel chains.  Most code
-        should use the more robust approach of rewriting the whole chain
-        using rewrite_chains().
+        This covers the case where we need to insert a rule into the
+        pre-existing kernel chains (only). For chains that are owned by Felix,
+        use the more robust approach of rewriting the whole chain using
+        rewrite_chains().
+
+
+        :param rule_fragment: fragment to be inserted. For example,
+           "INPUT --jump felix-INPUT"
         """
         try:
-            # Make an atomic delete + insert of the rule.  If the rule already
-            # exists then this will have no effect.
-            self._execute_iptables(['*%s' % self.table,
+            # Do an atomic delete + insert of the rule.  If the rule already
+            # exists then the rule will be moved to the start of the chain.
+            self._execute_iptables(['*%s' % self._table,
                                     '--delete %s' % rule_fragment,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
-        except CalledProcessError:
-            # Assume the rule didn't exist, try inserting it.
+        except FailedSystemCall:
+            # Assume the rule didn't exist. Try inserting it.
             _log.debug("Failed to do atomic delete/insert, assuming rule "
                        "wasn't programmed.")
-            self._execute_iptables(['*%s' % self.table,
+            self._execute_iptables(['*%s' % self._table,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
 
@@ -203,7 +214,7 @@ class IptablesUpdater(Actor):
         # changes by table and chain.
         _log.info("Deleting chains %s", chain_names)
         for chain in chain_names:
-            self._batch.store_delete(chain)
+            self._txn.store_delete(chain)
         if callback:
             self._completion_callbacks.append(callback)
 
@@ -222,23 +233,22 @@ class IptablesUpdater(Actor):
             # Try to delete all the unreferenced chains, we use a loop to
             # ensure that we then clean up any chains that become unreferenced
             # when we delete the previous lot.
-            unreferenced_chains = self._load_unreferenced_chains()
+            unreferenced_chains = self._read_unreferenced_chains()
             orphans = (unreferenced_chains -
-                       self.explicitly_prog_chains -
-                       set(self.requiring_chains.keys()))
-            our_orphans = [c for c in orphans if c.startswith(FELIX_PREFIX)]
-            if not chains_we_tried_to_delete.issuperset(our_orphans):
+                       self._explicitly_prog_chains -
+                       set(self._requiring_chains.keys()))
+            if not chains_we_tried_to_delete.issuperset(orphans):
                 _log.info("Cleanup found these unreferenced chains to "
-                          "delete: %s", our_orphans)
-                chains_we_tried_to_delete.update(our_orphans)
-                self._delete_best_effort(our_orphans)
+                          "delete: %s", orphans)
+                chains_we_tried_to_delete.update(orphans)
+                self._delete_best_effort(orphans)
             else:
                 # We've already tried to delete all the chains we found,
                 # give up.
-                _log.info("Cleanup finished, deleted %s chains, failed to "
+                _log.info("Cleanup finished, deleted %d chains, failed to "
                           "delete these chains: %s",
-                          len(chains_we_tried_to_delete) - len(our_orphans),
-                          our_orphans)
+                          len(chains_we_tried_to_delete) - len(orphans),
+                          orphans)
                 finished = True
 
     def _start_msg_batch(self, batch):
@@ -258,11 +268,15 @@ class IptablesUpdater(Actor):
             else:
                 self._execute_iptables(input_lines)
                 _log.info("%s Successfully processed iptables updates.", self)
-        except CalledProcessError as e:
+        except (IOError, OSError, FailedSystemCall) as e:
+            if isinstance(e, FailedSystemCall):
+                rc = e.retcode
+            else:
+                rc = "unknown"
             if len(batch) == 1:
                 # We only executed a single message, report the failure.
                 _log.error("Non-retryable %s failure. RC=%s",
-                           self.restore_cmd, e.returncode)
+                           self._restore_cmd, rc)
                 if self._completion_callbacks:
                     self._completion_callbacks[0](e)
                 final_result = ResultOrExc(None, e)
@@ -277,7 +291,7 @@ class IptablesUpdater(Actor):
             # Make a best effort to delete the chains we no longer want.
             # If we fail due to a stray reference from an orphan chain, we
             # should catch them on the next cleanup().
-            self._delete_best_effort(self._batch.chains_to_delete)
+            self._delete_best_effort(self._txn.chains_to_delete)
             for c in self._completion_callbacks:
                 c(None)
         finally:
@@ -288,7 +302,8 @@ class IptablesUpdater(Actor):
 
     def _delete_best_effort(self, chains):
         """
-        Try to delete all the chains in the input list.
+        Try to delete all the chains in the input list. Any errors are silently
+        swallowed.
         """
         if not chains:
             return
@@ -299,7 +314,7 @@ class IptablesUpdater(Actor):
                 # Try the next batch of chains...
                 _log.debug("Attempting to delete chains: %s", batch)
                 self._attempt_delete(batch)
-            except (CalledProcessError, IOError, FailedSystemCall):
+            except (IOError, OSError, FailedSystemCall):
                 _log.warning("Deleting chains %s failed", batch)
                 if len(batch) > 1:
                     # We were trying to delete multiple chains, split the
@@ -325,22 +340,28 @@ class IptablesUpdater(Actor):
                            "batches: %s", batch, len(chain_batches))
 
     def _attempt_delete(self, chains):
-        input_lines = self._calculate_ipt_delete_input(chains)
-        self._execute_iptables(input_lines)
+        try:
+            input_lines = self._calculate_ipt_delete_input(chains)
+        except NothingToDo:
+            _log.debug("No chains to delete %s", chains)
+        else:
+            self._execute_iptables(input_lines)
 
     def _update_indexes(self):
         """
         Called after successfully processing a batch, updates the
-        indexes with the values calculated by the UpdateBatch.
+        indices with the values calculated by the _Transaction.
         """
-        self.explicitly_prog_chains = self._batch.expl_prog_chains
-        self.required_chains = self._batch.required_chns
-        self.requiring_chains = self._batch.requiring_chns
+        self._explicitly_prog_chains = self._txn.expl_prog_chains
+        self._required_chains = self._txn.required_chns
+        self._requiring_chains = self._txn.requiring_chns
 
     def _calculate_ipt_modify_input(self):
         """
         Calculate the input for phase 1 of a batch, where we only modify and
         create chains.
+
+        :raises NothingToDo: if the batch requires no modify operations.
         """
         # Valid input looks like this.
         #
@@ -353,27 +374,29 @@ class IptablesUpdater(Actor):
         #
         # The chains are created if they don't exist.
         input_lines = []
-        affected_chains = self._batch.affected_chains
+        affected_chains = self._txn.affected_chains
         for chain in affected_chains:
             input_lines.append(":%s -" % chain)
-        for chain_name in (self._batch.chains_to_stub_out |
-                           self._batch.chains_to_delete):
+        for chain_name in (self._txn.chains_to_stub_out |
+                           self._txn.chains_to_delete):
             assert chain_name in affected_chains
             input_lines.extend(_stub_drop_rules(chain_name))
-        for chain_name, chain_updates in self._batch.updates.iteritems():
+        for chain_name, chain_updates in self._txn.updates.iteritems():
             input_lines.extend(chain_updates)
         if not input_lines:
             raise NothingToDo
-        return ["*%s" % self.table] + input_lines + ["COMMIT"]
+        return ["*%s" % self._table] + input_lines + ["COMMIT"]
 
     def _calculate_ipt_delete_input(self, chains):
         """
         Calculate the input for phase 2 of a batch, where we actually
         try to delete chains.
+
+        :raises NothingToDo: if the batch requires no delete operations.
         """
         input_lines = []
         found_delete = False
-        input_lines.append("*%s" % self.table)
+        input_lines.append("*%s" % self._table)
         for chain_name in chains:
             # Delete the chain
             input_lines.append(":%s -" % chain_name)
@@ -390,7 +413,7 @@ class IptablesUpdater(Actor):
         Runs ip(6)tables-restore with the given input.  Retries iff
         the COMMIT fails.
 
-        :raises CalledProcessError: if the command fails on a non-commit
+        :raises FailedSystemCall: if the command fails on a non-commit
             line or if it repeatedly fails and retries are exhausted.
         """
         backoff = 0.01
@@ -398,83 +421,79 @@ class IptablesUpdater(Actor):
         success = False
         while not success:
             input_str = "\n".join(input_lines) + "\n"
-            _log.debug("%s input:\n%s", self.restore_cmd, input_str)
+            _log.debug("%s input:\n%s", self._restore_cmd, input_str)
 
             # Run iptables-restore in noflush mode so that it doesn't
             # blow away all the tables we're not touching.
-            cmd = [self.restore_cmd, "--noflush", "--verbose"]
-            iptables_proc = subprocess.Popen(cmd,
-                                             stdin=subprocess.PIPE,
-                                             stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE)
-            out, err = iptables_proc.communicate(input_str)
-            rc = iptables_proc.wait()
-            _log.debug("%s completed with RC=%s", self.restore_cmd, rc)
-            num_tries += 1
-            if rc == 0:
-                success = True
-            else:
+            cmd = [self._restore_cmd, "--noflush", "--verbose"]
+            try:
+                futils.check_call(cmd, input_str=input_str)
+            except FailedSystemCall as e:
                 # Parse the output to determine if error is retryable.
-                match = re.search(r"line (\d+) failed", err)
-                if match:
-                    # Have a line number, work out if this was a commit
-                    # failure, which is caused by concurrent access and is
-                    # retryable.
-                    line_number = int(match.group(1))
-                    _log.debug("%s failure on line %s", self.restore_cmd,
-                               line_number)
-                    line_index = line_number - 1
-                    offending_line = input_lines[line_index]
-                    if (num_tries < MAX_IPT_RETRIES and
-                            offending_line.strip() == "COMMIT"):
-                        _log.info("Failure occurred on COMMIT line, error is "
-                                  "retryable. Retry in %.2fs", backoff)
+                retryable, detail = _parse_ipt_restore_error(input_lines,
+                                                             e.stderr)
+                num_tries += 1
+                if retryable:
+                    if num_tries < MAX_IPT_RETRIES:
+                        _log.info("%s failed with retryable error. Retry in "
+                                  "%.2fs", self._iptables_cmd, backoff)
                         gevent.sleep(backoff)
                         if backoff > MAX_IPT_BACKOFF:
                             backoff = MAX_IPT_BACKOFF
                         backoff *= (1.5 + random.random())
                         continue
-                    elif num_tries >= MAX_IPT_RETRIES:
-                        _log.error("Failed to run %s.\nOutput:\n%s\n"
-                                   "Error:\n%s\nInput was:\n%s",
-                                   self.restore_cmd, out, err, input_str)
-                        _log.error("Out of retries.  Error occurred on line "
-                                   "%s: %r", line_number, offending_line)
                     else:
                         _log.error("Failed to run %s.\nOutput:\n%s\n"
                                    "Error:\n%s\nInput was:\n%s",
-                                   self.restore_cmd, out, err, input_str)
-                        _log.error("Non-retryable error on line %s: %r",
-                                   line_number, offending_line)
+                                   self._restore_cmd, e.stdout, e.stderr,
+                                   input_str)
+                        _log.error("Out of retries: %s.", detail)
                 else:
-                    _log.error("%s completed with output:\n%s\n%s",
-                               self.restore_cmd, out, err)
-                raise CalledProcessError(cmd=cmd, returncode=rc)
+                    _log.error("Failed to run %s.\nOutput:\n%s\n"
+                               "Error:\n%s\nInput was:\n%s",
+                               self._restore_cmd, e.stdout, e.stderr,
+                               input_str)
+                    _log.error("Non-retryable error: %s", detail)
+                raise
+            else:
+                success = True
 
 
-class UpdateBatch(object):
+class _Transaction(object):
+    """
+    This class keeps track of a sequence of updates to an
+    IptablesUpdater's indexing data structures.
+
+    It takes a copy of the data structures at creation and then
+    gets fed the sequence of updates and deletes; then, on-demand
+    it calculates the dataplane deltas that are required and
+    caches the results.
+
+    The general idea is that, if the iptables-restore call fails,
+    the Transaction object can be thrown away, leaving the
+    IptablesUpdater's state unchanged.
+
+    """
     def __init__(self,
                  old_expl_prog_chains,
                  old_deps,
                  old_requiring_chains):
-        # Original state, read-only.
-        self.old_expl_prog_chains = old_expl_prog_chains
-        self.old_requiring_chains = old_requiring_chains
-
         # Figure out what stub chains should already be present.
-        self.already_stubbed = (set(self.old_requiring_chains.keys()) -
-                                self.old_expl_prog_chains)
+        self.already_stubbed = (set(old_requiring_chains.keys()) -
+                                old_expl_prog_chains)
 
         # Deltas.
         self.updates = {}
         self._deletes = set()
 
-        # New state.
+        # New state.  These will be copied back to the IptablesUpdater
+        # if the transaction succeeds.
         self.expl_prog_chains = copy.deepcopy(old_expl_prog_chains)
         self.required_chns = copy.deepcopy(old_deps)
         self.requiring_chns = copy.deepcopy(old_requiring_chains)
 
-        # Caches of expensive calculations.
+        # Memoized values of the properties below.  See chains_to_stub(),
+        # affected_chains() and chains_to_delete() below.
         self._chains_to_stub = None
         self._affected_chains = None
         self._chains_to_delete = None
@@ -595,6 +614,7 @@ class UpdateBatch(object):
         """
         return set(self.requiring_chns.keys())
 
+
 def _stub_drop_rules(chain):
     """
     :return: List of rule fragments to replace the given chain with a
@@ -605,10 +625,10 @@ def _stub_drop_rules(chain):
                                            'WARNING Missing chain DROP:')]
 
 
-def extract_unreffed_chains(raw_save_output):
+def _extract_unreffed_chains(raw_save_output):
     """
     Parses the output from iptables-save to extract the set of
-    unreferenced chains, which should be safe to delete.
+    our unreferenced chains which are safe to delete.
     """
     chains = set()
     last_line = None
@@ -625,10 +645,38 @@ def extract_unreffed_chains(raw_save_output):
             chain_name = m.group(1)
             ref_count = int(m.group(2))
             _log.debug("Found chain %s, ref count %s", chain_name, ref_count)
-            if ref_count == 0:
+            if chain_name.startswith(FELIX_PREFIX) and ref_count == 0:
                 chains.add(chain_name)
         last_line = line
     return chains
+
+
+def _parse_ipt_restore_error(input_lines, err):
+    """
+    Parses the stderr output from an iptables-restore call.
+
+    :param input_lines: list of lines of input that we passed to
+        iptables-restore.  (Used for debugging.)
+    :param str err: captures stderr from iptables-restore.
+    :return tuple[bool,str]: tuple, the first (bool) element indicates
+        whether the error is retryable; the second is a detail message.
+    """
+    match = re.search(r"line (\d+) failed", err)
+    if match:
+        # Have a line number, work out if this was a commit
+        # failure, which is caused by concurrent access and is
+        # retryable.
+        line_number = int(match.group(1))
+        _log.debug("ip(6)tables-restore failure on line %s", line_number)
+        line_index = line_number - 1
+        offending_line = input_lines[line_index]
+        if offending_line.strip == "COMMIT":
+            return True, "COMMIT failed; likely concurrent access."
+        else:
+            return False, "Line %s failed: %s" % (line_number, offending_line)
+    else:
+        return False, "ip(6)tables-restore failed with output: %s" % err
+
 
 
 class NothingToDo(Exception):
