@@ -6,7 +6,7 @@ netaddr==0.7.14
 sh==1.11
 requests==2.6.2
 docker-py==1.2.1
-python-etcd==0.3.2
+git+http://github.com/Metaswitch/python-etcd.git@3f14a002c9a75df3242de3d81a91a2e6bd32c5a8#egg=python-etcd
 Twisted==14.0.0
 cffi==0.9.2
 characteristic==14.3.0
