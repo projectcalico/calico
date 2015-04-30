@@ -43,8 +43,8 @@ Common Steps
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed here.
 
-Install OpenStack Icehouse/Juno
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install OpenStack Juno
+~~~~~~~~~~~~~~~~~~~~~~
 
 If you haven't already done so, install Juno with Neutron and ML2 networking.
 Instructions for installing OpenStack on RHEL can be found
@@ -56,7 +56,7 @@ Configure YUM repositories
 As well as the repositories for OpenStack and EPEL
 (https://fedoraproject.org/wiki/EPEL) -- which you will have already
 configured as part of the previous step -- you will need to configure the
-repository for Calico.
+repository for Calico::
 
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
