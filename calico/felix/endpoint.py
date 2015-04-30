@@ -53,20 +53,21 @@ class EndpointManager(ReferenceManager):
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
 
-        # All endpoint dicts that we know about.
+        # All endpoint dicts that are on this host.
         self.endpoints_by_id = {}
+        # Dict that maps from interface name ("tap1234") to endpoint ID.
         self.endpoint_id_by_iface_name = {}
 
         # Set of endpoints that are live on this host.  I.e. ones that we've
         # increffed.
         self.local_endpoint_ids = set()
 
-    def _create(self, object_id):
+    def _create(self, endpoint_id):
         """
         Overrides ReferenceManager._create()
         """
         return LocalEndpoint(self.config,
-                             object_id,
+                             endpoint_id,
                              self.ip_type,
                              self.iptables_updater,
                              self.dispatch_chains,
@@ -82,17 +83,17 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def apply_snapshot(self, endpoints_by_id):
-        missing_endpoints = set(self.endpoints_by_id.keys())
-
         # Tell the dispatch chains about the local endpoints in advance so
         # that we don't flap the dispatch chain at start-of-day.
         local_iface_name_to_ep_id = {}
         for ep_id, ep in endpoints_by_id.iteritems():
-            if ep and ep["host"] == self.config.HOSTNAME and ep.get("name"):
+            if ep and ep_id.host == self.config.HOSTNAME and ep.get("name"):
                 local_iface_name_to_ep_id[ep.get("name")] = ep_id
         self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id.keys(),
                                             async=True)
-
+        # Then update/create endpoints and work out which endpoints have been
+        # deleted.
+        missing_endpoints = set(self.endpoints_by_id.keys())
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
             self.on_endpoint_update(endpoint_id, endpoint)
             missing_endpoints.discard(endpoint_id)
@@ -104,24 +105,31 @@ class EndpointManager(ReferenceManager):
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
-        Event to indicate that an endpoint has been updated (including creation
-        or deletion).
+        Event to indicate that an endpoint has been updated (including
+        creation or deletion).
 
-        :param str endpoint_id: The endpoint ID in question.
-        :endpoint dict[str]: Dictionary of all endpoint data. If None, the
-                             endpoint is to be deleted.
+        :param EndpointId endpoint_id: The endpoint ID in question.
+        :param dict[str]|NoneType endpoint: Dictionary of all endpoint
+            data or None if the endpoint is to be deleted.
         """
+        if endpoint_id.host != self.config.HOSTNAME:
+            _log.debug("Skipping endpoint %s; not on our host.", endpoint_id)
+            return
+
         if self._is_starting_or_live(endpoint_id):
             # Local endpoint thread is running; tell it of the change.
             _log.info("Update for live endpoint %s", endpoint_id)
             self.objects_by_id[endpoint_id].on_endpoint_update(endpoint,
                                                                async=True)
+
+        old_ep = self.endpoints_by_id.pop(endpoint_id, {})
+        # Interface name shouldn't change but popping it now is correct for
+        # deletes and we add it back in below on create/modify.
+        old_iface_name = old_ep.get("name")
+        self.endpoint_id_by_iface_name.pop(old_iface_name, None)
         if endpoint is None:
             # Deletion. Remove from the list.
             _log.info("Endpoint %s deleted", endpoint_id)
-            old_ep = self.endpoints_by_id.pop(endpoint_id, {})
-            if old_ep.get("name") in self.endpoint_id_by_iface_name:
-                self.endpoint_id_by_iface_name.pop(old_ep.get("name"))
             if endpoint_id in self.local_endpoint_ids:
                 self.decref(endpoint_id)
                 self.local_endpoint_ids.remove(endpoint_id)
@@ -130,9 +138,6 @@ class EndpointManager(ReferenceManager):
             _log.info("Endpoint %s modified or created", endpoint_id)
             self.endpoints_by_id[endpoint_id] = endpoint
             self.endpoint_id_by_iface_name[endpoint["name"]] = endpoint_id
-
-        if endpoint and endpoint["host"] == self.config.HOSTNAME:
-            _log.debug("Endpoint is local, ensuring it is active.")
             if endpoint_id not in self.local_endpoint_ids:
                 # This will trigger _on_object_activated to pass the endpoint
                 # we just saved off to the endpoint.
@@ -149,6 +154,10 @@ class EndpointManager(ReferenceManager):
         """
         try:
             endpoint_id = self.endpoint_id_by_iface_name[name]
+        except KeyError:
+            _log.debug("Update on interface %s that we do not care about",
+                       name)
+        else:
             _log.info("Endpoint %s received interface update for %s",
                       endpoint_id, name)
             if self._is_starting_or_live(endpoint_id):
@@ -156,17 +165,13 @@ class EndpointManager(ReferenceManager):
                 ep = self.objects_by_id[endpoint_id]
                 ep.on_interface_update(async=True)
 
-        except KeyError:
-            _log.debug("Update on interface %s that we do not care about",
-                       name)
-
 
 class LocalEndpoint(RefCountedActor):
 
     def __init__(self, config, endpoint_id, ip_type, iptables_updater,
                  dispatch_chains, rules_manager):
         super(LocalEndpoint, self).__init__(qualifier="%s(%s)" %
-                                            (endpoint_id, ip_type))
+                                            (endpoint_id.endpoint, ip_type))
         assert isinstance(dispatch_chains, DispatchChains)
         assert isinstance(rules_manager, RulesManager)
 
@@ -309,7 +314,7 @@ class LocalEndpoint(RefCountedActor):
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(
-            self._id,
+            self.endpoint_id.endpoint,
             self._suffix,
             self.ip_version,
             self.endpoint.get("ipv%s_nets" % self.ip_version, []),
@@ -354,10 +359,10 @@ class LocalEndpoint(RefCountedActor):
         except (IOError, FailedSystemCall, CalledProcessError):
             if not devices.interface_exists(self._iface_name):
                 _log.info("Interface %s for %s does not exist yet",
-                           self._iface_name, self.endpoint_id)
+                          self._iface_name, self.endpoint_id)
             elif not devices.interface_up(self._iface_name):
                 _log.info("Interface %s for %s is not up yet",
-                           self._iface_name, self.endpoint_id)
+                          self._iface_name, self.endpoint_id)
             else:
                 # Interface flapped back up after we failed?
                 _log.warning("Failed to configure interface %s for %s",

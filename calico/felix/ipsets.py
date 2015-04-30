@@ -126,8 +126,8 @@ class IpsetManager(ReferenceManager):
             self.on_endpoint_update(endpoint_id, endpoint)
             missing_endpoints.discard(endpoint_id)
             self._maybe_yield()
-        for ep_id in missing_endpoints:
-            self.on_endpoint_update(ep_id, None)
+        for endpoint_id in missing_endpoints:
+            self.on_endpoint_update(endpoint_id, None)
             self._maybe_yield()
 
         _log.info("Tags snapshot applied: %s tags, %s endpoints",
@@ -217,7 +217,7 @@ class IpsetManager(ReferenceManager):
         """
         Update tag memberships and indices with the new endpoint dict.
 
-        :param str endpoint_id: ID of the endpoint.
+        :param EndpointId endpoint_id: ID of the endpoint.
         :param dict|NoneType endpoint: Either a dict containing endpoint
             information or None to indicate deletion.
 

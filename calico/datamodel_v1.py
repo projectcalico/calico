@@ -24,6 +24,7 @@ made in a new copy of the file with revved version suffix.  That allows
 us to maintain multiple copies of the data model in parallel during
 migrations.
 """
+from collections import namedtuple
 import logging
 import re
 
@@ -54,7 +55,11 @@ TAGS_KEY_RE = re.compile(
 # Regex to match endpoints, captures "hostname" and "endpoint_id".
 ENDPOINT_KEY_RE = re.compile(
     r'^' + HOST_DIR +
-    r'/(?P<hostname>[^/]+)/.+/endpoint/(?P<endpoint_id>[^/]+)')
+    r'/(?P<hostname>[^/]+)/'
+    r'workload/'
+    r'(?P<orchestrator>[^/]+)/'
+    r'(?P<workload_id>[^/]+)/'
+    r'endpoint/(?P<endpoint_id>[^/]+)')
 
 
 def dir_for_host(hostname):
@@ -96,3 +101,9 @@ def get_profile_id_for_profile_dir(key):
         return None
     prefix, final_node = key.rsplit("/", 1)
     return final_node if prefix == PROFILE_DIR else None
+
+
+class EndpointId(namedtuple("EndpointId", ["host", "orchestrator",
+                                           "workload", "endpoint"])):
+    def __str__(self):
+        return self.__class__.__name__ + ("<%s/%s/%s/%s>" % self)
