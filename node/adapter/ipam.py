@@ -1,3 +1,4 @@
+from etcd import EtcdKeyNotFound
 from netaddr import IPAddress
 from datastore import DatastoreClient
 
@@ -70,7 +71,7 @@ class IPAMClient(DatastoreClient):
                                    "address": address}
         try:
             self.etcd_client.write(key, "", prevExist=False)
-        except KeyError:
+        except EtcdKeyNotFound:
             return False
         else:
             return True
@@ -91,7 +92,7 @@ class IPAMClient(DatastoreClient):
                                    "address": address}
         try:
             self.etcd_client.delete(key)
-        except KeyError:
+        except EtcdKeyNotFound:
             return False
         else:
             return True
@@ -106,7 +107,7 @@ class IPAMClient(DatastoreClient):
                                           "pool": str(pool).replace("/", "-")}
         try:
             nodes = self.etcd_client.read(directory).children
-        except KeyError:
+        except EtcdKeyNotFound:
             # Path doesn't exist so configure now.
             self.etcd_client.write(directory, None, dir=True)
             return {}

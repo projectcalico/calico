@@ -41,7 +41,7 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
         python-gevent && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    pip install python-etcd
+    pip install git+http://github.com/Metaswitch/python-etcd.git@3f14a002c9a75df3242de3d81a91a2e6bd32c5a8#egg=python-etcd 
 
 # Confd
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \

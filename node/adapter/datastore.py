@@ -1,6 +1,7 @@
 from collections import namedtuple
 import json
 import etcd
+from etcd import EtcdKeyNotFound
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
 import copy
@@ -211,7 +212,7 @@ class DatastoreClient(object):
         config_dir = CONFIG_PATH
         try:
             self.etcd_client.read(config_dir)
-        except KeyError:
+        except EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
             self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
@@ -234,7 +235,7 @@ class DatastoreClient(object):
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
-        except KeyError:
+        except EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(workload_dir, None, dir=True)
         return
@@ -248,7 +249,7 @@ class DatastoreClient(object):
         host_path = HOST_PATH % {"hostname": hostname}
         try:
             self.etcd_client.delete(host_path, dir=True, recursive=True)
-        except KeyError:
+        except EtcdKeyNotFound:
             pass
 
     def get_ip_pools(self, version):
@@ -302,7 +303,7 @@ class DatastoreClient(object):
         try:
             key = pools[str(pool.cidr)]
             self.etcd_client.delete(key)
-        except KeyError:
+        except (KeyError, EtcdKeyNotFound):
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
 
@@ -329,7 +330,7 @@ class DatastoreClient(object):
 
         try:
             nodes = self.etcd_client.read(path).children
-        except KeyError:
+        except EtcdKeyNotFound:
             # Path doesn't exist.
             return {}
         else:
@@ -376,7 +377,7 @@ d
         try:
             key = peers[str(ip)]
             self.etcd_client.delete(key)
-        except KeyError:
+        except (KeyError, EtcdKeyNotFound):
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured peer." % ip)
 
@@ -390,7 +391,7 @@ d
         profile_path = PROFILE_PATH % {"profile_id": name}
         try:
             _ = self.etcd_client.read(profile_path)
-        except KeyError:
+        except EtcdKeyNotFound:
             return False
         else:
             return True
@@ -423,13 +424,14 @@ d
         Delete a policy profile with a given name.
 
         :param name: Unique string name for the profile.
-        :return: the ID of the profile that was deleted, or None if the profile
-        couldn't be found.
+        :return: nothing.
         """
 
         profile_path = PROFILE_PATH % {"profile_id": name}
-        self.etcd_client.delete(profile_path, recursive=True, dir=True)
-        return
+        try:
+            self.etcd_client.delete(profile_path, recursive=True, dir=True)
+        except EtcdKeyNotFound:
+            raise KeyError("%s is not a configured profile." % name)
 
     def get_profile_names(self):
         """
@@ -444,7 +446,7 @@ d
                 packed = child.key.split("/")
                 if len(packed) > 4:
                     profiles.add(packed[4])
-        except KeyError:
+        except EtcdKeyNotFound:
             # Means the PROFILES_PATH was not set up.  So, profile does not
             # exist.
             pass
@@ -459,16 +461,18 @@ d
         :return: A Profile object.
         """
         profile_path = PROFILE_PATH % {"profile_id": name}
-        # Note: raises KeyError if profile doesn't exist.
-        _ = self.etcd_client.read(profile_path)
-        profile = Profile(name)
+        try:
+            _ = self.etcd_client.read(profile_path)
+            profile = Profile(name)
+        except EtcdKeyNotFound:
+            raise KeyError("%s is not a configured profile." % name)
 
         tags_path = TAGS_PATH % {"profile_id": name}
         try:
             tags_result = self.etcd_client.read(tags_path)
             tags = json.loads(tags_result.value)
             profile.tags = set(tags)
-        except KeyError:
+        except EtcdKeyNotFound:
             pass
 
         rules_path = RULES_PATH % {"profile_id": name}
@@ -476,7 +480,7 @@ d
             rules_result = self.etcd_client.read(rules_path)
             rules = Rules.from_json(rules_result.value)
             profile.rules = rules
-        except KeyError:
+        except EtcdKeyNotFound:
             pass
 
         return profile
@@ -492,7 +496,7 @@ d
         try:
             endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
                                               recursive=True)
-        except KeyError:
+        except EtcdKeyNotFound:
             # Means the ALL_ENDPOINTS_PATH was not set up.  So, profile has no
             # members because there are no endpoints.
             return members
@@ -567,7 +571,7 @@ d
                                           "container_id": container_id}
         try:
             endpoints = self.etcd_client.read(ep_path).leaves
-        except KeyError:
+        except EtcdKeyNotFound:
             # Re-raise with better message
             raise KeyError("Container with ID %s was not found." %
                            container_id)
@@ -593,9 +597,12 @@ d
         ep_path = ENDPOINT_PATH % {"hostname": hostname,
                                    "container_id": container_id,
                                    "endpoint_id": endpoint_id}
-        ep_json = self.etcd_client.read(ep_path).value
-        ep = Endpoint.from_json(endpoint_id, ep_json)
-        return ep
+        try:
+            ep_json = self.etcd_client.read(ep_path).value
+            ep = Endpoint.from_json(endpoint_id, ep_json)
+            return ep
+        except EtcdKeyNotFound:
+            raise KeyError("Enpoint %s not found" % ep_path)
 
     def set_endpoint(self, hostname, container_id, endpoint):
         """
@@ -659,7 +666,7 @@ d
                      endpoint_id) = packed
                     ep = Endpoint.from_json(endpoint_id, child.value)
                     hosts[host][container_type][container_id][endpoint_id] = ep
-        except KeyError:
+        except EtcdKeyNotFound:
             pass
 
         return hosts
@@ -673,8 +680,11 @@ d
         """
 
         host_path = HOST_PATH % {"hostname": hostname}
-        ipv4 = self.etcd_client.read(host_path + "bird_ip").value
-        ipv6 = self.etcd_client.read(host_path + "bird6_ip").value
+        try:
+            ipv4 = self.etcd_client.read(host_path + "bird_ip").value
+            ipv6 = self.etcd_client.read(host_path + "bird6_ip").value
+        except EtcdKeyNotFound:
+            raise KeyError("BIRD configuration for host %s not found." % hostname)
 
         next_hops = {}
 
@@ -701,7 +711,7 @@ d
         """
         try:
             self.etcd_client.delete("/calico", recursive=True, dir=True)
-        except KeyError:
+        except EtcdKeyNotFound:
             pass
 
     def remove_container(self, hostname, container_id):
@@ -713,7 +723,11 @@ d
         """
         container_path = CONTAINER_PATH % {"hostname": hostname,
                                            "container_id": container_id}
-        self.etcd_client.delete(container_path, recursive=True, dir=True)
+        try:
+            self.etcd_client.delete(container_path, recursive=True, dir=True)
+        except EtcdKeyNotFound:
+            raise KeyError("%s is not a configured container on host %s" % 
+                           (container_id, hostname))
 
 
 class NoEndpointForContainer(Exception):

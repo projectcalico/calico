@@ -9,7 +9,7 @@ from node.adapter.datastore import (DatastoreClient,
                                     Endpoint,
                                     NoEndpointForContainer)
 from etcd import Client as EtcdClient
-from etcd import EtcdResult
+from etcd import EtcdKeyNotFound, EtcdResult
 from netaddr import IPNetwork, IPAddress
 import json
 from nose.tools import *
@@ -205,7 +205,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test ensure_global_config when it doesn't already exist.
         """
-        self.etcd_client.read.side_effect = KeyError
+        self.etcd_client.read.side_effect = EtcdKeyNotFound 
         self.datastore.ensure_global_config()
         expected_writes = [call(CONFIG_PATH + "InterfacePrefix", "cali"),
                            call(CONFIG_PATH + "LogSeverityFile", "DEBUG"),
@@ -248,7 +248,7 @@ class TestDatastoreClient(unittest.TestCase):
 """
                 return result
             else:
-                raise KeyError()
+                raise EtcdKeyNotFound()
         self.etcd_client.read.side_effect = mock_read
 
         profile = self.datastore.get_profile("TEST")
@@ -275,7 +275,7 @@ class TestDatastoreClient(unittest.TestCase):
             if path == TEST_PROFILE_PATH:
                 return result
             else:
-                raise KeyError()
+                raise EtcdKeyNotFound()
         self.etcd_client.read.side_effect = mock_read
 
         profile = self.datastore.get_profile("TEST")
@@ -365,7 +365,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             if path == "/calico/host/TEST_HOST/workload":
-                raise KeyError()
+                raise EtcdKeyNotFound()
             else:
                 assert False
 
@@ -400,7 +400,7 @@ class TestDatastoreClient(unittest.TestCase):
         exception.
         :return: None
         """
-        self.etcd_client.delete.side_effect = KeyError
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound
         self.datastore.remove_host(TEST_HOST)
 
     def test_get_ip_pools(self):
@@ -420,7 +420,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             assert_equal(path, IPV4_POOLS_PATH)
-            raise KeyError()
+            raise EtcdKeyNotFound()
 
         self.etcd_client.read.side_effect = mock_read
         pools = self.datastore.get_ip_pools("v4")
@@ -499,7 +499,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             assert_equal(path, TEST_PROFILE_PATH)
-            raise KeyError()
+            raise EtcdKeyNotFound()
 
         self.etcd_client.read.side_effect = mock_read
         assert_false(self.datastore.profile_exists("TEST"))
@@ -594,7 +594,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             assert_equal(path, TEST_ENDPOINT_PATH)
-            raise KeyError()
+            raise EtcdKeyNotFound()
         self.etcd_client.read.side_effect = mock_read
         assert_raises(KeyError,
                       self.datastore.get_endpoint,
@@ -639,7 +639,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_ep_id_from_cont() when the container doesn't exist.
         """
-        self.etcd_client.read.side_effect = KeyError
+        self.etcd_client.read.side_effect = EtcdKeyNotFound
         assert_raises(KeyError,
                       self.datastore.get_ep_id_from_cont,
                       TEST_HOST, TEST_CONT_ID)
@@ -728,7 +728,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_hosts() when the read returns a KeyError.
         """
-        self.etcd_client.read.side_effect = KeyError
+        self.etcd_client.read.side_effect = EtcdKeyNotFound
         hosts = self.datastore.get_hosts()
         assert_dict_equal({}, hosts)
 
@@ -780,7 +780,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test remove_all_data() when delete() throws a KeyError.
         """
-        self.etcd_client.delete.side_effect = KeyError
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound
         self.datastore.remove_all_data()  # should not throw exception.
 
     def test_remove_container(self):
@@ -809,7 +809,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             assert_equal(path, BGP_PEERS_PATH)
-            raise KeyError()
+            raise EtcdKeyNotFound()
 
         self.etcd_client.read.side_effect = mock_read
         peers = self.datastore.get_bgp_peers("v4")
@@ -952,7 +952,7 @@ def mock_read_no_profiles(path, recursive):
 def mock_read_profiles_key_error(path, recursive):
     assert path == ALL_PROFILES_PATH
     assert recursive
-    raise KeyError()
+    raise EtcdKeyNotFound()
 
 
 def mock_read_4_endpoints(path, recursive):
@@ -989,7 +989,7 @@ def mock_read_4_endpoints(path, recursive):
 def mock_read_endpoints_key_error(path, recursive):
     assert path == ALL_ENDPOINTS_PATH
     assert recursive
-    raise KeyError()
+    raise EtcdKeyNotFound()
 
 
 def mock_read_for_endpoint(ep):
