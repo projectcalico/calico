@@ -1,5 +1,7 @@
-FROM phusion/baseimage:0.9.16
-RUN add-apt-repository -y ppa:project-calico/icehouse && \
+FROM ubuntu:14.04
+RUN apt-get update -qq && \
+    apt-get install -qy software-properties-common && \
+    add-apt-repository -y ppa:project-calico/icehouse && \
     apt-get update -qq && \
     apt-get install -qy \
         python \
