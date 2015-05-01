@@ -16,6 +16,7 @@ from nose.tools import *
 import unittest
 
 TEST_HOST = "TEST_HOST"
+TEST_PROFILE = "TEST"
 TEST_CONT_ID = "1234"
 TEST_ENDPOINT_ID = "1234567890ab"
 TEST_HOST_PATH = "/calico/host/TEST_HOST"
@@ -283,6 +284,15 @@ class TestDatastoreClient(unittest.TestCase):
         assert_set_equal(set(), profile.tags)
         assert_equal([], profile.rules.inbound_rules)
         assert_equal([], profile.rules.outbound_rules)
+
+    @raises(KeyError)
+    def test_remove_profile_doesnt_exist(self):
+        """
+        Remove profile when it doesn't exist.  Check it throws a KeyError.
+        :return: None
+        """
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound
+        self.datastore.remove_profile(TEST_PROFILE)
 
     def test_profile_update_tags(self):
         """
@@ -767,6 +777,15 @@ class TestDatastoreClient(unittest.TestCase):
         next_hops = self.datastore.get_default_next_hops(TEST_HOST)
         assert_dict_equal(next_hops, {})
 
+    @raises(KeyError)
+    def test_get_default_next_hops_missing_config(self):
+        """
+        Test get_default_next_hops raises a KeyError when the BIRD
+        configuration is missing from etcd.
+        """
+        self.etcd_client.read.side_effect = EtcdKeyNotFound
+        next_hops = self.datastore.get_default_next_hops(TEST_HOST)
+
     def test_remove_all_data(self):
         """
         Test remove_all_data() when /calico does exist.
@@ -791,6 +810,15 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.assert_called_once_with(TEST_CONT_PATH,
                                                         recursive=True,
                                                         dir=True)
+
+    @raises(KeyError)
+    def test_remove_container_missing(self):
+        """
+        Test remove_container() raises a KeyError if the container does not
+        exist.
+        """
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound
+        self.datastore.remove_container(TEST_HOST, TEST_CONT_ID)
 
     def test_get_bgp_peer(self):
         """

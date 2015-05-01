@@ -1,4 +1,4 @@
-from etcd import EtcdKeyNotFound
+from etcd import EtcdKeyNotFound, EtcdAlreadyExists
 from netaddr import IPAddress
 from datastore import DatastoreClient
 
@@ -92,7 +92,7 @@ class IPAMClient(DatastoreClient):
                                    "address": address}
         try:
             self.etcd_client.delete(key)
-        except EtcdKeyNotFound:
+        except EtcdAlreadyExists:
             return False
         else:
             return True
