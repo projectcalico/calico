@@ -144,7 +144,7 @@ On a control node, perform the following steps:
 
    ::
 
-    tmpfs /var/lib/etcd-rd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
+    tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
 
 
 7. Edit ``/etc/init/etcd.conf``:
