@@ -36,7 +36,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  RULES_KEY_RE, TAGS_KEY_RE, ENDPOINT_KEY_RE,
                                  dir_for_per_host_config,
                                  get_profile_id_for_profile_dir, dir_for_host,
-                                 PROFILE_DIR, HOST_DIR)
+                                 PROFILE_DIR, HOST_DIR, EndpointId)
 from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
@@ -355,23 +355,24 @@ def parse_if_endpoint(config, etcd_node):
     m = ENDPOINT_KEY_RE.match(etcd_node.key)
     if m:
         # Got an endpoint.
+        host = m.group("hostname")
+        orch = m.group("orchestrator")
+        workload_id = m.group("workload_id")
         endpoint_id = m.group("endpoint_id")
         if etcd_node.action == "delete":
-            endpoint = None
             _log.debug("Found deleted endpoint %s", endpoint_id)
+            endpoint = None
         else:
-            hostname = m.group("hostname")
             endpoint = json_decoder.decode(etcd_node.value)
             try:
                 common.validate_endpoint(config, endpoint)
             except ValidationFailed as e:
                 _log.warning("Validation failed for endpoint %s, treating as "
                              "missing: %s", endpoint_id, e.message)
-                return endpoint_id, None
-            endpoint["host"] = hostname
-            endpoint["id"] = endpoint_id
-            _log.debug("Found endpoint : %s", endpoint)
-        return endpoint_id, endpoint
+                endpoint = None
+            else:
+                _log.debug("Validated endpoint : %s", endpoint)
+        return EndpointId(host, orch, workload_id, endpoint_id), endpoint
     return None, None
 
 
