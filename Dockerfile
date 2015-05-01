@@ -19,6 +19,7 @@ ENV LANG       en_US.UTF-8
 ENV LC_ALL     en_US.UTF-8
 
 RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
+    add-apt-repository -y ppa:project-calico/icehouse && \
     apt-get update && \
     apt-get install -qy \
 #        calico-felix \
@@ -38,10 +39,10 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
 # Required by calico-felix, eventually should be removed.
         python-zmq \
         git \
-        python-gevent && \
+        python-gevent \
+        python-etcd && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    pip install git+http://github.com/Metaswitch/python-etcd.git@3f14a002c9a75df3242de3d81a91a2e6bd32c5a8#egg=python-etcd 
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Confd
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
