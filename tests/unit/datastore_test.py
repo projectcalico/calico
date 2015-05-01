@@ -7,7 +7,8 @@ from node.adapter.datastore import (DatastoreClient,
                                     Profile,
                                     Rules,
                                     Endpoint,
-                                    NoEndpointForContainer)
+                                    NoEndpointForContainer,
+                                    CALICO_V_PATH)
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult
 from netaddr import IPNetwork, IPAddress
@@ -19,20 +20,20 @@ TEST_HOST = "TEST_HOST"
 TEST_PROFILE = "TEST"
 TEST_CONT_ID = "1234"
 TEST_ENDPOINT_ID = "1234567890ab"
-TEST_HOST_PATH = "/calico/host/TEST_HOST"
-IPV4_POOLS_PATH = "/calico/ipam/v4/pool/"
-IPV6_POOLS_PATH = "/calico/ipam/v6/pool/"
-BGP_PEERS_PATH = "/calico/config/bgp_peer_rr_v4/"
-TEST_PROFILE_PATH = "/calico/policy/profile/TEST/"
-ALL_PROFILES_PATH = "/calico/policy/profile/"
-ALL_ENDPOINTS_PATH = "/calico/host/"
-ALL_HOSTS_PATH = "/calico/host/"
-TEST_ENDPOINT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/endpoint/" \
-                     "1234567890ab"
-TEST_CONT_ENDPOINT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/" \
-                          "endpoint/"
-TEST_CONT_PATH = "/calico/host/TEST_HOST/workload/docker/1234/"
-CONFIG_PATH = "/calico/config/"
+TEST_HOST_PATH = CALICO_V_PATH + "/host/TEST_HOST"
+IPV4_POOLS_PATH = CALICO_V_PATH + "/ipam/v4/pool/"
+IPV6_POOLS_PATH = CALICO_V_PATH + "/ipam/v6/pool/"
+BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_v4/"
+TEST_PROFILE_PATH = CALICO_V_PATH + "/policy/profile/TEST/"
+ALL_PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
+ALL_ENDPOINTS_PATH = CALICO_V_PATH + "/host/"
+ALL_HOSTS_PATH = CALICO_V_PATH + "/host/"
+TEST_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/" \
+                                     "endpoint/1234567890ab"
+TEST_CONT_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/" \
+                                          "1234/endpoint/"
+TEST_CONT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/"
+CONFIG_PATH = CALICO_V_PATH + "/config/"
 
 # 4 endpoints, with 2 TEST profile and 2 UNIT profile.
 EP_56 = Endpoint("567890abcdef", "active", "11-22-33-44-55-66")
@@ -374,7 +375,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         def mock_read(path):
-            if path == "/calico/host/TEST_HOST/workload":
+            if path == CALICO_V_PATH + "/host/TEST_HOST/workload":
                 raise EtcdKeyNotFound()
             else:
                 assert False
@@ -953,12 +954,12 @@ def mock_read_no_bgppeers(path):
 def mock_read_2_profiles(path, recursive):
     assert path == ALL_PROFILES_PATH
     assert recursive
-    nodes = ["/calico/policy/profile/TEST",
-             "/calico/policy/profile/TEST/tags",
-             "/calico/policy/profile/TEST/rules",
-             "/calico/policy/profile/UNIT",
-             "/calico/policy/profile/UNIT/tags",
-             "/calico/policy/profile/UNIT/rules"]
+    nodes = [CALICO_V_PATH + "/policy/profile/TEST",
+             CALICO_V_PATH + "/policy/profile/TEST/tags",
+             CALICO_V_PATH + "/policy/profile/TEST/rules",
+             CALICO_V_PATH + "/policy/profile/UNIT",
+             CALICO_V_PATH + "/policy/profile/UNIT/tags",
+             CALICO_V_PATH + "/policy/profile/UNIT/rules"]
     children = []
     for node in nodes:
         result = Mock(spec=EtcdResult)
@@ -989,19 +990,19 @@ def mock_read_4_endpoints(path, recursive):
     leaves = []
 
     specs = [
-        ("/calico/host/TEST_HOST/bird_ip", "192.168.1.1"),
-        ("/calico/host/TEST_HOST/bird6_ip", "fd80::4"),
-        ("/calico/host/TEST_HOST/config/marker", "created"),
-        ("/calico/host/TEST_HOST/workload/docker/1234/endpoint/567890abcdef",
+        (CALICO_V_PATH + "/host/TEST_HOST/bird_ip", "192.168.1.1"),
+        (CALICO_V_PATH + "/host/TEST_HOST/bird6_ip", "fd80::4"),
+        (CALICO_V_PATH + "/host/TEST_HOST/config/marker", "created"),
+        (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/567890abcdef",
          EP_56.to_json()),
-        ("/calico/host/TEST_HOST/workload/docker/5678/endpoint/90abcdef1234",
+        (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/5678/endpoint/90abcdef1234",
          EP_90.to_json()),
-        ("/calico/host/TEST_HOST2/bird_ip", "192.168.1.2"),
-        ("/calico/host/TEST_HOST2/bird6_ip", "fd80::3"),
-        ("/calico/host/TEST_HOST2/config/marker", "created"),
-        ("/calico/host/TEST_HOST2/workload/docker/1234/endpoint/7890abcdef12",
+        (CALICO_V_PATH + "/host/TEST_HOST2/bird_ip", "192.168.1.2"),
+        (CALICO_V_PATH + "/host/TEST_HOST2/bird6_ip", "fd80::3"),
+        (CALICO_V_PATH + "/host/TEST_HOST2/config/marker", "created"),
+        (CALICO_V_PATH + "/host/TEST_HOST2/workload/docker/1234/endpoint/7890abcdef12",
          EP_78.to_json()),
-        ("/calico/host/TEST_HOST2/workload/docker/5678/endpoint/1234567890ab",
+        (CALICO_V_PATH + "/host/TEST_HOST2/workload/docker/5678/endpoint/1234567890ab",
          EP_12.to_json())]
     for spec in specs:
         leaf = Mock(spec=EtcdResult)
@@ -1034,9 +1035,9 @@ def mock_read_2_ep_for_cont(path):
     leaves = []
 
     specs = [
-        ("/calico/host/TEST_HOST/workload/docker/1234/endpoint/1234567890ab",
+        (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/1234567890ab",
          EP_12.to_json()),
-        ("/calico/host/TEST_HOST/workload/docker/1234/endpoint/90abcdef1234",
+        (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/90abcdef1234",
          EP_78.to_json())
     ]
     for spec in specs:

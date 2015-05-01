@@ -445,8 +445,8 @@ d
                                                   recursive=True).children
             for child in etcd_profiles:
                 packed = child.key.split("/")
-                if len(packed) > 4:
-                    profiles.add(packed[4])
+                if len(packed) > 5:
+                    profiles.add(packed[5])
         except EtcdKeyNotFound:
             # Means the PROFILES_PATH was not set up.  So, profile does not
             # exist.
@@ -504,7 +504,7 @@ d
 
         for child in endpoints.leaves:
             packed = child.key.split("/")
-            if len(packed) == 9:
+            if len(packed) == 10:
                 ep_id = packed[-1]
                 ep = Endpoint.from_json(ep_id, child.value)
                 if ep.profile_id == name:
@@ -580,7 +580,7 @@ d
         # Get the first endpoint & ID
         try:
             endpoint = endpoints.next()
-            (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
+            (_, _, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 9)
             return endpoint_id
         except StopIteration:
             raise NoEndpointForContainer(
@@ -658,12 +658,12 @@ d
                                                recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if 9 > len(packed) > 4:
-                    (_, _, _, host, _) = packed[0:5]
+                if 10 > len(packed) > 5:
+                    (_, _, _, _, host, _) = packed[0:6]
                     if not hosts[host]:
                         hosts[host] = Vividict()
-                elif len(packed) == 9:
-                    (_, _, _, host, _, container_type, container_id, _,
+                elif len(packed) == 10:
+                    (_, _, _, _, host, _, container_type, container_id, _,
                      endpoint_id) = packed
                     ep = Endpoint.from_json(endpoint_id, child.value)
                     hosts[host][container_type][container_id][endpoint_id] = ep
