@@ -21,13 +21,19 @@ into the code to propose enhancements or integrate with other systems.  To see
 the options for getting involved with Calico the project, please take a look at
 the following.
 
-Mailing List
+Mailing Lists
 ------------
+Project Calico run two mailing lists:
 
-The Calico mailing list is managed `here
-<http://lists.projectcalico.org/listinfo/calico>`__.  You're welcome to
-subscribe and to post any Calico-related discussion to this list, including
-problems, ideas, or requirements.  When reporting a problem, please try to:
+-  `calico-announce <http://lists.projectcalico.org/listinfo/calico-announce>`__
+   provides a read-only list providing a regular update on Project Calico.
+   Please subscribe so that you can keep up to date on the project.
+-  `calico-tech <http://lists.projectcalico.org/listinfo/calico-tech>`__
+   provides a list for technical discussions and queries about the project.
+   You're welcome to subscribe and to post any Calico-related discussion to
+   this list, including problems, ideas, or requirements.
+
+When reporting a problem on calico-tech, please try to:
 
 -  provide a clear subject line
 -  provide as much diagnostic information as possible.
