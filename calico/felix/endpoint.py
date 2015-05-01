@@ -53,8 +53,6 @@ class EndpointManager(ReferenceManager):
 
         # All endpoint dicts that we know about.
         self.endpoints_by_id = {}
-        # MD4: Why do we need this?  There's already an objects_by_id (and it's
-        # even used in this file...)
         self.endpoint_id_by_iface_name = {}
 
         # Set of endpoints that are live on this host.  I.e. ones that we've
@@ -132,9 +130,6 @@ class EndpointManager(ReferenceManager):
             self.endpoint_id_by_iface_name[endpoint["name"]] = endpoint_id
 
         if endpoint and endpoint["host"] == self.config.HOSTNAME:
-        # MD4: Do we really need to do all the above work for non-local
-        # endpoints?  Since the config for hostname is always available, can't
-        # we move this check to the top?
             _log.debug("Endpoint is local, ensuring it is active.")
             if endpoint_id not in self.local_endpoint_ids:
                 # This will trigger _on_object_activated to pass the endpoint

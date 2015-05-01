@@ -6,7 +6,7 @@ import logging
 import weakref
 from calico.felix.actor import Actor, actor_message
 import gevent
-# MD4 Do we need to import gevent?  pycharm thinks it's unused.
+
 _log = logging.getLogger(__name__)
 
 # States that a reference-counted actor can be in.
@@ -97,14 +97,6 @@ class ReferenceManager(Actor):
             _log.info("Ignoring on_object_startup_complete for instance "
                       "in state %s", obj.ref_mgmt_state)
             return
-            # MD4 It's not obvious to me why this branch is needed - I suspect it's because of asynchronous completion
-            # (thanks to actors) of startup while the manager thinks it's being (e.g.) destroyed, but this definitely
-            # needs commenting at least.
-
-            # MD4 On a related note, it wasn't clear to me what the intended way of
-            # covering these sort of things is.  The use of call_via_cb in the test code is
-            # very opaque - is there a reason you used these rather than something equivalent
-            # to the N-BASE's TB_SCHEDULER / SCHEDULE_ONE()?
         _log.info("Object %s startup completed", object_id)
         assert obj.ref_mgmt_state == STARTING
         obj.ref_mgmt_state = LIVE
@@ -116,9 +108,6 @@ class ReferenceManager(Actor):
         Return a reference and garbage-collect the backing actor if it is no
         longer referenced elsewhere.
         """
-        # MD4 RefHelper implies that this method can't be called while the object is
-        # starting - if this is true, it needs to be in this docstring, if not then
-        # RefHelper can be simplified a bunch.
         assert object_id in self.objects_by_id
         obj = self.objects_by_id[object_id]
         obj.ref_count -= 1
@@ -214,10 +203,6 @@ class ReferenceManager(Actor):
 class RefHelper(object):
     """
     Helper class for a client of a ReferenceManager.  Manages the
-    # MD4 I think the first sentence here is confusing - this is not a helper class for most
-    # clients of this class - only those that want to wait for creation of multiple
-    # RefCountedActors.  I'm also not entirely sold on its existence, since it only has one
-    # user.  I'd be tempted to move it into profilerules.py at least.
     lifecycle of a set of references and provides a callback when
     all required references are available.
     """
@@ -272,7 +257,6 @@ class RefHelper(object):
                 # decref it.  If we are still waiting for it then we'll get
                 # a callback later and we'll spot that it's no longer needed
                 # at that point.
-                # MD4 See earlier comment - is this needed?
                 _log.debug("Decreffing object %s", obj_id)
                 self._ref_mgr.decref(obj_id, async=True)
 
@@ -342,7 +326,6 @@ class RefCountedActor(Actor):
         self._manager.on_object_startup_complete(self._id, self, async=True)
 
     def _notify_cleanup_complete(self):
-        # MD4 Please move this after on_unreferenced, to better reflect the lifecycle of a RefCountedActor
         """
         Utility method, to be called by subclass once its cleanup
         is complete.  Notifies the manager.

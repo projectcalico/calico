@@ -338,7 +338,6 @@ class Actor(object):
         pass
 
     def _maybe_yield(self):
-    # MD4: Premature optimization or really worth including?
         """
         With some probability, yields processing to another greenlet.
         (Utility method to be called from the actor's greenlet during
@@ -509,8 +508,6 @@ def actor_message(needs_own_batch=False):
             if (not on_same_greenlet and
                     not async and
                     _log.isEnabledFor(logging.DEBUG)):
-                    # MD4: I don't understand what the point of this
-                    # isEnabledFor check is.  Please remove or explain.
                 _log.debug("BLOCKING CALL: %s", calling_path)
 
             # OK, so build the message and put it on the queue.

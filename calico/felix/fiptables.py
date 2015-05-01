@@ -271,8 +271,6 @@ class IptablesUpdater(Actor):
                 _log.error("Non-retryable error from a combined batch, "
                            "splitting the batch to narrow down culprit.")
                 raise SplitBatchAndRetry()
-                # MD4: This introduces code to the actor and makes failure
-                # handling complex - is it worth it?
         else:
             # Modify succeeded, update our indexes for next time.
             self._update_indexes()
