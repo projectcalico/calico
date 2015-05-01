@@ -5,7 +5,6 @@ import functools
 import logging
 import weakref
 from calico.felix.actor import Actor, actor_message
-import gevent
 
 _log = logging.getLogger(__name__)
 
@@ -94,11 +93,12 @@ class ReferenceManager(Actor):
             _log.info("Ignoring on_object_startup_complete for old instance")
             return
         if obj.ref_mgmt_state != STARTING:
+            # We can hit this case if the object was starting and we asked it
+            # to shut down before we received the callback.
             _log.info("Ignoring on_object_startup_complete for instance "
                       "in state %s", obj.ref_mgmt_state)
             return
         _log.info("Object %s startup completed", object_id)
-        assert obj.ref_mgmt_state == STARTING
         obj.ref_mgmt_state = LIVE
         self._maybe_notify_referrers(object_id)
 
@@ -202,11 +202,24 @@ class ReferenceManager(Actor):
 
 class RefHelper(object):
     """
-    Helper class for a client of a ReferenceManager.  Manages the
-    lifecycle of a set of references and provides a callback when
-    all required references are available.
+    Helper class for a clients of a ReferenceManager that need to
+    acquire a potentially-changing set of references before making
+    progress.
+
+    Note: this helper piggy-backs on the actor's message queue
+    in order to receive callbacks from the ReferenceManager.
     """
+
     def __init__(self, actor, ref_mgr, ready_callback):
+        """
+        Constructor.
+        :param actor: Actor instance; this object piggy-backs on the Actor's
+            message queue.
+        :param ready_callback: Callback to execute on the actor's greenlet
+            when all the objects in the set have been acquired.  Should
+            be a simple bound method, it will be called from the
+            on_ref_acquired @actor_message of this object.
+        """
         self._actor = actor
         """Actor that we belong to, we'll use its queue for callbacks."""
         self._ref_mgr = ref_mgr
@@ -249,14 +262,13 @@ class RefHelper(object):
         if obj_id in self.required_refs:
             _log.debug("Discarding object %s", obj_id)
             # Immediately record that we no longer want the ref and throw it
-            # away.
+            # away (if we've acquired it).
             self.required_refs.remove(obj_id)
             self.acquired_refs.pop(obj_id, None)
             if obj_id not in self.pending_increfs:
-                # We're not still waiting for this object so it's safe to
-                # decref it.  If we are still waiting for it then we'll get
-                # a callback later and we'll spot that it's no longer needed
-                # at that point.
+                # Only decref after we've actually acquired the ref.  This
+                # avoids a lot of complexity in managing multiple outstanding
+                # callbacks.
                 _log.debug("Decreffing object %s", obj_id)
                 self._ref_mgr.decref(obj_id, async=True)
 
@@ -325,14 +337,6 @@ class RefCountedActor(Actor):
         _log.debug("Notifying manager that %s is ready", self)
         self._manager.on_object_startup_complete(self._id, self, async=True)
 
-    def _notify_cleanup_complete(self):
-        """
-        Utility method, to be called by subclass once its cleanup
-        is complete.  Notifies the manager.
-        """
-        _log.debug("Notifying manager that %s is done cleaning up", self)
-        self._manager.on_object_cleanup_complete(self._id, self, async=True)
-
     @actor_message()
     def on_unreferenced(self):
         """
@@ -345,3 +349,11 @@ class RefCountedActor(Actor):
         """
         _log.debug("Default on_unreferenced() call, notifying cleanup done")
         self._notify_cleanup_complete()
+
+    def _notify_cleanup_complete(self):
+        """
+        Utility method, to be called by subclass once its cleanup
+        is complete.  Notifies the manager.
+        """
+        _log.debug("Notifying manager that %s is done cleaning up", self)
+        self._manager.on_object_cleanup_complete(self._id, self, async=True)
