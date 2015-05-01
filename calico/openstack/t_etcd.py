@@ -185,7 +185,7 @@ class CalicoTransportEtcd(CalicoTransport):
     def port_etcd_key(self, port):
         return key_for_endpoint(port['binding:host_id'],
                                 "openstack",
-                                port['id'],  # FIXME Should be the VM's ID.
+                                port['device_id'],
                                 port['id'])
 
     def port_etcd_data(self, port):
