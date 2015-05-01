@@ -23,7 +23,7 @@ the following.
 
 Mailing Lists
 ------------
-Project Calico run two mailing lists:
+Project Calico runs two mailing lists:
 
 -  `calico-announce <http://lists.projectcalico.org/listinfo/calico-announce>`__
    provides a read-only list providing a regular update on Project Calico.
