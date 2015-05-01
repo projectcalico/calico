@@ -81,6 +81,14 @@ class CalicoTransportEtcd(CalicoTransport):
         # group changes.
         self.needed_profiles = set()
 
+        # This event is used exactly once, at start of day, to delay all
+        # endpoint creation events behind security group synchronization.
+        # Note that this is a temporary work-around for a more severe problem,
+        # and should not be considered good architectural practice.
+        # This event has no meaningful return value.
+        self.start_of_day_lock = eventlet.event.Event()
+        self._start_of_day_complete = False
+
     def periodic_resync_thread(self):
         while True:
             try:
@@ -92,6 +100,13 @@ class CalicoTransportEtcd(CalicoTransport):
 
                 # Resynchronize security group data.
                 self.resync_security_groups()
+
+                # If this is our first pass through start of day processing, we
+                # can now unblock anyone waiting.
+                if not self._start_of_day_complete:
+                    self.start_of_day_lock.send('complete')
+                    self._start_of_day_complete = True
+                    LOG.info("Start of day processing complete")
 
             except:
                 LOG.exception("Exception in periodic resync thread")
@@ -282,6 +297,16 @@ class CalicoTransportEtcd(CalicoTransport):
         return profile_id.split('_')
 
     def endpoint_created(self, port):
+        # Endpoint creation events should not be processed until start of day
+        # processing is complete. Note that, if start of day processing never
+        # completes, we'll wait for a very long time indeed: for this reason,
+        # log if we're going to have to wait for start-of-day processing.
+        if not self.start_of_day_lock.ready():
+            LOG.warning(
+                "Endpoint creation blocked behind start of day processing"
+            )
+            self.start_of_day_lock.wait()
+
         # Write etcd data for the new endpoint.
         data = self.port_etcd_data(port)
         self.client.write(self.port_etcd_key(port), json.dumps(data))
