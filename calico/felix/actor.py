@@ -20,7 +20,7 @@ felix.actor
 A queue-based Actor framework that supports efficient handling of
 batches of messages.  Each Actor instance has its own greenlet
 and a queue of pending messages.  Messages are sent by making calls
-to a method decorated by the @actor_message decorator.
+to methods decorated by the @actor_message decorator.
 
 When an actor_message-decorated method is called from another greenlet
 the method call is wrapped up as a Message object and put on the
