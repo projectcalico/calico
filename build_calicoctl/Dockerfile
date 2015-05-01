@@ -1,4 +1,4 @@
-FROM debian:wheezy
+FROM ubuntu:14.04
 RUN apt-get update -qq && apt-get install -qy python python-pip libffi-dev libssl-dev libyaml-dev python-dev git && apt-get clean
 WORKDIR /code/
 
