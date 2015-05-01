@@ -71,7 +71,7 @@ class IPAMClient(DatastoreClient):
                                    "address": address}
         try:
             self.etcd_client.write(key, "", prevExist=False)
-        except EtcdKeyNotFoundError:
+        except EtcdKeyNotFound:
             return False
         else:
             return True
@@ -92,7 +92,7 @@ class IPAMClient(DatastoreClient):
                                    "address": address}
         try:
             self.etcd_client.delete(key)
-        except EtcdKeyNotFoundError:
+        except EtcdKeyNotFound:
             return False
         else:
             return True
@@ -107,7 +107,7 @@ class IPAMClient(DatastoreClient):
                                           "pool": str(pool).replace("/", "-")}
         try:
             nodes = self.etcd_client.read(directory).children
-        except EtcdKeyNotFoundError:
+        except EtcdKeyNotFound:
             # Path doesn't exist so configure now.
             self.etcd_client.write(directory, None, dir=True)
             return {}
