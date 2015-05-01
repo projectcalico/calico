@@ -283,7 +283,27 @@ class CalicoTransportEtcd(CalicoTransport):
         inbound = []
         outbound = []
         for sgid in self.profile_tags(profile_id):
-            for rule in self.sgs[sgid]['security_group_rules']:
+            # Be tolerant of a security group not being here. Allow up to 5
+            # attempts to get it, waiting a few hundred ms in between: we might
+            # just be racing slightly ahead of a security group update.
+            rules = None
+            retries = 5
+            while rules is None:
+                try:
+                    rules = self.sgs[sgid]['security_group_rules']
+                except KeyError:
+                    LOG.warning("Missing info for SG %s: waiting.", sgid)
+                    retries -= 1
+
+                    if not retries:
+                        LOG.error("Gave up waiting for SG %s", sgid)
+                        raise
+
+                    # Wait for 200ms
+                    eventlet.sleep(0.2)
+
+
+            for rule in rules:
                 LOG.info("Neutron rule  %s : %s", profile_id, rule)
                 etcd_rule = _neutron_rule_to_etcd_rule(rule)
                 if rule['direction'] == 'ingress':
