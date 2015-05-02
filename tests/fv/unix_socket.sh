@@ -6,7 +6,7 @@ dist/calicoctl restart-docker-without-alternative-unix-socket
 
 # Set it up
 docker rm -f etcd || true
-docker run --restart=always -d -p 4001:4001 --name etcd quay.io/coreos/etcd:v0.4.6
+docker run --restart=always -d --net=host --name etcd quay.io/coreos/etcd:v2.0.10
 
 # Run without the unix socket. Check that docker can be accessed though both
 # the unix socket and the powerstrip TCP port.

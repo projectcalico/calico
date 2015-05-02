@@ -11,7 +11,7 @@ dist/calicoctl profile show --detailed
 
 # Set it up
 docker rm -f node etcd || true
-docker run -d -p 4001:4001 --name etcd quay.io/coreos/etcd:v0.4.6
+docker run -d --net=host --name etcd quay.io/coreos/etcd:v2.0.10
 dist/calicoctl reset || true
 
 docker run -tid --name=node busybox

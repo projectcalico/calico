@@ -7,7 +7,7 @@ CALICO="dist/calicoctl"
 
 # Set it up
 docker rm -f node1 node2 etcd || true
-docker run -d -p 4001:4001 --name etcd quay.io/coreos/etcd:v0.4.6
+docker run -d --net=host --name etcd quay.io/coreos/etcd:v2.0.10
 $CALICO reset || true
 
 $CALICO node --ip=172.17.8.10
