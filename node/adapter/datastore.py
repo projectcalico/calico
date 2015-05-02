@@ -216,8 +216,9 @@ class DatastoreClient(object):
         except EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
-            self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
-            self.etcd_client.write(CALICO_V_PATH + "Ready", "true")
+
+        # We are always ready
+        self.etcd_client.write(CALICO_V_PATH + "/Ready", "true")
 
     def create_host(self, hostname, bird_ip, bird6_ip):
         """
