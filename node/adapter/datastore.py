@@ -10,19 +10,20 @@ ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # etcd paths for Calico
-CONFIG_PATH = "/calico/config/"
-HOSTS_PATH = "/calico/host/"
+CALICO_V_PATH = "/calico/v1"
+CONFIG_PATH = CALICO_V_PATH + "/config/"
+HOSTS_PATH = CALICO_V_PATH + "/host/"
 HOST_PATH = HOSTS_PATH + "%(hostname)s/"
 CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
 LOCAL_ENDPOINTS_PATH = HOST_PATH + "workload/docker/%(container_id)s/endpoint/"
 ALL_ENDPOINTS_PATH = HOSTS_PATH  # Read all hosts
 ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s"
-PROFILES_PATH = "/calico/policy/profile/"
+PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
-IP_POOL_PATH = "/calico/ipam/%(version)s/pool/"
-BGP_PEER_PATH = "/calico/config/bgp_peer_rr_%(version)s/"
+IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool/"
+BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_%(version)s/"
 
 IF_PREFIX = "cali"
 """
@@ -215,8 +216,9 @@ class DatastoreClient(object):
         except EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
-            self.etcd_client.write(config_dir + "LogSeverityFile", "DEBUG")
-            self.etcd_client.write(config_dir + "Ready", "true")
+
+        # We are always ready
+        self.etcd_client.write(CALICO_V_PATH + "/Ready", "true")
 
     def create_host(self, hostname, bird_ip, bird6_ip):
         """
@@ -444,8 +446,8 @@ d
                                                   recursive=True).children
             for child in etcd_profiles:
                 packed = child.key.split("/")
-                if len(packed) > 4:
-                    profiles.add(packed[4])
+                if len(packed) > 5:
+                    profiles.add(packed[5])
         except EtcdKeyNotFound:
             # Means the PROFILES_PATH was not set up.  So, profile does not
             # exist.
@@ -503,7 +505,7 @@ d
 
         for child in endpoints.leaves:
             packed = child.key.split("/")
-            if len(packed) == 9:
+            if len(packed) == 10:
                 ep_id = packed[-1]
                 ep = Endpoint.from_json(ep_id, child.value)
                 if ep.profile_id == name:
@@ -579,7 +581,7 @@ d
         # Get the first endpoint & ID
         try:
             endpoint = endpoints.next()
-            (_, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 8)
+            (_, _, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 9)
             return endpoint_id
         except StopIteration:
             raise NoEndpointForContainer(
@@ -657,12 +659,12 @@ d
                                                recursive=True).leaves
             for child in etcd_hosts:
                 packed = child.key.split("/")
-                if 9 > len(packed) > 4:
-                    (_, _, _, host, _) = packed[0:5]
+                if 10 > len(packed) > 5:
+                    (_, _, _, _, host, _) = packed[0:6]
                     if not hosts[host]:
                         hosts[host] = Vividict()
-                elif len(packed) == 9:
-                    (_, _, _, host, _, container_type, container_id, _,
+                elif len(packed) == 10:
+                    (_, _, _, _, host, _, container_type, container_id, _,
                      endpoint_id) = packed
                     ep = Endpoint.from_json(endpoint_id, child.value)
                     hosts[host][container_type][container_id][endpoint_id] = ep

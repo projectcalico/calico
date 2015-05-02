@@ -1,5 +1,5 @@
 from netaddr import IPNetwork, IPAddress
-from nose.tools import assert_equal, assert_true
+from nose.tools import assert_equal, assert_true, assert_false
 from node.adapter.ipam import SequentialAssignment, IPAMClient
 
 pool = IPNetwork("192.168.0.0/16")
@@ -21,11 +21,21 @@ class TestIPAMClient:
         assert_true(client.assign_address(pool, IPAddress("192.168.0.1")))
         assert_equal(client.get_assigned_addresses(pool), one_assigned)
 
+        # Should not be able to add a duplicate.
+        assert_false(client.assign_address(pool, IPAddress("192.168.0.1")))
+        assert_equal(client.get_assigned_addresses(pool), one_assigned)
+
     def test_remove_assignment(self):
         address = IPAddress("192.168.0.1")
         assert_equal(client.get_assigned_addresses(pool), {})
         assert_true(client.assign_address(pool, address))
         assert_true(client.unassign_address(pool, address))
+        assert_equal(client.get_assigned_addresses(pool), {})
+
+    def test_remove_missing_assignment(self):
+        address = IPAddress("192.168.0.1")
+        assert_equal(client.get_assigned_addresses(pool), {})
+        assert_false(client.unassign_address(pool, address))
         assert_equal(client.get_assigned_addresses(pool), {})
 
     def test_sequential_assignment(self):

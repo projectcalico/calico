@@ -1,4 +1,4 @@
 [template]
 src = "felix.cfg.template"
-dest = "/config/felix.cfg"
+dest = "/etc/calico/felix.cfg"
 keys = []

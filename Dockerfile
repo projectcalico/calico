@@ -19,6 +19,7 @@ ENV LANG       en_US.UTF-8
 ENV LC_ALL     en_US.UTF-8
 
 RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
+    add-apt-repository -y ppa:project-calico/icehouse && \
     apt-get update && \
     apt-get install -qy \
 #        calico-felix \
@@ -38,17 +39,17 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
 # Required by calico-felix, eventually should be removed.
         python-zmq \
         git \
-        python-gevent && \
+        python-gevent \
+        python-etcd && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    pip install git+http://github.com/Metaswitch/python-etcd.git@3f14a002c9a75df3242de3d81a91a2e6bd32c5a8#egg=python-etcd 
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Confd
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
     chmod +x confd
 
-RUN curl -L https://www.dropbox.com/s/zsr115cpuwv2okp/calico-common_0.15_all.deb?dl=1 -o common.deb && dpkg -i common.deb && rm common.deb
-RUN curl -L https://www.dropbox.com/s/m959ktr1274vp9p/calico-felix_0.15_all.deb?dl=1 -o felix.deb && dpkg -i felix.deb && rm felix.deb
+RUN curl -L https://www.dropbox.com/s/htl1fatq2sc8paz/calico-common_0.17_all.deb?dl=1 -o common.deb && dpkg -i common.deb && rm common.deb
+RUN curl -L https://www.dropbox.com/s/evovbt89s9axebj/calico-felix_0.17_all.deb?dl=1 -o felix.deb && dpkg -i felix.deb && rm felix.deb
 
 # Install Powerstrip Calico Adapter dependencies.
 ADD node/adapter/requirements.txt /adapter/
