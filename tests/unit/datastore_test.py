@@ -209,9 +209,8 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound 
         self.datastore.ensure_global_config()
-        expected_writes = [call(CONFIG_PATH + "InterfacePrefix", "cali"),
-                           call(CONFIG_PATH + "LogSeverityFile", "DEBUG"),
-                           call(CONFIG_PATH + "Ready", "true")]
+        expected_writes = [call(CALICO_V_PATH + "/Ready", "true"),
+                           call(CONFIG_PATH + "InterfacePrefix", "cali")]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
 
@@ -221,7 +220,6 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.datastore.ensure_global_config()
         self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
-        assert_false(self.etcd_client.write.called)
 
     def test_get_profile(self):
         """
