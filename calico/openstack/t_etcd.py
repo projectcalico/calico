@@ -67,10 +67,6 @@ class CalicoTransportEtcd(CalicoTransport):
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
                                   port=cfg.CONF.calico.etcd_port)
 
-        # Spawn a green thread for periodically resynchronizing etcd against
-        # the OpenStack database.
-        eventlet.spawn(self.periodic_resync_thread)
-
         # We will remember the OpenStack security group data, between resyncs,
         # so that we can generate profiles when needed for new or updated
         # endpoints.  Start off with an empty set.
@@ -89,8 +85,13 @@ class CalicoTransportEtcd(CalicoTransport):
         self.start_of_day_lock = eventlet.event.Event()
         self._start_of_day_complete = False
 
+        # Spawn a green thread for periodically resynchronizing etcd against
+        # the OpenStack database.
+        eventlet.spawn(self.periodic_resync_thread)
+
     def periodic_resync_thread(self):
         while True:
+            LOG.info("Calico plugin doing periodic resync.")
             try:
                 # Write non-default config that Felices need.
                 self.provide_felix_config()
@@ -112,6 +113,9 @@ class CalicoTransportEtcd(CalicoTransport):
                 LOG.exception("Exception in periodic resync thread")
 
             # Sleep until time for next resync.
+            LOG.info("Calico plugin finished periodic resync.  "
+                     "Next resync in %s seconds.",
+                     PERIODIC_RESYNC_INTERVAL_SECS)
             eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
 
     def resync_endpoints(self):
@@ -221,9 +225,10 @@ class CalicoTransportEtcd(CalicoTransport):
     def resync_security_groups(self):
         # Get all current security groups from the OpenStack database and key
         # them on security group ID.
-        self.sgs = {}
+        new_sgs = {}
         for sg in self.driver.get_security_groups():
-            self.sgs[sg['id']] = sg
+            new_sgs[sg['id']] = sg
+        self.sgs = new_sgs
 
         # As we look at the etcd data, accumulate a set of profile IDs that
         # already have correct data.
@@ -283,11 +288,11 @@ class CalicoTransportEtcd(CalicoTransport):
         inbound = []
         outbound = []
         for sgid in self.profile_tags(profile_id):
-            # Be tolerant of a security group not being here. Allow up to 5
+            # Be tolerant of a security group not being here. Allow up to 20
             # attempts to get it, waiting a few hundred ms in between: we might
             # just be racing slightly ahead of a security group update.
             rules = None
-            retries = 5
+            retries = 20
             while rules is None:
                 try:
                     rules = self.sgs[sgid]['security_group_rules']
