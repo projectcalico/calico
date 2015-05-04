@@ -20,6 +20,7 @@
 # Standard Python library imports.
 import etcd
 import eventlet
+from eventlet.semaphore import Semaphore
 import json
 import re
 
@@ -74,8 +75,16 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Also the set of profile IDs that we need for the current endpoints,
         # so that we can generate the profile data if an underlying security
-        # group changes.
+        # group changes.  We clean this up lazily on the periodic resync so
+        # it should be a safe over-approximation.
         self.needed_profiles = set()
+        # And set of profiles that are no longer needed, populated during
+        # resync.
+        self.profiles_to_clean_up = set()
+        # Semaphore protecting the needed_profiles and profiles_to_clean_up
+        # sets from concurrent modification between the main and resync
+        # threads.
+        self.profile_semaphore = Semaphore(1)
 
         # This event is used exactly once, at start of day, to delay all
         # endpoint creation events behind security group synchronization.
@@ -118,6 +127,11 @@ class CalicoTransportEtcd(CalicoTransport):
                      PERIODIC_RESYNC_INTERVAL_SECS)
             eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
 
+    def _mark_profile_needed(self, profile_id):
+        with self.profile_semaphore:
+            self.needed_profiles.add(profile_id)
+            self.profiles_to_clean_up.discard(profile_id)
+
     def resync_endpoints(self):
         # Get all current endpoints from the OpenStack database and key them on
         # endpoint ID.
@@ -125,9 +139,20 @@ class CalicoTransportEtcd(CalicoTransport):
         for port in self.driver.get_endpoints():
             ports[port['id']] = port
 
-        # As we go through the current endpoints, we'll accumulate the set of
-        # security profiles that they need.  Start with an empty set here.
-        self.needed_profiles = set()
+        # Mark all profiles for clean up and then remove them from the list
+        # as we find them below.
+        with self.profile_semaphore:
+            # Taking the lock ensures that any _mark_profile_needed() calls
+            # come before or after this update() call.
+            #
+            # If the call was before: Since we call _mark_profile_needed()
+            # *after) we write to etcd, that implies that we'll see the
+            # profile in etcd below and remove it from
+            # self.profiles_to_clean_up before we do the cleanup.
+            #
+            # If the call comes after then it will remove the profile from
+            # profiles_to_cleanup itself and we won't have to.
+            self.profiles_to_clean_up.update(self.needed_profiles)
 
         # Read all etcd keys under /calico/v1/host.
         try:
@@ -154,7 +179,7 @@ class CalicoTransportEtcd(CalicoTransport):
                     LOG.debug("Existing etcd endpoint data is correct")
                     # OpenStack still has an endpoint that exactly matches this
                     # etcd key/value.  Remember its security profile.
-                    self.needed_profiles.add(data['profile_id'])
+                    self._mark_profile_needed(data['profile_id'])
 
                     # No change is needed to the etcd data, and we can delete
                     # the port from the ports dict so as not to unnecessarily
@@ -184,7 +209,18 @@ class CalicoTransportEtcd(CalicoTransport):
             self.client.write(self.port_etcd_key(port), json.dumps(data))
 
             # Remember the security profile that this port needs.
-            self.needed_profiles.add(data['profile_id'])
+            self._mark_profile_needed(data['profile_id'])
+
+        with self.profile_semaphore:
+            # Clean up the profiles that we no longer need.  By taking the
+            # lock we ensure that any _mark_profile_needed() calls either
+            # come before or after this block.  If they come before, they'll
+            # remove the profile from self.profiles_to_cleanup so we won't
+            # clean that one up.  If they come after, then they'll put it
+            # back in self.needed_profiles.
+            self.needed_profiles -= self.profiles_to_clean_up
+            self.profiles_to_clean_up.clear()
+
 
     def port_etcd_key(self, port):
         return key_for_endpoint(port['binding:host_id'],
@@ -338,7 +374,7 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Get and remember the security profile that this port needs.
         profile_id = data['profile_id']
-        self.needed_profiles.add(profile_id)
+        self._mark_profile_needed(profile_id)
 
         # Write etcd data for this profile.
         self.write_profile_to_etcd(profile_id)
@@ -362,10 +398,17 @@ class CalicoTransportEtcd(CalicoTransport):
 
         # Identify all the needed profiles that incorporate this security
         # group, and rewrite their data.
-        for profile_id in self.needed_profiles:
-            if sg['id'] in self.profile_tags(profile_id):
-                # Write etcd data for this profile.
-                self.write_profile_to_etcd(profile_id)
+        # Take the profile lock so that no-one can modify needed_profiles
+        # while we iterate over it.  (This is probably unneeded since there
+        # aren't any yield points in the loop but better safe than sorry.)
+        profiles_to_rewrite = set()
+        with self.profile_semaphore:
+            for profile_id in self.needed_profiles:
+                if sg['id'] in self.profile_tags(profile_id):
+                    # Write etcd data for this profile.
+                    profiles_to_rewrite.add(profile_id)
+        for profile_id in profiles_to_rewrite:
+            self.write_profile_to_etcd(profile_id)
 
     def provide_felix_config(self):
         """Specify the prefix of the TAP interfaces that Felix should
