@@ -20,6 +20,7 @@
 # Standard Python library imports.
 import etcd
 import eventlet
+import eventlet.event
 from eventlet.semaphore import Semaphore
 import json
 import re
@@ -72,6 +73,8 @@ class CalicoTransportEtcd(CalicoTransport):
         # so that we can generate profiles when needed for new or updated
         # endpoints.  Start off with an empty set.
         self.sgs = {}
+        # Semaphore to protect all access to the sgs dict.
+        self._sgs_semaphore = Semaphore(1)
 
         # Also the set of profile IDs that we need for the current endpoints,
         # so that we can generate the profile data if an underlying security
@@ -261,10 +264,10 @@ class CalicoTransportEtcd(CalicoTransport):
     def resync_security_groups(self):
         # Get all current security groups from the OpenStack database and key
         # them on security group ID.
-        new_sgs = {}
-        for sg in self.driver.get_security_groups():
-            new_sgs[sg['id']] = sg
-        self.sgs = new_sgs
+        with self._sgs_semaphore:
+            self.sgs.clear()
+            for sg in self.driver.get_security_groups():
+                self.sgs[sg['id']] = sg
 
         # As we look at the etcd data, accumulate a set of profile IDs that
         # already have correct data.
@@ -331,7 +334,8 @@ class CalicoTransportEtcd(CalicoTransport):
             retries = 20
             while rules is None:
                 try:
-                    rules = self.sgs[sgid]['security_group_rules']
+                    with self._sgs_semaphore:
+                        rules = self.sgs[sgid]['security_group_rules']
                 except KeyError:
                     LOG.warning("Missing info for SG %s: waiting.", sgid)
                     retries -= 1
@@ -394,7 +398,8 @@ class CalicoTransportEtcd(CalicoTransport):
 
     def security_group_updated(self, sg):
         # Update the data that we're keeping for this security group.
-        self.sgs[sg['id']] = sg
+        with self._sgs_semaphore:
+            self.sgs[sg['id']] = sg
 
         # Identify all the needed profiles that incorporate this security
         # group, and rewrite their data.
