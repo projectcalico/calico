@@ -29,6 +29,7 @@ import traceback
 sys.modules['etcd'] = m_etcd = mock.Mock()
 sys.modules['neutron'] = m_neutron = mock.Mock()
 sys.modules['neutron.common'] = m_neutron.common
+sys.modules['neutron.common.exceptions'] = m_neutron.common.exceptions
 sys.modules['neutron.openstack'] = m_neutron.openstack
 sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
 sys.modules['neutron.plugins'] = m_neutron.plugins
