@@ -28,6 +28,7 @@
 
 # OpenStack imports.
 from neutron.common import constants
+from neutron.common.exceptions import PortNotFound
 from neutron.openstack.common import log
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
@@ -248,8 +249,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         endpoints = {}
         for binding in bindings:
             port_id = binding['port_id']
-            port = self.db.get_port(db_context, port_id)
-            endpoints[port_id] = [ip['ip_address'] for ip in port['fixed_ips']]
+            try:
+                port = self.db.get_port(db_context, port_id)
+                endpoints[port_id] = [ip['ip_address'] for
+                                          ip in port['fixed_ips']]
+            except PortNotFound:
+                # The port must have been removed after we loaded the bindings.
+                LOG.warning("Port %s not found while looking up members of %s",
+                            port_id, sg)
 
         LOG.info("Endpoints for SG %s are %s" % (sg['id'], endpoints))
         return endpoints
