@@ -416,6 +416,7 @@ def status():
     else:
         print "calico-node container is running. Status: %s" % \
               calico_node_info[0]["Status"]
+
         apt_cmd = docker_client.exec_create("calico-node", ["/bin/bash", "-c",
                                            "apt-cache policy calico-felix"])
         result = re.search(r"Installed: (.*?)\s", docker_client.exec_start(apt_cmd))
