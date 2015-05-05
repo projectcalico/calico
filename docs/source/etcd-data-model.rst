@@ -257,9 +257,7 @@ integer. Because etcd does not have typed data, the data is technically a
 base-10 integer string: writing any other data into this key is an error.
 
 Changes to this key must *always* be performed using etcd's atomic
-compare-and-swap function, including writing it at profile creation time. If a
-control-plane component compares-and-swaps this key down to ``0``, it must then
-issue an etcd delete of the profile directory.
+compare-and-swap function, including writing it at profile creation time.
 
 Care must be taken here: it's possible that an attempt to increment the
 reference count of a profile will find that the profile does not exist
