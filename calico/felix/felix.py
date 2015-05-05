@@ -25,6 +25,7 @@ from gevent import monkey
 monkey.patch_all()
 
 import logging
+import optparse
 import os
 
 import gevent
@@ -159,29 +160,40 @@ def _main_greenlet(config):
 
 
 def main():
+    # Initialise the logging with default parameters.
+    common.default_logging()
+
+    # Create configuration, reading defaults from file if it exists.
+    parser = optparse.OptionParser()
+    parser.add_option('-c', '--config-file', dest='config_file',
+                      help="configuration file to use",
+                      default="/etc/calico/felix.cfg")
+    options, args = parser.parse_args()
+
     try:
-        # Initialise the logging with default parameters.
-        common.default_logging()
-
-        # Create configuration, reading defaults from file if it exists.
+        config = Config(options.config_file)
+    except Exception:
+        # Config loading error, and not just invalid parameters (from optparse)
+        # as they generate a SystemExit. Attempt to open a log file, ignoring
+        # any errors it gets, before we raise the exception.
         try:
-            config = Config("/etc/calico/felix.cfg")
-        except:
-            # Attempt to open a log file, ignoring any errors it gets, before
-            # we raise the exception.
-            try:
-                common.complete_logging("/var/log/calico/felix.log",
-                                        logging.DEBUG,
-                                        logging.DEBUG,
-                                        logging.DEBUG)
-            except:
-                pass
+            common.complete_logging("/var/log/calico/felix.log",
+                                    logging.DEBUG,
+                                    logging.DEBUG,
+                                    logging.DEBUG)
+        except Exception:
+            pass
 
-            raise
+        # Log the exception with logging in whatever state we managed to get it
+        # to, then reraise it, taking Felix down.
+        _log.exception("Exception loading configuration")
+        raise
 
-        _log.info("Felix initializing")
+    _log.info("Felix initializing")
+
+    try:
         gevent.spawn(_main_greenlet, config).join()  # Should never return
-    except BaseException:
+    except Exception:
         # Make absolutely sure that we exit by asking the OS to terminate our
         # process.  We don't want to let a stray background thread keep us
         # alive.
