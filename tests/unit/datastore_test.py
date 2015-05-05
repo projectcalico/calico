@@ -208,6 +208,7 @@ class TestEndpoint(unittest.TestCase):
         assert_not_equal(endpoint1, 1)
         assert_false(endpoint1 == "this is not an endpoint")
 
+
 class TestDatastoreClient(unittest.TestCase):
 
     @patch("node.adapter.datastore.os.getenv", autospec=True)
