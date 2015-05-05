@@ -26,6 +26,7 @@ done
 docker run -e CALICO_IP=auto -tid --name=node1 busybox
 docker run -e CALICO_IP=auto -tid --name=node2 busybox
 
+# Perform a docker inspect to extract the configured IP addresses.
 node1_ip="$(docker inspect node1 | grep IPAddress)"
 node1_ip="${node1_ip#*: \"}"
 node1_ip="${node1_ip%\"*}"
@@ -36,11 +37,12 @@ node2_ip="${node2_ip#*: \"}"
 node2_ip="${node2_ip%\"*}"
 echo "Node 2 IP address is $node2_ip"
 
+# Configure the nodes with the same profiles.
 dist/calicoctl profile TEST_GROUP member add node1
 dist/calicoctl profile TEST_GROUP member add node2
 
-# Check the config looks good - standard set of show commands plus the non-detailed ones for
-# completeness.
+# Check the config looks good - standard set of show commands plus the
+# non-detailed ones for completeness.
 show_commands
 dist/calicoctl shownodes
 dist/calicoctl profile show

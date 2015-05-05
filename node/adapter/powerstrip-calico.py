@@ -126,22 +126,19 @@ class AdapterResource(resource.Resource):
 
             # Extract the container ID and request type.
             # TODO better URI parsing
-            (_, version, ptype, cid, ctype) = request_uri.split("/", 4)
-            _log.info("Request parameters: version:%s; ptype:%s;"
-                      "cid:%s; ctype:%s",
-                      version, ptype, cid, ctype)
-
-            if ptype == u'containers':
-                if ctype == u'start':
-                    # /version/containers/id/start
-                    _log.debug('Intercepted container start request')
-                    self._install_endpoint(client_request, cid)
-                elif ctype== 'json':
-                    # /version/containers/*/json
-                    _log.debug('Intercepted container json request')
-                    self._update_container_info(cid, server_response)
-                else:
-                    _log.debug('Unrecognized path: %s', request_path)
+            (_, version, _, cid, ctype) = request_uri.split("/", 4)
+            _log.info("Request parameters: version:%s; cid:%s; ctype:%s",
+                      version, cid, ctype)
+            if ctype == u'start':
+                # /version/containers/id/start
+                _log.debug('Intercepted container start request')
+                self._install_endpoint(client_request, cid)
+            elif ctype== 'json':
+                # /version/containers/*/json
+                _log.debug('Intercepted container json request')
+                self._update_container_info(cid, server_response)
+            else:
+                _log.debug('Unrecognized path: %s', request_path)
         except BaseException:
             _log.exception('Unexpected error handling post-hook.')
         finally:
@@ -261,16 +258,19 @@ class AdapterResource(resource.Resource):
         _log.debug('Pre-load body:\n%s', server_response["Body"])
 
         # Tweak the contents of the NetworkSettings dictionary in the request
-        # body.  We use an arbitrary IPv4 / IPv6 network to fill in the IP
-        # information since the dictionary only allows a single value for each.
+        # body.  We use an arbitrary IPv4 / IPv6 address from the endpoint
+        # network sets to fill in the IP information since the dictionary only
+        # allows a single value for each.
         body = json.loads(server_response["Body"])
         net_settings = body['NetworkSettings']
-        if len(ep.ipv4_nets):
-            ipv4_network = next(iter(ep.ipv4_nets))
-            net_settings['IPAddress'] = str(ipv4_network.ip)
-        if len(ep.ipv6_nets):
-            ipv6_network = next(iter(ep.ipv6_nets))
-            net_settings['GlobalIPv6Address'] = str(ipv6_network.ip)
+        for ipv4_net in ep.ipv4_nets:
+            if ipv4_net.prefixlen == 32:
+                net_settings['IPAddress'] = str(ipv4_net.ip)
+                break
+        for ipv6_net in ep.ipv6_nets:
+            if ipv6_net.prefixlen == 128:
+                net_settings['GlobalIPv6Address'] = str(ipv6_net.ip)
+                break
         net_settings["MacAddress"] = str(ep.mac)
         server_response['Body'] = json.dumps(body, separators=(',', ':'))
 
