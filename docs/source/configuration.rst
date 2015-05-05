@@ -62,15 +62,20 @@ The full list of parameters which can be set is as follows.
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | Setting          | Default                   | Meaning                                                                                   |
 +==================+===========================+===========================================================================================+
-| EtcdAddr         | localhost:4001            | The location of the etcd node or proxy that Felix should connect to.                      |
+| EtcdAddr         | localhost:4001            | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
+|                  |                           | to.                                                                                       |
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | FelixHostname    | socket.gethostname()      | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
 |                  |                           | autodetects is incorrect or does not match what the plugin will expect.                   |
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| MetadataAddr     | 127.0.0.1                 | The hostname or IP of the metadata server. If a hostname, must be resolvable. To disable  |
-|                  |                           | metadata (as in most non-OpenStack deployments) set to "none" (case insensitive).         |
+| MetadataAddr     | 127.0.0.1                 | The IP address or domain name of the server that can answer VM queries for cloud-init     |
+|                  |                           | metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu,   |
+|                  |                           | nova-api-metadata). A value of 'None' (case insensitive) means that Felix should not set  |
+|                  |                           | up any NAT rule for the metadata path.                                                    |
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| MetadataPort     | 8775                      | The port of the metadata server. Ignored if MetadataAddr is "none".                       |
+| MetadataPort     | 8775                      | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), |
+|                  |                           | is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In    |
+|                  |                           | most cases this should not need to be changed.                                            |
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | InterfacePrefix  | None                      | The start of the interface name for all interfaces. This is set to "tap" on OpenStack     |
 |                  |                           | by the plugin, but must be set to "veth" on most Docker deployments.                      |
@@ -78,7 +83,8 @@ The full list of parameters which can be set is as follows.
 | LogFilePath      | /var/log/calico/felix.log | The full path to the felix log. Set to "none" to disable file logging.                    |
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | LogSeveritySys   | ERROR                     | The log severity above which logs are sent to the syslog. Valid values are DEBUG, INFO,   |
-|                  |                           | WARNING, ERROR and CRITICAL.                                                              |
+|                  |                           | WARNING, ERROR and CRITICAL, or NONE for no logging to syslog (all values case            |
+|                  |                           | insensitive).                                                                             |
 +------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | LogSeverityFile  | INFO                      | The log severity above which logs are sent to the log file. Valid values as for           |
 |                  |                           | LogSeveritySys.                                                                           |
@@ -95,7 +101,8 @@ The highest priority of configuration is that read from environment
 variables. To set a configuration parameter via an environment variable, set
 the environment variable formed by taking ``FELIX_`` and appending the uppercase
 form of the variable name. For example, to set the etcd address, set the
-environment variable ``FELIX_ETCDADDR``.
+environment variable ``FELIX_ETCDADDR``.Other examples include
+``FELIX_FELIXHOSTNAME``, ``FELIX_LOGFILEPATH`` and ``FELIX_METADATAADDR``.
 
 Configuration file
 ^^^^^^^^^^^^^^^^^^
