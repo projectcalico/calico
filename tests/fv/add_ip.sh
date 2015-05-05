@@ -34,10 +34,10 @@ echo "Waiting for network to come up"
 done
 
 # Add two more addresses to node1 and one more to node2
-$CALICO ipv4 container node1 add 192.168.2.1
-$CALICO ipv4 container node1 add 192.168.3.1
+$CALICO container node1 ip add 192.168.2.1
+$CALICO container node1 ip add 192.168.3.1
 
-$CALICO ipv4 container node2 add 192.168.2.2 --interface=hello
+$CALICO container node2 ip add 192.168.2.2 --interface=hello
 
 docker exec node1 ping 192.168.2.2 -c 1
 docker exec node2 ping 192.168.1.1 -c 1
@@ -46,8 +46,8 @@ docker exec node2 ping 192.168.3.1 -c 1
 $CALICO shownodes --detailed
 
 # Now remove and check pings to the removed addresses no longer work.
-$CALICO ipv4 container node1 remove 192.168.2.1
-$CALICO ipv4 container node2 remove 192.168.2.2 --interface=hello
+$CALICO container node1 ip remove 192.168.2.1
+$CALICO container node2 ip remove 192.168.2.2 --interface=hello
 docker exec node1 ping 192.168.1.2 -c 1
 docker exec node2 ping 192.168.1.1 -c 1
 ! docker exec node1 ping 192.168.2.2 -c 1 -W 1
@@ -56,6 +56,6 @@ docker exec node2 ping 192.168.3.1 -c 1
 $CALICO shownodes --detailed
 
 # Check that we can't remove addresses twice
-! $CALICO ipv4 container node1 remove 192.168.2.1
+! $CALICO container node1 ip remove 192.168.2.1
 
 echo "Tests completed successfully"
