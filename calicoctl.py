@@ -487,20 +487,31 @@ def profile_show(detailed):
     profiles = client.get_profile_names()
 
     if detailed:
-        x = PrettyTable(["Name", "Endpoint ID"])
+        x = PrettyTable(["Name", "Host", "Workload Type", "Workload ID",
+                         "Endpoint ID", "State"])
         for name in profiles:
             members = client.get_profile_members(name)
-            if members:
-                for member in members:
-                    x.add_row([name, member])
-            else:
-                x.add_row([name, "No members"])
+            if not members:
+                x.add_row([name, "None", "None", "None", "None", "None"])
+                continue
+
+            for host, ctypes in members.iteritems():
+                for ctype, workloads in ctypes.iteritems():
+                    for workload, endpoints in workloads.iteritems():
+                        for ep_id, endpoint in endpoints.iteritems():
+                            x.add_row([name,
+                                       host,
+                                       ctype,
+                                       # Truncate ID to 12 chars like Docker
+                                       workload[:12],
+                                       ep_id,
+                                       endpoint.state])
     else:
         x = PrettyTable(["Name"])
         for name in profiles:
             x.add_row([name])
 
-    print x
+    print str(x) + "\n"
 
 
 def profile_tag_show(name):
@@ -630,7 +641,7 @@ def node_show(detailed):
                 continue
             for container_type, workloads in container_types.iteritems():
                 x.add_row([host, container_type, len(workloads)])
-    print x
+    print str(x) + "\n"
 
 
 def save_diags():

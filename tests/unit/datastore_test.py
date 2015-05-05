@@ -191,6 +191,22 @@ class TestEndpoint(unittest.TestCase):
         assert_set_equal(endpoint.ipv4_nets, endpoint2.ipv4_nets)
         assert_set_equal(endpoint.ipv6_nets, endpoint2.ipv6_nets)
 
+    def test_operators(self):
+        """
+        Test Enpoint operators __eq__, __ne__ and copy.
+        """
+        endpoint1 = Endpoint("aabbccddeeff112233",
+                             "active",
+                             "11-22-33-44-55-66")
+        endpoint2 = Endpoint("aabbccddeeff112233",
+                             "inactive",
+                             "11-22-33-44-55-66")
+        endpoint3 = endpoint1.copy()
+
+        assert_equal(endpoint1, endpoint3)
+        assert_not_equal(endpoint1, endpoint2)
+        assert_not_equal(endpoint1, 1)
+        assert_false(endpoint1 == "this is not an endpoint")
 
 class TestDatastoreClient(unittest.TestCase):
 
@@ -561,29 +577,72 @@ class TestDatastoreClient(unittest.TestCase):
         profiles = self.datastore.get_profile_names()
         assert_set_equal(profiles, set())
 
+    def test_get_profile_members_ep_ids(self):
+        """
+        Test get_profile_members_ep_ids() when there are endpoints.
+        """
+        self.etcd_client.read.side_effect = mock_read_4_endpoints
+        members = self.datastore.get_profile_members_ep_ids("TEST")
+        assert_set_equal({"567890abcdef", "7890abcdef12"},
+                         set(members))
+
+        members = self.datastore.get_profile_members_ep_ids("UNIT")
+        assert_set_equal({"90abcdef1234", TEST_ENDPOINT_ID},
+                         set(members))
+
+        members = self.datastore.get_profile_members_ep_ids("UNIT_TEST")
+        assert_set_equal(set(), set(members))
+
+    def test_get_profile_members_ep_ids_no_key(self):
+        """
+        Test get_profile_members_ep_ids() when the endpoints path has not been
+        set up.
+        """
+        self.etcd_client.read.side_effect = mock_read_endpoints_key_error
+        members = self.datastore.get_profile_members_ep_ids("UNIT_TEST")
+        assert_set_equal(set(), set(members))
+
     def test_get_profile_members(self):
         """
         Test get_profile_members() when there are endpoints.
         """
+        self.maxDiff = 1000
         self.etcd_client.read.side_effect = mock_read_4_endpoints
         members = self.datastore.get_profile_members("TEST")
-        assert_set_equal({"567890abcdef", "7890abcdef12"},
-                         set(members))
+        assert_dict_equal({"TEST_HOST":
+                            {"docker":
+                              {"1234":
+                                {"567890abcdef": EP_56}}},
+                           "TEST_HOST2":
+                            {"docker":
+                              {"1234":
+                                {"7890abcdef12": EP_78}}}
+                          },
+                          members)
 
         members = self.datastore.get_profile_members("UNIT")
-        assert_set_equal({"90abcdef1234", TEST_ENDPOINT_ID},
-                         set(members))
+        assert_dict_equal({"TEST_HOST":
+                            {"docker":
+                              {"5678":
+                                {"90abcdef1234": EP_90}}},
+                           "TEST_HOST2":
+                            {"docker":
+                              {"5678":
+                                {"1234567890ab": EP_12}}}
+                          },
+                          members)
 
         members = self.datastore.get_profile_members("UNIT_TEST")
-        assert_set_equal(set(), set(members))
+        assert_dict_equal({}, members)
 
     def test_get_profile_members_no_key(self):
         """
-        Test get_profile_members() when the endpoints path has not been set up.
+        Test get_profile_members() when the endpoints path has not been
+        set up.
         """
         self.etcd_client.read.side_effect = mock_read_endpoints_key_error
         members = self.datastore.get_profile_members("UNIT_TEST")
-        assert_set_equal(set(), set(members))
+        assert_dict_equal({}, members)
 
     def test_get_endpoint_exists(self):
         """

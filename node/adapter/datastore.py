@@ -171,6 +171,24 @@ class Endpoint(object):
         ep.profile_id = json_dict["profile_id"]
         return ep
 
+    def __eq__(self, other):
+        if not isinstance(other, Endpoint):
+            return NotImplemented
+        return (self.ep_id == other.ep_id and
+                self.state == other.state and
+                self.mac == other.mac and
+                self.profile_id == other.profile_id and
+                self.ipv4_nets == other.ipv4_nets and
+                self.ipv6_nets == other.ipv6_nets and
+                self.ipv4_gateway == other.ipv4_gateway and
+                self.ipv6_gateway == other.ipv6_gateway)
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
     def copy(self):
         return copy.deepcopy(self)
 
@@ -487,9 +505,9 @@ d
 
         return profile
 
-    def get_profile_members(self, name):
+    def get_profile_members_ep_ids(self, name):
         """
-        Get all endpoint members of named profile.
+        Get all endpoint IDs that are members of named profile.
 
         :param name: Unique string name of the profile.
         :return: a list of members
@@ -511,6 +529,35 @@ d
                 if ep.profile_id == name:
                     members.append(ep.ep_id)
         return members
+
+    def get_profile_members(self, profile_name):
+        """
+        Get the all of the endpoint members of a profile.
+
+        :param profile_name: Unique string name of the profile.
+        :return: a dict of hostname => {
+                               type => {
+                                   container_id => {
+                                       endpoint_id => Endpoint
+                                   }
+                               }
+                           }
+        """
+        eps = Vividict()
+        try:
+            endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
+                                              recursive=True).leaves
+            for child in endpoints:
+                packed = child.key.split("/")
+                if len(packed) == 10:
+                    (_, _, _, _, host, _, ctype, cid, _, ep_id) = packed
+                    ep = Endpoint.from_json(ep_id, child.value)
+                    if ep.profile_id == profile_name:
+                        eps[host][ctype][cid][ep_id] = ep
+        except EtcdKeyNotFound:
+            pass
+
+        return eps
 
     def profile_update_tags(self, profile):
         """
