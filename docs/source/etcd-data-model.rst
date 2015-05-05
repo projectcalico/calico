@@ -149,6 +149,16 @@ keys, of the form::
     /calico/policy/profile/<profile_id>/rules
     /calico/policy/profile/<profile_id>/tags
 
+Additionally, each profile keeps a count of the number of endpoints that
+reference it. This allows for garbage collection of profiles without requiring
+that components regularly scan all of etcd for profile membership. This count
+is stored at::
+
+    /calico/policy/profile/<profile_id>/refcount
+
+When creating a security profile, the ``refcount`` key must be atomically
+initialised first, to avoid data races.
+
 Rules
 ^^^^^
 
@@ -238,3 +248,21 @@ policy. These tags can be referred to by rules, as shown above.
 A single tag may be associated with multiple security profiles, in which case
 it expands to reference all endpoints in all of those profiles.
 
+Reference Count
+^^^^^^^^^^^^^^^
+
+The reference count is an unsigned integer that records the number of endpoints
+that are using this security profile. This is not stored as JSON, but as an
+integer. Because etcd does not have typed data, the data is technically a
+base-10 integer string: writing any other data into this key is an error.
+
+Changes to this key must *always* be performed using etcd's atomic
+compare-and-swap function, including writing it at profile creation time. If a
+control-plane component compares-and-swaps this key down to ``0``, it must then
+issue an etcd delete of the profile directory.
+
+Care must be taken here: it's possible that an attempt to increment the
+reference count of a profile will find that the profile does not exist
+(because it got deleted) in which case it will need creating. Alternatively, it
+is possible that an attempt to create a profile will find that it already
+exists, and so instead the reference count will need incrementing. Be cautious.
