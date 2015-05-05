@@ -164,12 +164,13 @@ def main():
     common.default_logging()
 
     # Create configuration, reading defaults from file if it exists.
+    parser = optparse.OptionParser()
+    parser.add_option('-c', '--config-file', dest='config_file',
+                      help="configuration file to use",
+                      default="/etc/calico/felix.cfg")
+    options, args = parser.parse_args()
+
     try:
-        parser = optparse.OptionParser()
-        parser.add_option('-c', '--config-file', dest='config_file',
-                          help="configuration file to use",
-                          default="/etc/calico/felix.cfg")
-        options, args = parser.parse_args()
         config = Config(options.config_file)
     except Exception:
         # Config loading error, and not just invalid parameters (from optparse)
@@ -183,6 +184,9 @@ def main():
         except Exception:
             pass
 
+        # Log the exception with logging in whatever state we managed to get it
+        # to, then reraise it, taking Felix down.
+        _log.exception("Exception loading configuration")
         raise
 
     _log.info("Felix initializing")
