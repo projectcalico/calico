@@ -4,5 +4,7 @@ endpoints:
     pre: [calico]
   "POST /*/containers/*/start":
     post: [calico]
+  "GET /*/containers/*/json":
+    post: [calico]
 adapters:
   calico: http://127.0.0.1:2378/calico-adapter

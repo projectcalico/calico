@@ -604,7 +604,7 @@ d
             ep = Endpoint.from_json(endpoint_id, ep_json)
             return ep
         except EtcdKeyNotFound:
-            raise KeyError("Enpoint %s not found" % ep_path)
+            raise KeyError("Endpoint %s not found" % ep_path)
 
     def set_endpoint(self, hostname, container_id, endpoint):
         """
