@@ -1,11 +1,23 @@
 
 router id @MY_IP_ADDRESS@;
 
+# We are only going to export routes from Calico interfaces.
+# Currently, 'tap*' is used by the OpenStack implimentation
+# and 'cali*' is used by the docker implimentation.
+# dummy1 is the interface that bare metal "service" addresses
+# should be bound to if they should be exported.
+# This will need to be updated as we add new interface names.
+#
+# Also filter out default, just in case.
+#
+# We should automate the build of this out of variables when
+# we have time.
+
 filter export_bgp {
-if ( net != 0.0.0.0/0 ) then {
-   accept;
-   }
-   reject;
+  if ( (ifname ~ "tap*") || (ifname ~ "cali*") || (ifname ~ "dummy1") ) then {
+    if  net != 0.0.0.0/0 then accept;
+  }
+  reject;
 }
 
 # Configure synchronization between BIRD's routing tables and the
