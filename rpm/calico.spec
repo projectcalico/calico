@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.17
+Version:        0.18
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,73 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue May 05 2015 Neil Jerram <neil@projectcalico.org> 0.18
+- Further fixes and improvements to Calico components
+  - Note that RHEL 6.5 instructions are not yet complete
+  - Document that Felix requires a config file, or it won't start on RHEL
+  - Tidy up line wrapping in RHEL install docs
+  - Move utility functions to frules
+  - Minor code tidies in dispatch.py
+  - Refactor DispatchManager API to not use dicts
+  - Add unit tests for DispatchChains
+  - Clarify DispatchChains comparison logic
+  - Move common validation code to single place.
+  - Reinstate etc after overwriting import.
+  - Initial code review markups for iptables updater.
+  - Code review markups for fiptables.py.
+  - Address some RHEL 7 install instruction issues:
+  - Minor grammar markups
+  - Fix missing import in common
+  - Revert "Initial code review markups for iptables updater."
+  - Docstrings for UpdateSplitter
+  - Remove invalid module reference
+  - Retire RHEL 6.5 instructions until we can fix them up, or are convinced there is no demand.
+  - Allow for config to be read from config files.
+  - Code review feedback
+  - changed bgp_export policy to be interface of origin based
+  - Ensure no logs are made to screen in mainline with screen logging disabled
+  - syntax cleanup, prettified, and default filter added back in.
+  - cut and paste doh... - v4 default address used in v6 config file
+  - Work in progress on cleanup/support for anycast IPs.
+  - Minor fixes: typos and incorrect indexing into dicts.
+  - Fixes and cleanups: move updates into lower level methods.
+  - Fix missing delete when cleaning up ip address.
+  - Minor cleanups and self-review markups.
+  - Code review markups.  Track dirty tags and update en-masse.
+  - Revert "Revert "Initial code review markups for iptables updater.""
+  - Revert rename of _Transaction.updates, it is referenced by IptablesUpdater.
+  - Suppress start-of-day iptables-restore errors from CaS-type operations.
+  - Tidy up etcd exception logging.
+  - Clean up devices exception logging.
+  - Add actor life-cycle logging.
+  - Add endpoint and profile IDs as comments in iptables chains.
+  - Unit tests for the UpdateSplitter
+  - RHEL7 doc: fix formatting of Calico repo config
+  - RHEL7 doc: don't mention Icehouse
+  - Clarify that mapping is dict
+  - Update documentation of configuration for Felix.
+  - Felix review and some UT (actor, refcount)
+  - Replace endpoint ID with tuple that includes host and workload too.
+  - Code review markups to refcount.py.
+  - Don't process endpoint creation until SOD complete
+  - Docs typo fix: incorrect etcd mount in fstab
+  - Remove comments
+  - Document the new mailing lists
+  - Update involved.rst
+  - Plugin: provide correct workload ID - fixes #445
+  - Plugin: provide correct workload ID - UT updates
+  - Update README.md
+  - Cleanup README line length
+  - Missing sec group retries
+  - Close race between resync and access to self.sgs in plugin.
+  - Remove race in needed_profile cleanup by using a semaphore.
+  - Be resilient to ports disappearing while loading SG members.
+  - Protect all access to the security groups dict.
+  - Fix up UT environment to include neutron.common.exceptions.
+  - Reinstate ability to take file path as command line parameter.
+  - Markups to config file specification - tidy exception handling
+  - Wording tweaks based on previous version of config documentation.
+
 * Mon Apr 27 2015 Neil Jerram <neil@projectcalico.org> 0.17
 - Bug fixes and improvements to Calico components
   - Clean up config loading (code review markups).
