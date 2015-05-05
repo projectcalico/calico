@@ -102,6 +102,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.debug("Not a VM port: %s" % port)
         return False
 
+    # For network and subnet actions we have nothing to do, so we provide these
+    # no-op methods.
     def create_network_postcommit(self, context):
         LOG.info("CREATE_NETWORK_POSTCOMMIT: %s" % context)
 
@@ -119,15 +121,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def delete_subnet_postcommit(self, context):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
-
-    def add_port_gateways(self, port, context):
-        assert self.db
-        for ip in port['fixed_ips']:
-            subnet = self.db.get_subnet(context, ip['subnet_id'])
-            ip['gateway'] = subnet['gateway_ip']
-
-    def add_port_interface_name(self, port):
-        port['interface_name'] = 'tap' + port['id'][:11]
 
     def create_port_postcommit(self, context):
         LOG.info("CREATE_PORT_POSTCOMMIT: %s" % context)
@@ -194,6 +187,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if self._port_is_endpoint_port(port):
             LOG.info("Deleted port: %s" % port)
             self.transport.endpoint_deleted(port)
+
+    def add_port_gateways(self, port, context):
+        assert self.db
+        for ip in port['fixed_ips']:
+            subnet = self.db.get_subnet(context, ip['subnet_id'])
+            ip['gateway'] = subnet['gateway_ip']
+
+    def add_port_interface_name(self, port):
+        port['interface_name'] = 'tap' + port['id'][:11]
 
     def send_sg_updates(self, sgids, db_context):
         for sgid in sgids:
