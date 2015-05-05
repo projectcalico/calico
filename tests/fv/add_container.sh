@@ -5,7 +5,7 @@ set -x
 show_commands() {
 dist/calicoctl status
 dist/calicoctl shownodes --detailed
-dist/calicoctl ipv4 pool show
+dist/calicoctl pool show
 dist/calicoctl profile show --detailed
 }
 

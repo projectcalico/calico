@@ -57,11 +57,11 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl (ipv4|ipv6) pool (add|remove) <CIDR>
-  calicoctl (ipv4|ipv6) pool show
-  calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
-  calicoctl (ipv4|ipv6) bgppeer rr show
-  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP> [--interface=<INTERFACE>]
+  calicoctl pool (add|remove) <CIDR>
+  calicoctl pool show [--ipv4 | --ipv6]
+  calicoctl bgppeer rr (add|remove) <IP>
+  calicoctl bgppeer rr show [--ipv4 | --ipv6]
+  calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -77,12 +77,13 @@ Options:
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
+ --ipv4                   Show IPv4 information only.
+ --ipv6                   Show IPv6 information only.
 
 
 
 ```
 
 ## Can a guest container have multiple networked IP addresses?
-Yes, using the calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP>
-command.
+Yes, using the `calicoctl container <CONTAINER> ip (add|remove) <IP>` command.
 

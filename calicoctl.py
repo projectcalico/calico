@@ -17,11 +17,11 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl (ipv4|ipv6) pool (add|remove) <CIDR>
-  calicoctl (ipv4|ipv6) pool show
-  calicoctl (ipv4|ipv6) bgppeer rr (add|remove) <IP>
-  calicoctl (ipv4|ipv6) bgppeer rr show
-  calicoctl (ipv4|ipv6) container <CONTAINER> (add|remove) <IP> [--interface=<INTERFACE>]
+  calicoctl pool (add|remove) <CIDR>
+  calicoctl pool show [--ipv4 | --ipv6]
+  calicoctl bgppeer rr (add|remove) <IP>
+  calicoctl bgppeer rr show [--ipv4 | --ipv6]
+  calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
@@ -37,6 +37,8 @@ Options:
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
                           [default: calico/node:latest]
+ --ipv4                   Show IPv4 information only.
+ --ipv6                   Show IPv6 information only.
 """
 import socket
 from subprocess import CalledProcessError
@@ -263,8 +265,10 @@ def node_stop(force):
         print "Current host has active endpoints so can't be stopped." + \
               " Force with --force"
 
+
 def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
+
 
 def node(ip, node_image, ip6=""):
     # modprobe and sysctl require root privileges.
@@ -703,7 +707,6 @@ def ip_pool_add(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
-    assert version in ("v4", "v6")
     pool = check_ip_version(cidr_pool, version, IPNetwork)
     client.add_ip_pool(version, pool)
 
@@ -716,7 +719,6 @@ def ip_pool_remove(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
-    assert version in ("v4", "v6")
     pool = check_ip_version(cidr_pool, version, IPNetwork)
     try:
         client.remove_ip_pool(version, pool)
@@ -729,11 +731,12 @@ def ip_pool_show(version):
     Print a list of IP allocation pools.
     :return: None
     """
+    assert version in ("v4", "v6")
     pools = client.get_ip_pools(version)
-    x = PrettyTable(["CIDR"])
+    x = PrettyTable(["IP%s CIDR" % version])
     for pool in pools:
         x.add_row([pool])
-    print x
+    print str(x) + "\n"
 
 
 def restart_docker_with_alternative_unix_socket():
@@ -757,26 +760,6 @@ def restart_docker_without_alternative_unix_socket():
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
-def validate_arguments():
-    profile_ok = (arguments["<PROFILE>"] is None or
-                  re.match("^\w{1,30}$", arguments["<PROFILE>"]))
-    tag_ok = (arguments["<TAG>"] is None or
-              re.match("^\w+$", arguments["<TAG>"]))
-    ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(
-        arguments["--ip"]) or netaddr.valid_ipv6(arguments["--ip"])
-    container_ip_ok = arguments["<IP>"] is None or netaddr.valid_ipv4(
-        arguments["<IP>"]) or netaddr.valid_ipv6(arguments["<IP>"])
-
-    if not profile_ok:
-        print "Profile names must be <30 character long and can only contain " \
-              "numbers, letters and underscore."
-    if not tag_ok:
-        print "Tags names can only container numbers, letters and underscore."
-    if not ip_ok:
-        print "Invalid ip argument"
-    return profile_ok and ip_ok and container_ip_ok and tag_ok
-
-
 def bgppeer_add(ip, version):
     """
     Add the the given IP to the list of BGP Peers
@@ -797,6 +780,7 @@ def check_ip_version(ip, version, cls):
     :param cls: The type of IP object (IPAddress or IPNetwork)
     :return: The parsed object of type "type"
     """
+    assert version in ("v4", "v6")
     try:
         parsed = cls(ip)
     except AddrFormatError:
@@ -828,15 +812,17 @@ def bgppeer_show(version):
     """
     Print a list BGP Peers
     """
+    assert version in ("v4", "v6")
     peers = client.get_bgp_peers(version)
     if peers:
-        x = PrettyTable(["BGP Peer"], sortby="BGP Peer")
+        heading = "IP%s BGP Peer" % version
+        x = PrettyTable([heading], sortby=heading)
         for peer in peers:
             x.add_row([peer])
         x.align = "l"
-        print x
+        print str(x) + "\n"
     else:
-        print "No BGP Peers defined."
+        print "No IP%s BGP Peers defined.\n" % version
 
 
 def container_ip_add(container_name, ip, version, interface):
@@ -912,6 +898,7 @@ def container_ip_add(container_name, ip, version, interface):
 
     print "IP %s added to %s" % (ip, container_name)
 
+
 def container_ip_remove(container_name, ip, version, interface):
     """
     Add an IP address to an existing Calico networked container.
@@ -979,88 +966,152 @@ def container_ip_remove(container_name, ip, version, interface):
     print "IP %s removed from %s" % (ip, container_name)
 
 
+def validate_arguments():
+    """
+    Validate common argument values.
+    """
+    profile_ok = (arguments["<PROFILE>"] is None or
+                  re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+    tag_ok = (arguments["<TAG>"] is None or
+              re.match("^\w+$", arguments["<TAG>"]))
+    ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
+    ip6_ok = arguments["--ip6"] is None or \
+             netaddr.valid_ipv6(arguments["--ip6"])
+    container_ip_ok = arguments["<IP>"] is None or \
+                      netaddr.valid_ipv4(arguments["<IP>"]) or \
+                      netaddr.valid_ipv6(arguments["<IP>"])
+    cidr_ok = True
+    if arguments["<CIDR>"]:
+        try:
+            IPNetwork(arguments["<CIDR>"])
+        except AddrFormatError:
+            cidr_ok = False
+
+    if not profile_ok:
+        print "Profile names must be <30 character long and can only " \
+              "contain numbers, letters and underscores."
+    if not tag_ok:
+        print "Tags names can only container numbers, letters and underscores."
+    if not ip_ok:
+        print "Invalid IPv4 address specified with --ip argument."
+    if not ip6_ok:
+        print "Invalid IPv6 address specified with --ip6 argument."
+    if not container_ip_ok:
+        print "Invalid IP address specified."
+    if not cidr_ok:
+        print "Invalid CIDR specified."
+
+    if not (profile_ok and ip_ok and ip6_ok and tag_ok and
+                container_ip_ok and cidr_ok):
+        sys.exit(1)
+
+
+def get_container_ipv_from_arguments():
+    """
+    Determine the container IP version from the arguments.
+    :return: The IP version.  One of "v4", "v6" or None.
+    """
+    version = None
+    if arguments["--ipv4"]:
+        version = "v4"
+    elif arguments["--ipv6"]:
+        version = "v6"
+    elif arguments["<IP>"]:
+        version = "v%s" % IPAddress(arguments["<IP>"]).version
+    elif arguments["<CIDR>"]:
+        version = "v%s" % IPNetwork(arguments["<CIDR>"]).version
+    return version
+
+
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-    if validate_arguments():
-        if arguments["restart-docker-with-alternative-unix-socket"]:
-            restart_docker_with_alternative_unix_socket()
-        elif arguments["restart-docker-without-alternative-unix-socket"]:
-            restart_docker_without_alternative_unix_socket()
-        elif arguments["node"]:
-            if arguments["stop"]:
-                node_stop(arguments["--force"])
-            else:
-                node_image = arguments['--node-image']
-                ip6 = arguments["--ip6"]
-                node(arguments["--ip"],
-                     node_image=node_image,
-                     ip6=ip6)
-        elif arguments["status"]:
-            status()
-        elif arguments["reset"]:
-            reset()
-        elif arguments["profile"]:
-            if arguments["tag"]:
-                if arguments["show"]:
-                    profile_tag_show(arguments["<PROFILE>"])
-                elif arguments["add"]:
-                    profile_tag_add(arguments["<PROFILE>"],
-                                    arguments["<TAG>"])
-                elif arguments["remove"]:
-                    profile_tag_remove(arguments["<PROFILE>"],
-                                       arguments["<TAG>"])
-            elif arguments["member"]:
-                profile_add_container(arguments["<CONTAINER>"],
-                                      arguments["<PROFILE>"])
-            elif arguments["rule"]:
-                if arguments["show"]:
-                    profile_rule_show(arguments["<PROFILE>"],
-                                      human_readable=True)
-                elif arguments["json"]:
-                    profile_rule_show(arguments["<PROFILE>"],
-                                      human_readable=False)
-                elif arguments["update"]:
-                    profile_rule_update(arguments["<PROFILE>"])
+
+    validate_arguments()
+    ip_version = get_container_ipv_from_arguments()
+
+    if arguments["restart-docker-with-alternative-unix-socket"]:
+        restart_docker_with_alternative_unix_socket()
+    elif arguments["restart-docker-without-alternative-unix-socket"]:
+        restart_docker_without_alternative_unix_socket()
+    elif arguments["node"]:
+        if arguments["stop"]:
+            node_stop(arguments["--force"])
+        else:
+            node_image = arguments['--node-image']
+            ip6 = arguments["--ip6"]
+            node(arguments["--ip"],
+                 node_image=node_image,
+                 ip6=ip6)
+    elif arguments["status"]:
+        status()
+    elif arguments["reset"]:
+        reset()
+    elif arguments["profile"]:
+        if arguments["tag"]:
+            if arguments["show"]:
+                profile_tag_show(arguments["<PROFILE>"])
             elif arguments["add"]:
-                profile_add(arguments["<PROFILE>"])
+                profile_tag_add(arguments["<PROFILE>"],
+                                arguments["<TAG>"])
             elif arguments["remove"]:
-                profile_remove(arguments["<PROFILE>"])
-            elif arguments["show"]:
-                profile_show(arguments["--detailed"])
-        elif arguments["diags"]:
-            save_diags()
-        elif arguments["shownodes"]:
-            node_show(arguments["--detailed"])
-        elif arguments["ipv4"] or arguments["ipv6"]:
-            if arguments["ipv4"]:
-                version = "v4"
-            elif arguments["ipv6"]:
-                version = "v6"
-            if arguments["pool"]:
-                if arguments["add"]:
-                    ip_pool_add(arguments["<CIDR>"], version)
-                elif arguments["remove"]:
-                    ip_pool_remove(arguments["<CIDR>"], version)
-                elif arguments["show"]:
-                    ip_pool_show(version)
-            elif arguments["bgppeer"] and arguments["rr"]:
-                if arguments["add"]:
-                    bgppeer_add(arguments["<IP>"], version)
-                elif arguments["remove"]:
-                    bgppeer_remove(arguments["<IP>"], version)
-                elif arguments["show"]:
-                    bgppeer_show(version)
-            elif arguments["container"]:
-                if arguments["add"]:
-                    container_ip_add(arguments["<CONTAINER>"],
-                                     arguments["<IP>"],
-                                     version,
-                                     arguments["--interface"])
-                elif arguments["remove"]:
-                    container_ip_remove(arguments["<CONTAINER>"],
-                                        arguments["<IP>"],
-                                        version,
-                                        arguments["--interface"])
+                profile_tag_remove(arguments["<PROFILE>"],
+                                   arguments["<TAG>"])
+        elif arguments["member"]:
+            profile_add_container(arguments["<CONTAINER>"],
+                                  arguments["<PROFILE>"])
+        elif arguments["rule"]:
+            if arguments["show"]:
+                profile_rule_show(arguments["<PROFILE>"],
+                                  human_readable=True)
+            elif arguments["json"]:
+                profile_rule_show(arguments["<PROFILE>"],
+                                  human_readable=False)
+            elif arguments["update"]:
+                profile_rule_update(arguments["<PROFILE>"])
+        elif arguments["add"]:
+            profile_add(arguments["<PROFILE>"])
+        elif arguments["remove"]:
+            profile_remove(arguments["<PROFILE>"])
+        elif arguments["show"]:
+            profile_show(arguments["--detailed"])
+    elif arguments["diags"]:
+        save_diags()
+    elif arguments["shownodes"]:
+        node_show(arguments["--detailed"])
+    elif arguments["pool"]:
+        if arguments["add"]:
+            ip_pool_add(arguments["<CIDR>"], ip_version)
+        elif arguments["remove"]:
+            ip_pool_remove(arguments["<CIDR>"], ip_version)
+        elif arguments["show"]:
+            if not ip_version:
+                ip_pool_show("v4")
+                ip_pool_show("v6")
+            else:
+                ip_pool_show(ip_version)
+    elif arguments["bgppeer"] and arguments["rr"]:
+        if arguments["add"]:
+            bgppeer_add(arguments["<IP>"], ip_version)
+        elif arguments["remove"]:
+            bgppeer_remove(arguments["<IP>"], ip_version)
+        elif arguments["show"]:
+            if not ip_version:
+                bgppeer_show("v4")
+                bgppeer_show("v6")
+            else:
+                bgppeer_show(ip_version)
+    elif arguments["container"]:
+        if arguments["ip"]:
+            if arguments["add"]:
+                container_ip_add(arguments["<CONTAINER>"],
+                                 arguments["<IP>"],
+                                 ip_version,
+                                 arguments["--interface"])
+            elif arguments["remove"]:
+                container_ip_remove(arguments["<CONTAINER>"],
+                                    arguments["<IP>"],
+                                    ip_version,
+                                    arguments["--interface"])
         elif arguments["container"]:
             if arguments["add"]:
                 container_add(arguments["<CONTAINER>"],
@@ -1068,6 +1119,3 @@ if __name__ == '__main__':
                               arguments["--interface"])
             if arguments["remove"]:
                 container_remove(arguments["<CONTAINER>"])
-    else:
-        print "Couldn't validate arguments. Exiting."
-        sys.exit(1)

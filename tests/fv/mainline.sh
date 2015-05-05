@@ -6,7 +6,7 @@ set -x
 show_commands() {
 dist/calicoctl status
 dist/calicoctl shownodes --detailed
-dist/calicoctl ipv4 pool show
+dist/calicoctl pool show
 dist/calicoctl profile show --detailed
 }
 
@@ -77,7 +77,7 @@ dist/calicoctl container remove node1
 dist/calicoctl container remove node2
 show_commands
 
-dist/calicoctl ipv4 pool remove 192.168.0.0/16
+dist/calicoctl pool remove 192.168.0.0/16
 show_commands
 
 export DOCKER_HOST=
