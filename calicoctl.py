@@ -707,7 +707,6 @@ def ip_pool_add(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
-    assert version in ("v4", "v6")
     pool = check_ip_version(cidr_pool, version, IPNetwork)
     client.add_ip_pool(version, pool)
 
@@ -720,7 +719,6 @@ def ip_pool_remove(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
-    assert version in ("v4", "v6")
     pool = check_ip_version(cidr_pool, version, IPNetwork)
     try:
         client.remove_ip_pool(version, pool)
@@ -733,11 +731,12 @@ def ip_pool_show(version):
     Print a list of IP allocation pools.
     :return: None
     """
+    assert version in ("v4", "v6")
     pools = client.get_ip_pools(version)
-    x = PrettyTable(["CIDR"])
+    x = PrettyTable(["IP%s CIDR" % version])
     for pool in pools:
         x.add_row([pool])
-    print x
+    print str(x) + "\n"
 
 
 def restart_docker_with_alternative_unix_socket():
@@ -781,6 +780,7 @@ def check_ip_version(ip, version, cls):
     :param cls: The type of IP object (IPAddress or IPNetwork)
     :return: The parsed object of type "type"
     """
+    assert version in ("v4", "v6")
     try:
         parsed = cls(ip)
     except AddrFormatError:
@@ -812,15 +812,17 @@ def bgppeer_show(version):
     """
     Print a list BGP Peers
     """
+    assert version in ("v4", "v6")
     peers = client.get_bgp_peers(version)
     if peers:
-        x = PrettyTable(["BGP Peer"], sortby="BGP Peer")
+        heading = "IP%s BGP Peer" % version
+        x = PrettyTable([heading], sortby=heading)
         for peer in peers:
             x.add_row([peer])
         x.align = "l"
-        print x
+        print str(x) + "\n"
     else:
-        print "No BGP Peers defined."
+        print "No IP%s BGP Peers defined.\n" % version
 
 
 def container_ip_add(container_name, ip, version, interface):
@@ -1011,9 +1013,9 @@ def get_container_ipv_from_arguments():
     """
     version = None
     if arguments["--ipv4"]:
-        version = "v6"
-    elif arguments["--ipv6"]:
         version = "v4"
+    elif arguments["--ipv6"]:
+        version = "v6"
     elif arguments["<IP>"]:
         version = "v%s" % IPAddress(arguments["<IP>"]).version
     elif arguments["<CIDR>"]:
