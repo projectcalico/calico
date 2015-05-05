@@ -95,46 +95,74 @@ class AdapterResource(resource.Resource):
 
     def _handle_pre_hook(self, request, request_content):
         _log.info("Handling pre-hook")
-        client_request = request_content["ClientRequest"]
 
-        if _calico_ip_in_request(client_request):
-            # Calico IP was defined in the request, so override the net portion
-            # of the HostConfig
-            _client_request_net_none(client_request)
+        # Exceptions hang the Reactor, so ensure we handle all exceptions.
+        client_request = {}
+        try:
+            client_request = request_content["ClientRequest"]
 
-        return json.dumps({"PowerstripProtocolVersion": 1,
-                           "ModifiedClientRequest": client_request})
+            if _calico_ip_in_request(client_request):
+                # Calico IP was defined in the request, so override the net
+                # portion of the HostConfig
+                _client_request_net_none(client_request)
+        except BaseException:
+            _log.exception("Unexpected error handling pre-hook")
+        finally:
+            return json.dumps({"PowerstripProtocolVersion": 1,
+                               "ModifiedClientRequest": client_request})
 
     def _handle_post_hook(self, request, request_content):
         _log.debug("Post-hook response: %s", request_content)
 
-        # Extract ip, profile, master, docker_options
-        client_request = request_content["ClientRequest"]
-        server_response = request_content["ServerResponse"]
+        # Exceptions hang the Reactor, so ensure we handle all exceptions.
+        server_response = {}
+        try:
+            # Extract ip, profile, master, docker_options
+            client_request = request_content["ClientRequest"]
+            server_response = request_content["ServerResponse"]
 
-        # Only one action at this point, so just plumb directly.
-        self._install_endpoint(client_request)
+            request_uri = client_request['Request']
+            request_path = request_uri.split('/')
 
-        return json.dumps({"PowerstripProtocolVersion": 1,
-                           "ModifiedServerResponse": server_response})
+            # Extract the container ID and request type.
+            # TODO better URI parsing
+            (_, version, ptype, cid, ctype) = request_uri.split("/", 4)
+            _log.info("Request parameters: version:%s; ptype:%s;"
+                      "cid:%s; ctype:%s",
+                      version, ptype, cid, ctype)
 
-    def _install_endpoint(self, client_request):
+            if ptype == u'containers':
+                if ctype == u'start':
+                    # /version/containers/id/start
+                    _log.debug('Intercepted container start request')
+                    self._install_endpoint(client_request, cid)
+                elif ctype== 'json':
+                    # /version/containers/*/json
+                    _log.debug('Intercepted container json request')
+                    self._update_container_info(cid, server_response)
+                else:
+                    _log.debug('Unrecognized path: %s', request_path)
+        except BaseException:
+            _log.exception('Unexpected error handling post-hook.')
+        finally:
+            output = json.dumps({
+                "PowerstripProtocolVersion": 1,
+                "ModifiedServerResponse": server_response
+            })
+            _log.debug("Returning output:\n%s", output)
+            return output
+
+    def _install_endpoint(self, client_request, cid):
         """
         Install a Calico endpoint (veth) in the container referenced in the
         client request object.
-        :param client_request: Powerstrip ClientRequest object as dictionary
-        from JSON.
+-       :param client_request: Powerstrip ClientRequest object as dictionary
+                               from JSON.
+        :param cid: The ID of the container to install an endpoint in.
         :returns: None
         """
         try:
-            uri = client_request["Request"]
-            _log.info("Intercepted %s, starting network.", uri)
-
-            # Get the container ID
-            # TODO better URI parsing
-            # /*/containers/*/start
-            (_, version, _, cid, _) = uri.split("/", 4)
-            _log.debug("cid %s", cid)
+            _log.debug("Installing endpoint for cid %s", cid)
 
             # Grab the running pid from Docker
             cont = self.docker.inspect_container(cid)
@@ -148,7 +176,6 @@ class AdapterResource(resource.Resource):
             env_dict = env_to_dictionary(env_list)
             ip_str = env_dict[ENV_IP]
             profile = env_dict.get(ENV_PROFILE, None)
-
         except KeyError as e:
             # This error is benign for missing ENV_IP, since it means not to
             # set up Calico networking for this container.
@@ -199,6 +226,55 @@ class AdapterResource(resource.Resource):
         _log.info("Finished network for container %s, IP=%s", cid, ip)
 
         return
+
+    def _update_container_info(self, cid_or_name, server_response):
+        """
+        Update the response for a */container/*/json (docker inspect) request.
+
+        Since we've patched the docker networking using --net=none,
+        docker inspect calls will not return any IP information. This is
+        required for some orchestrators (such as Kubernetes).
+
+        Insert the IP for this container into the config dict.
+
+        :param str cid_or_name: The name or ID of the container to update.
+        :param dict server_response: The response from the Docker API, to be
+                                     be updated.
+        """
+        _log.debug('Getting container config from etcd')
+
+        try:
+            cont = self.docker.inspect_container(cid_or_name)
+            _log.debug("Container info: %s", cont)
+            cid = cont["Id"]
+            _log.debug("Container ID: %s", cid)
+
+            # Get a single endpoint ID from the container, and use this to
+            # get the Endpoint.
+            ep_id = self.datastore.get_ep_id_from_cont(hostname, cid)
+            ep = self.datastore.get_endpoint(hostname, cid, ep_id)
+        except KeyError:
+            _log.info('No workload found for container %s, '
+                      'returning request unmodified.', cid)
+            return
+
+        _log.debug('Pre-load body:\n%s', server_response["Body"])
+
+        # Tweak the contents of the NetworkSettings dictionary in the request
+        # body.  We use an arbitrary IPv4 / IPv6 network to fill in the IP
+        # information since the dictionary only allows a single value for each.
+        body = json.loads(server_response["Body"])
+        net_settings = body['NetworkSettings']
+        if len(ep.ipv4_nets):
+            ipv4_network = next(iter(ep.ipv4_nets))
+            net_settings['IPAddress'] = str(ipv4_network.ip)
+        if len(ep.ipv6_nets):
+            ipv6_network = next(iter(ep.ipv6_nets))
+            net_settings['GlobalIPv6Address'] = str(ipv6_network.ip)
+        net_settings["MacAddress"] = str(ep.mac)
+        server_response['Body'] = json.dumps(body, separators=(',', ':'))
+
+        _log.debug('Post-load body:\n%s', server_response["Body"])
 
     def assign_ipv4(self):
         """
