@@ -25,6 +25,7 @@
 # TODO: Update reference to new etcd architecture document
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
+from collections import namedtuple
 
 # OpenStack imports.
 from neutron.common import constants
@@ -43,6 +44,12 @@ LOG = log.getLogger(__name__)
 # An OpenStack agent type name for Felix, the Calico agent component in the new
 # architecture.
 AGENT_TYPE_FELIX = 'Felix (Calico agent)'
+
+
+# A single security profile.
+SecurityProfile = namedtuple(
+    'SecurityProfile', ['id', 'inbound_rules', 'outbound_rules']
+)
 
 
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
@@ -154,7 +161,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Next, we need to work out what security profile applies to this
             # port and grab information about it. This is a fairly expensive
             # operation, but we need to do it to guarantee our sanity.
-            # TODO: This method doesn't exist yet!
             profile = self.get_security_profile(context, port)
 
             # Pass this to the transport layer.
@@ -303,6 +309,40 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             subnet = self.db.get_subnet(context, ip['subnet_id'])
             ip['gateway'] = subnet['gateway_ip']
 
+    def get_security_profile(self, context, port):
+        """
+        Obtain information about the security profile that applies to a given
+        port.
+
+        This method expects to be called from within a database transaction,
+        and does not create its own.
+
+        :returns: A ``SecurityProfile`` object.
+        """
+        # First, work out the profile ID.
+        profile_id = port_profile_id(port)
+
+        # Next, for each security group get its rules. Given that we don't need
+        # anything else about the security group, we can do this as a single
+        # query.
+        # CB2: I am concerned that this does not adequately prevent new
+        # security group rules being added and racing us in.
+        rules = self.db.get_security_group_rules(
+            context, filters={'security_group_id': port['security_groups']}
+        )
+
+        # Split the rules based on direction.
+        inbound_rules = []
+        outbound_rules = []
+
+        for rule in rules:
+            if rule['direction'] == 'ingress':
+                inbound_rules.append(rule)
+            else:
+                outbound_rules.append(rule)
+
+        return SecurityProfile(profile_id, inbound_rules, outbound_rules)
+
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
 
@@ -409,3 +449,10 @@ class CalicoNotifierProxy(object):
         LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
         self.calico_driver.send_sg_updates(sgids, context)
         self.ml2_notifier.security_groups_member_updated(context, sgids)
+
+
+def port_profile_id(port):
+    """
+    Returns the security profile ID for a given port.
+    """
+    return '_'.join(port['security_groups'])
