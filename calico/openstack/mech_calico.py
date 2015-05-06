@@ -257,7 +257,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(port['id'])
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
-            self.transport.endpoint_created(port)
+            profile = self.get_security_profile(context, port)
+            self.transport.endpoint_created(port, profile)
 
     def _icehouse_migration_step(self, context, port, original):
         """
@@ -273,7 +274,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.transport.endpoint_deleted(original)
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
-            self.transport.endpoint_created(port)
+            profile = self.get_security_profile(context, port)
+            self.transport.endpoint_created(port, profile)
 
     def _update_port(self, context, port):
         """
@@ -286,7 +288,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(port['id'])
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
-            self.transport.endpoint_created(port)
+            profile = profile = self.get_security_profile(context, port)
+            self.transport.endpoint_created(port, profile)
 
     def add_port_gateways(self, port, context):
         """
