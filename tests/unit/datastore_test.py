@@ -193,7 +193,7 @@ class TestEndpoint(unittest.TestCase):
 
     def test_operators(self):
         """
-        Test Enpoint operators __eq__, __ne__ and copy.
+        Test Endpoint operators __eq__, __ne__ and copy.
         """
         endpoint1 = Endpoint("aabbccddeeff112233",
                              "active",
