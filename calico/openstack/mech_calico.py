@@ -290,7 +290,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.transport.endpoint_created(port)
 
     def add_port_gateways(self, port, context):
-        assert self.db
+        """
+        Determine the gateway IP addresses for a given port's IP addresses, and
+        adds them to the port dict.
+
+        This method assumes it's being called from within a database
+        transaction and does not take out another one.
+        """
         for ip in port['fixed_ips']:
             subnet = self.db.get_subnet(context, ip['subnet_id'])
             ip['gateway'] = subnet['gateway_ip']
@@ -339,15 +345,23 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Return those (augmented) security groups.
         return sgs
 
-    def _get_members(self, sg, db_context):
+    def _get_members(self, sg, context):
+        """
+        Get the endpoint members of the given security group.
+
+        This method will lock a large number of database rows, be warned.
+        """
+        # TODO: Can we refactor this to do a single database query for the
+        # ports? Otherwise, the cost of this method is O(n) in Python code,
+        # which is far worse than whatever the SQL database could do.
         filters = {'security_group_id': [sg['id']]}
-        bindings = self.db._get_port_security_group_bindings(db_context,
+        bindings = self.db._get_port_security_group_bindings(context,
                                                              filters)
         endpoints = {}
         for binding in bindings:
             port_id = binding['port_id']
             try:
-                port = self.db.get_port(db_context, port_id)
+                port = self.db.get_port(context, port_id)
                 endpoints[port_id] = [ip['ip_address'] for
                                           ip in port['fixed_ips']]
             except PortNotFound:
