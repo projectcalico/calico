@@ -187,7 +187,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         # Fork execution based on the type of update we're performing.
-        # TODO: Write these methods!
         if port['binding:vif_type'] == 'unbound':
             self._first_migration_step(context, original)
         elif original['binding:vif_type'] == 'unbound':
