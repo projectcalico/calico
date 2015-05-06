@@ -46,6 +46,7 @@ import re
 import socket
 from subprocess import CalledProcessError
 import sys
+import textwrap
 import time
 import traceback
 
@@ -65,7 +66,8 @@ from node.adapter.datastore import (ETCD_AUTHORITY_ENV,
 from node.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from node.adapter.ipam import IPAMClient
 from node.adapter import netns, docker_restart
-
+from requests.exceptions import ConnectionError
+from requests.packages.urllib3.exceptions import ProtocolError
 
 hostname = socket.gethostname()
 client = IPAMClient()
@@ -83,6 +85,7 @@ except sh.CommandNotFound as e:
     
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
+POWERSTRIP_PORT = "2377"
 
 class ConfigError(Exception):
     pass
@@ -376,9 +379,8 @@ def node(ip, node_image, ip6=""):
         gid = os.stat(REAL_SOCK).st_gid
         os.chown(POWERSTRIP_SOCK, uid, gid)
     else:
-        powerstrip_port = "2377"
-        print "Docker Remote API is on port %s.  Run \n" % powerstrip_port
-        print "export DOCKER_HOST=localhost:%s\n" % powerstrip_port
+        print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
+        print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
         print "before using `docker run` for Calico networking.\n"
 
     print "Calico node is running with id: %s" % cid
@@ -471,8 +473,13 @@ def profile_add_container(container_name, profile_name):
         print "Profile with name %s was not found." % profile_name
         sys.exit(1)
 
-    client.add_workload_to_profile(hostname, profile_name, container_id)
-    print "Added %s to %s" % (container_name, profile_name)
+    try:
+        client.add_workload_to_profile(hostname, profile_name, container_id)
+        print "Added %s to %s" % (container_name, profile_name)
+    except KeyError:
+        print "Failed to add container to profile.\n"
+        print_container_not_in_calico_msg(container_name)
+        sys.exit(1)
 
 
 def profile_remove(profile_name):
@@ -872,8 +879,8 @@ def container_ip_add(container_name, ip, version, interface):
         endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
         endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
     except KeyError:
-        print "Container is unknown to Calico. Tell Calico about the " \
-              "container before adding addresses using calicoctl container add"
+        print "Failed to add IP address to container.\n"
+        print_container_not_in_calico_msg(container_name)
         sys.exit(1)
 
     # From here, this method starts having side effects. If something
@@ -1004,8 +1011,8 @@ def validate_arguments():
             cidr_ok = False
 
     if not profile_ok:
-        print "Profile names must be <30 character long and can only " \
-              "contain numbers, letters and underscores."
+        print_paragraph("Profile names must be <30 character long and can "
+                        "only contain numbers, letters and underscores.")
     if not tag_ok:
         print "Tags names can only container numbers, letters and underscores."
     if not ip_ok:
@@ -1037,6 +1044,59 @@ def get_container_ipv_from_arguments():
     elif arguments["<CIDR>"]:
         version = "v%s" % IPNetwork(arguments["<CIDR>"]).version
     return version
+
+
+def get_socket_errno_from_connection_error(conn_error):
+    """
+    Determine the socker error from the supplied connection error.
+    :param conn_error: A requests.exceptions.ConnectionError instance
+    :return: The socket error code.
+    """
+    # Grab the ProtocolError from the ConnectionError arguments.
+    pe = None
+    for arg in conn_error.args:
+        if isinstance(arg, ProtocolError):
+            pe = arg
+            break
+    if not pe:
+        return None
+
+    # Grab the socket error from the ProtocolError arguments.
+    se = None
+    for arg in pe.args:
+        if isinstance(arg, socket.error):
+            se = arg
+            break
+    if not se:
+        return None
+
+    return se.errno
+
+
+def print_container_not_in_calico_msg(container_name):
+    """
+    Display message indicating that the supplied container is not known to
+    Calico.
+    :param container_name: The container name.
+    :return: None.
+    """
+    print_paragraph("Container %s is unknown to Calico.  This can occur if "
+                    "the container was created without setting the powerstrip "
+                    "port (%s) either in the DOCKER_HOST environment variable "
+                    "or using the -H flag on the `docker` command." %
+                    (container_name, POWERSTRIP_PORT))
+    print_paragraph("Use `calicoctl container add` to add the container "
+                    "to the Calico network.")
+
+
+def print_paragraph(msg):
+    """
+    Print a fixed width (80 chars) paragraph of text.
+    :param msg: The msg to print.
+    :return: None.
+    """
+    print "\n".join(textwrap.wrap(msg, width=80))
+    print
 
 
 if __name__ == '__main__':
@@ -1136,12 +1196,29 @@ if __name__ == '__main__':
                                   arguments["--interface"])
                 if arguments["remove"]:
                     container_remove(arguments["<CONTAINER>"])
+    except SystemExit:
+        raise
+    except ConnectionError as e:
+        # We hit a "Permission denied error (13) if the docker daemon does not
+        # have sudo permissions
+        errno = get_socket_errno_from_connection_error(e)
+        if errno == 13:
+            print_paragraph("Unable to run command.  Re-run the "
+                            "command as root, or configure the docker group "
+                            "to run with sudo privileges (see docker "
+                            "installation guide for details).")
+        else:
+            print_paragraph("Unable to run docker commands. Is the docker "
+                            "daemon running?")
+        sys.exit(1)
     except EtcdException as e:
-        print "Error accessing etcd (%s)." % e.message
-        print "Is etcd running?"
+        print_paragraph("Error accessing etcd (%s).  Is etcd running?" %
+                          e.message)
         sys.exit(1)
     except BaseException as e:
         print "Unexpected error executing command.\n"
         traceback.print_exc()
+        print dir(e)
+        print e.__module__ + "." + e.__class__.__name__
         sys.exit(1)
 

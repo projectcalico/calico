@@ -90,3 +90,5 @@ run_test "auto" "auto"
 
 # Run the test using hard coded IPV4 assignments
 run_test "192.168.1.1" "192.168.1.2"
+
+echo "Tests completed successfully"

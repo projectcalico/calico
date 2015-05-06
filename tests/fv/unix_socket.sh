@@ -37,4 +37,4 @@ echo "Waiting for powerstrip to come up"
   sleep 1
 done
 
-echo "All passed"
+echo "Tests completed successfully"

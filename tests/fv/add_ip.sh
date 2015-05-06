@@ -50,12 +50,12 @@ $CALICO container node1 ip remove 192.168.2.1
 $CALICO container node2 ip remove 192.168.2.2 --interface=hello
 docker exec node1 ping 192.168.1.2 -c 1
 docker exec node2 ping 192.168.1.1 -c 1
-! docker exec node1 ping 192.168.2.2 -c 1 -W 1
-! docker exec node2 ping 192.168.2.1 -c 1 -W 1
+(! docker exec node1 ping 192.168.2.2 -c 1 -W 1)
+(! docker exec node2 ping 192.168.2.1 -c 1 -W 1)
 docker exec node2 ping 192.168.3.1 -c 1
 $CALICO shownodes --detailed
 
 # Check that we can't remove addresses twice
-! $CALICO container node1 ip remove 192.168.2.1
+(! $CALICO container node1 ip remove 192.168.2.1)
 
 echo "Tests completed successfully"
