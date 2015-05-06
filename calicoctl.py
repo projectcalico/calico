@@ -1136,9 +1136,6 @@ if __name__ == '__main__':
                                   arguments["--interface"])
                 if arguments["remove"]:
                     container_remove(arguments["<CONTAINER>"])
-    except KeyboardInterrupt:
-        print "\nCommand interrupted, may be partially complete."
-        sys.exit(130)
     except EtcdException as e:
         print "Error accessing etcd (%s)." % e.message
         print "Is etcd running?"
