@@ -40,19 +40,21 @@ Options:
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
 """
+import json
+import os
+import re
 import socket
 from subprocess import CalledProcessError
 import sys
 import time
-import os
-import re
-import json
+import traceback
 
 import netaddr
 from docopt import docopt
 import sh
 import docker
 import docker.utils
+from etcd import EtcdException
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
@@ -649,6 +651,9 @@ def save_diags():
     Gather Calico diagnostics for bug reporting.
     :return: None
     """
+    # This needs to be run as root.
+    enforce_root()
+
     script = """
 #!/bin/bash
 [ -z $BASH ] && echo "You must run this script in bash" && exit 1
@@ -1040,93 +1045,106 @@ if __name__ == '__main__':
     validate_arguments()
     ip_version = get_container_ipv_from_arguments()
 
-    if arguments["restart-docker-with-alternative-unix-socket"]:
-        restart_docker_with_alternative_unix_socket()
-    elif arguments["restart-docker-without-alternative-unix-socket"]:
-        restart_docker_without_alternative_unix_socket()
-    elif arguments["node"]:
-        if arguments["stop"]:
-            node_stop(arguments["--force"])
-        else:
-            node_image = arguments['--node-image']
-            ip6 = arguments["--ip6"]
-            node(arguments["--ip"],
-                 node_image=node_image,
-                 ip6=ip6)
-    elif arguments["status"]:
-        status()
-    elif arguments["reset"]:
-        reset()
-    elif arguments["profile"]:
-        if arguments["tag"]:
-            if arguments["show"]:
-                profile_tag_show(arguments["<PROFILE>"])
+    try:
+        if arguments["restart-docker-with-alternative-unix-socket"]:
+            restart_docker_with_alternative_unix_socket()
+        elif arguments["restart-docker-without-alternative-unix-socket"]:
+            restart_docker_without_alternative_unix_socket()
+        elif arguments["node"]:
+            if arguments["stop"]:
+                node_stop(arguments["--force"])
+            else:
+                node_image = arguments['--node-image']
+                ip6 = arguments["--ip6"]
+                node(arguments["--ip"],
+                     node_image=node_image,
+                     ip6=ip6)
+        elif arguments["status"]:
+            status()
+        elif arguments["reset"]:
+            reset()
+        elif arguments["profile"]:
+            if arguments["tag"]:
+                if arguments["show"]:
+                    profile_tag_show(arguments["<PROFILE>"])
+                elif arguments["add"]:
+                    profile_tag_add(arguments["<PROFILE>"],
+                                    arguments["<TAG>"])
+                elif arguments["remove"]:
+                    profile_tag_remove(arguments["<PROFILE>"],
+                                       arguments["<TAG>"])
+            elif arguments["member"]:
+                profile_add_container(arguments["<CONTAINER>"],
+                                      arguments["<PROFILE>"])
+            elif arguments["rule"]:
+                if arguments["show"]:
+                    profile_rule_show(arguments["<PROFILE>"],
+                                      human_readable=True)
+                elif arguments["json"]:
+                    profile_rule_show(arguments["<PROFILE>"],
+                                      human_readable=False)
+                elif arguments["update"]:
+                    profile_rule_update(arguments["<PROFILE>"])
             elif arguments["add"]:
-                profile_tag_add(arguments["<PROFILE>"],
-                                arguments["<TAG>"])
+                profile_add(arguments["<PROFILE>"])
             elif arguments["remove"]:
-                profile_tag_remove(arguments["<PROFILE>"],
-                                   arguments["<TAG>"])
-        elif arguments["member"]:
-            profile_add_container(arguments["<CONTAINER>"],
-                                  arguments["<PROFILE>"])
-        elif arguments["rule"]:
-            if arguments["show"]:
-                profile_rule_show(arguments["<PROFILE>"],
-                                  human_readable=True)
-            elif arguments["json"]:
-                profile_rule_show(arguments["<PROFILE>"],
-                                  human_readable=False)
-            elif arguments["update"]:
-                profile_rule_update(arguments["<PROFILE>"])
-        elif arguments["add"]:
-            profile_add(arguments["<PROFILE>"])
-        elif arguments["remove"]:
-            profile_remove(arguments["<PROFILE>"])
-        elif arguments["show"]:
-            profile_show(arguments["--detailed"])
-    elif arguments["diags"]:
-        save_diags()
-    elif arguments["shownodes"]:
-        node_show(arguments["--detailed"])
-    elif arguments["pool"]:
-        if arguments["add"]:
-            ip_pool_add(arguments["<CIDR>"], ip_version)
-        elif arguments["remove"]:
-            ip_pool_remove(arguments["<CIDR>"], ip_version)
-        elif arguments["show"]:
-            if not ip_version:
-                ip_pool_show("v4")
-                ip_pool_show("v6")
-            else:
-                ip_pool_show(ip_version)
-    elif arguments["bgppeer"] and arguments["rr"]:
-        if arguments["add"]:
-            bgppeer_add(arguments["<IP>"], ip_version)
-        elif arguments["remove"]:
-            bgppeer_remove(arguments["<IP>"], ip_version)
-        elif arguments["show"]:
-            if not ip_version:
-                bgppeer_show("v4")
-                bgppeer_show("v6")
-            else:
-                bgppeer_show(ip_version)
-    elif arguments["container"]:
-        if arguments["ip"]:
+                profile_remove(arguments["<PROFILE>"])
+            elif arguments["show"]:
+                profile_show(arguments["--detailed"])
+        elif arguments["diags"]:
+            save_diags()
+        elif arguments["shownodes"]:
+            node_show(arguments["--detailed"])
+        elif arguments["pool"]:
             if arguments["add"]:
-                container_ip_add(arguments["<CONTAINER>"],
-                                 arguments["<IP>"],
-                                 ip_version,
-                                 arguments["--interface"])
+                ip_pool_add(arguments["<CIDR>"], ip_version)
             elif arguments["remove"]:
-                container_ip_remove(arguments["<CONTAINER>"],
-                                    arguments["<IP>"],
-                                    ip_version,
-                                    arguments["--interface"])
+                ip_pool_remove(arguments["<CIDR>"], ip_version)
+            elif arguments["show"]:
+                if not ip_version:
+                    ip_pool_show("v4")
+                    ip_pool_show("v6")
+                else:
+                    ip_pool_show(ip_version)
+        elif arguments["bgppeer"] and arguments["rr"]:
+            if arguments["add"]:
+                bgppeer_add(arguments["<IP>"], ip_version)
+            elif arguments["remove"]:
+                bgppeer_remove(arguments["<IP>"], ip_version)
+            elif arguments["show"]:
+                if not ip_version:
+                    bgppeer_show("v4")
+                    bgppeer_show("v6")
+                else:
+                    bgppeer_show(ip_version)
         elif arguments["container"]:
-            if arguments["add"]:
-                container_add(arguments["<CONTAINER>"],
-                              arguments["<IP>"],
-                              arguments["--interface"])
-            if arguments["remove"]:
-                container_remove(arguments["<CONTAINER>"])
+            if arguments["ip"]:
+                if arguments["add"]:
+                    container_ip_add(arguments["<CONTAINER>"],
+                                     arguments["<IP>"],
+                                     ip_version,
+                                     arguments["--interface"])
+                elif arguments["remove"]:
+                    container_ip_remove(arguments["<CONTAINER>"],
+                                        arguments["<IP>"],
+                                        ip_version,
+                                        arguments["--interface"])
+            elif arguments["container"]:
+                if arguments["add"]:
+                    container_add(arguments["<CONTAINER>"],
+                                  arguments["<IP>"],
+                                  arguments["--interface"])
+                if arguments["remove"]:
+                    container_remove(arguments["<CONTAINER>"])
+    except KeyboardInterrupt:
+        print "\nCommand interrupted, may be partially complete."
+        sys.exit(130)
+    except EtcdException as e:
+        print "Error accessing etcd (%s)." % e.message
+        print "Is etcd running?"
+        sys.exit(1)
+    except BaseException as e:
+        print "Unexpected error executing command.\n"
+        traceback.print_exc()
+        sys.exit(1)
+
