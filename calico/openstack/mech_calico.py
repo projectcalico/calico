@@ -122,71 +122,172 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def delete_subnet_postcommit(self, context):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
 
+    # Idealised method forms.
     def create_port_postcommit(self, context):
-        LOG.info("CREATE_PORT_POSTCOMMIT: %s" % context)
+        """
+        Called after Neutron has committed a port creation event to the
+        database.
+
+        Process this event by taking and holding a database transaction and
+        re-reading the port. Once we do that, we know the port will remain
+        unchanged while we hold the transaction. We can then write the port to
+        etcd, along with any other information we may need (security profiles).
+        """
+        LOG.info('CREATE_PORT_POSTCOMMIT: %s' % context)
         port = context._port
-        if self._port_is_endpoint_port(port):
-            LOG.info("Created port: %s" % port)
+
+        # Immediately halt processing if this is not an endpoint port.
+        if not self._port_is_endpoint_port(port):
+            return
+
+        with context.session.begin(subtransactions=True):
             self._get_db()
-            self.add_port_gateways(port, context._plugin_context)
+
+            # First, regain the current port. This protects against concurrent
+            # writes breaking our state.
+            port = self.db.get_port(context, port['id'])
+
+            # Next, fill out other information we need on the port.
+            self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
-            self.transport.endpoint_created(port)
+
+            # Next, we need to work out what security profile applies to this
+            # port and grab information about it. This is a fairly expensive
+            # operation, but we need to do it to guarantee our sanity.
+            # TODO: This method doesn't exist yet!
+            profile = self.get_security_profile(context, port)
+
+            # Pass this to the transport layer.
+            # Implementation note: we could arguably avoid holding the
+            # transaction for this length and instead release it here, then
+            # use atomic CAS. The problem there is that we potentially have to
+            # repeatedly respin and regain the transaction. Let's not do that
+            # for now, and performance test to see if it's a problem later.
+            self.transport.endpoint_created(port, profile)
+
+            # Update Neutron that we succeeded.
             self.db.update_port_status(context._plugin_context,
                                        port['id'],
                                        constants.PORT_STATUS_ACTIVE)
 
     def update_port_postcommit(self, context):
-        LOG.info("UPDATE_PORT_POSTCOMMIT: %s" % context)
+        """
+        Called after Neutron has committed a port update event to the
+        database.
+
+        This is a tricky event, because it can be called in a number of ways
+        during VM migration. We farm out to the appropriate method from here.
+        """
+        LOG.info('UPDATE_PORT_POSTCOMMIT: %s' % context)
         port = context._port
         original = context.original
-        if self._port_is_endpoint_port(port):
-            LOG.info("Updated port: %s" % port)
-            LOG.info("Original: %s" % original)
 
-            if port['binding:vif_type'] == 'unbound':
-                # This indicates part 1 of a port being migrated: the port
-                # being unbound from its old location.  The old compute host is
-                # available from context.original.  We should send an
-                # ENDPOINTDESTROYED to the old compute host.
-                #
-                # Ref: http://lists.openstack.org/pipermail/openstack-dev/
-                # 2014-February/027571.html
-                LOG.info("Migration part 1")
-                self.add_port_gateways(original, context._plugin_context)
-                self.add_port_interface_name(original)
-                self.transport.endpoint_deleted(original)
-            elif original['binding:vif_type'] == 'unbound':
-                # This indicates part 2 of a port being migrated: the port
-                # being bound to its new location.  We should send an
-                # ENDPOINTCREATED to the new compute host.
-                #
-                # Ref: http://lists.openstack.org/pipermail/openstack-dev/
-                # 2014-February/027571.html
-                LOG.info("Migration part 2")
-                self.add_port_gateways(port, context._plugin_context)
-                self.add_port_interface_name(port)
-                self.transport.endpoint_created(port)
-            elif original['binding:host_id'] != port['binding:host_id']:
-                # Migration as implemented in Icehouse.
-                LOG.info("Migration as implemented in Icehouse")
-                self.add_port_gateways(original, context._plugin_context)
-                self.add_port_interface_name(original)
-                self.transport.endpoint_deleted(original)
-                self.add_port_gateways(port, context._plugin_context)
-                self.add_port_interface_name(port)
-                self.transport.endpoint_created(port)
-            else:
-                # This is a non-migration-related update.
-                self.add_port_gateways(port, context._plugin_context)
-                self.add_port_interface_name(port)
-                self.transport.endpoint_updated(port)
+        # Abort early if we're manging non-endpoint ports.
+        if not self._port_is_endpoint_port(port):
+            return
+
+        # Fork execution based on the type of update we're performing.
+        # TODO: Write these methods!
+        if port['binding:vif_type'] == 'unbound':
+            self._first_migration_step(context, original)
+        elif original['binding:vif_type'] == 'unbound':
+            self._second_migration_step(context, port)
+        elif original['binding:host_id'] != port['binding:host_id']:
+            self._icehouse_migration(context, port, original)
+        else:
+            self._update_port(context, port)
 
     def delete_port_postcommit(self, context):
-        LOG.info("DELETE_PORT_POSTCOMMIT: %s" % context)
+        """
+        Called after Neutron has committed a port deletion event to the
+        database.
+
+        There's no database row for us to lock on here, so don't bother.
+        """
+        LOG.info('CREATE_PORT_POSTCOMMIT: %s' % context)
         port = context._port
-        if self._port_is_endpoint_port(port):
-            LOG.info("Deleted port: %s" % port)
+
+        # Immediately halt processing if this is not an endpoint port.
+        if not self._port_is_endpoint_port(port):
+            return
+
+        # Pass this to the transport layer.
+        self.transport.endpoint_deleted(port)
+
+    def send_sg_updates(self, sgids, context):
+        """
+        Called whenever security group rules or membership change.
+
+        We handle this change by taking out a database transaction and
+        re-reading the database state. We then write that state straight out
+        into the transport layer.
+        """
+        with context.session.begin(subtransactions=True):
+            for sgid in sgids:
+                sg = self.db.get_security_group(context, sgid)
+                sg['members'] = self._get_members(sg, context)
+                self.transport.security_group_updated(sg)
+
+    def _first_migration_step(self, context, port):
+        """
+        This is called during stage one of port migration, when the port is
+        unbound from the old location. At this point we treat it as an endpoint
+        deletion.
+
+        For more, see:
+        http://lists.openstack.org/pipermail/openstack-dev/2014-February/
+        027571.html
+        """
+        LOG.info("Migration part 1")
+        with context.session.begin(subtransactions=True):
+            port = self.db.get_port(port['id'])
             self.transport.endpoint_deleted(port)
+
+    def _second_migration_step(self, context, port):
+        """
+        This is called during stage two of port migration, when the port is
+        unbound from the old location. At this point we treat it as an endpoint
+        creation event.
+
+        For more, see:
+        http://lists.openstack.org/pipermail/openstack-dev/2014-February/
+        027571.html
+        """
+        LOG.info("Migration part 2")
+        with context.session.begin(subtransactions=True):
+            port = self.db.get_port(port['id'])
+            self.add_port_gateways(port, context)
+            self.add_port_interface_name(port)
+            self.transport.endpoint_created(port)
+
+    def _icehouse_migration_step(self, context, port, original):
+        """
+        This is called when migrating on Icehouse. Here, we basically just
+        perform step one and step two at exactly the same time, but we hold
+        a DB lock the entire time.
+        """
+        LOG.info("Migration as implemented in Icehouse")
+        with context.session.begin(subtransactions=True):
+            port = self.db.get_port(port['id'])
+            original = self.db.get_port(original['id'])
+
+            self.transport.endpoint_deleted(original)
+            self.add_port_gateways(port, context._plugin_context)
+            self.add_port_interface_name(port)
+            self.transport.endpoint_created(port)
+
+    def _update_port(self, context, port):
+        """
+        Called during port updates that have nothing to do with migration.
+        """
+        # TODO: There's a lot of redundant code in these methods, with the only
+        # key difference being taking out transactions. Come back and shorten
+        # these.
+        with context.session.begin(subtransactions=True):
+            port = self.db.get_port(port['id'])
+            self.add_port_gateways(port, context)
+            self.add_port_interface_name(port)
+            self.transport.endpoint_created(port)
 
     def add_port_gateways(self, port, context):
         assert self.db
@@ -196,12 +297,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
-
-    def send_sg_updates(self, sgids, db_context):
-        for sgid in sgids:
-            sg = self.db.get_security_group(db_context, sgid)
-            sg['members'] = self._get_members(sg, db_context)
-            self.transport.security_group_updated(sg)
 
     def get_endpoints(self):
         """Return the current set of endpoints.
