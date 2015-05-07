@@ -364,7 +364,7 @@ class DatastoreClient(object):
     def add_bgp_peer(self, version, ip):
         """
         Add a BGP Peer.
-d
+
         If the peer already exists then do nothing.
 
         :param version: "v4" for IPv4, "v6" for IPv6

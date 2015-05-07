@@ -72,6 +72,32 @@ dist/calicoctl pool show --ipv6 | grep aa:bb::ff/128
 dist/calicoctl pool remove aa:bb::ff/128
 ! dist/calicoctl pool show | grep aa:bb::ff/128
 
+# Not used anywhere else in the tests; added here for completeness.
+PROFILE=TEST_PROFILE
+dist/calicoctl profile add $PROFILE
+TAG=TEST_TAG
+
+dist/calicoctl profile $PROFILE tag add $TAG
+dist/calicoctl profile $PROFILE tag remove $TAG
+dist/calicoctl profile $PROFILE tag show
+dist/calicoctl profile $PROFILE rule json
+dist/calicoctl profile $PROFILE rule show
+echo '{
+  "id": "TEST_PROFILE",
+  "inbound_rules": [
+    {
+      "action": "allow",
+      "src_tag": "TEST_PROFILE"
+    },
+    {
+      "action": "deny"
+    }
+  ],
+  "outbound_rules": [
+    {
+      "action": "allow"
+    }
+  ]
+}' | dist/calicoctl profile $PROFILE rule update
 
 echo "Tests completed successfully"
-
