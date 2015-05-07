@@ -8,9 +8,10 @@ from node.adapter.datastore import (DatastoreClient,
                                     Rules,
                                     Endpoint,
                                     NoEndpointForContainer,
-                                    CALICO_V_PATH)
+                                    CALICO_V_PATH,
+                                    DataStoreError)
 from etcd import Client as EtcdClient
-from etcd import EtcdKeyNotFound, EtcdResult
+from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 from netaddr import IPNetwork, IPAddress
 import json
 from nose.tools import *
@@ -236,6 +237,14 @@ class TestDatastoreClient(unittest.TestCase):
         Test ensure_global_config() when it already exists.
         """
         self.datastore.ensure_global_config()
+        self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
+
+    def test_ensure_global_config_exists_etcd_exc(self):
+        """
+        Test ensure_global_config() when etcd raises an EtcdException.
+        """
+        self.etcd_client.read.side_effect = EtcdException
+        self.assertRaises(DataStoreError, self.datastore.ensure_global_config)
         self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
 
     def test_get_profile(self):

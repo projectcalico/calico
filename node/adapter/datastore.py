@@ -1,7 +1,7 @@
 from collections import namedtuple
 import json
 import etcd
-from etcd import EtcdKeyNotFound
+from etcd import EtcdKeyNotFound, EtcdException
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 import os
 import copy
@@ -30,6 +30,23 @@ IF_PREFIX = "cali"
 prefix that appears in all Calico interface names in the root namespace. e.g.
 cali123456789ab.
 """
+
+
+def handle_errors(fn):
+    """
+    Decorator function to decorate Datastore API methods to handle common
+    exception types and re-raise as datastore specific errors.
+    :param fn: The function to decorate.
+    :return: The decorated function.
+    """
+    def wrapped(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except EtcdException as e:
+            # Don't leak out etcd exceptions.
+            raise DataStoreError("Error accessing etcd (%s).  Is etcd "
+                                 "running?" % e.message)
+    return wrapped
 
 
 class Rule(dict):
@@ -222,6 +239,7 @@ class DatastoreClient(object):
         (host, port) = etcd_authority.split(":", 1)
         self.etcd_client = etcd.Client(host=host, port=int(port))
 
+    @handle_errors
     def ensure_global_config(self):
         """
         Ensure the global config settings for Calico exist, creating them with
@@ -238,6 +256,7 @@ class DatastoreClient(object):
         # We are always ready
         self.etcd_client.write(CALICO_V_PATH + "/Ready", "true")
 
+    @handle_errors
     def create_host(self, hostname, bird_ip, bird6_ip):
         """
         Create a new Calico host.
@@ -260,6 +279,7 @@ class DatastoreClient(object):
             self.etcd_client.write(workload_dir, None, dir=True)
         return
 
+    @handle_errors
     def remove_host(self, hostname):
         """
         Remove a Calico host.
@@ -272,6 +292,7 @@ class DatastoreClient(object):
         except EtcdKeyNotFound:
             pass
 
+    @handle_errors
     def get_ip_pools(self, version):
         """
         Get the configured IP pools.
@@ -283,6 +304,7 @@ class DatastoreClient(object):
         pool_path = IP_POOL_PATH % {"version": version}
         return map(IPNetwork, self._get_path_with_keys(pool_path).keys())
 
+    @handle_errors
     def add_ip_pool(self, version, pool):
         """
         Add the given pool to the list of IP allocation pools.  If the pool
@@ -306,6 +328,7 @@ class DatastoreClient(object):
         pool_path = IP_POOL_PATH % {"version": version}
         self.etcd_client.write(pool_path, str(pool), append=True)
 
+    @handle_errors
     def remove_ip_pool(self, version, pool):
         """
         Delete the given CIDR range from the list of pools.  If the pool does
@@ -327,6 +350,7 @@ class DatastoreClient(object):
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured IP pool." % pool)
 
+    @handle_errors
     def get_bgp_peers(self, version):
         """
         Get the configured BGP Peers
@@ -337,7 +361,6 @@ class DatastoreClient(object):
         assert version in ("v4", "v6")
         bgp_peer_path = BGP_PEER_PATH % {"version": version}
         return map(IPAddress, self._get_path_with_keys(bgp_peer_path).keys())
-
 
     def _get_path_with_keys(self, path):
         """
@@ -361,6 +384,7 @@ class DatastoreClient(object):
                     values[value] = child.key
             return values
 
+    @handle_errors
     def add_bgp_peer(self, version, ip):
         """
         Add a BGP Peer.
@@ -381,6 +405,7 @@ d
 
         self.etcd_client.write(bgp_peer_path, str(ip), append=True)
 
+    @handle_errors
     def remove_bgp_peer(self, version, ip):
         """
         Delete a BGP Peer
@@ -401,6 +426,7 @@ d
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured peer." % ip)
 
+    @handle_errors
     def profile_exists(self, name):
         """
         Check if a profile exists.
@@ -416,6 +442,7 @@ d
         else:
             return True
 
+    @handle_errors
     def create_profile(self, name):
         """
         Create a policy profile.  By default, containers in a profile
@@ -439,6 +466,7 @@ d
                       outbound_rules=[default_allow])
         self.etcd_client.write(profile_path + "rules", rules.to_json())
 
+    @handle_errors
     def remove_profile(self, name):
         """
         Delete a policy profile with a given name.
@@ -453,6 +481,7 @@ d
         except EtcdKeyNotFound:
             raise KeyError("%s is not a configured profile." % name)
 
+    @handle_errors
     def get_profile_names(self):
         """
         Get the all configured profiles.
@@ -472,6 +501,7 @@ d
             pass
         return profiles
 
+    @handle_errors
     def get_profile(self, name):
         """
         Get a Profile object representing the named profile from the data
@@ -505,6 +535,7 @@ d
 
         return profile
 
+    @handle_errors
     def get_profile_members_ep_ids(self, name):
         """
         Get all endpoint IDs that are members of named profile.
@@ -530,6 +561,7 @@ d
                     members.append(ep.ep_id)
         return members
 
+    @handle_errors
     def get_profile_members(self, profile_name):
         """
         Get the all of the endpoint members of a profile.
@@ -559,6 +591,7 @@ d
 
         return eps
 
+    @handle_errors
     def profile_update_tags(self, profile):
         """
         Write the tags set on the Profile to the data store.  This creates the
@@ -569,6 +602,7 @@ d
         tags_path = TAGS_PATH % {"profile_id": profile.name}
         self.etcd_client.write(tags_path, json.dumps(list(profile.tags)))
 
+    @handle_errors
     def profile_update_rules(self, profile):
         """
         Write the rules on the Profile to the data store.  This creates the
@@ -579,6 +613,7 @@ d
         rules_path = RULES_PATH % {"profile_id": profile.name}
         self.etcd_client.write(rules_path, profile.rules.to_json())
 
+    @handle_errors
     def add_workload_to_profile(self, hostname, profile_name, container_id):
         """
 
@@ -594,6 +629,7 @@ d
         ep.profile_id = profile_name
         self.set_endpoint(hostname, container_id, ep)
 
+    @handle_errors
     def remove_workload_from_profile(self, hostname, container_id):
         """
 
@@ -608,6 +644,7 @@ d
         ep.profile_id = None
         self.set_endpoint(hostname, container_id, ep)
 
+    @handle_errors
     def get_ep_id_from_cont(self, hostname, container_id):
         """
         Get a single endpoint ID from a container ID.
@@ -634,6 +671,7 @@ d
             raise NoEndpointForContainer(
                 "Container with ID %s has no endpoints." % container_id)
 
+    @handle_errors
     def get_endpoint(self, hostname, container_id, endpoint_id):
         """
         Get all of the details for a single endpoint.
@@ -653,6 +691,7 @@ d
         except EtcdKeyNotFound:
             raise KeyError("Endpoint %s not found" % ep_path)
 
+    @handle_errors
     def set_endpoint(self, hostname, container_id, endpoint):
         """
         Write a single endpoint object to the datastore.
@@ -666,6 +705,7 @@ d
                                    "endpoint_id": endpoint.ep_id}
         self.etcd_client.write(ep_path, endpoint.to_json())
 
+    @handle_errors
     def update_endpoint(self, hostname, container_id,
                         old_endpoint, new_endpoint):
         """
@@ -689,6 +729,7 @@ d
                                new_endpoint.to_json(),
                                prevValue=old_endpoint.to_json())
 
+    @handle_errors
     def get_hosts(self):
         """
         Get the all configured hosts
@@ -720,6 +761,7 @@ d
 
         return hosts
 
+    @handle_errors
     def get_default_next_hops(self, hostname):
         """
         Get the next hop IP addresses for default routes on the given host.
@@ -751,6 +793,7 @@ d
 
         return next_hops
 
+    @handle_errors
     def remove_all_data(self):
         """
         Remove all data from the datastore.
@@ -763,6 +806,7 @@ d
         except EtcdKeyNotFound:
             pass
 
+    @handle_errors
     def remove_container(self, hostname, container_id):
         """
         Remove a container from the datastore.
@@ -785,3 +829,11 @@ class NoEndpointForContainer(Exception):
     endpoints.
     """
     pass
+
+
+class DataStoreError(Exception):
+    """
+    General Datastore exception.
+    """
+    pass
+

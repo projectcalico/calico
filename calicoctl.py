@@ -55,14 +55,14 @@ from docopt import docopt
 import sh
 import docker
 import docker.utils
-from etcd import EtcdException
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
 from node.adapter.datastore import (ETCD_AUTHORITY_ENV,
                                     ETCD_AUTHORITY_DEFAULT,
-                                    Rules)
+                                    Rules,
+                                    DataStoreError)
 from node.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from node.adapter.ipam import IPAMClient
 from node.adapter import netns, docker_restart
@@ -1211,9 +1211,8 @@ if __name__ == '__main__':
             print_paragraph("Unable to run docker commands. Is the docker "
                             "daemon running?")
         sys.exit(1)
-    except EtcdException as e:
-        print_paragraph("Error accessing etcd (%s).  Is etcd running?" %
-                          e.message)
+    except DataStoreError as e:
+        print_paragraph(e.message)
         sys.exit(1)
     except BaseException as e:
         print "Unexpected error executing command.\n"
