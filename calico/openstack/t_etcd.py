@@ -151,7 +151,7 @@ class CalicoTransportEtcd(object):
         """
         # First, write etcd data for the new endpoint.
         # TODO: Write this function.
-        self.write_port_to_etcd(port)
+        self.write_port_to_etcd(port, profile.id)
 
         # Next, write the security profile.
         # TODO: Fix this function to do the right thing.
@@ -195,6 +195,14 @@ class CalicoTransportEtcd(object):
                     profiles_to_rewrite.add(profile_id)
         for profile_id in profiles_to_rewrite:
             self.write_profile_to_etcd(profile_id)
+
+    def write_port_to_etcd(self, port, profile_id):
+        """
+        Writes a given port dictionary to etcd.
+        """
+        data = port_etcd_data(port, profile_id)
+        self.client.write(port_etcd_key(port), json.dumps(data))
+
 
     def provide_felix_config(self):
         """Specify the prefix of the TAP interfaces that Felix should
