@@ -22,137 +22,186 @@ calico.election
 Calico election code.
 """
 import etcd
-from etcd import EtcdKeyNotFound
-import gevent
-import gevent.lock
+import eventlet
+from httplib import HTTPException
 import logging
+from socket import timeout as SocketTimeout
 import time
 from urllib3 import Timeout
-import urllib3.exceptions
-from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
+from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError, HTTPError
+
 import os
 
 _log = logging.getLogger(__name__)
 
-class Elector(object):
+class ElectionReconnect(Exception):
     """
-    Class that manages elections.
+    Exception indicating that an error occurred, and we should try reconnect.
     """
-    def __init__(self, server_id, election_key,
-                 etcd_host="localhost", etcd_port=4001,
-                 interval=30, ttl=60):
+    pass
 
+class Elector(object):
+    def __init__(self, client, server_id, election_key,
+                 interval=30, ttl=60):
+        """
+        Class that manages elections.
+
+        :param client: etcd client object
+        :param server_id: Server ID. Must be unique to this server, and should
+                       take a value that is meaningful in logs (e.g. hostname)
+        :param election_key: The etcd key used in the election - e.g.
+                             "/calico/v1/election"
+        :param interval: Interval (seconds) between checks on etcd. Must be > 0
+        :param ttl: Time to live (seconds) for etcd values. Must be > interval.
+        """
+        self._etcd_client = client
         self._server_id = server_id
         self._key = election_key
-        self._etcd_host = etcd_host
-        self._etcd_port = int(etcd_port)
         self._interval = int(interval)
         self._ttl = int(ttl)
 
-        assert(self._interval > 0)
-        assert(self._ttl > self._interval)
+        if self._interval <= 0:
+            raise AssertionError("Interval %r is <= 0" % interval)
 
+        if self._ttl <= self._interval:
+            raise AssertionError("TTL %r is <= interval %r" % (ttl, interval))
+
+        # Used to track whether or not this is the first iteration of the
+        # attempts to test who is master.
+        self._first_iteration = True
+
+        # Is this the master? To start with, no
         self._master = False
-        self._mutex = gevent.lock.Semaphore()
 
-        gevent.spawn(self._run)
+        # Keep the greenlet ID handy to ease UT.
+        self._greenlet = eventlet.spawn(self._run)
 
     def _run(self):
+        """
+        Main election thread run routine.
 
-        interval = 0
+        The slightly artificial split between this and _vote is mostly so that
+        we can easily catch and log any exception that takes out the greenlet.
+        """
+        try:
+            while True:
+                try:
+                    self._vote()
+                except ElectionReconnect:
+                    # Something failed, and wants us just to go back to the
+                    # beginning.
+                    pass
+
+        except:
+            # Election greenlet failed. Log but reraise.
+            _log.exception("Election greenlet exiting")
+            raise
+
+    def _vote(self):
+        """
+        Main election thread routine to reconnect and perform election.
+        """
+        # Sleep only if this is not the first time round the loop.
+        if self._first_iteration:
+            self._first_iteration = False
+        else:
+            eventlet.sleep(self._interval)
+
+        try:
+            response = self._etcd_client.read(self._key)
+            index = response.etcd_index
+        except etcd.EtcdKeyNotFound:
+            _log.debug("Try to become the master - not found")
+            self._become_master()
+        except (etcd.EtcdException, ReadTimeoutError, SocketTimeout,
+                ConnectTimeoutError, HTTPError,
+                etcd.EtcdClusterIdChanged, etcd.EtcdEventIndexCleared,
+                HTTPException):
+            # Some kind of exception. Try again later.
+            _log.warning("Failed to read elected master",
+                         exc_info=True)
+            return
+
+        _log.debug("ID of elected master is : %s", response.value)
 
         while True:
-            # Sleep if this is not the first time round the loop, then recreate
-            # the client.
-            gevent.sleep(interval)
-            interval = self._interval
-            client = etcd.Client(host=self._etcd_host, port=self._etcd_port)
-
+            # We know another instance is the master. Wait until something
+            # changes, giving long enough that it really should do (i.e. we
+            # expect this read always to return, never to time out).
             try:
-                response = client.read(self._key)
+                response = self._etcd_client.read(self._key,
+                                                  wait=True,
+                                                  waitIndex=index + 1,
+                                                  timeout=Timeout(
+                                                      connect=self._interval,
+                                                      read=self._ttl * 2))
                 index = response.etcd_index
-            except EtcdKeyNotFound:
-                _log.debug("Try to become the master - no entry"),
 
-                self._become_master(client)
-                # If _become_master returns, we failed and should continue.
-                continue
-            except:
-                # Some kind of exception. Try again later.
-                _log.warning("Failed to read elected master",
+            except (ReadTimeoutError, SocketTimeout,
+                    ConnectTimeoutError) as e:
+                # Unexpected timeout - reconnect.
+                _log.debug("Read from etcd timed out (%r), retrying.", e)
+                return
+            except (etcd.EtcdException, HTTPError, HTTPException,
+                    etcd.EtcdClusterIdChanged, etcd.EtcdEventIndexCleared):
+                # Something bad and unexpected. Log and reconnect.
+                _log.warning("Unexpected error waiting for change in elected master",
                              exc_info=True)
-                continue
+                return
+            except etcd.EtcdKeyNotFound:
+                # It should be impossible for somebody to delete the object
+                # without us getting the delete action, but safer to handle it.
+                _log.warning("Implausible vanished key - become master")
+                self._become_master()
 
-            _log.debug("ID of elected master is : %s", response.value)
+            if response.action == "delete":
+                # Deleted - try and become the master.
+                _log.debug("Attempting to become the elected master")
+                self._become_master()
 
-            while True:
-                # We know another instance is the master. Wait until something
-                # changes, giving long enough that it really should do.
-                try:
-                    response = client.read(self._key,
-                                           wait=True,
-                                           waitIndex=index + 1,
-                                           timeout=Timeout(connect=self._interval,
-                                                           read=self._ttl * 2))
-                    index = response.etcd_index
-
-                except (ReadTimeoutError, SocketTimeout) as e:
-                    # Unexpected timeout - reconnect.
-                    _log.debug("Read from etcd timed out (%r), retrying.", e)
-                    break
-                except:
-                    # Something bad and unexpected. Log but just reconnect.
-                    _log.warning("Unexpected error waiting for change in elected master",
-                                 exc_info=True)
-                    break
-
-                if response.action == "delete":
-                    # Deleted - try and become the master. If we fail, reconnect.
-                    self._become_master(client)
-                    break
-
-
-    def _become_master(self, client):
+    def _become_master(self,):
         """
-        Function to become the master. Returns if it fails, but if it succeeds
-        never returns, and continually loops updating the key as necessary.
+        Function to become the master. Never returns, and continually loops
+        updating the key as necessary.
+
         param: etcd.Client: etcd client to use
-        raises: Nothing; terminates on error.
+        raises: ElectionReconnect if it fails to become master (e.g race
+                conditions). In this case, some other process has become
+                master.
+                Any other error from etcd is not caught in this routine.
         """
         id_string = "%s:%d:%s" % (self._server_id, os.getpid(), int(time.time()))
 
         try:
-            client.write(self._key, id_string,
-                         ttl=self._ttl, prevExists=False)
-        except:
-            # Got an error, so give up right away.
+            self._etcd_client.write(self._key, id_string,
+                                    ttl=self._ttl, prevExists=False)
+        except Exception:
+            # We could be smarter about what exceptions we allow, but any kind
+            # of error means we should give up, and safer to have a broad
+            # except here.
             _log.warning("Failed to become elected master - key %s",
                          self._key, exc_info=True)
-            return
+            raise ElectionReconnect()
 
         _log.warning("Successfully become master - key %s, value %s",
                      self._key, id_string)
 
-        self._mutex.acquire()
         self._master = True
-        self._mutex.release()
 
         while True:
+            eventlet.sleep(self._interval)
             try:
-                gevent.sleep(self._interval)
-                client.write(self._key, id_string, ttl=self._ttl,
-                             prevValue=id_string)
-            except:
-                # If we get an exception, just terminate
-                _log.exception("Exception raised in election - terminating")
-                os._exit(1)
+                self._etcd_client.write(self._key, id_string, ttl=self._ttl,
+                                        prevValue=id_string)
+            except Exception:
+                # This is a pretty broad except statement, but anything going
+                # wrong means this instance gives up being the master.
+                self._master = False
+                raise
 
     def master(self):
         """
         Am I the master?
         returns: True if this is the master.
         """
-        self._mutex.acquire()
-        master = self._master
-        self._mutex.release()
-        return master
+        return self._master
