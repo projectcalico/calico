@@ -100,41 +100,6 @@ class CalicoTransportEtcd(object):
     def resync_security_groups(self):
         pass
 
-    def port_etcd_key(self, port):
-        return key_for_endpoint(port['binding:host_id'],
-                                "openstack",
-                                port['device_id'],
-                                port['id'])
-
-    def port_etcd_data(self, port):
-        # Construct the simpler port data.
-        data = {'state': 'active' if port['admin_state_up'] else 'inactive',
-                'name': port['interface_name'],
-                'mac': port['mac_address'],
-                'profile_id': self.port_profile_id(port)}
-
-        # Collect IPv6 and IPv6 addresses.  On the way, also set the
-        # corresponding gateway fields.  If there is more than one IPv4 or IPv6
-        # gateway, the last one (in port['fixed_ips']) wins.
-        ipv4_nets = []
-        ipv6_nets = []
-        for ip in port['fixed_ips']:
-            if ':' in ip['ip_address']:
-                ipv6_nets.append(ip['ip_address'] + '/128')
-                if ip['gateway'] is not None:
-                    data['ipv6_gateway'] = ip['gateway']
-            else:
-                ipv4_nets.append(ip['ip_address'] + '/32')
-                if ip['gateway'] is not None:
-                    data['ipv4_gateway'] = ip['gateway']
-        data['ipv4_nets'] = ipv4_nets
-        data['ipv6_nets'] = ipv6_nets
-
-        # Return that data.
-        return data
-
-    def port_profile_id(self, port):
-        return '_'.join(port['security_groups'])
 
     def write_profile_to_etcd(self, profile_id):
         self.client.write(key_for_profile_rules(profile_id),
@@ -327,3 +292,44 @@ def _neutron_rule_to_etcd_rule(rule):
         LOG.info("=> Outbound Calico rule %s" % etcd_rule)
 
     return etcd_rule
+
+
+def port_etcd_key(port):
+    """
+    Determine what the etcd key is for a port.
+    """
+    return key_for_endpoint(port['binding:host_id'],
+                            "openstack",
+                            port['device_id'],
+                            port['id'])
+
+
+def port_etcd_data(port, profile_id):
+    """
+    Build the dictionary of data that will be written into etcd for a port.
+    """
+    # Construct the simpler port data.
+    data = {'state': 'active' if port['admin_state_up'] else 'inactive',
+            'name': port['interface_name'],
+            'mac': port['mac_address'],
+            'profile_id': profile_id}
+
+    # Collect IPv6 and IPv6 addresses.  On the way, also set the
+    # corresponding gateway fields.  If there is more than one IPv4 or IPv6
+    # gateway, the last one (in port['fixed_ips']) wins.
+    ipv4_nets = []
+    ipv6_nets = []
+    for ip in port['fixed_ips']:
+        if ':' in ip['ip_address']:
+            ipv6_nets.append(ip['ip_address'] + '/128')
+            if ip['gateway'] is not None:
+                data['ipv6_gateway'] = ip['gateway']
+        else:
+            ipv4_nets.append(ip['ip_address'] + '/32')
+            if ip['gateway'] is not None:
+                data['ipv4_gateway'] = ip['gateway']
+    data['ipv4_nets'] = ipv4_nets
+    data['ipv6_nets'] = ipv6_nets
+
+    # Return that data.
+    return data
