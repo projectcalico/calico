@@ -23,6 +23,7 @@ import eventlet
 import eventlet.event
 import json
 import re
+import weakref
 
 # OpenStack imports.
 from oslo.config import cfg
@@ -33,7 +34,6 @@ from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_endpoint, PROFILE_DIR,
                                  key_for_profile, key_for_profile_rules,
                                  key_for_profile_tags, key_for_config)
-from calico.openstack.transport import CalicoTransport
 
 # Register Calico-specific options.
 calico_opts = [
@@ -54,11 +54,15 @@ PERIODIC_RESYNC_INTERVAL_SECS = 30
 
 LOG = log.getLogger(__name__)
 
-class CalicoTransportEtcd(CalicoTransport):
+
+class CalicoTransportEtcd(object):
     """Calico transport implementation based on etcd."""
 
     def __init__(self, driver):
-        super(CalicoTransportEtcd, self).__init__(driver)
+        # Explicitly store the driver as a weakreference. This prevents
+        # the reference loop between transport and driver keeping the objects
+        # alive.
+        self.driver = weakref.proxy(driver)
 
         # Prepare client for accessing etcd data.
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
