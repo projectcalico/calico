@@ -180,33 +180,30 @@ class CalicoTransportEtcd(object):
     def profile_tags(self, profile_id):
         return profile_id.split('_')
 
-    def endpoint_created(self, port):
-        # Endpoint creation events should not be processed until start of day
-        # processing is complete. Note that, if start of day processing never
-        # completes, we'll wait for a very long time indeed: for this reason,
-        # log if we're going to have to wait for start-of-day processing.
-        if not self.start_of_day_lock.ready():
-            LOG.warning(
-                "Endpoint creation blocked behind start of day processing"
-            )
-            self.start_of_day_lock.wait()
+    def endpoint_created(self, port, profile):
+        """
+        Write appropriate data to etcd for an endpoint creation event.
+        """
+        # First, write etcd data for the new endpoint.
+        # TODO: Write this function.
+        self.write_port_to_etcd(port)
 
-        # Write etcd data for the new endpoint.
-        data = self.port_etcd_data(port)
-        self.client.write(self.port_etcd_key(port), json.dumps(data))
+        # Next, write the security profile.
+        # TODO: Fix this function to do the right thing.
+        self.write_profile_to_etcd(profile)
 
-        # Get and remember the security profile that this port needs.
-        profile_id = data['profile_id']
-        self._mark_profile_needed(profile_id)
-
-        # Write etcd data for this profile.
-        self.write_profile_to_etcd(profile_id)
-
-    def endpoint_updated(self, port):
+    def endpoint_updated(self, port, profile):
+        """
+        Write data to etcd for an endpoint updated event.
+        """
         # Do the same as for endpoint_created.
-        self.endpoint_created(port)
+        self.endpoint_created(port, profile)
 
     def endpoint_deleted(self, port):
+        """
+        Delete data from etcd for an endpoint deleted event.
+        """
+        # TODO: What do we do about profiles here?
         # Delete the etcd key for this endpoint.
         key = self.port_etcd_key(port)
         try:

@@ -228,6 +228,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for sgid in sgids:
                 sg = self.db.get_security_group(context, sgid)
                 sg['members'] = self._get_members(sg, context)
+
+                # TODO: We actually have to work out each affected security
+                # profile, here.
                 self.transport.security_group_updated(sg)
 
     def _first_migration_step(self, context, port):
