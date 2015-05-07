@@ -29,10 +29,10 @@ echo '{
 dist/calicoctl profile $PROFILE rule show | grep "1 deny"
 
 # Test that adding and removing a tag works.
-! (dist/calicoctl profile $PROFILE tag show | grep $TAG)
+(! dist/calicoctl profile $PROFILE tag show | grep $TAG)
 dist/calicoctl profile $PROFILE tag add $TAG
 dist/calicoctl profile $PROFILE tag show | grep $TAG
 dist/calicoctl profile $PROFILE tag remove $TAG
-! (dist/calicoctl profile $PROFILE tag show | grep $TAG)
+(! dist/calicoctl profile $PROFILE tag show | grep $TAG)
 
 echo "Tests completed successfully"
