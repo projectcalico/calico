@@ -21,7 +21,6 @@
 import etcd
 import eventlet
 import eventlet.event
-from eventlet.semaphore import Semaphore
 import json
 import re
 
@@ -68,34 +67,6 @@ class CalicoTransportEtcd(CalicoTransport):
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
                                   port=cfg.CONF.calico.etcd_port)
 
-        # We will remember the OpenStack security group data, between resyncs,
-        # so that we can generate profiles when needed for new or updated
-        # endpoints.  Start off with an empty set.
-        self.sgs = {}
-        # Semaphore to protect all access to the sgs dict.
-        self._sgs_semaphore = Semaphore(1)
-
-        # Also the set of profile IDs that we need for the current endpoints,
-        # so that we can generate the profile data if an underlying security
-        # group changes.  We clean this up lazily on the periodic resync so
-        # it should be a safe over-approximation.
-        self.needed_profiles = set()
-        # And set of profiles that are no longer needed, populated during
-        # resync.
-        self.profiles_to_clean_up = set()
-        # Semaphore protecting the needed_profiles and profiles_to_clean_up
-        # sets from concurrent modification between the main and resync
-        # threads.
-        self.profile_semaphore = Semaphore(1)
-
-        # This event is used exactly once, at start of day, to delay all
-        # endpoint creation events behind security group synchronization.
-        # Note that this is a temporary work-around for a more severe problem,
-        # and should not be considered good architectural practice.
-        # This event has no meaningful return value.
-        self.start_of_day_lock = eventlet.event.Event()
-        self._start_of_day_complete = False
-
         # Spawn a green thread for periodically resynchronizing etcd against
         # the OpenStack database.
         eventlet.spawn(self.periodic_resync_thread)
@@ -113,13 +84,6 @@ class CalicoTransportEtcd(CalicoTransport):
                 # Resynchronize security group data.
                 self.resync_security_groups()
 
-                # If this is our first pass through start of day processing, we
-                # can now unblock anyone waiting.
-                if not self._start_of_day_complete:
-                    self.start_of_day_lock.send('complete')
-                    self._start_of_day_complete = True
-                    LOG.info("Start of day processing complete")
-
             except:
                 LOG.exception("Exception in periodic resync thread")
 
@@ -129,100 +93,11 @@ class CalicoTransportEtcd(CalicoTransport):
                      PERIODIC_RESYNC_INTERVAL_SECS)
             eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
 
-    def _mark_profile_needed(self, profile_id):
-        with self.profile_semaphore:
-            self.needed_profiles.add(profile_id)
-            self.profiles_to_clean_up.discard(profile_id)
-
     def resync_endpoints(self):
-        # Get all current endpoints from the OpenStack database and key them on
-        # endpoint ID.
-        ports = {}
-        for port in self.driver.get_endpoints():
-            ports[port['id']] = port
+        pass
 
-        # Mark all profiles for clean up and then remove them from the list
-        # as we find them below.
-        with self.profile_semaphore:
-            # Taking the lock ensures that any _mark_profile_needed() calls
-            # come before or after this update() call.
-            #
-            # If the call was before: Since we call _mark_profile_needed()
-            # *after) we write to etcd, that implies that we'll see the
-            # profile in etcd below and remove it from
-            # self.profiles_to_clean_up before we do the cleanup.
-            #
-            # If the call comes after then it will remove the profile from
-            # profiles_to_cleanup itself and we won't have to.
-            self.profiles_to_clean_up.update(self.needed_profiles)
-
-        # Read all etcd keys under /calico/v1/host.
-        try:
-            children = self.client.read(HOST_DIR, recursive=True).children
-        except etcd.EtcdKeyNotFound:
-            children = []
-        for child in children:
-            LOG.debug("etcd key: %s" % child.key)
-            m = OPENSTACK_ENDPOINT_RE.match(child.key)
-            if m:
-                # We have a key/value pair for an OpenStack endpoint.  Extract
-                # the endpoint ID and hostname from the key, and read the JSON
-                # data as a dict.
-                endpoint_id = m.group("endpoint_id")
-                hostname = m.group("hostname")
-                data = json_decoder.decode(child.value)
-                LOG.debug("Existing etcd endpoint data for %s on %s" % (
-                    endpoint_id,
-                    hostname
-                ))
-                if (endpoint_id in ports and
-                    hostname == ports[endpoint_id]['binding:host_id'] and
-                    data == self.port_etcd_data(ports[endpoint_id])):
-                    LOG.debug("Existing etcd endpoint data is correct")
-                    # OpenStack still has an endpoint that exactly matches this
-                    # etcd key/value.  Remember its security profile.
-                    self._mark_profile_needed(data['profile_id'])
-
-                    # No change is needed to the etcd data, and we can delete
-                    # the port from the ports dict so as not to unnecessarily
-                    # write out its (unchanged) value again below.
-                    del ports[endpoint_id]
-
-                elif (endpoint_id not in ports or
-                      hostname != ports[endpoint_id]['binding:host_id']):
-                    LOG.debug("Existing etcd endpoint key is now invalid")
-                    # OpenStack no longer has an endpoint with the ID in the
-                    # etcd key; or it does, but the endpoint has migrated to a
-                    # different host than the one in the etcd key.  In both
-                    # cases the etcd key is no longer valid and should be
-                    # deleted.  In the migration case, data will be written
-                    # below to an etcd key that incorporates the new hostname.
-                    try:
-                        self.client.delete(child.key)
-                    except etcd.EtcdKeyNotFound:
-                        LOG.debug("Key %s, which we were deleting, "
-                                  "disappeared", child.key)
-
-        # Now write etcd data for any endpoints remaining in the ports dict;
-        # these are new endpoints - i.e. never previously represented in etcd
-        # data - or endpoints that have migrated or whose data has changed.
-        for port in ports.values():
-            data = self.port_etcd_data(port)
-            self.client.write(self.port_etcd_key(port), json.dumps(data))
-
-            # Remember the security profile that this port needs.
-            self._mark_profile_needed(data['profile_id'])
-
-        with self.profile_semaphore:
-            # Clean up the profiles that we no longer need.  By taking the
-            # lock we ensure that any _mark_profile_needed() calls either
-            # come before or after this block.  If they come before, they'll
-            # remove the profile from self.profiles_to_cleanup so we won't
-            # clean that one up.  If they come after, then they'll put it
-            # back in self.needed_profiles.
-            self.needed_profiles -= self.profiles_to_clean_up
-            self.profiles_to_clean_up.clear()
-
+    def resync_security_groups(self):
+        pass
 
     def port_etcd_key(self, port):
         return key_for_endpoint(port['binding:host_id'],
@@ -259,62 +134,6 @@ class CalicoTransportEtcd(CalicoTransport):
 
     def port_profile_id(self, port):
         return '_'.join(port['security_groups'])
-
-    def resync_security_groups(self):
-        # Get all current security groups from the OpenStack database and key
-        # them on security group ID.
-        with self._sgs_semaphore:
-            self.sgs.clear()
-            for sg in self.driver.get_security_groups():
-                self.sgs[sg['id']] = sg
-
-        # As we look at the etcd data, accumulate a set of profile IDs that
-        # already have correct data.
-        correct_profiles = set()
-
-        # Read all etcd keys directly under /calico/v1/policy/profile.
-        try:
-            children = self.client.read(PROFILE_DIR, recursive=True).children
-        except etcd.EtcdKeyNotFound:
-            children = []
-        for child in children:
-            LOG.debug("etcd key: %s" % child.key)
-            m = TAGS_KEY_RE.match(child.key)
-            if m:
-                # If there are no policies, then read returns the top level
-                # node, so we need to check that this really is a profile ID.
-                profile_id = m.group("profile_id")
-                LOG.debug("Existing etcd profile data for %s" % profile_id)
-                try:
-                    if profile_id in self.needed_profiles:
-                        # This is a profile that we want.  Let's read its rules and
-                        # tags, and compare those against the current OpenStack data.
-                        rules_key = key_for_profile_rules(profile_id)
-                        rules = json_decoder.decode(
-                            self.client.read(rules_key).value)
-                        tags_key = key_for_profile_tags(profile_id)
-                        tags = json_decoder.decode(
-                            self.client.read(tags_key).value)
-
-                        if (rules == self.profile_rules(profile_id) and
-                            tags == self.profile_tags(profile_id)):
-                            # The existing etcd data for this profile is completely
-                            # correct.  Remember the profile_id so that we don't
-                            # unnecessarily write out its (unchanged) data again below.
-                            LOG.debug("Existing etcd profile data is correct")
-                            correct_profiles.add(profile_id)
-                    else:
-                        # We don't want this profile any more, so delete the key.
-                        LOG.debug("Existing etcd profile key is now invalid")
-                        profile_key = key_for_profile(profile_id)
-                        self.client.delete(profile_key, recursive=True)
-                except etcd.EtcdKeyNotFound:
-                    LOG.info("Etcd data appears to have been reset")
-
-        # Now write etcd data for each profile that we need and that we don't
-        # already know to be correct.
-        for profile_id in self.needed_profiles.difference(correct_profiles):
-            self.write_profile_to_etcd(profile_id)
 
     def write_profile_to_etcd(self, profile_id):
         self.client.write(key_for_profile_rules(profile_id),
