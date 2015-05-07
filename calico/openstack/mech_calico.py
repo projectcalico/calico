@@ -72,7 +72,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.db = None
 
         # Use Etcd-based transport.
-        self.transport = CalicoTransportEtcd(self, LOG)
+        self.transport = CalicoTransportEtcd(self)
 
     def _get_db(self):
         if not self.db:

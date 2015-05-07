@@ -26,6 +26,7 @@ import re
 
 # OpenStack imports.
 from oslo.config import cfg
+from neutron.openstack.common import log
 
 # Calico imports.
 from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
@@ -43,7 +44,6 @@ calico_opts = [
 ]
 cfg.CONF.register_opts(calico_opts, 'calico')
 
-LOG = None
 OPENSTACK_ENDPOINT_RE = re.compile(
     r'^' + HOST_DIR +
     r'/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
@@ -52,16 +52,13 @@ json_decoder = json.JSONDecoder()
 
 PERIODIC_RESYNC_INTERVAL_SECS = 30
 
+LOG = log.getLogger(__name__)
 
 class CalicoTransportEtcd(CalicoTransport):
     """Calico transport implementation based on etcd."""
 
-    def __init__(self, driver, logger):
+    def __init__(self, driver):
         super(CalicoTransportEtcd, self).__init__(driver)
-
-        # Initialize logger.
-        global LOG
-        LOG = logger
 
         # Prepare client for accessing etcd data.
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
