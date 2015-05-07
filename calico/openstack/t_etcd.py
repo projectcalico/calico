@@ -169,7 +169,6 @@ class CalicoTransportEtcd(object):
         data = port_etcd_data(port, profile_id)
         self.client.write(port_etcd_key(port), json.dumps(data))
 
-
     def provide_felix_config(self):
         """Specify the prefix of the TAP interfaces that Felix should
         look for and work with.  This config setting does not have a
@@ -196,6 +195,7 @@ class CalicoTransportEtcd(object):
             # TODO Set this flag only once we're really ready!
             LOG.info('%s -> true', READY_KEY)
             self.client.write(READY_KEY, 'true')
+
 
 def _neutron_rule_to_etcd_rule(rule):
     """
