@@ -64,7 +64,6 @@ class CalicoTransportEtcd(CalicoTransport):
         global LOG
         LOG = logger
 
-    def initialize(self):
         # Prepare client for accessing etcd data.
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
                                   port=cfg.CONF.calico.etcd_port)

@@ -74,9 +74,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Use Etcd-based transport.
         self.transport = CalicoTransportEtcd(self, LOG)
 
-    def initialize(self):
-        self.transport.initialize()
-
     def _get_db(self):
         if not self.db:
             self.db = manager.NeutronManager.get_plugin()
