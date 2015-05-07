@@ -12,6 +12,7 @@ pushd ./build_calicoctl
 popd
 
 # Run the FVs
+sudo ./tests/fv/no_powerstrip.sh
 sudo ./tests/fv/arg_parsing.sh
 sudo ./tests/fv/mainline.sh
 sudo ./tests/fv/add_container.sh

@@ -32,3 +32,5 @@ while ! ip route |grep 192.168.1.1; do
 echo "Waiting for felix to add route"
   sleep 1
 done
+
+echo "Tests completed successfully"
