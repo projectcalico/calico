@@ -100,61 +100,27 @@ class CalicoTransportEtcd(object):
     def resync_security_groups(self):
         pass
 
-
-    def write_profile_to_etcd(self, profile_id):
-        self.client.write(key_for_profile_rules(profile_id),
-                          json.dumps(self.profile_rules(profile_id)))
-        self.client.write(key_for_profile_tags(profile_id),
-                          json.dumps(self.profile_tags(profile_id)))
-
-    def profile_rules(self, profile_id):
-        inbound = []
-        outbound = []
-        for sgid in self.profile_tags(profile_id):
-            # Be tolerant of a security group not being here. Allow up to 20
-            # attempts to get it, waiting a few hundred ms in between: we might
-            # just be racing slightly ahead of a security group update.
-            rules = None
-            retries = 20
-            while rules is None:
-                try:
-                    with self._sgs_semaphore:
-                        rules = self.sgs[sgid]['security_group_rules']
-                except KeyError:
-                    LOG.warning("Missing info for SG %s: waiting.", sgid)
-                    retries -= 1
-
-                    if not retries:
-                        LOG.error("Gave up waiting for SG %s", sgid)
-                        raise
-
-                    # Wait for 200ms
-                    eventlet.sleep(0.2)
-
-
-            for rule in rules:
-                LOG.info("Neutron rule  %s : %s", profile_id, rule)
-                etcd_rule = _neutron_rule_to_etcd_rule(rule)
-                if rule['direction'] == 'ingress':
-                    inbound.append(etcd_rule)
-                else:
-                    outbound.append(etcd_rule)
-
-        return {'inbound_rules': inbound, 'outbound_rules': outbound}
-
-    def profile_tags(self, profile_id):
-        return profile_id.split('_')
+    def write_profile_to_etcd(self, profile):
+        """
+        Write a single security profile into etcd.
+        """
+        self.client.write(
+            key_for_profile_rules(profile.id),
+            json.dumps(profile_rules(profile))
+        )
+        self.client.write(
+            key_for_profile_tags(profile.id),
+            json.dumps(profile_tags(profile))
+        )
 
     def endpoint_created(self, port, profile):
         """
         Write appropriate data to etcd for an endpoint creation event.
         """
         # First, write etcd data for the new endpoint.
-        # TODO: Write this function.
         self.write_port_to_etcd(port, profile.id)
 
         # Next, write the security profile.
-        # TODO: Fix this function to do the right thing.
         self.write_profile_to_etcd(profile)
 
     def endpoint_updated(self, port, profile):
@@ -341,3 +307,24 @@ def port_etcd_data(port, profile_id):
 
     # Return that data.
     return data
+
+
+def profile_tags(profile):
+    """
+    Get the tags from a given security profile.
+    """
+    return profile.id.split('_')
+
+
+def profile_rules(profile):
+    """
+    Get a dictionary of profile rules, ready for writing into etcd as JSON.
+    """
+    inbound_rules = [
+        _neutron_rule_to_etcd_rule(rule) for rule in profile.inbound_rules
+    ]
+    outbound_rules = [
+        _neutron_rule_to_etcd_rule(rule) for rule in profile.outbound_rules
+    ]
+
+    return {'inbound_rules': inbound_rules, 'outbound_rules': outbound_rules}
