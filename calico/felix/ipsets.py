@@ -319,6 +319,8 @@ class IpsetManager(ReferenceManager):
             if not self.ip_owners_by_tag[tag_id][ip_address]:
                 del self.ip_owners_by_tag[tag_id][ip_address]
                 self._dirty_tags.add(tag_id)
+            if not self.ip_owners_by_tag[tag_id]:
+                del self.ip_owners_by_tag[tag_id]
 
     def _add_profile_index(self, prof_ids, endpoint_id):
         """
