@@ -398,7 +398,6 @@ class ExceptionTrackingRef(weakref.ref):
         super(ExceptionTrackingRef, self).__init__(obj, callback)
         self.exception = None
         self.tag = None
-        self.msg = None
 
         # Callback won't get triggered if we die before the object we reference
         # so stash a reference to this object, which we clean up when the
@@ -426,13 +425,19 @@ def _reap_ref(ref):
     assert isinstance(ref, ExceptionTrackingRef)
     del _refs[ref.idx]
     if ref.exception:
-        _log.critical("TrackedAsyncResult %s was leaked with exception %r",
-                      ref.msg, ref.exception)
-        print >> sys.stderr, "TrackedAsyncResult %s was leaked with " \
-                             "exception %r" % (ref.tag, ref.exception)
+        try:
+            msg = ("TrackedAsyncResult %s was leaked with "
+                   "exception %r.  Dying." % (ref.tag, ref.exception))
+            _log.critical(msg)
+            _print_to_stderr(msg)
+        finally:
+            # Called from the GC so we can't raise an exception, just die.
+            _exit(1)
 
-        # Called from the GC so we can't raise an exception, just die.
-        _exit(1)
+
+# Factored out for UTs to stub.
+def _print_to_stderr(msg):
+    print >> sys.stderr, msg
 
 
 def _exit(rc):
@@ -450,11 +455,17 @@ class TrackedAsyncResult(AsyncResult):
     """
     def __init__(self, tag):
         super(TrackedAsyncResult, self).__init__()
-        self.__ref = ExceptionTrackingRef(self, _reap_ref)
-        self.__ref.tag = tag
+        # Avoid keeping a reference to the week ref directly; look it up
+        # when needed.  Also, be careful not to attach any debugging
+        # information to the ref that could produce a reference cycle.  The
+        # tag should be something simple like a string or tuple.
+        tr = ExceptionTrackingRef(self, _reap_ref)
+        tr.tag = tag
+        self.__ref_idx = tr.idx
 
-    def set_msg(self, msg):
-        self.__ref.msg = msg
+    @property
+    def __ref(self):
+        return _refs[self.__ref_idx]
 
     def set_exception(self, exception):
         self.__ref.exception = exception
@@ -505,10 +516,9 @@ def actor_message(needs_own_batch=False):
 
             # OK, so build the message and put it on the queue.
             partial = functools.partial(fn, self, *args, **kwargs)
-            result = TrackedAsyncResult(method_name)
+            result = TrackedAsyncResult((caller, self.name))
             msg = Message(partial, [result], caller, self.name,
                           needs_own_batch=needs_own_batch)
-            result.set_msg(msg)
 
             _log.debug("Message %s sent by %s to %s, queue length %d",
                        msg, caller, self.name, self._event_queue.qsize())
