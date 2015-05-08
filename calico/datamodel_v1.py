@@ -52,10 +52,6 @@ RULES_KEY_RE = re.compile(
 # "profile_id".
 TAGS_KEY_RE = re.compile(
     r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/tags')
-# Regex to match profile refcounts, capturing the profile ID in capture group
-# "profile_id".
-PROFILE_REFCOUNT_RE = re.compile(
-    r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/refcount')
 # Regex to match endpoints, captures "hostname" and "endpoint_id".
 ENDPOINT_KEY_RE = re.compile(
     r'^' + HOST_DIR +
@@ -89,10 +85,6 @@ def key_for_profile_rules(profile_id):
 
 def key_for_profile_tags(profile_id):
     return PROFILE_DIR + "/%s/tags" % profile_id
-
-
-def key_for_profile_refcount(profile_id):
-    return PROFILE_DIR + "/%s/refcount" % profile_id
 
 
 def key_for_config(config_name):
