@@ -342,10 +342,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         :returns: A generator of ``SecurityProfile`` objects.
         """
-        # First, work out the profile ID.
-        profile_id = port_profile_id(port)
-
-        # Next, for each security group get its rules. Given that we don't need
+        # For each security group get its rules. Given that we don't need
         # anything else about the security group, we can do this as a single
         # query.
         # CB2: I am concerned that this does not adequately prevent new
@@ -467,21 +464,6 @@ class CalicoNotifierProxy(object):
         LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
         self.calico_driver.send_sg_updates(sgids, context)
         self.ml2_notifier.security_groups_member_updated(context, sgids)
-
-
-def port_profile_id(port):
-    """
-    Returns the security profile ID for a given port.
-    """
-    return '_'.join(port['security_groups'])
-
-
-def groups_from_profile_id(profile_id):
-    """
-    For a given profile ID, returns a list of the security group IDs that
-    make it up.
-    """
-    return profile_id.split('_')
 
 
 def profile_from_neutron_rules(profile_id, rules):
