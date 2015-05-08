@@ -21,8 +21,8 @@ class BaseTestCase(unittest.TestCase):
         self._m_exit = self._exit_patch.start()
 
     def tearDown(self):
-        self._exit_patch.stop()
         self.assertFalse(self._m_exit.called)
+        self._exit_patch.stop()
 
     def step_actor(self, actor):
         self.assertFalse(actor._event_queue.empty())
