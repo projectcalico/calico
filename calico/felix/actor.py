@@ -363,10 +363,6 @@ def wait_and_check(async_results):
         r.get()
 
 
-_refs = {}
-_ref_idx = 0
-
-
 class Message(object):
     """
     Message passed to an actor.
@@ -386,102 +382,26 @@ class Message(object):
         return data
 
 
-class ExceptionTrackingRef(weakref.ref):
-    """
-    Specialised weak reference with a slot to hold an exception
-    that was leaked.
-    """
-
-    # Note: superclass implements __new__ so we have to mimic its args
-    # and have the callback passed in.
-    def __init__(self, obj, callback):
-        super(ExceptionTrackingRef, self).__init__(obj, callback)
-        self.exception = None
-        self.tag = None
-
-        # Callback won't get triggered if we die before the object we reference
-        # so stash a reference to this object, which we clean up when the
-        # TrackedAsyncResult is GCed.
-        global _ref_idx
-        self.idx = _ref_idx
-        _ref_idx += 1
-        _refs[self.idx] = self
-
-    def __str__(self):
-        return (self.__class__.__name__ + "<%s/%s,exc=%s>" %
-                (self.tag, self.idx, self.exception))
-
-
-def _reap_ref(ref):
-    """
-    Called when a TrackedAsyncResult gets GCed.
-
-    Looks for leaked exceptions.
-
-    :param ExceptionTrackingRef ref: The ref that may contain a leaked
-        exception.
-    """
-    _log.debug("Reaping %s", ref)
-    assert isinstance(ref, ExceptionTrackingRef)
-    del _refs[ref.idx]
-    if ref.exception:
-        try:
-            msg = ("TrackedAsyncResult %s was leaked with "
-                   "exception %r.  Dying." % (ref.tag, ref.exception))
-            _log.critical(msg)
-            _print_to_stderr(msg)
-        finally:
-            # Called from the GC so we can't raise an exception, just die.
-            _exit(1)
-
-
-# Factored out for UTs to stub.
-def _print_to_stderr(msg):
-    print >> sys.stderr, msg
-
-
-def _exit(rc):
-    """
-    Immediately terminates this process with the given return code.
-
-    This function is mainly here to be mocked out in UTs.
-    """
-    os._exit(rc)  # pragma nocover
-
-
-class TrackedAsyncResult(AsyncResult):
-    """
-    An AsyncResult that tracks if any exceptions are leaked.
-    """
-    def __init__(self, tag):
-        super(TrackedAsyncResult, self).__init__()
-        # Avoid keeping a reference to the week ref directly; look it up
-        # when needed.  Also, be careful not to attach any debugging
-        # information to the ref that could produce a reference cycle.  The
-        # tag should be something simple like a string or tuple.
-        tr = ExceptionTrackingRef(self, _reap_ref)
-        tr.tag = tag
-        self.__ref_idx = tr.idx
-
-    @property
-    def __ref(self):
-        return _refs[self.__ref_idx]
-
-    def set_exception(self, exception):
-        self.__ref.exception = exception
-        return super(TrackedAsyncResult, self).set_exception(exception)
-
-    def get(self, block=True, timeout=None):
-        try:
-            result = super(TrackedAsyncResult, self).get(block=block,
-                                                         timeout=timeout)
-        finally:
-            # Someone called get so any exception can't be leaked.  Discard it.
-            self.__ref.exception = None
-        return result
-
-
 def actor_message(needs_own_batch=False):
+    """
+    Decorator: turns a method into an Actor message.
+
+    Calls to the wrapped method will be queued via the Actor's message queue.
+    The caller to a wrapped method must specify the async=True/False
+    argument to specify whether they want their own thread to block
+    waiting for the result.
+
+    If async=True is passed, the wrapped method returns an AsyncResult.
+    Otherwise, it blocks and returns the result (or raises the exception)
+    as-is.
+
+    Using async=False to block the current thread can be very convenient but
+    it can also deadlock if there is a cycle of blocking calls.  Use with
+    caution.
+
+    :param bool needs_own_batch: True if this message should be processed
+        in its own batch.
+    """
     def decorator(fn):
         method_name = fn.__name__
         @functools.wraps(fn)
@@ -516,7 +436,7 @@ def actor_message(needs_own_batch=False):
 
             # OK, so build the message and put it on the queue.
             partial = functools.partial(fn, self, *args, **kwargs)
-            result = TrackedAsyncResult((caller, self.name))
+            result = TrackedAsyncResult((caller, self.name, method_name))
             msg = Message(partial, [result], caller, self.name,
                           needs_own_batch=needs_own_batch)
 
@@ -530,3 +450,111 @@ def actor_message(needs_own_batch=False):
         queue_fn.func = fn
         return queue_fn
     return decorator
+
+
+# Each time we create a TrackedAsyncResult, me make a weak reference to it
+# so that we can get a callback (_on_ref_reaped()) when the TrackedAsyncResult
+# is GCed.  This is roughly equivalent to adding a __del__ method to the
+# TrackedAsyncResult but it doesn't interfere with the GC.
+#
+# In order for the callback to get called, we have to keep the weak reference
+# alive until after the TrackedAsyncResult itself is GCed.  To do that, we
+# stash a reference to the weak ref in this dict and then clean it up in
+# _on_ref_reaped().
+_tracked_refs_by_idx = {}
+_ref_idx = 0
+
+
+class ExceptionTrackingWeakRef(weakref.ref):
+    """
+    Specialised weak reference with a slot to hold an exception
+    that was leaked.
+    """
+
+    # Note: superclass implements __new__ so we have to mimic its args
+    # and have the callback passed in.
+    def __init__(self, obj, callback):
+        super(ExceptionTrackingWeakRef, self).__init__(obj, callback)
+        self.exception = None
+        self.tag = None
+
+        # Callback won't get triggered if we die before the object we reference
+        # so stash a reference to this object, which we clean up when the
+        # TrackedAsyncResult is GCed.
+        global _ref_idx
+        self.idx = _ref_idx
+        _ref_idx += 1
+        _tracked_refs_by_idx[self.idx] = self
+
+    def __str__(self):
+        return (self.__class__.__name__ + "<%s/%s,exc=%s>" %
+                (self.tag, self.idx, self.exception))
+
+
+def _on_ref_reaped(ref):
+    """
+    Called when a TrackedAsyncResult gets GCed.
+
+    Looks for leaked exceptions.
+
+    :param ExceptionTrackingWeakRef ref: The ref that may contain a leaked
+        exception.
+    """
+    _log.debug("Reaping %s", ref)
+    assert isinstance(ref, ExceptionTrackingWeakRef)
+    del _tracked_refs_by_idx[ref.idx]
+    if ref.exception:
+        try:
+            msg = ("TrackedAsyncResult %s was leaked with "
+                   "exception %r.  Dying." % (ref.tag, ref.exception))
+            _log.critical(msg)
+            _print_to_stderr(msg)
+        finally:
+            # Called from the GC so we can't raise an exception, just die.
+            _exit(1)
+
+
+class TrackedAsyncResult(AsyncResult):
+    """
+    An AsyncResult that tracks if any exceptions are leaked.
+    """
+    def __init__(self, tag):
+        super(TrackedAsyncResult, self).__init__()
+        # Avoid keeping a reference to the weak ref directly; look it up
+        # when needed.  Also, be careful not to attach any debugging
+        # information to the ref that could produce a reference cycle.  The
+        # tag should be something simple like a string or tuple.
+        tr = ExceptionTrackingWeakRef(self, _on_ref_reaped)
+        tr.tag = tag
+        self.__ref_idx = tr.idx
+
+    @property
+    def __ref(self):
+        return _tracked_refs_by_idx[self.__ref_idx]
+
+    def set_exception(self, exception):
+        self.__ref.exception = exception
+        return super(TrackedAsyncResult, self).set_exception(exception)
+
+    def get(self, block=True, timeout=None):
+        try:
+            result = super(TrackedAsyncResult, self).get(block=block,
+                                                         timeout=timeout)
+        finally:
+            # Someone called get so any exception can't be leaked.  Discard it.
+            self.__ref.exception = None
+        return result
+
+
+# Factored out for UTs to stub.
+def _print_to_stderr(msg):
+    print >> sys.stderr, msg
+
+
+def _exit(rc):
+    """
+    Immediately terminates this process with the given return code.
+
+    This function is mainly here to be mocked out in UTs.
+    """
+    os._exit(rc)  # pragma nocover

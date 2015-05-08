@@ -224,27 +224,27 @@ class TestExceptionTracking(BaseTestCase):
 
     @mock.patch("calico.felix.actor._print_to_stderr", autospec=True)
     def test_exception(self, _print):
-        num_refs_at_start = len(actor._refs)
+        num_refs_at_start = len(actor._tracked_refs_by_idx)
         ar = actor.TrackedAsyncResult("foo")
         ar.set_exception(Exception())
-        self.assertEqual(num_refs_at_start + 1, len(actor._refs))
+        self.assertEqual(num_refs_at_start + 1, len(actor._tracked_refs_by_idx))
         del ar  # Enough to trigger cleanup in CPython, with exact ref counts.
         self._m_exit.assert_called_once_with(1)
         self.assertTrue(_print.called)
         self.assertTrue("foo" in _print.call_args[0][0])
         self._m_exit.reset_mock()
-        num_refs_at_end = len(actor._refs)
+        num_refs_at_end = len(actor._tracked_refs_by_idx)
         self.assertEqual(num_refs_at_start, num_refs_at_end)
 
     @mock.patch("calico.felix.actor._print_to_stderr", autospec=True)
     def test_no_exception(self, m_print):
-        num_refs_at_start = len(actor._refs)
+        num_refs_at_start = len(actor._tracked_refs_by_idx)
         ar = actor.TrackedAsyncResult("foo")
         ar.set("foo")
         del ar  # Enough to trigger cleanup in CPython, with exact ref counts.
         self.assertFalse(self._m_exit.called)
         self.assertFalse(m_print.called)
-        num_refs_at_end = len(actor._refs)
+        num_refs_at_end = len(actor._tracked_refs_by_idx)
         self.assertEqual(num_refs_at_start, num_refs_at_end)
 
 
