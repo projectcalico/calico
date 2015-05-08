@@ -117,15 +117,8 @@ class CalicoTransportEtcd(object):
         """
         Write appropriate data to etcd for an endpoint creation event.
         """
-        # First, write etcd data for the new endpoint.
+        # Write etcd data for the new endpoint.
         self.write_port_to_etcd(port)
-
-    def endpoint_updated(self, port, profile):
-        """
-        Write data to etcd for an endpoint updated event.
-        """
-        # Do the same as for endpoint_created.
-        self.endpoint_created(port, profile)
 
     def endpoint_deleted(self, port):
         """
