@@ -396,7 +396,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Work out all the endpoints in etcd. Do this outside a database
         # transaction to try to ensure that anything that gets created is in
         # our Neutron snapshot.
-        # TODO: Write this method.
         endpoints = self.transport.get_endpoints()
         endpoint_ids = set(ep.id for ep in endpoints)
 

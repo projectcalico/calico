@@ -23,6 +23,8 @@ import json
 import re
 import weakref
 
+from collections import namedtuple
+
 # OpenStack imports.
 from oslo.config import cfg
 from neutron.openstack.common import log
@@ -51,6 +53,9 @@ json_decoder = json.JSONDecoder()
 PERIODIC_RESYNC_INTERVAL_SECS = 30
 
 LOG = log.getLogger(__name__)
+
+
+Endpoint = namedtuple('Endpoint', ['id', 'modified_index'])
 
 
 class CalicoTransportEtcd(object):
@@ -132,6 +137,29 @@ class CalicoTransportEtcd(object):
             # TODO Set this flag only once we're really ready!
             LOG.info('%s -> true', READY_KEY)
             self.client.write(READY_KEY, 'true')
+
+    def get_endpoints(self):
+        """
+        Gets information about every endpoint in etcd. Returns a generator of
+        ``Endpoint`` objects.
+        """
+        result = self.client.read(HOST_DIR, recursive=True, timeout=5)
+        nodes = result.children
+
+        for node in nodes:
+            match = OPENSTACK_ENDPOINT_RE.match(node.key)
+            if match is None:
+                continue
+
+            endpoint_id = match.group('endpoint_id')
+            modified_index = node.modifiedIndex
+
+            yield Endpoint(endpoint_id, modified_index)
+
+    def atomic_delete_endpoint(self, endpoint_id):
+        """
+        Atomically delete a given endpoint.
+        """
 
 
 def _neutron_rule_to_etcd_rule(rule):
