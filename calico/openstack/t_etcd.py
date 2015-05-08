@@ -31,7 +31,7 @@ from neutron.openstack.common import log
 
 # Calico imports.
 from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
-                                 key_for_endpoint, PROFILE_DIR,
+                                 key_for_endpoint, PROFILE_DIR, RULES_KEY_RE,
                                  key_for_profile, key_for_profile_rules,
                                  key_for_profile_tags, key_for_config)
 
@@ -55,7 +55,12 @@ PERIODIC_RESYNC_INTERVAL_SECS = 30
 LOG = log.getLogger(__name__)
 
 
+# Objects for lightly wrapping etcd return values for use in the mechanism
+# driver.
 Endpoint = namedtuple('Endpoint', ['id', 'key', 'modified_index'])
+Profile = namedtuple(
+    'Profile', ['id', 'tags_modified_index', 'rules_modified_index']
+)
 
 
 class CalicoTransportEtcd(object):
@@ -161,6 +166,63 @@ class CalicoTransportEtcd(object):
         """
         self.client.delete(
             endpoint.key, prevIndex=endpoint.modified_index, timeout=5
+        )
+
+    def get_profiles(self):
+        """
+        Gets information about every profile in etcd. Returns a generator of
+        ``Profile`` objects.
+        """
+        result = self.client.read(PROFILE_DIR, recursive=True, timeout=5)
+        nodes = result.children
+
+        tag_indices = {}
+        rules_indices = {}
+
+        for node in nodes:
+            # All groups have both tags and rules, and we need the
+            # modifiedIndex for both.
+            tags_match = TAGS_KEY_RE.match(node.key)
+            rules_match = RULES_KEY_RE.match(node.key)
+            if tags_match:
+                profile_id = tags_match.group('profile_id')
+                tag_indices[profile_id] = node.modifiedIndex
+            elif rules_match:
+                profile_id = rules_match.group('profile_id')
+                rules_indices[profile_id] = node.modifiedIndex
+            else:
+                continue
+
+            # Check whether we have a complete set. If we do, remove them and
+            # yield.
+            if profile_id in tag_indices and profile_id in rules_indices:
+                tag_modified = tag_indices.pop(profile_id)
+                rules_modified = rules_indices.pop(profile_id)
+                yield Profile(profile_id, tag_modified, rules_modified)
+
+        # Quickly confirm that the tag and rule indices are empty (they should
+        # be).
+        if tag_indices or rules_indices:
+            LOG.warning(
+                "Imbalanced profile tags and rules! "
+                "Extra tags %s, extra rules %s" % tag_indices, rules_indices
+            )
+
+    def atomic_delete_profile(self, profile):
+        """
+        Atomically delete a profile. This occurs in two stages: first the tag,
+        then the rules. Abort if the first stage fails, as we can assume that
+        someone else is trying to replace the profile.
+        """
+        self.client.delete(
+            key_for_profile_tags(profile.id),
+            prevIndex=profile.tags_modified_index,
+            timeout=5
+        )
+        self.client.delete(
+            key_for_profile_rules(profile.id),
+            prevIndex=profile.rules_modified_index,
+            timeout=5
         )
 
 
