@@ -157,8 +157,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.add_port_interface_name(port)
 
             # Next, we need to work out what security profile applies to this
-            # port and grab information about it. This is a fairly expensive
-            # operation, but we need to do it to guarantee our sanity.
+            # port and grab information about it.
             profile = self.get_security_profile(context, port)
 
             # Pass this to the transport layer.
@@ -167,7 +166,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # use atomic CAS. The problem there is that we potentially have to
             # repeatedly respin and regain the transaction. Let's not do that
             # for now, and performance test to see if it's a problem later.
-            self.transport.endpoint_created(port, profile)
+            self.transport.endpoint_created(port)
+            self.transport.write_profile_to_etcd(profile)
 
             # Update Neutron that we succeeded.
             self.db.update_port_status(context._plugin_context,
@@ -221,35 +221,26 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         Called whenever security group rules or membership change.
 
-        This turns out to be really tricky to handle. When a security group
-        rule is added, we need to do the following steps:
+        When a security group rule is added, we need to do the following steps:
 
-        1. Query etcd to determine all profiles that contain this security
-           group.
-        2. Query the Neutron database to determine the rules for all those
-           groups.
-        3. Rebuild and apply all the security profiles to etcd.
+        1. Reread the security rules from the Neutron DB.
+        2. Write the profile to etcd.
         """
-        # TODO: Write this function.
-        profiles = self.transport.get_etcd_profiles()
-        groups = set(chain(map(groups_from_profile_id, profiles)))
-
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
-                context, filters={'security_group_id': groups}
+                context, filters={'security_group_id': sgids}
             )
 
             # For each profile, build its object and send it down.
             # TODO: Sending this to etcd could legitimately fail because of a
             # CAS problem. Come back to handle retries.
-            for profile_id in profiles:
-                profile_groups = set(groups_from_profile_id(profile_id))
+            for sgid in sgids:
                 profile_rules = (
                     r for r in rules
-                    if r['security_group_id'] in profile_groups
+                    if r['security_group_id'] in sgid
                 )
 
-                profile = profile_from_neutron_rules(profile_id, profile_rules)
+                profile = profile_from_neutron_rules(sgid, profile_rules)
                 self.transport.write_profile_to_etcd(profile)
 
     def _first_migration_step(self, context, port):
@@ -277,13 +268,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         http://lists.openstack.org/pipermail/openstack-dev/2014-February/
         027571.html
         """
+        # TODO: Can we avoid re-writing the security profile here? Put another
+        # way, does the security profile change during migration steps, or does
+        # a separate port update event occur?
         LOG.info("Migration part 2")
         with context.session.begin(subtransactions=True):
             port = self.db.get_port(port['id'])
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
             profile = self.get_security_profile(context, port)
-            self.transport.endpoint_created(port, profile)
+            self.transport.endpoint_created(port)
+            self.transport.write_profile_to_etcd(profile)
 
     def _icehouse_migration_step(self, context, port, original):
         """
@@ -291,6 +286,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         perform step one and step two at exactly the same time, but we hold
         a DB lock the entire time.
         """
+        # TODO: Can we avoid re-writing the security profile here? Put another
+        # way, does the security profile change during migration steps, or does
+        # a separate port update event occur?
         LOG.info("Migration as implemented in Icehouse")
         with context.session.begin(subtransactions=True):
             port = self.db.get_port(port['id'])
@@ -300,7 +298,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
             profile = self.get_security_profile(context, port)
-            self.transport.endpoint_created(port, profile)
+            self.transport.endpoint_created(port)
+            self.transport.write_profile_to_etcd(profile)
 
     def _update_port(self, context, port):
         """
@@ -314,7 +313,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
             profile = profile = self.get_security_profile(context, port)
-            self.transport.endpoint_created(port, profile)
+            self.transport.endpoint_created(port)
+            self.transport.write_profile_to_etcd(profile)
 
     def add_port_gateways(self, port, context):
         """
