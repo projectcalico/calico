@@ -239,6 +239,15 @@ class RefHelper(object):
         Mapping from object ID to object that we've acquired.
         """
 
+    def replace_all(self, new_obj_ids):
+        """
+        Change the set of references we require to the given set.
+        """
+        for obj_id in new_obj_ids:
+            self.acquire_ref(obj_id)
+        for obj_id in [r for r in self.required_refs if r not in new_obj_ids]:
+            self.discard_ref(obj_id)
+
     def acquire_ref(self, obj_id):
         """
         Add the given ID to the set of objects that we want to acquire.

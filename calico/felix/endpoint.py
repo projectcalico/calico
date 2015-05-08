@@ -25,7 +25,7 @@ from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4
-from calico.felix.refcount import ReferenceManager, RefCountedActor
+from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (
@@ -183,6 +183,8 @@ class LocalEndpoint(RefCountedActor):
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
+        self.rules_ref_helper = RefHelper(self, rules_manager,
+                                          self._on_profiles_ready)
 
         # Will be filled in as we learn about the OS interface and the
         # endpoint config.
@@ -211,17 +213,15 @@ class LocalEndpoint(RefCountedActor):
                                                self._iface_name)
         was_ready = self._ready
 
-        old_profile_id = self.endpoint and self.endpoint["profile_id"]
-        new_profile_id = endpoint and endpoint["profile_id"]
-        if old_profile_id != new_profile_id:
-            if old_profile_id:
-                # Clean up the old profile.
-                _log.info("Profile changed, decreffing old profile %s",
-                          old_profile_id)
-                self.rules_mgr.decref(old_profile_id, async=True)
-            if new_profile_id is not None:
-                _log.info("Acquiring new profile %s", new_profile_id)
-                self.rules_mgr.get_and_incref(new_profile_id, async=True)
+        # Activate the required profile IDs (and deactivate any that we no
+        # longer need).
+        if endpoint:
+            new_profile_ids = set(endpoint["profile_ids"])
+        else:
+            new_profile_ids = set()
+        # Note: we don't actually need to wait for the activation to finish
+        # due to the dependency management in the iptables layer.
+        self.rules_ref_helper.replace_all(new_profile_ids)
 
         if endpoint != self.endpoint:
             self._dirty = True
@@ -247,6 +247,9 @@ class LocalEndpoint(RefCountedActor):
         """
         _log.info("%s now unreferenced, cleaning up", self)
         assert not self._ready, "Should be deleted before being unreffed."
+        # Removing all profile refs should have been done already but be
+        # defensive:
+        self.rules_ref_helper.discard_all()
         self._notify_cleanup_complete()
 
     @actor_message()
@@ -267,7 +270,7 @@ class LocalEndpoint(RefCountedActor):
             missing_deps.append("endpoint")
         elif self.endpoint.get("state", "active") != "active":
             missing_deps.append("endpoint active")
-        elif not self.endpoint.get("profile_id"):
+        elif not self.endpoint.get("profile_ids"):
             missing_deps.append("profile")
         return missing_deps
 
@@ -319,7 +322,7 @@ class LocalEndpoint(RefCountedActor):
             self.ip_version,
             self.endpoint.get("ipv%s_nets" % self.ip_version, []),
             self.endpoint["mac"],
-            self.endpoint["profile_id"]
+            self.endpoint["profile_ids"]
         )
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
@@ -384,6 +387,10 @@ class LocalEndpoint(RefCountedActor):
                 _log.exception("Cannot delete rules for interface %s for %s",
                                self._iface_name, self.endpoint_id)
 
+    def _on_profiles_ready(self):
+        # We don't actually need to talk to the profiles, just log.
+        _log.info("Endpoint acquired all required profile references.")
+
     def __str__(self):
         return ("Endpoint<%s,id=%s,iface=%s>" %
                 (self.ip_type, self.endpoint_id,
@@ -391,9 +398,10 @@ class LocalEndpoint(RefCountedActor):
 
 
 def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
-                        profile_id):
+                        profile_ids):
     to_chain_name, from_chain_name = chain_names(suffix)
 
+    # Common chain prefixes.  Allow IPv6 ICMP and conntrack rules.
     to_chain = ["--flush %s" % to_chain_name]
     if ip_version == 6:
         #  In ipv6 only, there are 6 rules that need to be created first.
@@ -416,15 +424,29 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
     to_chain.append("--append %s --match conntrack "
                     "--ctstate RELATED,ESTABLISHED --jump RETURN" %
                     to_chain_name)
-    assert profile_id, "Profile ID should be set, not %s" % profile_id
-    profile_in_chain = profile_to_chain_name("inbound", profile_id)
-    to_chain.append("--append %s --goto %s" %
-                    (to_chain_name, profile_in_chain))
-    # This drop rule is not hittable, but it gives us a place to stash the
-    # comment with our ID.
+
+    # Jump to each profile in turn.  The profile will do one of the
+    # following:
+    # * DROP the packet; in which case we won't see it again.
+    # * RETURN without MARKing the packet; indicates that the packet was
+    #   accepted.
+    # * RETURN with a mark on the packet, indicates reaching the end
+    #   of the chain.
+    to_deps = set()
+    for profile_id in profile_ids:
+        profile_in_chain = profile_to_chain_name("inbound", profile_id)
+        to_chain.append("--append %s --jump MARK --set-mark 0" %
+                        (to_chain_name,))
+        to_chain.append("--append %s --jump %s" %
+                        (to_chain_name, profile_in_chain))
+        to_deps.add(profile_in_chain)
+        to_chain.append('--append %s --match mark ! --mark 1/1 '
+                        '--match comment --comment "No mark means profile '
+                        'accepted packet" --jump RETURN' % (to_chain_name,))
+
+    # Default drop rule.
     to_chain.append(commented_drop_fragment(to_chain_name,
                                             "Endpoint %s:" % endpoint_id))
-    to_deps = set([profile_in_chain])
 
     # Now the chain that manages packets from the interface...
     from_chain = ["--flush %s" % from_chain_name]
@@ -448,21 +470,36 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
         from_chain.append("--append %s --protocol udp --sport 546 --dport 547 "
                           "--jump RETURN" % from_chain_name)
 
-    # Anti-spoofing rules.  Only allow traffic from known (IP, MAC) pairs to
-    # get to the profile chain, drop other traffic.
-    profile_out_chain = profile_to_chain_name("outbound", profile_id)
-    from_deps = set([profile_out_chain])
-    for ip in local_ips:
-        if "/" in ip:
-            cidr = ip
-        else:
-            cidr = "%s/32" % ip if ip_version == 4 else "%s/128" % ip
-        # Note use of --goto rather than --jump; this means that when the
-        # profile chain returns, it will return the chain that called us, not
-        # this chain.
-        from_chain.append("--append %s --src %s --match mac --mac-source %s "
-                          "--goto %s" % (from_chain_name, cidr,
-                                         mac.upper(), profile_out_chain))
+    # Combined anti-spoofing and jump to profile rules.  The only way to
+    # get to a profile chain is to have the correct IP and MAC address.
+    from_deps = set()
+    for profile_id in profile_ids:
+        profile_out_chain = profile_to_chain_name("outbound", profile_id)
+        from_deps.add(profile_out_chain)
+        from_chain.append("--append %s --jump MARK --set-mark 0" %
+                          (from_chain_name,))
+        for ip in local_ips:
+            if "/" in ip:
+                cidr = ip
+            else:
+                cidr = "%s/32" % ip if ip_version == 4 else "%s/128" % ip
+            # Jump to each profile in turn.  The profile will do one of the
+            # following:
+            # * DROP the packet; in which case we won't see it again.
+            # * RETURN without MARKing the packet; indicates that the packet
+            #   was accepted.
+            # * RETURN with a mark on the packet, indicates reaching the end
+            #   of the chain.
+            from_chain.append("--append %s --src %s --match mac "
+                              "--mac-source %s --jump %s" %
+                              (from_chain_name, cidr, mac.upper(),
+                               profile_out_chain))
+        from_chain.append('--append %s --match mark ! --mark 1/1 '
+                          '--match comment --comment "No mark means profile '
+                          'accepted packet" --jump RETURN' %
+                          (from_chain_name,))
+
+    # Final default drop.
     drop_frag = commented_drop_fragment(from_chain_name,
                                         "Anti-spoof DROP (endpoint %s):" %
                                         endpoint_id)

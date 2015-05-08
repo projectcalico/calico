@@ -261,12 +261,25 @@ def validate_endpoint(config, endpoint):
     elif endpoint["state"] not in ("active", "inactive"):
         issues.append("Expected 'state' to be one of active/inactive.")
 
-    for field in ["name", "mac", "profile_id"]:
+    for field in ["name", "mac"]:
         if field not in endpoint:
             issues.append("Missing '%s' field." % field)
         elif not isinstance(endpoint[field], StringTypes):
             issues.append("Expected '%s' to be a string; got %r." %
                           (field, endpoint[field]))
+
+    if "profile_id" in endpoint:
+        if "profile_ids" not in endpoint:
+            endpoint["profile_ids"] = [endpoint["profile_id"]]
+        del endpoint["profile_id"]
+
+    if "profile_ids" not in endpoint:
+        issues.append("Missing 'profile_id(s)' field.")
+    else:
+        for value in endpoint["profile_ids"]:
+            if not isinstance(value, StringTypes):
+                issues.append("Expected profile IDs to be strings.")
+                break
 
     if "name" in endpoint:
         if not endpoint["name"].startswith(config.IFACE_PREFIX):
