@@ -156,9 +156,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
 
-            # Next, we need to work out what security profile applies to this
+            # Next, we need to work out what security profiles apply to this
             # port and grab information about it.
-            profile = self.get_security_profile(context, port)
+            profiles = self.get_security_profiles(context, port)
 
             # Pass this to the transport layer.
             # Implementation note: we could arguably avoid holding the
@@ -167,7 +167,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # repeatedly respin and regain the transaction. Let's not do that
             # for now, and performance test to see if it's a problem later.
             self.transport.endpoint_created(port)
-            self.transport.write_profile_to_etcd(profile)
+
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
 
             # Update Neutron that we succeeded.
             self.db.update_port_status(context._plugin_context,
@@ -234,13 +236,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # For each profile, build its object and send it down.
             # TODO: Sending this to etcd could legitimately fail because of a
             # CAS problem. Come back to handle retries.
-            for sgid in sgids:
-                profile_rules = (
-                    r for r in rules
-                    if r['security_group_id'] in sgid
-                )
+            profiles = profile_from_neutron_rules(sgids, rules)
 
-                profile = profile_from_neutron_rules(sgid, profile_rules)
+            for profile in profiles:
                 self.transport.write_profile_to_etcd(profile)
 
     def _first_migration_step(self, context, port):
@@ -276,9 +274,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(port['id'])
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
-            profile = self.get_security_profile(context, port)
+            profiles = self.get_security_profiles(context, port)
             self.transport.endpoint_created(port)
-            self.transport.write_profile_to_etcd(profile)
+
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
 
     def _icehouse_migration_step(self, context, port, original):
         """
@@ -297,9 +297,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.transport.endpoint_deleted(original)
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
-            profile = self.get_security_profile(context, port)
+            profiles = self.get_security_profiles(context, port)
             self.transport.endpoint_created(port)
-            self.transport.write_profile_to_etcd(profile)
+
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
 
     def _update_port(self, context, port):
         """
@@ -312,9 +314,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(port['id'])
             self.add_port_gateways(port, context)
             self.add_port_interface_name(port)
-            profile = profile = self.get_security_profile(context, port)
+            profiles = self.get_security_profiles(context, port)
             self.transport.endpoint_created(port)
-            self.transport.write_profile_to_etcd(profile)
+
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
 
     def add_port_gateways(self, port, context):
         """
@@ -328,7 +332,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             subnet = self.db.get_subnet(context, ip['subnet_id'])
             ip['gateway'] = subnet['gateway_ip']
 
-    def get_security_profile(self, context, port):
+    def get_security_profiles(self, context, port):
         """
         Obtain information about the security profile that applies to a given
         port.
@@ -336,7 +340,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         This method expects to be called from within a database transaction,
         and does not create its own.
 
-        :returns: A ``SecurityProfile`` object.
+        :returns: A generator of ``SecurityProfile`` objects.
         """
         # First, work out the profile ID.
         profile_id = port_profile_id(port)
@@ -346,11 +350,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # query.
         # CB2: I am concerned that this does not adequately prevent new
         # security group rules being added and racing us in.
+        sgids = port['security_groups']
         rules = self.db.get_security_group_rules(
-            context, filters={'security_group_id': port['security_groups']}
+            context, filters={'security_group_id': sgids}
         )
 
-        return profile_from_neutron_rules(profile_id, rules)
+        # Now, return a generator that provides profile objects for each
+        # profile.
+        return (
+            profile_from_neutron_rules(sgid, rules) for sgid in sgids
+        )
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
@@ -483,7 +492,10 @@ def profile_from_neutron_rules(profile_id, rules):
     inbound_rules = []
     outbound_rules = []
 
-    for rule in rules:
+    # Only use the rules that have the right profile id.
+    sg_rules = (r for r in rules if r['security_group_id'] == profile_id)
+
+    for rule in sg_rules:
         if rule['direction'] == 'ingress':
             inbound_rules.append(rule)
         else:
