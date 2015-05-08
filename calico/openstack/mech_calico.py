@@ -420,7 +420,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # is potentially held for quite a while.
         with context.session.begin(subtransactions=True):
             missing_ports = self.db.get_ports(
-                context, filter={'id': missing_ports}
+                context, filters={'id': missing_ports}
             )
 
             for port in missing_ports:
@@ -470,7 +470,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # transaction is potentially held for quite a while.
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
-                context, filter={'security_group_id': missing_groups}
+                context, filters={'security_group_id': missing_groups}
             )
 
             profiles = (
