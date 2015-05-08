@@ -103,7 +103,7 @@ class CalicoTransportEtcd(object):
         """
         # TODO: What do we do about profiles here?
         # Delete the etcd key for this endpoint.
-        key = self.port_etcd_key(port)
+        key = port_etcd_key(port)
         try:
             self.client.delete(key)
         except etcd.EtcdKeyNotFound:
