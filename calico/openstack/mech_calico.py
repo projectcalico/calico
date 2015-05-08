@@ -26,6 +26,7 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 from collections import namedtuple
+from itertools import chain
 
 # OpenStack imports.
 from neutron.common import constants
@@ -220,18 +221,36 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         Called whenever security group rules or membership change.
 
-        We handle this change by taking out a database transaction and
-        re-reading the database state. We then write that state straight out
-        into the transport layer.
-        """
-        with context.session.begin(subtransactions=True):
-            for sgid in sgids:
-                sg = self.db.get_security_group(context, sgid)
-                sg['members'] = self._get_members(sg, context)
+        This turns out to be really tricky to handle. When a security group
+        rule is added, we need to do the following steps:
 
-                # TODO: We actually have to work out each affected security
-                # profile, here.
-                self.transport.security_group_updated(sg)
+        1. Query etcd to determine all profiles that contain this security
+           group.
+        2. Query the Neutron database to determine the rules for all those
+           groups.
+        3. Rebuild and apply all the security profiles to etcd.
+        """
+        # TODO: Write this function.
+        profiles = self.transport.get_etcd_profiles()
+        groups = set(chain(map(groups_from_profile_id, profiles)))
+
+        with context.session.begin(subtransactions=True):
+            rules = self.db.get_security_group_rules(
+                context, filters={'security_group_id': groups}
+            )
+
+            # For each profile, build its object and send it down.
+            # TODO: Sending this to etcd could legitimately fail because of a
+            # CAS problem. Come back to handle retries.
+            for profile_id in profiles:
+                profile_groups = set(groups_from_profile_id(profile_id))
+                profile_rules = (
+                    r for r in rules
+                    if r['security_group_id'] in profile_groups
+                )
+
+                profile = profile_from_neutron_rules(profile_id, profile_rules)
+                self.transport.write_profile_to_etcd(profile)
 
     def _first_migration_step(self, context, port):
         """
@@ -331,17 +350,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             context, filters={'security_group_id': port['security_groups']}
         )
 
-        # Split the rules based on direction.
-        inbound_rules = []
-        outbound_rules = []
-
-        for rule in rules:
-            if rule['direction'] == 'ingress':
-                inbound_rules.append(rule)
-            else:
-                outbound_rules.append(rule)
-
-        return SecurityProfile(profile_id, inbound_rules, outbound_rules)
+        return profile_from_neutron_rules(profile_id, rules)
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
@@ -456,3 +465,28 @@ def port_profile_id(port):
     Returns the security profile ID for a given port.
     """
     return '_'.join(port['security_groups'])
+
+
+def groups_from_profile_id(profile_id):
+    """
+    For a given profile ID, returns a list of the security group IDs that
+    make it up.
+    """
+    return profile_id.split('_')
+
+
+def profile_from_neutron_rules(profile_id, rules):
+    """
+    Given a set of Neutron rules, build them into a ``SecurityProfile`` object.
+    """
+    # Split the rules based on direction.
+    inbound_rules = []
+    outbound_rules = []
+
+    for rule in rules:
+        if rule['direction'] == 'ingress':
+            inbound_rules.append(rule)
+        else:
+            outbound_rules.append(rule)
+
+    return SecurityProfile(profile_id, inbound_rules, outbound_rules)
