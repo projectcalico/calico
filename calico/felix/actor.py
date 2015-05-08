@@ -436,7 +436,8 @@ def actor_message(needs_own_batch=False):
 
             # OK, so build the message and put it on the queue.
             partial = functools.partial(fn, self, *args, **kwargs)
-            result = TrackedAsyncResult((caller, self.name, method_name))
+            result = TrackedAsyncResult((calling_path, caller,
+                                         self.name, method_name))
             msg = Message(partial, [result], caller, self.name,
                           needs_own_batch=needs_own_batch)
 

@@ -247,6 +247,22 @@ class TestExceptionTracking(BaseTestCase):
         num_refs_at_end = len(actor._tracked_refs_by_idx)
         self.assertEqual(num_refs_at_start, num_refs_at_end)
 
+    @mock.patch("calico.felix.actor._print_to_stderr", autospec=True)
+    def test_real_actor_leaked_exc(self, m_print):
+        """
+        Really leak an exception-containing result returned via
+        actor_message and check we exit.
+        """
+        self.assertFalse(self._m_exit.called)
+        a = ActorForTesting()
+        a.start()
+        result = a.do_exc(async=True)
+        del result  # We abandon the result so only the message has a ref.
+        # Now block so that we know that the do_exc() must have been completed.
+        a.do_a(async=False)
+        self._m_exit.assert_called_once_with(1)
+        self._m_exit.reset_mock()
+
 
 class ActorForTesting(actor.Actor):
     def __init__(self, qualifier=None):
