@@ -195,6 +195,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info('UPDATE_PORT_POSTCOMMIT: %s', context)
         port = context._port
         original = context.original
+        self._get_db()
 
         # Abort early if we're manging non-endpoint ports.
         if not self._port_is_endpoint_port(port):
@@ -237,6 +238,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         2. Write the profile to etcd.
         """
         LOG.info("Updating security group IDs %s", sgids)
+        self._get_db()
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
                 context, filters={'security_group_id': sgids}
@@ -379,6 +381,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         it with etcd, ensuring that the etcd database and Neutron are in
         synchronization with each other.
         """
+        self._get_db()
+
         while True:
             context = ctx.get_admin_context()
 
