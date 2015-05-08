@@ -168,6 +168,9 @@ class CalicoTransportEtcd(object):
         """
         Atomically delete a given endpoint. This method allows exceptions from
         etcd to bubble up.
+
+        This also attempts to clean up the containing directory, but doesn't
+        worry too much if it fails.
         """
         LOG.info(
             "Atomically deleting endpoint id %s, modified %s",
@@ -177,6 +180,14 @@ class CalicoTransportEtcd(object):
         self.client.delete(
             endpoint.key, prevIndex=endpoint.modified_index, timeout=5
         )
+
+        # Strip the endpoint specific part of the key.
+        workload_key = '/'.join(endpoint.key.split('/')[:-2])
+
+        try:
+            self.client.delete(workload_key, dir=True, timeout=5)
+        except etcd.EtcdException as e:
+            LOG.debug("Failed to delete %s (%r), giving up.", workload_key, e)
 
     def get_profiles(self):
         """
@@ -226,6 +237,9 @@ class CalicoTransportEtcd(object):
         Atomically delete a profile. This occurs in two stages: first the tag,
         then the rules. Abort if the first stage fails, as we can assume that
         someone else is trying to replace the profile.
+
+        This will also attempt to clean up the directory, but isn't overly
+        bothered if that fails.
         """
         LOG.info(
             "Deleting profile %s, tags modified %s, rules modified %s",
@@ -243,6 +257,14 @@ class CalicoTransportEtcd(object):
             prevIndex=profile.rules_modified_index,
             timeout=5
         )
+
+        # Strip the endpoint specific part of the key.
+        profile_key = key_for_profile(profile.id)
+
+        try:
+            self.client.delete(profile_key, dir=True, timeout=5)
+        except etcd.EtcdException as e:
+            LOG.debug("Failed to delete %s (%r), giving up.", profile_key, e)
 
 
 def _neutron_rule_to_etcd_rule(rule):
