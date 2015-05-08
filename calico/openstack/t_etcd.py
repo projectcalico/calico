@@ -19,8 +19,6 @@
 
 # Standard Python library imports.
 import etcd
-import eventlet
-import eventlet.event
 import json
 import re
 import weakref
