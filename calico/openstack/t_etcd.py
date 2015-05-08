@@ -80,6 +80,7 @@ class CalicoTransportEtcd(object):
         """
         Write a single security profile into etcd.
         """
+        LOG.debug("Writing profile %s", profile)
         self.client.write(
             key_for_profile_rules(profile.id),
             json.dumps(profile_rules(profile))
@@ -113,6 +114,7 @@ class CalicoTransportEtcd(object):
         """
         Writes a given port dictionary to etcd.
         """
+        LOG.info("Write port %s to etcd", port)
         data = port_etcd_data(port)
         self.client.write(port_etcd_key(port), json.dumps(data))
 
@@ -148,6 +150,7 @@ class CalicoTransportEtcd(object):
         Gets information about every endpoint in etcd. Returns a generator of
         ``Endpoint`` objects.
         """
+        LOG.info("Scanning etcd for all endpoints")
         result = self.client.read(HOST_DIR, recursive=True, timeout=5)
         nodes = result.children
 
@@ -157,6 +160,8 @@ class CalicoTransportEtcd(object):
                 continue
 
             endpoint_id = match.group('endpoint_id')
+
+            LOG.debug("Found endpoint %s", endpoint_id)
             yield Endpoint(endpoint_id, node.key, node.modifiedIndex)
 
     def atomic_delete_endpoint(self, endpoint):
@@ -164,6 +169,11 @@ class CalicoTransportEtcd(object):
         Atomically delete a given endpoint. This method allows exceptions from
         etcd to bubble up.
         """
+        LOG.info(
+            "Atomically deleting endpoint id %s, modified %s",
+            endpoint.id,
+            endpoint.modified_index
+        )
         self.client.delete(
             endpoint.key, prevIndex=endpoint.modified_index, timeout=5
         )
@@ -173,6 +183,7 @@ class CalicoTransportEtcd(object):
         Gets information about every profile in etcd. Returns a generator of
         ``Profile`` objects.
         """
+        LOG.info("Scanning etcd for all profiles")
         result = self.client.read(PROFILE_DIR, recursive=True, timeout=5)
         nodes = result.children
 
@@ -198,6 +209,8 @@ class CalicoTransportEtcd(object):
             if profile_id in tag_indices and profile_id in rules_indices:
                 tag_modified = tag_indices.pop(profile_id)
                 rules_modified = rules_indices.pop(profile_id)
+
+                LOG.debug("Found profile id %s", profile_id)
                 yield Profile(profile_id, tag_modified, rules_modified)
 
         # Quickly confirm that the tag and rule indices are empty (they should
@@ -214,6 +227,12 @@ class CalicoTransportEtcd(object):
         then the rules. Abort if the first stage fails, as we can assume that
         someone else is trying to replace the profile.
         """
+        LOG.info(
+            "Deleting profile %s, tags modified %s, rules modified %s",
+            profile.id,
+            profile.tags_modified_index,
+            profile.rules_modified_index
+        )
         self.client.delete(
             key_for_profile_tags(profile.id),
             prevIndex=profile.tags_modified_index,

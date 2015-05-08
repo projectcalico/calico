@@ -146,7 +146,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         unchanged while we hold the transaction. We can then write the port to
         etcd, along with any other information we may need (security profiles).
         """
-        LOG.info('CREATE_PORT_POSTCOMMIT: %s' % context)
+        LOG.info('CREATE_PORT_POSTCOMMIT: %s', context)
         port = context._port
 
         # Immediately halt processing if this is not an endpoint port.
@@ -192,7 +192,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         This is a tricky event, because it can be called in a number of ways
         during VM migration. We farm out to the appropriate method from here.
         """
-        LOG.info('UPDATE_PORT_POSTCOMMIT: %s' % context)
+        LOG.info('UPDATE_PORT_POSTCOMMIT: %s', context)
         port = context._port
         original = context.original
 
@@ -217,7 +217,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         There's no database row for us to lock on here, so don't bother.
         """
-        LOG.info('CREATE_PORT_POSTCOMMIT: %s' % context)
+        LOG.info('DELETE_PORT_POSTCOMMIT: %s', context)
         port = context._port
 
         # Immediately halt processing if this is not an endpoint port.
@@ -236,6 +236,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         1. Reread the security rules from the Neutron DB.
         2. Write the profile to etcd.
         """
+        LOG.info("Updating security group IDs %s", sgids)
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
                 context, filters={'security_group_id': sgids}
@@ -320,6 +321,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # TODO: There's a lot of redundant code in these methods, with the only
         # key difference being taking out transactions. Come back and shorten
         # these.
+        LOG.info("Updating port %s", port)
         with context.session.begin(subtransactions=True):
             port = self.db.get_port(port['id'])
             self.add_port_gateways(port, context)
@@ -396,6 +398,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         Handles periodic resynchronization for endpoints.
         """
+        LOG.info("Resyncing endpoints")
+
         # Work out all the endpoints in etcd. Do this outside a database
         # transaction to try to ensure that anything that gets created is in
         # our Neutron snapshot.
@@ -414,6 +418,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port_ids = set(port['id'] for port in ports)
         missing_ports = port_ids - endpoint_ids
         extra_ports = endpoint_ids - port_ids
+
+        if missing_ports or extra_ports:
+            LOG.info("Missing ports: %s", missing_ports)
+            LOG.info("Extra ports: %s", extra_ports)
 
         # For each missing port, do a quick port creation. This takes out a
         # db transaction and regains all the ports. Note that this transaction
@@ -447,6 +455,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         Resynchronize security profiles.
         """
+        LOG.info("Resyncing profiles")
         # Work out all the security groups in etcd. Do this outside a database
         # transaction to try to ensure that anything that gets created is in
         # our Neutron snapshot.
@@ -464,6 +473,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         sgids = set(sg['id'] for sg in sgs)
         missing_groups = sgids - profile_ids
         extra_groups = profile_ids - sgids
+
+        if missing_groups or extra_groups:
+            LOG.info("Missing groups: %s", missing_groups)
+            LOG.info("Extra groups: %s", extra_groups)
 
         # For each missing profile, do a quick profile creation. This takes out
         # a db transaction and regains all the rules. Note that this
