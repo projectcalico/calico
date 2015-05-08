@@ -380,11 +380,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         while True:
             context = ctx.get_admin_context()
 
-            # First, resync endpoints.
-            self.resync_endpoints(context)
+            try:
+                # First, resync endpoints.
+                self.resync_endpoints(context)
 
-            # Second, profiles.
-            self.resync_profiles(context)
+                # Second, profiles.
+                self.resync_profiles(context)
+            except Exception:
+                LOG.exception("Error in periodic resync thread.")
 
             # Reschedule ourselves.
             eventlet.sleep(RESYNC_INTERVAL_SECS)
