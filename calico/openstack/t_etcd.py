@@ -133,25 +133,6 @@ class CalicoTransportEtcd(object):
             # Already gone, treat as success.
             LOG.debug("Key %s, which we were deleting, disappeared", key)
 
-    def security_group_updated(self, sg):
-        # Update the data that we're keeping for this security group.
-        with self._sgs_semaphore:
-            self.sgs[sg['id']] = sg
-
-        # Identify all the needed profiles that incorporate this security
-        # group, and rewrite their data.
-        # Take the profile lock so that no-one can modify needed_profiles
-        # while we iterate over it.  (This is probably unneeded since there
-        # aren't any yield points in the loop but better safe than sorry.)
-        profiles_to_rewrite = set()
-        with self.profile_semaphore:
-            for profile_id in self.needed_profiles:
-                if sg['id'] in self.profile_tags(profile_id):
-                    # Write etcd data for this profile.
-                    profiles_to_rewrite.add(profile_id)
-        for profile_id in profiles_to_rewrite:
-            self.write_profile_to_etcd(profile_id)
-
     def write_port_to_etcd(self, port):
         """
         Writes a given port dictionary to etcd.
