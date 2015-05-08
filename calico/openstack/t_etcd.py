@@ -152,16 +152,16 @@ class CalicoTransportEtcd(object):
                 continue
 
             endpoint_id = match.group('endpoint_id')
-            modified_index = node.modifiedIndex
-
-            yield Endpoint(endpoint_id, node.key, modified_index)
+            yield Endpoint(endpoint_id, node.key, node.modifiedIndex)
 
     def atomic_delete_endpoint(self, endpoint):
         """
         Atomically delete a given endpoint. This method allows exceptions from
         etcd to bubble up.
         """
-        self.client.delete(endpoint.key, prevIndex=endpoint.modified_index)
+        self.client.delete(
+            endpoint.key, prevIndex=endpoint.modified_index, timeout=5
+        )
 
 
 def _neutron_rule_to_etcd_rule(rule):
