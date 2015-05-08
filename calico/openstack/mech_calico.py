@@ -433,7 +433,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         for endpoint in eps_to_delete:
             try:
-                # TODO: Write this method.
                 self.transport.atomic_delete_endpoint(endpoint)
             except Exception:
                 # TODO: Be more specific.

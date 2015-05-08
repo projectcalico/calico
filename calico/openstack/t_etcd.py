@@ -55,7 +55,7 @@ PERIODIC_RESYNC_INTERVAL_SECS = 30
 LOG = log.getLogger(__name__)
 
 
-Endpoint = namedtuple('Endpoint', ['id', 'modified_index'])
+Endpoint = namedtuple('Endpoint', ['id', 'key', 'modified_index'])
 
 
 class CalicoTransportEtcd(object):
@@ -154,12 +154,14 @@ class CalicoTransportEtcd(object):
             endpoint_id = match.group('endpoint_id')
             modified_index = node.modifiedIndex
 
-            yield Endpoint(endpoint_id, modified_index)
+            yield Endpoint(endpoint_id, node.key, modified_index)
 
-    def atomic_delete_endpoint(self, endpoint_id):
+    def atomic_delete_endpoint(self, endpoint):
         """
-        Atomically delete a given endpoint.
+        Atomically delete a given endpoint. This method allows exceptions from
+        etcd to bubble up.
         """
+        self.client.delete(endpoint.key, prevIndex=endpoint.modified_index)
 
 
 def _neutron_rule_to_etcd_rule(rule):
