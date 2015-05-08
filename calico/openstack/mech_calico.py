@@ -26,7 +26,6 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 from collections import namedtuple
-from itertools import chain
 
 # OpenStack imports.
 from neutron.common import constants
