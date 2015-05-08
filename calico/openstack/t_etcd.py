@@ -68,38 +68,6 @@ class CalicoTransportEtcd(object):
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
                                   port=cfg.CONF.calico.etcd_port)
 
-        # Spawn a green thread for periodically resynchronizing etcd against
-        # the OpenStack database.
-        eventlet.spawn(self.periodic_resync_thread)
-
-    def periodic_resync_thread(self):
-        while True:
-            LOG.info("Calico plugin doing periodic resync.")
-            try:
-                # Write non-default config that Felices need.
-                self.provide_felix_config()
-
-                # Resynchronize endpoint data.
-                self.resync_endpoints()
-
-                # Resynchronize security group data.
-                self.resync_security_groups()
-
-            except:
-                LOG.exception("Exception in periodic resync thread")
-
-            # Sleep until time for next resync.
-            LOG.info("Calico plugin finished periodic resync.  "
-                     "Next resync in %s seconds.",
-                     PERIODIC_RESYNC_INTERVAL_SECS)
-            eventlet.sleep(PERIODIC_RESYNC_INTERVAL_SECS)
-
-    def resync_endpoints(self):
-        pass
-
-    def resync_security_groups(self):
-        pass
-
     def write_profile_to_etcd(self, profile):
         """
         Write a single security profile into etcd.
@@ -284,6 +252,7 @@ def profile_tags(profile):
     """
     Get the tags from a given security profile.
     """
+    # TODO: This is going to be a no-op now, so consider removing it.
     return profile.id.split('_')
 
 
