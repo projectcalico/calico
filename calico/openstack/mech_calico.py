@@ -153,20 +153,22 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not self._port_is_endpoint_port(port):
             return
 
-        with context.session.begin(subtransactions=True):
+        with context._plugin_context.session.begin(subtransactions=True):
             self._get_db()
 
             # First, regain the current port. This protects against concurrent
             # writes breaking our state.
-            port = self.db.get_port(context, port['id'])
+            port = self.db.get_port(context._plugin_context, port['id'])
 
             # Next, fill out other information we need on the port.
-            self.add_port_gateways(port, context)
+            self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
 
             # Next, we need to work out what security profiles apply to this
             # port and grab information about it.
-            profiles = self.get_security_profiles(context, port)
+            profiles = self.get_security_profiles(
+                context._plugin_context, port
+            )
 
             # Pass this to the transport layer.
             # Implementation note: we could arguably avoid holding the
@@ -265,8 +267,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         027571.html
         """
         LOG.info("Migration part 1")
-        with context.session.begin(subtransactions=True):
-            port = self.db.get_port(port['id'])
+        with context._plugin_context.session.begin(subtransactions=True):
+            port = self.db.get_port(context._plugin_context, port['id'])
             self.transport.endpoint_deleted(port)
 
     def _second_migration_step(self, context, port):
@@ -283,11 +285,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # way, does the security profile change during migration steps, or does
         # a separate port update event occur?
         LOG.info("Migration part 2")
-        with context.session.begin(subtransactions=True):
-            port = self.db.get_port(port['id'])
-            self.add_port_gateways(port, context)
+        with context._plugin_context.session.begin(subtransactions=True):
+            port = self.db.get_port(context._plugin_context, port['id'])
+            self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
-            profiles = self.get_security_profiles(context, port)
+            profiles = self.get_security_profiles(
+                context._plugin_context, port
+            )
             self.transport.endpoint_created(port)
 
             for profile in profiles:
@@ -303,14 +307,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # way, does the security profile change during migration steps, or does
         # a separate port update event occur?
         LOG.info("Migration as implemented in Icehouse")
-        with context.session.begin(subtransactions=True):
-            port = self.db.get_port(port['id'])
-            original = self.db.get_port(original['id'])
+        with context._plugin_context.session.begin(subtransactions=True):
+            port = self.db.get_port(context._plugin_context, port['id'])
+            original = self.db.get_port(
+                context._plugin_context, original['id']
+            )
 
             self.transport.endpoint_deleted(original)
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
-            profiles = self.get_security_profiles(context, port)
+            profiles = self.get_security_profiles(
+                context._plugin_context, port
+            )
             self.transport.endpoint_created(port)
 
             for profile in profiles:
@@ -324,11 +332,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # key difference being taking out transactions. Come back and shorten
         # these.
         LOG.info("Updating port %s", port)
-        with context.session.begin(subtransactions=True):
+        with context._plugin_context.session.begin(subtransactions=True):
             port = self.db.get_port(port['id'])
-            self.add_port_gateways(port, context)
+            self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
-            profiles = self.get_security_profiles(context, port)
+            profiles = self.get_security_profiles(
+                context._plugin_context, port
+            )
             self.transport.endpoint_created(port)
 
             for profile in profiles:
