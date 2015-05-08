@@ -25,6 +25,8 @@
 # TODO: Update reference to new etcd architecture document
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
+import eventlet
+
 from collections import namedtuple
 
 # OpenStack imports.
@@ -44,6 +46,10 @@ LOG = log.getLogger(__name__)
 # An OpenStack agent type name for Felix, the Calico agent component in the new
 # architecture.
 AGENT_TYPE_FELIX = 'Felix (Calico agent)'
+
+# The interval between period resyncs, in seconds.
+# TODO: Increase this to a longer interval for product code.
+RESYNC_INTERVAL_SECS = 60
 
 
 # A single security profile.
@@ -74,7 +80,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Use Etcd-based transport.
         self.transport = CalicoTransportEtcd(self)
 
-        # TODO: Handle resync
+        # Start our resynchronization process.
+        eventlet.spawn(self.periodic_resync_thread)
 
     def _get_db(self):
         if not self.db:
@@ -237,7 +244,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # For each profile, build its object and send it down.
             # TODO: Sending this to etcd could legitimately fail because of a
             # CAS problem. Come back to handle retries.
-            profiles = profile_from_neutron_rules(sgids, rules)
+            profiles = (
+                profile_from_neutron_rules(sgid, rules) for sgid in sgids
+            )
 
             for profile in profiles:
                 self.transport.write_profile_to_etcd(profile)
@@ -359,76 +368,134 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             profile_from_neutron_rules(sgid, rules) for sgid in sgids
         )
 
+    def periodic_resync_thread(self):
+        """
+        This method acts as a the periodic resynchronization logic for the
+        Calico mechanism driver.
+
+        On a fixed interval, it spins over the entire database and reconciles
+        it with etcd, ensuring that the etcd database and Neutron are in
+        synchronization with each other.
+        """
+        while True:
+            context = ctx.get_admin_context()
+
+            # First, resync endpoints.
+            self.resync_endpoints(context)
+
+            # Second, profiles.
+            self.resync_profiles(context)
+
+            # Reschedule ourselves.
+            eventlet.sleep(RESYNC_INTERVAL_SECS)
+
+    def resync_endpoints(self, context):
+        """
+        Handles periodic resynchronization for endpoints.
+        """
+        # Work out all the endpoints in etcd. Do this outside a database
+        # transaction to try to ensure that anything that gets created is in
+        # our Neutron snapshot.
+        # TODO: Write this method.
+        endpoints = self.transport.get_endpoints()
+        endpoint_ids = set(ep.id for ep in endpoints)
+
+        # Then, grab all the ports from Neutron. Quickly work out whether
+        # a given port is missing from etcd, or if etcd has too many ports.
+        # Then, add all missing ports and remove all extra ones.
+        # This explicit with statement is technically unnecessary, but it helps
+        # keep our transaction scope really clear.
+        with context.session.begin(subtransactions=True):
+            ports = [port for port in self.db.get_ports(context)
+                     if self._port_is_endpoint_port(port)]
+
+        port_ids = set(port['id'] for port in ports)
+        missing_ports = port_ids - endpoint_ids
+        extra_ports = endpoint_ids - port_ids
+
+        # For each missing port, do a quick port creation. This takes out a
+        # db transaction and regains all the ports. Note that this transaction
+        # is potentially held for quite a while.
+        with context.session.begin(subtransactions=True):
+            missing_ports = self.db.get_ports(
+                context, filter={'id': missing_ports}
+            )
+
+            for port in missing_ports:
+                # Fill out other information we need on the port and write to
+                # etcd.
+                self.add_port_gateways(port, context)
+                self.add_port_interface_name(port)
+                self.transport.endpoint_created(port)
+
+        # Next, handle the extra ports. Each of them needs to be atomically
+        # deleted.
+        eps_to_delete = (e for e in endpoints if e.id in extra_ports)
+
+        for endpoint in eps_to_delete:
+            try:
+                # TODO: Write this method.
+                self.transport.atomic_delete_endpoint(endpoint)
+            except Exception:
+                # TODO: Be more specific.
+                # If the atomic CAD doesn't successfully delete, that's ok, it
+                # means the endpoint was created or updated elsewhere.
+                continue
+
+    def resync_profiles(self, context):
+        """
+        Resynchronize security profiles.
+        """
+        # Work out all the security groups in etcd. Do this outside a database
+        # transaction to try to ensure that anything that gets created is in
+        # our Neutron snapshot.
+        # TODO: Write this method.
+        profiles = self.transport.get_profiles()
+        profile_ids = set(profile.id for profile in profiles)
+
+        # Next, grab all the security groups from Neutron. Quickly work out
+        # whether a given group is missing from etcd, or if etcd has too many
+        # groups. Then, add all missing groups and remove all extra ones.
+        # This explicit with statement is technically unnecessary, but it helps
+        # keep our transaction scope really clear.
+        with context.session.begin(subtransactions=True):
+            sgs = self.db.get_security_groups(context)
+
+        sgids = set(sg['id'] for sg in sgs)
+        missing_groups = sgids - profile_ids
+        extra_groups = profile_ids - sgids
+
+        # For each missing profile, do a quick profile creation. This takes out
+        # a db transaction and regains all the rules. Note that this
+        # transaction is potentially held for quite a while.
+        with context.session.begin(subtransactions=True):
+            rules = self.db.get_security_group_rules(
+                context, filter={'security_group_id': missing_groups}
+            )
+
+            profiles = (
+                profile_from_neutron_rules(sgid, rules) for sgid in sgids
+            )
+
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
+
+        # Next, handle the extra profiles. Each of them needs to be atomically
+        # deleted.
+        profiles_to_delete = (p for p in profiles if p.id in extra_groups)
+
+        for profile in profiles_to_delete:
+            try:
+                # TODO: Write this method.
+                self.transport.atomic_delete_profile(profile)
+            except Exception:
+                # TODO: Be more specific.
+                # If the atomic CAD doesn't successfully delete, that's ok, it
+                # means the profile was created or updated elsewhere.
+                continue
+
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
-
-    def get_endpoints(self):
-        """Return the current set of endpoints.
-        """
-        # Set up access to the Neutron database, if we haven't already.
-        self._get_db()
-
-        # Get a DB context for this query.
-        db_context = ctx.get_admin_context()
-
-        # Get current endpoint ports.
-        ports = [port for port in self.db.get_ports(db_context)
-                 if self._port_is_endpoint_port(port)]
-
-        # Add IP gateways and interface names.
-        for port in ports:
-            self.add_port_gateways(port, db_context)
-            self.add_port_interface_name(port)
-
-        # Return those (augmented) ports.
-        return ports
-
-    def get_security_groups(self):
-        """Return the current set of security groups.
-        """
-        # Set up access to the Neutron database, if we haven't already.
-        self._get_db()
-
-        # Get a DB context for this query.
-        db_context = ctx.get_admin_context()
-
-        # Get current SGs.
-        sgs = self.db.get_security_groups(db_context)
-
-        # Add, to each SG, a dict whose keys are the endpoints configured to
-        # use that SG, and whose values are the corresponding IP addresses.
-        for sg in sgs:
-            sg['members'] = self._get_members(sg, db_context)
-
-        # Return those (augmented) security groups.
-        return sgs
-
-    def _get_members(self, sg, context):
-        """
-        Get the endpoint members of the given security group.
-
-        This method will lock a large number of database rows, be warned.
-        """
-        # TODO: Can we refactor this to do a single database query for the
-        # ports? Otherwise, the cost of this method is O(n) in Python code,
-        # which is far worse than whatever the SQL database could do.
-        filters = {'security_group_id': [sg['id']]}
-        bindings = self.db._get_port_security_group_bindings(context,
-                                                             filters)
-        endpoints = {}
-        for binding in bindings:
-            port_id = binding['port_id']
-            try:
-                port = self.db.get_port(context, port_id)
-                endpoints[port_id] = [ip['ip_address'] for
-                                          ip in port['fixed_ips']]
-            except PortNotFound:
-                # The port must have been removed after we loaded the bindings.
-                LOG.warning("Port %s not found while looking up members of %s",
-                            port_id, sg)
-
-        LOG.info("Endpoints for SG %s are %s" % (sg['id'], endpoints))
-        return endpoints
 
     def felix_status(self, hostname, up, start_flag):
         # Get a DB context for this processing.
