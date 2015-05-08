@@ -113,15 +113,12 @@ class CalicoTransportEtcd(object):
             json.dumps(profile_tags(profile))
         )
 
-    def endpoint_created(self, port, profile):
+    def endpoint_created(self, port):
         """
         Write appropriate data to etcd for an endpoint creation event.
         """
         # First, write etcd data for the new endpoint.
-        self.write_port_to_etcd(port, profile.id)
-
-        # Next, write the security profile.
-        self.write_profile_to_etcd(profile)
+        self.write_port_to_etcd(port)
 
     def endpoint_updated(self, port, profile):
         """
@@ -162,11 +159,11 @@ class CalicoTransportEtcd(object):
         for profile_id in profiles_to_rewrite:
             self.write_profile_to_etcd(profile_id)
 
-    def write_port_to_etcd(self, port, profile_id):
+    def write_port_to_etcd(self, port):
         """
         Writes a given port dictionary to etcd.
         """
-        data = port_etcd_data(port, profile_id)
+        data = port_etcd_data(port)
         self.client.write(port_etcd_key(port), json.dumps(data))
 
     def provide_felix_config(self):
@@ -278,7 +275,7 @@ def port_etcd_key(port):
                             port['id'])
 
 
-def port_etcd_data(port, profile_id):
+def port_etcd_data(port):
     """
     Build the dictionary of data that will be written into etcd for a port.
     """
@@ -286,7 +283,7 @@ def port_etcd_data(port, profile_id):
     data = {'state': 'active' if port['admin_state_up'] else 'inactive',
             'name': port['interface_name'],
             'mac': port['mac_address'],
-            'profile_id': profile_id}
+            'profile_id': port['security_groups']}
 
     # Collect IPv6 and IPv6 addresses.  On the way, also set the
     # corresponding gateway fields.  If there is more than one IPv4 or IPv6
