@@ -125,6 +125,8 @@ class CalicoTransportEtcd(object):
         different things.  Here we provide the prefix that Neutron
         uses.
         """
+        LOG.info("Providing Felix configuration")
+
         # First read the config values, so as to avoid unnecessary
         # writes.
         prefix = None
@@ -151,7 +153,14 @@ class CalicoTransportEtcd(object):
         ``Endpoint`` objects.
         """
         LOG.info("Scanning etcd for all endpoints")
-        result = self.client.read(HOST_DIR, recursive=True, timeout=5)
+
+        try:
+            result = self.client.read(HOST_DIR, recursive=True, timeout=5)
+        except etcd.EtcdKeyNotFound:
+            # No key yet, which is totally fine: just exit.
+            LOG.info("No endpoint key present.")
+            return
+
         nodes = result.children
 
         for node in nodes:
@@ -196,7 +205,14 @@ class CalicoTransportEtcd(object):
         ``Profile`` objects.
         """
         LOG.info("Scanning etcd for all profiles")
-        result = self.client.read(PROFILE_DIR, recursive=True, timeout=5)
+
+        try:
+            result = self.client.read(PROFILE_DIR, recursive=True, timeout=5)
+        except etcd.EtcdKeyNotFound:
+            # No key yet, which is totally fine: just exit.
+            LOG.info("No profiles key present")
+            return
+
         nodes = result.children
 
         tag_indices = {}
