@@ -333,7 +333,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # these.
         LOG.info("Updating port %s", port)
         with context._plugin_context.session.begin(subtransactions=True):
-            port = self.db.get_port(port['id'])
+            port = self.db.get_port(context._plugin_context, port['id'])
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
             profiles = self.get_security_profiles(
