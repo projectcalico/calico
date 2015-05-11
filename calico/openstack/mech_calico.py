@@ -501,7 +501,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
 
             profiles = (
-                profile_from_neutron_rules(sgid, rules) for sgid in sgids
+                profile_from_neutron_rules(sgid, rules)
+                for sgid in missing_groups
             )
 
             for profile in profiles:
