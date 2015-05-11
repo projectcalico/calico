@@ -57,7 +57,7 @@ LOG = log.getLogger(__name__)
 
 # Objects for lightly wrapping etcd return values for use in the mechanism
 # driver.
-Endpoint = namedtuple('Endpoint', ['id', 'key', 'modified_index'])
+Endpoint = namedtuple('Endpoint', ['id', 'key', 'modified_index', 'host'])
 Profile = namedtuple(
     'Profile', ['id', 'tags_modified_index', 'rules_modified_index']
 )
@@ -160,9 +160,10 @@ class CalicoTransportEtcd(object):
                 continue
 
             endpoint_id = match.group('endpoint_id')
+            host = match.group('hostname')
 
             LOG.debug("Found endpoint %s", endpoint_id)
-            yield Endpoint(endpoint_id, node.key, node.modifiedIndex)
+            yield Endpoint(endpoint_id, node.key, node.modifiedIndex, host)
 
     def atomic_delete_endpoint(self, endpoint):
         """

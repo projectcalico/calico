@@ -415,7 +415,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Work out all the endpoints in etcd. Do this outside a database
         # transaction to try to ensure that anything that gets created is in
         # our Neutron snapshot.
-        endpoints = self.transport.get_endpoints()
+        endpoints = list(self.transport.get_endpoints())
         endpoint_ids = set(ep.id for ep in endpoints)
 
         # Then, grab all the ports from Neutron. Quickly work out whether
@@ -424,33 +424,39 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # This explicit with statement is technically unnecessary, but it helps
         # keep our transaction scope really clear.
         with context.session.begin(subtransactions=True):
-            ports = [port for port in self.db.get_ports(context)
-                     if self._port_is_endpoint_port(port)]
+            ports = {port['id']: port for port in self.db.get_ports(context)
+                     if self._port_is_endpoint_port(port)}
 
-        port_ids = set(port['id'] for port in ports)
+        port_ids = set(ports.keys())
         missing_ports = port_ids - endpoint_ids
         extra_ports = endpoint_ids - port_ids
+
+        # We need to do one more check: are any ports in the wrong place? The
+        # way we handle this is to treat this as a port that is both missing
+        # and extra, where the old version is extra and the new version is
+        # missing.
+        for endpoint in endpoints:
+            try:
+                port = ports[endpoint.id]
+            except KeyError:
+                # Port already in extra_ports.
+                continue
+
+            if endpoint.host != port['binding:host_id']:
+                LOG.info(
+                    "Port %s is incorrectly on %s, should be %s",
+                    endpoint.id,
+                    endpoint.host,
+                    port['binding:host_id']
+                )
+                missing_ports.add(endpoint.id)
+                extra_ports.add(endpoint.id)
 
         if missing_ports or extra_ports:
             LOG.info("Missing ports: %s", missing_ports)
             LOG.info("Extra ports: %s", extra_ports)
 
-        # For each missing port, do a quick port creation. This takes out a
-        # db transaction and regains all the ports. Note that this transaction
-        # is potentially held for quite a while.
-        with context.session.begin(subtransactions=True):
-            missing_ports = self.db.get_ports(
-                context, filters={'id': missing_ports}
-            )
-
-            for port in missing_ports:
-                # Fill out other information we need on the port and write to
-                # etcd.
-                self.add_port_gateways(port, context)
-                self.add_port_interface_name(port)
-                self.transport.endpoint_created(port)
-
-        # Next, handle the extra ports. Each of them needs to be atomically
+        # First, handle the extra ports. Each of them needs to be atomically
         # deleted.
         eps_to_delete = (e for e in endpoints if e.id in extra_ports)
 
@@ -462,6 +468,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the endpoint was created or updated elsewhere.
                 continue
+
+        # Next, for each missing port, do a quick port creation. This takes out
+        # a db transaction and regains all the ports. Note that thisj
+        # transaction is potentially held for quite a while.
+        with context.session.begin(subtransactions=True):
+            missing_ports = self.db.get_ports(
+                context, filters={'id': missing_ports}
+            )
+
+            for port in missing_ports:
+                # Fill out other information we need on the port and write to
+                # etcd.
+                self.add_port_gateways(port, context)
+                self.add_port_interface_name(port)
+                self.transport.endpoint_created(port)
 
     def resync_profiles(self, context):
         """
