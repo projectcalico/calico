@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.18
+Version:        0.19
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon May 11 2015 Neil Jerram <neil@projectcalico.org> 0.19
+- Further fixes and improvements to Calico components
+  - Add script that automates the merging required for a Debian/Ubuntu package
+  - Actually save off the endpoints in the endpoint index.
+  - Fix reference leak in felix caused by reference cycle.
+  - Core review markups and cleanups to ref-tracking code.
+  - Add FV-level test that genuinely leaks an exception.
+
 * Tue May 05 2015 Neil Jerram <neil@projectcalico.org> 0.18
 - Further fixes and improvements to Calico components
   - Note that RHEL 6.5 instructions are not yet complete

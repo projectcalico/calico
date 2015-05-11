@@ -1,3 +1,14 @@
+calico (0.19) trusty; urgency=medium
+
+  * Further fixes and improvements to Calico components
+    - Add script that automates the merging required for a Debian/Ubuntu package
+    - Actually save off the endpoints in the endpoint index.
+    - Fix reference leak in felix caused by reference cycle.
+    - Core review markups and cleanups to ref-tracking code.
+    - Add FV-level test that genuinely leaks an exception.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Mon, 11 May 2015 12:32:26 +0100
+
 calico (0.18) trusty; urgency=medium
 
   * Further fixes and improvements to Calico components
