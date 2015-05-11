@@ -397,6 +397,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                 # Second, profiles.
                 self.resync_profiles(context)
+
+                # Now, set the config flags.
+                self.transport.provide_felix_config()
             except Exception:
                 LOG.exception("Error in periodic resync thread.")
 
