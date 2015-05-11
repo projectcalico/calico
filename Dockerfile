@@ -40,7 +40,9 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
         python-zmq \
         git \
         python-gevent \
-        python-etcd && \
+        python-etcd \
+        software-properties-common \
+        && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
