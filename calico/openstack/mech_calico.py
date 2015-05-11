@@ -424,8 +424,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # This explicit with statement is technically unnecessary, but it helps
         # keep our transaction scope really clear.
         with context.session.begin(subtransactions=True):
-            ports = {port['id']: port for port in self.db.get_ports(context)
-                     if self._port_is_endpoint_port(port)}
+            ports = dict((port['id'], port)
+                         for port in self.db.get_ports(context)
+                         if self._port_is_endpoint_port(port))
 
         port_ids = set(ports.keys())
         missing_ports = port_ids - endpoint_ids
