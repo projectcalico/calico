@@ -21,6 +21,7 @@ Top level tests for Felix configuration.
 
 from collections import namedtuple
 import logging
+import re
 import mock
 import socket
 import sys
@@ -35,6 +36,25 @@ else:
 log = logging.getLogger(__name__)
 
 class TestConfig(unittest.TestCase):
+    def setUp(self):
+        super(TestConfig, self).setUp()
+
+        self.ghbn_patch = mock.patch("socket.gethostbyname", autospec=True)
+        self.m_gethostbyname = self.ghbn_patch.start()
+        self.m_gethostbyname.side_effect = self.dummy_gethostbyname
+
+    def dummy_gethostbyname(self, host):
+        if host in ("localhost", "127.0.0.1"):
+            return "127.0.0.1"
+        elif re.match(r"\d+\.\d+\.\d+\.\d+", host):
+            return host
+        else:
+            raise socket.gaierror("Dummy test error")
+
+    def tearDown(self):
+        self.ghbn_patch.stop()
+        super(TestConfig, self).tearDown()
+
     def test_default_config(self):
         """
         Test various ways of defaulting config.
@@ -126,6 +146,7 @@ class TestConfig(unittest.TestCase):
         with self.assertRaisesRegexp(ConfigException,
                                      "Invalid or unresolvable.*MetadataAddr"):
             config.report_etcd_config({}, cfg_dict)
+        self.m_gethostbyname.assert_has_calls([mock.call("bloop")])
 
     def test_bad_log_level(self):
         for field in ("LogSeverityFile", "LogSeverityScreen", "LogSeveritySys"):

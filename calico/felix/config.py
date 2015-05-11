@@ -328,7 +328,7 @@ class Config(object):
         else:
             # Metadata must be supplied as IP or address, but we store as IP
             self.METADATA_IP = self._validate_addr("MetadataAddr",
-                                                  self.METADATA_IP)
+                                                   self.METADATA_IP)
 
             if not common.validate_port(self.METADATA_PORT):
                 raise ConfigException("Invalid field value",
