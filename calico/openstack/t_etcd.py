@@ -48,10 +48,6 @@ OPENSTACK_ENDPOINT_RE = re.compile(
     r'^' + HOST_DIR +
     r'/(?P<hostname>[^/]+)/.*openstack.*/endpoint/(?P<endpoint_id>[^/]+)')
 
-json_decoder = json.JSONDecoder()
-
-PERIODIC_RESYNC_INTERVAL_SECS = 30
-
 LOG = log.getLogger(__name__)
 
 
