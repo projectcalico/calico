@@ -67,7 +67,10 @@ from node.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from node.adapter.ipam import IPAMClient
 from node.adapter import netns, docker_restart
 from requests.exceptions import ConnectionError
-from requests.packages.urllib3.exceptions import ProtocolError
+try:
+    from requests.packages.urllib3.exceptions import ProtocolError
+except ImportError:
+    from urllib3.exceptions import HTTPError
 
 hostname = socket.gethostname()
 client = IPAMClient()
@@ -1055,7 +1058,7 @@ def get_socket_errno_from_connection_error(conn_error):
     # Grab the ProtocolError from the ConnectionError arguments.
     pe = None
     for arg in conn_error.args:
-        if isinstance(arg, ProtocolError):
+        if isinstance(arg, HTTPError):
             pe = arg
             break
     if not pe:
