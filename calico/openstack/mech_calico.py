@@ -209,7 +209,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         elif original['binding:vif_type'] == 'unbound':
             self._second_migration_step(context, port)
         elif original['binding:host_id'] != port['binding:host_id']:
-            self._icehouse_migration(context, port, original)
+            self._icehouse_migration_step(context, port, original)
         else:
             self._update_port(context, port)
 
