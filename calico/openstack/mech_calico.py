@@ -267,9 +267,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         027571.html
         """
         LOG.info("Migration part 1")
-        with context._plugin_context.session.begin(subtransactions=True):
-            port = self.db.get_port(context._plugin_context, port['id'])
-            self.transport.endpoint_deleted(port)
+        self.transport.endpoint_deleted(port)
 
     def _second_migration_step(self, context, port):
         """
@@ -307,13 +305,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # way, does the security profile change during migration steps, or does
         # a separate port update event occur?
         LOG.info("Migration as implemented in Icehouse")
+        self.transport.endpoint_deleted(original)
+
         with context._plugin_context.session.begin(subtransactions=True):
             port = self.db.get_port(context._plugin_context, port['id'])
-            original = self.db.get_port(
-                context._plugin_context, original['id']
-            )
-
-            self.transport.endpoint_deleted(original)
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
             profiles = self.get_security_profiles(
