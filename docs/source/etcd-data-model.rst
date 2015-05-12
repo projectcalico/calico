@@ -80,7 +80,7 @@ The object stored is a JSON blob with the following structure:
       "state": "active|inactive",
       "name": "<name of linux interface>",
       "mac": "<MAC of the interface>",
-      "profile_id": "<profile_id>",
+      "profile_id": ["<profile_id>", …],
       "ipv4_nets": [
         "198.51.100.17/32",
         …
@@ -106,8 +106,9 @@ The various properties in this object have the following meanings:
   the MAC address of the endpoint interface.
 
 ``profile_id``
-  the identifier of a single :ref:`security-profile-data` object, which applies
-  to this endpoint.
+  a list of identifiers of :ref:`security-profile-data` objects that apply to
+  this endpoint. Each profile is applied to packets in the order that they
+  appear in this list.
 
 ``ipv4_nets``
   a list of IPv4 subnets allocated to this endpoint. IPv4 packets will only be
@@ -148,16 +149,6 @@ keys, of the form::
 
     /calico/policy/profile/<profile_id>/rules
     /calico/policy/profile/<profile_id>/tags
-
-Additionally, each profile keeps a count of the number of endpoints that
-reference it. This allows for garbage collection of profiles without requiring
-that components regularly scan all of etcd for profile membership. This count
-is stored at::
-
-    /calico/policy/profile/<profile_id>/refcount
-
-When creating a security profile, the ``refcount`` key must be atomically
-initialised first, to avoid data races.
 
 Rules
 ^^^^^
@@ -247,20 +238,3 @@ policy. These tags can be referred to by rules, as shown above.
 
 A single tag may be associated with multiple security profiles, in which case
 it expands to reference all endpoints in all of those profiles.
-
-Reference Count
-^^^^^^^^^^^^^^^
-
-The reference count is an unsigned integer that records the number of endpoints
-that are using this security profile. This is not stored as JSON, but as an
-integer. Because etcd does not have typed data, the data is technically a
-base-10 integer string: writing any other data into this key is an error.
-
-Changes to this key must *always* be performed using etcd's atomic
-compare-and-swap function, including writing it at profile creation time.
-
-Care must be taken here: it's possible that an attempt to increment the
-reference count of a profile will find that the profile does not exist
-(because it got deleted) in which case it will need creating. Alternatively, it
-is possible that an attempt to create a profile will find that it already
-exists, and so instead the reference count will need incrementing. Be cautious.
