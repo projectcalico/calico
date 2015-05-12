@@ -60,12 +60,12 @@ class TestElection(unittest.TestCase):
 
     def test_invalid(self):
         # Test that not elected using defaults.
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             client = stub_etcd.Client()
             elector = election.Elector(client, "test_basic", "/bloop", interval=-1, ttl=15)
             self.assertFalse(elector.master())
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             client = stub_etcd.Client()
             elector = election.Elector(client, "test_basic", "/bloop", interval=10, ttl=5)
             self.assertFalse(elector.master())
