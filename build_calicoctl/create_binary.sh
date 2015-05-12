@@ -10,12 +10,15 @@ mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
 if [[ $CIRCLE_TEST_REPORTS ]]; then
-    $NOSE_ARGS=" --cover-html-dir=dist --with-xunit --xunit-file=/code$CIRCLE_TEST_REPORTS/output.xml"
+    docker run --rm -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build \
+     bash -c '/tmp/etcd & \
+      nosetests -c nose.cfg --cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
+else
+    docker run --rm -v `pwd`/:/code calico-build \
+     bash -c '/tmp/etcd & \
+      nosetests -c nose.cfg$NOSE_ARGS'
 fi
 
-docker run --rm -v `pwd`/:/code calico-build \
- bash -c '/tmp/etcd & \
-  nosetests -c nose.cfg$NOSE_ARGS'
 
 docker run --rm -v `pwd`/:/code calico-build \
  pyinstaller calicoctl.py -a -F -s --clean
