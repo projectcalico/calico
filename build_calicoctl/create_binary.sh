@@ -8,10 +8,11 @@ docker build -t calico-build .
 cd ..
 mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
-docker run -v `pwd`/:/code/calico -v `pwd`/dist:/code/dist calico-build \
+
+docker run --rm -v `pwd`/:/code/calico -v `pwd`/dist:/code/dist calico-build \
     bash -c 'su - user -c \
         "cd /code && pyinstaller calico/calicoctl.py -a -F -s --clean"'
-docker run -v `pwd`/dist:/code/dist calico-build \
+docker run --rm -v `pwd`/dist:/code/dist calico-build \
     bash -c 'su - user -c \
         "cd /code && dist/calicoctl --help && docopt-completion --manual-bash dist/calicoctl && mv calicoctl.sh dist"'
 
