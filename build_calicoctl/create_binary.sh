@@ -10,7 +10,7 @@ mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
 if [[ $CIRCLE_TEST_REPORTS ]]; then
-    docker run --rm -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build \
+    docker run -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build \
      bash -c '/tmp/etcd & \
       nosetests -c nose.cfg --cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
 else
