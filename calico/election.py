@@ -34,11 +34,14 @@ import os
 
 _log = logging.getLogger(__name__)
 
+
 class ElectionReconnect(Exception):
     """
-    Exception indicating that an error occurred, and we should try reconnect.
+    Exception indicating that an error occurred, and we should try to
+    reconnect.
     """
     pass
+
 
 class Elector(object):
     def __init__(self, client, server_id, election_key,
@@ -48,7 +51,8 @@ class Elector(object):
 
         :param client: etcd client object
         :param server_id: Server ID. Must be unique to this server, and should
-                       take a value that is meaningful in logs (e.g. hostname)
+                          take a value that is meaningful in logs (e.g.
+                          hostname)
         :param election_key: The etcd key used in the election - e.g.
                              "/calico/v1/election"
         :param interval: Interval (seconds) between checks on etcd. Must be > 0
@@ -61,10 +65,10 @@ class Elector(object):
         self._ttl = int(ttl)
 
         if self._interval <= 0:
-            raise AssertionError("Interval %r is <= 0" % interval)
+            raise ValueError("Interval %r is <= 0" % interval)
 
         if self._ttl <= self._interval:
-            raise AssertionError("TTL %r is <= interval %r" % (ttl, interval))
+            raise ValueError("TTL %r is <= interval %r" % (ttl, interval))
 
         # Used to track whether or not this is the first iteration of the
         # attempts to test who is master.
@@ -145,7 +149,7 @@ class Elector(object):
             except (etcd.EtcdException, HTTPError, HTTPException,
                     etcd.EtcdClusterIdChanged, etcd.EtcdEventIndexCleared):
                 # Something bad and unexpected. Log and reconnect.
-                _log.warning("Unexpected error waiting for change in elected master",
+                _log.warning("Unexpected error waiting for master change",
                              exc_info=True)
                 return
             except etcd.EtcdKeyNotFound:
@@ -170,7 +174,9 @@ class Elector(object):
                 master.
                 Any other error from etcd is not caught in this routine.
         """
-        id_string = "%s:%d:%s" % (self._server_id, os.getpid(), int(time.time()))
+        id_string = "%s:%d:%s" % (
+            self._server_id, os.getpid(), int(time.time())
+        )
 
         try:
             self._etcd_client.write(self._key, id_string,
