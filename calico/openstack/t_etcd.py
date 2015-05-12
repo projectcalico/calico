@@ -106,13 +106,7 @@ class CalicoTransportEtcd(object):
             # Already gone, treat as success.
             LOG.debug("Key %s, which we were deleting, disappeared", key)
 
-        # We also want to delete the containing directory if possible.
-        workload_key = '/'.join(key.split('/')[:-2])
-
-        try:
-            self.client.delete(workload_key, dir=True, timeout=5)
-        except etcd.EtcdException as e:
-            LOG.debug("Failed to delete %s (%r), giving up.", workload_key, e)
+        self._cleanup_workload_tree(key)
 
     def write_port_to_etcd(self, port):
         """
@@ -195,13 +189,7 @@ class CalicoTransportEtcd(object):
             endpoint.key, prevIndex=endpoint.modified_index, timeout=5
         )
 
-        # Strip the endpoint specific part of the key.
-        workload_key = '/'.join(endpoint.key.split('/')[:-2])
-
-        try:
-            self.client.delete(workload_key, dir=True, timeout=5)
-        except etcd.EtcdException as e:
-            LOG.debug("Failed to delete %s (%r), giving up.", workload_key, e)
+        self._cleanup_workload_tree(endpoint.key)
 
     def get_profiles(self):
         """
@@ -287,6 +275,23 @@ class CalicoTransportEtcd(object):
         except etcd.EtcdException as e:
             LOG.debug("Failed to delete %s (%r), giving up.", profile_key, e)
 
+    def _cleanup_workload_tree(self, endpoint_key):
+        """
+        Attempts to delete any remaining etcd directories after an endpoint has
+        been deleted. This needs to recurse up the tree until the workload
+        level to ensure that all directories really are pruned.
+        """
+        key_parts = endpoint_key.split('/')
+
+        # This will return [-1, -2], which means we'll attempt to delete two
+        # directories above the endpoint key. That means we'll clean up the
+        # workload directory.
+        for i in range(-1, -3, -1):
+            delete_key = '/'.join(key_parts[:i])
+            try:
+                self.client.delete(delete_key, dir=True, timeout=5)
+            except etcd.EtcdException as e:
+                LOG.debug("Failed to delete %s (%r), skipping.", delete_key, e)
 
 def _neutron_rule_to_etcd_rule(rule):
     """
