@@ -19,6 +19,7 @@ felix.test.test_dispatch
 Tests of the actor that controls the top-level dispatch chain.
 """
 import collections
+from pprint import pformat
 
 import mock
 
@@ -79,7 +80,7 @@ class TestDispatchChains(BaseTestCase):
         self.config = Config('tap', '127.0.0.1', 8775)
         d = self.getDispatchChain()
 
-        ifaces = ['tapabcdef', 'tap123456', 'tapa7d849']
+        ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
         d.apply_snapshot(ifaces, async=True)
         self.step_actor(d)
 
@@ -88,17 +89,17 @@ class TestDispatchChains(BaseTestCase):
             '--destination 127.0.0.1 --dport 8775 --jump RETURN',
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
-            '--append felix-FROM-ENDPOINT --in-interface tapa7d849 --goto felix-from-a7d849',
+            '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
             '--append felix-FROM-ENDPOINT --jump DROP',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
-            '--append felix-TO-ENDPOINT --out-interface tapa7d849 --goto felix-to-a7d849',
+            '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
-        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-a7d849'])
-        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-a7d849'])
+        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
+        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
@@ -106,30 +107,92 @@ class TestDispatchChains(BaseTestCase):
             args, to_updates, from_updates, to_chain_names, from_chain_names
         )
 
+    def test_tree_building(self):
+        d = self.getDispatchChain()
+        d.programmed_leaf_chains.add("felix-FROM-EP-PFX-a")
+        d.programmed_leaf_chains.add("felix-FROM-EP-PFX-z")
+        ifaces = ['tapa1', 'tapa2', 'tapa3',
+                  'tapb1', 'tapb2',
+                  'tapc']
+        to_delete, deps, updates, new_leaf_chains = d._calculate_update(ifaces)
+        self.assertEqual(to_delete, set(["felix-FROM-EP-PFX-z"]))
+        self.assertEqual(deps, {
+            'felix-TO-ENDPOINT': set(
+                ['felix-FROM-EP-PFX-a', 'felix-FROM-EP-PFX-b', 'felix-to-c']),
+            'felix-FROM-ENDPOINT': set(
+                ['felix-TO-EP-PFX-a', 'felix-TO-EP-PFX-b', 'felix-from-c']),
+
+            'felix-TO-EP-PFX-a': set(['felix-to-a1', 'felix-to-a2', 'felix-to-a3']),
+            'felix-TO-EP-PFX-b': set(['felix-to-b1', 'felix-to-b2']),
+
+            'felix-FROM-EP-PFX-a': set(['felix-from-a1',
+                                      'felix-from-a2',
+                                      'felix-from-a3']),
+            'felix-FROM-EP-PFX-b': set(['felix-from-b2', 'felix-from-b1']),
+        })
+        for chain_name, chain_updates in updates.items():
+            chain_updates[:] = sorted(chain_updates[:-1]) + chain_updates[-1:]
+        print "Updates:", pformat(updates)
+        self.assertEqual(updates, {
+            'felix-TO-ENDPOINT': [
+                # If there are multiple endpoints with a prefix, we get a
+                # prefix match.
+                '--append felix-TO-ENDPOINT --out-interface tapa+ --goto felix-TO-EP-PFX-a',
+                '--append felix-TO-ENDPOINT --out-interface tapb+ --goto felix-TO-EP-PFX-b',
+                # If there's only one, we don't.
+                '--append felix-TO-ENDPOINT --out-interface tapc --goto felix-to-c',
+                '--append felix-TO-ENDPOINT --jump DROP'],
+            'felix-FROM-ENDPOINT': [
+                '--append felix-FROM-ENDPOINT --in-interface tapa+ --goto felix-FROM-EP-PFX-a',
+                '--append felix-FROM-ENDPOINT --in-interface tapb+ --goto felix-FROM-EP-PFX-b',
+                '--append felix-FROM-ENDPOINT --in-interface tapc --goto felix-from-c',
+                '--append felix-FROM-ENDPOINT --jump DROP'],
+            'felix-FROM-EP-PFX-a': [
+                # Per-prefix chain has one entry per endpoint.
+                '--append felix-FROM-EP-PFX-a --in-interface tapa1 --goto felix-from-a1',
+                '--append felix-FROM-EP-PFX-a --in-interface tapa2 --goto felix-from-a2',
+                '--append felix-FROM-EP-PFX-a --in-interface tapa3 --goto felix-from-a3',
+                # And a trailing drop.
+                '--append felix-FROM-EP-PFX-a --jump DROP'],
+            'felix-FROM-EP-PFX-b': [
+                '--append felix-FROM-EP-PFX-b --in-interface tapb1 --goto felix-from-b1',
+                '--append felix-FROM-EP-PFX-b --in-interface tapb2 --goto felix-from-b2',
+                '--append felix-FROM-EP-PFX-b --jump DROP'],
+            'felix-TO-EP-PFX-a': [
+                '--append felix-TO-EP-PFX-a --out-interface tapa1 --goto felix-to-a1',
+                '--append felix-TO-EP-PFX-a --out-interface tapa2 --goto felix-to-a2',
+                '--append felix-TO-EP-PFX-a --out-interface tapa3 --goto felix-to-a3',
+                '--append felix-TO-EP-PFX-a --jump DROP'],
+            'felix-TO-EP-PFX-b': [
+                '--append felix-TO-EP-PFX-b --out-interface tapb1 --goto felix-to-b1',
+                '--append felix-TO-EP-PFX-b --out-interface tapb2 --goto felix-to-b2',
+                '--append felix-TO-EP-PFX-b --jump DROP']
+        })
+
     def test_applying_snapshot_clean(self):
         """
         Tests that a snapshot can be applied to a previously unused actor.
         """
         d = self.getDispatchChain()
 
-        ifaces = ['tapabcdef', 'tap123456', 'tapa7d849']
+        ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
         d.apply_snapshot(ifaces, async=True)
         self.step_actor(d)
 
         from_updates = [
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
-            '--append felix-FROM-ENDPOINT --in-interface tapa7d849 --goto felix-from-a7d849',
+            '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
             '--append felix-FROM-ENDPOINT --jump DROP',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
-            '--append felix-TO-ENDPOINT --out-interface tapa7d849 --goto felix-to-a7d849',
+            '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
-        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-a7d849'])
-        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-a7d849'])
+        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
+        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
@@ -148,24 +211,24 @@ class TestDispatchChains(BaseTestCase):
         d.apply_snapshot(['tapxyz', 'tap889900', 'tapundefined'], async=True)
         self.step_actor(d)
 
-        ifaces = ['tapabcdef', 'tap123456', 'tapa7d849']
+        ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
         d.apply_snapshot(ifaces, async=True)
         self.step_actor(d)
 
         from_updates = [
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
-            '--append felix-FROM-ENDPOINT --in-interface tapa7d849 --goto felix-from-a7d849',
+            '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
             '--append felix-FROM-ENDPOINT --jump DROP',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
-            '--append felix-TO-ENDPOINT --out-interface tapa7d849 --goto felix-to-a7d849',
+            '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
-        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-a7d849'])
-        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-a7d849'])
+        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
+        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
@@ -214,23 +277,23 @@ class TestDispatchChains(BaseTestCase):
         self.step_actor(d)
 
         # Add one endpoint.
-        d.on_endpoint_added('tapa7d849', async=True)
+        d.on_endpoint_added('tapb7d849', async=True)
         self.step_actor(d)
 
         from_updates = [
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
-            '--append felix-FROM-ENDPOINT --in-interface tapa7d849 --goto felix-from-a7d849',
+            '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
             '--append felix-FROM-ENDPOINT --jump DROP',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
-            '--append felix-TO-ENDPOINT --out-interface tapa7d849 --goto felix-to-a7d849',
+            '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
-        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-a7d849'])
-        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-a7d849'])
+        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
+        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
@@ -245,7 +308,7 @@ class TestDispatchChains(BaseTestCase):
         d = self.getDispatchChain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapa7d849'], async=True)
+        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapb7d849'], async=True)
         self.step_actor(d)
 
         # Add an endpoint we already have.
@@ -262,7 +325,7 @@ class TestDispatchChains(BaseTestCase):
         d = self.getDispatchChain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapa7d849'], async=True)
+        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapb7d849'], async=True)
         self.step_actor(d)
 
         # Remove an endpoint.
@@ -271,16 +334,16 @@ class TestDispatchChains(BaseTestCase):
 
         from_updates = [
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
-            '--append felix-FROM-ENDPOINT --in-interface tapa7d849 --goto felix-from-a7d849',
+            '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
             '--append felix-FROM-ENDPOINT --jump DROP',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
-            '--append felix-TO-ENDPOINT --out-interface tapa7d849 --goto felix-to-a7d849',
+            '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
-        from_chain_names = set(['felix-from-123456', 'felix-from-a7d849'])
-        to_chain_names = set(['felix-to-123456', 'felix-to-a7d849'])
+        from_chain_names = set(['felix-from-123456', 'felix-from-b7d849'])
+        to_chain_names = set(['felix-to-123456', 'felix-to-b7d849'])
 
         # Confirm that we got called twice.
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
@@ -296,7 +359,7 @@ class TestDispatchChains(BaseTestCase):
         d = self.getDispatchChain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapa7d849'], async=True)
+        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapb7d849'], async=True)
         self.step_actor(d)
 
         # Remove an endpoint.
