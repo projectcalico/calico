@@ -141,8 +141,8 @@ class IptablesUpdater(Actor):
         """List of callbacks to issue once the current batch completes."""
 
         # Avoid duplicating init logic.
-        self._refresh_chains_in_dataplane()
         self._reset_batched_work()
+        self._refresh_chains_in_dataplane(async=True)
 
     def _reset_batched_work(self):
         """Reset the per-batch state in preparation for a new batch."""
@@ -151,6 +151,7 @@ class IptablesUpdater(Actor):
                                          self._requiring_chains)
         self._completion_callbacks = []
 
+    @actor_message(needs_own_batch=True)
     def _refresh_chains_in_dataplane(self):
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",
                                                   self._table])
@@ -416,7 +417,7 @@ class IptablesUpdater(Actor):
             _log.debug("No chains to delete %s", chains)
         else:
             self._execute_iptables(input_lines, fail_log_level=logging.WARNING)
-            self._chains_in_dataplane -= chains
+            self._chains_in_dataplane -= set(chains)
 
     def _update_indexes(self):
         """
