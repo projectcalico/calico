@@ -9,7 +9,13 @@ cd ..
 mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
-docker run --rm -v `pwd`/:/code calico-build bash -c '/tmp/etcd & nosetests -c nose.cfg'
+if [[ $CIRCLE_TEST_REPORTS ]]; then
+    $NOSE_ARGS=" --cover-html-dir=dist --with-xunit --xunit-file=$CIRCLE_TEST_REPORTS/output.xml"
+fi
+
+docker run --rm -v `pwd`/:/code calico-build \
+ bash -c '/tmp/etcd & \
+  nosetests -c nose.cfg$NOSE_ARGS'
 
 docker run --rm -v `pwd`/:/code calico-build \
  pyinstaller calicoctl.py -a -F -s --clean
