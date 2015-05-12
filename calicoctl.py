@@ -67,10 +67,7 @@ from node.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from node.adapter.ipam import IPAMClient
 from node.adapter import netns, docker_restart
 from requests.exceptions import ConnectionError
-try:
-    from requests.packages.urllib3.exceptions import ProtocolError
-except ImportError:
-    from urllib3.exceptions import HTTPError
+from urllib3.exceptions import MaxRetryError
 
 hostname = socket.gethostname()
 client = IPAMClient()
@@ -1049,31 +1046,31 @@ def get_container_ipv_from_arguments():
     return version
 
 
-def get_socket_errno_from_connection_error(conn_error):
+def permission_denied_error(conn_error):
     """
     Determine the socker error from the supplied connection error.
     :param conn_error: A requests.exceptions.ConnectionError instance
     :return: The socket error code.
     """
     # Grab the ProtocolError from the ConnectionError arguments.
-    pe = None
+    mre = None
     for arg in conn_error.args:
-        if isinstance(arg, HTTPError):
-            pe = arg
+        if isinstance(arg, MaxRetryError):
+            mre = arg
             break
-    if not pe:
+    if not mre:
         return None
 
     # Grab the socket error from the ProtocolError arguments.
     se = None
-    for arg in pe.args:
-        if isinstance(arg, socket.error):
+    for arg in mre.args:
+        if "Permission denied" in str(arg):
             se = arg
             break
     if not se:
         return None
 
-    return se.errno
+    return True
 
 
 def print_container_not_in_calico_msg(container_name):
@@ -1204,8 +1201,7 @@ if __name__ == '__main__':
     except ConnectionError as e:
         # We hit a "Permission denied error (13) if the docker daemon does not
         # have sudo permissions
-        errno = get_socket_errno_from_connection_error(e)
-        if errno == 13:
+        if permission_denied_error(e):
             print_paragraph("Unable to run command.  Re-run the "
                             "command as root, or configure the docker group "
                             "to run with sudo privileges (see docker "
