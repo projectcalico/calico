@@ -9,6 +9,9 @@ cd ..
 mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
+docker run --rm -v `pwd`/:/code/calico calico-build bash -c 'su - user -c \
+    "cd /code/calico && nosetests -c nose.cfg"'
+
 docker run --rm -v `pwd`/:/code/calico -v `pwd`/dist:/code/dist calico-build \
     bash -c 'su - user -c \
         "cd /code && pyinstaller calico/calicoctl.py -a -F -s --clean"'
