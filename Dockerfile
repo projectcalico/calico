@@ -22,7 +22,7 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
     add-apt-repository -y ppa:project-calico/icehouse && \
     apt-get update && \
     apt-get install -qy \
-#        calico-felix \
+        calico-felix \
         bird \
         bird6 \
         build-essential \
@@ -50,9 +50,6 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
 # Confd
 RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
     chmod +x confd
-
-RUN curl -L https://www.dropbox.com/s/htl1fatq2sc8paz/calico-common_0.17_all.deb?dl=1 -o common.deb && dpkg -i common.deb && rm common.deb
-RUN curl -L https://www.dropbox.com/s/evovbt89s9axebj/calico-felix_0.17_all.deb?dl=1 -o felix.deb && dpkg -i felix.deb && rm felix.deb
 
 # Install Powerstrip Calico Adapter dependencies.
 ADD node/adapter/requirements.txt /adapter/
