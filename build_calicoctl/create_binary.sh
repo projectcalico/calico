@@ -20,10 +20,10 @@ else
 fi
 
 
-docker run --rm -v `pwd`/:/code calico-build \
+docker run -v `pwd`/:/code calico-build \
  pyinstaller calicoctl.py -a -F -s --clean
 
-docker run --rm -v `pwd`/:/code calico-build \
+docker run -v `pwd`/:/code calico-build \
  docopt-completion --manual-bash dist/calicoctl
 
 mv calicoctl.sh dist
