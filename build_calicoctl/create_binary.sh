@@ -10,7 +10,7 @@ mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
 if [[ $CIRCLE_TEST_REPORTS ]]; then
-    $NOSE_ARGS=" --cover-html-dir=dist --with-xunit --xunit-file=$CIRCLE_TEST_REPORTS/output.xml"
+    $NOSE_ARGS=" --cover-html-dir=dist --with-xunit --xunit-file=/code$CIRCLE_TEST_REPORTS/output.xml"
 fi
 
 docker run --rm -v `pwd`/:/code calico-build \
