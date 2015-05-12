@@ -106,6 +106,14 @@ class CalicoTransportEtcd(object):
             # Already gone, treat as success.
             LOG.debug("Key %s, which we were deleting, disappeared", key)
 
+        # We also want to delete the containing directory if possible.
+        workload_key = '/'.join(key.split('/')[:-2])
+
+        try:
+            self.client.delete(workload_key, dir=True, timeout=5)
+        except etcd.EtcdException as e:
+            LOG.debug("Failed to delete %s (%r), giving up.", workload_key, e)
+
     def write_port_to_etcd(self, port):
         """
         Writes a given port dictionary to etcd.

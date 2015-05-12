@@ -29,9 +29,14 @@ import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
 
 
-class EtcdKeyNotFound(Exception):
+class EtcdException(Exception):
     pass
 
+
+class EtcdKeyNotFound(EtcdException):
+    pass
+
+lib.m_etcd.EtcdException = EtcdException
 lib.m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
 
 
