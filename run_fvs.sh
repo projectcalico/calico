@@ -8,8 +8,6 @@ git status
 
 ./build_node.sh
 ./create_binary.sh
-docker stop pyinstaller docopt
-docker rm pyinstaller docopt
 
 # Run the FVs
 sudo ./tests/fv/mainline.sh
