@@ -10,9 +10,9 @@ git status
 ./create_binary.sh
 
 # Run the FVs
+sudo ./tests/fv/mainline.sh
 sudo ./tests/fv/no_powerstrip.sh
 sudo ./tests/fv/arg_parsing.sh
-sudo ./tests/fv/mainline.sh
 sudo ./tests/fv/add_container.sh
 sudo ./tests/fv/unix_socket.sh
 sudo ./tests/fv/add_ip.sh

@@ -10,14 +10,15 @@ popd
 mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
-docker run -v `pwd`/:/code calico-build \
- bash -c '/tmp/etcd & nosetests -c nose.cfg'
-
-docker run -v `pwd`/:/code calico-build \
+docker run -v `pwd`/:/code --name pyinstaller calico-build \
  pyinstaller calicoctl.py -a -F -s --clean
+docker stop pyinstaller
+docker rm pyinstaller
 
-docker run -v `pwd`/:/code calico-build \
+docker run -v `pwd`/:/code --name docopt calico-build \
  docopt-completion --manual-bash dist/calicoctl
+docker stop docopt
+docker rm docopt
 
 mv calicoctl.sh dist
 
