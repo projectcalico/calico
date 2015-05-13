@@ -3,12 +3,6 @@
 set -e
 set -x
 
-docker build -t calico-build .
-
-cd ..
-mkdir -p `pwd`/dist
-chmod 777 `pwd`/dist
-
 if [[ $CIRCLE_TEST_REPORTS ]]; then
     docker run -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build \
      bash -c '/tmp/etcd & \
@@ -18,6 +12,12 @@ else
      bash -c '/tmp/etcd & \
       nosetests -c nose.cfg'
 fi
+
+docker build -t calico-build .
+
+cd ..
+mkdir -p `pwd`/dist
+chmod 777 `pwd`/dist
 
 
 docker run -v `pwd`/:/code calico-build \
