@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+#!/usr/bin/env python
 """calicoctl
 
 Override the host:port of the ETCD server by setting the environment variable
@@ -204,7 +205,7 @@ def container_add(container_name, ip, interface):
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip, pid, next_hops,
                                      veth_name=interface,
-                                     proc_alias="proc")
+                                     proc_alias="/proc")
 
     # Register the endpoint
     client.set_endpoint(hostname, container_id, endpoint)
@@ -904,10 +905,10 @@ def container_ip_add(container_name, ip, version, interface):
 
     try:
         container_pid = info["State"]["Pid"]
-        netns.ensure_namespace_named(container_pid)
         netns.add_ip_to_interface(container_pid,
                                   address,
-                                  interface)
+                                  interface,
+                                  proc_alias="/proc")
 
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
@@ -976,10 +977,10 @@ def container_ip_remove(container_name, ip, version, interface):
 
     try:
         container_pid = info["State"]["Pid"]
-        netns.ensure_namespace_named(container_pid)
         netns.remove_ip_from_interface(container_pid,
                                        address,
-                                       interface)
+                                       interface,
+                                       proc_alias="/proc")
 
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
@@ -1218,6 +1219,5 @@ if __name__ == '__main__':
         print "Unexpected error executing command.\n"
         traceback.print_exc()
         print dir(e)
-        print e.__module__ + "." + e.__class__.__name__
         sys.exit(1)
 

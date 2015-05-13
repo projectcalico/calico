@@ -8,7 +8,7 @@ CALICOCTL_CMD="dist/calicoctl"
 show_commands() {
 $CALICOCTL_CMD status
 $CALICOCTL_CMD shownodes --detailed
-$CALICOCTL_CMD ipv4 pool show
+$CALICOCTL_CMD pool show
 $CALICOCTL_CMD profile show --detailed
 }
 
