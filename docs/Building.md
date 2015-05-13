@@ -14,7 +14,6 @@ This builds the Dockerfile giving it the name `calico/node:latest`, which is the
 
 ## Building `calicoctl` CLI Tool - mainline
 
-    cd ./build_calicoctl
     ./create_binary.sh
 
 ## Building `calicoctl` CLI Tool - virtualenv

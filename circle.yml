@@ -4,11 +4,7 @@ general:
 machine:
   services:
     - docker
-dependencies:
-  override:
-    - sudo add-apt-repository -y "deb http://ppa.launchpad.net/project-calico/icehouse/ubuntu trusty main" && sudo apt-get update -qq && sudo apt-get install -qy python-etcd
-    - sudo pip install pycparser==2.10 && sudo pip install -r build_calicoctl/requirements.txt
 test:
   override:
-    - docker run --net=host -d  quay.io/coreos/etcd:v2.0.8 && mkdir dist && nosetests -c nose.cfg --cover-html-dir=dist --with-xunit --xunit-file=$CIRCLE_TEST_REPORTS/output.xml
-    - cd build_calicoctl && ./create_binary.sh 
+    - ./create_binary.sh
+    - docker run -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build bash -c '/tmp/etcd & nosetests -c nose.cfg --cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
