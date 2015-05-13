@@ -42,8 +42,8 @@ Install OpenStack Icehouse or Juno
 
 If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
-found here -
-`Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_preface.html>`__
+found here --
+`Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_preface.html>`__ /
 `Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/ch_preface.html>`__.
 
 Configuring the APT software sources
@@ -124,22 +124,22 @@ On a control node, perform the following steps:
 
        sudo apt-get install etcd python-etcd
 
-3. Stop etcd service
+3. Stop the etcd service:
    ::
 
        sudo service etcd stop
 
-4. Delete any existing etcd database
+4. Delete any existing etcd database:
    ::
 
        sudo rm -rf /var/lib/etcd/*
 
-5. Mount a ramdisk at /var/lib/etcd:
+5. Mount a RAM disk at /var/lib/etcd:
    ::
 
     sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
 
-6. add the following to the bottom of ``/etc/fstab`` so that the ramdisk gets
+6. Add the following to the bottom of ``/etc/fstab`` so that the RAM disk gets
    reinstated at boot time:
 
    ::
@@ -155,7 +155,7 @@ On a control node, perform the following steps:
      you should use a new cluster_token, as this is checked by Calico
      components to check whether etcd has moved.
 
-   ::
+     ::
 
        exec /usr/bin/etcd --name="<controller_fqdn>"                                                         \
                           --advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
@@ -166,7 +166,7 @@ On a control node, perform the following steps:
                           --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
                           --initial-cluster-state "new"
 
-8. Start etcd service
+8. Start the etcd service:
    ::
 
        sudo service etcd start
@@ -200,7 +200,7 @@ On a control node, perform the following steps:
    -  Find the line for the ``rpc_workers`` setting, uncomment it and
       set its value to 0.
 
-12. Restart the neutron server process:
+12. Restart the Neutron server process:
 
    ::
 
@@ -272,7 +272,7 @@ On a compute node, perform the following steps:
            sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
            sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
 
-4. Install some extra packages.
+4. Install some extra packages:
 
    ::
 
@@ -301,12 +301,12 @@ On a compute node, perform the following steps:
 
        sudo apt-get install etcd python-etcd
 
-8. Stop etcd service
+8. Stop the etcd service:
    ::
 
        sudo service etcd stop
 
-9. Delete any existing etcd database
+9. Delete any existing etcd database:
    ::
 
         sudo rm -rf /var/lib/etcd/*
