@@ -10,7 +10,7 @@ popd
 mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
-docker run --rm -v `pwd`/:/code calico-build \
+docker run -v `pwd`/:/code calico-build \
  bash -c '/tmp/etcd & nosetests -c nose.cfg'
 
 docker run -v `pwd`/:/code calico-build \
