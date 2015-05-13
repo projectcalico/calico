@@ -28,6 +28,7 @@
 import eventlet
 
 from collections import namedtuple
+from functools import wraps
 
 # OpenStack imports.
 from neutron.common import constants
@@ -51,10 +52,33 @@ AGENT_TYPE_FELIX = 'Felix (Calico agent)'
 # TODO: Increase this to a longer interval for product code.
 RESYNC_INTERVAL_SECS = 60
 
+# We wait for a short period of time before we initialize our state to avoid
+# problems with Neutron forking.
+STARTUP_DELAY_SECS = 30
+
 # A single security profile.
 SecurityProfile = namedtuple(
     'SecurityProfile', ['id', 'inbound_rules', 'outbound_rules']
 )
+
+
+def requires_state(f):
+    """
+    This decorator is used to ensure that any method that requires that
+    state be initialized will do that. This is to make sure that, if a user
+    attempts an action before STARTUP_DELAY_SECS have passed, they don't
+    have to wait.
+
+    This decorator only needs to be applied to top-level functions of the
+    CalicoMechanismDriver class: specifically, those that are called directly
+    from Neutron.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        args[0]._init_state()  # args[0] will be 'self'.
+        return f(*args, **kwargs)
+
+    return wrapper
 
 
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
@@ -72,15 +96,30 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             'tap',
             {'port_filter': True})
 
-        # Initialize fields for the database object and context.  We will
+        # Initialize fields for the database object and transport.  We will
         # initialize these properly when we first need them.
         self.db = None
-
-        # Use Etcd-based transport.
-        self.transport = CalicoTransportEtcd(self)
+        self.transport = None
+        self._state_initialized = False
 
         # Start our resynchronization process.
         eventlet.spawn(self.periodic_resync_thread)
+
+    def _init_state(self):
+        """
+        Creates the connection state required for talking to the Neutron DB
+        and to etcd. This is a no-op if it has been executed before.
+        """
+        if self._state_initialized:
+            return
+
+        self._get_db()
+
+        # Use Etcd-based transport.
+        if self.transport is None:
+            self.transport = CalicoTransportEtcd(self)
+
+        self._state_initialized = True
 
     def _get_db(self):
         if not self.db:
@@ -135,6 +174,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
 
     # Idealised method forms.
+    @requires_state
     def create_port_postcommit(self, context):
         """
         Called after Neutron has committed a port creation event to the
@@ -153,8 +193,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         with context._plugin_context.session.begin(subtransactions=True):
-            self._get_db()
-
             # First, regain the current port. This protects against concurrent
             # writes breaking our state.
             port = self.db.get_port(context._plugin_context, port['id'])
@@ -185,6 +223,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                        port['id'],
                                        constants.PORT_STATUS_ACTIVE)
 
+    @requires_state
     def update_port_postcommit(self, context):
         """
         Called after Neutron has committed a port update event to the
@@ -196,7 +235,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info('UPDATE_PORT_POSTCOMMIT: %s', context)
         port = context._port
         original = context.original
-        self._get_db()
 
         # Abort early if we're manging non-endpoint ports.
         if not self._port_is_endpoint_port(port):
@@ -212,6 +250,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         else:
             self._update_port(context, port)
 
+    @requires_state
     def delete_port_postcommit(self, context):
         """
         Called after Neutron has committed a port deletion event to the
@@ -229,6 +268,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Pass this to the transport layer.
         self.transport.endpoint_deleted(port)
 
+    @requires_state
     def send_sg_updates(self, sgids, context):
         """
         Called whenever security group rules or membership change.
@@ -239,7 +279,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         2. Write the profile to etcd.
         """
         LOG.info("Updating security group IDs %s", sgids)
-        self._get_db()
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
                 context, filters={'security_group_id': sgids}
@@ -385,7 +424,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         it with etcd, ensuring that the etcd database and Neutron are in
         synchronization with each other.
         """
-        self._get_db()
+        # The very first thing we do is sleep for our startup interval before
+        # initializing our state.
+        eventlet.sleep(STARTUP_DELAY_SECS)
+        self._init_state()
 
         while True:
             LOG.info("Attempting periodic resync.")
