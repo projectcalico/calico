@@ -1048,11 +1048,12 @@ def get_container_ipv_from_arguments():
 
 def permission_denied_error(conn_error):
     """
-    Determine the socker error from the supplied connection error.
+    Determine whether the supplied connection error is from a permission denied
+    error.
     :param conn_error: A requests.exceptions.ConnectionError instance
-    :return: The socket error code.
+    :return: True if error is from permission denied.
     """
-    # Grab the ProtocolError from the ConnectionError arguments.
+    # Grab the MaxRetryError from the ConnectionError arguments.
     mre = None
     for arg in conn_error.args:
         if isinstance(arg, MaxRetryError):
@@ -1061,7 +1062,7 @@ def permission_denied_error(conn_error):
     if not mre:
         return None
 
-    # Grab the socket error from the ProtocolError arguments.
+    # See if permission denied is in the MaxRetryError arguments.
     se = None
     for arg in mre.args:
         if "Permission denied" in str(arg):
