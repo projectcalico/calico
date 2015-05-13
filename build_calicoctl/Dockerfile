@@ -1,13 +1,5 @@
 FROM calico/node
 
-RUN apt-get update && \
-    apt-get install -qy \
-        python-nose \
-        software-properties-common \
-        && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 WORKDIR /code/
 
 ADD requirements.txt /code/

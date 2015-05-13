@@ -15,6 +15,7 @@ pyOpenSSL==0.15.1
 pyasn1==0.1.7
 pyasn1-modules==0.0.5
 six==1.9.0
-urllib3>=1.7,<=1.8
+urllib3>=1.7,<1.8
 websocket-client==0.30.0
 zope.interface==4.1.2
+simplejson==3.6.5

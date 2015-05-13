@@ -1,7 +1,6 @@
 coverage==3.7.1
 infi.docopt-completion==0.2.6
 docopt==0.6.2
-simplejson==3.6.5
 mock==1.0.1
 PyInstaller==2.1
 six==1.9.0
