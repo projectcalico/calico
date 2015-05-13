@@ -6,4 +6,5 @@ machine:
     - docker
 test:
   override:
-    - cd build_calicoctl && ./create_binary.sh 
+    - ./create_binary.sh
+    - docker run -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build bash -c '/tmp/etcd & nosetests -c nose.cfg --cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
