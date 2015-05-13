@@ -36,8 +36,6 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
         python-pip \
         python-pyasn1 \
         python-netaddr \
-        python-nose \
-        software-properties-common \
 # Required by calico-felix, eventually should be removed.
         python-zmq \
         git \

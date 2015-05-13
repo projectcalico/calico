@@ -16,7 +16,7 @@ if [[ $CIRCLE_TEST_REPORTS ]]; then
 else
     docker run --rm -v `pwd`/:/code calico-build \
      bash -c '/tmp/etcd & \
-      nosetests -c nose.cfg$NOSE_ARGS'
+      nosetests -c nose.cfg'
 fi
 
 
