@@ -20,6 +20,7 @@ ProfileRules actor, handles local profile chains.
 """
 
 import logging
+from subprocess import CalledProcessError
 from calico.felix.actor import actor_message
 from calico.felix.frules import (profile_to_chain_name,
                                  rules_to_chain_rewrite_lines)
@@ -93,17 +94,18 @@ class ProfileRules(RefCountedActor):
 
         self.id = profile_id
         self.ip_version = ip_version
-        self.ipset_mgr = ipset_mgr
+        self._ipset_mgr = ipset_mgr
         self._iptables_updater = iptables_updater
-        self.notified_ready = False
+        self._notified_ready = False
 
-        self.ipset_refs = RefHelper(self, ipset_mgr, self._maybe_update)
+        self._ipset_refs = RefHelper(self, ipset_mgr, self._maybe_update)
 
+        # Latest profile update.
+        self._pending_profile = None
+        # Currently-programmed profile.
         self._profile = None
-        """
-        :type dict|None: filled in by first update.  Reset to None on delete.
-        """
-        self.dead = False
+        self._dead = False
+        self._dirty = True
 
         self.chain_names = {
             "inbound": profile_to_chain_name("inbound", profile_id),
@@ -120,34 +122,10 @@ class ProfileRules(RefCountedActor):
         """
         _log.debug("%s: Profile update: %s", self, profile)
         assert profile is None or profile["id"] == self.id
-        assert not self.dead, "Shouldn't receive updates after we're dead."
+        assert not self._dead, "Shouldn't receive updates after we're dead."
+        self._pending_profile = profile
 
-        old_tags = extract_tags_from_profile(self._profile)
-        new_tags = extract_tags_from_profile(profile)
-
-        removed_tags = old_tags - new_tags
-        added_tags = new_tags - old_tags
-        for tag in removed_tags:
-            _log.debug("Queueing ipset for tag %s for decref", tag)
-            self.ipset_refs.discard_ref(tag)
-        for tag in added_tags:
-            _log.debug("Requesting ipset for tag %s", tag)
-            self.ipset_refs.acquire_ref(tag)
-
-        self._profile = profile
-        self._maybe_update()
-
-    def _maybe_update(self):
-        if self.dead:
-            _log.info("Not updating: profile is dead.")
-        elif not self.ipset_refs.ready:
-            _log.info("Can't program rules %s yet, waiting on ipsets",
-                      self.id)
-        else:
-            _log.info("Ready to program rules for %s", self.id)
-            self._update_chains()
-
-    @actor_message()
+    @actor_message(needs_own_batch=True)
     def on_unreferenced(self):
         """
         Called to tell us that this profile is no longer needed.  Removes
@@ -155,17 +133,58 @@ class ProfileRules(RefCountedActor):
         """
         try:
             _log.info("%s unreferenced, removing our chains", self)
-            self.dead = True
+            self._dead = True
             chains = []
             for direction in ["inbound", "outbound"]:
                 chain_name = self.chain_names[direction]
                 chains.append(chain_name)
             self._iptables_updater.delete_chains(chains, async=False)
-            self.ipset_refs.discard_all()
-            self.ipset_refs = None # Break ref cycle.
+            self._ipset_refs.discard_all()
+            self._ipset_refs = None # Break ref cycle.
             self._profile = None
+            self._pending_profile = None
         finally:
             self._notify_cleanup_complete()
+
+    def _finish_msg_batch(self, batch, results):
+        if self._dead:
+            _log.info("Actor is dead, doing nothing")
+            return
+        if self._pending_profile != self._profile:
+            _log.debug("Profile data changed, updating ipset references.")
+            old_tags = extract_tags_from_profile(self._profile)
+            new_tags = extract_tags_from_profile(self._pending_profile)
+            removed_tags = old_tags - new_tags
+            added_tags = new_tags - old_tags
+            for tag in removed_tags:
+                _log.debug("Queueing ipset for tag %s for decref", tag)
+                self._ipset_refs.discard_ref(tag)
+            for tag in added_tags:
+                _log.debug("Requesting ipset for tag %s", tag)
+                self._ipset_refs.acquire_ref(tag)
+            self._dirty = True
+        if self._dirty:
+            _log.info("%s dirty, trying to update chains.", self)
+            self._maybe_update()
+
+    def _maybe_update(self):
+        if self._dead:
+            _log.info("Not updating: profile is dead.")
+        elif not self._ipset_refs.ready:
+            _log.info("Can't program rules %s yet, waiting on ipsets",
+                      self.id)
+        elif self._dirty:
+            _log.info("Ready to program rules for %s", self.id)
+            try:
+                self._update_chains()
+            except CalledProcessError as e:
+                _log.error("Failed to program profile chain %s; error: %r",
+                           self, e)
+            else:
+                self._profile = self._pending_profile
+                self._dirty = False
+        else:
+            _log.debug("Profile not dirty.  Nothing to do.")
 
     def _update_chains(self):
         """
@@ -178,11 +197,11 @@ class ProfileRules(RefCountedActor):
             _log.info("Updating %s chain %r for profile %s",
                       direction, chain_name, self.id)
             _log.debug("Profile %s: %s", self.id, self._profile)
-            new_profile = self._profile or {}
+            new_profile = self._pending_profile or {}
             rules_key = "%s_rules" % direction
             new_rules = new_profile.get(rules_key, [])
             tag_to_ip_set_name = {}
-            for tag, ipset in self.ipset_refs.iteritems():
+            for tag, ipset in self._ipset_refs.iteritems():
                 tag_to_ip_set_name[tag] = ipset.name
             updates[chain_name] = rules_to_chain_rewrite_lines(
                 chain_name,
@@ -199,9 +218,9 @@ class ProfileRules(RefCountedActor):
         # and therefore we don't care? In other words, do we need to handle the
         # error cleverly, or could we just say that since we built the rules
         # they really should always work.
-        if not self.notified_ready:
+        if not self._notified_ready:
             self._notify_ready()
-            self.notified_ready = True
+            self._notified_ready = True
 
 
 def extract_tags_from_profile(profile):
