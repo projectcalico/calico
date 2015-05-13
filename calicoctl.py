@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#!/usr/bin/env python
+
 """calicoctl
 
 Override the host:port of the ETCD server by setting the environment variable

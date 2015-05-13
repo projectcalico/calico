@@ -144,9 +144,10 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
 
     # Provision the networking.  We create a temporary link from the proc
     # alias to the /var/run/netns to provide a named namespace.  If we don't
-    # do this, when run from the calico-node container, the PID of the
-    # container process is not recognised by ip link set <if> netns <pid>
-    # because that uses /proc rather than the proc alias to dereference a PID.
+    # do this, when run from the calico-node container the PID of the
+    # container process is not recognised by `ip link set <if> netns <pid>`
+    # command because that uses /proc rather than the proc alias to
+    # dereference the PID.
     #
     # TODO: Something similar to Namespace() to arbitrarily specify the proc
     # ...   alias for the ip link set command.
