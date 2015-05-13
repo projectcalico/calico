@@ -575,11 +575,6 @@ class CalicoNotifierProxy(object):
         self.calico_driver.send_sg_updates(sgids, context)
         self.ml2_notifier.security_groups_rule_updated(context, sgids)
 
-    def security_groups_member_updated(self, context, sgids):
-        LOG.info("security_groups_member_updated: %s %s" % (context, sgids))
-        self.calico_driver.send_sg_updates(sgids, context)
-        self.ml2_notifier.security_groups_member_updated(context, sgids)
-
 
 def profile_from_neutron_rules(profile_id, rules):
     """
