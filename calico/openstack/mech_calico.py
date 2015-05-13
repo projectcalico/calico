@@ -51,7 +51,6 @@ AGENT_TYPE_FELIX = 'Felix (Calico agent)'
 # TODO: Increase this to a longer interval for product code.
 RESYNC_INTERVAL_SECS = 60
 
-
 # A single security profile.
 SecurityProfile = namedtuple(
     'SecurityProfile', ['id', 'inbound_rules', 'outbound_rules']
@@ -389,19 +388,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._get_db()
 
         while True:
-            context = ctx.get_admin_context()
+            LOG.info("Attempting periodic resync.")
 
-            try:
-                # First, resync endpoints.
-                self.resync_endpoints(context)
+            # Only do the resync logic if we're actually the master node.
+            if self.transport.is_master:
+                LOG.info("I am master: proceeding with resync")
+                context = ctx.get_admin_context()
 
-                # Second, profiles.
-                self.resync_profiles(context)
+                try:
+                    # First, resync endpoints.
+                    self.resync_endpoints(context)
 
-                # Now, set the config flags.
-                self.transport.provide_felix_config()
-            except Exception:
-                LOG.exception("Error in periodic resync thread.")
+                    # Second, profiles.
+                    self.resync_profiles(context)
+
+                    # Now, set the config flags.
+                    self.transport.provide_felix_config()
+                except Exception:
+                    LOG.exception("Error in periodic resync thread.")
 
             # Reschedule ourselves.
             eventlet.sleep(RESYNC_INTERVAL_SECS)

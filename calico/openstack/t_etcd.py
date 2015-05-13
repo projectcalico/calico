@@ -21,6 +21,7 @@
 import etcd
 import json
 import re
+import socket
 import weakref
 
 from collections import namedtuple
@@ -33,7 +34,13 @@ from neutron.openstack.common import log
 from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_endpoint, PROFILE_DIR, RULES_KEY_RE,
                                  key_for_profile, key_for_profile_rules,
-                                 key_for_profile_tags, key_for_config)
+                                 key_for_profile_tags, key_for_config,
+                                 NEUTRON_ELECTION_KEY)
+from calico.election import Elector
+
+
+# The node hostname is used as the default identity for leader election
+hostname = socket.gethostname()
 
 # Register Calico-specific options.
 calico_opts = [
@@ -41,6 +48,8 @@ calico_opts = [
                help="The hostname or IP of the etcd node/proxy"),
     cfg.IntOpt('etcd_port', default=4001,
                help="The port to use for the etcd node/proxy"),
+    cfg.StrOpt('elector_name', default=hostname,
+               help="A unique name to identify this node in leader election"),
 ]
 cfg.CONF.register_opts(calico_opts, 'calico')
 
@@ -71,6 +80,22 @@ class CalicoTransportEtcd(object):
         # Prepare client for accessing etcd data.
         self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
                                   port=cfg.CONF.calico.etcd_port)
+
+        # Elector, for performing leader election.
+        # TODO: This doesn't handle forking yet, we need to mix the PID in here
+        # somewhere.
+        self.elector = Elector(
+            client=self.client,
+            server_id=cfg.CONF.calico.elector_name,
+            election_key=NEUTRON_ELECTION_KEY
+        )
+
+    @property
+    def is_master(self):
+        """
+        Whether this node is currently the Neutron master.
+        """
+        return self.elector.master()
 
     def write_profile_to_etcd(self, profile):
         """
