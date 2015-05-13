@@ -389,7 +389,8 @@ class LocalEndpoint(RefCountedActor):
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.
-        _log.info("Endpoint %s acquired all required profile references" % self.endpoint_id)
+        _log.info("Endpoint %s acquired all required profile references",
+                  self.endpoint_id)
 
     def __str__(self):
         return ("Endpoint<%s,id=%s,iface=%s>" %
