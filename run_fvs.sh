@@ -7,9 +7,7 @@ pwd
 git status
 
 ./build_node.sh
-pushd ./build_calicoctl
 ./create_binary.sh
-popd
 
 # Run the FVs
 sudo ./tests/fv/no_powerstrip.sh
