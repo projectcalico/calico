@@ -80,10 +80,25 @@ class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
         pass
 
+
+# Define another stub class that mocks out leader election: assume we're always
+# the leader. This is a fake elector: it never votes (get it!?).
+class GrandDukeOfSalzburg(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def master(self):
+        return True
+
+
 # Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
 # that CalicoMechanismDriver inherits from - with this stub class.
 m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
     DriverBase
+
+# Replace the elector.
+import calico.election as election
+election.Elector = GrandDukeOfSalzburg
 
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd

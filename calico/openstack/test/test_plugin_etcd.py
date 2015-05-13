@@ -159,7 +159,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Allow the etcd transport's resync thread to run. The last thing it
         # does is write the Felix config, so let it run three reads.
         self.give_way()
-        self.simulated_time_advance(1)
+        self.simulated_time_advance(31)
         self.assertEtcdWrites(
             {'/calico/v1/config/InterfacePrefix': 'tap',
              '/calico/v1/Ready': True,
@@ -195,7 +195,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Allow the etcd transport's resync thread to run.
         self.give_way()
-        self.simulated_time_advance(1)
+        self.simulated_time_advance(31)
         expected_writes = {
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/Ready': True,
