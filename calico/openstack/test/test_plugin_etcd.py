@@ -633,6 +633,19 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'icmp_code': 100,
         })
 
+    def test_not_master_does_not_resync(self):
+        """Test that a driver that is not master does not resync.
+        """
+        # Initialize the state early to put the elector in place, then override
+        # it to claim that the driver is not master.
+        self.driver._init_state()
+        self.driver.transport.elector.master = lambda *args: False
+
+        # Allow the etcd transport's resync thread to run. Nothing will happen.
+        self.give_way()
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites({})
+
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(etcd_rule, exp_etcd_rule)
