@@ -389,7 +389,7 @@ class LocalEndpoint(RefCountedActor):
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.
-        _log.info("Endpoint acquired all required profile references.")
+        _log.info("Endpoint %s acquired all required profile references" % self.endpoint_id)
 
     def __str__(self):
         return ("Endpoint<%s,id=%s,iface=%s>" %
@@ -401,6 +401,7 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
                         profile_ids):
     to_chain_name, from_chain_name = chain_names(suffix)
 
+    # First build the chain that manages packets to the interface.
     # Common chain prefixes.  Allow IPv6 ICMP and conntrack rules.
     to_chain = ["--flush %s" % to_chain_name]
     if ip_version == 6:
@@ -412,9 +413,7 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
         #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-solicitation
         #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-advertisement
         #
-        #  These rules are ICMP types 130, 131, 132, 134, 135 and 136, and can
-        #  be created on the command line with something like :
-        #     ip6tables -A plw -j RETURN --protocol ipv6-icmp --icmpv6-type 130
+        #  These rules are ICMP types 130, 131, 132, 134, 135 and 136.
         for icmp_type in ["130", "131", "132", "134", "135", "136"]:
             to_chain.append("--append %s --jump RETURN "
                             "--protocol ipv6-icmp "
@@ -435,14 +434,14 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
     to_deps = set()
     for profile_id in profile_ids:
         profile_in_chain = profile_to_chain_name("inbound", profile_id)
+        to_deps.add(profile_in_chain)
         to_chain.append("--append %s --jump MARK --set-mark 0" %
-                        (to_chain_name,))
+                        to_chain_name)
         to_chain.append("--append %s --jump %s" %
                         (to_chain_name, profile_in_chain))
-        to_deps.add(profile_in_chain)
         to_chain.append('--append %s --match mark ! --mark 1/1 '
                         '--match comment --comment "No mark means profile '
-                        'accepted packet" --jump RETURN' % (to_chain_name,))
+                        'accepted packet" --jump RETURN' % to_chain_name)
 
     # Default drop rule.
     to_chain.append(commented_drop_fragment(to_chain_name,
@@ -451,7 +450,7 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
     # Now the chain that manages packets from the interface...
     from_chain = ["--flush %s" % from_chain_name]
     if ip_version == 6:
-        # In ipv6 only, allows all ICMP traffic from this endpoint to anywhere.
+        # In ipv6 only, allow all ICMP traffic from this endpoint to anywhere.
         from_chain.append("--append %s --protocol ipv6-icmp --jump RETURN" %
                           from_chain_name)
 
@@ -477,7 +476,7 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
         profile_out_chain = profile_to_chain_name("outbound", profile_id)
         from_deps.add(profile_out_chain)
         from_chain.append("--append %s --jump MARK --set-mark 0" %
-                          (from_chain_name,))
+                          from_chain_name)
         for ip in local_ips:
             if "/" in ip:
                 cidr = ip
@@ -497,11 +496,11 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
         from_chain.append('--append %s --match mark ! --mark 1/1 '
                           '--match comment --comment "No mark means profile '
                           'accepted packet" --jump RETURN' %
-                          (from_chain_name,))
+                          from_chain_name)
 
-    # Final default drop.
+    # Final default DROP if no profile RETURNed or no MAC matched.
     drop_frag = commented_drop_fragment(from_chain_name,
-                                        "Anti-spoof DROP (endpoint %s):" %
+                                        "Default DROP if no match (endpoint %s):" %
                                         endpoint_id)
     from_chain.append(drop_frag)
 
