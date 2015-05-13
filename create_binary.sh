@@ -3,22 +3,15 @@
 set -e
 set -x
 
-if [[ $CIRCLE_TEST_REPORTS ]]; then
-    docker run -v `pwd`/:/code -v $CIRCLE_TEST_REPORTS:/circle_output calico-build \
-     bash -c '/tmp/etcd & \
-      nosetests -c nose.cfg --cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
-else
-    docker run --rm -v `pwd`/:/code calico-build \
-     bash -c '/tmp/etcd & \
-      nosetests -c nose.cfg'
-fi
-
+pushd build_calicoctl
 docker build -t calico-build .
+popd
 
-cd ..
 mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
+docker run --rm -v `pwd`/:/code calico-build \
+ bash -c '/tmp/etcd & nosetests -c nose.cfg'
 
 docker run -v `pwd`/:/code calico-build \
  pyinstaller calicoctl.py -a -F -s --clean
