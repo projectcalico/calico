@@ -19,5 +19,5 @@ websocket-client==0.30.0
 zope.interface==4.1.2
 simplejson==3.6.5
 
-# We use a version in this range because python-etcd depends on it.
-urllib3>=1.7,<1.8
+# We use this version because python-etcd depends on it.
+urllib3=1.7.1
