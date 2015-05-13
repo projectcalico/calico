@@ -97,11 +97,10 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
     DriverBase
 
 # Replace the elector.
-import calico.election as election
-election.Elector = GrandDukeOfSalzburg
 
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
+t_etcd.Elector = GrandDukeOfSalzburg
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
