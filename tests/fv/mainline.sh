@@ -2,12 +2,14 @@
 set -e
 set -x
 
-# Execute show commands
+#CALICOCTL_CMD="python calicoctl.py"
+CALICOCTL_CMD="dist/calicoctl"
+
 show_commands() {
-dist/calicoctl status
-dist/calicoctl shownodes --detailed
-dist/calicoctl pool show
-dist/calicoctl profile show --detailed
+$CALICOCTL_CMD status
+$CALICOCTL_CMD shownodes --detailed
+$CALICOCTL_CMD pool show
+$CALICOCTL_CMD profile show --detailed
 }
 
 # Run the mainline test.
@@ -19,11 +21,12 @@ cfg_ip2=$2
 # Set it up
 docker rm -f node1 node2 etcd || true
 docker run -d --net=host --name etcd quay.io/coreos/etcd:v2.0.10
-dist/calicoctl reset || true
+docker run --rm  -v `pwd`:/target jpetazzo/nsenter || true
+$CALICOCTL_CMD reset || true
 
 show_commands
-dist/calicoctl node --ip=127.0.0.1
-dist/calicoctl profile add TEST_GROUP
+$CALICOCTL_CMD node --ip=127.0.0.1
+$CALICOCTL_CMD profile add TEST_GROUP
 
 # Add endpoints
 export DOCKER_HOST=localhost:2377
@@ -46,42 +49,45 @@ node2_ip="${node2_ip%\"*}"
 echo "Node 2 IP address is $node2_ip"
 
 # Configure the nodes with the same profiles.
-dist/calicoctl profile TEST_GROUP member add node1
-dist/calicoctl profile TEST_GROUP member add node2
+$CALICOCTL_CMD profile TEST_GROUP member add node1
+$CALICOCTL_CMD profile TEST_GROUP member add node2
 
 # Check the config looks good - standard set of show commands plus the
 # non-detailed ones for completeness.
 show_commands
-dist/calicoctl shownodes
-dist/calicoctl profile show
+$CALICOCTL_CMD shownodes
+$CALICOCTL_CMD profile show
+
+node1=$(docker inspect --format {{.State.Pid}} node1)
+node2=$(docker inspect --format {{.State.Pid}} node2)
 
 # Check it works
-while ! docker exec node1 ping $node2_ip -c 1 -W 1; do
+while ! ./nsenter -t $node1 ping $node2_ip -c 1 -W 1; do
 echo "Waiting for network to come up"
   sleep 1
 done
 
-docker exec node1 ping $node1_ip -c 1
-docker exec node1 ping $node2_ip -c 1
-docker exec node2 ping $node1_ip -c 1
-docker exec node2 ping $node2_ip -c 1
+./nsenter -t $node1 ping $node1_ip -c 1
+./nsenter -t $node1 ping $node2_ip -c 1
+./nsenter -t $node2 ping $node1_ip -c 1
+./nsenter -t $node2 ping $node2_ip -c 1
 
 # Record diags - works, but it's just s bit slow.
-#dist/calicoctl diags
+#$CALICOCTL_CMD diags
 
 # Tear it down
-dist/calicoctl profile remove TEST_GROUP
+$CALICOCTL_CMD profile remove TEST_GROUP
 show_commands
 
-dist/calicoctl container remove node1
-dist/calicoctl container remove node2
+$CALICOCTL_CMD container remove node1
+$CALICOCTL_CMD container remove node2
 show_commands
 
-dist/calicoctl pool remove 192.168.0.0/16
+$CALICOCTL_CMD pool remove 192.168.0.0/16
 show_commands
 
 export DOCKER_HOST=
-dist/calicoctl node stop
+$CALICOCTL_CMD node stop
 show_commands
 }
 

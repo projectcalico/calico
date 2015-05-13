@@ -24,6 +24,7 @@ import os.path
 from netaddr import IPNetwork, IPAddress
 
 from datastore import Endpoint, IF_PREFIX
+from nsenter import Namespace
 
 
 _log = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ pid 1
 PREFIX_LEN = {4: 32, 6: 128}
 """The IP address prefix length to assign, by IP version."""
 
-PROC_ALIAS = "proc_host"
+PROC_ALIAS = "/proc_host"
 """The alias for /proc.  This is useful when the filesystem is containerized.
 """
 
@@ -74,45 +75,48 @@ def remove_endpoint(ep_id):
     call("ip link delete %s" % iface, shell=True)
 
 
-def add_ip_to_interface(container_pid, ip, interface_name):
+def add_ip_to_interface(container_pid, ip, interface_name,
+                    proc_alias=PROC_ALIAS):
     """
     Add an IP to an interface in a container.
 
     :param container_pid: The PID and name of the namespace to operate in.
     :param ip: The IPAddress to add.
     :param interface_name: The interface to add the address to.
+    :param proc_alias: The head of the /proc filesystem on the host.
     :return: None. raises CalledProcessError on error.
     """
-    check_call("ip netns exec %(cpid)s ip -%(version)s addr add "
-               "%(addr)s/%(len)s dev %(device)s" %
-               {"cpid": container_pid,
-                "version": ip.version,
-                "len": PREFIX_LEN[ip.version],
-                "addr": ip,
-                "device": interface_name},
-               shell=True)
+    with Namespace(container_pid, 'net', proc=proc_alias):
+        check_call("ip -%(version)s addr add "
+                   "%(addr)s/%(len)s dev %(device)s" %
+                   {"version": ip.version,
+                    "len": PREFIX_LEN[ip.version],
+                    "addr": ip,
+                    "device": interface_name},
+                   shell=True)
 
-def remove_ip_from_interface(container_pid, ip, interface_name):
+def remove_ip_from_interface(container_pid, ip, interface_name,
+                    proc_alias=PROC_ALIAS):
     """
     Remove an IP from an interface in a container.
 
     :param container_pid: The PID and name of the namespace to operate in.
     :param ip: The IPAddress to remove.
     :param interface_name: The interface to remove the address from.
+    :param proc_alias: The head of the /proc filesystem on the host.
     :return: None. raises CalledProcessError on error.
     """
-    check_call("ip netns exec %(cpid)s ip -%(version)s addr del "
-               "%(addr)s/%(len)s dev %(device)s" %
-               {"cpid": container_pid,
-                "version": ip.version,
-                "len": PREFIX_LEN[ip.version],
-                "addr": ip,
-                "device": interface_name},
-               shell=True)
+    with Namespace(container_pid, 'net', proc=proc_alias):
+        check_call("ip -%(version)s addr del "
+                   "%(addr)s/%(len)s dev %(device)s" %
+                   {"version": ip.version,
+                    "len": PREFIX_LEN[ip.version],
+                    "addr": ip,
+                    "device": interface_name},
+                   shell=True)
 
 
 def set_up_endpoint(ip, cpid, next_hop_ips,
-                    in_container=False,
                     veth_name=VETH_NAME,
                     proc_alias=PROC_ALIAS):
     """
@@ -123,8 +127,6 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     :param cpid: The PID of a process currently running in the namespace.
     :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
     default routes.
-    :param in_container: When True, we assume this program is itself running in
-    a container
     namespace, as opposed to the root namespace.  If so, this method also moves
     the other end of the veth into the root namespace.
     :param veth_name: The name of the interface inside the container namespace,
@@ -140,72 +142,62 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     iface = IF_PREFIX + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]
 
-    # Provision the networking
-    check_call("mkdir -p /var/run/netns", shell=True)
-    check_call("ln -s /%s/%s/ns/net /var/run/netns/%s" % (proc_alias,
-                                                          cpid,
-                                                          cpid),
-               shell=True)
+    # Provision the networking.  We create a temporary link from the proc
+    # alias to the /var/run/netns to provide a named namespace.  If we don't
+    # do this, when run from the calico-node container the PID of the
+    # container process is not recognised by `ip link set <if> netns <pid>`
+    # command because that uses /proc rather than the proc alias to
+    # dereference the PID.
+    #
+    # TODO: Something similar to Namespace() to arbitrarily specify the proc
+    # ...   alias for the ip link set command.
+    try:
+        check_call("mkdir -p /var/run/netns", shell=True)
+        check_call("ln -s %s/%s/ns/net /var/run/netns/pid-%s" %
+                     (proc_alias, cpid, cpid),
+                   shell=True)
+        _log.debug(check_output("ls -l /var/run/netns", shell=True))
 
-    # If running in a container, set up a link to the root netns.
-    if in_container:
-        try:
-            check_call("ln -s /%s/%s/ns/net /var/run/netns/%s" % (proc_alias,
-                                                                  ROOT_NETNS,
-                                                                  ROOT_NETNS),
-                       shell=True)
-        except CalledProcessError:
-            pass  # Only need to do this once.
-    _log.debug(check_output("ls -l /var/run/netns", shell=True))
-
-    # Create the veth pair and move one end into container:
-    check_call("ip link add %s type veth peer name %s" % (iface, iface_tmp),
-               shell=True)
-    check_call("ip link set %s up" % iface, shell=True)
-    check_call("ip link set %s netns %s" % (iface_tmp, cpid), shell=True)
-    _log.debug(check_output("ip netns exec %s ip link" % cpid, shell=True))
+        # Create the veth pair and move one end into container:
+        check_call("ip link add %s type veth peer name %s" %
+                     (iface, iface_tmp),
+                   shell=True)
+        check_call("ip link set %s up" % iface, shell=True)
+        check_call("ip link set %s netns pid-%s" % (iface_tmp, cpid),
+                   shell=True)
+        _log.debug(check_output("ip link", shell=True))
+    finally:
+        check_call("rm /var/run/netns/pid-%s" % cpid, shell=True)
 
     # Rename within the container to something sensible.
-    check_call("ip netns exec %s ip link set dev %s name %s" % (cpid,
-                                                                iface_tmp,
-                                                                veth_name),
-               shell=True)
-    check_call("ip netns exec %s ip link set %s up" % (cpid, veth_name),
-               shell=True)
-
-    # If in container, the iface end of the veth pair will be in the container
-    # namespace.  We need to move it to the root namespace so it will
-    # participate in routing.
-    if in_container:
-        # Move the other end of the veth pair into the root namespace
-        check_call("ip link set %s netns %s" % (iface, ROOT_NETNS), shell=True)
-        check_call("ip netns exec %s ip link set %s up" % (ROOT_NETNS, iface),
+    with Namespace(cpid, 'net', proc=proc_alias):
+        check_call("ip link set dev %s name %s" % (iface_tmp,veth_name),
                    shell=True)
+        check_call("ip link set %s up" % (veth_name), shell=True)
 
     # Add an IP address.
-    add_ip_to_interface(cpid, ip, veth_name)
+    add_ip_to_interface(cpid, ip, veth_name, proc_alias=proc_alias)
 
     # Connected route to next hop & default route.
     next_hop = next_hop_ips[ip.version]
-    check_call("ip netns exec %(cpid)s ip -%(version)s route replace"
-               " %(next_hop)s dev %(device)s" %
-               {"cpid": cpid,
-                "version": ip.version,
-                "device": veth_name,
-                "next_hop": next_hop},
-               shell=True)
-    check_call("ip netns exec %(cpid)s ip -%(version)s route replace"
-               " default via %(next_hop)s dev %(device)s" %
-               {"cpid": cpid,
-                "version": ip.version,
-                "device": veth_name,
-                "next_hop": next_hop},
-               shell=True)
+    with Namespace(cpid, 'net', proc=proc_alias):
+        check_call("ip -%(version)s route replace"
+                   " %(next_hop)s dev %(device)s" %
+                   {"version": ip.version,
+                    "device": veth_name,
+                    "next_hop": next_hop},
+                   shell=True)
+        check_call("ip -%(version)s route replace"
+                   " default via %(next_hop)s dev %(device)s" %
+                   {"version": ip.version,
+                    "device": veth_name,
+                    "next_hop": next_hop},
+                   shell=True)
 
-    # Get the MAC address.
-    mac = check_output(
-        "ip netns exec %s ip link show %s | grep ether | awk '{print $2}'" %
-        (cpid, veth_name), shell=True).strip()
+        # Get the MAC address.
+        mac = check_output(
+            "ip link show %s | grep ether | awk '{print $2}'" %
+            (veth_name), shell=True).strip()
 
     # Return an Endpoint
     network = IPNetwork(IPAddress(ip))
@@ -217,16 +209,3 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
         ep.ipv6_nets.add(network)
         ep.ipv6_gateway = next_hop
     return ep
-
-
-def ensure_namespace_named(container_pid):
-    """
-    Ensures that a namespace is named. Idempotent.
-
-    :param container_pid: The container_pid to name.
-    :return: raises CalledProcessError if naming the ns fails.
-    """
-    if not os.path.islink("/var/run/netns/%s" % container_pid):
-        check_call("ln -s /proc/%s/ns/net /var/run/netns/%s" % (container_pid,
-                                                                container_pid),
-                   shell=True)
