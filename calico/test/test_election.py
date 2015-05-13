@@ -52,11 +52,17 @@ class TestElection(unittest.TestCase):
         self._real_sleep = eventlet.sleep
         election.etcd = stub_etcd
         eventlet.sleep = eventlet_sleep
+        # Stop eventlet from printing our expected NoMoreResults exception
+        # to stdout directly.
+        self.print_exc_patch = mock.patch("traceback.print_exception",
+                                          autospec=True)
+        self.print_exc_patch.start()
 
     def tearDown(self):
-        super(TestElection, self).tearDown()
+        self.print_exc_patch.stop()
         election.etcd = self._real_etcd
         eventlet.sleep = self._real_sleep
+        super(TestElection, self).tearDown()
 
     def test_invalid(self):
         # Test that not elected using defaults.
