@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-felix.test.stub_etcd
+calico.test.stub_etcd
 ~~~~~~~~~~~~
 
 Stub version of the etcd interface.

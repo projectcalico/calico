@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # Copyright (c) 2014, 2015 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -70,10 +69,6 @@ class Elector(object):
         if self._ttl <= self._interval:
             raise ValueError("TTL %r is <= interval %r" % (ttl, interval))
 
-        # Used to track whether or not this is the first iteration of the
-        # attempts to test who is master.
-        self._first_iteration = True
-
         # Is this the master? To start with, no
         self._master = False
 
@@ -96,6 +91,9 @@ class Elector(object):
                     # beginning.
                     pass
 
+                # Sleep a little before we go back and read again.
+                eventlet.sleep(self._interval)
+
         except:
             # Election greenlet failed. Log but reraise.
             _log.exception("Election greenlet exiting")
@@ -105,14 +103,9 @@ class Elector(object):
         """
         Main election thread routine to reconnect and perform election.
         """
-        # Sleep only if this is not the first time round the loop.
-        if self._first_iteration:
-            self._first_iteration = False
-        else:
-            eventlet.sleep(self._interval)
-
         try:
-            response = self._etcd_client.read(self._key)
+            response = self._etcd_client.read(self._key,
+                                              timeout=self._interval)
             index = response.etcd_index
         except etcd.EtcdKeyNotFound:
             _log.debug("Try to become the master - not found")
@@ -139,6 +132,7 @@ class Elector(object):
                                                   timeout=Timeout(
                                                       connect=self._interval,
                                                       read=self._ttl * 2))
+
                 index = response.etcd_index
 
             except (ReadTimeoutError, SocketTimeout,
@@ -163,12 +157,11 @@ class Elector(object):
                 _log.debug("Attempting to become the elected master")
                 self._become_master()
 
-    def _become_master(self,):
+    def _become_master(self):
         """
         Function to become the master. Never returns, and continually loops
         updating the key as necessary.
 
-        param: etcd.Client: etcd client to use
         raises: ElectionReconnect if it fails to become master (e.g race
                 conditions). In this case, some other process has become
                 master.
@@ -179,8 +172,12 @@ class Elector(object):
         )
 
         try:
-            self._etcd_client.write(self._key, id_string,
-                                    ttl=self._ttl, prevExists=False)
+            self._etcd_client.write(self._key,
+                                    id_string,
+                                    ttl=self._ttl,
+                                    prevExists=False,
+                                    timeout=self._interval)
+
         except Exception:
             # We could be smarter about what exceptions we allow, but any kind
             # of error means we should give up, and safer to have a broad
@@ -197,8 +194,11 @@ class Elector(object):
         while True:
             eventlet.sleep(self._interval)
             try:
-                self._etcd_client.write(self._key, id_string, ttl=self._ttl,
-                                        prevValue=id_string)
+                self._etcd_client.write(self._key,
+                                        id_string,
+                                        ttl=self._ttl,
+                                        prevValue=id_string,
+                                        timeout=self._interval)
             except Exception:
                 # This is a pretty broad except statement, but anything going
                 # wrong means this instance gives up being the master.
