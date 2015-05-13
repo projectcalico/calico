@@ -407,7 +407,9 @@ def port_etcd_data(port):
     data = {'state': 'active' if port['admin_state_up'] else 'inactive',
             'name': port['interface_name'],
             'mac': port['mac_address'],
-            'profile_id': port['security_groups']}
+            'profile_ids': port['security_groups']}
+            # MD4 TODO Check the old version writes 'profile_id' in a form that
+            # translation code in common.validate_endpoint() will work.
 
     # Collect IPv6 and IPv6 addresses.  On the way, also set the
     # corresponding gateway fields.  If there is more than one IPv4 or IPv6
