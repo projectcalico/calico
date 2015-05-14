@@ -201,7 +201,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/Ready': True,
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_id": ["SGID-default"],
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
@@ -209,7 +209,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": []},
             '/calico/v1/host/felix-host-1/workload/openstack/instance-2/endpoint/FACEBEEF-1234-5678':
                 {"name": "tapFACEBEEF-12",
-                 "profile_id": ["SGID-default"],
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.3/32"],
@@ -260,7 +260,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         expected_writes = {
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_id": ["SGID-default"],
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
@@ -295,7 +295,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         del expected_writes['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']
         expected_writes['/calico/v1/host/new-host/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678'] = {
             "name": "tapDEADBEEF-12",
-            "profile_id": ["SGID-default"],
+            "profile_ids": ["SGID-default"],
             "mac": "00:11:22:33:44:55",
             "ipv4_gateway": "10.65.0.1",
             "ipv4_nets": ["10.65.0.2/32"],
@@ -315,7 +315,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         expected_writes = {
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_id": ["SGID-default"],
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
@@ -332,7 +332,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         expected_writes = {
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
-                 "profile_id": ["SGID-default"],
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
@@ -471,7 +471,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         expected_writes = {
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
-                 "profile_id": ["SG-1"],
+                 "profile_ids": ["SG-1"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
