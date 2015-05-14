@@ -249,7 +249,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # A migration only applies if the binding host ID has changed:
         # otherwise, this is a plain update.
         if original['binding:host_id'] == port['binding:host_id']:
-            return self._update_port(context, port)
+            status_change = port_status_change(port, original)
+            LOG.debug("Status change event: %s", status_change)
+            if not status_change:
+                return self._update_port(context, port)
 
         # This is a migration, handle the appropriate migration step.
         if port['binding:vif_type'] == 'unbound':
@@ -666,3 +669,26 @@ def profile_from_neutron_rules(profile_id, rules):
             outbound_rules.append(rule)
 
     return SecurityProfile(profile_id, inbound_rules, outbound_rules)
+
+
+def port_status_change(port, original):
+    """
+    Checks whether a port update is being called for a port status change
+    event.
+
+    Port activation events are triggered by our own action: if the only change
+    in the port dictionary is activation state, we don't want to do any
+    processing.
+    """
+    # Be defensive here: if Neutron is going to use these port dicts later we
+    # don't want to have taken away data they want. Take copies.
+    port = port.copy()
+    original = original.copy()
+
+    port.pop('status')
+    original.pop('status')
+
+    if port == original:
+        return True
+    else:
+        return False
