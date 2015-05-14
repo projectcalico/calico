@@ -192,6 +192,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not self._port_is_endpoint_port(port):
             return
 
+        # If the port binding VIF type is 'unbound', this port doesn't actually
+        # need to be networked yet. We can simply return immediately.
+        if port['binding:vif_type'] == 'unbound':
+            return
+
         with context._plugin_context.session.begin(subtransactions=True):
             # First, regain the current port. This protects against concurrent
             # writes breaking our state.
@@ -241,14 +246,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         # Fork execution based on the type of update we're performing.
+        # A migration only applies if the binding host ID has changed:
+        # otherwise, this is a plain update.
+        if original['binding:host_id'] == port['binding:host_id']:
+            return self._update_port(context, port)
+
+        # This is a migration, handle the appropriate migration step.
         if port['binding:vif_type'] == 'unbound':
             self._first_migration_step(context, original)
         elif original['binding:vif_type'] == 'unbound':
             self._second_migration_step(context, port)
-        elif original['binding:host_id'] != port['binding:host_id']:
-            self._icehouse_migration_step(context, port, original)
         else:
-            self._update_port(context, port)
+            self._icehouse_migration_step(context, port, original)
 
     @requires_state
     def delete_port_postcommit(self, context):
@@ -365,17 +374,34 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # key difference being taking out transactions. Come back and shorten
         # these.
         LOG.info("Updating port %s", port)
-        with context._plugin_context.session.begin(subtransactions=True):
-            port = self.db.get_port(context._plugin_context, port['id'])
-            self.add_port_gateways(port, context._plugin_context)
-            self.add_port_interface_name(port)
-            profiles = self.get_security_profiles(
-                context._plugin_context, port
-            )
-            self.transport.endpoint_created(port)
 
-            for profile in profiles:
-                self.transport.write_profile_to_etcd(profile)
+        # If the binding VIF type is unbound, we consider this port 'disabled',
+        # and should attempt to delete it. Otherwise, the port is enabled:
+        # re-process it.
+        port_disabled = port['binding:vif_type'] == 'unbound'
+        if not port_disabled:
+            LOG.info("Port enabled, attempting to update.")
+
+            with context._plugin_context.session.begin(subtransactions=True):
+                port = self.db.get_port(context._plugin_context, port['id'])
+                self.add_port_gateways(port, context._plugin_context)
+                self.add_port_interface_name(port)
+                profiles = self.get_security_profiles(
+                    context._plugin_context, port
+                )
+                self.transport.endpoint_created(port)
+
+                for profile in profiles:
+                    self.transport.write_profile_to_etcd(profile)
+
+                # Update Neutron that we succeeded.
+                self.db.update_port_status(context._plugin_context,
+                                           port['id'],
+                                           constants.PORT_STATUS_ACTIVE)
+        else:
+            # Port unbound, attempt to delete.
+            LOG.info("Port disabled, attempting delete if needed.")
+            self.transport.endpoint_deleted(port)
 
     def add_port_gateways(self, port, context):
         """
