@@ -246,22 +246,37 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not self._port_is_endpoint_port(port):
             return
 
-        # Fork execution based on the type of update we're performing.
-        # A migration only applies if the binding host ID has changed:
-        # otherwise, this is a plain update.
-        if original['binding:host_id'] == port['binding:host_id']:
-            status_change = port_status_change(port, original)
-            LOG.debug("Status change event: %s", status_change)
-            if not status_change:
-                return self._update_port(context, port)
+        # If this port update is purely for a status change, don't do anything:
+        # we don't care about port statuses.
+        if port_status_change(port, original):
+            LOG.info('Called for port status change, no action.')
+            return
 
-        # This is a migration, handle the appropriate migration step.
-        if port['binding:vif_type'] == 'unbound':
-            self._first_migration_step(context, original)
-        elif original['binding:vif_type'] == 'unbound':
-            self._second_migration_step(context, port)
-        else:
-            self._icehouse_migration_step(context, port, original)
+        # Now, re-read the port.
+        with context._plugin_context.session.begin(subtransactions=True):
+            port = self.db.get_port(context._plugin_context, port['id'])
+
+            # Now, fork execution based on the type of update we're performing.
+            # There are a few: first, a port becoming bound (binding vif_type
+            # from unbound to bound); second, a port becoming unbound (binding
+            # vif_type from bound to unbound); third, an Icehouse migration
+            # (binding host id changed and port bound); fourth, an updated
+            # (port bound at all times); fifth, a change to an unbound port
+            # (which we don't care about, because we do nothing with unbound
+            # ports).
+            if port_bound(port) and not port_bound(original):
+                self._port_bound_update(context, port)
+            elif port_bound(original) and not port_bound(port):
+                self._port_unbound_update(context, original)
+            elif original['binding:host_id'] != port['binding:host_id']:
+                LOG.info("Icehouse migration")
+                self._icehouse_migration_step(context, port, original)
+            elif port_bound(original) and port_bound(port):
+                LOG.info("Port update")
+                self._update_port(context, port)
+            else:
+                LOG.info("Update on unbound port: no action")
+                pass
 
     @requires_state
     def delete_port_postcommit(self, context):
@@ -307,68 +322,52 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for profile in profiles:
                 self.transport.write_profile_to_etcd(profile)
 
-    def _first_migration_step(self, context, port):
+    def _port_unbound_update(self, context, port):
         """
-        This is called during stage one of port migration, when the port is
-        unbound from the old location. At this point we treat it as an endpoint
-        deletion.
-
-        For more, see:
-        http://lists.openstack.org/pipermail/openstack-dev/2014-February/
-        027571.html
+        This is called when a port is unbound during a port update. This
+        destroys the port in etcd.
         """
-        LOG.info("Migration part 1")
+        LOG.info("Port becoming unbound: destroy.")
         self.transport.endpoint_deleted(port)
 
-    def _second_migration_step(self, context, port):
+    def _port_bound_update(self, context, port):
         """
-        This is called during stage two of port migration, when the port is
-        unbound from the old location. At this point we treat it as an endpoint
-        creation event.
+        This is called when a port is bound during a port update. This creates
+        the port in etcd.
 
-        For more, see:
-        http://lists.openstack.org/pipermail/openstack-dev/2014-February/
-        027571.html
+        This method expects to be called from within a database transaction,
+        and does not create one itself.
         """
         # TODO: Can we avoid re-writing the security profile here? Put another
         # way, does the security profile change during migration steps, or does
         # a separate port update event occur?
-        LOG.info("Migration part 2")
-        with context._plugin_context.session.begin(subtransactions=True):
-            port = self.db.get_port(context._plugin_context, port['id'])
-            self.add_port_gateways(port, context._plugin_context)
-            self.add_port_interface_name(port)
-            profiles = self.get_security_profiles(
-                context._plugin_context, port
-            )
-            self.transport.endpoint_created(port)
+        LOG.info("Port becoming bound: create.")
+        port = self.db.get_port(context._plugin_context, port['id'])
+        self.add_port_gateways(port, context._plugin_context)
+        self.add_port_interface_name(port)
+        profiles = self.get_security_profiles(
+            context._plugin_context, port
+        )
+        self.transport.endpoint_created(port)
 
-            for profile in profiles:
-                self.transport.write_profile_to_etcd(profile)
+        for profile in profiles:
+            self.transport.write_profile_to_etcd(profile)
 
     def _icehouse_migration_step(self, context, port, original):
         """
         This is called when migrating on Icehouse. Here, we basically just
-        perform step one and step two at exactly the same time, but we hold
-        a DB lock the entire time.
+        perform an unbinding and a binding at exactly the same time, but we
+        hold a DB lock the entire time.
+
+        This method expects to be called from within a database transaction,
+        and does not create one itself.
         """
         # TODO: Can we avoid re-writing the security profile here? Put another
         # way, does the security profile change during migration steps, or does
         # a separate port update event occur?
         LOG.info("Migration as implemented in Icehouse")
-        self.transport.endpoint_deleted(original)
-
-        with context._plugin_context.session.begin(subtransactions=True):
-            port = self.db.get_port(context._plugin_context, port['id'])
-            self.add_port_gateways(port, context._plugin_context)
-            self.add_port_interface_name(port)
-            profiles = self.get_security_profiles(
-                context._plugin_context, port
-            )
-            self.transport.endpoint_created(port)
-
-            for profile in profiles:
-                self.transport.write_profile_to_etcd(profile)
+        self._port_unbound_update(context, original)
+        self._port_bound_update(context, port)
 
     def _update_port(self, context, port):
         """
@@ -693,3 +692,10 @@ def port_status_change(port, original):
         return True
     else:
         return False
+
+
+def port_bound(port):
+    """
+    Returns true if the port is bound.
+    """
+    return port['binding:vif_type'] != 'unbound'
