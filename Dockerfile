@@ -46,7 +46,7 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Confd
-RUN curl -L https://github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
+RUN curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
     chmod +x confd
 
 # Install Powerstrip Calico Adapter dependencies.
@@ -60,7 +60,7 @@ COPY node /
 # Note that we are on a Metaswitch-customized version of Powerstrip that allows
 # configuration to either listen on a UNIX socket, or a TCP socket for Docker,
 # depending on an environment variable.
-RUN git clone https://github.com/Metaswitch/powerstrip.git && \
+RUN git clone https://www.github.com/Metaswitch/powerstrip.git && \
     cd powerstrip && \
     sed -i s/2375/2377/ powerstrip.tac && \
     python setup.py install
