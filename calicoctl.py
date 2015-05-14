@@ -79,7 +79,6 @@ docker_client = docker.Client(version=DOCKER_VERSION,
 docker_restarter = docker_restart.create_restarter()
 
 try:
-    modprobe = sh.Command._create('modprobe')
     sysctl = sh.Command._create("sysctl")
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
