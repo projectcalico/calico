@@ -195,6 +195,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # If the port binding VIF type is 'unbound', this port doesn't actually
         # need to be networked yet. We can simply return immediately.
         if port['binding:vif_type'] == 'unbound':
+            LOG.info("Creating unbound port: no work required.")
             return
 
         with context._plugin_context.session.begin(subtransactions=True):
