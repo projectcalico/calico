@@ -542,7 +542,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.add_port_gateways(port, context)
                 self.add_port_interface_name(port)
                 port['security_groups'] = self.get_security_groups_for_port(
-                    context._plugin_context, port
+                    context, port
                 )
                 self.transport.endpoint_created(port)
 
