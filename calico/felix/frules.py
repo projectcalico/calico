@@ -195,9 +195,10 @@ def rule_to_iptables_fragments(chain_name, rule, ip_version, tag_to_ipset,
                                               on_deny=on_deny)
             fragments.append(frag)
         return fragments
-    except Exception:
+    except Exception as e:
         # Defensive: isolate failures to parse the rule (which has already
         # passed validation by this point) to this chain.
+        _log.exception("Failed to parse rules: %r", e)
         return [commented_drop_fragment(chain_name,
                                         "ERROR failed to parse rules DROP:")]
 
@@ -214,6 +215,7 @@ def _split_port_lists(ports):
     """
     chunks = []
     chunk = []
+    entries_in_chunk = 0
     for port_or_range in ports:
         port_or_range = str(port_or_range)  # Defensive, support ints too.
         if ":" in port_or_range:
@@ -222,10 +224,12 @@ def _split_port_lists(ports):
         else:
             # Just a port.
             num_entries = 1
-        if len(chunk) + num_entries > MAX_MULTIPORT_ENTRIES:
+        if entries_in_chunk + num_entries > MAX_MULTIPORT_ENTRIES:
             chunks.append(chunk)
             chunk = []
+            entries_in_chunk = 0
         chunk.append(port_or_range)
+        entries_in_chunk += num_entries
     if chunk or not chunks:
         chunks.append(chunk)
     return chunks
@@ -287,7 +291,8 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
             ports = ','.join([str(p) for p in rule[ports_key]])
             # multiport only supports 15 ports.  The calling function should
             # have taken care of that.
-            assert ports.count(",") + ports.count(":") < 15, "Too many ports"
+            num_ports = ports.count(",") + ports.count(":") + 1
+            assert num_ports <= 15, "Too many ports (%s)" % ports
             append("--match multiport", "--%s-ports" % direction, ports)
 
     if rule.get("icmp_type") is not None:

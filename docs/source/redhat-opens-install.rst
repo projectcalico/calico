@@ -457,6 +457,8 @@ On a compute node, perform the following steps:
 
    Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
 
+   ::
+
          service bird restart
          service bird6 restart
          chkconfig bird on
