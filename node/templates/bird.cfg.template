@@ -28,7 +28,7 @@ protocol device {
 
 protocol direct {
    debug all;
-   interface "eth*", "em*", "ens*";
+   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
 # Template for all BGP clients
