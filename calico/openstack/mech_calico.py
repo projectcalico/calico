@@ -200,6 +200,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Next, fill out other information we need on the port.
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
+            port['security_groups'] = self.get_security_groups_for_port(
+                context._plugin_context, port
+            )
 
             # Next, we need to work out what security profiles apply to this
             # port and grab information about it.
@@ -325,6 +328,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
+            port['security_groups'] = self.get_security_groups_for_port(
+                context._plugin_context, port
+            )
             profiles = self.get_security_profiles(
                 context._plugin_context, port
             )
@@ -349,6 +355,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
+            port['security_groups'] = self.get_security_groups_for_port(
+                context._plugin_context, port
+            )
             profiles = self.get_security_profiles(
                 context._plugin_context, port
             )
@@ -369,6 +378,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
             self.add_port_gateways(port, context._plugin_context)
             self.add_port_interface_name(port)
+            port['security_groups'] = self.get_security_groups_for_port(
+                context._plugin_context, port
+            )
             profiles = self.get_security_profiles(
                 context._plugin_context, port
             )
@@ -529,6 +541,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # etcd.
                 self.add_port_gateways(port, context)
                 self.add_port_interface_name(port)
+                port['security_groups'] = self.get_security_groups_for_port(
+                    context._plugin_context, port
+                )
                 self.transport.endpoint_created(port)
 
     def resync_profiles(self, context):
@@ -602,6 +617,20 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if start_flag:
                 agent_state['start_flag'] = True
             self.db.create_or_update_agent(db_context, agent_state)
+
+    def get_security_groups_for_port(self, context, port):
+        """
+        Checks which security groups apply for a given port.
+
+        Frustratingly, the port dict provided to us when we call get_port may
+        actually be out of date, and I don't know why. This change ensures that
+        we get the most recent information.
+        """
+        filters = {'port_id': [port['id']]}
+        bindings = self.db._get_port_security_group_bindings(
+            context, filters=filters
+        )
+        return [binding['security_group_id'] for binding in bindings]
 
 
 class CalicoNotifierProxy(object):

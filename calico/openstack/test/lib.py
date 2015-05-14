@@ -203,9 +203,15 @@ class Lib(object):
               'port_range_min': -1}
         ]
 
-        # Prep a null response to the following
-        # _get_port_security_group_bindings call.
-        self.db._get_port_security_group_bindings.return_value = []
+        self.db._get_port_security_group_bindings.side_effect = (
+            self.get_port_security_group_bindings
+        )
+
+        self.port_security_group_bindings = [
+            {'port_id': 'DEADBEEF-1234-5678', 'security_group_id': 'SGID-default'},
+            {'port_id': 'FACEBEEF-1234-5678', 'security_group_id': 'SGID-default'},
+            {'port_id': 'HELLO-1234-5678', 'security_group_id': 'SGID-default'},
+        ]
 
     def setUp_eventlet(self):
         """Setup to intercept sleep calls made by the code under test, and hence to
@@ -389,3 +395,13 @@ class Lib(object):
             self.db.notifier.security_groups_member_updated(
                 mock.MagicMock(), [id]
             )
+
+    def get_port_security_group_bindings(self, context, filters):
+        if filters is None:
+            return self.port_security_group_bindings
+
+        assert filters.keys() == ['port_id']
+        allowed_ids = set(filters['port_id'])
+
+        return [b for b in self.port_security_group_bindings
+                if b['port_id'] in allowed_ids]

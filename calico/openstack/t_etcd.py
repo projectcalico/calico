@@ -122,6 +122,7 @@ class CalicoTransportEtcd(object):
         """
         Delete data from etcd for an endpoint deleted event.
         """
+        LOG.info("Deleting port %s", port)
         # TODO: What do we do about profiles here?
         # Delete the etcd key for this endpoint.
         key = port_etcd_key(port)

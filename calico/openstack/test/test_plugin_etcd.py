@@ -466,7 +466,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Now change the security group for that port.
         context.original = context._port.copy()
-        context._port['security_groups'] = ['SG-1']
+        self.port_security_group_bindings.pop(2)
+        self.port_security_group_bindings.append({
+            'port_id': 'HELLO-1234-5678', 'security_group_id': 'SG-1'
+        })
         self.driver.update_port_postcommit(context)
         expected_writes = {
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
