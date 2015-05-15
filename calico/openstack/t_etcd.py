@@ -82,8 +82,6 @@ class CalicoTransportEtcd(object):
                                   port=cfg.CONF.calico.etcd_port)
 
         # Elector, for performing leader election.
-        # TODO: This doesn't handle forking yet, we need to mix the PID in here
-        # somewhere.
         self.elector = Elector(
             client=self.client,
             server_id=cfg.CONF.calico.elector_name,
