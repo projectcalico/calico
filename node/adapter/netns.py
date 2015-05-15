@@ -119,7 +119,8 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
 def set_up_endpoint(ip, cpid, next_hop_ips,
                     veth_name=VETH_NAME,
                     proc_alias=PROC_ALIAS,
-                    ep_id=None):
+                    ep_id=None,
+                    mac=None):
     """
     Set up an endpoint (veth) in the network namespace identified by the PID.
 
@@ -134,6 +135,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     :param proc_alias: The head of the /proc filesystem on the host.
     :param ep_id: The endpoint ID to use.  Set to None if this is a new
     endpoint, or set to the existing endpoint ID that is being re-added.
+    :param mac: The interface MAC to use.  Set to None to auto assign a MAC.
     :return: An Endpoint describing the veth just created.
     """
     assert isinstance(ip, IPAddress)
@@ -160,10 +162,16 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                    shell=True)
         _log.debug(check_output("ip link", shell=True))
 
-        # Rename within the container to something sensible.
-        ns.check_call("ip link set dev %s name %s" % (iface_tmp,veth_name),
-                      shell=True)
-        ns.check_call("ip link set %s up" % (veth_name), shell=True)
+    with Namespace(cpid, 'net', proc=proc_alias):
+        if mac:
+            ns.check_call("ip link set dev %s name %s address %s" %
+                            (iface_tmp, veth_name, str(mac)),
+                          shell=True)
+        else:
+            ns.check_call("ip link set dev %s name %s" %
+                            (iface_tmp, veth_name),
+                          shell=True)
+        ns.check_call("ip link set %s up" % veth_name, shell=True)
 
     # Add an IP address.
     add_ip_to_interface(cpid, ip, veth_name, proc_alias=proc_alias)
@@ -220,7 +228,8 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
                                    next_hop_ips=next_hop_ips,
                                    veth_name=if_name,
                                    proc_alias=proc_alias,
-                                   ep_id=old_endpoint.ep_id)
+                                   ep_id=old_endpoint.ep_id,
+                                   mac=old_endpoint.mac)
     for net in nets:
         add_ip_to_interface(cpid, net.ip, if_name, proc_alias=proc_alias)
 

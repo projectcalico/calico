@@ -736,7 +736,7 @@ class DatastoreClient(object):
     @handle_errors
     def get_endpoints(self, hostname, container_id):
         """
-        Get all of Endpoints for a container.
+        Get all of the Endpoints for a container.
 
         :param hostname: The hostname that the endpoint lives on.
         :param container_id: The container that the endpoint belongs to.
@@ -756,11 +756,7 @@ class DatastoreClient(object):
         for endpoint in endpoints:
             (_, _, _, _, _, _, _, _, _, endpoint_id) = \
                                                  endpoint.key.split("/", 9)
-            ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                       "container_id": container_id,
-                                       "endpoint_id": endpoint_id}
-            ep_json = self.etcd_client.read(ep_path).value
-            eps.append(Endpoint.from_json(endpoint_id, ep_json))
+            eps.append(Endpoint.from_json(endpoint_id, endpoint.value))
         return eps
 
     @handle_errors
