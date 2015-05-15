@@ -108,7 +108,7 @@ driver. This component integrates with Neutron's ML2 plugin, and allows users
 to configure the Calico network by making Neutron API calls. This provides
 seamless integration with Neutron.
 
-The orchestrator plugin is repsonsible for the following tasks:
+The orchestrator plugin is responsible for the following tasks:
 
 API Translation
 ~~~~~~~~~~~~~~~
@@ -152,7 +152,7 @@ into two groups of machines: the core cluster, and the proxies.
 For small deployments the core cluster can be an etcd cluster of one node
 (which would typically be co-located with the :ref:`calico-orchestrator-plugin`
 component). This deployment model is simple but provides no redundancy for
-etcd - in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
+etcd -- in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
 have to rebuild the database which, as noted for OpenStack, will simply require
 that the plug-in resynchonizes state to etcd from the OpenStack database.
 
@@ -174,9 +174,10 @@ Data Storage
 ~~~~~~~~~~~~
 
 etcd stores the data for the Calico network in a distributed, consistent,
-fault-tolerant manner (for cluster sizes of at least 3 etcd nodes). This set of
-properties ensures that the Calico network is always in a known-good state,
-while allowing for some number of the machines hosting etcd to fail or become unreachable.
+fault-tolerant manner (for cluster sizes of at least three etcd nodes). This set
+of properties ensures that the Calico network is always in a known-good state,
+while allowing for some number of the machines hosting etcd to fail or become
+unreachable.
 
 This distributed storage of Calico data also improves the ability of the Calico
 components to read from the database (which is their most common operation), as
@@ -186,9 +187,9 @@ Communication
 ~~~~~~~~~~~~~
 
 etcd is also used as a communication bus between components. We do this by
-having the non-etcd components watch certain points in the keyspice to ensure
+having the non-etcd components watch certain points in the keyspace to ensure
 that they see any changes that have been made, allowing them to respond to
-tohose changes in a timely manner. This allows the act of committing state
+those changes in a timely manner. This allows the act of committing state
 to the database to cause that state to be programmed into the network.
 
 
