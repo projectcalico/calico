@@ -16,7 +16,7 @@ Configuring Calico
 ==================
 
 This page describes how to configure Calico. We first describe the
-configuration of the core Calico component - Felix -
+configuration of the core Calico component -- Felix --
 because this is needed, and configured similarly, regardless of the
 surrounding environment (OpenStack, Docker, or whatever). Then,
 depending on that surrounding environment, there will be some further
@@ -101,7 +101,7 @@ The highest priority of configuration is that read from environment
 variables. To set a configuration parameter via an environment variable, set
 the environment variable formed by taking ``FELIX_`` and appending the uppercase
 form of the variable name. For example, to set the etcd address, set the
-environment variable ``FELIX_ETCDADDR``.Other examples include
+environment variable ``FELIX_ETCDADDR``. Other examples include
 ``FELIX_FELIXHOSTNAME``, ``FELIX_LOGFILEPATH`` and ``FELIX_METADATAADDR``.
 
 Configuration file
@@ -115,7 +115,9 @@ read (ignoring section names) and all parameters are set from it.
 etcd configuration
 ^^^^^^^^^^^^^^^^^^
 
-*etcd configuration cannot be used to set either EtcdAddr or FelixHostname, both of which are required before the etcd configuration can be read.*
+.. note:: etcd configuration cannot be used to set either EtcdAddr or
+          FelixHostname, both of which are required before the etcd
+          configuration can be read.
 
 etcd configuration is read from etcd from two places.
 
