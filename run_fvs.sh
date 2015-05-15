@@ -10,7 +10,7 @@ docker rm -f host1 || true
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
 
 docker exec -t host1 bash -c \
- 'docker -d & \
+ 'while ! docker ps; do sleep 1; done && \
  cd /code && \
  ./build_node.sh && \
  ./create_binary.sh'
