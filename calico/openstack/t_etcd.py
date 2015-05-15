@@ -317,6 +317,11 @@ class CalicoTransportEtcd(object):
             except etcd.EtcdException as e:
                 LOG.debug("Failed to delete %s (%r), skipping.", delete_key, e)
 
+    def stop(self):
+        LOG.info("Stopping transport %s", self)
+        self.elector.stop()
+
+
 def _neutron_rule_to_etcd_rule(rule):
     """
     Translate a single Neutron rule dict to a single dict in our

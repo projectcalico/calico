@@ -37,10 +37,9 @@ _log = logging.getLogger(__name__)
 ETCD_DELETE_ACTIONS = set(["delete", "expire", "compareAndDelete"])
 
 
-class ElectionReconnect(Exception):
+class RestartElection(Exception):
     """
-    Exception indicating that an error occurred, and we should try to
-    reconnect.
+    Exception indicating that we should start our leader election over.
     """
     pass
 
@@ -65,6 +64,7 @@ class Elector(object):
         self._key = election_key
         self._interval = int(interval)
         self._ttl = int(ttl)
+        self._stopped = False
 
         if self._interval <= 0:
             raise ValueError("Interval %r is <= 0" % interval)
@@ -86,10 +86,10 @@ class Elector(object):
         we can easily catch and log any exception that takes out the greenlet.
         """
         try:
-            while True:
+            while not self._stopped:
                 try:
                     self._vote()
-                except ElectionReconnect:
+                except RestartElection:
                     # Something failed, and wants us just to go back to the
                     # beginning.
                     pass
@@ -125,7 +125,7 @@ class Elector(object):
 
         _log.debug("ID of elected master is : %s", response.value)
 
-        while True:
+        while not self._stopped:
             # We know another instance is the master. Wait until something
             # changes, giving long enough that it really should do (i.e. we
             # expect this read always to return, never to time out).
@@ -168,7 +168,7 @@ class Elector(object):
         Function to become the master. Never returns, and continually loops
         updating the key as necessary.
 
-        raises: ElectionReconnect if it fails to become master (e.g race
+        raises: RestartElection if it fails to become master (e.g race
                 conditions). In this case, some other process has become
                 master.
                 Any other error from etcd is not caught in this routine.
@@ -184,21 +184,19 @@ class Elector(object):
                                     prevExists=False,
                                     timeout=self._interval)
 
-        except Exception:
+        except Exception as e:
             # We could be smarter about what exceptions we allow, but any kind
             # of error means we should give up, and safer to have a broad
-            # except here.
-            _log.warning("Failed to become elected master - key %s",
-                         self._key, exc_info=True)
-            raise ElectionReconnect()
+            # except here.  Since we expect to hit this in the mainline, we
+            # don't log out the stack trace.
+            _log.info("Failed to become elected master - key %s: %r",
+                      self._key, e)
+            raise RestartElection()
 
-        _log.warning("Successfully become master - key %s, value %s",
-                     self._key, id_string)
+        _log.info("Successfully become master - key %s, value %s",
+                  self._key, id_string)
 
-        self._master = True
-
-        while True:
-            eventlet.sleep(self._interval)
+        while not self._stopped:
             try:
                 self._etcd_client.write(self._key,
                                         id_string,
@@ -209,11 +207,19 @@ class Elector(object):
                 # This is a pretty broad except statement, but anything going
                 # wrong means this instance gives up being the master.
                 self._master = False
-                raise
+                _log.warning("Failed to renew master role - key %s",
+                             self._key, exc_info=True)
+                raise RestartElection()
+
+            eventlet.sleep(self._interval)
+        raise RestartElection()
 
     def master(self):
         """
         Am I the master?
         returns: True if this is the master.
         """
-        return self._master
+        return self._master and not self._stopped
+
+    def stop(self):
+        self._stopped = True

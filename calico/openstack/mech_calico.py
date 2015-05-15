@@ -25,6 +25,7 @@
 # TODO: Update reference to new etcd architecture document
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
+import os
 import eventlet
 
 from collections import namedtuple
@@ -51,6 +52,8 @@ AGENT_TYPE_FELIX = 'Felix (Calico agent)'
 # The interval between period resyncs, in seconds.
 # TODO: Increase this to a longer interval for product code.
 RESYNC_INTERVAL_SECS = 60
+# When we're not the master, how often we check if we have become the master.
+MASTER_CHECK_INTERVAL_SECS = 5
 
 # We wait for a short period of time before we initialize our state to avoid
 # problems with Neutron forking.
@@ -74,9 +77,9 @@ def requires_state(f):
     from Neutron.
     """
     @wraps(f)
-    def wrapper(*args, **kwargs):
-        args[0]._init_state()  # args[0] will be 'self'.
-        return f(*args, **kwargs)
+    def wrapper(self, *args, **kwargs):
+        self._init_state()
+        return f(self, *args, **kwargs)
 
     return wrapper
 
@@ -100,26 +103,52 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # initialize these properly when we first need them.
         self.db = None
         self.transport = None
-        self._state_initialized = False
+        self._my_pid = None
+        self._periodic_resync_greenlet = None
+        self._epoch = 0
 
-        # Start our resynchronization process.
-        eventlet.spawn(self.periodic_resync_thread)
+        # Make sure we initialise even if we don't see any API calls.
+        eventlet.spawn_after(STARTUP_DELAY_SECS, self._init_state)
 
     def _init_state(self):
         """
         Creates the connection state required for talking to the Neutron DB
         and to etcd. This is a no-op if it has been executed before.
         """
-        if self._state_initialized:
+        current_pid = os.getpid()
+        if self._my_pid == current_pid:
+            # We've initialised our PID and it hasn't changed since last time,
+            # nothing to do.
             return
+        # else: either this is the first call or our PID has changed:
+        # (re)initialise.
 
+        if self._my_pid is not None:
+            # This is unexpected but we can deal with it: Neutron should
+            # fork before we trigger the first call to _init_state().
+            LOG.warning("PID changed; unexpected fork after initialisation.  "
+                        "Reinitialising Calico driver.")
+
+        # Start our resynchronization process.  Just in case we ever get two
+        # threads running, use an epoch counter to tell the old thread to die.
+        # This is defensive: our greenlets don't actually seem to get forked
+        # with the process.
+        self._epoch += 1
+        eventlet.spawn(self.periodic_resync_thread, self._epoch)
+
+        # (Re)init the DB.
+        self.db = None
         self._get_db()
 
         # Use Etcd-based transport.
-        if self.transport is None:
-            self.transport = CalicoTransportEtcd(self)
+        if self.transport:
+            # If we've been forked then the old transport will incorrectly
+            # share file handles with the other process.
+            LOG.warning("Shutting down previous transport instance.")
+            self.transport.stop()
+        self.transport = CalicoTransportEtcd(self)
 
-        self._state_initialized = True
+        self._my_pid = current_pid
 
     def _get_db(self):
         if not self.db:
@@ -459,7 +488,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             profile_from_neutron_rules(sgid, rules) for sgid in sgids
         )
 
-    def periodic_resync_thread(self):
+    def periodic_resync_thread(self, expected_epoch):
         """
         This method acts as a the periodic resynchronization logic for the
         Calico mechanism driver.
@@ -468,33 +497,41 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         it with etcd, ensuring that the etcd database and Neutron are in
         synchronization with each other.
         """
-        # The very first thing we do is sleep for our startup interval before
-        # initializing our state.
-        eventlet.sleep(STARTUP_DELAY_SECS)
-        self._init_state()
+        try:
+            LOG.info("Periodic resync thread started")
+            while self._epoch == expected_epoch:
+                # Only do the resync logic if we're actually the master node.
+                if self.transport.is_master:
+                    LOG.info("I am master: doing periodic resync")
+                    context = ctx.get_admin_context()
 
-        while True:
-            LOG.info("Attempting periodic resync.")
+                    try:
+                        # First, resync endpoints.
+                        self.resync_endpoints(context)
 
-            # Only do the resync logic if we're actually the master node.
-            if self.transport.is_master:
-                LOG.info("I am master: proceeding with resync")
-                context = ctx.get_admin_context()
+                        # Second, profiles.
+                        self.resync_profiles(context)
 
-                try:
-                    # First, resync endpoints.
-                    self.resync_endpoints(context)
-
-                    # Second, profiles.
-                    self.resync_profiles(context)
-
-                    # Now, set the config flags.
-                    self.transport.provide_felix_config()
-                except Exception:
-                    LOG.exception("Error in periodic resync thread.")
-
-            # Reschedule ourselves.
-            eventlet.sleep(RESYNC_INTERVAL_SECS)
+                        # Now, set the config flags.
+                        self.transport.provide_felix_config()
+                    except Exception:
+                        LOG.exception("Error in periodic resync thread.")
+                    # Reschedule ourselves.
+                    eventlet.sleep(RESYNC_INTERVAL_SECS)
+                else:
+                    # Shorter sleep interval before we check if we've become
+                    # the master.  Avoids waiting a whole RESYNC_INTERVAL_SECS
+                    # if we just miss the master update.
+                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+        except:
+            # TODO Should we tear down the process.
+            LOG.exception("Periodic resync thread died!")
+            if self.transport:
+                # Stop the transport so that we give up the mastership.
+                self.transport.stop()
+            raise
+        else:
+            LOG.warning("Periodic resync thread exiting.")
 
     def resync_endpoints(self, context):
         """
