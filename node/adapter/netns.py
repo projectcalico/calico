@@ -75,7 +75,7 @@ def remove_endpoint(ep_id):
 
 
 def add_ip_to_interface(container_pid, ip, interface_name,
-                    proc_alias=PROC_ALIAS):
+                        proc_alias=PROC_ALIAS):
     """
     Add an IP to an interface in a container.
 
@@ -96,7 +96,7 @@ def add_ip_to_interface(container_pid, ip, interface_name,
 
 
 def remove_ip_from_interface(container_pid, ip, interface_name,
-                    proc_alias=PROC_ALIAS):
+                             proc_alias=PROC_ALIAS):
     """
     Remove an IP from an interface in a container.
 
@@ -118,26 +118,28 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
 
 def set_up_endpoint(ip, cpid, next_hop_ips,
                     veth_name=VETH_NAME,
-                    proc_alias=PROC_ALIAS):
+                    proc_alias=PROC_ALIAS,
+                    ep_id=None):
     """
-    Set up an endpoint (veth) in the network namespace idenfitied by the PID.
+    Set up an endpoint (veth) in the network namespace identified by the PID.
 
     :param ip: The IP address to assign to the endpoint (veth) as Netaddr
     IPAddress.
     :param cpid: The PID of a process currently running in the namespace.
     :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
-    default routes.
-    namespace, as opposed to the root namespace.  If so, this method also moves
-    the other end of the veth into the root namespace.
+    default routes namespace, as opposed to the root namespace.  If so, this
+    method also moves the other end of the veth into the root namespace.
     :param veth_name: The name of the interface inside the container namespace,
     e.g. eth1
     :param proc_alias: The head of the /proc filesystem on the host.
+    :param ep_id: The endpoint ID to use.  Set to None if this is a new
+    endpoint, or set to the existing endpoint ID that is being re-added.
     :return: An Endpoint describing the veth just created.
     """
     assert isinstance(ip, IPAddress)
 
-    # Generate a new endpoint ID.
-    ep_id = uuid.uuid1().hex
+    # Generate a new endpoint ID if required.
+    ep_id = ep_id or uuid.uuid1().hex
 
     iface = IF_PREFIX + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]
@@ -187,9 +189,9 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                 "ip link show %s | grep ether | awk '{print $2}'" %
                 (veth_name), shell=True).strip()
 
-    # Return an Endpoint
+    # Return an Endpoint.
     network = IPNetwork(IPAddress(ip))
-    ep = Endpoint(ep_id=ep_id, state="active", mac=mac)
+    ep = Endpoint(ep_id=ep_id, state="active", mac=mac, if_name=veth_name)
     if network.version == 4:
         ep.ipv4_nets.add(network)
         ep.ipv4_gateway = next_hop
@@ -197,6 +199,38 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
         ep.ipv6_nets.add(network)
         ep.ipv6_gateway = next_hop
     return ep
+
+
+def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
+                       proc_alias=PROC_ALIAS):
+    """
+    Re-instate and endpoint that has been removed.
+    :param cpid: The PID and name of the namespace to operate in.
+    :param old_endpoint: The old endpoint that is being re-instated.
+    :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
+    default routes namespace.
+    :param proc_alias: The head of the /proc filesystem on the host.
+    :return: A new Endpoint replacing the old one.
+    """
+    nets = old_endpoint.ipv4_nets | old_endpoint.ipv6_nets
+    if_name = old_endpoint.if_name
+    net = nets.pop()
+    new_endpoint = set_up_endpoint(ip=net.ip,
+                                   cpid=cpid,
+                                   next_hop_ips=next_hop_ips,
+                                   veth_name=if_name,
+                                   proc_alias=proc_alias,
+                                   ep_id=old_endpoint.ep_id)
+    for net in nets:
+        add_ip_to_interface(cpid, net.ip, if_name, proc_alias=proc_alias)
+
+    # Copy across the IP and profile data from the old endpoint since this is
+    # unchanged.
+    new_endpoint.ipv4_nets = set(old_endpoint.ipv4_nets)
+    new_endpoint.ipv6_nets = set(old_endpoint.ipv6_nets)
+    new_endpoint.profile_id = old_endpoint.profile_id
+
+    return new_endpoint
 
 
 class NamedNamespace(object):

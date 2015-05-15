@@ -145,10 +145,11 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
 
 class Endpoint(object):
 
-    def __init__(self, ep_id, state, mac):
+    def __init__(self, ep_id, state, mac, if_name):
         self.ep_id = ep_id
         self.state = state
         self.mac = mac
+        self.if_name = if_name
 
         self.profile_id = None
         self.ipv4_nets = set()
@@ -160,6 +161,7 @@ class Endpoint(object):
         json_dict = {"state": self.state,
                      "name": IF_PREFIX + self.ep_id[:11],
                      "mac": self.mac,
+                     "container:if_name": self.if_name,
                      "profile_id": self.profile_id,
                      "ipv4_nets": sorted([str(net) for net in self.ipv4_nets]),
                      "ipv6_nets": sorted([str(net) for net in self.ipv6_nets]),
@@ -174,7 +176,8 @@ class Endpoint(object):
         json_dict = json.loads(json_str)
         ep = cls(ep_id=ep_id,
                  state=json_dict["state"],
-                 mac=json_dict["mac"])
+                 mac=json_dict["mac"],
+                 if_name=json_dict["container:if_name"])
         for net in json_dict["ipv4_nets"]:
             ep.ipv4_nets.add(IPNetwork(net))
         for net in json_dict["ipv6_nets"]:
@@ -193,6 +196,7 @@ class Endpoint(object):
             return NotImplemented
         return (self.ep_id == other.ep_id and
                 self.state == other.state and
+                self.if_name == other.if_name and
                 self.mac == other.mac and
                 self.profile_id == other.profile_id and
                 self.ipv4_nets == other.ipv4_nets and
@@ -728,6 +732,36 @@ class DatastoreClient(object):
         self.etcd_client.write(ep_path,
                                new_endpoint.to_json(),
                                prevValue=old_endpoint.to_json())
+
+    @handle_errors
+    def get_endpoints(self, hostname, container_id):
+        """
+        Get all of Endpoints for a container.
+
+        :param hostname: The hostname that the endpoint lives on.
+        :param container_id: The container that the endpoint belongs to.
+        :return:  a list of Endpoint Object
+        """
+        eps_path = LOCAL_ENDPOINTS_PATH % {"hostname": hostname,
+                                          "container_id": container_id}
+        try:
+            endpoints = self.etcd_client.read(eps_path).leaves
+        except EtcdKeyNotFound:
+            # Re-raise with better message
+            raise KeyError("Container with ID %s was not found." %
+                           container_id)
+
+        # Extract all of the endpoints.
+        eps = []
+        for endpoint in endpoints:
+            (_, _, _, _, _, _, _, _, _, endpoint_id) = \
+                                                 endpoint.key.split("/", 9)
+            ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                       "container_id": container_id,
+                                       "endpoint_id": endpoint_id}
+            ep_json = self.etcd_client.read(ep_path).value
+            eps.append(Endpoint.from_json(endpoint_id, ep_json))
+        return eps
 
     @handle_errors
     def get_hosts(self):
