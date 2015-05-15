@@ -23,9 +23,8 @@ import socket
 
 from docker import Client
 from netaddr import IPAddress, AddrFormatError
-
 import netns
-from ipam import SequentialAssignment, IPAMClient
+from calico.adapter.ipam import SequentialAssignment, IPAMClient
 
 _log = logging.getLogger(__name__)
 

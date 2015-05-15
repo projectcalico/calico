@@ -50,11 +50,11 @@ RUN curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.
     chmod +x confd
 
 # Install Powerstrip Calico Adapter dependencies.
-ADD node/adapter/requirements.txt /adapter/
+ADD calico/adapter/requirements.txt /adapter/
 RUN pip install -r /adapter/requirements.txt
 
 # Copy in our custom configuration files etc.
-COPY node /
+COPY node_fs /
 
 # Powerstrip
 # Note that we are on a Metaswitch-customized version of Powerstrip that allows
