@@ -159,10 +159,9 @@ class TestUpdateSplitter(BaseTestCase):
         for mgr in self.iptables_updaters:
             mgr.cleanup.assertCalledOnceWith(async=False)
 
-    def test_cleanup_aborts_on_exception(self):
+    def test_cleanup_give_up_on_exception(self):
         """
-        Test that cleanup stops processing a given manager type on exception,
-        but that exception in one manager type does not affect the other.
+        Test that cleanup is killed by exception.
         """
         # No need to apply any data here.
         s = self.get_splitter()
@@ -173,16 +172,9 @@ class TestUpdateSplitter(BaseTestCase):
         self.iptables_updaters[0].cleanup.side_effect = RuntimeError('Bang!')
 
         # Start the cleanup.
-        s.trigger_cleanup(async=True)
+        result = s.trigger_cleanup(async=True)
         self.step_actor(s)
-
-        # Confirm that we cleaned up. Cleanup only affects the
-        # iptables_updaters and the ipsets_managagers, so confirm the other
-        # managers got left alone.
-        self.ipsets_mgrs[0].cleanup.assertCalledOnceWith(async=False)
-        self.assertEqual(self.ipsets_mgrs[1].cleanup.call_count, 0)
-        self.iptables_updaters[0].cleanup.assertCalledOnceWith(async=False)
-        self.assertEqual(self.iptables_updaters[1].cleanup.call_count, 0)
+        self.assertRaises(RuntimeError, result.get)
 
     def test_rule_updates_propagate(self):
         """
