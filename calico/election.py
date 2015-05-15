@@ -34,6 +34,9 @@ import os
 _log = logging.getLogger(__name__)
 
 
+ETCD_DELETE_ACTIONS = set(["delete", "expire", "compareAndDelete"])
+
+
 class ElectionReconnect(Exception):
     """
     Exception indicating that an error occurred, and we should try to
@@ -110,6 +113,7 @@ class Elector(object):
         except etcd.EtcdKeyNotFound:
             _log.debug("Try to become the master - not found")
             self._become_master()
+            assert False, "_become_master() should not return."
         except (etcd.EtcdException, ReadTimeoutError, SocketTimeout,
                 ConnectTimeoutError, HTTPError,
                 etcd.EtcdClusterIdChanged, etcd.EtcdEventIndexCleared,
@@ -152,9 +156,11 @@ class Elector(object):
                 _log.warning("Implausible vanished key - become master")
                 self._become_master()
 
-            if response.action == "delete":
+            if (response.action in ETCD_DELETE_ACTIONS or
+                    response.value is None):
                 # Deleted - try and become the master.
-                _log.debug("Attempting to become the elected master")
+                _log.info("Leader etcd key went away, attempting to become "
+                          "the elected master")
                 self._become_master()
 
     def _become_master(self):
