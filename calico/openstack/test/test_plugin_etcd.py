@@ -489,6 +489,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
+        self.check_update_port_status_called(context)
 
 
         # Resync with all latest data - expect no etcd writes or deletes.

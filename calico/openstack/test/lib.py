@@ -48,7 +48,8 @@ port1 = {'binding:vif_type': 'tap',
                         'ip_address': '10.65.0.2'}],
          'mac_address': '00:11:22:33:44:55',
          'admin_state_up': True,
-         'security_groups': ['SGID-default']}
+         'security_groups': ['SGID-default'],
+         'status': 'ACTIVE'}
 
 port2 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
@@ -59,7 +60,8 @@ port2 = {'binding:vif_type': 'tap',
                         'ip_address': '10.65.0.3'}],
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
-         'security_groups': ['SGID-default']}
+         'security_groups': ['SGID-default'],
+         'status': 'ACTIVE'}
 
 # Port with an IPv6 address.
 port3 = {'binding:vif_type': 'tap',
@@ -71,7 +73,8 @@ port3 = {'binding:vif_type': 'tap',
                         'ip_address': '2001:db8:a41:2::12'}],
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
-         'security_groups': ['SGID-default']}
+         'security_groups': ['SGID-default'],
+         'status': 'ACTIVE'}
 
 
 # Define a stub class, that we will use as the base class for
