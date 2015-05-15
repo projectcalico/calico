@@ -95,19 +95,13 @@ class UpdateSplitter(Actor):
         """
         self._cleanup_scheduled = False
         _log.info("Triggering a cleanup of orphaned ipsets/chains")
-        try:
-            # Need to clean up iptables first because they reference ipsets
-            # and force them to stay alive.
-            for ipt_updater in self.iptables_updaters:
-                ipt_updater.cleanup(async=False)
-        except Exception:
-            _log.exception("iptables cleanup failed, will retry on resync")
-        try:
-            # It's still worth a try to clean up any ipsets that we can.
-            for ipset_mgr in self.ipsets_mgrs:
-                ipset_mgr.cleanup(async=False)
-        except Exception:
-            _log.exception("ipsets cleanup failed, will retry on resync.")
+        # Need to clean up iptables first because they reference ipsets
+        # and force them to stay alive.
+        for ipt_updater in self.iptables_updaters:
+            ipt_updater.cleanup(async=False)
+        # It's still worth a try to clean up any ipsets that we can.
+        for ipset_mgr in self.ipsets_mgrs:
+            ipset_mgr.cleanup(async=False)
 
     @actor_message()
     def on_rules_update(self, profile_id, rules):
