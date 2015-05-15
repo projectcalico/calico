@@ -113,10 +113,9 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
 def set_up_endpoint(ip, cpid, next_hop_ips,
                     veth_name=VETH_NAME,
                     proc_alias=PROC_ALIAS,
-                    ep_id=None,
                     mac=None):
     """
-    Set up an endpoint (veth) in the network namespace identified by the PID.
+    Set up an endpoint (veth) in the network namespace idenfitied by the PID.
 
     :param ip: The IP address to assign to the endpoint (veth) as Netaddr
     IPAddress.
@@ -127,15 +126,13 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     :param veth_name: The name of the interface inside the container namespace,
     e.g. eth1
     :param proc_alias: The location of the /proc filesystem on the host.
-    :param ep_id: The endpoint ID to use.  Set to None if this is a new
-    endpoint, or set to the existing endpoint ID that is being re-added.
     :param mac: The interface MAC to use.  Set to None to auto assign a MAC.
     :return: An Endpoint describing the veth just created.
     """
     assert isinstance(ip, IPAddress)
 
-    # Generate a new endpoint ID if required.
-    ep_id = ep_id or uuid.uuid1().hex
+    # Generate a new endpoint ID.
+    ep_id = uuid.uuid1().hex
 
     iface = IF_PREFIX + ep_id[:11]
     iface_tmp = "tmp" + ep_id[:11]

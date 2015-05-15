@@ -27,8 +27,6 @@ Usage:
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
-  calicoctl restart-docker-with-alternative-unix-socket
-  calicoctl restart-docker-without-alternative-unix-socket
 
 Options:
  --interface=<INTERFACE>  The name to give to the interface in the container
@@ -48,7 +46,6 @@ import socket
 from subprocess import CalledProcessError
 import sys
 import textwrap
-import time
 import traceback
 
 import netaddr
@@ -64,9 +61,8 @@ from calico_containers.adapter.datastore import (ETCD_AUTHORITY_ENV,
                                                  ETCD_AUTHORITY_DEFAULT,
                                                  Rules,
                                                  DataStoreError)
-from calico_containers.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from calico_containers.adapter.ipam import IPAMClient
-from calico_containers.adapter import netns, docker_restart
+from calico_containers.adapter import netns
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 
@@ -76,7 +72,6 @@ DOCKER_VERSION = "1.16"
 docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
                                                  "unix://var/run/docker.sock"))
-docker_restarter = docker_restart.create_restarter()
 
 try:
     sysctl = sh.Command._create("sysctl")
@@ -308,17 +303,6 @@ def node(ip, node_image, ip6=""):
     sysctl("-w", "net.ipv4.ip_forward=1")
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
-    if docker_restarter.is_using_alternative_socket():
-        # At this point, docker is listening on a new port but powerstrip
-        # might not be running, so docker clients need to talk directly to
-        # docker.
-        node_docker_client = docker.Client(version=DOCKER_VERSION,
-                                           base_url="unix://%s" % REAL_SOCK)
-        enable_socket = "YES"
-    else:
-        node_docker_client = docker_client
-        enable_socket = "NO"
-
     try:
         node_docker_client.remove_container("calico-node", force=True)
     except docker.errors.APIError as err:
@@ -328,7 +312,6 @@ def node(ip, node_image, ip6=""):
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
 
     environment = [
-        "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
         "IP=%s" % ip,
         "IP6=%s" % ip6,
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
@@ -336,11 +319,6 @@ def node(ip, node_image, ip6=""):
     ]
 
     binds = {
-        "/var/run":
-            {
-                "bind": "/host-var-run",
-                "ro": False
-            },
         "/proc":
             {
                 "bind": "/proc_host",
@@ -349,6 +327,11 @@ def node(ip, node_image, ip6=""):
         "/var/log/calico":
             {
                 "bind": "/var/log/calico",
+                "ro": False
+            },
+        "/usr/share/docker/plugins":
+            {
+                "bind": "/usr/share/docker/plugins",
                 "ro": False
             }
     }
@@ -366,23 +349,12 @@ def node(ip, node_image, ip6=""):
         detach=True,
         environment=environment,
         host_config=host_config,
-        volumes=["/host-var-run",
-                 "/proc_host",
-                 "/var/log/calico"])
+        volumes=["/proc_host",
+                 "/var/log/calico",
+                 "/usr/share/docker/plugins"])
     cid = container["Id"]
 
     node_docker_client.start(container)
-
-    if enable_socket == "YES":
-        while not os.path.exists(POWERSTRIP_SOCK):
-            time.sleep(0.1)
-        uid = os.stat(REAL_SOCK).st_uid
-        gid = os.stat(REAL_SOCK).st_gid
-        os.chown(POWERSTRIP_SOCK, uid, gid)
-    else:
-        print "Docker Remote API is on port %s.  Run \n" % POWERSTRIP_PORT
-        print "export DOCKER_HOST=localhost:%s\n" % POWERSTRIP_PORT
-        print "before using `docker run` for Calico networking.\n"
 
     print "Calico node is running with id: %s" % cid
 
@@ -764,27 +736,6 @@ def ip_pool_show(version):
     print str(x) + "\n"
 
 
-def restart_docker_with_alternative_unix_socket():
-    """
-    Update docker to use a different unix socket, so powerstrip can run
-    its proxy on the "normal" one. This provides simple access for
-    existing tools to the powerstrip proxy.
-
-    Set the docker daemon to listen on the docker.real.sock by updating
-    the config, clearing old sockets and restarting.
-    """
-    enforce_root()
-    docker_restarter.restart_docker_with_alternative_unix_socket()
-
-
-def restart_docker_without_alternative_unix_socket():
-    """
-    Remove any "alternative" unix socket config.
-    """
-    enforce_root()
-    docker_restarter.restart_docker_without_alternative_unix_socket()
-
-
 def bgppeer_add(ip, version):
     """
     Add the the given IP to the list of BGP Peers
@@ -1109,11 +1060,7 @@ if __name__ == '__main__':
     ip_version = get_container_ipv_from_arguments()
 
     try:
-        if arguments["restart-docker-with-alternative-unix-socket"]:
-            restart_docker_with_alternative_unix_socket()
-        elif arguments["restart-docker-without-alternative-unix-socket"]:
-            restart_docker_without_alternative_unix_socket()
-        elif arguments["node"]:
+        if arguments["node"]:
             if arguments["stop"]:
                 node_stop(arguments["--force"])
             else:

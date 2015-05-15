@@ -42,15 +42,6 @@ RUN curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.
 ADD calico_containers/adapter/requirements.txt /adapter/
 RUN pip install -r /adapter/requirements.txt
 
-# Powerstrip
-# Note that we are on a Metaswitch-customized version of Powerstrip that allows
-# configuration to either listen on a UNIX socket, or a TCP socket for Docker,
-# depending on an environment variable.
-RUN git clone https://www.github.com/Metaswitch/powerstrip.git && \
-    cd powerstrip && \
-    sed -i s/2375/2377/ powerstrip.tac && \
-    python setup.py install
-
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's thing they're most likely to change.
 COPY node_filesystem /
