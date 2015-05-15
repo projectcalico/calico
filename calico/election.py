@@ -203,7 +203,9 @@ class Elector(object):
                 # This is a pretty broad except statement, but anything going
                 # wrong means this instance gives up being the master.
                 self._master = False
-                raise
+                _log.warning("Failed to renew master role - key %s",
+                             self._key, exc_info=True)
+                raise ElectionReconnect()
 
     def master(self):
         """
