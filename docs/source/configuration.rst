@@ -18,7 +18,7 @@ Configuring Calico
 This page describes how to configure Calico. We first describe the
 configuration of the core Calico component -- Felix --
 because this is needed, and configured similarly, regardless of the
-surrounding environment (OpenStack, Docker, or whatever.) Then,
+surrounding environment (OpenStack, Docker, or whatever). Then,
 depending on that surrounding environment, there will be some further
 configuration of that environment needed, to tell it to talk to the
 Calico components.
