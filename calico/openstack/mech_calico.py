@@ -360,6 +360,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for profile in profiles:
             self.transport.write_profile_to_etcd(profile)
 
+        # Update Neutron that we succeeded.
+        self.db.update_port_status(context._plugin_context,
+                                   port['id'],
+                                   constants.PORT_STATUS_ACTIVE)
+
     def _icehouse_migration_step(self, context, port, original):
         """
         This is called when migrating on Icehouse. Here, we basically just

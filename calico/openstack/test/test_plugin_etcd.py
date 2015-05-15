@@ -305,6 +305,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
+        self.check_update_port_status_called(context)
 
         # Now resync again, moving self.osdb_ports to move port 1 back to the
         # old host felix-host-1.  The effect will be as though we've
