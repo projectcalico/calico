@@ -20,7 +20,6 @@ Test election code.
 """
 
 
-
 import eventlet
 import logging
 import mock
@@ -42,8 +41,10 @@ from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError, HTTPError
 
 log = logging.getLogger(__name__)
 
+
 def eventlet_sleep(time):
     pass
+
 
 class TestElection(unittest.TestCase):
     def setUp(self):
@@ -105,17 +106,20 @@ class TestElection(unittest.TestCase):
     def test_become_master_multiple_attempts(self):
         # Become the master after once round
         log.debug("test_become_master_multiple_circuits")
-        try:
-            client = stub_etcd.Client()
-            client.add_read_result(key="/bloop", value="value")
-            client.add_read_result(key="/bloop", value="value")
-            client.add_read_result(key="/bloop", value=None, action="delete")
-            client.add_write_exception(None)
-            client.add_write_exception(None)
-            elector = election.Elector(client, "test_basic", "/bloop", interval=5, ttl=15)
-            elector._greenlet.wait()
-        except NoMoreResults:
-            pass
+        for action in ["delete", "expire", "compareAndDelete", "something"]:
+            try:
+                log.info("Testing etcd delete event %s", action)
+                client = stub_etcd.Client()
+                client.add_read_result(key="/bloop", value="value")
+                client.add_read_result(key="/bloop", value="value")
+                client.add_read_result(key="/bloop", value=None, action=action)
+                client.add_write_exception(None)
+                client.add_write_exception(None)
+                elector = election.Elector(client, "test_basic", "/bloop",
+                                           interval=5, ttl=15)
+                elector._greenlet.wait()
+            except NoMoreResults:
+                pass
 
     def test_become_master_implausible(self):
         # Become the master after key vanishes
