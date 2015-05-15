@@ -33,6 +33,9 @@ _log = logging.getLogger(__name__)
 # All Calico data is stored under this path.
 ROOT_DIR = "/calico"
 
+# OpenStack data is stored under this path.
+OPENSTACK_DIR = ROOT_DIR + "/openstack"
+
 # Data that flows from orchestrator to felix is stored under a versioned
 # sub-tree.
 VERSION_DIR = ROOT_DIR + "/v1"
@@ -45,7 +48,7 @@ POLICY_DIR = VERSION_DIR + '/policy'
 PROFILE_DIR = POLICY_DIR + "/profile"
 
 # Key used for leader election by Neutron mechanism drivers.
-NEUTRON_ELECTION_KEY = VERSION_DIR + '/neutron_election'
+NEUTRON_ELECTION_KEY = OPENSTACK_DIR + '/neutron_election'
 
 # Regex to match profile rules, capturing the profile ID in capture group
 # "profile_id".
