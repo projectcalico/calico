@@ -613,12 +613,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 context, filters={'security_group_id': missing_groups}
             )
 
-            profiles = (
+            profiles_to_write = (
                 profile_from_neutron_rules(sgid, rules)
                 for sgid in missing_groups
             )
 
-            for profile in profiles:
+            for profile in profiles_to_write:
                 self.transport.write_profile_to_etcd(profile)
 
         # Next, handle the extra profiles. Each of them needs to be atomically
