@@ -586,7 +586,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Work out all the security groups in etcd. Do this outside a database
         # transaction to try to ensure that anything that gets created is in
         # our Neutron snapshot.
-        profiles = self.transport.get_profiles()
+        profiles = list(self.transport.get_profiles())
         profile_ids = set(profile.id for profile in profiles)
 
         # Next, grab all the security groups from Neutron. Quickly work out
