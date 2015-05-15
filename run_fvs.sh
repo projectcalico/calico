@@ -14,16 +14,6 @@ docker exec -t host1 bash -c \
  cd /code && \
  ./build_node.sh && \
  ./create_binary.sh'
-# docker run --privileged -v `pwd`:/code --name host2 -t jpetazzo/dind bash -c \
-#  'docker -d -D && \
-#  cd /code && \
-#  ./build_node.sh && \
-#  ./create_binary.sh'
-# docker run --privileged -v `pwd`:/code --name host3 -t jpetazzo/dind bash -c \
-#  'docker -d -D && \
-#  cd /code && \
-#  ./build_node.sh && \
-#  ./create_binary.sh'
 
 # Run the FVs
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/mainline.sh'
