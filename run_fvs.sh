@@ -6,7 +6,9 @@ date
 pwd
 git status
 
-docker rm -f host1 || true
+docker exec -t host1 bash -c 'docker rm -f $(docker ps -qa) ; \
+ docker rmi $(docker images -qa)' ; \
+ docker rm -f host1 || true
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
 
 docker exec -t host1 bash -c \
@@ -24,6 +26,8 @@ docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/profile_commands.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/no_powerstrip.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/diags.sh'
 
-docker rm -f host1 || true
+docker exec -t host1 bash -c 'docker rm -f $(docker ps -qa) ; \
+ docker rmi $(docker images -qa)' ; \
+ docker rm -f host1 || true
 
 echo "All tests have passed."
