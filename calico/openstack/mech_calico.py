@@ -257,13 +257,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
 
             # Now, fork execution based on the type of update we're performing.
-            # There are a few: first, a port becoming bound (binding vif_type
-            # from unbound to bound); second, a port becoming unbound (binding
-            # vif_type from bound to unbound); third, an Icehouse migration
-            # (binding host id changed and port bound); fourth, an updated
-            # (port bound at all times); fifth, a change to an unbound port
-            # (which we don't care about, because we do nothing with unbound
-            # ports).
+            # There are a few:
+            # - a port becoming bound (binding vif_type from unbound to bound);
+            # - a port becoming unbound (binding vif_type from bound to
+            #   unbound);
+            # - an Icehouse migration (binding host id changed and port bound);
+            # - an update (port bound at all times);
+            # - a change to an unbound port (which we don't care about, because
+            #   we do nothing with unbound ports).
             if port_bound(port) and not port_bound(original):
                 self._port_bound_update(context, port)
             elif port_bound(original) and not port_bound(port):
