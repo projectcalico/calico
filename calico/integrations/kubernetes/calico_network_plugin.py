@@ -19,7 +19,7 @@ ETCD_PROFILE_PATH = '/calico/'
 AllowRule = namedtuple('AllowRule', ['port', 'proto', 'source'])
 
 
-class NetworkPlugin():
+class NetworkPlugin(object):
     def __init__(self):
         self.pod_name = None
         self.docker_id = None
@@ -183,10 +183,6 @@ class NetworkPlugin():
 
         The Rule is structured to match the Calico etcd format.
 
-        :param profile_name: The name of the Profile being generated
-        :type profile_name: string
-        :param ports: a list of ContainerPort objecs.
-        :type ports: list
         :return list() rules: the rules to be added to the Profile.
         """
         inbound_rules = [
@@ -242,8 +238,7 @@ class NetworkPlugin():
         profile_json = self._generate_profile_json(profile_name, rules)
 
         # Pipe the Profile JSON into the calicoctl command to update the rule.
-        calicoctl('profile', profile_name, 'rule', 'update',
-                  _in=profile_json)
+        calicoctl('profile', profile_name, 'rule', 'update', _in=profile_json)
         print('Finished applying rules.')
 
     def _apply_tags(self, profile_name, pod):
@@ -277,7 +272,6 @@ class NetworkPlugin():
 if __name__ == '__main__':
     print('Args: %s' % sys.argv)
     mode = sys.argv[1]
-
 
     if mode == 'init':
         print('No initialization work to perform')
