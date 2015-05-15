@@ -18,6 +18,7 @@ openstack.test.test_plugin_etcd
 
 Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
+import copy
 import eventlet
 import json
 import mock
@@ -326,7 +327,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdDeletes(set(['/calico/v1/host/new-host/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
 
         # Add another port with an IPv6 address.
-        context._port = lib.port3.copy()
+        context._port = copy.deepcopy(lib.port3)
         self.osdb_ports.append(context._port)
         self.driver.create_port_postcommit(context)
         expected_writes = {
@@ -465,7 +466,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         })
 
         # Now change the security group for that port.
-        context.original = context._port.copy()
+        context.original = copy.deepcopy(context._port)
+        context.original['security_groups'] = ['SGID-default']
+        context._port['security_groups'] = ['SG-1']
         self.port_security_group_bindings.pop(2)
         self.port_security_group_bindings.append({
             'port_id': 'HELLO-1234-5678', 'security_group_id': 'SG-1'
@@ -549,7 +552,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Resync with only the last port.  Expect the first two ports to be
         # cleaned up.
-        self.osdb_ports = [context._port]
+        self.osdb_ports = [context.original]
         print "\nResync with existing etcd data\n"
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
