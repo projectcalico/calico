@@ -52,5 +52,6 @@ RUN git clone https://www.github.com/Metaswitch/powerstrip.git && \
     python setup.py install
 
 # Copy in our custom configuration files etc. We do this last to speed up
-builds for developer, as it's thing they're most likely to change.
+# builds for developer, as it's thing they're most likely to change.
 COPY node /
+
