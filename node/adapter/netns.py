@@ -224,7 +224,7 @@ class NamedNamespace(object):
 
     def __exit__(self, _type, _value, _traceback):
         try:
-            os.unlink(self.nsr_dir)
+            os.unlink(self.nsn_dir)
         except BaseException:
             _log.exception("Failed to remove link: %s", self.nsn_dir)
         return False
