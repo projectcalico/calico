@@ -367,9 +367,9 @@ class Message(object):
     """
     Message passed to an actor.
     """
-    def __init__(self, method, results, caller_path, recipient,
+    def __init__(self, msg_id,  method, results, caller_path, recipient,
                  needs_own_batch):
-        self.uuid = uuid.uuid4().hex[:12]
+        self.uuid = msg_id
         self.method = method
         self.results = results
         self.caller = caller_path
@@ -428,17 +428,16 @@ def actor_message(needs_own_batch=False):
 
             # async must be specified, unless on the same actor.
             assert async_set, "All cross-actor event calls must specify async arg."
-
-            if (not on_same_greenlet and
-                    not async and
-                    _log.isEnabledFor(logging.DEBUG)):
-                _log.debug("BLOCKING CALL: %s", calling_path)
+            msg_id = uuid.uuid4().hex[:12]
+            if not on_same_greenlet and not async:
+                _log.debug("BLOCKING CALL: [%s] %s -> %s", msg_id,
+                           calling_path, method_name)
 
             # OK, so build the message and put it on the queue.
             partial = functools.partial(fn, self, *args, **kwargs)
             result = TrackedAsyncResult((calling_path, caller,
                                          self.name, method_name))
-            msg = Message(partial, [result], caller, self.name,
+            msg = Message(msg_id, partial, [result], caller, self.name,
                           needs_own_batch=needs_own_batch)
 
             _log.debug("Message %s sent by %s to %s, queue length %d",
@@ -447,7 +446,17 @@ def actor_message(needs_own_batch=False):
             if async:
                 return result
             else:
-                return result.get()
+                blocking_result = None
+                try:
+                    blocking_result = result.get()
+                except BaseException as e:
+                    blocking_result = e
+                    raise
+                finally:
+                    _log.debug("BLOCKING CALL COMPLETE: [%s] %s -> %s = %r",
+                               msg_id, calling_path, method_name,
+                               blocking_result)
+                return blocking_result
         queue_fn.func = fn
         return queue_fn
     return decorator
