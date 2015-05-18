@@ -24,7 +24,6 @@ import os.path
 from netaddr import IPNetwork, IPAddress
 
 from datastore import Endpoint, IF_PREFIX
-from nsenter import Namespace
 
 
 _log = logging.getLogger(__name__)
@@ -86,14 +85,15 @@ def add_ip_to_interface(container_pid, ip, interface_name,
     :param proc_alias: The head of the /proc filesystem on the host.
     :return: None. raises CalledProcessError on error.
     """
-    with Namespace(container_pid, 'net', proc=proc_alias):
-        check_call("ip -%(version)s addr add "
-                   "%(addr)s/%(len)s dev %(device)s" %
-                   {"version": ip.version,
-                    "len": PREFIX_LEN[ip.version],
-                    "addr": ip,
-                    "device": interface_name},
-                   shell=True)
+    with NamedNamespace(container_pid, proc=proc_alias) as ns:
+        ns.check_call("ip -%(version)s addr add %(addr)s/%(len)s "
+                      "dev %(device)s" %
+                        {"version": ip.version,
+                         "len": PREFIX_LEN[ip.version],
+                         "addr": ip,
+                         "device": interface_name},
+                      shell=True)
+
 
 def remove_ip_from_interface(container_pid, ip, interface_name,
                     proc_alias=PROC_ALIAS):
@@ -106,14 +106,14 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
     :param proc_alias: The head of the /proc filesystem on the host.
     :return: None. raises CalledProcessError on error.
     """
-    with Namespace(container_pid, 'net', proc=proc_alias):
-        check_call("ip -%(version)s addr del "
-                   "%(addr)s/%(len)s dev %(device)s" %
-                   {"version": ip.version,
-                    "len": PREFIX_LEN[ip.version],
-                    "addr": ip,
-                    "device": interface_name},
-                   shell=True)
+    with NamedNamespace(container_pid, proc=proc_alias) as ns:
+        ns.check_call("ip -%(version)s addr del %(addr)s/%(len)s "
+                      "dev %(device)s" %
+                        {"version": ip.version,
+                         "len": PREFIX_LEN[ip.version],
+                         "addr": ip,
+                         "device": interface_name},
+                      shell=True)
 
 
 def set_up_endpoint(ip, cpid, next_hop_ips,
@@ -148,56 +148,44 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     # container process is not recognised by `ip link set <if> netns <pid>`
     # command because that uses /proc rather than the proc alias to
     # dereference the PID.
-    #
-    # TODO: Something similar to Namespace() to arbitrarily specify the proc
-    # ...   alias for the ip link set command.
-    try:
-        check_call("mkdir -p /var/run/netns", shell=True)
-        check_call("ln -s %s/%s/ns/net /var/run/netns/pid-%s" %
-                     (proc_alias, cpid, cpid),
-                   shell=True)
-        _log.debug(check_output("ls -l /var/run/netns", shell=True))
-
+    with NamedNamespace(cpid, proc=proc_alias) as ns:
         # Create the veth pair and move one end into container:
         check_call("ip link add %s type veth peer name %s" %
                      (iface, iface_tmp),
                    shell=True)
         check_call("ip link set %s up" % iface, shell=True)
-        check_call("ip link set %s netns pid-%s" % (iface_tmp, cpid),
+        check_call("ip link set %s netns %s" % (iface_tmp, ns.name),
                    shell=True)
         _log.debug(check_output("ip link", shell=True))
-    finally:
-        check_call("rm /var/run/netns/pid-%s" % cpid, shell=True)
 
-    # Rename within the container to something sensible.
-    with Namespace(cpid, 'net', proc=proc_alias):
-        check_call("ip link set dev %s name %s" % (iface_tmp,veth_name),
-                   shell=True)
-        check_call("ip link set %s up" % (veth_name), shell=True)
+        # Rename within the container to something sensible.
+        ns.check_call("ip link set dev %s name %s" % (iface_tmp,veth_name),
+                      shell=True)
+        ns.check_call("ip link set %s up" % (veth_name), shell=True)
 
     # Add an IP address.
     add_ip_to_interface(cpid, ip, veth_name, proc_alias=proc_alias)
 
-    # Connected route to next hop & default route.
-    next_hop = next_hop_ips[ip.version]
-    with Namespace(cpid, 'net', proc=proc_alias):
-        check_call("ip -%(version)s route replace"
-                   " %(next_hop)s dev %(device)s" %
-                   {"version": ip.version,
-                    "device": veth_name,
-                    "next_hop": next_hop},
-                   shell=True)
-        check_call("ip -%(version)s route replace"
-                   " default via %(next_hop)s dev %(device)s" %
-                   {"version": ip.version,
-                    "device": veth_name,
-                    "next_hop": next_hop},
-                   shell=True)
+    with NamedNamespace(cpid, proc=proc_alias) as ns:
+        # Connected route to next hop & default route.
+        next_hop = next_hop_ips[ip.version]
+        ns.check_call("ip -%(version)s route replace"
+                      " %(next_hop)s dev %(device)s" %
+                      {"version": ip.version,
+                       "device": veth_name,
+                       "next_hop": next_hop},
+                      shell=True)
+        ns.check_call("ip -%(version)s route replace"
+                      " default via %(next_hop)s dev %(device)s" %
+                      {"version": ip.version,
+                       "device": veth_name,
+                       "next_hop": next_hop},
+                      shell=True)
 
         # Get the MAC address.
-        mac = check_output(
-            "ip link show %s | grep ether | awk '{print $2}'" %
-            (veth_name), shell=True).strip()
+        mac = ns.check_output(
+                "ip link show %s | grep ether | awk '{print $2}'" %
+                (veth_name), shell=True).strip()
 
     # Return an Endpoint
     network = IPNetwork(IPAddress(ip))
@@ -209,3 +197,52 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
         ep.ipv6_nets.add(network)
         ep.ipv6_gateway = next_hop
     return ep
+
+
+class NamedNamespace(object):
+    """
+    Create a named namespace to allow commands to be run within the namespace
+    in both the calico-node and within the root namespace.
+    """
+    def __init__(self, cpid, proc=PROC_ALIAS):
+        self.name = uuid.uuid1().hex
+        self.pid_dir = "%s/%s/ns/net" % (proc, cpid)
+        self.nsn_dir = "/var/run/netns/%s" % self.name
+
+    def __enter__(self):
+        """
+        Add the appropriate configuration to name the namespace.  This links
+        the PID to the namespace name.
+        """
+        _log.debug("Creating link between ns name and PID")
+        check_call("mkdir -p /var/run/netns", shell=True)
+        check_call("ln -s %s %s" % (self.pid_dir, self.nsn_dir),
+                   shell=True)
+        _log.debug(check_output("ls -l /var/run/netns", shell=True))
+        return self
+
+    def __exit__(self, _type, _value, _traceback):
+        try:
+            check_call("rm %s" % self.nsn_dir, shell=True)
+        except BaseException:
+            _log.exception("Failed to remove link: %s", self.nsn_dir)
+        return False
+
+    def check_call(self, command, shell=False):
+        """
+        Run a command within the named namespace.
+        :param command: The command to run.
+        :param shell: Whether this is a shell command.
+        """
+        _log.debug("Run command: %s", command)
+        check_call("ip netns exec %s %s" % (self.name, command), shell=shell)
+
+    def check_output(self, command, shell=False):
+        """
+        Run a command within the named namespace.
+        :param command: The command to run.
+        :param shell: Whether this is a shell command.
+        """
+        _log.debug("Run command: %s", command)
+        return check_output("ip netns exec %s %s" % (self.name, command),
+                            shell=shell)
