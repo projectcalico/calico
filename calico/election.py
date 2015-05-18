@@ -173,7 +173,7 @@ class Elector(object):
             self._etcd_client.write(self._key,
                                     self.id_string,
                                     ttl=self._ttl,
-                                    prevExists=False,
+                                    prevExist=False,
                                     timeout=self._interval)
         except Exception as e:
             # We could be smarter about what exceptions we allow, but any kind
