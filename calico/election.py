@@ -20,12 +20,12 @@ calico.election
 
 Calico election code.
 """
+from greenlet import GreenletExit
 import etcd
 import eventlet
 from httplib import HTTPException
 import logging
 from socket import timeout as SocketTimeout
-import time
 from urllib3 import Timeout
 from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError, HTTPError
 
@@ -101,6 +101,8 @@ class Elector(object):
             # Election greenlet failed. Log but reraise.
             _log.exception("Election greenlet exiting")
             raise
+        finally:
+            self._attempt_step_down()
 
     def _vote(self):
         """
@@ -144,17 +146,17 @@ class Elector(object):
                 # Unexpected timeout - reconnect.
                 _log.debug("Read from etcd timed out (%r), retrying.", e)
                 return
+            except etcd.EtcdKeyNotFound:
+                # It should be impossible for somebody to delete the object
+                # without us getting the delete action, but safer to handle it.
+                _log.warning("Implausible vanished key - become master")
+                self._become_master()
             except (etcd.EtcdException, HTTPError, HTTPException,
                     etcd.EtcdClusterIdChanged, etcd.EtcdEventIndexCleared):
                 # Something bad and unexpected. Log and reconnect.
                 _log.warning("Unexpected error waiting for master change",
                              exc_info=True)
                 return
-            except etcd.EtcdKeyNotFound:
-                # It should be impossible for somebody to delete the object
-                # without us getting the delete action, but safer to handle it.
-                _log.warning("Implausible vanished key - become master")
-                self._become_master()
 
             if (response.action in ETCD_DELETE_ACTIONS or
                     response.value is None):
@@ -173,13 +175,10 @@ class Elector(object):
                 master.
                 Any other error from etcd is not caught in this routine.
         """
-        id_string = "%s:%d:%s" % (
-            self._server_id, os.getpid(), int(time.time())
-        )
 
         try:
             self._etcd_client.write(self._key,
-                                    id_string,
+                                    self.id_string,
                                     ttl=self._ttl,
                                     prevExists=False,
                                     timeout=self._interval)
@@ -194,16 +193,16 @@ class Elector(object):
             raise RestartElection()
 
         _log.info("Successfully become master - key %s, value %s",
-                  self._key, id_string)
+                  self._key, self.id_string)
 
         self._master = True
 
         while not self._stopped:
             try:
                 self._etcd_client.write(self._key,
-                                        id_string,
+                                        self.id_string,
                                         ttl=self._ttl,
-                                        prevValue=id_string,
+                                        prevValue=self.id_string,
                                         timeout=self._interval)
             except Exception:
                 # This is a pretty broad except statement, but anything going
@@ -216,6 +215,20 @@ class Elector(object):
             eventlet.sleep(self._interval)
         raise RestartElection()
 
+    @property
+    def id_string(self):
+        return "%s:%d" % (self._server_id, os.getpid())
+
+    def _attempt_step_down(self):
+        try:
+            self._etcd_client.delete(self._key,
+                                     prevValue=self.id_string,
+                                     timeout=self._interval)
+        except Exception:
+            # Broad except because we're already on an error path.  The key
+            # will expire anyway.
+            _log.exception("Failed to step down as master.  Ignoring.")
+
     def master(self):
         """
         Am I the master?
@@ -225,3 +238,22 @@ class Elector(object):
 
     def stop(self):
         self._stopped = True
+        if not self._greenlet.dead:
+            self._greenlet.kill(ElectorStopped())
+            try:
+                # It should die very quickly.
+                eventlet.with_timeout(10, self._greenlet.wait)
+            except eventlet.Timeout:
+                # Looks like we've leaked the greenlet somehow.
+                _log.error("Timeout while waiting for the greenlet to die.")
+                raise RuntimeError("Failed to kill Elector greenlet.")
+            except ElectorStopped:
+                pass  # Expected
+
+
+class ElectorStopped(GreenletExit):
+    """
+    Custom exception used to stop our Elector.  Used to distinguish our
+    kill() call from any other potential GreenletExit exception.
+    """
+    pass

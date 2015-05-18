@@ -19,6 +19,8 @@ calico.test.stub_etcd
 Stub version of the etcd interface.
 """
 import logging
+import eventlet
+from eventlet.event import Event
 
 # Logger
 log = logging.getLogger(__name__)
@@ -47,13 +49,20 @@ WRITE = "write"
 class Client(object):
     def __init__(self):
         self.results = []
+        self.stop = Event()
+        self.no_more_results = Event()
+        self.failure = None
 
     def read(self, path, **kwargs):
         try:
             result = self.results.pop(0)
         except IndexError:
+            if not self.no_more_results.ready():
+                self.no_more_results.send()
+            eventlet.with_timeout(5, self.stop.wait)
             raise NoMoreResults()
         if result.op != READ:
+            self.failure = "Unexpected result type for read(): %s" % result.op
             raise UnexpectedResultType()
         if result.exception is not None:
             log.debug("Raise read exception %s", type(result.exception).__name__)
@@ -66,8 +75,12 @@ class Client(object):
         try:
             result = self.results.pop(0)
         except IndexError:
+            if not self.no_more_results.ready():
+                self.no_more_results.send()
+            eventlet.with_timeout(5, self.stop.wait)
             raise NoMoreResults()
         if result.op != WRITE:
+            self.failure = "Unexpected result type for write(): %s" % result.op
             raise UnexpectedResultType()
         if result.exception is not None:
             log.debug("Raise write exception %s", result.exception)
