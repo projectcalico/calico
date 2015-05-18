@@ -209,7 +209,7 @@ class TestProfileRules(BaseTestCase):
         self.assertFalse(self.m_ips_mgr.decref.called)
         self.assertTrue(self.rules._dead)
         self.m_ipt_updater.delete_chains.assert_called_once_with(
-            ['felix-p-prof1-i', 'felix-p-prof1-o'], async=False
+            set(['felix-p-prof1-i', 'felix-p-prof1-o']), async=False
         )
 
     def test_unreferenced_after_creation(self):
@@ -234,7 +234,7 @@ class TestProfileRules(BaseTestCase):
             any_order=True
         )
         self.m_ipt_updater.delete_chains.assert_called_once_with(
-            ['felix-p-prof1-i', 'felix-p-prof1-o'], async=False
+            set(['felix-p-prof1-i', 'felix-p-prof1-o']), async=False
         )
 
     def test_immediate_deletion(self):
@@ -251,7 +251,7 @@ class TestProfileRules(BaseTestCase):
         self._process_ipset_refs(set())
         self.assertTrue(self.rules._dead)
         self.m_ipt_updater.delete_chains.assert_called_once_with(
-            ['felix-p-prof1-i', 'felix-p-prof1-o'], async=False
+            set(['felix-p-prof1-i', 'felix-p-prof1-o']), async=False
         )
 
     def _process_ipset_refs(self, expected_tags):
