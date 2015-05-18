@@ -15,12 +15,18 @@ docker rm -f host1 || true
 
 ./build_node.sh
 docker save --output calico-node.tar calico/node
-docker pull busybox:latest
-docker save --output busybox.tar busybox:latest
-docker pull jpetazzo/nsenter:latest
-docker save --output nsenter.tar jpetazzo/nsenter:latest
-docker images | grep quay.io/coreos/etcd || docker pull quay.io/coreos/etcd:v2.0.10
-docker save --output etcd.tar quay.io/coreos/etcd:v2.0.10
+if ! { docker images | grep busybox ; } ; then
+    docker pull busybox:latest
+    docker save --output busybox.tar busybox:latest
+fi
+if ! { docker images | grep jpetazzo/nsenter ; } ; then
+    docker pull jpetazzo/nsenter:latest
+    docker save --output nsenter.tar jpetazzo/nsenter:latest
+fi
+if ! { docker images | grep quay.io/coreos/etcd ; } ; then
+    docker pull quay.io/coreos/etcd:v2.0.10
+    docker save --output etcd.tar quay.io/coreos/etcd:v2.0.10
+fi
 
 ./create_binary.sh
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
