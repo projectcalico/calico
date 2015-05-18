@@ -224,7 +224,17 @@ class TestExceptionTracking(BaseTestCase):
 
     @mock.patch("calico.felix.actor._print_to_stderr", autospec=True)
     def test_exception(self, _print):
-        num_refs_at_start = len(actor._tracked_refs_by_idx)
+        """
+        Test a simulated exception leak.
+        """
+        # Since the weak refs are cleaned up lazily, grab strong references to
+        # any that are currently alive to prevent our baseline from changing
+        # under us.
+        refs_at_start = set([ref() for ref in
+                             actor._tracked_refs_by_idx.values()])
+        num_refs_at_start = len(refs_at_start)
+
+        # Now do our test: leak a result with an exception attached.
         ar = actor.TrackedAsyncResult("foo")
         ar.set_exception(Exception())
         self.assertEqual(num_refs_at_start + 1, len(actor._tracked_refs_by_idx))
@@ -233,8 +243,15 @@ class TestExceptionTracking(BaseTestCase):
         self.assertTrue(_print.called)
         self.assertTrue("foo" in _print.call_args[0][0])
         self._m_exit.reset_mock()
-        num_refs_at_end = len(actor._tracked_refs_by_idx)
-        self.assertEqual(num_refs_at_start, num_refs_at_end)
+
+        # Re-grab the set of references for comparison
+        refs_at_end = set([ref() for ref in
+                           actor._tracked_refs_by_idx.values()])
+        num_refs_at_end = len(refs_at_end)
+        self.assertEqual(refs_at_start, refs_at_end,
+                         "%s exceptions may have been leaked: %s" %
+                         (num_refs_at_end - num_refs_at_start,
+                          actor._tracked_refs_by_idx))
 
     @mock.patch("calico.felix.actor._print_to_stderr", autospec=True)
     def test_no_exception(self, m_print):
