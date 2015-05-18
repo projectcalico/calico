@@ -21,6 +21,7 @@ calico.election
 Calico election code.
 """
 from greenlet import GreenletExit
+import random
 import etcd
 import eventlet
 from httplib import HTTPException
@@ -93,9 +94,15 @@ class Elector(object):
                     # Something failed, and wants us just to go back to the
                     # beginning.
                     pass
-
-                # Sleep a little before we go back and read again.
-                eventlet.sleep(self._interval)
+                # In case we're repeatedly failing, sleep a little before we
+                # retry.
+                retry_time = 1 + (5 * random.random())
+                _log.info("Retrying leader election in %.1f seconds",
+                          retry_time)
+                eventlet.sleep(retry_time)
+        except ElectorStopped:
+            _log.info("Elector told to stop.")
+            raise
         except BaseException as e:
             # Election greenlet failed. Log but reraise.
             _log.exception("Election greenlet exiting: %r", e)
@@ -212,8 +219,8 @@ class Elector(object):
         :param failed_to: Snippet to include, such as "become master".
         """
         if isinstance(exc, etcd.EtcdClusterIdChanged):
-            _log.warning("etcd cluster ID changed, the etcd cluster "
-                         "may have been rebuilt.")
+            _log.warning("etcd cluster ID changed while trying to %s, "
+                         "the etcd cluster may have been rebuilt.", failed_to)
         elif isinstance(exc, (etcd.EtcdException, HTTPError, HTTPException,
                               SocketTimeout)):
             # Expected errors (with good messages): timeouts and connection
