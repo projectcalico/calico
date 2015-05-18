@@ -93,6 +93,9 @@ class GrandDukeOfSalzburg(object):
     def master(self):
         return True
 
+    def stop(self):
+        pass
+
 
 # Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
 # that CalicoMechanismDriver inherits from - with this stub class.
@@ -274,6 +277,13 @@ class Lib(object):
             # Also return it.
             return thread
 
+        def simulated_spawn_after(secs, fn, *args):
+            def sleep_then_run():
+                simulated_time_sleep(secs)
+                fn(*args)
+
+            return simulated_spawn(sleep_then_run)
+
         # Hook sleeping.
         self.real_eventlet_sleep = eventlet.sleep
         eventlet.sleep = simulated_time_sleep
@@ -281,6 +291,9 @@ class Lib(object):
         # Similarly hook spawning.
         self.real_eventlet_spawn = eventlet.spawn
         eventlet.spawn = simulated_spawn
+
+        self.real_eventlet_spawn_after = eventlet.spawn_after
+        eventlet.spawn_after = simulated_spawn_after
 
     def setUp_logging(self):
         """Setup to intercept and display logging by the code under test.
@@ -305,6 +318,7 @@ class Lib(object):
         # Restore the real eventlet.sleep and eventlet.spawn.
         eventlet.sleep = self.real_eventlet_sleep
         eventlet.spawn = self.real_eventlet_spawn
+        eventlet.spawn_after = self.real_eventlet_spawn_after
 
     # Method for the test code to call when it wants to advance the simulated
     # time.
