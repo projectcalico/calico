@@ -21,7 +21,7 @@ Tests for the profilerules module.
 
 import logging
 from subprocess import CalledProcessError
-from mock import Mock, call, patch
+from mock import Mock, call
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.ipsets import IpsetManager, ActiveIpset
 from calico.felix.profilerules import ProfileRules, RulesManager

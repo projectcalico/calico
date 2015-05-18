@@ -18,7 +18,7 @@ Calico etcd Data Model
 
 In Calico, etcd is used as the data store and communication mechanism for all
 the Calico components. This data store contains all the information the various
-Calico components to set up the Calico network.
+Calico components require to set up the Calico network.
 
 This document discusses the way Calico stores its data in etcd. This data store
 and structure acts as Calico's primary external and internal API, granting
