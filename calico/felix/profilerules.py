@@ -161,7 +161,7 @@ class ProfileRules(RefCountedActor):
             if not self._cleaned_up:
                 try:
                     _log.info("%s unreferenced, removing our chains", self)
-                    chains = self.chain_names.values()
+                    chains = set(self.chain_names.values())
                     # Need to block here: have to wait for chains to be deleted
                     # before we can decref our ipsets.
                     self._iptables_updater.delete_chains(chains, async=False)
