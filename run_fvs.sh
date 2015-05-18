@@ -13,6 +13,7 @@ docker exec -t host1 bash -c 'docker rm -f $(docker ps -qa) ; \
                               docker rmi $(docker images -qa)' || true
 docker rm -f host1 || true
 
+# Save and load each image, so we can use them in the inner host containers.
 ./build_node.sh
 docker save --output calico-node.tar calico/node
 if ! { docker images | grep busybox ; } ; then
@@ -23,7 +24,7 @@ if ! { docker images | grep jpetazzo/nsenter ; } ; then
     docker pull jpetazzo/nsenter:latest
     docker save --output nsenter.tar jpetazzo/nsenter:latest
 fi
-if ! { docker images | grep quay.io/coreos/etcd ; } ; then
+if ! { docker images | grep "v2\.0\.10" ; } ; then
     docker pull quay.io/coreos/etcd:v2.0.10
     docker save --output etcd.tar quay.io/coreos/etcd:v2.0.10
 fi
@@ -31,6 +32,7 @@ fi
 ./create_binary.sh
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
 
+# Load each of the images saved above.
 docker exec -t host1 bash -c \
  'while ! docker ps; do sleep 1; done && \
  docker load --input /code/calico-node.tar && \
