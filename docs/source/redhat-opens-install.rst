@@ -422,10 +422,9 @@ On a compute node, perform the following steps:
     will create BIRD config files for simple topologies -- either a
     peering between a single pair of compute nodes, or to a route
     reflector (to avoid the need for a full BGP mesh in networks with
-    more than two compute nodes). If your topology is more complex, please
-    consult the relevant documentation for your chosen BGP stack or ask
-    the mailing list if you have questions about how BGP relates to
-    Calico.
+    more than two compute nodes). If you decide to do this, instructions for
+    configuring BIRD as a route reflector can be found in
+    :doc:`bird-rr-config`.
 
     For IPv4 connectivity between compute hosts:
 

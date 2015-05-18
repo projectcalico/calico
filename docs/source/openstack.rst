@@ -46,5 +46,6 @@ controller and one OpenStack compute node).
    redhat-opens-install
    ubuntu-opens-install
    juju-opens-install
+   bird-rr-config
    fuel-integration
    worked-examples-openstack
