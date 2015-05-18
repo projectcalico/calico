@@ -28,13 +28,13 @@ log = logging.getLogger(__name__)
 class EtcdException(Exception):
     pass
 
-class EtcdKeyNotFound(Exception):
+class EtcdKeyNotFound(EtcdException):
     pass
 
-class EtcdClusterIdChanged(Exception):
+class EtcdClusterIdChanged(EtcdException):
     pass
 
-class EtcdEventIndexCleared(Exception):
+class EtcdEventIndexCleared(EtcdException):
     pass
 
 class NoMoreResults(Exception):

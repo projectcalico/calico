@@ -80,7 +80,11 @@ class TestElection(unittest.TestCase):
     def _wait_and_stop(self, client, elector):
         # Wait for the client to tell us that all the results have been
         # processed.
-        eventlet.with_timeout(5, client.no_more_results.wait)
+        try:
+            eventlet.with_timeout(5, client.no_more_results.wait)
+        except eventlet.Timeout:
+            elector._greenlet.kill(AssertionError("Didn't reach end of results"))
+            elector._greenlet.wait()
         # This should shut down the Elector.
         eventlet.with_timeout(5, elector.stop)
         # The greenlet should be dead already, but just in case, let our
@@ -106,6 +110,16 @@ class TestElection(unittest.TestCase):
         client.add_read_exception(stub_etcd.EtcdKeyNotFound())
         client.add_write_exception(None)
         client.add_write_exception(None)
+        elector = election.Elector(client, "test_basic", "/bloop", interval=5, ttl=15)
+        self._wait_and_stop(client, elector)
+
+    def test_fail_to_maintain(self):
+        # Become the master after once round
+        log.debug("test_become_master_first_time")
+        client = stub_etcd.Client()
+        client.add_read_exception(stub_etcd.EtcdKeyNotFound())
+        client.add_write_exception(None)
+        client.add_write_exception(stub_etcd.EtcdClusterIdChanged())
         elector = election.Elector(client, "test_basic", "/bloop", interval=5, ttl=15)
         self._wait_and_stop(client, elector)
 
