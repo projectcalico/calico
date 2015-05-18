@@ -87,3 +87,56 @@ Options:
 ## Can a guest container have multiple networked IP addresses?
 Yes, using the `calicoctl container <CONTAINER> ip (add|remove) <IP>` command.
 
+## How can I get network traffic into and out of my Calico cluster?
+The ideal way to get traffic to/from your Calico network is by peering to 
+your existing data center routers using BGP and by assigning globally 
+routable IPs to your workloads. This avoids the need for NATs, 
+tunnels or overlays. 
+
+Detailed datacenter networking recommendations are given in the main 
+[Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
+
+In some cases however, it's not possible to set up such a peering. In such a
+ case, then iptables rules can be configured on the compute hosts to get 
+ traffic into and out of the Calico networked containers.
+
+### Egress traffic from containers
+If you just want to be able to access the internet from your containers and 
+they only have private Calico IP addresses then you can configure SNAT on 
+each compute host.
+```
+iptables -t nat -A POSTROUTING -s 192.168.0.0/16 ! -d 192.168.0.0/16 -j 
+MASQUERADE
+```
+
+This configures masquerading for all traffic from the default Calico subnet 
+that's destined for outside that subnet. You'll need to use a different IP 
+range (or multiple IP ranges) if you've configured different pools. 
+
+The command will need to be run each time the host is restarted.
+
+### Ingress traffic to containers
+if you're trying to host a public facing service on your Calico network then
+you'll want some way of exposing that service. It's highly desirable that 
+you assign a public IP to your container and peer with your border router 
+so that traffic for that IP is brought to the appropriate compute host. If 
+you can't do this and you're host already has a public facing IP, then you 
+can use port mapping to get the traffic into the container.
+
+You will need to runt he following commands to on the host that the container
+is running on.
+
+```
+iptables -A FORWARD -p tcp -d <CALICO_IP> --dport <SERVICE_PORT> -j ACCEPT
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport <EXPOSED_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
+```
+
+For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4
+to, and you have NGINX running on port 8000 inside the container. If you 
+want to expose this on port 80, then you could run the following two commands:
+
+```
+iptables -A FORWARD -p tcp -d 192.168.7.4 --dport 8000 -j ACCEPT
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.4:8000
+```
+The command will need to be run each time the host is restarted.
