@@ -8,7 +8,7 @@ calicoctl.spec
 calicoctl.py.sh
 *~
 .coverage
-cover/
+cover
 
 busybox.tar
 calico-node.tar
