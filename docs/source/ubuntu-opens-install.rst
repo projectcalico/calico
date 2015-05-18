@@ -373,8 +373,8 @@ perform the following steps:
     configuration is outside the scope of this install document.
 
     If you *are* configuring a full BGP mesh you'll need to handle the BGP
-    configuration appropriately. You should consult the relevant
-    documentation for your chosen BGP stack.
+    configuration appropriately. To configure BIRD as a route reflector,
+    follow the instructions in :doc:`bird-rr-config`.
 
 9. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
     supplied sample config at ``/etc/calico/felix.cfg.example``.
