@@ -17,9 +17,9 @@ from subprocess import call, check_output, check_call, CalledProcessError
 import socket
 import logging
 import logging.handlers
+import os
 import sys
 import uuid
-import os.path
 
 from netaddr import IPNetwork, IPAddress
 
@@ -215,15 +215,16 @@ class NamedNamespace(object):
         the PID to the namespace name.
         """
         _log.debug("Creating link between ns name and PID")
-        check_call("mkdir -p /var/run/netns", shell=True)
-        check_call("ln -s %s %s" % (self.pid_dir, self.nsn_dir),
-                   shell=True)
-        _log.debug(check_output("ls -l /var/run/netns", shell=True))
+        try:
+            os.makedirs("/var/run/netns")
+        except os.error:
+            _log.info("Unable to create /var/run/netns dir")
+        os.symlink(self.pid_dir, self.nsn_dir)
         return self
 
     def __exit__(self, _type, _value, _traceback):
         try:
-            check_call("rm %s" % self.nsn_dir, shell=True)
+            os.unlink(self.nsr_dir)
         except BaseException:
             _log.exception("Failed to remove link: %s", self.nsn_dir)
         return False
