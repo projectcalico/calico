@@ -17,6 +17,9 @@ docker pull busybox:latest
 docker save --output busybox.tar busybox:latest
 ./build_node.sh
 docker save --output calico-node.tar calico/node
+docker pull jpetazzo/nsenter
+docker save --output nsenter.tar jpetazzo/nsenter
+docker save --output etcd.tar quay.io/coreos/etcd:v2.0.10
 
 ./create_binary.sh
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
@@ -24,7 +27,9 @@ docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
 docker exec -t host1 bash -c \
  'while ! docker ps; do sleep 1; done && \
  docker load --input /code/busybox.tar && \
- docker load --input /code/calico-node.tar'
+ docker load --input /code/calico-node.tar && \
+ docker load --input /code/nsenter.tar && \
+ docker load --input /code/etcd.tar'
 
 # Run the FVs
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/mainline.sh'
