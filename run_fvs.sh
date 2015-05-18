@@ -16,15 +16,15 @@ docker rm -f host1 || true
 # Save and load each image, so we can use them in the inner host containers.
 ./build_node.sh
 docker save --output calico-node.tar calico/node
-if ! { docker images | grep busybox ; } ; then
+if [ ! -e busybox.tar ] ; then
     docker pull busybox:latest
     docker save --output busybox.tar busybox:latest
 fi
-if ! { docker images | grep jpetazzo/nsenter ; } ; then
+if [ ! -e nsenter.tar ] ; then
     docker pull jpetazzo/nsenter:latest
     docker save --output nsenter.tar jpetazzo/nsenter:latest
 fi
-if ! { docker images | grep "v2\.0\.10" ; } ; then
+if [ ! -e etcd.tar ] ; then
     docker pull quay.io/coreos/etcd:v2.0.10
     docker save --output etcd.tar quay.io/coreos/etcd:v2.0.10
 fi
