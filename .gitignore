@@ -9,3 +9,9 @@ calicoctl.py.sh
 *~
 .coverage
 cover/
+
+busybox.tar
+calico-node.tar
+docker-enter
+importenv
+nsenter

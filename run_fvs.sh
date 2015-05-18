@@ -12,12 +12,19 @@ git status
 docker exec -t host1 bash -c 'docker rm -f $(docker ps -qa) ; \
                               docker rmi $(docker images -qa)' || true
 docker rm -f host1 || true
+
+docker pull busybox:latest
+docker save --output busybox.tar busybox:latest
+./build_node.sh
+docker save --output calico-node.tar calico/node
+
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
 
 docker exec -t host1 bash -c \
  'while ! docker ps; do sleep 1; done && \
+ docker load --input /code/busybox.tar && \
+ docker load --input /code/calico-node.tar && \
  cd /code && \
- ./build_node.sh && \
  ./create_binary.sh'
 
 # Run the FVs
