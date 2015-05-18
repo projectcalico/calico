@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.19
+Version:        0.20
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon May 18 2015 Matt Dupre <matt@projectcalico.org> 0.20
+  - Felix graceful restart support
+  - Refactoring and additional unit testing
+
 * Mon May 11 2015 Neil Jerram <neil@projectcalico.org> 0.19
 - Further fixes and improvements to Calico components
   - Add script that automates the merging required for a Debian/Ubuntu package

@@ -1,3 +1,10 @@
+calico (0.20) trusty; urgency=medium
+
+  * Felix graceful restart support
+  * Refactoring and additional unit testing
+
+ -- Matt Dupre <matt@projectcalico.org>  Mon, 18 May 2015 17:55:32 +0100
+
 calico (0.19) trusty; urgency=medium
 
   * Further fixes and improvements to Calico components
