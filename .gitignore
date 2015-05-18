@@ -12,6 +12,8 @@ cover
 
 busybox.tar
 calico-node.tar
+etcd.tar
+nsenter.tar
 docker-enter
 importenv
 nsenter

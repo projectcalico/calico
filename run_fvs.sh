@@ -19,6 +19,7 @@ docker save --output busybox.tar busybox:latest
 docker save --output calico-node.tar calico/node
 docker pull jpetazzo/nsenter
 docker save --output nsenter.tar jpetazzo/nsenter
+docker pull quay.io/coreos/etcd:v2.0.10
 docker save --output etcd.tar quay.io/coreos/etcd:v2.0.10
 
 ./create_binary.sh
