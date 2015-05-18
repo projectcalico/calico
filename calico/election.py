@@ -196,6 +196,8 @@ class Elector(object):
         _log.info("Successfully become master - key %s, value %s",
                   self._key, id_string)
 
+        self._master = True
+
         while not self._stopped:
             try:
                 self._etcd_client.write(self._key,
