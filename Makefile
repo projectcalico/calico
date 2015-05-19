@@ -118,4 +118,13 @@ setup-env:
 install-completion: /etc/bash_completion.d/calicoctl.sh
 /etc/bash_completion.d/calicoctl.sh: dist/calicoctl
 	cp dist/calicoctl.sh /etc/bash_completion.d
-	
+
+.PHONY: kubernetes	
+kubernetes:
+	# Build docker container
+	cd build_calicoctl; docker build -t calico-build .
+	mkdir -p dist
+	chmod 777 `pwd`/dist
+	# Build the rkt plugin
+	docker run -u user -v `pwd`/calico/integrations/kubernetes:/calico -v `pwd`/dist:/code/dist calico-build pyinstaller /calico/calico_kubernetes.py -a -F -s --clean
+
