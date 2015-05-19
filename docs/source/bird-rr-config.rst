@@ -146,9 +146,13 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6::
 Step 5: Reconfigure compute nodes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-On each of your compute nodes, edit ``/etc/bird/bird.conf`` (and, if you're
-using IPv6, ``/etc/bird/bird6.conf``) to remove all their peer relationships
-(the blocks beginning with ``protocol bgp``) except for one. Edit that one's
-``neighbor`` field IP address to be the IP address of the route reflector
-(either IPv4 or IPv6). Then, restart their BIRD instances as detailed in step
-4.
+If you used the ``calico-gen-bird-conf.sh`` script to configure your compute
+hosts, and you used the route reflector IP when you did, you do not need to do
+anything further.
+
+Otherwise, on each of your compute nodes, edit ``/etc/bird/bird.conf`` (and, if
+you're using IPv6, ``/etc/bird/bird6.conf``) to remove all their peer
+relationships (the blocks beginning with ``protocol bgp``) except for one. Edit
+that one's ``neighbor`` field IP address to be the IP address of the route
+reflector (either IPv4 or IPv6). Then, restart their BIRD instances as detailed
+in step 4.
