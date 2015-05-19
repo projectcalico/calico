@@ -591,8 +591,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for endpoint in eps_to_delete:
             try:
                 self.transport.atomic_delete_endpoint(endpoint)
-            except Exception:
-                # TODO: Be more specific.
+            except ValueError:
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the endpoint was created or updated elsewhere.
                 continue
@@ -665,8 +664,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for profile in profiles_to_delete:
             try:
                 self.transport.atomic_delete_profile(profile)
-            except Exception:
-                # TODO: Be more specific.
+            except ValueError:
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
