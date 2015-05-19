@@ -53,5 +53,5 @@ RUN git clone https://www.github.com/Metaswitch/powerstrip.git && \
 
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's thing they're most likely to change.
-COPY node /
+COPY node_fs /
 
