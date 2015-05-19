@@ -116,14 +116,15 @@ range (or multiple IP ranges) if you've configured different pools.
 The command will need to be run each time the host is restarted.
 
 ### Ingress traffic to containers
-if you're trying to host a public facing service on your Calico network then
+
+If you're trying to host a public facing service on your Calico network then
 you'll want some way of exposing that service. It's highly desirable that 
 you assign a public IP to your container and peer with your border router 
 so that traffic for that IP is brought to the appropriate compute host. If 
 you can't do this and your host already has a public facing IP, then you 
 can use port mapping to get the traffic into the container.
 
-You will need to run the following commands to on the host that the container
+You will need to run the following commands on the host that the container
 is running on.
 
 ```
