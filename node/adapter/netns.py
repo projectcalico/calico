@@ -158,7 +158,6 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                    shell=True)
         _log.debug(check_output("ip link", shell=True))
 
-    with Namespace(cpid, 'net', proc=proc_alias):
         if mac:
             ns.check_call("ip link set dev %s name %s address %s" %
                             (iface_tmp, veth_name, str(mac)),
