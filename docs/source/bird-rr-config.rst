@@ -12,7 +12,8 @@ Prerequisites
 
 Before starting this you will need the following:
 
-- A machine running either Ubuntu 14.04 or RHEL 7.
+- A machine running either Ubuntu 14.04 or RHEL 7 that is not already being
+  used as a compute host.
 - SSH access to the machine.
 
 Installation
@@ -29,7 +30,8 @@ available in Ubuntu 14.04. To add the PPA, run::
 
     sudo add-apt-repository ppa:cz.nic-labs/bird
 
-Once that's done, update your package manager and install BIRD::
+Once that's done, update your package manager and install BIRD (the single
+``bird`` package installs both IPv4 and IPv6 BIRD)::
 
     sudo apt-get update
     sudo apt-get install bird
@@ -60,8 +62,9 @@ Step 2: Set your BIRD IPv4 configuration
 Before doing this, you'll need to take note of what BGP AS number you've used
 in your compute node install.
 
-Open ``/etc/bird/bird.conf`` and initially fill it with the following template,
-replacing ``<router_id>`` with the IPv4 address of your route reflector::
+Open ``/etc/bird/bird.conf`` on your route reflector system and initially fill
+it with the following template, replacing ``<router_id>`` with the IPv4 address
+of your route reflector::
 
     # Configure logging
     log syslog { debug, trace, info, remote, warning, error, auth, fatal, bug };
@@ -87,9 +90,10 @@ replacing ``<router_id>`` with the IPv4 address of your route reflector::
     }
 
 Then, at the end, for each compute node in your deployment add one of the
-following blocks, replacing ``<node_shortname>`` with a short
-purely-alphabetical name for the host, ``<node_ip>`` with the node's IPv4
-address, and ``<as_number>`` with the AS number you're using::
+following blocks, replacing ``<node_shortname>`` with a purely alphabetical
+name for the host (this must be unique for each host, but the shortname is only
+used within this file)t, ``<node_ip>`` with the node's IPv4 address, and
+``<as_number>`` with the AS number you're using::
 
     protocol bgp <node_shortname> {
       description "<node_ip>";
@@ -110,7 +114,7 @@ before you set ``<node_ip>`` to the compute node's IPv4 address, this time you
 need to set it to the compute node's IPv6 address.
 
 Note that ``<router_id>`` should still be set to the route reflector's IPv4
-address: you cannot use an IPv6 address in that field.#
+address: you cannot use an IPv6 address in that field.
 
 Step 4: Restart BIRD
 ~~~~~~~~~~~~~~~~~~~~
@@ -122,7 +126,7 @@ Restart BIRD::
 
     sudo service bird restart
 
-Optionally, if you configured IPv6 in step 3, also restart BIRD6:
+Optionally, if you configured IPv6 in step 3, also restart BIRD6::
 
     sudo service bird6 restart
 
@@ -134,7 +138,7 @@ Restart BIRD::
     systemctl restart bird
     systemctl enable bird
 
-Optionally, if you configured IPv6 in step 3, also restart BIRD6:
+Optionally, if you configured IPv6 in step 3, also restart BIRD6::
 
     systemctl restart bird6
     systemctl enable bird6
@@ -142,8 +146,9 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
 Step 5: Reconfigure compute nodes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-On each of your compute nodes, edit ``/etc/bird/bird.conf`` (and optionally
-``/etc/bird/bird6.conf``) to remove all their peer relationships (the blocks
-beginning with ``protocol bgp``) except for one. Edit that one's ``neighbor``
-field IP address to be the IP address of the route reflector (either IPv4 or
-IPv6). Then, restart their BIRD instances as detailed in step 4.
+On each of your compute nodes, edit ``/etc/bird/bird.conf`` (and, if you're
+using IPv6, ``/etc/bird/bird6.conf``) to remove all their peer relationships
+(the blocks beginning with ``protocol bgp``) except for one. Edit that one's
+``neighbor`` field IP address to be the IP address of the route reflector
+(either IPv4 or IPv6). Then, restart their BIRD instances as detailed in step
+4.
