@@ -22,6 +22,7 @@ IP sets management functions.
 from collections import defaultdict
 
 import logging
+from itertools import chain
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
@@ -148,8 +149,12 @@ class IpsetManager(ReferenceManager):
         felix_ipsets = set([n for n in all_ipsets if n.startswith(pfx) or
                                                      n.startswith(tmppfx)])
         whitelist = set()
-        for ipset in (self.objects_by_id.values() +
-                      self.stopping_objects_by_id.values()):
+        live_ipsets = self.objects_by_id.itervalues()
+        # stopping_objects_by_id is a dict of sets of ActiveIpset objects,
+        # chain them together.
+        stopping_ipsets = chain.from_iterable(
+            self.stopping_objects_by_id.itervalues())
+        for ipset in chain(live_ipsets, stopping_ipsets):
             # Ask the ipset for all the names it may use and whitelist.
             whitelist.update(ipset.owned_ipset_names())
         _log.debug("Whitelisted ipsets: %s", whitelist)

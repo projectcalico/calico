@@ -18,12 +18,14 @@ felix.test.test_ipsets
 
 Unit tests for the IpsetManager.
 """
+from collections import defaultdict
 
 import logging
 from mock import *
 from calico.datamodel_v1 import EndpointId
-from calico.felix.futils import IPV4
-from calico.felix.ipsets import IpsetManager
+from calico.felix.futils import IPV4, FailedSystemCall
+from calico.felix.ipsets import IpsetManager, ActiveIpset
+from calico.felix.refcount import CREATED
 from calico.felix.test.base import BaseTestCase
 
 
@@ -58,9 +60,26 @@ class TestIpsetManager(BaseTestCase):
         self.reset()
 
     def reset(self):
+        self.created_refs = defaultdict(list)
+        self.acquired_refs = {}
         self.mgr = IpsetManager(IPV4)
-        self.m_create = Mock(spec=self.mgr._create)
+        self.m_create = Mock(spec=self.mgr._create,
+                             side_effect = self.m_create)
         self.mgr._create = self.m_create
+
+    def m_create(self, tag_id):
+        ipset = Mock(spec=ActiveIpset)
+
+        ipset._manager = None
+        ipset._id = None
+        ipset.ref_mgmt_state = CREATED
+        ipset.ref_count = 0
+        ipset.owned_ipset_names.return_value = ["felix-v4-" + tag_id,
+                                                "felix-v4-tmp-" + tag_id]
+
+        ipset.tag = tag_id
+        self.created_refs[tag_id].append(ipset)
+        return ipset
 
     def test_tag_then_enpdpoint(self):
         # Send in the messages.
@@ -276,3 +295,62 @@ class TestIpsetManager(BaseTestCase):
         self.assertEqual(self.mgr.endpoints_by_ep_id, {})
         self.assertEqual(self.mgr.ip_owners_by_tag, {})
 
+    def on_ref_acquired(self, tag_id, ipset):
+        self.acquired_refs[tag_id] = ipset
+
+    @patch("calico.felix.ipsets.list_ipset_names", autospec=True)
+    @patch("calico.felix.futils.check_call", autospec=True)
+    def test_cleanup(self, m_check_call, m_list_ipsets):
+        # Start with a couple ipsets.
+        self.mgr.get_and_incref("foo", callback=self.on_ref_acquired,
+                                async=True)
+        self.mgr.get_and_incref("bar", callback=self.on_ref_acquired,
+                                async=True)
+        self.step_mgr()
+        self.assertEqual(set(self.created_refs.keys()),
+                         set(["foo", "bar"]))
+
+        # Notify ready so that the ipsets are marked as started.
+        self._notify_ready(["foo", "bar"])
+        self.step_mgr()
+
+        # Then decref "bar" so that it gets marked as stopping.
+        self.mgr.decref("bar", async=True)
+        self.step_mgr()
+        self.assertEqual(
+            self.mgr.stopping_objects_by_id,
+            {"bar": set(self.created_refs["bar"])}
+        )
+
+        # Return mix of expected and unexpected ipsets.
+        m_list_ipsets.return_value = [
+            "not-felix-foo",
+            "felix-v6-foo",
+            "felix-v6-bazzle",
+            "felix-v4-foo",
+            "felix-v4-bar",
+            "felix-v4-baz",
+            "felix-v4-biff",
+        ]
+        m_check_call.side_effect = iter([
+            # Exception on any individual call should be ignored.
+            FailedSystemCall("Dummy", [], None, None, None),
+            None,
+        ])
+        self.mgr.cleanup(async=True)
+        self.step_mgr()
+
+        # Explicitly check that exactly the right delete calls were made.
+        # assert_has_calls would ignore extra calls.
+        self.assertEqual(sorted(m_check_call.mock_calls),
+                         sorted([
+                             call(["ipset", "destroy", "felix-v4-biff"]),
+                             call(["ipset", "destroy", "felix-v4-baz"]),
+                         ]))
+
+
+    def _notify_ready(self, tags):
+        for tag in tags:
+            self.mgr.on_object_startup_complete(tag, self.created_refs[tag][0],
+                                                async=True)
+        self.step_mgr()
