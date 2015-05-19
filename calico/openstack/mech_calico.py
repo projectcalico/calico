@@ -41,7 +41,8 @@ from neutron import context as ctx
 from neutron import manager
 
 # Calico imports.
-from calico.openstack.t_etcd import CalicoTransportEtcd, etcd
+import etcd
+from calico.openstack.t_etcd import CalicoTransportEtcd
 
 LOG = log.getLogger(__name__)
 
@@ -623,7 +624,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for endpoint in eps_to_delete:
             try:
                 self.transport.atomic_delete_endpoint(endpoint)
-            except ValueError:
+            except (ValueError, etcd.EtcdKeyNotFound):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the endpoint was created or updated elsewhere.
                 continue
@@ -696,7 +697,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for profile in profiles_to_delete:
             try:
                 self.transport.atomic_delete_profile(profile)
-            except ValueError:
+            except (ValueError, etcd.EtcdKeyNotFound):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
