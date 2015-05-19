@@ -108,6 +108,7 @@ def get_container_info_or_exit(container_name):
         sys.exit(1)
     return info
 
+
 def get_container_id(container_name):
     """
     Get the full container ID from a partial ID or name.
