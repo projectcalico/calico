@@ -18,19 +18,22 @@
 # Etcd-based transport for the Calico/OpenStack Plugin.
 
 # Standard Python library imports.
-import etcd
+from collections import namedtuple
+import functools
+import httplib
 import json
 import re
 import socket
 import weakref
-
-from collections import namedtuple
 
 # OpenStack imports.
 from oslo.config import cfg
 from neutron.openstack.common import log
 
 # Calico imports.
+from eventlet.semaphore import Semaphore
+import etcd
+import urllib3.exceptions
 from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_endpoint, PROFILE_DIR, RULES_KEY_RE,
                                  key_for_profile, key_for_profile_rules,
@@ -68,6 +71,26 @@ Profile = namedtuple(
 )
 
 
+def _handling_etcd_exceptions(fn):
+    """
+    Decorator for methods of CalicoTransportEtcd only; implements some
+    common EtcdException handling.
+    """
+    @functools.wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        try:
+            return fn(self, *args, **kwargs)
+        except (etcd.EtcdException,
+                urllib3.exceptions.HTTPError,
+                httplib.HTTPException,
+                socket.error):
+            LOG.exception("Request to etcd failed. This will cause the "
+                          "current API call to fail.")
+            self._on_etcd_request_failed()
+            raise
+    return wrapped
+
+
 class CalicoTransportEtcd(object):
     """Calico transport implementation based on etcd."""
 
@@ -78,15 +101,48 @@ class CalicoTransportEtcd(object):
         self.driver = weakref.proxy(driver)
 
         # Prepare client for accessing etcd data.
-        self.client = etcd.Client(host=cfg.CONF.calico.etcd_host,
-                                  port=cfg.CONF.calico.etcd_port)
+        self.client = None
 
         # Elector, for performing leader election.
-        self.elector = Elector(
-            client=self.client,
-            server_id=cfg.CONF.calico.elector_name,
-            election_key=NEUTRON_ELECTION_KEY
-        )
+        self.elector = None
+
+        # Lock prevents concurrent re-initialisations which could leave us with
+        # inconsistent client and elector.
+        self._init_lock = Semaphore()
+        self._init_count = 0
+        self._initialise()
+
+    def _on_etcd_request_failed(self):
+        LOG.warning("Request to etcd failed, reinitialising our connection.")
+        self._initialise()
+
+    def _initialise(self):
+        # Optimisation: only run the most recently scheduled _initialise()
+        # call. This increment and copy is atomic because there are no yield
+        # points.  The lock prevents inconsistency anyway.
+        self._init_count += 1
+        expected_count = self._init_count
+
+        with self._init_lock:
+            if self._init_count != expected_count:
+                LOG.info("Skipping duplicate _initialise() call.")
+                return
+            LOG.info("(Re)initialising the etcd transport.")
+            if self.elector:
+                LOG.warning("There was already an elector, shutting it down.")
+                self.elector.stop()
+            client = etcd.Client(host=cfg.CONF.calico.etcd_host,
+                                 port=cfg.CONF.calico.etcd_port)
+            elector = Elector(
+                client=client,
+                server_id=cfg.CONF.calico.elector_name,
+                election_key=NEUTRON_ELECTION_KEY
+            )
+            # Since normal reading threads don't take the lock, save the
+            # client and elector off together atomically.  This is atomic
+            # because we're in a green thread.
+            self.client = client
+            self.elector = elector
 
     @property
     def is_master(self):
@@ -95,6 +151,7 @@ class CalicoTransportEtcd(object):
         """
         return self.elector.master()
 
+    @_handling_etcd_exceptions
     def write_profile_to_etcd(self, profile):
         """
         Write a single security profile into etcd.
@@ -109,6 +166,7 @@ class CalicoTransportEtcd(object):
             json.dumps(profile_tags(profile))
         )
 
+    @_handling_etcd_exceptions
     def endpoint_created(self, port):
         """
         Write appropriate data to etcd for an endpoint creation event.
@@ -116,6 +174,7 @@ class CalicoTransportEtcd(object):
         # Write etcd data for the new endpoint.
         self.write_port_to_etcd(port)
 
+    @_handling_etcd_exceptions
     def endpoint_deleted(self, port):
         """
         Delete data from etcd for an endpoint deleted event.
@@ -132,6 +191,7 @@ class CalicoTransportEtcd(object):
 
         self._cleanup_workload_tree(key)
 
+    @_handling_etcd_exceptions
     def write_port_to_etcd(self, port):
         """
         Writes a given port dictionary to etcd.
@@ -140,6 +200,7 @@ class CalicoTransportEtcd(object):
         data = port_etcd_data(port)
         self.client.write(port_etcd_key(port), json.dumps(data))
 
+    @_handling_etcd_exceptions
     def provide_felix_config(self):
         """Specify the prefix of the TAP interfaces that Felix should
         look for and work with.  This config setting does not have a
@@ -169,6 +230,7 @@ class CalicoTransportEtcd(object):
             LOG.info('%s -> true', READY_KEY)
             self.client.write(READY_KEY, 'true')
 
+    @_handling_etcd_exceptions
     def get_endpoints(self):
         """
         Gets information about every endpoint in etcd. Returns a generator of
@@ -196,6 +258,7 @@ class CalicoTransportEtcd(object):
             LOG.debug("Found endpoint %s", endpoint_id)
             yield Endpoint(endpoint_id, node.key, node.modifiedIndex, host)
 
+    @_handling_etcd_exceptions
     def atomic_delete_endpoint(self, endpoint):
         """
         Atomically delete a given endpoint. This method allows exceptions from
@@ -215,6 +278,7 @@ class CalicoTransportEtcd(object):
 
         self._cleanup_workload_tree(endpoint.key)
 
+    @_handling_etcd_exceptions
     def get_profiles(self):
         """
         Gets information about every profile in etcd. Returns a generator of
@@ -265,6 +329,7 @@ class CalicoTransportEtcd(object):
                 "Extra tags %s, extra rules %s" % tag_indices, rules_indices
             )
 
+    @_handling_etcd_exceptions
     def atomic_delete_profile(self, profile):
         """
         Atomically delete a profile. This occurs in two stages: first the tag,
