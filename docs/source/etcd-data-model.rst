@@ -80,7 +80,7 @@ The object stored is a JSON blob with the following structure:
       "state": "active|inactive",
       "name": "<name of linux interface>",
       "mac": "<MAC of the interface>",
-      "profile_id": ["<profile_id>", …],
+      "profile_ids": ["<profile_id>", …],
       "ipv4_nets": [
         "198.51.100.17/32",
         …
@@ -105,7 +105,7 @@ The various properties in this object have the following meanings:
 ``mac``
   the MAC address of the endpoint interface.
 
-``profile_id``
+``profile_ids``
   a list of identifiers of :ref:`security-profile-data` objects that apply to
   this endpoint. Each profile is applied to packets in the order that they
   appear in this list.
