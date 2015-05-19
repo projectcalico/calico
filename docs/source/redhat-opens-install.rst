@@ -372,7 +372,6 @@ On a compute node, perform the following steps:
 
            ETCD_PROXY=on
            ETCD_DATA_DIR=/var/lib/etcd
-           ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
            ETCD_INITIAL_CLUSTER="<controller_hostname>=http://<controller_ip>:2380"
 
       You then need to add the following file to

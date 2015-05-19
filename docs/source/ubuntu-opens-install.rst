@@ -320,7 +320,6 @@ On a compute node, perform the following steps:
    ::
 
        exec /usr/bin/etcd --proxy on                                                         \
-                          --listen-client-urls http://127.0.0.1:4001                         \
                           --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
 
 11. Start etcd service
