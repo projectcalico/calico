@@ -23,16 +23,12 @@ import uuid
 
 from netaddr import IPNetwork, IPAddress
 
-from datastore import Endpoint, IF_PREFIX
+from datastore import Endpoint, IF_PREFIX, VETH_NAME
 
 
 _log = logging.getLogger(__name__)
 
 HOSTNAME = socket.gethostname()
-
-VETH_NAME = "eth1"
-"""The name to give to the veth in the target container's namespace. Default
-to eth1 because eth0 could be in use"""
 
 ROOT_NETNS = "1"
 """The pid of the root namespace.  On almost all systems, the init system is
@@ -79,10 +75,10 @@ def add_ip_to_interface(container_pid, ip, interface_name,
     """
     Add an IP to an interface in a container.
 
-    :param container_pid: The PID and name of the namespace to operate in.
+    :param container_pid: The PID of the namespace to operate in.
     :param ip: The IPAddress to add.
     :param interface_name: The interface to add the address to.
-    :param proc_alias: The head of the /proc filesystem on the host.
+    :param proc_alias: The location of the /proc filesystem on the host.
     :return: None. raises CalledProcessError on error.
     """
     with NamedNamespace(container_pid, proc=proc_alias) as ns:
@@ -100,10 +96,10 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
     """
     Remove an IP from an interface in a container.
 
-    :param container_pid: The PID and name of the namespace to operate in.
+    :param container_pid: The PID of the namespace to operate in.
     :param ip: The IPAddress to remove.
     :param interface_name: The interface to remove the address from.
-    :param proc_alias: The head of the /proc filesystem on the host.
+    :param proc_alias: The location of the /proc filesystem on the host.
     :return: None. raises CalledProcessError on error.
     """
     with NamedNamespace(container_pid, proc=proc_alias) as ns:
@@ -132,7 +128,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
     method also moves the other end of the veth into the root namespace.
     :param veth_name: The name of the interface inside the container namespace,
     e.g. eth1
-    :param proc_alias: The head of the /proc filesystem on the host.
+    :param proc_alias: The location of the /proc filesystem on the host.
     :param ep_id: The endpoint ID to use.  Set to None if this is a new
     endpoint, or set to the existing endpoint ID that is being re-added.
     :param mac: The interface MAC to use.  Set to None to auto assign a MAC.
@@ -213,11 +209,11 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
                        proc_alias=PROC_ALIAS):
     """
     Re-instate and endpoint that has been removed.
-    :param cpid: The PID and name of the namespace to operate in.
+    :param cpid: The PID of the namespace to operate in.
     :param old_endpoint: The old endpoint that is being re-instated.
     :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
     default routes namespace.
-    :param proc_alias: The head of the /proc filesystem on the host.
+    :param proc_alias: The location of the /proc filesystem on the host.
     :return: A new Endpoint replacing the old one.
     """
     nets = old_endpoint.ipv4_nets | old_endpoint.ipv6_nets

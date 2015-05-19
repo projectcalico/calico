@@ -31,6 +31,10 @@ prefix that appears in all Calico interface names in the root namespace. e.g.
 cali123456789ab.
 """
 
+VETH_NAME = "eth1"
+"""The name to give to the veth in the target container's namespace. Default
+to eth1 because eth0 could be in use"""
+
 
 def handle_errors(fn):
     """
@@ -174,10 +178,17 @@ class Endpoint(object):
     @classmethod
     def from_json(cls, ep_id, json_str):
         json_dict = json.loads(json_str)
+
+        # If there is no container if_name sepcified, assume the default
+        # VETH_NAME.  For containers created prior to this information being
+        # stored, it will be possible to restart the containers, but the
+        # interface may be named differently.
+        if_name = json_dict.get("container:if_name", VETH_NAME)
+
         ep = cls(ep_id=ep_id,
                  state=json_dict["state"],
                  mac=json_dict["mac"],
-                 if_name=json_dict["container:if_name"])
+                 if_name= if_name)
         for net in json_dict["ipv4_nets"]:
             ep.ipv4_nets.add(IPNetwork(net))
         for net in json_dict["ipv6_nets"]:
