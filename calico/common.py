@@ -32,6 +32,7 @@ import netaddr.core
 import os
 import sys
 from types import StringTypes
+from netaddr.strategy import eui48
 
 _log = logging.getLogger(__name__)
 
@@ -93,17 +94,25 @@ def validate_port(port):
         return False
 
 
-def validate_ip_addr(addr, version):
+def validate_ip_addr(addr, version=None):
     """
     Validates that an IP address is valid. Returns true if valid, false if
     not. Version can be "4", "6", None for "IPv4", "IPv6", or "either"
     respectively.
     """
-    try:
-        ip = netaddr.IPAddress(addr, version=version)
-        return True
-    except (netaddr.core.AddrFormatError, ValueError, TypeError):
-        return False
+    if version == 4:
+        return netaddr.valid_ipv4(addr)
+    elif version == 6:
+        return netaddr.valid_ipv6(addr)
+    else:
+        return netaddr.valid_ipv4(addr) or netaddr.valid_ipv6(addr)
+
+
+def canonicalise_ip(addr, version):
+    if addr is None:
+        return None
+    ip = netaddr.IPAddress(addr, version=version)
+    return intern(str(ip))
 
 
 def validate_cidr(cidr, version):
@@ -117,6 +126,20 @@ def validate_cidr(cidr, version):
         return True
     except (netaddr.core.AddrFormatError, ValueError, TypeError):
         return False
+
+
+def canonicalise_cidr(cidr, version):
+    if cidr is None:
+        return None
+    nw = netaddr.IPNetwork(cidr, version=version)
+    return intern(str(nw))
+
+
+def canonicalise_mac(mac):
+    # Use the Unix dialect, which uses ':' for its separator instead of
+    # '-'.  This fits best with what iptables is expecting.
+    eui = netaddr.EUI(mac, dialect=eui48.mac_unix)
+    return str(eui)
 
 
 def mkdir_p(path):
@@ -247,6 +270,9 @@ def validate_endpoint(config, endpoint):
     successfully, we know that all required fields are present and have valid
     values.
 
+    Has the side-effect of putting IP and MAC addresses in canonical form in
+    the input dict.
+
     :param config: configuration structure
     :param endpoint: endpoint dictionary as read from etcd
     :raises ValidationFailed
@@ -267,6 +293,15 @@ def validate_endpoint(config, endpoint):
         elif not isinstance(endpoint[field], StringTypes):
             issues.append("Expected '%s' to be a string; got %r." %
                           (field, endpoint[field]))
+        elif field == "mac":
+            if not netaddr.valid_mac(endpoint.get("mac")):
+                issues.append("Invalid MAC address")
+            else:
+                endpoint["mac"] = canonicalise_mac(endpoint.get("mac"))
+        elif field == "name":
+            if not endpoint["name"].startswith(config.IFACE_PREFIX):
+                issues.append("Interface %r does not start with %r." %
+                              (endpoint["name"], config.IFACE_PREFIX))
 
     if "profile_id" in endpoint:
         if "profile_ids" not in endpoint:
@@ -281,21 +316,24 @@ def validate_endpoint(config, endpoint):
                 issues.append("Expected profile IDs to be strings.")
                 break
 
-    if "name" in endpoint:
-        if not endpoint["name"].startswith(config.IFACE_PREFIX):
-            issues.append("Interface %r does not start with %r." %
-                          (endpoint["name"], config.IFACE_PREFIX))
-
     for version in (4, 6):
         nets = "ipv%d_nets" % version
         if nets not in endpoint:
-            issues.append("Missing network %s." % nets)
+            endpoint[nets] = []
         else:
-            for ip in endpoint.get(nets, []):
-                if not validate_cidr(ip, version):
-                    issues.append("IP address %r is not a valid IPv%d CIDR." %
-                                  (ip, version))
-                    break
+            canonical_nws = []
+            nets_list = endpoint.get(nets, [])
+            if not isinstance(nets_list, list):
+                issues.append("%s should be a list" % nets)
+            else:
+                for ip in nets_list:
+                    if not validate_cidr(ip, version):
+                        issues.append("IP address %r is not a valid "
+                                      "IPv%d CIDR." % (ip, version))
+                        break
+                    else:
+                        canonical_nws.append(canonicalise_cidr(ip, version))
+                endpoint[nets] = canonical_nws
 
         gw_key = "ipv%d_gateway" % version
         try:
@@ -304,11 +342,14 @@ def validate_endpoint(config, endpoint):
                                                            version):
                 issues.append("%s is not a valid IPv%d gateway address." %
                               (gw_key, version))
+            else:
+                endpoint[gw_key] = canonicalise_ip(gw_str, version)
         except KeyError:
             pass
 
     if issues:
         raise ValidationFailed(" ".join(issues))
+
 
 def validate_rules(rules):
     """
@@ -334,6 +375,14 @@ def validate_rules(rules):
             continue
 
         for rule in rules[dirn]:
+            if not isinstance(rule, dict):
+                issues.append("Rules should be dicts.")
+                break
+
+            for key, value in rule.items():
+                if value is None:
+                    del rule[key]
+
             # Absolutely all fields are optional, but some have valid and
             # invalid values.
             protocol = rule.get('protocol')
@@ -361,7 +410,8 @@ def validate_rules(rules):
                     not validate_cidr(rule[key], ip_version)):
                     issues.append("Invalid CIDR (version %s) in rule %s." %
                                   (ip_version, rule))
-
+                elif network is not None:
+                    rule[key] = canonicalise_cidr(network, ip_version)
             for key in ("src_ports", "dst_ports"):
                 ports = rule.get(key)
                 if (ports is not None and
