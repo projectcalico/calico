@@ -28,12 +28,12 @@ from calico.felix.test.base import BaseTestCase
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_DROP = ('--append chain-foo --jump DROP -m comment '
-                '--comment "Default DROP rule:"')
+DEFAULT_MARK = ('--append chain-foo --match comment '
+                '--comment "Mark as not matched" --jump MARK --set-mark 1')
 RULES_TESTS = [
     ([{"src_net": "10.0.0.0/8"},], 4,
      ["--append chain-foo --source 10.0.0.0/8 --jump RETURN",
-      DEFAULT_DROP]),
+      DEFAULT_MARK]),
 
     ([{"protocol": "icmp",
        "src_net": "10.0.0.0/8",
@@ -42,7 +42,7 @@ RULES_TESTS = [
      ["--append chain-foo --protocol icmp --source 10.0.0.0/8 "
       "--match icmp --icmp-type 7/123 "
       "--jump RETURN",
-      DEFAULT_DROP]),
+      DEFAULT_MARK]),
 
     ([{"protocol": "icmp",
        "src_net": "10.0.0.0/8",
@@ -50,7 +50,7 @@ RULES_TESTS = [
      ["--append chain-foo --protocol icmp --source 10.0.0.0/8 "
       "--match icmp --icmp-type 7 "
       "--jump RETURN",
-      DEFAULT_DROP]),
+      DEFAULT_MARK]),
 
     ([{"protocol": "icmpv6",
        "src_net": "1234::beef",
@@ -58,7 +58,7 @@ RULES_TESTS = [
      ["--append chain-foo --protocol icmpv6 --source 1234::beef "
       "--match icmp6 --icmpv6-type 7 "
       "--jump RETURN",
-      DEFAULT_DROP]),
+      DEFAULT_MARK]),
 
     ([{"protocol": "tcp",
        "src_tag": "tag-foo",
@@ -66,7 +66,7 @@ RULES_TESTS = [
      ["--append chain-foo --protocol tcp "
       "--match set --match-set ipset-foo src "
       "--match multiport --source-ports 10,11:12 --jump RETURN",
-      DEFAULT_DROP]),
+      DEFAULT_MARK]),
 
     ([{"protocol": "tcp",
        "src_ports": [1, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}], 4,
@@ -76,7 +76,7 @@ RULES_TESTS = [
       "--append chain-foo --protocol tcp "
       "--match multiport --source-ports 16,17 "
       "--jump RETURN",
-      DEFAULT_DROP]),
+      DEFAULT_MARK]),
 ]
 
 IP_SET_MAPPING = {

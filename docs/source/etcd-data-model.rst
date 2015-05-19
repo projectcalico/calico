@@ -80,7 +80,7 @@ The object stored is a JSON blob with the following structure:
       "state": "active|inactive",
       "name": "<name of linux interface>",
       "mac": "<MAC of the interface>",
-      "profile_id": "<profile_id>",
+      "profile_id": ["<profile_id>", …],
       "ipv4_nets": [
         "198.51.100.17/32",
         …
@@ -106,8 +106,9 @@ The various properties in this object have the following meanings:
   the MAC address of the endpoint interface.
 
 ``profile_id``
-  the identifier of a single :ref:`security-profile-data` object, which applies
-  to this endpoint.
+  a list of identifiers of :ref:`security-profile-data` objects that apply to
+  this endpoint. Each profile is applied to packets in the order that they
+  appear in this list.
 
 ``ipv4_nets``
   a list of IPv4 subnets allocated to this endpoint. IPv4 packets will only be
@@ -237,4 +238,3 @@ policy. These tags can be referred to by rules, as shown above.
 
 A single tag may be associated with multiple security profiles, in which case
 it expands to reference all endpoints in all of those profiles.
-

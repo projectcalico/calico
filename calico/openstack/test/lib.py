@@ -26,8 +26,8 @@ import mock
 import sys
 import traceback
 
-sys.modules['etcd'] = m_etcd = mock.Mock()
-sys.modules['neutron'] = m_neutron = mock.Mock()
+sys.modules['etcd'] = m_etcd = mock.MagicMock()
+sys.modules['neutron'] = m_neutron = mock.MagicMock()
 sys.modules['neutron.common'] = m_neutron.common
 sys.modules['neutron.common.exceptions'] = m_neutron.common.exceptions
 sys.modules['neutron.openstack'] = m_neutron.openstack
@@ -48,7 +48,8 @@ port1 = {'binding:vif_type': 'tap',
                         'ip_address': '10.65.0.2'}],
          'mac_address': '00:11:22:33:44:55',
          'admin_state_up': True,
-         'security_groups': ['SGID-default']}
+         'security_groups': ['SGID-default'],
+         'status': 'ACTIVE'}
 
 port2 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
@@ -59,7 +60,8 @@ port2 = {'binding:vif_type': 'tap',
                         'ip_address': '10.65.0.3'}],
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
-         'security_groups': ['SGID-default']}
+         'security_groups': ['SGID-default'],
+         'status': 'ACTIVE'}
 
 # Port with an IPv6 address.
 port3 = {'binding:vif_type': 'tap',
@@ -71,7 +73,8 @@ port3 = {'binding:vif_type': 'tap',
                         'ip_address': '2001:db8:a41:2::12'}],
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
-         'security_groups': ['SGID-default']}
+         'security_groups': ['SGID-default'],
+         'status': 'ACTIVE'}
 
 
 # Define a stub class, that we will use as the base class for
@@ -80,12 +83,30 @@ class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
         pass
 
+
+# Define another stub class that mocks out leader election: assume we're always
+# the leader. This is a fake elector: it never votes (get it!?).
+class GrandDukeOfSalzburg(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def master(self):
+        return True
+
+    def stop(self):
+        pass
+
+
 # Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
 # that CalicoMechanismDriver inherits from - with this stub class.
 m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
     DriverBase
 
+# Replace the elector.
+
 import calico.openstack.mech_calico as mech_calico
+import calico.openstack.t_etcd as t_etcd
+t_etcd.Elector = GrandDukeOfSalzburg
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
@@ -120,7 +141,8 @@ class Lib(object):
         self.db_context = mech_calico.ctx.get_admin_context()
 
         # Arrange what the DB's get_ports will return.
-        self.db.get_ports.side_effect = lambda *args: self.osdb_ports
+        self.db.get_ports.side_effect = self.get_ports
+        self.db.get_port.side_effect = self.get_port
 
         # Arrange DB's get_subnet call.
         self.db.get_subnet.side_effect = self.get_subnet
@@ -156,10 +178,46 @@ class Lib(object):
                   'port_range_min': -1}
              ]}
         ]
+        self.db.get_security_group_rules.return_value = [
+             {'remote_group_id': 'SGID-default',
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'ingress',
+              'ethertype': 'IPv4',
+              'security_group_id': 'SGID-default',
+              'port_range_min': -1},
+             {'remote_group_id': 'SGID-default',
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'ingress',
+              'ethertype': 'IPv6',
+              'security_group_id': 'SGID-default',
+              'port_range_min': -1},
+             {'remote_group_id': None,
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'egress',
+              'ethertype': 'IPv4',
+              'security_group_id': 'SGID-default',
+              'port_range_min': -1},
+             {'remote_group_id': None,
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'egress',
+              'security_group_id': 'SGID-default',
+              'ethertype': 'IPv6',
+              'port_range_min': -1}
+        ]
 
-        # Prep a null response to the following
-        # _get_port_security_group_bindings call.
-        self.db._get_port_security_group_bindings.return_value = []
+        self.db._get_port_security_group_bindings.side_effect = (
+            self.get_port_security_group_bindings
+        )
+
+        self.port_security_group_bindings = [
+            {'port_id': 'DEADBEEF-1234-5678', 'security_group_id': 'SGID-default'},
+            {'port_id': 'FACEBEEF-1234-5678', 'security_group_id': 'SGID-default'},
+            {'port_id': 'HELLO-1234-5678', 'security_group_id': 'SGID-default'},
+        ]
 
     def setUp_eventlet(self):
         """Setup to intercept sleep calls made by the code under test, and hence to
@@ -219,6 +277,13 @@ class Lib(object):
             # Also return it.
             return thread
 
+        def simulated_spawn_after(secs, fn, *args):
+            def sleep_then_run():
+                simulated_time_sleep(secs)
+                fn(*args)
+
+            return simulated_spawn(sleep_then_run)
+
         # Hook sleeping.
         self.real_eventlet_sleep = eventlet.sleep
         eventlet.sleep = simulated_time_sleep
@@ -227,35 +292,15 @@ class Lib(object):
         self.real_eventlet_spawn = eventlet.spawn
         eventlet.spawn = simulated_spawn
 
+        self.real_eventlet_spawn_after = eventlet.spawn_after
+        eventlet.spawn_after = simulated_spawn_after
+
     def setUp_logging(self):
         """Setup to intercept and display logging by the code under test.
         """
-        # Print logs to stdout.
-        def log_info(msg, *args):
-            print "       INFO %s" % (msg % args)
-            return None
-        def log_debug(msg, *args):
-            print "       DEBUG %s" % (msg % args)
-            return None
-        def log_warn(msg, *args):
-            print "       WARN %s" % (msg % args)
-            return None
-        def log_error(msg, *args):
-            print "       ERROR %s" % (msg % args)
-            return None
-        def log_exception(msg, *args):
-            print "       EXCEPTION %s" % (msg % args)
-            if sys.exc_type is not greenlet.GreenletExit:
-                traceback.print_exc()
-            return None
-
-        # Hook logging.
-        mech_calico.LOG = mock.Mock()
-        mech_calico.LOG.info.side_effect = log_info
-        mech_calico.LOG.debug.side_effect = log_debug
-        mech_calico.LOG.warn.side_effect = log_warn
-        mech_calico.LOG.error.side_effect = log_error
-        mech_calico.LOG.exception.side_effect = log_exception
+        import logging
+        mech_calico.LOG = logging.getLogger('calico.openstack.mech_calico')
+        t_etcd.LOG = logging.getLogger('calico.openstack.t_etcd')
 
     # Tear down after each test case.
     def tearDown(self):
@@ -273,6 +318,7 @@ class Lib(object):
         # Restore the real eventlet.sleep and eventlet.spawn.
         eventlet.sleep = self.real_eventlet_sleep
         eventlet.spawn = self.real_eventlet_spawn
+        eventlet.spawn_after = self.real_eventlet_spawn_after
 
     # Method for the test code to call when it wants to advance the simulated
     # time.
@@ -321,6 +367,18 @@ class Lib(object):
             mech_calico.constants.PORT_STATUS_ACTIVE)
         self.db.update_port_status.reset_mock()
 
+    def get_port(self, context, port_id):
+        return self.get_ports(context, filters={'id': [port_id]})[0]
+
+    def get_ports(self, context, filters=None):
+        if filters is None:
+            return self.osdb_ports
+
+        assert filters.keys() == ['id']
+        allowed_ids = set(filters['id'])
+
+        return [p for p in self.osdb_ports if p['id'] in allowed_ids]
+
     def get_subnet(self, context, id):
         if ':' in id:
             return {'gateway_ip': '2001:db8:a41:2::1'}
@@ -346,7 +404,21 @@ class Lib(object):
 
         if type == 'rule':
             # Call security_groups_rule_updated with the new or changed ID.
-            self.db.notifier.security_groups_rule_updated(mock.Mock(), [id])
+            self.db.notifier.security_groups_rule_updated(
+                mock.MagicMock(), [id]
+            )
         else:
             # Call security_groups_member_updated with the new or changed ID.
-            self.db.notifier.security_groups_member_updated(mock.Mock(), [id])
+            self.db.notifier.security_groups_member_updated(
+                mock.MagicMock(), [id]
+            )
+
+    def get_port_security_group_bindings(self, context, filters):
+        if filters is None:
+            return self.port_security_group_bindings
+
+        assert filters.keys() == ['port_id']
+        allowed_ids = set(filters['port_id'])
+
+        return [b for b in self.port_security_group_bindings
+                if b['port_id'] in allowed_ids]

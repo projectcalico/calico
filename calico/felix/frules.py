@@ -137,11 +137,11 @@ def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
                                                         tag_to_ipset,
                                                         on_allow=on_allow,
                                                         on_deny=on_deny))
-    tag_part = " (%s)" % comment_tag if comment_tag else ""
-    fragments.append(commented_drop_fragment(
-        chain_name,
-        "Default DROP rule%s:" % tag_part)
-    )
+    # If we get to the end of the chain without a match, we mark the packet
+    # to let the caller know that we haven't accepted the packet.
+    fragments.append('--append %s --match comment '
+                     '--comment "Mark as not matched" '
+                     '--jump MARK --set-mark 1' % chain_name)
     return fragments
 
 
