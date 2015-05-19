@@ -8,4 +8,12 @@ calicoctl.spec
 calicoctl.py.sh
 *~
 .coverage
-cover/
+cover
+
+busybox.tar
+calico-node.tar
+etcd.tar
+nsenter.tar
+docker-enter
+importenv
+nsenter
