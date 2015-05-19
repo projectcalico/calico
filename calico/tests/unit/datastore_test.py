@@ -2,14 +2,14 @@ __author__ = 'spike@projectcalico.org'
 
 
 from mock import patch, Mock, call
-from node.adapter.datastore import (DatastoreClient,
-                                    Rule,
-                                    Profile,
-                                    Rules,
-                                    Endpoint,
-                                    NoEndpointForContainer,
-                                    CALICO_V_PATH,
-                                    DataStoreError)
+from calico.adapter.datastore import (DatastoreClient,
+                                      Rule,
+                                      Profile,
+                                      Rules,
+                                      Endpoint,
+                                      NoEndpointForContainer,
+                                      CALICO_V_PATH,
+                                      DataStoreError)
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 from netaddr import IPNetwork, IPAddress
@@ -212,8 +212,8 @@ class TestEndpoint(unittest.TestCase):
 
 class TestDatastoreClient(unittest.TestCase):
 
-    @patch("node.adapter.datastore.os.getenv", autospec=True)
-    @patch("node.adapter.datastore.etcd.Client", autospec=True)
+    @patch("calico.adapter.datastore.os.getenv", autospec=True)
+    @patch("calico.adapter.datastore.etcd.Client", autospec=True)
     def setUp(self, m_etcd_client, m_getenv):
         m_getenv.return_value = "127.0.0.2:4002"
         self.etcd_client = Mock(spec=EtcdClient)

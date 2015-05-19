@@ -11,7 +11,7 @@ mkdir -p `pwd`/dist
 chmod 777 `pwd`/dist
 
 docker rm -f pyinstaller || true
-docker run -v `pwd`/:/code --name pyinstaller calico-build \
+docker run -v `pwd`/calico:/code --name pyinstaller calico-build \
  pyinstaller calicoctl.py -a -F -s --clean
 docker rm -f pyinstaller || true
 
