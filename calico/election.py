@@ -185,8 +185,7 @@ class Elector(object):
         except Exception as e:
             # We could be smarter about what exceptions we allow, but any kind
             # of error means we should give up, and safer to have a broad
-            # except here.  Since we expect to hit this in the mainline, we
-            # don't log out the stack trace.
+            # except here. Log and reconnect.
             self._log_exception("become elected master", e)
             raise RestartElection()
 
