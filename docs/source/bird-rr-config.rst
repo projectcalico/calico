@@ -92,7 +92,7 @@ of your route reflector::
 Then, at the end, for each compute node in your deployment add one of the
 following blocks, replacing ``<node_shortname>`` with a purely alphabetical
 name for the host (this must be unique for each host, but the shortname is only
-used within this file)t, ``<node_ip>`` with the node's IPv4 address, and
+used within this file), ``<node_ip>`` with the node's IPv4 address, and
 ``<as_number>`` with the AS number you're using::
 
     protocol bgp <node_shortname> {
