@@ -39,12 +39,12 @@ The [example script][example-commands] assumes that your ordinary user account h
 
 Retrieve the `calicoctl` binary.  On each host run
 
-    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.0/calicoctl
+    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.2/calicoctl
     chmod +x calicoctl
 
 Finally, preload the Calico Docker image.  This will make the demo more responsive the first time you run it.
 
-    docker pull calico/node:v0.4.0
+    docker pull calico/node:v0.4.2
 
 You are now ready to run the [example commands][example-commands].
 
