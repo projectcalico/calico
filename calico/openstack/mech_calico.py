@@ -41,7 +41,7 @@ from neutron import context as ctx
 from neutron import manager
 
 # Calico imports.
-from calico.openstack.t_etcd import CalicoTransportEtcd
+from calico.openstack.t_etcd import CalicoTransportEtcd, etcd
 
 LOG = log.getLogger(__name__)
 
@@ -80,6 +80,34 @@ def requires_state(f):
     def wrapper(self, *args, **kwargs):
         self._init_state()
         return f(self, *args, **kwargs)
+
+    return wrapper
+
+
+def retry_on_cluster_id_change(f):
+    """
+    This decorator ensures that the appropriate methods will retry if an
+    etcd EtcdClusterIdChanged exception is raised. This ensures that if etcd
+    is moved under their feet these methods don't fail, but instead do their
+    best to succeed.
+
+    To avoid infinite loops, however, these methods attempt to retry a finite
+    number of times before abandoning the attempt.
+
+    This decorator can only be applied to functions of the
+    CalicoMechanismDriver.
+    """
+    @wraps(f)
+    def wrapper(self, *args, **kwargs):
+        retries = 5
+        while True:
+            try:
+                return f(self, *args, **kwargs)
+            except etcd.EtcdClusterIdChanged:
+                LOG.info("etcd cluster moved, retrying")
+                retries -= 1
+                if not retries:
+                    raise
 
     return wrapper
 
@@ -203,6 +231,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
 
     # Idealised method forms.
+    @retry_on_cluster_id_change
     @requires_state
     def create_port_postcommit(self, context):
         """
@@ -261,6 +290,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                        port['id'],
                                        constants.PORT_STATUS_ACTIVE)
 
+    @retry_on_cluster_id_change
     @requires_state
     def update_port_postcommit(self, context):
         """
@@ -311,6 +341,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.info("Update on unbound port: no action")
                 pass
 
+    @retry_on_cluster_id_change
     @requires_state
     def delete_port_postcommit(self, context):
         """
@@ -329,6 +360,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Pass this to the transport layer.
         self.transport.endpoint_deleted(port)
 
+    @retry_on_cluster_id_change
     @requires_state
     def send_sg_updates(self, sgids, context):
         """
@@ -591,8 +623,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for endpoint in eps_to_delete:
             try:
                 self.transport.atomic_delete_endpoint(endpoint)
-            except Exception:
-                # TODO: Be more specific.
+            except ValueError:
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the endpoint was created or updated elsewhere.
                 continue
@@ -665,8 +696,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for profile in profiles_to_delete:
             try:
                 self.transport.atomic_delete_profile(profile)
-            except Exception:
-                # TODO: Be more specific.
+            except ValueError:
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
