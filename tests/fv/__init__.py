@@ -4,6 +4,9 @@ from sh import docker
 
 
 def setup_package():
+    """
+    Sets up docker images and host containers for running the STs.
+    """
     pwd = sh.pwd().stdout.rstrip()
 
     docker_exec = docker.bake("exec")
@@ -29,7 +32,7 @@ def setup_package():
         pass
     print "Host containers removed."
 
-    # # Save and load each image, so we can use them in the inner host containers.
+    # Pull and save each image, so we can use them inside the host containers.
     print sh.bash("./build_node.sh").stdout
     docker.save("--output", "calico-node.tar", "calico/node")
     if not os.path.isfile("busybox.tar"):
@@ -42,13 +45,16 @@ def setup_package():
         docker.pull("quay.io/coreos/etcd:v2.0.10")
         docker.save("--output", "etcd.tar", "quay.io/coreos/etcd:v2.0.10")
 
+    # Create the calicoctl binary here so it will be in the volume mounted on the hosts.
     print sh.bash("./create_binary.sh")
     print "Calicoctl binary created."
 
+    # Set up two hosts for the entire test suite to use.
     docker.run("--privileged", "-v", pwd+":/code", "--name", "host1", "-tid", "jpetazzo/dind")
     docker.run("--privileged", "-v", pwd+":/code", "--name", "host2", "-tid", "jpetazzo/dind")
     print "Host containers created"
 
+    # Load the saved images into the host containers.
     host1_exec("while ! docker ps; do sleep 1; done && "
                "docker load --input /code/calico-node.tar && "
                "docker load --input /code/busybox.tar && "
@@ -60,16 +66,16 @@ def setup_package():
                "docker load --input /code/busybox.tar && "
                "docker load --input /code/nsenter.tar")
 
+    # Set up the single-node etcd cluster inside host1.
     host1_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", "host1").stdout.rstrip()
-
     cmd = ("--name calico "
-          "--advertise-client-urls http://%s:2379 "
-          "--listen-client-urls http://0.0.0.0:2379 "
-          "--initial-advertise-peer-urls http://%s:2380 "
-          "--listen-peer-urls http://0.0.0.0:2380 "
-          "--initial-cluster-token etcd-cluster-2 "
-          "--initial-cluster calico=http://%s:2380 "
-          "--initial-cluster-state new" % (host1_ip, host1_ip, host1_ip))
+           "--advertise-client-urls http://%s:2379 "
+           "--listen-client-urls http://0.0.0.0:2379 "
+           "--initial-advertise-peer-urls http://%s:2380 "
+           "--listen-peer-urls http://0.0.0.0:2380 "
+           "--initial-cluster-token etcd-cluster-2 "
+           "--initial-cluster calico=http://%s:2380 "
+           "--initial-cluster-state new" % (host1_ip, host1_ip, host1_ip))
     host1_exec('docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s' % cmd)
     print "Etcd container started"
 
