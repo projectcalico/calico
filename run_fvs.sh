@@ -6,7 +6,7 @@ date
 pwd
 git status
 
-nosetests tests/fv --nocapture
+nosetests tests/fv
 
 # Run the FVs
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/mainline.sh'
