@@ -61,9 +61,9 @@ from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
 from calico_docker.adapter.datastore import (ETCD_AUTHORITY_ENV,
-                                      ETCD_AUTHORITY_DEFAULT,
-                                      Rules,
-                                      DataStoreError)
+                                             ETCD_AUTHORITY_DEFAULT,
+                                             Rules,
+                                             DataStoreError)
 from calico_docker.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from calico_docker.adapter.ipam import IPAMClient
 from calico_docker.adapter import netns, docker_restart
