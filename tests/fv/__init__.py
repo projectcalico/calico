@@ -1,35 +1,22 @@
 import os
 import sh
 from sh import docker
-
+from docker_host import DockerHost
 
 def setup_package():
     """
     Sets up docker images and host containers for running the STs.
     """
-    pwd = sh.pwd().stdout.rstrip()
-
-    docker_exec = docker.bake("exec")
-    host1_exec = docker_exec.bake("-t", "host1", "bash", "-c")
-    host2_exec = docker_exec.bake("-t", "host2", "bash", "-c")
-
     # We *must* remove all inner containers and images before removing the outer
     # container. Otherwise the inner images will stick around and fill disk.
     # https://github.com/jpetazzo/dind#important-warning-about-disk-usage
-    try:
-        host1_exec('docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)')
-    except sh.ErrorReturnCode_1:
-        pass
-    try:
-        host2_exec('docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)')
-    except sh.ErrorReturnCode_1:
-        pass
+    containers = docker.ps("-qa").split()
+    for container in containers:
+        docker("exec", "-t", container, "bash", "-c",
+               "docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)", _ok_code=[0, 1])
     print "Containers and images within host containers removed."
 
-    try:
-        sh.docker.rm("-f", "host1", "host2")
-    except sh.ErrorReturnCode:
-        pass
+    sh.docker.rm("-f", *containers, _ok_code=[0, 1])
     print "Host containers removed."
 
     # Pull and save each image, so we can use them inside the host containers.
@@ -49,36 +36,7 @@ def setup_package():
     print sh.bash("./create_binary.sh")
     print "Calicoctl binary created."
 
-    # Set up two hosts for the entire test suite to use.
-    docker.run("--privileged", "-v", pwd+":/code", "--name", "host1", "-tid", "jpetazzo/dind")
-    docker.run("--privileged", "-v", pwd+":/code", "--name", "host2", "-tid", "jpetazzo/dind")
-    print "Host containers created"
-
-    # Load the saved images into the host containers.
-    host1_exec("while ! docker ps; do sleep 1; done && "
-               "docker load --input /code/calico-node.tar && "
-               "docker load --input /code/busybox.tar && "
-               "docker load --input /code/nsenter.tar && "
-               "docker load --input /code/etcd.tar")
-
-    host2_exec("while ! docker ps; do sleep 1; done && "
-               "docker load --input /code/calico-node.tar && "
-               "docker load --input /code/busybox.tar && "
-               "docker load --input /code/nsenter.tar")
-
-    # Set up the single-node etcd cluster inside host1.
-    host1_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", "host1").stdout.rstrip()
-    cmd = ("--name calico "
-           "--advertise-client-urls http://%s:2379 "
-           "--listen-client-urls http://0.0.0.0:2379 "
-           "--initial-advertise-peer-urls http://%s:2380 "
-           "--listen-peer-urls http://0.0.0.0:2380 "
-           "--initial-cluster-token etcd-cluster-2 "
-           "--initial-cluster calico=http://%s:2380 "
-           "--initial-cluster-state new" % (host1_ip, host1_ip, host1_ip))
-    host1_exec('docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s' % cmd)
-    print "Etcd container started"
-
+    DockerHost('')
 
 def teardown_package():
     pass
