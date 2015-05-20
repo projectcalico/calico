@@ -9,7 +9,6 @@ git status
 nosetests tests/fv
 
 # Run the FVs
-docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/mainline.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/add_container.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/add_ip.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./tests/fv/arg_parsing.sh'

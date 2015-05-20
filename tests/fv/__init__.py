@@ -43,9 +43,11 @@ def setup_package():
         docker.save("--output", "etcd.tar", "quay.io/coreos/etcd:v2.0.10")
 
     print sh.bash("./create_binary.sh")
+    print "Calicoctl binary created."
 
-    print docker.run("--privileged", "-v", pwd+":/code", "--name", "host1", "-tid", "jpetazzo/dind")
+    docker.run("--privileged", "-v", pwd+":/code", "--name", "host1", "-tid", "jpetazzo/dind")
     docker.run("--privileged", "-v", pwd+":/code", "--name", "host2", "-tid", "jpetazzo/dind")
+    print "Host containers created"
 
     host1_exec("while ! docker ps; do sleep 1; done && "
                "docker load --input /code/calico-node.tar && "
@@ -69,6 +71,7 @@ def setup_package():
           "--initial-cluster calico=http://%s:2380 "
           "--initial-cluster-state new" % (host1_ip, host1_ip, host1_ip))
     host1_exec('docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s' % cmd)
+    print "Etcd container started"
 
 
 def teardown_package():

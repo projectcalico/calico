@@ -3,7 +3,7 @@ import sh
 from sh import docker
 
 
-def multi_host():
+def test_multi_host():
     docker_exec = docker.bake("exec")
 
     host1_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", "host1").stdout.rstrip()
