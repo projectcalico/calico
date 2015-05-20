@@ -47,6 +47,29 @@ def setup_package():
     print docker.run("--privileged", "-v", pwd+":/code", "--name", "host1", "-tid", "jpetazzo/dind")
     docker.run("--privileged", "-v", pwd+":/code", "--name", "host2", "-tid", "jpetazzo/dind")
 
+    host1_exec("while ! docker ps; do sleep 1; done && "
+               "docker load --input /code/calico-node.tar && "
+               "docker load --input /code/busybox.tar && "
+               "docker load --input /code/nsenter.tar && "
+               "docker load --input /code/etcd.tar")
+
+    host2_exec("while ! docker ps; do sleep 1; done && "
+               "docker load --input /code/calico-node.tar && "
+               "docker load --input /code/busybox.tar && "
+               "docker load --input /code/nsenter.tar")
+
+    host1_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", "host1").stdout.rstrip()
+
+    cmd = ("--name calico "
+          "--advertise-client-urls http://%s:2379 "
+          "--listen-client-urls http://0.0.0.0:2379 "
+          "--initial-advertise-peer-urls http://%s:2380 "
+          "--listen-peer-urls http://0.0.0.0:2380 "
+          "--initial-cluster-token etcd-cluster-2 "
+          "--initial-cluster calico=http://%s:2380 "
+          "--initial-cluster-state new" % (host1_ip, host1_ip, host1_ip))
+    host1_exec('docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s' % cmd)
+
 
 def teardown_package():
     pass
