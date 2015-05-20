@@ -24,7 +24,7 @@ import socket
 from docker import Client
 from netaddr import IPAddress, AddrFormatError
 import netns
-from calico.adapter.ipam import SequentialAssignment, IPAMClient
+from ipam import SequentialAssignment, IPAMClient
 
 _log = logging.getLogger(__name__)
 
@@ -377,4 +377,3 @@ if __name__ == "__main__":
     # host.
     reactor.listenTCP(LISTEN_PORT, get_adapter(), interface="127.0.0.1")
     reactor.run()
-

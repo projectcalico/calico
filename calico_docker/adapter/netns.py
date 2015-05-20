@@ -22,7 +22,7 @@ import sys
 import uuid
 
 from netaddr import IPNetwork, IPAddress
-from calico.adapter.datastore import Endpoint, IF_PREFIX
+from datastore import Endpoint, IF_PREFIX
 
 _log = logging.getLogger(__name__)
 

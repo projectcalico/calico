@@ -2,7 +2,7 @@ __author__ = 'spike@projectcalico.org'
 
 
 from mock import patch, Mock, call
-from calico.adapter.datastore import (DatastoreClient,
+from calico_docker.adapter.datastore import (DatastoreClient,
                                       Rule,
                                       Profile,
                                       Rules,

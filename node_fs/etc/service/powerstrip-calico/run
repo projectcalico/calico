@@ -1,3 +1,3 @@
 #!/bin/sh
-cd /adapter/
-exec python powerstrip-calico.py
+cd /calico_docker/adapter/
+exec python powerstrip_calico.py

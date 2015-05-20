@@ -39,7 +39,7 @@ RUN curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.
     chmod +x confd
 
 # Install Powerstrip Calico Adapter dependencies.
-ADD calico/adapter/requirements.txt /adapter/
+ADD calico_docker/adapter/requirements.txt /adapter/
 RUN pip install -r /adapter/requirements.txt
 
 # Powerstrip
@@ -55,3 +55,5 @@ RUN git clone https://www.github.com/Metaswitch/powerstrip.git && \
 # builds for developer, as it's thing they're most likely to change.
 COPY node_fs /
 
+COPY calico_docker/adapter /calico_docker/adapter
+COPY calico_docker/__init__.py /calico_docker/
