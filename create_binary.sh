@@ -12,7 +12,7 @@ chmod 777 `pwd`/dist
 
 docker rm -f pyinstaller || true
 docker run -v `pwd`:/code --name pyinstaller calico-build \
- pyinstaller calico_docker/calicoctl.py -a -F -s --clean
+ pyinstaller calico_containers/calicoctl.py -a -F -s --clean
 docker rm -f pyinstaller || true
 
 docker rm -f docopt || true
