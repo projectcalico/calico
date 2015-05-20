@@ -3,10 +3,12 @@ router id {{getenv "IP"}};
 log "/var/log/calico/bird.log" all;
 
 filter calico_pools {
-{{range gets "/calico/v1/ipam/v4/pool/*"}}
+{{if exists "/ipam/v4/pool"}}
+{{range gets "/ipam/v4/pool/*"}}
     if ( net ~ {{.Value}} ) then {
         accept;
     }
+{{end}}
 {{end}}
     reject;
 }
@@ -36,7 +38,7 @@ protocol direct {
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
-  local as {{if exists "/calico/v1/config/bgp_as"}}{{getv "/calico/v1/config/bgp_as"}}{{else}}64511{{end}};
+  local as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   # Import all routes, since we don't know what the upstream topology is and
@@ -50,22 +52,22 @@ template bgp bgp_template {
   graceful restart;
 }
 
-{{if ls "/calico/v1/config/bgp_peer_rr_v4"}}
+{{if ls "/config/bgp_peer_rr_v4"}}
 # Peer with configured neighbors
-{{range gets "/calico/v1/config/bgp_peer_rr_v4/*"}}
+{{range gets "/config/bgp_peer_rr_v4/*"}}
 # For peer {{.Value}}
 protocol bgp from bgp_template {
-  neighbor {{.Value}} as {{if exists "/calico/v1/config/bgp_as"}}{{getv "/calico/v1/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
 
 }
 {{end}}
-{{else}}
+{{else if exists "/host"}}
 # Peer with all neighbours
-{{range gets "/calico/v1/host/*/bird_ip"}}
+{{range gets "/host/*/bird_ip"}}
 # For peer {{.Key}} {{if eq .Value (getenv "IP") }}
 # Skipping ourselves ({{getenv "IP"}}) {{else}}
 protocol bgp from bgp_template {
-  neighbor {{.Value}} as {{if exists "/calico/v1/config/bgp_as"}}{{getv "/calico/v1/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
 }
 {{end}}{{end}}
 {{end}}
