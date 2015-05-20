@@ -19,10 +19,8 @@
 # Calico/OpenStack Plugin
 #
 # This module is the OpenStack-specific implementation of the Plugin component
-# of the new Calico architecture (described by the "Felix, the Calico Plugin
-# and the Calico ACL Manager" document at
-# http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html).
-# TODO: Update reference to new etcd architecture document
+# of the new Calico architecture (described by the "Calico Architecture"
+# document at http://docs.projectcalico.org/en/latest/architecture.html).
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import os
@@ -33,7 +31,6 @@ from functools import wraps
 
 # OpenStack imports.
 from neutron.common import constants
-from neutron.common.exceptions import PortNotFound
 from neutron.openstack.common import log
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
@@ -630,7 +627,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 continue
 
         # Next, for each missing port, do a quick port creation. This takes out
-        # a db transaction and regains all the ports. Note that thisj
+        # a db transaction and regains all the ports. Note that this
         # transaction is potentially held for quite a while.
         with context.session.begin(subtransactions=True):
             missing_ports = self.db.get_ports(
