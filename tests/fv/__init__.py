@@ -14,11 +14,7 @@ def setup_package():
 
     containers = docker.ps("-qa").split()
     for container in containers:
-        docker("exec", "-t", container, "bash", "-c",
-               "docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)", _ok_code=[0, 1])
-    print "Containers and images within host containers removed."
-
-    sh.docker.rm("-f", *containers, _ok_code=[0, 1])
+        DockerHost.delete_container(container)
     print "Host containers removed."
 
     # Pull and save each image, so we can use them inside the host containers.

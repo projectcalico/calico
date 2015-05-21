@@ -6,6 +6,16 @@ class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by calico.
     """
+    @classmethod
+    def delete_container(cls, name):
+        cls.cleanup_inside(name)
+        sh.docker.rm("-f", name, _ok_code=[0, 1])
+
+    @classmethod
+    def cleanup_inside(cls, name):
+        docker("exec", "-t", name, "bash", "-c",
+               "docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)", _ok_code=[0, 1])
+
     def __init__(self, name):
         self.name = name
 
@@ -21,6 +31,9 @@ class DockerHost(object):
 
     def execute(self, command):
         return docker("exec", "-t", self.name, "bash", c=command)
+
+    def delete(self):
+        self.__class__.delete_container(self.name)
 
     def start_etcd(self):
         # Set up the single-node etcd cluster inside host1.
