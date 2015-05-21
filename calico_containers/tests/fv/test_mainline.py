@@ -26,7 +26,7 @@ class TestMainline(TestBase):
         # Wait for powerstrip to come up.
         for i in range(5):
             try:
-                host.listen("%s docker ps" % calico_port)
+                host.execute("docker -H localhost:2377 ps")
                 break
             except ErrorReturnCode:
                 if i == 4:
@@ -35,8 +35,8 @@ class TestMainline(TestBase):
                     sleep(1)
 
         print "Add endpoints"
-        host.listen("%s docker run -e CALICO_IP=%s -tid --name=node1 busybox" % (calico_port, ip1))
-        host.listen("%s docker run -e CALICO_IP=%s -tid --name=node2 busybox" % (calico_port, ip2))
+        host.execute("docker -H localhost:2377 run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1)
+        host.execute("docker -H localhost:2377 run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2)
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1" % calico_port).stdout.rstrip()
