@@ -254,8 +254,8 @@ class Elector(object):
 
     def stop(self):
         self._stopped = True
-        if not self._greenlet.dead:
-            self._greenlet.kill(ElectorStopped())
+        if self._greenlet and not self._greenlet.dead:
+            self._greenlet.kill(ElectorStopped(), None, None)
             try:
                 # It should die very quickly.
                 eventlet.with_timeout(10, self._greenlet.wait)
