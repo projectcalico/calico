@@ -1,6 +1,6 @@
 from netaddr import IPNetwork, IPAddress
 from nose.tools import assert_equal, assert_true, assert_false
-from node.adapter.ipam import SequentialAssignment, IPAMClient
+from calico_containers.adapter.ipam import SequentialAssignment, IPAMClient
 
 pool = IPNetwork("192.168.0.0/16")
 client = IPAMClient()

@@ -13,7 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from subprocess import call, check_output, check_call, CalledProcessError
+from subprocess import call, check_output, check_call
 import socket
 import logging
 import logging.handlers
@@ -22,9 +22,7 @@ import sys
 import uuid
 
 from netaddr import IPNetwork, IPAddress
-
 from datastore import Endpoint, IF_PREFIX, VETH_NAME
-
 
 _log = logging.getLogger(__name__)
 

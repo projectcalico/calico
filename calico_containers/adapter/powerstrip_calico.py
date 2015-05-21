@@ -23,7 +23,6 @@ import socket
 
 from docker import Client
 from netaddr import IPAddress, AddrFormatError
-
 import netns
 from ipam import SequentialAssignment, IPAMClient
 
@@ -419,4 +418,3 @@ if __name__ == "__main__":
     # host.
     reactor.listenTCP(LISTEN_PORT, get_adapter(), interface="127.0.0.1")
     reactor.run()
-
