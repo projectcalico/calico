@@ -23,7 +23,7 @@ from collections import defaultdict
 import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
-    CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_FROM_NODE, CHAIN_TO_NODE,
+    CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_FROM_LEAF, CHAIN_TO_LEAF,
     chain_names, interface_to_suffix
 )
 
@@ -107,15 +107,61 @@ class DispatchChains(Actor):
             self._dirty = False
 
     def _calculate_update(self, ifaces):
-        root_to_upds = []
-        root_from_upds = []
-        updates = {CHAIN_TO_ENDPOINT: root_to_upds,
-                   CHAIN_FROM_ENDPOINT: root_from_upds}
-        root_to_deps = set()
-        root_from_deps = set()
-        dependencies = {CHAIN_TO_ENDPOINT: root_to_deps,
-                        CHAIN_FROM_ENDPOINT: root_from_deps}
+        """
+        Calculates the iptables update to rewrite our chains.
 
+        To avoid traversing lots of dispatch rules to find the right one,
+        we build a tree of chains.  Currently, the tree can only be
+        two layers deep: a root chain and a layer of leaves.
+
+        Interface names look like this: "prefix1234abc".  The "prefix"
+        part is always the same so we ignore it.  We call "1234abc", the
+        "suffix".
+
+        The root chain contains two sorts of rules:
+
+        * where there are multiple interfaces whose suffixes start with
+          the same character, it contains a rule that matches on
+          that prefix of the "suffix"(!) and directs the packet to a
+          leaf chain for that prefix.
+
+        * as an optimization, if there is only one interface whose
+          suffix starts with a given character, it contains a dispatch
+          rule for that exact interface name.
+
+        For example, if we have interface names "tapA1" "tapB1" "tapB2",
+        we'll get (in pseudo code):
+
+        Root chain:
+
+        if interface=="tapA1" then goto chain for endpoint tapA1
+        if interface.startswith("tapB") then goto leaf chain for prefix "tapB"
+
+        tapB leaf chain:
+
+        if interface=="tapB1" then goto chain for endpoint tapB1
+        if interface=="tapB2" then goto chain for endpoint tapB2
+
+        :param set[str] ifaces: The list of interfaces to generate a
+            dispatch chain for.
+        :returns Tuple: to_delete, deps, updates, new_leaf_chains:
+
+            * set of leaf chains that are no longer needed for deletion
+            * chain dependency dict.
+            * chain updates dict.
+            * complete set of leaf chains that are now required.
+        """
+
+        # iptables update fragments/dependencies for the root chains.
+        updates = defaultdict(list)
+        root_to_upds = updates[CHAIN_TO_ENDPOINT]
+        root_from_upds = updates[CHAIN_FROM_ENDPOINT]
+
+        dependencies = defaultdict(set)
+        root_to_deps = dependencies[CHAIN_TO_ENDPOINT]
+        root_from_deps = dependencies[CHAIN_FROM_ENDPOINT]
+
+        # Special case: allow the metadata IP through from all interfaces.
         if self.config.METADATA_IP is not None and self.ip_version == 4:
             # Need to allow outgoing Metadata requests.
             root_from_upds.append("--append %s "
@@ -129,14 +175,20 @@ class DispatchChains(Actor):
                                    self.config.METADATA_IP,
                                    self.config.METADATA_PORT))
 
+        # Separate the interface names by their prefixes so we can count them
+        # and decide whether to program a leaf chain or not.
         interfaces_by_prefix = defaultdict(set)
         for iface in ifaces:
             ep_suffix = interface_to_suffix(self.config, iface)
             prefix = ep_suffix[:1]
             interfaces_by_prefix[prefix].add(iface)
+
+        # Spin through the interfaces by prefix.  Either add them directly
+        # to the root chain or create a leaf and add them there.
         new_leaf_chains = set()
         for prefix, interfaces in interfaces_by_prefix.iteritems():
-            if len(interfaces) == 1:
+            use_root_chain = len(interfaces) == 1
+            if use_root_chain:
                 # Optimization: there's only one interface with this prefix,
                 # don't program a leaf chain.
                 disp_to_chain = CHAIN_TO_ENDPOINT
@@ -148,16 +200,12 @@ class DispatchChains(Actor):
             else:
                 # There's more than one interface with this prefix, program
                 # a leaf chain.
-                disp_to_chain = CHAIN_TO_NODE + "-" + prefix
-                disp_from_chain = CHAIN_FROM_NODE + "-" + prefix
-                to_deps = set()
-                from_deps = set()
-                to_upds = []
-                from_upds = []
-                updates[disp_to_chain] = to_upds
-                updates[disp_from_chain] = from_upds
-                dependencies[disp_to_chain] = to_deps
-                dependencies[disp_from_chain] = from_deps
+                disp_to_chain = CHAIN_TO_LEAF + "-" + prefix
+                disp_from_chain = CHAIN_FROM_LEAF + "-" + prefix
+                to_upds = updates[disp_to_chain]
+                from_upds = updates[disp_from_chain]
+                to_deps = dependencies[disp_to_chain]
+                from_deps = dependencies[disp_from_chain]
                 new_leaf_chains.add(disp_from_chain)
                 new_leaf_chains.add(disp_to_chain)
                 # Root chain depends on its leaves.
@@ -167,12 +215,15 @@ class DispatchChains(Actor):
                 iface_match = self.config.IFACE_PREFIX + prefix + "+"
                 root_from_upds.append(
                     "--append %s --in-interface %s --goto %s" %
-                    (
-                        CHAIN_FROM_ENDPOINT, iface_match, disp_from_chain))
+                    (CHAIN_FROM_ENDPOINT, iface_match, disp_from_chain)
+                )
                 root_to_upds.append(
                     "--append %s --out-interface %s --goto %s" %
-                    (CHAIN_TO_ENDPOINT, iface_match, disp_to_chain))
+                    (CHAIN_TO_ENDPOINT, iface_match, disp_to_chain)
+                )
 
+            # Common processing, add the per-endpoint rules to whichever
+            # chain we decided above.
             for iface in interfaces:
                 # Add rule to leaf or global chain to direct traffic to the
                 # endpoint-specific one.  Note that we use --goto, which means
@@ -187,7 +238,7 @@ class DispatchChains(Actor):
                                (disp_to_chain, iface, to_chain_name))
                 to_deps.add(to_chain_name)
 
-            if len(interfaces) > 1:
+            if not use_root_chain:
                 # Add a default drop to the end of the leaf chain.
                 from_upds.append("--append %s --jump DROP" % disp_from_chain)
                 to_upds.append("--append %s --jump DROP" % disp_to_chain)
