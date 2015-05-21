@@ -1,13 +1,12 @@
-import unittest
-from sh import docker
+from test_base import TestBase
+from docker_host import DockerHost
 
 
-class TestDiags(unittest.TestCase):
+class TestDiags(TestBase):
     def test_diags(self):
         """
         Test that the diags command successfully uploads the diags file.
         """
-        docker_exec = docker.bake("exec")
-        host1_exec = docker_exec.bake("-t", "host1", "bash", "-c")
-        link = host1_exec("/code/dist/calicoctl diags")
+        host = DockerHost('host')
+        link = host.execute("/code/dist/calicoctl diags")
         assert "https://transfer.sh/" in link

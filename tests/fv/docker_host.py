@@ -8,6 +8,9 @@ class DockerHost(object):
     """
     @classmethod
     def delete_container(cls, name):
+        # We *must* remove all inner containers and images before removing the outer
+        # container. Otherwise the inner images will stick around and fill disk.
+        # https://github.com/jpetazzo/dind#important-warning-about-disk-usage
         cls.cleanup_inside(name)
         sh.docker.rm("-f", name, _ok_code=[0, 1])
 
@@ -29,8 +32,11 @@ class DockerHost(object):
                    "docker load --input /code/busybox.tar && "
                    "docker load --input /code/nsenter.tar")
 
-    def execute(self, command):
-        return docker("exec", "-t", self.name, "bash", c=command)
+    def execute(self, command, **kwargs):
+        return docker("exec", "-t", self.name, "bash", c=command, **kwargs)
+
+    def listen(self, stdin, **kwargs):
+        return docker("exec", "-i", self.name, "bash", s=True, _in=stdin, **kwargs)
 
     def delete(self):
         self.__class__.delete_container(self.name)

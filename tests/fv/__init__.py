@@ -8,10 +8,6 @@ def setup_package():
     """
     Sets up docker images and host containers for running the STs.
     """
-    # We *must* remove all inner containers and images before removing the outer
-    # container. Otherwise the inner images will stick around and fill disk.
-    # https://github.com/jpetazzo/dind#important-warning-about-disk-usage
-
     containers = docker.ps("-qa").split()
     for container in containers:
         DockerHost.delete_container(container)
