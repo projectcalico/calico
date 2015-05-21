@@ -3,7 +3,7 @@
 ## Main Integration Tasks
  
  1. Calico service instantiation
-     -  Instantiate an etcd cluster, with ideally with proxies on each Docker compute host.
+     -  Instantiate an etcd cluster, ideally with proxies on each Docker compute host.
      -  Bring up one instance of the `calico-node` service on each Docker compute host in the cluster.  This is also accomplished using `calicoctl`
  2. Redirect Docker Remote API requests to `calico-node`.
     - `calico-node` exposes the Docker Remote API on port 2377, using [Powerstrip][] to trap the container create/start/stop/destroy events and program the network.
@@ -24,9 +24,14 @@ Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
  - If you don't run the proxy, you can manually set the etcd location using the `--etcd=` option on `calicoctl` commands.  Type `calicoctl help` for details.
  
 
-Get the calico binary onto each node. It's usually safe to just grab the latest [release](https://github.com/Metaswitch/calico-docker/releases/) e.g.
+Get the calico binary onto each node. It's usually safe to just grab the latest [beta](http://projectcalico.org/latest/calicoctl):
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.0.6/calicoctl
+    wget http://projectcalico.org/latest/calicoctl
+	chmod +x calicoctl
+
+The latest beta is not HA so may not be suitable for production environments.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/), e.g.
+
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.2/calicoctl
 	chmod +x calicoctl
 
 Launch the Calico Node service on each Docker Host you want to use with Calico.
