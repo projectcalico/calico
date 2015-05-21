@@ -85,6 +85,7 @@ class TestElection(unittest.TestCase):
         except eventlet.Timeout:
             elector._greenlet.kill(AssertionError("Didn't reach end of results"))
             elector._greenlet.wait()
+            raise
         # This should shut down the Elector.
         eventlet.with_timeout(5, elector.stop)
         # The greenlet should be dead already, but just in case, let our
