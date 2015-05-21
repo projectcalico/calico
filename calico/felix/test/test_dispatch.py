@@ -29,7 +29,7 @@ from calico.felix.dispatch import (
 
 
 # A mocked config object for use with interface_to_suffix.
-Config = collections.namedtuple('Config', ['IFACE_PREFIX'])
+Config = collections.namedtuple('Config', ['IFACE_PREFIX', 'METADATA_IP', 'METADATA_PORT'])
 
 
 class TestDispatchChains(BaseTestCase):
@@ -39,7 +39,7 @@ class TestDispatchChains(BaseTestCase):
     def setUp(self):
         super(TestDispatchChains, self).setUp()
         self.iptables_updater = mock.MagicMock()
-        self.config = Config('tap')
+        self.config = Config('tap', None, 8775)
 
     def getDispatchChain(self):
         return DispatchChains(
@@ -71,6 +71,40 @@ class TestDispatchChains(BaseTestCase):
         # Confirm that the dependency sets match.
         self.assertEqual(args[1][CHAIN_TO_ENDPOINT], to_chain_names)
         self.assertEqual(args[1][CHAIN_FROM_ENDPOINT], from_chain_names)
+
+    def test_applying_metadata(self):
+        """
+        Tests that a snapshot with metadata works OK.
+        """
+        self.config = Config('tap', '127.0.0.1', 8775)
+        d = self.getDispatchChain()
+
+        ifaces = ['tapabcdef', 'tap123456', 'tapa7d849']
+        d.apply_snapshot(ifaces, async=True)
+        self.step_actor(d)
+
+        from_updates = [
+            '--append felix-FROM-ENDPOINT --protocol tcp --in-interface tap+ '
+            '--destination 127.0.0.1 --dport 8775 --jump RETURN',
+            '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
+            '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
+            '--append felix-FROM-ENDPOINT --in-interface tapa7d849 --goto felix-from-a7d849',
+            '--append felix-FROM-ENDPOINT --jump DROP',
+        ]
+        to_updates = [
+            '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
+            '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
+            '--append felix-TO-ENDPOINT --out-interface tapa7d849 --goto felix-to-a7d849',
+            '--append felix-TO-ENDPOINT --jump DROP',
+        ]
+        from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-a7d849'])
+        to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-a7d849'])
+
+        self.iptables_updater.assertCalledOnce()
+        args = self.iptables_updater.rewrite_chains.call_args
+        self.assert_iptables_update(
+            args, to_updates, from_updates, to_chain_names, from_chain_names
+        )
 
     def test_applying_snapshot_clean(self):
         """
