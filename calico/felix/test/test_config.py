@@ -66,7 +66,8 @@ class TestConfig(unittest.TestCase):
                   ]
 
         for filename in files:
-            config = Config("calico/felix/test/data/%s" % filename)
+            with mock.patch('calico.common.complete_logging'):
+                config = Config("calico/felix/test/data/%s" % filename)
             host_dict = { "InterfacePrefix": "blah",
                           "MetadataPort": 123 }
             global_dict = { "InterfacePrefix": "overridden",
@@ -95,8 +96,10 @@ class TestConfig(unittest.TestCase):
                 config = Config("calico/felix/test/data/%s" % filename)
 
     def test_no_logfile(self):
-        # Logging to file can be excluded by explicitly saying "none"
-        config = Config("calico/felix/test/data/felix_missing.cfg")
+        # Logging to file can be excluded by explicitly saying "none" -
+        # but if in etcd config the file is still created.
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
         cfg_dict = { "InterfacePrefix": "blah",
                      "LogFilePath": "None" }
         with mock.patch('calico.common.complete_logging'):
@@ -104,9 +107,17 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.LOGFILE, None)
 
+        config = Config("calico/felix/test/data/felix_nolog.cfg")
+        cfg_dict = { "InterfacePrefix": "blah"}
+        config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.LOGFILE, None)
+
+
     def test_no_metadata(self):
         # Metadata can be excluded by explicitly saying "none"
-        config = Config("calico/felix/test/data/felix_missing.cfg")
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
 
         cfg_dict = { "InterfacePrefix": "blah",
                      "MetadataAddr": "NoNe",
@@ -119,7 +130,8 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.METADATA_PORT, None)
 
     def test_metadata_port_not_int(self):
-        config = Config("calico/felix/test/data/felix_missing.cfg")
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
         cfg_dict = { "InterfacePrefix": "blah",
                      "MetadataAddr": "127.0.0.1",
                      "MetadataPort": "bloop" }
@@ -130,7 +142,8 @@ class TestConfig(unittest.TestCase):
     def test_metadata_port_not_valid_1(self):
         for i in (0, -1, 99999):
             log.debug("Test invalid metadata port %d", i)
-            config = Config("calico/felix/test/data/felix_missing.cfg")
+            with mock.patch('calico.common.complete_logging'):
+                config = Config("calico/felix/test/data/felix_missing.cfg")
             cfg_dict = { "InterfacePrefix": "blah",
                          "MetadataAddr": "127.0.0.1",
                          "MetadataPort": i }
@@ -139,7 +152,8 @@ class TestConfig(unittest.TestCase):
                 config.report_etcd_config({}, cfg_dict)
 
     def test_bad_metadata_addr(self):
-        config = Config("calico/felix/test/data/felix_missing.cfg")
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
         cfg_dict = { "InterfacePrefix": "blah",
                      "MetadataAddr": "bloop",
                      "MetadataPort": "123" }
@@ -150,7 +164,8 @@ class TestConfig(unittest.TestCase):
 
     def test_bad_log_level(self):
         for field in ("LogSeverityFile", "LogSeverityScreen", "LogSeveritySys"):
-            config = Config("calico/felix/test/data/felix_missing.cfg")
+            with mock.patch('calico.common.complete_logging'):
+                config = Config("calico/felix/test/data/felix_missing.cfg")
 
             cfg_dict = { "LogInterfacePrefix": "blah",
                          field: "bloop" }
@@ -159,7 +174,8 @@ class TestConfig(unittest.TestCase):
                 config.report_etcd_config({}, cfg_dict)
 
     def test_blank_metadata_addr(self):
-        config = Config("calico/felix/test/data/felix_missing.cfg")
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
         cfg_dict = { "InterfacePrefix": "blah",
                      "MetadataAddr": "",
                      "MetadataPort": "123" }
@@ -168,7 +184,8 @@ class TestConfig(unittest.TestCase):
             config.report_etcd_config({}, cfg_dict)
 
     def test_no_iface_prefix(self):
-        config = Config("calico/felix/test/data/felix_missing.cfg")
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
         cfg_dict = {}
         with self.assertRaisesRegexp(ConfigException,
                         "Missing undefaulted value.*InterfacePrefix"):
@@ -182,7 +199,8 @@ class TestConfig(unittest.TestCase):
                   ]
 
         for filename in files:
-            config = Config("calico/felix/test/data/%s" % filename)
+            with mock.patch('calico.common.complete_logging'):
+                config = Config("calico/felix/test/data/%s" % filename)
 
             # Test that read ignoring sections.
             self.assertEqual(config.ETCD_ADDR, "localhost:4001")
@@ -198,7 +216,8 @@ class TestConfig(unittest.TestCase):
         """
         with mock.patch.dict("os.environ", {"FELIX_ETCDADDR": "9.9.9.9:1234",
                                             "FELIX_METADATAPORT": "999"}):
-            config = Config("calico/felix/test/data/felix_section.cfg")
+            with mock.patch('calico.common.complete_logging'):
+                config = Config("calico/felix/test/data/felix_section.cfg")
 
         host_dict = { "InterfacePrefix": "blah",
                       "StartupCleanupDelay": "42",

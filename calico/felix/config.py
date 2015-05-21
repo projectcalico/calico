@@ -191,7 +191,16 @@ class Config(object):
         Responsible for :
         - storing the parameters in the relevant fields in the structure
         - validating the configuration is valid (for this stage in the process)
-        - updating logging parameters (if this is the final call)
+        - updating logging parameters
+
+        Note that we complete the logging even before etcd configuration
+        changes are read. Hence, for example, if logging to file is turned on
+        after reading environment variables and config file, then the log file
+        is created and logging to it starts - even if later on etcd
+        configuration turns the file off. That's because we must log if etcd
+        configuration load fails, and not having the log file early enough is
+        worse.
+
         :param final: Have we completed (rather than just read env and config file)
         """
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
@@ -207,13 +216,13 @@ class Config(object):
 
         self._validate_cfg(final=final)
 
-        if final:
-            # Update logging.
-            common.complete_logging(self.LOGFILE,
-                                    self.LOGLEVFILE,
-                                    self.LOGLEVSYS,
-                                    self.LOGLEVSCR)
+        # Update logging.
+        common.complete_logging(self.LOGFILE,
+                                self.LOGLEVFILE,
+                                self.LOGLEVSYS,
+                                self.LOGLEVSCR)
 
+        if final:
             # Log configuration - the whole lot of it.
             for name, parameter in self.parameters.iteritems():
                 log.info("Parameter %s (%s) has value %r read from %s",
