@@ -41,7 +41,8 @@ class DockerHost(object):
 
     def start_etcd(self):
         """
-        Start etcd on this host. Not tested for multiple etcd nodes.
+        Start etcd on this host. Not tested for multiple etcd nodes. Start etcd
+        only after all hosts have been created.
         """
         self.execute("docker load --input /code/etcd.tar")
 

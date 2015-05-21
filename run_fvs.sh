@@ -18,7 +18,7 @@ docker exec -t host1 bash -c \
  docker load --input /code/nsenter.tar && \
  docker load --input /code/etcd.tar'
 
-docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/fv/mainline.sh'
+# docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/fv/mainline.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/fv/add_container.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/fv/add_ip.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/fv/arg_parsing.sh'

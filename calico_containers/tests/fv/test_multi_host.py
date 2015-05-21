@@ -24,15 +24,17 @@ class MultiHostMainline(TestBase):
         host1.listen(calicoctl % ("node --ip=%s" % host1_ip))
         host2.listen(calicoctl % ("node --ip=%s" % host2_ip))
 
+        calico_port = "DOCKER_HOST=localhost:2377"
+
         # Wait for the Calico nodes to be created.
         sleep(3)
 
-        host1.execute("docker -H localhost:2377 run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox")
-        host1.execute("docker -H localhost:2377 run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox")
-        host1.execute("docker -H localhost:2377 run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox")
+        host1.listen("%s docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox" % calico_port)
+        host1.listen("%s docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox" % calico_port)
+        host1.listen("%s docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox" % calico_port)
 
-        host2.execute("docker -H localhost:2377 run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox")
-        host2.execute("docker -H localhost:2377 run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox")
+        host2.listen("%s docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox" % calico_port)
+        host2.listen("%s docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox" % calico_port)
 
         host1.listen(calicoctl % "profile add PROF_A_C_E")
         host1.listen(calicoctl % "profile add PROF_B")
