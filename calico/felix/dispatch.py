@@ -119,6 +119,20 @@ class DispatchChains(Actor):
         from_deps = set()
         dependencies = {CHAIN_TO_ENDPOINT: to_deps,
                         CHAIN_FROM_ENDPOINT: from_deps}
+
+        if self.config.METADATA_IP is not None and self.ip_version == 4:
+            # Need to allow outgoing Metadata requests.
+            from_upds.append("--append %s "
+                             "--protocol tcp "
+                             "--in-interface %s+ "
+                             "--destination %s "
+                             "--dport %s "
+                             "--jump RETURN" %
+                             (CHAIN_FROM_ENDPOINT,
+                              self.config.IFACE_PREFIX,
+                              self.config.METADATA_IP,
+                              self.config.METADATA_PORT))
+
         for iface in self.ifaces:
             # Add rule to global chain to direct traffic to the
             # endpoint-specific one.  Note that we use --goto, which means
