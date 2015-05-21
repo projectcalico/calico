@@ -42,7 +42,7 @@ Get the calico binary onto each host. It's usually safe to just grab the latest 
     wget http://projectcalico.org/latest/calicoctl
 	chmod +x calicoctl
 
-The beta is not HA so may not be suitable for production environments.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/).  For example, to retrieve the most recent release, on each host run
+Note that projectcalico.org is not a HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the v0.4.2 release, on each host run
 
 	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.2/calicoctl
 	chmod +x calicoctl
