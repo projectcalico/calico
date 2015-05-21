@@ -45,6 +45,26 @@ docker exec node2 ping 192.168.2.1 -c 1
 docker exec node2 ping 192.168.3.1 -c 1
 $CALICO shownodes --detailed
 
+# Now stop and restart node 1 and node 2.
+sudo docker -H=localhost:2377 stop node1
+sudo docker -H=localhost:2377 stop node2
+sudo docker -H=localhost:2377 start node1
+sudo docker -H=localhost:2377 start node2
+
+# Wait for the network to come up.
+while ! docker exec node1 ping 192.168.1.2 -c 1 -W 1; do
+echo "Waiting for network to come up"
+  sleep 1
+done
+
+# Test pings between the IPs.
+docker exec node1 ping 192.168.1.2 -c 1
+docker exec node1 ping 192.168.2.2 -c 1
+docker exec node2 ping 192.168.1.1 -c 1
+docker exec node2 ping 192.168.2.1 -c 1
+docker exec node2 ping 192.168.3.1 -c 1
+$CALICO shownodes --detailed
+
 # Now remove and check pings to the removed addresses no longer work.
 $CALICO container node1 ip remove 192.168.2.1
 $CALICO container node2 ip remove 192.168.2.2 --interface=hello
