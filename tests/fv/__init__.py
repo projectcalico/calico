@@ -3,6 +3,7 @@ import sh
 from sh import docker
 from docker_host import DockerHost
 
+
 def setup_package():
     """
     Sets up docker images and host containers for running the STs.
@@ -10,6 +11,7 @@ def setup_package():
     # We *must* remove all inner containers and images before removing the outer
     # container. Otherwise the inner images will stick around and fill disk.
     # https://github.com/jpetazzo/dind#important-warning-about-disk-usage
+
     containers = docker.ps("-qa").split()
     for container in containers:
         docker("exec", "-t", container, "bash", "-c",
@@ -36,7 +38,10 @@ def setup_package():
     print sh.bash("./create_binary.sh")
     print "Calicoctl binary created."
 
-    DockerHost('')
+    host1 = DockerHost('host1')
+    DockerHost('host2')
+    host1.start_etcd()
+
 
 def teardown_package():
     pass
