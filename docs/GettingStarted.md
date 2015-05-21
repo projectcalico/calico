@@ -40,7 +40,7 @@ You should see output like this on each node
 
     core@core-01 ~ $ docker ps
     CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:v0.4.1     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+    077ceae44fe3        calico/node:v0.4.2     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 
 ## Routing via Powerstrip
 

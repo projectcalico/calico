@@ -23,7 +23,6 @@ import socket
 
 from docker import Client
 from netaddr import IPAddress, AddrFormatError
-
 import netns
 from ipam import SequentialAssignment, IPAMClient
 
@@ -124,15 +123,23 @@ class AdapterResource(resource.Resource):
             request_uri = client_request['Request']
             request_path = request_uri.split('/')
 
-            # Extract the container ID and request type.
+            # Extract the container ID or name and request type.
             # TODO better URI parsing
-            (_, version, _, cid, ctype) = request_uri.split("/", 4)
+            (_, version, _, cid_or_name, ctype) = request_uri.split("/", 4)
             _log.info("Request parameters: version:%s; cid:%s; ctype:%s",
-                      version, cid, ctype)
+                      version, cid_or_name, ctype)
+
+            # Get the actual container ID, the URL may contain the name or
+            # a short ID.
+            cont = self.docker.inspect_container(cid_or_name)
+            _log.debug("Container info: %s", cont)
+            cid = cont["Id"]
+            _log.debug("Container ID: %s", cid)
+
             if ctype == u'start':
                 # /version/containers/id/start
                 _log.debug('Intercepted container start request')
-                self._install_endpoint(client_request, cid)
+                self._install_or_reinstall_endpoints(client_request, cont, cid)
             elif ctype== 'json':
                 # /version/containers/*/json
                 _log.debug('Intercepted container json request')
@@ -149,23 +156,41 @@ class AdapterResource(resource.Resource):
             _log.debug("Returning output:\n%s", output)
             return output
 
-    def _install_endpoint(self, client_request, cid):
+    def _install_or_reinstall_endpoints(self, client_request, cont, cid):
+        """
+        Install or reinstall Calico endpoints based on whether we are
+        restarting a container.
+-       :param client_request: Powerstrip ClientRequest object as dictionary
+                               from JSON.
+        :param cont: The Docker container dictionary.
+        :param cid: The ID of the container to install an endpoint in.
+        :returns: None
+        """
+        # Grab the running pid from Docker
+        pid = cont["State"]["Pid"]
+        _log.debug('Container PID: %s', pid)
+
+        # Grab the list of endpoints, if they exist.
+        try:
+            eps = self.datastore.get_endpoints(hostname, cid)
+            self._reinstall_endpoints(cid, pid, eps)
+        except KeyError:
+            self._install_endpoint(client_request, cont, cid, pid)
+        return
+
+    def _install_endpoint(self, client_request, cont, cid, pid):
         """
         Install a Calico endpoint (veth) in the container referenced in the
         client request object.
 -       :param client_request: Powerstrip ClientRequest object as dictionary
                                from JSON.
+        :param cont: The Docker container dictionary.
         :param cid: The ID of the container to install an endpoint in.
+        :param pid: The PID of the container process.
         :returns: None
         """
         try:
             _log.debug("Installing endpoint for cid %s", cid)
-
-            # Grab the running pid from Docker
-            cont = self.docker.inspect_container(cid)
-            _log.debug("Container info: %s", cont)
-            pid = cont["State"]["Pid"]
-            _log.debug('Container PID: %s', pid)
 
             # Attempt to parse out environment variables
             env_list = cont["Config"]["Env"]
@@ -224,7 +249,27 @@ class AdapterResource(resource.Resource):
 
         return
 
-    def _update_container_info(self, cid_or_name, server_response):
+    def _reinstall_endpoints(self, cid, pid, eps):
+        """
+        Install a Calico endpoint (veth) in the container referenced in the
+        client request object.
+        :param cid: The ID of the container to install an endpoint in.
+        :param pid: The PID of the container process.
+        :param eps: The container endpoints.
+        :returns: None
+        """
+        _log.debug("Re-install endpoints for container %s", cid)
+        next_hop_ips = self.datastore.get_default_next_hops(hostname)
+        for old_endpoint in eps:
+            new_endpoint = netns.reinstate_endpoint(pid, old_endpoint,
+                                                    next_hop_ips)
+            self.datastore.update_endpoint(hostname, cid,
+                                           old_endpoint, new_endpoint)
+
+        _log.info("Finished network for container %s", cid)
+        return
+
+    def _update_container_info(self, cid, server_response):
         """
         Update the response for a */container/*/json (docker inspect) request.
 
@@ -234,18 +279,13 @@ class AdapterResource(resource.Resource):
 
         Insert the IP for this container into the config dict.
 
-        :param str cid_or_name: The name or ID of the container to update.
-        :param dict server_response: The response from the Docker API, to be
-                                     be updated.
+        :param cid: The ID of the container to install an endpoint in.
+        :param server_response: The response from the Docker API, to be
+                                 be updated.
         """
         _log.debug('Getting container config from etcd')
 
         try:
-            cont = self.docker.inspect_container(cid_or_name)
-            _log.debug("Container info: %s", cont)
-            cid = cont["Id"]
-            _log.debug("Container ID: %s", cid)
-
             # Get a single endpoint ID from the container, and use this to
             # get the Endpoint.
             ep_id = self.datastore.get_ep_id_from_cont(hostname, cid)
@@ -378,4 +418,3 @@ if __name__ == "__main__":
     # host.
     reactor.listenTCP(LISTEN_PORT, get_adapter(), interface="127.0.0.1")
     reactor.run()
-

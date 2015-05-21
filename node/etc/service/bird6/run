@@ -1,2 +1,0 @@
-#!/bin/sh
-exec bird6 -s bird6.ctl -d -c /config/bird6.cfg >>/var/log/calico/bird6.log 2>&1

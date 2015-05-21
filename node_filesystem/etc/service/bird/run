@@ -1,0 +1,2 @@
+#!/bin/sh
+exec bird -R -s bird.ctl -d -c /config/bird.cfg >>/var/log/calico/bird.log 2>&1

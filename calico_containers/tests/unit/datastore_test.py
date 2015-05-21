@@ -2,14 +2,14 @@ __author__ = 'spike@projectcalico.org'
 
 
 from mock import patch, Mock, call
-from node.adapter.datastore import (DatastoreClient,
-                                    Rule,
-                                    Profile,
-                                    Rules,
-                                    Endpoint,
-                                    NoEndpointForContainer,
-                                    CALICO_V_PATH,
-                                    DataStoreError)
+from calico_containers.adapter.datastore import (DatastoreClient,
+                                                 Rule,
+                                                 Profile,
+                                                 Rules,
+                                                 Endpoint,
+                                                 NoEndpointForContainer,
+                                                 CALICO_V_PATH,
+                                                 DataStoreError)
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 from netaddr import IPNetwork, IPAddress
@@ -21,6 +21,7 @@ TEST_HOST = "TEST_HOST"
 TEST_PROFILE = "TEST"
 TEST_CONT_ID = "1234"
 TEST_ENDPOINT_ID = "1234567890ab"
+TEST_ENDPOINT_ID2 = "90abcdef1234"
 TEST_HOST_PATH = CALICO_V_PATH + "/host/TEST_HOST"
 IPV4_POOLS_PATH = CALICO_V_PATH + "/ipam/v4/pool/"
 IPV6_POOLS_PATH = CALICO_V_PATH + "/ipam/v6/pool/"
@@ -37,15 +38,15 @@ TEST_CONT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 
 # 4 endpoints, with 2 TEST profile and 2 UNIT profile.
-EP_56 = Endpoint("567890abcdef", "active", "11-22-33-44-55-66")
+EP_56 = Endpoint("567890abcdef", "active", "AA-22-BB-44-CC-66", if_name="eth0")
 EP_56.profile_id = "TEST"
-EP_78 = Endpoint("7890abcdef12", "active", "11-22-33-44-55-66")
+EP_78 = Endpoint("7890abcdef12", "active", "11-AA-33-BB-55-CC", if_name="eth0")
 EP_78.profile_id = "TEST"
-EP_90 = Endpoint("90abcdef1234", "active", "11-22-33-44-55-66")
+EP_90 = Endpoint("90abcdef1234", "active", "1A-2B-3C-4D-5E-6E", if_name="eth0")
 EP_90.profile_id = "UNIT"
-EP_12 = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66")
+EP_12 = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66",
+                 if_name="eth0")
 EP_12.profile_id = "UNIT"
-
 
 class TestRule(unittest.TestCase):
 
@@ -133,7 +134,8 @@ class TestEndpoint(unittest.TestCase):
         """
         endpoint1 = Endpoint("aabbccddeeff112233",
                              "active",
-                             "11-22-33-44-55-66")
+                             "11-22-33-44-55-66",
+                             if_name="eth0")
         assert_equal(endpoint1.ep_id, "aabbccddeeff112233")
         assert_equal(endpoint1.state, "active")
         assert_equal(endpoint1.mac, "11-22-33-44-55-66")
@@ -141,6 +143,7 @@ class TestEndpoint(unittest.TestCase):
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
+                    "container:if_name": "eth0",
                     "profile_id": None,
                     "ipv4_nets": [],
                     "ipv6_nets": [],
@@ -166,6 +169,7 @@ class TestEndpoint(unittest.TestCase):
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
+                    "container:if_name": "eth0",
                     "profile_id": "TEST23",
                     "ipv4_nets": ["192.168.3.2/32", "10.3.4.23/32"],
                     "ipv6_nets": ["fd20::4:2:1/128"],
@@ -198,10 +202,12 @@ class TestEndpoint(unittest.TestCase):
         """
         endpoint1 = Endpoint("aabbccddeeff112233",
                              "active",
-                             "11-22-33-44-55-66")
+                             "11-22-33-44-55-66",
+                             if_name="eth0")
         endpoint2 = Endpoint("aabbccddeeff112233",
                              "inactive",
-                             "11-22-33-44-55-66")
+                             "11-22-33-44-55-66",
+                             if_name="eth0")
         endpoint3 = endpoint1.copy()
 
         assert_equal(endpoint1, endpoint3)
@@ -212,8 +218,8 @@ class TestEndpoint(unittest.TestCase):
 
 class TestDatastoreClient(unittest.TestCase):
 
-    @patch("node.adapter.datastore.os.getenv", autospec=True)
-    @patch("node.adapter.datastore.etcd.Client", autospec=True)
+    @patch("calico_containers.adapter.datastore.os.getenv", autospec=True)
+    @patch("calico_containers.adapter.datastore.etcd.Client", autospec=True)
     def setUp(self, m_etcd_client, m_getenv):
         m_getenv.return_value = "127.0.0.2:4002"
         self.etcd_client = Mock(spec=EtcdClient)
@@ -658,7 +664,8 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_endpoint() for an endpoint that exists.
         """
-        ep = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66")
+        ep = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66",
+                      if_name="eth1")
         self.etcd_client.read.side_effect = mock_read_for_endpoint(ep)
         ep2 = self.datastore.get_endpoint(TEST_HOST,
                                           TEST_CONT_ID,
@@ -720,6 +727,30 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = EtcdKeyNotFound
         assert_raises(KeyError,
                       self.datastore.get_ep_id_from_cont,
+                      TEST_HOST, TEST_CONT_ID)
+
+    def test_get_endpoints_exists(self):
+        """
+        Test get_endpoints() for a container that exists.
+        """
+        self.etcd_client.read.side_effect = mock_read_2_ep_for_cont
+        eps = self.datastore.get_endpoints(TEST_HOST, TEST_CONT_ID)
+        assert_equal(len(eps), 2)
+        assert_equal(eps[0].to_json(), EP_12.to_json())
+        assert_equal(eps[0].ep_id, EP_12.ep_id)
+        assert_equal(eps[1].to_json(), EP_78.to_json())
+        assert_equal(eps[1].ep_id, EP_78.ep_id)
+
+    def test_get_endpoints_doesnt_exist(self):
+        """
+        Test get_endpoints() for a container that doesn't exist.
+        """
+        def mock_read(path):
+            assert_equal(path, TEST_CONT_ENDPOINT_PATH)
+            raise EtcdKeyNotFound()
+        self.etcd_client.read.side_effect = mock_read
+        assert_raises(KeyError,
+                      self.datastore.get_endpoints,
                       TEST_HOST, TEST_CONT_ID)
 
     def test_add_workload_to_profile(self):
@@ -1104,7 +1135,7 @@ def mock_read_2_ep_for_cont(path):
     specs = [
         (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/1234567890ab",
          EP_12.to_json()),
-        (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/90abcdef1234",
+        (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/7890abcdef12",
          EP_78.to_json())
     ]
     for spec in specs:
