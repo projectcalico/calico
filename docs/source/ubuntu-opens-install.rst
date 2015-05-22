@@ -377,7 +377,7 @@ perform the following steps:
     If you *are* configuring a full BGP mesh you'll need to handle the BGP
     configuration appropriately on each compute host.  The scripts above can be
     used to generate a sample configuration for BIRD, by replacing the
-    <route_reflector_ip> with the ip of one other compute host - this will
+    ``<route_reflector_ip>`` with the IP of one other compute host -- this will
     generate the configuration for a single peer connection, which you can
     duplicate and update for each compute host in your mesh.
 
