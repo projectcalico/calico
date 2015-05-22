@@ -22,7 +22,7 @@ the options for getting involved with Calico the project, please take a look at
 the following.
 
 Mailing Lists
-------------
+-------------
 Project Calico runs two mailing lists:
 
 -  `calico-announce <http://lists.projectcalico.org/listinfo/calico-announce>`__
