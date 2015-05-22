@@ -15,9 +15,10 @@
 Ubuntu 14.04 Packaged Install Instructions
 ==========================================
 
-These instructions will take you through installing Calico using the
-latest packages on a system running Ubuntu 14.04 with either OpenStack
-Icehouse or Juno.
+These instructions will take you through a first-time install of Calico using
+the latest packages on a system running Ubuntu 14.04 with either OpenStack
+Icehouse or Juno. If you are upgrading an existing system, please see the
+:doc:`opens-upgrade` document instead for upgrade instructions.
 
 The instructions come in two sections: one for installing control nodes,
 and one for installing compute nodes. Before moving on to those
