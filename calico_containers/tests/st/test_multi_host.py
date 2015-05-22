@@ -11,12 +11,12 @@ class MultiHostMainline(TestBase):
         """
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
-        host1.start_etcd()
 
-        host1_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", host1.name).stdout.rstrip()
-        host2_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", host2.name).stdout.rstrip()
+        host1_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host1.name).stdout.rstrip()
+        host2_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host2.name).stdout.rstrip()
 
-        etcd_port = "ETCD_AUTHORITY=%s:2379" % host1_ip
+        etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
+        etcd_port = "ETCD_AUTHORITY=%s:2379" % etcd_ip
         calicoctl = etcd_port + " /code/dist/calicoctl %s"
 
         host1.listen(calicoctl % "reset || true")

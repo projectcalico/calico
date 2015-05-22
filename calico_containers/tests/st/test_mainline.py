@@ -10,17 +10,16 @@ class TestMainline(TestBase):
         Setup two endpoints on one host and check connectivity.
         """
         host = DockerHost('host')
-        host.start_etcd()
 
-        host_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", host.name).stdout.rstrip()
-        etcd_port = "ETCD_AUTHORITY=%s:2379" % host_ip
+        etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
+        etcd_port = "ETCD_AUTHORITY=%s:2379" % etcd_ip
         calicoctl = etcd_port + " /code/dist/calicoctl %s"
         calico_port = "DOCKER_HOST=localhost:2377"
 
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
 
-        host.execute(calicoctl % "node --ip=127.0.0.1")
-        host.execute(calicoctl % "profile add TEST_GROUP")
+        host.listen(calicoctl % "node --ip=127.0.0.1")
+        host.listen(calicoctl % "profile add TEST_GROUP")
 
         # Wait for powerstrip to come up.
         for i in range(5):
@@ -37,8 +36,8 @@ class TestMainline(TestBase):
         host.listen("%s docker run -e CALICO_IP=%s -tid --name=node2 busybox" % (calico_port, ip2))
 
         # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.execute("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1" % calico_port).stdout.rstrip()
-        node2_ip = host.execute("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2" % calico_port).stdout.rstrip()
+        node1_ip = host.listen("%s docker inspect --format {{ .NetworkSettings.IPAddress }} node1" % calico_port).stdout.rstrip()
+        node2_ip = host.listen("%s docker inspect --format {{ .NetworkSettings.IPAddress }} node2" % calico_port).stdout.rstrip()
 
         # Configure the nodes with the same profiles.
         host.listen(calicoctl % "profile TEST_GROUP member add node1")
