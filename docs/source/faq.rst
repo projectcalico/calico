@@ -91,3 +91,12 @@ their behaviour extremely simple, reducing the complexity of bugs.
 
 The :doc:`calico-neutron-api` document goes into extensive detail about how
 various Neutron API calls translate into Calico actions.
+
+"I've heard Calico uses Proxy ARP - surely that doesn't scale?"
+---------------------------------------------------------------
+
+On each compute host, Calico uses the proxy ARP technique to intercept *all*
+ARP requests from each workload, returning the MAC address of the compute host
+as the next hop.  As Calico is responding to all ARP requests from a workload,
+there is no distribution of MAC addresses between compute nodes and, hence,
+none of the usual proxy ARP scalability issues arise.
