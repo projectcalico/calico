@@ -59,14 +59,12 @@ Interface Management
 
 Felix programs some information about interfaces into the kernel in order to
 get the kernel to correctly handle the traffic emitted by that endpoint. In
-particular, it may enable `Proxy ARP`_, `Proxy NDP`_, and IP forwarding for
+particular, it will ensure that the host responds to ARP requests from each
+workload with the MAC of the host, and will enable IP forwarding for
 interfaces that it manages.
 
 It also monitors for interfaces to appear and disappear so that it can ensure
 that the programming for those interfaces is applied at the appropriate time.
-
-.. _Proxy ARP: http://en.wikipedia.org/wiki/Proxy_ARP
-.. _Proxy NDP: http://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol
 
 Route Programming
 ~~~~~~~~~~~~~~~~~
@@ -135,9 +133,9 @@ Felix liveness; marking certain endpoints as failed if network setup failed.
 etcd
 ----
 
-etcd is a distributed key-value store that has a focus on consistency. 
+etcd is a distributed key-value store that has a focus on consistency.
 Calico uses etcd to provide the communication between components and as a
-consistent data store, which ensures Calico can always build an accurate 
+consistent data store, which ensures Calico can always build an accurate
 network.
 
 Depending on the orchestrator plug-in, etcd may either be the master data store
@@ -156,7 +154,7 @@ etcd -- in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
 have to rebuild the database which, as noted for OpenStack, will simply require
 that the plug-in resynchonizes state to etcd from the OpenStack database.
 
-In larger deployments the core cluster can be scaled up, as per the 
+In larger deployments the core cluster can be scaled up, as per the
 `etcd admin guide`_.
 
 Additionally, on each machine that hosts either a

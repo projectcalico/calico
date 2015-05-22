@@ -21,11 +21,11 @@ encapsulation.
 
 In the Calico approach, IP packets to or from a workload are routed and
 firewalled by the Linux routing table and iptables infrastructure on the
-workload’s host.  For a workload that is sending packets, its host is always
-the first IP hop – we ensure this, regardless of whatever routing the workload
-itself might configure, by enabling Proxy ARP on the interface from the
-workload – and for packets addressed to a workload, the last IP hop is that
-from the destination workload’s host to the workload itself.
+workload’s host.  For a workload that is sending packets, Calico ensures that
+the host is always returned as the next hop MAC address regardless of whatever
+routing the workload itself might configure. For packets addressed to a
+workload, the last IP hop is that from the destination workload’s host to the
+workload itself.
 
 .. figure:: _static/calico-datapath.png
    :alt: Calico IP hops between two workloads
@@ -78,8 +78,7 @@ Is that all?
 ------------
 
 As far as the static data path is concerned, yes.  It’s just a combination of
-Proxy ARP, IP routing and iptables.  (Plus mechanisms that are equivalent to
-Proxy ARP for IPv6.)  There’s a great deal more to Calico in terms of how the
-required routing and security information is managed, and for handling dynamic
-things such as workload migration – but the basic data path really is that
-simple.
+responding to workload ARP requests with the host MAC, IP routing and iptables.
+There’s a great deal more to Calico in terms of how the required routing and
+security information is managed, and for handling dynamic things such as
+workload migration – but the basic data path really is that simple.
