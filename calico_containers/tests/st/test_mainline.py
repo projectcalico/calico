@@ -1,5 +1,5 @@
 from sh import docker, ErrorReturnCode
-from time import sleep
+from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
@@ -23,15 +23,7 @@ class TestMainline(TestBase):
         host.execute(calicoctl % "profile add TEST_GROUP")
 
         # Wait for powerstrip to come up.
-        for i in range(5):
-            try:
-                host.execute("docker ps", docker_host=True)
-                break
-            except ErrorReturnCode:
-                if i == 4:
-                    raise AssertionError("Powerstrip failed to come up.")
-                else:
-                    sleep(1)
+        self.assert_powerstrip_up(host)
 
         host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1, docker_host=True)
         host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2, docker_host=True)
@@ -49,15 +41,8 @@ class TestMainline(TestBase):
         node1_pid = host.execute("docker inspect --format {{.State.Pid}} node1").stdout.rstrip()
         node2_pid = host.execute("docker inspect --format {{.State.Pid}} node2").stdout.rstrip()
 
-        for i in range(10):
-            try:
-                host.listen("./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
-                break
-            except ErrorReturnCode:
-                if i == 9:
-                    raise AssertionError("Network failed to come up.")
-                else:
-                    sleep(1)
+        ping = partial(host.listen, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
+        self.retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
         host.execute("./nsenter -t %s ping %s -c 1" % (node1_pid, node1_ip))

@@ -1,5 +1,5 @@
 from sh import docker, ErrorReturnCode
-from time import sleep
+from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
@@ -21,26 +21,11 @@ class TestAddContainer(TestBase):
         host.execute(calicoctl % "node --ip=127.0.0.1")
         host.execute(calicoctl % "profile add TEST_GROUP")
 
-        # Wait for powerstrip to come up.
-        for i in range(5):
-            try:
-                host.execute("docker ps", docker_host=True)
-                break
-            except ErrorReturnCode:
-                if i == 4:
-                    raise AssertionError("Powerstrip failed to come up.")
-                else:
-                    sleep(1)
+        self.assert_powerstrip_up(host)
 
         host.execute(calicoctl % "container add node 192.168.1.1")
         host.execute(calicoctl % "profile TEST_GROUP member add node")
 
-        for i in range(10):
-            try:
-                host.execute("ip route | grep '192\.168\.1\.1'")
-                break
-            except ErrorReturnCode:
-                if i == 9:
-                    raise AssertionError("Felix failed to add route.")
-                else:
-                    sleep(1)
+        # Wait for felix to program down the route.
+        powerstrip = partial(host.execute, "ip route | grep '192\.168\.1\.1'")
+        self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)
