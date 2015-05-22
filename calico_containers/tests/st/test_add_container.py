@@ -1,14 +1,14 @@
-from test_base import TestBase
-import sh
 from sh import docker, ErrorReturnCode
 from time import sleep
+
+from test_base import TestBase
 from docker_host import DockerHost
 
 
 class TestAddContainer(TestBase):
     def test_add_container(self):
         """
-        Setup two endpoints on one host and check connectivity.
+        
         """
         host = DockerHost('host')
         host.start_etcd()
@@ -21,11 +21,10 @@ class TestAddContainer(TestBase):
         host.execute(calicoctl % "node --ip=127.0.0.1")
         host.execute(calicoctl % "profile add TEST_GROUP")
 
-        calico_port = "DOCKER_HOST=localhost:2377"
         # Wait for powerstrip to come up.
         for i in range(5):
             try:
-                host.listen("%s docker ps" % calico_port)
+                host.execute("docker ps", docker_host=True)
                 break
             except ErrorReturnCode:
                 if i == 4:

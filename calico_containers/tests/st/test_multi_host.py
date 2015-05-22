@@ -1,13 +1,16 @@
-from test_base import TestBase
-from time import sleep
 from sh import docker, ErrorReturnCode_1
+from time import sleep
+
+from test_base import TestBase
 from docker_host import DockerHost
 
 
 class MultiHostMainline(TestBase):
     def test_multi_host(self):
         """
-        Run a mainline multi-host test. Almost identical in function to the vagrant coreOS demo.
+        Run a mainline multi-host test.
+
+        Almost identical in function to the vagrant coreOS demo.
         """
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
@@ -24,17 +27,15 @@ class MultiHostMainline(TestBase):
         host1.listen(calicoctl % ("node --ip=%s" % host1_ip))
         host2.listen(calicoctl % ("node --ip=%s" % host2_ip))
 
-        calico_port = "DOCKER_HOST=localhost:2377"
-
         # Wait for the Calico nodes to be created.
         sleep(3)
 
-        host1.listen("%s docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox" % calico_port)
-        host1.listen("%s docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox" % calico_port)
-        host1.listen("%s docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox" % calico_port)
+        host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox", docker_host=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox", docker_host=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox", docker_host=True)
 
-        host2.listen("%s docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox" % calico_port)
-        host2.listen("%s docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox" % calico_port)
+        host2.execute("docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox", docker_host=True)
+        host2.execute("docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox", docker_host=True)
 
         host1.listen(calicoctl % "profile add PROF_A_C_E")
         host1.listen(calicoctl % "profile add PROF_B")

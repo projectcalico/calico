@@ -20,11 +20,15 @@ class DockerHost(object):
                    "docker load --input /code/busybox.tar && "
                    "docker load --input /code/nsenter.tar")
 
-    def execute(self, command, **kwargs):
+    def execute(self, command, docker_host=False, **kwargs):
         """
         Pass a command into a host container.
         """
-        return docker("exec", "-t", self.name, "bash", c=command, **kwargs)
+        if docker_host:
+            stdin = ' '.join(["DOCKER_HOST=localhost:2377", command])
+            return self.listen(stdin, **kwargs)
+        else:
+            return docker("exec", "-t", self.name, "bash", c=command, **kwargs)
 
     def listen(self, stdin, **kwargs):
         """
