@@ -33,7 +33,8 @@ OpenStack deployment.
 Upgrade Procedure
 -----------------
 
-Upgrade is performed in the following stages.
+Upgrade is performed in the following stages, which must be performed in the
+order shown.
 
 1: Upgrade etcd
 ~~~~~~~~~~~~~~~
@@ -44,8 +45,7 @@ Calico code, and also on the machine running the etcd cluster.
 Ubuntu 14.04
 ^^^^^^^^^^^^
 
-On the machine running etcd, simply use apt-get to obtain the more recent
-version::
+On the machine running etcd, use apt-get to obtain the more recent version::
 
     apt-get update
     apt-get install etcd
@@ -57,7 +57,7 @@ On the machine running etcd, begin by stopping the etcd process::
 
     systemctl stop etcd
 
-Then, download the latest binary and install it::
+Then, download the tested binary (currently 2.0.11) and install it::
 
     curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
     tar xvf etcd-v2.0.11-linux-amd64.tar.gz
@@ -82,7 +82,7 @@ First, upgrade packaged components::
     apt-get update
     apt-get install dnsmasq-base nova-api-metadata neutron-dhcp-agent neutron-common python-etcd calico-compute
 
-Finally, restart Felix to ensure that it picks up any changes::
+Then, restart Felix to ensure that it picks up any changes::
 
     service calico-felix restart
 
@@ -98,7 +98,7 @@ First, upgrade python-etcd::
 
 Then, update the relevant components::
 
-    yum update
+    yum update dnsmasq openstack-nova-api openstack-neutron calico-compute
 
 3: Upgrade control software
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -114,7 +114,7 @@ First, update packaged components::
     apt-get update
     apt-get install python-etcd calico-control
 
-Finally, restart Neutron to ensure that it picks up any changes::
+Then, restart Neutron to ensure that it picks up any changes::
 
     service neutron-server restart
 
@@ -130,4 +130,4 @@ First, upgrade python-etcd::
 
 Then, update the relevant components::
 
-    yum update
+    yum update calico-control

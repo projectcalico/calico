@@ -15,6 +15,10 @@
 Red Hat Enterprise Linux 7 Packaged Install Instructions
 ========================================================
 
+These instructions will take you through a first-time install of Calico.
+If you are upgrading an existing system, please see the :doc:`opens-upgrade`
+document instead for upgrade instructions.
+
 The instructions come in two sections: one for installing control nodes,
 and one for installing compute nodes. Before moving on to those
 sections, make sure you follow the **Common Steps** section, and if you
