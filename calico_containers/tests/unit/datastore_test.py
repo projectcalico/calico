@@ -172,7 +172,6 @@ class TestRules(unittest.TestCase):
 
         # Convert the Rules object to JSON and then back again.
         new_json = rules.to_json()
-        print new_json
         new_rules = Rules.from_json(new_json)
 
         # Compare the two rules objects.
