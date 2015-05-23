@@ -48,6 +48,43 @@ EP_12 = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66",
                  if_name="eth0")
 EP_12.profile_id = "UNIT"
 
+# A complicated set of Rules JSON for testing serialization / deserialization.
+RULES_JSON = """
+{
+  "id": "PROF_GROUP1",
+  "inbound_rules": [
+    {
+      "action": "allow",
+      "src_tag": "PROF_GROUP1"
+    },
+    {
+      "action": "allow",
+      "src_net": "192.168.77.0/24"
+    },
+    {
+      "action": "allow",
+      "src_net": "192.168.0.0"
+    },
+    {
+      "protocol": "udp",
+      "src_tag": "SRC_TAG",
+      "src_ports": [10, 20, 30],
+      "src_net": "192.168.77.0/30",
+      "dst_tag": "DST_TAG",
+      "dst_ports": [20, 30, 40],
+      "dst_net": "1.2.3.4",
+      "icmp_type": 30,
+      "action": "deny"
+    }
+  ],
+  "outbound_rules": [
+    {
+      "action": "allow"
+    }
+  ]
+}"""
+
+
 class TestRule(unittest.TestCase):
 
     def test_create(self):
@@ -133,42 +170,8 @@ class TestRules(unittest.TestCase):
         Create a detailed set of rules, convert from and to json and compare
         the results.
         """
-        rules_json = """
-{
-  "id": "PROF_GROUP1",
-  "inbound_rules": [
-    {
-      "action": "allow",
-      "src_tag": "PROF_GROUP1"
-    },
-    {
-      "action": "allow",
-      "src_net": "192.168.77.0/24"
-    },
-    {
-      "action": "allow",
-      "src_net": "192.168.0.0"
-    },
-    {
-      "protocol": "udp",
-      "src_tag": "SRC_TAG",
-      "src_ports": [10, 20, 30],
-      "src_net": "192.168.77.0/30",
-      "dst_tag": "DST_TAG",
-      "dst_ports": [20, 30, 40],
-      "dst_net": "1.2.3.4",
-      "icmp_type": 30,
-      "action": "deny"
-    }
-  ],
-  "outbound_rules": [
-    {
-      "action": "allow"
-    }
-  ]
-}"""
-        # Convert the JSON into a Rules object.
-        rules = Rules.from_json(rules_json)
+        # Convert a JSON blob into a Rules object.
+        rules = Rules.from_json(RULES_JSON)
 
         # Convert the Rules object to JSON and then back again.
         new_json = rules.to_json()
