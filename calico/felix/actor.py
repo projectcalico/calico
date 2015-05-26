@@ -510,14 +510,15 @@ def _on_ref_reaped(ref):
     :param ExceptionTrackingWeakRef ref: The ref that may contain a leaked
         exception.
     """
-    _log.debug("Reaping %s", ref)
+    # Future maintainers: This function *must not* do any IO of any kind, or
+    # generally do anything that would cause gevent to yield the flow of
+    # control. See issue #587 for more details.
     assert isinstance(ref, ExceptionTrackingWeakRef)
     del _tracked_refs_by_idx[ref.idx]
     if ref.exception:
         try:
             msg = ("TrackedAsyncResult %s was leaked with "
                    "exception %r.  Dying." % (ref.tag, ref.exception))
-            _log.critical(msg)
             _print_to_stderr(msg)
         finally:
             # Called from the GC so we can't raise an exception, just die.
