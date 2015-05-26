@@ -32,7 +32,6 @@ class TestBase(TestCase):
         self.ip = getattr(self, 'ip', self.get_ip())
         docker.run("-d",
                    "-p", "2379:2379",
-                   "-p", "2380:2380",
                    "--name", "etcd", "quay.io/coreos/etcd:v2.0.10",
                    name="calico",
                    advertise_client_urls="http://%s:2379" % self.ip,
@@ -45,4 +44,4 @@ class TestBase(TestCase):
 
     def get_ip(self):
         intf = sh.ifconfig.eth0()
-        return sh.perl(intf,  "-ne",  's/dr:(\S+)/print $1/e')
+        return sh.perl(intf, "-ne", 's/dr:(\S+)/print $1/e')
