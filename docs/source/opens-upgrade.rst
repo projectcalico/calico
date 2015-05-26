@@ -45,7 +45,7 @@ Calico code, and also on the machine running the etcd cluster.
 Ubuntu 14.04
 ^^^^^^^^^^^^
 
-On the machine running etcd, use apt-get to obtain the more recent version::
+Use apt-get to obtain the more recent version::
 
     apt-get update
     apt-get install etcd
@@ -53,7 +53,7 @@ On the machine running etcd, use apt-get to obtain the more recent version::
 Red Hat 7
 ^^^^^^^^^
 
-On the machine running etcd, begin by stopping the etcd process::
+Stop the etcd process::
 
     systemctl stop etcd
 
