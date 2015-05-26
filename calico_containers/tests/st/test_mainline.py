@@ -1,4 +1,4 @@
-from sh import docker, ErrorReturnCode
+from sh import ErrorReturnCode
 from functools import partial
 
 from test_base import TestBase
@@ -13,9 +13,7 @@ class TestMainline(TestBase):
         host = DockerHost('host')
         host.start_etcd()
 
-        host_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", host.name).stdout.rstrip()
-        etcd_port = "ETCD_AUTHORITY=%s:2379" % host_ip
-        calicoctl = etcd_port + " /code/dist/calicoctl %s"
+        calicoctl = "/code/dist/calicoctl %s"
 
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
 
@@ -35,13 +33,13 @@ class TestMainline(TestBase):
                                 docker_host=True).stdout.rstrip()
 
         # Configure the nodes with the same profiles.
-        host.listen(calicoctl % "profile TEST_GROUP member add node1")
-        host.listen(calicoctl % "profile TEST_GROUP member add node2")
+        host.execute(calicoctl % "profile TEST_GROUP member add node1")
+        host.execute(calicoctl % "profile TEST_GROUP member add node2")
 
         node1_pid = host.execute("docker inspect --format {{.State.Pid}} node1").stdout.rstrip()
         node2_pid = host.execute("docker inspect --format {{.State.Pid}} node2").stdout.rstrip()
 
-        ping = partial(host.listen, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
+        ping = partial(host.execute, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
         self.retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.

@@ -15,6 +15,8 @@ class DockerHost(object):
         pwd = sh.pwd().stdout.rstrip()
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
 
+        self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
+                                 self.name).stdout.rstrip()
         self.execute("while ! docker ps; do sleep 1; done && "
                    "docker load --input /code/calico-node.tar && "
                    "docker load --input /code/busybox.tar && "
@@ -24,11 +26,10 @@ class DockerHost(object):
         """
         Pass a command into a host container.
         """
+        stdin = ' '.join(["export ETCD_AUTHORITY=%s:2379;" % self.ip, command])
         if docker_host:
-            stdin = ' '.join(["DOCKER_HOST=localhost:2377", command])
-            return self.listen(stdin, **kwargs)
-        else:
-            return docker("exec", "-t", self.name, "bash", c=command, **kwargs)
+            stdin = ' '.join(["export DOCKER_HOST=localhost:2377;", stdin])
+        return self.listen(stdin, **kwargs)
 
     def listen(self, stdin, **kwargs):
         """
@@ -50,7 +51,6 @@ class DockerHost(object):
         """
         self.execute("docker load --input /code/etcd.tar")
 
-        host_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", self.name).stdout.rstrip()
         cmd = ("--name calico "
                "--advertise-client-urls http://%s:2379 "
                "--listen-client-urls http://0.0.0.0:2379 "
@@ -58,7 +58,7 @@ class DockerHost(object):
                "--listen-peer-urls http://0.0.0.0:2380 "
                "--initial-cluster-token etcd-cluster-2 "
                "--initial-cluster calico=http://%s:2380 "
-               "--initial-cluster-state new" % (host_ip, host_ip, host_ip))
+               "--initial-cluster-state new" % (self.ip, self.ip, self.ip))
         self.execute("docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s" % cmd)
 
     @classmethod
