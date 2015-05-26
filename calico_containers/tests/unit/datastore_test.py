@@ -48,6 +48,43 @@ EP_12 = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66",
                  if_name="eth0")
 EP_12.profile_id = "UNIT"
 
+# A complicated set of Rules JSON for testing serialization / deserialization.
+RULES_JSON = """
+{
+  "id": "PROF_GROUP1",
+  "inbound_rules": [
+    {
+      "action": "allow",
+      "src_tag": "PROF_GROUP1"
+    },
+    {
+      "action": "allow",
+      "src_net": "192.168.77.0/24"
+    },
+    {
+      "action": "allow",
+      "src_net": "192.168.0.0"
+    },
+    {
+      "protocol": "udp",
+      "src_tag": "SRC_TAG",
+      "src_ports": [10, 20, 30],
+      "src_net": "192.168.77.0/30",
+      "dst_tag": "DST_TAG",
+      "dst_ports": [20, 30, 40],
+      "dst_net": "1.2.3.4",
+      "icmp_type": 30,
+      "action": "deny"
+    }
+  ],
+  "outbound_rules": [
+    {
+      "action": "allow"
+    }
+  ]
+}"""
+
+
 class TestRule(unittest.TestCase):
 
     def test_create(self):
@@ -124,6 +161,40 @@ class TestRule(unittest.TestCase):
                      src_net=IPNetwork("10/8"))
         assert_equal("allow icmp type 8 from 10.0.0.0/8",
                      rule4.pprint())
+
+
+class TestRules(unittest.TestCase):
+
+    def test_rules(self):
+        """
+        Create a detailed set of rules, convert from and to json and compare
+        the results.
+        """
+        # Convert a JSON blob into a Rules object.
+        rules = Rules.from_json(RULES_JSON)
+
+        # Convert the Rules object to JSON and then back again.
+        new_json = rules.to_json()
+        new_rules = Rules.from_json(new_json)
+
+        # Compare the two rules objects.
+        assert_equal(rules.id, new_rules.id)
+        assert_equal(rules.inbound_rules,
+                     new_rules.inbound_rules)
+        assert_equal(rules.outbound_rules,
+                     new_rules.outbound_rules)
+
+        # Check the values of one of the inbound Rule objects.
+        assert_equal(len(rules.inbound_rules), 4)
+        inbound_rule = rules.inbound_rules[3]
+        assert_equal(inbound_rule["protocol"], "udp")
+        assert_equal(inbound_rule["src_tag"], "SRC_TAG")
+        assert_equal(inbound_rule["src_ports"], [10, 20,30])
+        assert_equal(inbound_rule["src_net"], IPNetwork("192.168.77.0/30"))
+        assert_equal(inbound_rule["dst_tag"], "DST_TAG")
+        assert_equal(inbound_rule["dst_net"], IPNetwork("1.2.3.4"))
+        assert_equal(inbound_rule["icmp_type"], 30)
+        assert_equal(inbound_rule["action"], "deny")
 
 
 class TestEndpoint(unittest.TestCase):
