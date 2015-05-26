@@ -20,9 +20,10 @@ the latest packages on a system running Ubuntu 14.04 with either OpenStack
 Icehouse or Juno. If you are upgrading an existing system, please see the
 :doc:`opens-upgrade` document instead for upgrade instructions.
 
-The instructions come in two sections: one for installing control nodes,
-and one for installing compute nodes. Before moving on to those
-sections, make sure you follow the **Common Steps** section.
+There are three sections to the install: installing etcd, upgrading control
+nodes to use Calico, and upgrading compute nodes to use Calico.  The
+**Common Steps** must be followed on each node before moving onto the specific
+instructions in those sections.
 
 Prerequisites
 -------------
@@ -110,37 +111,38 @@ Once that's done, update your package manager on each machine:
 
     sudo apt-get update
 
-Control Node Install
---------------------
+Etcd Install
+------------
 
-On a control node, perform the following steps:
+Calico requires an etcd database to operate - this may be installed on a single
+machine or as a cluster.
 
-1. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
-   will bring in Calico-specific updates to the OpenStack packages and
-   to ``dnsmasq``.
+These instructions cover installing a single node etcd database.  You may wish
+to co-locate this with your control node.  If you want to install a cluster,
+please get in touch with us and we'll be happy to help you through the process.
 
-2. Install the ``etcd`` packages:
+1. Install the ``etcd`` packages:
 
    ::
 
        sudo apt-get install etcd python-etcd
 
-3. Stop the etcd service:
+2. Stop the etcd service:
    ::
 
        sudo service etcd stop
 
-4. Delete any existing etcd database:
+3. Delete any existing etcd database:
    ::
 
        sudo rm -rf /var/lib/etcd/*
 
-5. Mount a RAM disk at /var/lib/etcd:
+4. Mount a RAM disk at /var/lib/etcd:
    ::
 
     sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
 
-6. Add the following to the bottom of ``/etc/fstab`` so that the RAM disk gets
+5. Add the following to the bottom of ``/etc/fstab`` so that the RAM disk gets
    reinstated at boot time:
 
    ::
@@ -148,7 +150,7 @@ On a control node, perform the following steps:
     tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
 
 
-7. Edit ``/etc/init/etcd.conf``:
+6. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
      substituting for ``<controller_fqdn>``, ``<controller_ip>``, and
@@ -167,19 +169,66 @@ On a control node, perform the following steps:
                           --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
                           --initial-cluster-state "new"
 
-8. Start the etcd service:
+7. Start the etcd service:
    ::
 
        sudo service etcd start
 
+Etcd Proxy Install
+------------------
 
-9. Install the ``calico-control`` package:
+Install an etcd proxy on every node running OpenStack services that isn't
+running the etcd database itself (both control and compute nodes).
+
+1. Install the ``etcd`` and ``python-etcd`` packages:
+
+   ::
+
+       sudo apt-get install etcd python-etcd
+
+2. Stop the etcd service:
+   ::
+
+       sudo service etcd stop
+
+3. Delete any existing etcd database:
+   ::
+
+        sudo rm -rf /var/lib/etcd/*
+
+4. Edit ``/etc/init/etcd.conf``:
+
+   - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
+     substituting for ``<etcd_fqdn>`` and ``<etcd_ip>`` appropriately:
+
+   ::
+
+       exec /usr/bin/etcd --proxy on                                             \
+                          --initial-cluster "<etcd_fqdn>=http://<etcd_ip>:2380"  \
+
+5. Start etcd service
+
+   ::
+
+       sudo service etcd start
+
+Control Node Install
+--------------------
+
+On each control node ensure etcd or an etcd proxy is installed, and then
+perform the following steps:
+
+1. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
+   will bring in Calico-specific updates to the OpenStack packages and
+   to ``dnsmasq``.
+
+2. Install the ``calico-control`` package:
 
    ::
 
        sudo apt-get install calico-control
 
-10. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
 
    -  Find the line beginning with ``type_drivers``, and change it to
       read ``type_drivers = local, flat``.
@@ -188,7 +237,7 @@ On a control node, perform the following steps:
    -  Find the line beginning with ``tenant_network_types``, and change
       it to read ``tenant_network_types = local``.
 
-11. Edit the ``/etc/neutron/neutron.conf`` file:
+4. Edit the ``/etc/neutron/neutron.conf`` file:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -196,12 +245,8 @@ On a control node, perform the following steps:
       DHCP agent to run on every compute node, which Calico requires
       because the networks on different compute nodes are not bridged
       together.
-   -  Find the line for the ``api_workers`` setting, uncomment it and
-      set its value to 0.
-   -  Find the line for the ``rpc_workers`` setting, uncomment it and
-      set its value to 0.
 
-12. Restart the Neutron server process:
+5. Restart the Neutron server process:
 
    ::
 
@@ -210,7 +255,8 @@ On a control node, perform the following steps:
 Compute Node Install
 --------------------
 
-On a compute node, perform the following steps:
+On each compute node ensure etcd or an etcd proxy is installed, and then
+perform the following steps:
 
 1. Make the changes to SELinux and QEMU config that are described in
    `this libvirt Wiki page <http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface)>`__,
@@ -296,40 +342,7 @@ On a compute node, perform the following steps:
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
 
-7. Install the ``etcd``, ``python-etcd`` packages:
-
-   ::
-
-       sudo apt-get install etcd python-etcd
-
-8. Stop the etcd service:
-   ::
-
-       sudo service etcd stop
-
-9. Delete any existing etcd database:
-   ::
-
-        sudo rm -rf /var/lib/etcd/*
-
-10. Edit ``/etc/init/etcd.conf``:
-
-   - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
-     substituting for ``<controller_fqdn>`` and ``<controller_ip>``
-     appropriately:
-
-   ::
-
-       exec /usr/bin/etcd --proxy on                                                         \
-                          --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
-
-11. Start etcd service
-
-   ::
-
-       sudo service etcd start
-
-12. Install the ``calico-compute`` package:
+7. Install the ``calico-compute`` package:
 
    ::
 
@@ -338,7 +351,7 @@ On a compute node, perform the following steps:
    This step may prompt you to save your IPTables rules to make them
    persistent on restart – hit yes.
 
-13. Configure BIRD. By default Calico assumes that you'll be deploying a
+8. Configure BIRD. By default Calico assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's
@@ -363,10 +376,10 @@ On a compute node, perform the following steps:
     configuration appropriately. You should consult the relevant
     documentation for your chosen BGP stack.
 
-14. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
+9. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
     supplied sample config at ``/etc/calico/felix.cfg.example``.
 
-15. Restart the Felix service with ``service calico-felix restart``.
+10. Restart the Felix service with ``service calico-felix restart``.
 
 Next Steps
 ----------
