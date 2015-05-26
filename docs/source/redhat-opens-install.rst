@@ -19,11 +19,11 @@ These instructions will take you through a first-time install of Calico.
 If you are upgrading an existing system, please see the :doc:`opens-upgrade`
 document instead for upgrade instructions.
 
-The instructions come in two sections: one for installing control nodes,
-and one for installing compute nodes. Before moving on to those
-sections, make sure you follow the **Common Steps** section, and if you
-want to create a combined controller and compute node, work through all
-three sections.
+There are three sections to the install: installing etcd, upgrading control
+nodes to use Calico, and upgrading compute nodes to use Calico.  Follow the
+**Common Steps** on each node before moving on to the specific instructions in
+the control and compute sections.  If you want to create a combined control
+and compute node, work through all three sections.
 
 .. warning:: Following the upgrade to use etcd as a data store, Calico
              currently only supports RHEL 7 and above.
@@ -77,58 +77,25 @@ Note: The priority setting in ``calico.repo`` is needed so that the
 Calico repository can install Calico-enhanced versions of some of the
 OpenStack Nova and Neutron packages.
 
-.. _control-node:
+.. _etcd-install:
 
-Control Node Install
---------------------
+Etcd Install
+------------
 
-On a control node, perform the following steps:
+Calico requires an etcd database to operate - this may be installed on a single
+machine or as a cluster.
 
-1. Delete all configured OpenStack state, in particular any instances,
-   routers, subnets and networks (in that order) created by the install
-   process referenced above. You can do this using the web dashboard or
-   at the command line.
+These instructions cover installing a single node etcd database.  You may wish
+to co-locate this with your control node.  If you want to install a cluster,
+please get in touch with us and we'll be happy to help you through the process.
 
-   .. hint:: The Admin and Project sections of the web dashboard both
-             have subsections for networks and routers. Some networks
-             may need to be deleted from the Admin section.
-
-   .. warning:: The Calico install will fail if incompatible state is
-                left around.
-
-2. Run ``yum update``. This will bring in Calico-specific updates to the
-   OpenStack packages and to ``dnsmasq``.
-
-3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
-
-   -  Find the ``type_drivers`` setting and change it to read
-      ``type_drivers = local, flat``.
-   -  Find the ``tenant_network_types`` setting and change it to read
-      ``tenant_network_types = local``.
-   -  Find the ``mechanism_drivers`` setting and change it to read
-      ``mechanism_drivers = calico``.
-
-4. Edit the ``/etc/neutron/neutron.conf`` file:
-
-   -  Find the line for the ``dhcp_agents_per_network`` setting,
-      uncomment it, and set its value to the number of compute nodes
-      that you will have (or any number larger than that). This allows a
-      DHCP agent to run on every compute node, which Calico requires
-      because the networks on different compute nodes are not bridged
-      together.
-   -  Find the lines for ``api_workers`` and ``rpc_workers``, uncomment
-      them and set them both to 0.
-
-5. Install and configure etcd. For these instructions we assume you're
-   configuring a single-node cluster on only one machine. If you plan to
-   deploy a multi-node cluster, please consult the `etcd clustering docs`_, and
-   skip to step 7.
+1. Install and configure etcd.
 
    - Download, unpack, and install the binary::
 
-        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
-        tar xvf etcd-v2.0.9-linux-amd64.tar.gz
-        cd etcd-v2.0.9-linux-amd64
+        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
+        tar xvf etcd-v2.0.11-linux-amd64.tar.gz
+        cd etcd-v2.0.11-linux-amd64
         mv etcd* /usr/local/bin/
 
    - Create an etcd user::
@@ -193,38 +160,143 @@ On a control node, perform the following steps:
            [Install]
            WantedBy=multi-user.target
 
-6. Launch etcd and set it to restart after a reboot::
+2. Launch etcd and set it to restart after a reboot::
 
         systemctl start etcd
         systemctl enable etcd
 
-7. Install dependencies for python-etcd::
+3. Install dependencies for python-etcd::
 
         yum groupinstall 'Development Tools'
         yum install python-devel libffi-devel openssl-devel
 
-8. Install python-etcd::
+4. Install python-etcd::
 
         curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
         tar xvf python-etcd.tar.gz
         cd python-etcd-master
         python setup.py install
 
-9. Install the ``calico-control`` package:
+Etcd Proxy Install
+------------------
+
+Install an etcd proxy on every node running OpenStack services that isn't
+running the etcd database itself (both control and compute nodes).
+
+1. Install and configure etcd as an etcd proxy.
+
+    - Download, unpack, and install the binary::
+
+        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
+        tar xvf etcd-v2.0.11-linux-amd64.tar.gz
+        cd etcd-v2.0.11-linux-amd64
+        mv etcd* /usr/local/bin/
+
+    - Create an etcd user::
+
+        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
+        chmod 700 /var/lib/etcd/
+
+    - Get etcd running by providing an init file.
+
+      Place the following in ``/etc/sysconfig/etcd``, replacing
+      ``<etcd_hostname>`` and ``<etcd_ip>`` with the values you
+      used in the :ref:`etcd-install` section.
+
+      ::
+
+           ETCD_PROXY=on
+           ETCD_DATA_DIR=/var/lib/etcd
+           ETCD_INITIAL_CLUSTER="<etcd_hostname>=http://<etcd_ip>:2380"
+
+      You then need to add the following file to
+      ``/usr/lib/systemd/system/etcd.service``::
+
+           [Unit]
+           Description=Etcd
+           After=syslog.target network.target
+
+           [Service]
+           User=root
+           ExecStart=/usr/local/bin/etcd
+           EnvironmentFile=-/etc/sysconfig/etcd
+           KillMode=process
+           Restart=always
+
+           [Install]
+           WantedBy=multi-user.target
+
+2. Launch etcd and set it to restart after a reboot::
+
+        systemctl start etcd
+        systemctl enable etcd
+
+
+3. Install dependencies for python-etcd::
+
+        yum groupinstall 'Development Tools'
+        yum install python-devel libffi-devel openssl-devel
+
+4. Install python-etcd::
+
+        curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        tar xvf python-etcd.tar.gz
+        cd python-etcd-master
+        python setup.py install
+
+.. _control-node:
+
+Control Node Install
+--------------------
+
+On each control node, perform the following steps:
+
+1. Delete all configured OpenStack state, in particular any instances,
+   routers, subnets and networks (in that order) created by the install
+   process referenced above. You can do this using the web dashboard or
+   at the command line.
+
+   .. hint:: The Admin and Project sections of the web dashboard both
+             have subsections for networks and routers. Some networks
+             may need to be deleted from the Admin section.
+
+   .. warning:: The Calico install will fail if incompatible state is
+                left around.
+
+2. Run ``yum update``. This will bring in Calico-specific updates to the
+   OpenStack packages and to ``dnsmasq``.
+
+3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+
+   -  Find the ``type_drivers`` setting and change it to read
+      ``type_drivers = local, flat``.
+   -  Find the ``tenant_network_types`` setting and change it to read
+      ``tenant_network_types = local``.
+   -  Find the ``mechanism_drivers`` setting and change it to read
+      ``mechanism_drivers = calico``.
+
+4. Edit the ``/etc/neutron/neutron.conf`` file:
+
+   -  Find the line for the ``dhcp_agents_per_network`` setting,
+      uncomment it, and set its value to the number of compute nodes
+      that you will have (or any number larger than that). This allows a
+      DHCP agent to run on every compute node, which Calico requires
+      because the networks on different compute nodes are not bridged
+      together.
+
+5. Install the ``calico-control`` package:
 
    ::
 
        yum install calico-control
 
-10. Restart the neutron server process:
+6. Restart the neutron server process:
     ``service neutron-server restart``.
-
-.. _etcd clustering docs: https://github.com/coreos/etcd/blob/master/Documentation/clustering.md
 
 Compute Node Install
 --------------------
 
-On a compute node, perform the following steps:
+On each compute node, perform the following steps:
 
 1. Make changes to SELinux and QEMU config to allow VM interfaces with
    ``type='ethernet'``  (`this
@@ -349,79 +421,13 @@ On a compute node, perform the following steps:
 10. Install the BIRD BGP client from EPEL:
     ``yum install -y bird bird6``
 
-11. If this node is not a controller, install and configure etcd as an etcd
-    proxy. These assume you followed the instructions in the
-    :ref:`control-node` section of this document for your contoller: if you
-    installed etcd yourself in some other manner, skip to step 12.
-
-    - Download, unpack, and install the binary::
-
-        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.9/etcd-v2.0.9-linux-amd64.tar.gz -o etcd-v2.0.9-linux-amd64.tar.gz
-        tar xvf etcd-v2.0.9-linux-amd64.tar.gz
-        cd etcd-v2.0.9-linux-amd64
-        mv etcd* /usr/local/bin/
-
-    - Create an etcd user::
-
-        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
-        chmod 700 /var/lib/etcd/
-
-    - Get etcd running by providing an init file.
-
-      Place the following in ``/etc/sysconfig/etcd``, replacing
-      ``<controller_hostname>`` and ``<controller_ip>`` with the values you
-      used in the :ref:`control-node` section.
-
-      ::
-
-           ETCD_PROXY=on
-           ETCD_DATA_DIR=/var/lib/etcd
-           ETCD_INITIAL_CLUSTER="<controller_hostname>=http://<controller_ip>:2380"
-
-      You then need to add the following file to
-      ``/usr/lib/systemd/system/etcd.service``::
-
-           [Unit]
-           Description=Etcd
-           After=syslog.target network.target
-
-           [Service]
-           User=root
-           ExecStart=/usr/local/bin/etcd
-           EnvironmentFile=-/etc/sysconfig/etcd
-           KillMode=process
-           Restart=always
-
-           [Install]
-           WantedBy=multi-user.target
-
-12. If this node is not a controller, launch etcd and set it to restart after a
-    reboot::
-
-        systemctl start etcd
-        systemctl enable etcd
-
-
-13. If this node is not also a controller, install dependencies for
-    python-etcd::
-
-        yum groupinstall 'Development Tools'
-        yum install python-devel libffi-devel openssl-devel
-
-14. If this node is not also a controller, install python-etcd::
-
-        curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
-        tar xvf python-etcd.tar.gz
-        cd python-etcd-master
-        python setup.py install
-
-14. Install the ``calico-compute`` package:
+11. Install the ``calico-compute`` package:
 
     ::
 
         yum install calico-compute
 
-15. Configure BIRD. Calico includes useful configuration scripts that
+12. Configure BIRD. Calico includes useful configuration scripts that
     will create BIRD config files for simple topologies -- either a
     peering between a single pair of compute nodes, or to a route
     reflector (to avoid the need for a full BGP mesh in networks with
@@ -467,11 +473,11 @@ On a compute node, perform the following steps:
          chkconfig bird on
          chkconfig bird6 on
 
-16. Create the ``/etc/calico/felix.cfg`` file by copying
+13. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
     used, but see :doc:`configuration` for more details.
 
-17. Restart the Felix service:
+14. Restart the Felix service:
 
        - run ``systemctl restart calico-felix``.
 
