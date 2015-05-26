@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.21-dev
+## 0.22-dev
+
+## 0.21
 
 - Support for running multiple neutron-server instances in OpenStack.
 - Support for running neutron-server API workers in OpenStack.
@@ -11,3 +13,9 @@
 - Felix no longer leaks memory when etcd directories it watches are deleted.
 - Fix error on port creation where the Mechanism Driver would create, delete,
   and then recreate the port in etcd.
+- Handle EtcdKeyNotFound from atomic delete methods
+- Handle etcd cluster ID changes on API actions
+- Fix ipsets cleanup to correctly iterate through stopping ipsets
+- Ensure that metadata is not blocked by over-restrictive rules on outbound
+  traffic
+- Updates and clarifications to documentation

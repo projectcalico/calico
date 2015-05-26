@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.20
+Version:        0.21
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,23 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue May 26 2015 Matt Dupre <matt@projectcalico.org> 0.21
+  - Support for running multiple neutron-server instances in OpenStack
+  - Support for running neutron-server API workers in OpenStack
+  - Calico Mechanism Driver now performs leader election to control state
+    resynchronization
+  - Extended data model to support multiple security profiles per endpoint
+  - Calico Mechanism Driver now attempts to delete empty etcd directories
+  - Felix no longer leaks memory when etcd directories it watches are deleted
+  - Fix error on port creation where the Mechanism Driver would create, delete,
+    and then recreate the port in etcd
+  - Handle EtcdKeyNotFound from atomic delete methods
+  - Handle etcd cluster ID changes on API actions
+  - Fix ipsets cleanup to correctly iterate through stopping ipsets
+  - Ensure that metadata is not blocked by over-restrictive rules on outbound
+    traffic
+  - Updates and clarifications to documentation
+
 * Mon May 18 2015 Matt Dupre <matt@projectcalico.org> 0.20
   - Felix graceful restart support
   - Refactoring and additional unit testing
