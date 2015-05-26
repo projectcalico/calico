@@ -180,7 +180,7 @@ Etcd Proxy Install
 Install an etcd proxy on every node running OpenStack services that isn't
 running the etcd database itself (both control and compute nodes).
 
-1. Install the ``etcd``, ``python-etcd`` packages:
+1. Install the ``etcd`` and ``python-etcd`` packages:
 
    ::
 
