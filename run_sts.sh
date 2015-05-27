@@ -18,8 +18,6 @@ docker exec -t host1 bash -c \
  docker load --input /code/nsenter.tar && \
  docker load --input /code/etcd.tar'
 
-docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/arg_parsing.sh'
-docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/profile_commands.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/unix_socket.sh'
 
 docker exec -t host1 bash -c 'docker rm -f $(docker ps -qa) ; \
