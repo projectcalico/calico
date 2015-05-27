@@ -204,6 +204,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         else:
             return False
 
+    def get_allowed_network_types(self, agent=None):
+        return ('local', 'flat')
+
+    def get_mappings(self, agent):
+        # We override this primarily to satisfy the ABC checker: this method
+        # never actually gets called because we also override
+        # check_segment_for_agent.
+        return agent['configurations'].get('interface_mappings', {})
+
     def _port_is_endpoint_port(self, port):
         # Return True if port is a VM port.
         if port['device_owner'].startswith('compute:'):
