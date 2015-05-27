@@ -4,6 +4,8 @@
 
 - Updated Mechanism driver to specify fixed MAC address for Calico tap
   interfaces.
+- Prevent the possibility of gevent context-switching during garbage collection
+  in Felix
 
 ## 0.21
 
