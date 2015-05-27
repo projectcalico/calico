@@ -44,49 +44,52 @@ be a part.  We understand that most current solutions use VLANs, but after
 studying the PCI requirements documents, we believe that Calico does meet those
 requirements and that nothing in the documents *mandates* the use of VLANs.
 
-"How Does Calico Maintain Saved State?"
+"How does Calico maintain saved state?"
 ---------------------------------------
-
-.. note:: Following the change to use etcd instead of message queues to
-          communicate between components, this document may now contain out of
-          date information. We will remedy this in the near future.
-
 State is saved in a few places in a Calico deployment, depending on
 whether it's global or local state.
 
-Local state is state that belongs on a single compute host (associated
-with a single running Felix instance). That state is actually entirely
-stored by the Linux kernel on that host: Felix doesn't store any of it
-internally. This makes Felix basically stateless, with the kernel acting
-as a backing data store on one side and the plugin/ACL manger as a data
-source on the other.
+Local state is state that belongs on a single compute host, associated with a
+single running Felix instance (things like kernel routes, tap devices
+etc.). Local state is entirely stored by the Linux kernel on the host, with
+Felix storing it only as a temporary mirror. This makes Felix effectively
+stateless, with the kernel acting as a backing data store on one side and
+`etcd` as a data source on the other.
 
-If Felix dies and returns, it learns current state from the kernel
-(things like kernel routes, tap devices etc.) at start up. It then asks
-the plugin for a full report of the state it should have, and updates
-the kernel to match. This approach has strong resiliency benefits, in
-that if Felix crashes you don't suddenly lose access to your VMs. As
-long as the Linux kernel is running, you've still got functionality.
+If Felix is restarted, it learns current local state by interrogating the
+kernel at start up. It then reads from ``etcd`` all the local state which it
+should have, and updates the kernel to match. This approach has strong
+resiliency benefits, in that if Felix restarts you don't suddenly lose access
+to your VMs or containers. As long as the Linux kernel is running, you've still
+got full functionality.
 
 The bulk of global state is mastered in whatever component hosts the
-plugin. In the case of OpenStack, this means a Neutron database. Our
-OpenStack plugin (more strictly a Neutron ML2 driver) queries the
-Neutron database to find out state about the entire deployment. That
-state is then reflected down to Felix and the ACL manager. In other
-orchestration systems, it may be stored in distributed databases, either
-owned directly by the plugin or by the orchestrator itself.
+plugin.
 
-The only other state storage in a Calico network is in the BGP sessions,
-which approximate a distributed database of routes. This isn't actually
-the master state (that's stored by the orchestrator), but it's the state
-that is updated by Calico in response to changes in the master state.
+- In the case of OpenStack, this means a Neutron database. Our OpenStack plugin
+  (more strictly a Neutron ML2 driver) queries the Neutron database to find out
+  state about the entire deployment. That state is then reflected to ``etcd``
+  and so to Felix.
+
+- In certain cases, ``etcd`` itself contains the master copy of the data. This
+  is because some Docker deployments have an ``etcd`` cluster that has the
+  required resiliency characteristics, used to store all system configuration -
+  and so ``etcd`` is configured so as to be a suitable store for critical data.
+
+- In other orchestration systems, it may be stored in distributed databases,
+  either owned directly by the plugin or by the orchestrator itself.
+
+The only other state storage in a Calico network is in the BGP sessions, which
+approximate a distributed database of routes. This BGP state is simply a
+replicated copy of the per-host routes configured by Felix based on the global
+state provided by the orchestrator.
 
 This makes the Calico design very simple, because we store very little
 state. All of our components can be shutdown and restarted without risk,
 because they resynchronize state as necessary. This makes modelling
 their behaviour extremely simple, reducing the complexity of bugs.
 
-"How Does Calico Interact with the Neutron API?"
+"How does Calico interact with the Neutron API?"
 ------------------------------------------------
 
 The :doc:`calico-neutron-api` document goes into extensive detail about how
