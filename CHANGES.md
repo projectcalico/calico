@@ -2,6 +2,9 @@
 
 ## 0.22-dev
 
+- Updated Mechanism driver to specify fixed MAC address for Calico tap
+  interfaces.
+
 ## 0.21
 
 - Support for running multiple neutron-server instances in OpenStack.
