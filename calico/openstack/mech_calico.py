@@ -31,11 +31,15 @@ from functools import wraps
 
 # OpenStack imports.
 from neutron.common import constants
-from neutron.openstack.common import log
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from neutron import context as ctx
 from neutron import manager
+
+try:  # Icehouse, Juno
+    from neutron.openstack.common import log
+except ImportError:  # Kilo
+    from oslo_log import log
 
 # Calico imports.
 import etcd
