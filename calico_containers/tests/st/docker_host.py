@@ -44,13 +44,15 @@ class DockerHost(object):
         """
         self.__class__.delete_container(self.name)
 
-    def start_etcd(self):
+    def start_etcd(self, restart=''):
         """
         Start etcd on this host. Not tested for multiple etcd nodes. Start etcd
         only after all hosts have been created.
         """
         self.execute("docker load --input /code/etcd.tar")
 
+        if restart:
+            restart = "--restart=" + restart
         cmd = ("--name calico "
                "--advertise-client-urls http://%s:2379 "
                "--listen-client-urls http://0.0.0.0:2379 "
@@ -59,7 +61,7 @@ class DockerHost(object):
                "--initial-cluster-token etcd-cluster-2 "
                "--initial-cluster calico=http://%s:2380 "
                "--initial-cluster-state new" % (self.ip, self.ip, self.ip))
-        self.execute("docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s" % cmd)
+        self.execute("docker run -d -p 2379:2379 %s quay.io/coreos/etcd:v2.0.10 %s" % (restart, cmd))
 
     @classmethod
     def delete_container(cls, name):
