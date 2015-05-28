@@ -665,7 +665,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         else:
             rules = {"outbound_rules": [etcd_rule],
                      "inbound_rules": []}
-        common.validate_rules(rules)
+        common.validate_rules("profile_id", rules)
 
 
 def _neutron_rule_from_dict(overrides):

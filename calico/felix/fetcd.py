@@ -481,7 +481,7 @@ def parse_if_endpoint(config, etcd_node):
 def parse_endpoint(config, endpoint_id, raw_json):
     endpoint = json_decoder.decode(raw_json)
     try:
-        common.validate_endpoint(config, endpoint)
+        common.validate_endpoint(config, endpoint_id, endpoint)
     except ValidationFailed as e:
         _log.warning("Validation failed for endpoint %s, treating as "
                      "missing: %s", endpoint_id, e.message)
@@ -507,9 +507,8 @@ def parse_if_rules(etcd_node):
 
 def parse_rules(profile_id, raw_json):
     rules = json_decoder.decode(raw_json)
-    rules["id"] = profile_id
     try:
-        common.validate_rules(rules)
+        common.validate_rules(profile_id, rules)
     except ValidationFailed:
         _log.exception("Validation failed for profile %s rules: %s",
                        profile_id, rules)
@@ -534,7 +533,7 @@ def parse_if_tags(etcd_node):
 def parse_tags(profile_id, raw_json):
     tags = json_decoder.decode(raw_json)
     try:
-        common.validate_tags(tags)
+        common.validate_tags(profile_id, tags)
     except ValidationFailed:
         _log.exception("Validation failed for profile %s tags : %s",
                        profile_id, tags)
