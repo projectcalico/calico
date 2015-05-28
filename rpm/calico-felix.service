@@ -9,6 +9,7 @@ ExecStartPre=/usr/bin/mkdir -p /var/run/calico
 ExecStart=/usr/bin/calico-felix --config-file=/etc/calico/felix.cfg
 KillMode=process
 Restart=always
+LimitNOFILE=32000
 
 [Install]
 WantedBy=multi-user.target
