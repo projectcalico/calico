@@ -123,7 +123,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         super(CalicoMechanismDriver, self).__init__(
             constants.AGENT_TYPE_DHCP,
             'tap',
-            {'port_filter': True})
+            {'port_filter': True,
+             'mac_address': '00:61:fe:ed:ca:fe'})
 
         # Initialize fields for the database object and transport.  We will
         # initialize these properly when we first need them.
