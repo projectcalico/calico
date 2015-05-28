@@ -427,46 +427,41 @@ On each compute node, perform the following steps:
 
         yum install calico-compute
 
-12. Configure BIRD. Calico includes useful configuration scripts that
-    will create BIRD config files for simple topologies -- either a
-    peering between a single pair of compute nodes, or to a route
-    reflector (to avoid the need for a full BGP mesh in networks with
-    more than two compute nodes). If your topology is more complex, please
-    consult the relevant documentation for your chosen BGP stack or ask
-    the mailing list if you have questions about how BGP relates to
-    Calico.
+12. Configure BIRD. By default Calico assumes that you'll be deploying a
+    route reflector to avoid the need for a full BGP mesh. To this end,
+    it includes useful configuration scripts that will prepare a BIRD
+    config file with a single peering to the route reflector. If that's
+    correct for your network, you can run either or both of the following
+    commands.
 
     For IPv4 connectivity between compute hosts:
 
     ::
 
-        /usr/bin/calico-gen-bird-conf.sh <compute_node_ipv4> <peer_ipv4> <bgp_as_number>
+        sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
 
     And/or for IPv6 connectivity between compute hosts:
 
     ::
 
-        /usr/bin/calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <peer_ipv6> <bgp_as_number>
+        sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
-    ``<compute_node_ipv4>`` and ``<compute_node_ipv6>`` are the IPv4/6
-    addresses of the compute host, used as next hops and router ids.
+    Note that you'll also need to configure your route reflector to allow
+    connections from the compute node as a route reflector client. If you are
+    using BIRD as a route reflector, follow the instructions in
+    :doc:`bird-rr-config`. If you are using another route reflector, refer to
+    the appropriate instructions to configure a client connection.
 
-    ``<peer_ipv4>`` and ``<peer_ipv6>`` are the IP address of your
-    single other compute node, or the route reflector as described
-    earlier.
+    If you *are* configuring a full BGP mesh you'll need to handle the BGP
+    configuration appropriately on each compute host.  The scripts above can be
+    used to generate a sample configuration for BIRD, by replacing the
+    ``<route_reflector_ip>`` with the IP of one other compute host -- this will
+    generate the configuration for a single peer connection, which you can
+    duplicate and update for each compute host in your mesh.
 
-    ``<bgp_as_number>`` is the BGP `AS
-    number <http://en.wikipedia.org/wiki/Autonomous_System_%28Internet%29>`__.
-    Unless your deployment needs to peer with other BGP routers, this
-    can be chosen arbitrarily.
+    Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
 
-   Note that you'll also need to configure your route reflector to allow
-   connections from the compute node as a route reflector client. This
-   configuration is outside the scope of this install document.
-
-   Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
-
-   ::
+    ::
 
          service bird restart
          service bird6 restart
