@@ -21,9 +21,6 @@ Test utilities.
 import logging
 import random
 
-from collections import namedtuple
-CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
-
 # Logger
 log = logging.getLogger(__name__)
 
