@@ -123,7 +123,6 @@ class ProfileRules(RefCountedActor):
         profile.
         """
         _log.debug("%s: Profile update: %s", self, profile)
-        assert profile is None or profile["id"] == self.id
         assert not self._dead, "Shouldn't receive updates after we're dead."
         self._pending_profile = profile
 

@@ -1,5 +1,7 @@
 # Changelog
 
+- Firewall input characters in profiles and tags.
+
 ## 0.22-dev
 
 - Updated Mechanism driver to specify fixed MAC address for Calico tap
