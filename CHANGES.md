@@ -6,6 +6,7 @@
   interfaces.
 - Prevent the possibility of gevent context-switching during garbage collection
   in Felix
+- Increase the number of file descriptors available to Felix
 
 ## 0.21
 

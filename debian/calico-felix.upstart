@@ -5,6 +5,8 @@ author "Project Calico Maintainers <maintainers@projectcalico.org>"
 start on stopped rc RUNLEVEL=[2345]
 stop on runlevel [!2345]
 
+limit nofile 32000 32000
+
 respawn
 
 chdir /var/run
