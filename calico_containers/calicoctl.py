@@ -57,12 +57,12 @@ from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
-from calico_containers.adapter.datastore import (ETCD_AUTHORITY_ENV,
-                                                 ETCD_AUTHORITY_DEFAULT,
-                                                 Rules,
-                                                 DataStoreError)
-from calico_containers.adapter.ipam import IPAMClient
-from calico_containers.adapter import netns
+from calico_containers.driver.datastore import (ETCD_AUTHORITY_ENV,
+                                                ETCD_AUTHORITY_DEFAULT,
+                                                Rules,
+                                                DataStoreError)
+from calico_containers.driver.ipam import IPAMClient
+from calico_containers.driver import netns
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 
@@ -304,7 +304,7 @@ def node(ip, node_image, ip6=""):
     sysctl("-w", "net.ipv6.conf.all.forwarding=1")
 
     try:
-        node_docker_client.remove_container("calico-node", force=True)
+        docker_client.remove_container("calico-node", force=True)
     except docker.errors.APIError as err:
         if err.response.status_code != 404:
             raise
@@ -342,8 +342,8 @@ def node(ip, node_image, ip6=""):
         network_mode="host",
         binds=binds)
 
-    _find_or_pull_node_image(node_image, node_docker_client)
-    container = node_docker_client.create_container(
+    _find_or_pull_node_image(node_image, docker_client)
+    container = docker_client.create_container(
         node_image,
         name="calico-node",
         detach=True,
@@ -354,7 +354,7 @@ def node(ip, node_image, ip6=""):
                  "/usr/share/docker/plugins"])
     cid = container["Id"]
 
-    node_docker_client.start(container)
+    docker_client.start(container)
 
     print "Calico node is running with id: %s" % cid
 

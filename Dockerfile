@@ -39,12 +39,12 @@ RUN curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.
     chmod +x confd
 
 # Install Powerstrip Calico Adapter dependencies.
-ADD calico_containers/adapter/requirements.txt /adapter/
-RUN pip install -r /adapter/requirements.txt
+ADD calico_containers/driver/requirements.txt /driver/
+RUN pip install -r /driver/requirements.txt
 
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's thing they're most likely to change.
 COPY node_filesystem /
 
-COPY calico_containers/adapter /calico_containers/adapter
+COPY calico_containers/driver /calico_containers/driver
 COPY calico_containers/__init__.py /calico_containers/

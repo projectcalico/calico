@@ -1,0 +1,4 @@
+netaddr==0.7.14
+sh==1.11
+flask
+# python-etcd is installed via apt in the Dockerfile.

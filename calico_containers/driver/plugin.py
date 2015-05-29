@@ -5,8 +5,8 @@ from subprocess import check_call
 
 from netaddr import IPAddress, IPNetwork
 
-from calico_containers.adapter.datastore import IF_PREFIX, Endpoint
-from calico_containers.adapter.ipam import SequentialAssignment, IPAMClient
+from datastore import IF_PREFIX, Endpoint
+from ipam import SequentialAssignment, IPAMClient
 
 app = Flask(__name__)
 hostname = socket.gethostname()

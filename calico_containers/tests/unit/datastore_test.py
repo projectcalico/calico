@@ -2,7 +2,7 @@ __author__ = 'spike@projectcalico.org'
 
 
 from mock import patch, Mock, call
-from calico_containers.adapter.datastore import (DatastoreClient,
+from calico_containers.driver.datastore import (DatastoreClient,
                                                  Rule,
                                                  Profile,
                                                  Rules,
@@ -289,8 +289,8 @@ class TestEndpoint(unittest.TestCase):
 
 class TestDatastoreClient(unittest.TestCase):
 
-    @patch("calico_containers.adapter.datastore.os.getenv", autospec=True)
-    @patch("calico_containers.adapter.datastore.etcd.Client", autospec=True)
+    @patch("calico_containers.driver.datastore.os.getenv", autospec=True)
+    @patch("calico_containers.driver.datastore.etcd.Client", autospec=True)
     def setUp(self, m_etcd_client, m_getenv):
         m_getenv.return_value = "127.0.0.2:4002"
         self.etcd_client = Mock(spec=EtcdClient)
