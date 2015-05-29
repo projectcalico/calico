@@ -2,31 +2,29 @@
 router id {{getenv "IP"}};
 log "/var/log/calico/bird.log" all;
 
-filter calico_pools {
-{{if ls "/ipam"}}  {{/* Check that there are entries */}}
-{{range gets "/ipam/v4/pool/*"}}
-    if ( net ~ {{.Value}} ) then {
-        accept;
-    }
-{{end}}
-{{end}}
-    reject;
+filter calico_pools { {{/* Check the ipam dir is not empty before enumerating over pool CIDRs */}}
+{{if ls "/ipam"}}{{range gets "/ipam/v4/pool/*"}}
+  if ( net ~ {{.Value}} ) then {
+    accept;
+  }
+{{end}}{{end}}
+  reject;
 }
 
 # Configure synchronization between routing tables and kernel.
 protocol kernel {
-  learn;          # Learn all alien routes from the kernel
-  persist;        # Don't remove routes on bird shutdown
-  scan time 2;    # Scan kernel routing table every 2 seconds
+  learn;             # Learn all alien routes from the kernel
+  persist;           # Don't remove routes on bird shutdown
+  scan time 2;       # Scan kernel routing table every 2 seconds
   import all;
   device routes;
-  export all;     # Default is export none
-
-  # Turn on graceful restart to reduce potential flaps in routes when reloading
-  # BIRD configuration.  With a full automatic mesh, there is no way to prevent
-  # BGP from flapping since multiple nodes update their BGP configuration at
-  # the same time, GR is not guaranteed to work correctly in this scenario.
-  graceful restart;
+  export all;        # Default is export none
+  graceful restart;  # Turn on graceful restart to reduce potential flaps in
+                     # routes when reloading BIRD configuration.  With a full
+                     # automatic mesh, there is no way to prevent BGP from
+                     # flapping since multiple nodes update their BGP
+                     # configuration at the same time, GR is not guaranteed to
+                     # work correctly in this scenario.
 }
 
 # Watch interface up/down events.
@@ -35,8 +33,8 @@ protocol device {
 }
 
 protocol direct {
-   debug all;
-   interface -"cali*", "*"; # Exclude cali* but include everything else.
+  debug all;
+  interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
 # Template for all BGP clients
@@ -53,27 +51,23 @@ template bgp bgp_template {
                      # local address as nexthop
   source address {{getenv "IP"}};  # The local address we use for the TCP connection
   add paths on;
-
-  # See comment in kernel section about graceful restart.
-  graceful restart;
+  graceful restart;  # See comment in kernel section about graceful restart.
 }
 
 {{if ls "/config/bgp_peer_rr_v4"}}
-# Peer with configured neighbors
-{{range gets "/config/bgp_peer_rr_v4/*"}}
+# Peering with configured neighbors.
+{{range gets "/config/bgp_peer_rr_v4/*"}}{{$nums := split .Value "."}}{{$id := join $nums "_"}}
 # For peer {{.Value}}
-protocol bgp from bgp_template {
+protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-
 }
 {{end}}
 {{else if ls "/host"}}   {{/* Check that there are entries */}}
-# Peer with all neighbours
-{{range gets "/host/*/bird_ip"}}
-# For peer {{.Key}} {{if eq .Value (getenv "IP") }}
-# Skipping ourselves ({{getenv "IP"}}) {{else}}
-protocol bgp from bgp_template {
+# Peering with all neighbours (mesh).
+{{range gets "/host/*/bird_ip"}}{{$nums := split .Value "."}}{{$id := join $nums "_"}}
+# For peer {{.Key}}
+{{if eq .Value (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
+{{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
 }
-{{end}}{{end}}
-{{end}}
+{{end}}{{end}}{{end}}

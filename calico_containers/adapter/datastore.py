@@ -85,14 +85,27 @@ class Rule(dict):
         super(Rule, self).__setitem__(key, value)
 
     def to_json(self):
+        """
+        Convert the Rule object to a JSON string.
 
+        :return:  A JSON string representation of this object.
+        """
+        return json.dumps(self.to_json_dict())
+
+    def to_json_dict(self):
+        """
+        Convert the Rule object to a dict that can be directly converted to
+        JSON.
+
+        :return: A dict containing valid JSON types.
+        """
         # Convert IPNetworks to strings
         json_dict = self.copy()
         if "dst_net" in json_dict:
             json_dict["dst_net"] = str(json_dict["dst_net"])
         if "src_net" in json_dict:
             json_dict["src_net"] = str(json_dict["src_net"])
-        return json.dumps(json_dict)
+        return json_dict
 
     def pprint(self):
         """Human readable description."""
@@ -130,10 +143,26 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
     """
 
     def to_json(self):
-        return json.dumps(self._asdict())
+        """
+        Convert the Rules object to a JSON string.
+
+        :return:  A JSON string representation of this object.
+        """
+        json_dict = self._asdict()
+        rules = json_dict["inbound_rules"]
+        json_dict["inbound_rules"] = [rule.to_json_dict() for rule in rules]
+        rules = json_dict["outbound_rules"]
+        json_dict["outbound_rules"] = [rule.to_json_dict() for rule in rules]
+        return json.dumps(json_dict)
 
     @classmethod
     def from_json(cls, json_str):
+        """
+        Create a Rules object from a JSON string.
+
+        :param json_str: A JSON string representation of a Rules object.
+        :return: A Rules object.
+        """
         json_dict = json.loads(json_str)
         inbound_rules = []
         for rule in json_dict["inbound_rules"]:
