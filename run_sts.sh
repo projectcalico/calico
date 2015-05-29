@@ -10,7 +10,7 @@ nosetests calico_containers/tests/st
 
 # Run the STs. Need to run from the /code directory since the tests expect
 # to be run from the root of the codebase.
-docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
+docker run --privileged -v `pwd`/calico_containers:/code/calico_containers --name host1 -tid jpetazzo/dind
 docker exec -t host1 bash -c \
  'while ! docker ps; do sleep 1; done && \
  docker load --input /code/calico-node.tar && \
