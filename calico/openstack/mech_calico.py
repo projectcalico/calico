@@ -211,7 +211,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # We override this primarily to satisfy the ABC checker: this method
         # never actually gets called because we also override
         # check_segment_for_agent.
-        return agent['configurations'].get('interface_mappings', {})
+        assert False
 
     def _port_is_endpoint_port(self, port):
         # Return True if port is a VM port.
