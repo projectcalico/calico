@@ -18,9 +18,9 @@ class DockerHost(object):
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
 
         self.execute("while ! docker ps; do sleep 1; done && "
-                     "docker load --input /code/calico-node.tar && "
-                     "docker load --input /code/busybox.tar && "
-                     "docker load --input /code/nsenter.tar")
+                     "docker load --input /code/calico_containers/calico-node.tar && "
+                     "docker load --input /code/calico_containers/busybox.tar && "
+                     "docker load --input /code/calico_containers/nsenter.tar")
 
     def execute(self, command, docker_host=False, **kwargs):
         """

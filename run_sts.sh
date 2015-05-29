@@ -13,9 +13,9 @@ nosetests calico_containers/tests/st
 docker run --privileged -v `pwd`:/code --name host1 -tid jpetazzo/dind
 docker exec -t host1 bash -c \
  'while ! docker ps; do sleep 1; done && \
- docker load --input /code/calico-node.tar && \
- docker load --input /code/busybox.tar && \
- docker load --input /code/nsenter.tar'
+ docker load --input /code/calico_containers/calico-node.tar && \
+ docker load --input /code/calico_containers/busybox.tar && \
+ docker load --input /code/calico_containers/nsenter.tar'
 
 # docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/mainline.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/add_container.sh'
