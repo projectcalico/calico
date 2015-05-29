@@ -11,7 +11,6 @@ class TestMainline(TestBase):
         """
         host = DockerHost('host')
 
-        # etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
         etcd_auth = "ETCD_AUTHORITY=%s:2379" % self.ip
         calicoctl = etcd_auth + " /code/dist/calicoctl %s"
         calico_port = "DOCKER_HOST=localhost:2377"
