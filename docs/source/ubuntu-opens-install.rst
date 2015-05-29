@@ -46,7 +46,7 @@ If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
 `Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_preface.html>`__ /
-`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/ch_preface.html>`__.
+`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/ch_preface.html>`__/
 `Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/ch_preface.html>`__.
 
 
@@ -64,7 +64,7 @@ Add the Calico PPA.
     sudo apt-add-repository ppa:project-calico/<release>
 
 
-Where ``<release>`` is icehouse, juno or kilo
+Where ``<release>`` is icehouse, juno or kilo.
 
 Edit ``/etc/apt/preferences`` to add the following lines, whose effect
 is to prefer Calico-provided packages for Nova and Neutron even if later
