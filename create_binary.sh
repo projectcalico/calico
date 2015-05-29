@@ -28,8 +28,5 @@ docker run -v `pwd`/calico_containers:/code/calico_containers \
  docopt-completion --manual-bash dist/calicoctl
 docker rm -f docopt || true
 
-
-mv calicoctl.sh dist
-
 echo "Build output is in dist/"
 echo "Copy dist/calicoctl.sh to /etc/bash_completion.d/ to get bash completion"
