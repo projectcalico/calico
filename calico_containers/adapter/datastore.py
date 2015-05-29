@@ -179,24 +179,39 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
 
 class Endpoint(object):
 
-    def __init__(self, ep_id, state, mac, if_name):
-        self.ep_id = ep_id
+    def __init__(self, hostname, orchestrator_id, workload_id, endpoint_id,
+                 state, mac):
+        self.hostname = hostname
+        self.orchestrator_id = orchestrator_id
+        self.workload_id = workload_id
+        self.ep_id = endpoint_id
         self.state = state
         self.mac = mac
-        self.if_name = if_name
 
-        self.profile_id = None
         self.ipv4_nets = set()
         self.ipv6_nets = set()
         self.ipv4_gateway = None
         self.ipv6_gateway = None
 
+        self.if_name = None
+        self.profile_ids = []
+        self._json = None
+
     def to_json(self):
+        """
+        Return a JSON representation of this Endpoint.  Note that if this
+        Endpoint was parsed from JSON and has not been altered, the JSON
+        returned will be identical.
+        :return: A JSON string.
+        """
+        if self._json:
+            return self._json
+
         json_dict = {"state": self.state,
                      "name": IF_PREFIX + self.ep_id[:11],
                      "mac": self.mac,
                      "container:if_name": self.if_name,
-                     "profile_id": self.profile_id,
+                     "profile_ids": self.profile_ids,
                      "ipv4_nets": sorted([str(net) for net in self.ipv4_nets]),
                      "ipv6_nets": sorted([str(net) for net in self.ipv6_nets]),
                      "ipv4_gateway": str(self.ipv4_gateway) if
@@ -206,19 +221,28 @@ class Endpoint(object):
         return json.dumps(json_dict)
 
     @classmethod
-    def from_json(cls, ep_id, json_str):
+    def from_json(cls, endpoint_key, json_str):
+        """
+        Create an Endpoint from the endpoint raw JSON and the endpoint key.
+
+        :param endpoint_key: The endpoint key (the etcd path to the endpoint)
+        :param json_str: The raw endpoint JSON data.
+        :return: An Endpoint object, or None if the endpoint_key does not
+        represent and Endpoint.
+        """
+        # Extract the IDs from the key
+        packed = endpoint_key.split("/")
+        if len(packed) != 10:
+            return None
+
+        # TODO Should really check key format here.
+        (_, _, _, _, hostname, _,
+         orchestrator_id, workload_id, _, endpoint_id) = packed
+
         json_dict = json.loads(json_str)
+        ep = cls(hostname, orchestrator_id, workload_id, endpoint_id,
+                 json_dict["state"], json_dict["mac"])
 
-        # If there is no container if_name specified, assume the default
-        # VETH_NAME.  For containers created prior to this information being
-        # stored, it will be possible to restart the containers, but the
-        # interface may be named differently.
-        if_name = json_dict.get("container:if_name", VETH_NAME)
-
-        ep = cls(ep_id=ep_id,
-                 state=json_dict["state"],
-                 mac=json_dict["mac"],
-                 if_name= if_name)
         for net in json_dict["ipv4_nets"]:
             ep.ipv4_nets.add(IPNetwork(net))
         for net in json_dict["ipv6_nets"]:
@@ -229,7 +253,16 @@ class Endpoint(object):
         ipv6_gw = json_dict.get("ipv6_gateway")
         if ipv6_gw:
             ep.ipv6_gateway = IPAddress(ipv6_gw)
-        ep.profile_id = json_dict["profile_id"]
+
+        # Version controlled fields
+        profile_id = json_dict.get("profile_id", None)
+        ep.profile_ids = [profile_id] if profile_id else \
+                         json_dict.get("profile_ids", [])
+        ep.if_name = json_dict.get("container:if_name", VETH_NAME)
+
+        # Store the JSON representation of this Endpoint.
+        ep._json = json_str
+
         return ep
 
     def __eq__(self, other):
@@ -239,7 +272,7 @@ class Endpoint(object):
                 self.state == other.state and
                 self.if_name == other.if_name and
                 self.mac == other.mac and
-                self.profile_id == other.profile_id and
+                self.profile_ids == other.profile_ids and
                 self.ipv4_nets == other.ipv4_nets and
                 self.ipv6_nets == other.ipv6_nets and
                 self.ipv4_gateway == other.ipv4_gateway and
@@ -250,6 +283,19 @@ class Endpoint(object):
         if result is NotImplemented:
             return result
         return not result
+
+    def __setattr__(self, name, value):
+        """
+        Set an attribute in this class.  This sets the value and wipes out the
+        stored JSON data representing this class.  This ensures that if this
+        Endpoint is unchanged it will return the same JSON data used to create
+        it, but if any field is altered the JSON will be recalculated.
+        :param name:  The attribute name.
+        :param value:  The attribute value.
+        :return: nothing.
+        """
+        self.__dict__["_json"] = None
+        self.__dict__["name"] = value
 
     def copy(self):
         return copy.deepcopy(self)
@@ -641,12 +687,9 @@ class DatastoreClient(object):
             return members
 
         for child in endpoints.leaves:
-            packed = child.key.split("/")
-            if len(packed) == 10:
-                ep_id = packed[-1]
-                ep = Endpoint.from_json(ep_id, child.value)
-                if ep.profile_id == name:
-                    members.append(ep.ep_id)
+            ep = Endpoint.from_json(child.key, child.value)
+            if ep and name in ep.profile_ids:
+                members.append(ep.ep_id)
         return members
 
     @handle_errors
@@ -668,12 +711,9 @@ class DatastoreClient(object):
             endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
                                               recursive=True).leaves
             for child in endpoints:
-                packed = child.key.split("/")
-                if len(packed) == 10:
-                    (_, _, _, _, host, _, ctype, cid, _, ep_id) = packed
-                    ep = Endpoint.from_json(ep_id, child.value)
-                    if ep.profile_id == profile_name:
-                        eps[host][ctype][cid][ep_id] = ep
+                ep = Endpoint.from_json(child.key, child.value)
+                if ep and profile_name in ep.profile_ids:
+                    eps[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.ep_id] = ep
         except EtcdKeyNotFound:
             pass
 
@@ -702,35 +742,72 @@ class DatastoreClient(object):
         self.etcd_client.write(rules_path, profile.rules.to_json())
 
     @handle_errors
-    def add_workload_to_profile(self, hostname, profile_name, container_id):
+    def append_profiles_to_endpoint(self, endpoint_id, profile_names):
         """
+        Append a list of profiles to the endpoint.  This assumes there is a
+        single endpoint per container.
+
+        Raises ProfileAlreadyInEndpoint if any of the profiles are already
+        configured in the endpoint profile list.
 
         :param hostname: The host the workload is on.
-        :param profile_name: The profile to add the workload to.
+        :param profile_names: The profiles to append to the endpoint profile
+        list.
         :param container_id: The Docker container ID of the workload.
         :return: None.
         """
-        endpoint_id = self.get_ep_id_from_cont(hostname, container_id)
-
-        # Change the profile on the endpoint.
-        ep = self.get_endpoint(hostname, container_id, endpoint_id)
-        ep.profile_id = profile_name
-        self.set_endpoint(hostname, container_id, ep)
+        # Change the profiles on the endpoint.  Check that we are not adding a
+        # duplicate entry, and perform an update to ensure atomicity.
+        old_ep = self.get_endpoint_from_id(endpoint_id)
+        new_ep = old_ep.copy()
+        for profile_name in new_ep.profile_ids:
+            if profile_name in profile_names:
+                raise ProfileAlreadyInEndpoint(profile_name)
+        new_ep.profile_ids += profile_names
+        self.update_endpoint(old_ep, new_ep)
 
     @handle_errors
-    def remove_workload_from_profile(self, hostname, container_id):
+    def set_profiles_on_endpoint(self, endpoint_id, profile_names):
         """
+        Set a list of profiles on the endpoint.  This assumes there is a single
+        endpoint per container.
+
+        :param hostname: The host the workload is on.
+        :param profile_names: The profiles to set for the endpoint profile
+        list.
+        :param container_id: The Docker container ID of the workload.
+        :return: None.
+        """
+        # Set the profiles on the endpoint.
+        old_ep = self.get_endpoint_from_id(endpoint_id)
+        new_ep = old_ep.copy()
+        new_ep.profile_ids = profile_names
+        self.update_endpoint(old_ep, new_ep)
+
+    @handle_errors
+    def remove_profiles_from_endpoint(self, endpoint_id, profile_names)
+        """
+        Remove a profiles from the endpoint profile list.  This assumes there
+        is a single endpoint per container.
+
+        Raises ProfileNotInEndpoint if any of the profiles are not configured
+        in the endpoint profile list.
 
         :param hostname: The name of the host the container is on.
+        :param profile_names: The profiles to remove from the endpoint profile
+        list.
         :param container_id: The Docker container ID.
         :return: None.
         """
-        endpoint_id = self.get_ep_id_from_cont(hostname, container_id)
-
         # Change the profile on the endpoint.
-        ep = self.get_endpoint(hostname, container_id, endpoint_id)
-        ep.profile_id = None
-        self.set_endpoint(hostname, container_id, ep)
+        old_ep = self.get_endpoint_from_id(endpoint_id)
+        new_ep = old_ep.copy()
+        for profile_name in profile_names:
+            try:
+                new_ep.profile_ids.remove(profile_name)
+            except ValueError:
+                raise ProfileNotInEndpoint(profile_name)
+        self.update_endpoint(old_ep, new_ep)
 
     @handle_errors
     def get_ep_id_from_cont(self, hostname, container_id):
@@ -774,7 +851,7 @@ class DatastoreClient(object):
                                    "endpoint_id": endpoint_id}
         try:
             ep_json = self.etcd_client.read(ep_path).value
-            ep = Endpoint.from_json(endpoint_id, ep_json)
+            ep = Endpoint.from_json(ep_path, ep_json)
             return ep
         except EtcdKeyNotFound:
             raise KeyError("Endpoint %s not found" % ep_path)
@@ -794,24 +871,22 @@ class DatastoreClient(object):
         self.etcd_client.write(ep_path, endpoint.to_json())
 
     @handle_errors
-    def update_endpoint(self, hostname, container_id,
-                        old_endpoint, new_endpoint):
+    def update_endpoint(self, old_endpoint, new_endpoint):
         """
         Update a single endpoint object to the datastore. Fails if the
-        old_endpoint that's passed in doesn't match what's in the datastore.
+        old_endpoint_raw that's passed in doesn't match the raw data that is
+        in the datastore.
         Example usage:
             old_endpoint = datastore.get_endpoint(...)
             new_endpoint = old_endpoint.copy()
             # modify new endpoint fields
-            datastore.update_endpoint(..., old_endpoint, new_endpoint)
+            datastore.update_endpoint(old_endpoint, new_endpoint)
 
-        :param hostname: The hostname for the Docker hosting this container.
-        :param container_id: The Docker container ID.
         :param old_endpoint: The existing endpoint to update.
         :param new_endpoint: The Endpoint to add to the container.
         """
-        ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                   "container_id": container_id,
+        ep_path = ENDPOINT_PATH % {"hostname": new_endpoint.hostname,
+                                   "container_id": new_endpoint.workload_id,
                                    "endpoint_id": new_endpoint.ep_id}
         self.etcd_client.write(ep_path,
                                new_endpoint.to_json(),
@@ -838,10 +913,26 @@ class DatastoreClient(object):
         # Extract all of the endpoints.
         eps = []
         for endpoint in endpoints:
-            (_, _, _, _, _, _, _, _, _, endpoint_id) = \
-                                                 endpoint.key.split("/", 9)
-            eps.append(Endpoint.from_json(endpoint_id, endpoint.value))
+            eps.append(Endpoint.from_json(endpoint.key, endpoint.value))
         return eps
+
+    @handle_errors
+    def get_endpoint_from_id(self, endpoint_id):
+        """
+        Get the endpoint specified by the endpoint id.
+
+        :param endpoint_id: The endpoint ID.
+        :return:  a tuple of: (raw json, Endpoint)
+        """
+        leaves = self.etcd_client.read(HOSTS_PATH).leaves
+
+        # Extract all of the endpoints.
+        for leaf in leaves:
+            ep = Endpoint.from_json(leaf.key, leaf.value)
+            if ep and ep.ep_id == endpoint_id:
+                return ep
+        raise KeyError("Endpoint with ID %s was not found." %
+                       endpoint_id)
 
     @handle_errors
     def get_hosts(self):
@@ -860,16 +951,15 @@ class DatastoreClient(object):
             etcd_hosts = self.etcd_client.read(HOSTS_PATH,
                                                recursive=True).leaves
             for child in etcd_hosts:
-                packed = child.key.split("/")
-                if 10 > len(packed) > 5:
-                    (_, _, _, _, host, _) = packed[0:6]
-                    if not hosts[host]:
-                        hosts[host] = Vividict()
-                elif len(packed) == 10:
-                    (_, _, _, _, host, _, container_type, container_id, _,
-                     endpoint_id) = packed
-                    ep = Endpoint.from_json(endpoint_id, child.value)
-                    hosts[host][container_type][container_id][endpoint_id] = ep
+                ep = Endpoint.from_json(child.key, child.value)
+                if ep:
+                    hosts[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.ep_id] = ep
+                else:
+                    packed = child.key.split("/")
+                    if 10 > len(packed) > 5:
+                        (_, _, _, _, host, _) = packed[0:6]
+                        if not hosts[host]:
+                            hosts[host] = Vividict()
         except EtcdKeyNotFound:
             pass
 
@@ -950,3 +1040,21 @@ class DataStoreError(Exception):
     General Datastore exception.
     """
     pass
+
+
+class ProfileNotInEndpoint(Exception):
+    """
+    Attempting to remove a profile is not in the container endpoint profile
+    list.
+    """
+    def __init__(self, profile_name):
+        self.profile_name = profile_name
+
+
+class ProfileAlreadyInEndpoint(Exception):
+    """
+    Attempting to append a profile that is already in the container endpoint
+    profile list.
+    """
+    def __init__(self, profile_name):
+        self.profile_name = profile_name

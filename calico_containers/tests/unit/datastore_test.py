@@ -205,12 +205,12 @@ class TestEndpoint(unittest.TestCase):
         """
         endpoint1 = Endpoint("aabbccddeeff112233",
                              "active",
-                             "11-22-33-44-55-66",
-                             if_name="eth0")
+                             "11-22-33-44-55-66")
         assert_equal(endpoint1.ep_id, "aabbccddeeff112233")
         assert_equal(endpoint1.state, "active")
         assert_equal(endpoint1.mac, "11-22-33-44-55-66")
-        assert_equal(endpoint1.profile_id, None)
+        assert_equal(endpoint1.profile_ids, [])  # Defaulted
+        assert_equal(endpoint1.if_name, "eth1")  # Defaulted
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
@@ -222,12 +222,24 @@ class TestEndpoint(unittest.TestCase):
                     "ipv6_gateway": None}
         assert_dict_equal(json.loads(endpoint1.to_json()), expected)
 
-        endpoint1.profile_id = "TEST12"
+        # Explicitly set a profile_id and some gateways.
+        endpoint1._profile_id = "TEST12"   # Internal field value
         endpoint1.ipv4_nets.add(IPNetwork("192.168.1.23/32"))
         endpoint1.ipv4_gateway = IPAddress("192.168.1.1")
         expected["profile_id"] = "TEST12"
         expected["ipv4_nets"] = ["192.168.1.23/32"]
         expected["ipv4_gateway"] = "192.168.1.1"
+        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
+
+        # Now explicitly set a profile_ids list.
+        endpoint1.profile_ids = ["TEST23", "TEST24"]
+        del(expected["profile_id"])
+        expected["profile_id"] = ["TEST23", "TEST24"]
+        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
+
+        # Now explicitly set an interface name.
+        endpoint1.if_name = "new_interface"
+        expected["container:if_name"] = "new_interface"
         assert_dict_equal(json.loads(endpoint1.to_json()), expected)
 
     def test_from_json(self):
@@ -261,7 +273,7 @@ class TestEndpoint(unittest.TestCase):
         assert_equal(endpoint.state, endpoint2.state)
         assert_equal(endpoint.ep_id, endpoint2.ep_id)
         assert_equal(endpoint.mac, endpoint2.mac)
-        assert_equal(endpoint.profile_id, endpoint2.profile_id)
+        assert_equal(endpoint.profile_ids, endpoint2.profile_ids)
         assert_equal(endpoint.ipv4_gateway, endpoint2.ipv4_gateway)
         assert_equal(endpoint.ipv6_gateway, endpoint2.ipv6_gateway)
         assert_set_equal(endpoint.ipv4_nets, endpoint2.ipv4_nets)
