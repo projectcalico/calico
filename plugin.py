@@ -11,15 +11,14 @@ from calico_containers.adapter.ipam import SequentialAssignment, IPAMClient
 app = Flask(__name__)
 hostname = socket.gethostname()
 client = IPAMClient()
-#TODO - stop responding to GETs
 
 
-@app.route('/Plugin.Activate', methods=['GET', 'POST'])
+@app.route('/Plugin.Activate', methods=['POST'])
 def activate():
     return jsonify({"Implements": ["NetworkDriver"]})
 
 
-@app.route('/NetworkDriver.CreateNetwork', methods=['GET', 'POST'])
+@app.route('/NetworkDriver.CreateNetwork', methods=['POST'])
 def create_network():
     json_data = request.get_json(force=True) # TODO - what if JSON can't be parsed
 
@@ -29,20 +28,18 @@ def create_network():
     return jsonify({})
 
 
-@app.route('/NetworkDriver.DeleteNetwork', methods=['GET', 'POST'])
+@app.route('/NetworkDriver.DeleteNetwork', methods=['POST'])
 def delete_network():
-    # TODO - untested
     json_data = request.get_json(force=True)
 
     # Remove the network
     client.remove_profile(json_data["NetworkID"])
 
     #TODO - What if the profile has endpoints?
-
     return jsonify({})
 
 
-@app.route('/NetworkDriver.CreateEndpoint', methods=['GET', 'POST'])
+@app.route('/NetworkDriver.CreateEndpoint', methods=['POST'])
 def create_endpoint():
     json_data = request.get_json(force=True)
     ep_id = json_data["EndpointID"]
@@ -59,6 +56,7 @@ def create_endpoint():
         ip = IPNetwork(ip)
         # TODO - Mac. Create one, use a fixed one or what? What does
         # libnetwork do with it?
+
         next_hop = client.get_default_next_hops(hostname)[ip.version]
         container_id = "undefined"  # Always used a fixed value.
         mac = "11:22:33:44:55:66"
@@ -68,7 +66,8 @@ def create_endpoint():
         # Create the veth and set the host name to be up.
         check_call("ip link add %s type veth peer name %s" % (iface, iface_tmp),
                    shell=True)
-        check_call("ip link set %s up" % iface, shell=True)
+        check_call("ip link set %s up" % iface, shell=True) # at least get
+        # rid of the shell calls.
 
         ep = Endpoint(ep_id=ep_id, state="active", mac=mac, if_name=iface)
         ep.ipv4_nets.add(ip)
@@ -93,46 +92,60 @@ def create_endpoint():
         # TODO - Check that the provided IP is valid, and in a pool and
         # currently unassigned.
 
-@app.route('/NetworkDriver.EndpointOperInfo', methods=['GET', 'POST'])
+
+@app.route('/NetworkDriver.DeleteEndpoint', methods=['POST'])
+def delete_endpoint():
+    json_data = request.get_json(force=True)
+    ep_id = json_data["EndpointID"]
+
+    # TODO - delete the endpoint.
+
+    return jsonify({"Value": {}})
+
+
+@app.route('/NetworkDriver.EndpointOperInfo', methods=['POST'])
 def endpoint_oper_info():
     # Nothing is supported yet, just pass blank data.
     return jsonify({"Value": {}})
 
 
-@app.route('/NetworkDriver.Join', methods=['GET', 'POST'])
+@app.route('/NetworkDriver.Join', methods=['POST'])
 def join():
-    app.logger.info("Join was passed %s", request.data)
     json_data = request.get_json(force=True)
-    app.logger.info("Parsed data = %s", json_data)
-    app.logger.info("NetworkID: %s", json_data["NetworkID"])
-    app.logger.info("EndpointID: %s", json_data["EndpointID"])
-    app.logger.info("SandboxKey: %s", json_data["SandboxKey"])
 
-    # TODO - Just get the data out of etcd and return it? Actually, there's
-    # nothing that we need in etcd... yet...
-    iface = IF_PREFIX + json_data["EndpointID"][:10]
-    iface_tmp = "tmp" + json_data["EndpointID"][:10]
+    interface_source = "tmp" + json_data["EndpointID"][:10]
+    interface_destination_prefix = IF_PREFIX
 
-    # Add in the gateway and routes once I've got the remote api updated.
     return jsonify({
         "InterfaceNames": [{
-            "SrcName": iface_tmp,
-            "DstName": iface
+            "SrcName": interface_source,
+            "DstName": interface_destination_prefix
         }],
-        # Don't include optional bits for now.
-        # "Gateway": string,
-        # "GatewayIPv6": string,
-        # "HostsPath": string,
-        # "ResolvConfPath": string
-        }
-    )
+        "Gateway": "192.168.50.50",  # TODO Use the right gateway from etcd
+        "StaticRoutes": [{
+            "Destination": "192.168.50.50/32",# TODO Use the right gateway from etcd
+            "RouteType": 1,  # 1 = CONNECTED
+            "NextHop": "",
+            "InterfaceID": 0
+        }]
+    })
+
+@app.route('/NetworkDriver.Leave', methods=['POST'])
+def leave():
+    json_data = request.get_json(force=True)
+    ep_id = json_data["EndpointID"]
+
+    # TODO - Should this do anything?
+
+    return jsonify({"Value": {}})
 
 def create_spec():
     PLUGIN_DIR = "/usr/share/docker/plugins/"
     if not os.path.exists(PLUGIN_DIR):
         os.makedirs(PLUGIN_DIR)
     with open(os.path.join(PLUGIN_DIR, 'calico.spec'), 'w') as f:
-        f.write("tcp://localhost:5000")
+        f.write("tcp://localhost:5000")  #TODO change the port at some point.
+
 
 def assign_ipv4():
     """
@@ -152,13 +165,14 @@ def assign_ipv4():
     return ip
 
 
+# Uncomment get logging of all requests.
 # @app.before_request
 # def log_request():
 #     from flask import current_app
 #     current_app.logger.debug(request.data)
 
 if __name__ == '__main__':
-    # create_spec()
-    app.debug = True
+    create_spec()
+    app.debug = True  # TODO Only required during development.
     app.run()
 
