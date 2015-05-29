@@ -15,7 +15,7 @@ class MultiHostMainline(TestBase):
         host1_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host1.name).stdout.rstrip()
         host2_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host2.name).stdout.rstrip()
 
-        etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % self.ip
+        etcd_auth = "ETCD_AUTHORITY=%s:2379" % self.ip
         calicoctl = etcd_auth + " /code/dist/calicoctl %s"
 
         host1.listen(calicoctl % "reset || true")
@@ -23,7 +23,7 @@ class MultiHostMainline(TestBase):
         host1.listen(calicoctl % ("node --ip=%s" % host1_ip))
         host2.listen(calicoctl % ("node --ip=%s" % host2_ip))
 
-        calico_port = "export DOCKER_HOST=localhost:2377;"
+        calico_port = "DOCKER_HOST=localhost:2377"
 
         # Wait for the Calico nodes to be created.
         sleep(3)
