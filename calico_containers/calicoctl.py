@@ -60,13 +60,14 @@ from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
-from calico_containers.adapter.datastore import (ETCD_AUTHORITY_ENV,
-                                                 ETCD_AUTHORITY_DEFAULT,
-                                                 Rules,
-                                                 DataStoreError)
-from calico_containers.adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
-from calico_containers.adapter.ipam import IPAMClient
-from calico_containers.adapter import netns, docker_restart
+from adapter.datastore import (ETCD_AUTHORITY_ENV,
+                               ETCD_AUTHORITY_DEFAULT,
+                               Rules,
+                               DataStoreError)
+from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
+from adapter.ipam import IPAMClient
+from adapter import netns, docker_restart
+
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 
