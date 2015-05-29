@@ -15,8 +15,7 @@ docker exec -t host1 bash -c \
  'while ! docker ps; do sleep 1; done && \
  docker load --input /code/calico-node.tar && \
  docker load --input /code/busybox.tar && \
- docker load --input /code/nsenter.tar && \
- docker load --input /code/etcd.tar'
+ docker load --input /code/nsenter.tar'
 
 # docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/mainline.sh'
 docker exec -t host1 bash -c 'cd /code && sudo ./calico_containers/tests/st/add_container.sh'

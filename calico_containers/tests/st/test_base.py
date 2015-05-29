@@ -34,7 +34,6 @@ class TestBase(TestCase):
                    "-p", "2379:2379",
                    "-p", "2380:2380",
                    "--name", "etcd", "quay.io/coreos/etcd:v2.0.10",
-                   # Comment out just in case double-dashes don't work...
                    name="calico",
                    advertise_client_urls="http://%s:2379" % self.ip,
                    listen_client_urls="http://0.0.0.0:2379",
