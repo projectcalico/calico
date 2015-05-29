@@ -11,7 +11,8 @@ class TestMainline(TestBase):
         """
         host = DockerHost('host')
 
-        etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
+        # etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
+        etcd_ip = self.ip
         etcd_port = "ETCD_AUTHORITY=%s:2379" % etcd_ip
         calicoctl = etcd_port + " /code/dist/calicoctl %s"
         calico_port = "DOCKER_HOST=localhost:2377"
@@ -36,15 +37,15 @@ class TestMainline(TestBase):
         host.listen("%s docker run -e CALICO_IP=%s -tid --name=node2 busybox" % (calico_port, ip2))
 
         # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.listen("%s docker inspect --format {{ .NetworkSettings.IPAddress }} node1" % calico_port).stdout.rstrip()
-        node2_ip = host.listen("%s docker inspect --format {{ .NetworkSettings.IPAddress }} node2" % calico_port).stdout.rstrip()
+        node1_ip = host.listen("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1" % calico_port).stdout.rstrip()
+        node2_ip = host.listen("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2" % calico_port).stdout.rstrip()
 
         # Configure the nodes with the same profiles.
         host.listen(calicoctl % "profile TEST_GROUP member add node1")
         host.listen(calicoctl % "profile TEST_GROUP member add node2")
 
-        node1_pid = host.execute("docker inspect --format {{.State.Pid}} node1").stdout.rstrip()
-        node2_pid = host.execute("docker inspect --format {{.State.Pid}} node2").stdout.rstrip()
+        node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
+        node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
 
         for i in range(10):
             try:
