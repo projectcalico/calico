@@ -1,12 +1,7 @@
 from unittest import TestCase
-from docker_host import DockerHost
-import sh
 from sh import docker
 
-
-def get_ip():
-    intf = sh.ifconfig.eth0()
-    return sh.perl(intf, "-ne", 's/dr:(\S+)/print $1/e')
+from utils import get_ip, delete_container
 
 
 class TestBase(TestCase):
@@ -17,7 +12,7 @@ class TestBase(TestCase):
         """
         containers = docker.ps("-qa").split()
         for container in containers:
-            DockerHost.delete_container(container)
+            delete_container(container)
 
         self.ip = get_ip()
         self.start_etcd()
@@ -28,7 +23,7 @@ class TestBase(TestCase):
         """
         containers = docker.ps("-qa").split()
         for container in containers:
-            DockerHost.delete_container(container)
+            delete_container(container)
 
     def start_etcd(self):
         """
