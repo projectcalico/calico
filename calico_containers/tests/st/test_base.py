@@ -4,6 +4,11 @@ import sh
 from sh import docker
 
 
+def get_ip():
+    intf = sh.ifconfig.eth0()
+    return sh.perl(intf, "-ne", 's/dr:(\S+)/print $1/e')
+
+
 class TestBase(TestCase):
     """Base class for test-wide methods."""
     def setUp(self):
@@ -14,7 +19,7 @@ class TestBase(TestCase):
         for container in containers:
             DockerHost.delete_container(container)
 
-        self.ip = self.get_ip()
+        self.ip = get_ip()
         self.start_etcd()
 
     def tearDown(self):
@@ -30,20 +35,17 @@ class TestBase(TestCase):
         Starts a separate etcd container.
         """
 
-        docker.run("-d",
-                   "-p", "2379:2379",
-                   "-p", "2380:2380",
-                   "--name", "etcd", "quay.io/coreos/etcd:v2.0.10",
-                   name="calico",
-                   advertise_client_urls="http://%s:2379" % self.ip,
-                   listen_client_urls="http://0.0.0.0:2379",
-                   initial_advertise_peer_urls="http://%s:2380" % self.ip,
-                   listen_peer_urls="http://0.0.0.0:2380",
-                   initial_cluster_token="etcd-cluster-2",
-                   initial_cluster="calico=http://%s:2380" % self.ip,
-                   initial_cluster_state="new",
-                  )
-
-    def get_ip(self):
-        intf = sh.ifconfig.eth0()
-        return sh.perl(intf, "-ne", 's/dr:(\S+)/print $1/e')
+        docker.run(
+            "--detach",
+            "--publish", "2379:2379",
+            "--publish", "2380:2380",
+            "--name", "etcd", "quay.io/coreos/etcd:v2.0.11",
+            name="calico",
+            advertise_client_urls="http://%s:2379" % self.ip,
+            listen_client_urls="http://0.0.0.0:2379",
+            initial_advertise_peer_urls="http://%s:2380" % self.ip,
+            listen_peer_urls="http://0.0.0.0:2380",
+            initial_cluster_token="etcd-cluster-2",
+            initial_cluster="calico=http://%s:2380" % self.ip,
+            initial_cluster_state="new",
+        )
