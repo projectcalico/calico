@@ -41,9 +41,21 @@ def interface_exists(interface):
     Checks if an interface exists.
     :param str interface: Interface name
     :returns: True if interface device exists
-    """
-    return os.path.exists("/sys/class/net/" + interface)
+    :raises: FailedSystemCall if ip link list fails.
 
+    We could check under /sys/class/net here, but there's a window where
+    /sys/class/net/<iface> might still exist for a link that is in the process
+    of being deleted, so we use ip link list instead.
+    """
+    try:
+        data = futils.check_call(["ip", "link", "list", interface])
+        return True
+    except futils.FailedSystemCall as fsc:
+        if fsc.stderr.count("does not exist") != 0:
+            return False
+        else:
+            # An error other than does not exist; just pass on up
+            raise
 
 def list_interface_ips(ip_type, interface):
     """

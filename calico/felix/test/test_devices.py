@@ -52,13 +52,25 @@ class TestDevices(unittest.TestCase):
     def test_interface_exists(self):
         tap = "tap" + str(uuid.uuid4())[:11]
 
-        with mock.patch('os.path.exists', return_value=True):
-            self.assertTrue(devices.interface_exists(tap))
-            os.path.exists.assert_called_with("/sys/class/net/" + tap)
+        args = []
+        retcode = 1
+        stdout = ""
+        stderr = "Device \"%s\" does not exist." % tap
+        err = futils.FailedSystemCall("From test", args, retcode, stdout, stderr)
 
-        with mock.patch('os.path.exists', return_value=False):
+        with mock.patch('calico.felix.futils.check_call', side_effect=err):
             self.assertFalse(devices.interface_exists(tap))
-            os.path.exists.assert_called_with("/sys/class/net/" + tap)
+            futils.check_call.assert_called_with(["ip", "link", "list", tap])
+
+        with mock.patch('calico.felix.futils.check_call'):
+            self.assertTrue(devices.interface_exists(tap))
+            futils.check_call.assert_called_with(["ip", "link", "list", tap])
+
+        stderr = "Another error."
+        err = futils.FailedSystemCall("From test", args, retcode, stdout, stderr)
+        with mock.patch('calico.felix.futils.check_call', side_effect=err):
+            with self.assertRaises(futils.FailedSystemCall):
+                devices.interface_exists(tap)
 
     def test_add_route(self):
         tap = "tap" + str(uuid.uuid4())[:11]
@@ -77,6 +89,10 @@ class TestDevices(unittest.TestCase):
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             devices.add_route(type, ip, tap, mac)
             futils.check_call.assert_called_with(["ip", "-6", "route", "replace", ip, "dev", tap])
+
+        with self.assertRaisesRegexp(ValueError,
+                                     "mac must be supplied if ip is provided"):
+            devices.add_route(type, ip, tap, None)
 
     def test_del_route(self):
         tap = "tap" + str(uuid.uuid4())[:11]
