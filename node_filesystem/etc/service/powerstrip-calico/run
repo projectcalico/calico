@@ -1,3 +1,0 @@
-#!/bin/sh
-cd /calico_containers/adapter/
-exec python powerstrip_calico.py
