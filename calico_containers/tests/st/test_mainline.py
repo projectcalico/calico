@@ -11,12 +11,10 @@ class TestMainline(TestBase):
         Setup two endpoints on one host and check connectivity.
         """
         host = DockerHost('host')
-        host.start_etcd()
-
-        calicoctl = "/code/dist/calicoctl %s"
 
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
 
+        calicoctl = "/code/dist/calicoctl %s"
         host.execute(calicoctl % "node --ip=127.0.0.1")
         host.execute(calicoctl % "profile add TEST_GROUP")
 
@@ -36,8 +34,8 @@ class TestMainline(TestBase):
         host.execute(calicoctl % "profile TEST_GROUP member add node1")
         host.execute(calicoctl % "profile TEST_GROUP member add node2")
 
-        node1_pid = host.execute("docker inspect --format {{.State.Pid}} node1").stdout.rstrip()
-        node2_pid = host.execute("docker inspect --format {{.State.Pid}} node2").stdout.rstrip()
+        node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
+        node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
 
         ping = partial(host.execute, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
         self.retry_until_success(ping, ex_class=ErrorReturnCode)

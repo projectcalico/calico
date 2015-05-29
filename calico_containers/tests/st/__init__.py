@@ -16,13 +16,9 @@ def setup_package():
     if not os.path.isfile("nsenter.tar"):
         docker.pull("jpetazzo/nsenter:latest")
         docker.save("--output", "nsenter.tar", "jpetazzo/nsenter:latest")
-    if not os.path.isfile("etcd.tar"):
-        docker.pull("quay.io/coreos/etcd:v2.0.10")
-        docker.save("--output", "etcd.tar", "quay.io/coreos/etcd:v2.0.10")
 
     # Create the calicoctl binary here so it will be in the volume mounted on the hosts.
     print sh.bash("./create_binary.sh")
-    print "Calicoctl binary created."
 
 
 def teardown_package():

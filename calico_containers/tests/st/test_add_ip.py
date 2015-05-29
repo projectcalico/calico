@@ -1,5 +1,4 @@
-import sh
-from sh import docker, ErrorReturnCode
+from sh import ErrorReturnCode
 from functools import partial
 
 from test_base import TestBase
@@ -9,7 +8,6 @@ from docker_host import DockerHost
 class TestAddIp(TestBase):
     def test_add_ip(self):
         host = DockerHost('host')
-        host.start_etcd()
 
         calicoctl = "/code/dist/calicoctl %s"
         host.execute(calicoctl % "node --ip=172.17.8.10")

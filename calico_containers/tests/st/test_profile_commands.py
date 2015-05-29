@@ -8,7 +8,6 @@ class TestProfileCommands(TestBase):
         Test that the profile rule update command successfully updates.
         """
         host = DockerHost('host')
-        host.start_etcd()
 
         calicoctl = "/code/dist/calicoctl %s"
         host.execute(calicoctl % "profile add TEST_PROFILE")

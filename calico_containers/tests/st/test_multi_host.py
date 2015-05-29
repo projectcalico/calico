@@ -1,4 +1,4 @@
-from sh import ErrorReturnCode, ErrorReturnCode_1
+from sh import docker, ErrorReturnCode, ErrorReturnCode_1
 from time import sleep
 import unittest
 
@@ -16,13 +16,18 @@ class MultiHostMainline(TestBase):
         """
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
-        host1.start_etcd()
+
+        host1_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host1.name).stdout.rstrip()
+        host2_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host2.name).stdout.rstrip()
 
         calicoctl = "/code/dist/calicoctl %s"
         try:
             host1.execute(calicoctl % "reset")
         except ErrorReturnCode:
             pass
+
+        host1.execute(calicoctl % ("node --ip=%s" % host1_ip))
+        host2.execute(calicoctl % ("node --ip=%s" % host2_ip))
 
         host1.execute(calicoctl % ("node --ip=%s" % host1.ip))
         host2.execute(calicoctl % ("node --ip=%s" % host2.ip))

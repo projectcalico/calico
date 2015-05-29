@@ -9,7 +9,6 @@ class TestNoPowerstrip(TestBase):
     def test_no_powerstrip(self):
 
         host = DockerHost('host')
-        host.start_etcd()
 
         calicoctl = "/code/dist/calicoctl %s"
 

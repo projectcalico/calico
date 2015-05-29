@@ -10,7 +10,6 @@ class TestArgParsing(TestBase):
         Test that calicoctl correctly accepts or rejects given argument.
         """
         host = DockerHost('host')
-        host.start_etcd()
 
         calicoctl = "/code/dist/calicoctl %s"
 

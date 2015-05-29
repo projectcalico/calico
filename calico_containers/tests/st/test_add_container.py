@@ -7,11 +7,7 @@ from docker_host import DockerHost
 
 class TestAddContainer(TestBase):
     def test_add_container(self):
-        """
-        
-        """
         host = DockerHost('host')
-        host.start_etcd()
 
         calicoctl = "/code/dist/calicoctl %s"
 
