@@ -57,12 +57,12 @@ from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
 
-from calico_containers.driver.datastore import (ETCD_AUTHORITY_ENV,
-                                                ETCD_AUTHORITY_DEFAULT,
-                                                Rules,
-                                                DataStoreError)
-from calico_containers.driver.ipam import IPAMClient
-from calico_containers.driver import netns
+from driver.datastore import (ETCD_AUTHORITY_ENV,
+                              ETCD_AUTHORITY_DEFAULT,
+                              Rules,
+                              DataStoreError)
+from driver.ipam import IPAMClient
+from driver import netns
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 

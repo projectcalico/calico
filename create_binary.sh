@@ -15,7 +15,9 @@ docker rm -f pyinstaller || true
 # as the mountpoint directly since the host permissions may not allow the
 # `user` account in the container to write to it.
 docker run -v `pwd`/calico_containers:/code/calico_containers \
- -v `pwd`/dist:/code/dist --name pyinstaller calico-build \
+ -v `pwd`/dist:/code/dist --name pyinstaller \
+ -e PYTHONPATH=/code/calico_containers \
+ calico-build \
  pyinstaller calico_containers/calicoctl.py -a -F -s --clean
 docker rm -f pyinstaller || true
 
