@@ -323,10 +323,11 @@ perform the following steps:
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
 
-   Note: for kilo the version of libvirt-bin should be  1.2.12-0ubuntu13.
+   Note: for kilo the version of libvirt-bin should be ``1.2.12-0ubuntu13``.
    If not, then:
 
    ::
+
        sudo add-apt-repository cloud-archive:kilo-proposed
        sudo apt-get update
        sudo apt-get upgrade
