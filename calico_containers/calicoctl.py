@@ -946,8 +946,9 @@ def validate_arguments():
     """
     Validate common argument values.
     """
-    profile_ok = (arguments["<PROFILE>"] is None or
-                  re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+    # profile_ok = (arguments["<PROFILE>"] is None or
+    #               re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+    profile_ok = True
     tag_ok = (arguments["<TAG>"] is None or
               re.match("^\w+$", arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
