@@ -774,6 +774,21 @@ class DatastoreClient(object):
                                prevValue=old_endpoint.to_json())
 
     @handle_errors
+    def remove_endpoint(self, hostname, workload_id,
+                        endpoint_id):
+        """
+        Remove a single endpoint object from the datastore.
+
+        :param hostname: The hostname for the Docker hosting this container.
+        :param workload_id: The workload ID.
+        :param endpoint_id: The ID of the Endpoint to remove.
+        """
+        ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                   "container_id": workload_id,
+                                   "endpoint_id": endpoint_id}
+        self.etcd_client.delete(ep_path)
+
+    @handle_errors
     def get_endpoints(self, hostname, container_id):
         """
         Get all of the Endpoints for a container.

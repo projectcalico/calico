@@ -8,6 +8,8 @@ from netaddr import IPAddress, IPNetwork
 from calico_containers.adapter.datastore import IF_PREFIX, Endpoint
 from calico_containers.adapter.ipam import SequentialAssignment, IPAMClient
 
+CONTAINER_NAME = "undefined"
+
 app = Flask(__name__)
 hostname = socket.gethostname()
 client = IPAMClient()
@@ -58,7 +60,7 @@ def create_endpoint():
         # libnetwork do with it?
 
         next_hop = client.get_default_next_hops(hostname)[ip.version]
-        container_id = "undefined"  # Always used a fixed value.
+        container_id = CONTAINER_NAME
         mac = "11:22:33:44:55:66"
         iface = IF_PREFIX + ep_id[:10]
         iface_tmp = "tmp" + ep_id[:10]
@@ -98,7 +100,7 @@ def delete_endpoint():
     json_data = request.get_json(force=True)
     ep_id = json_data["EndpointID"]
 
-    # TODO - delete the endpoint.
+    client.remove_endpoint(hostname, CONTAINER_NAME, ep_id)
 
     return jsonify({"Value": {}})
 
@@ -112,8 +114,11 @@ def endpoint_oper_info():
 @app.route('/NetworkDriver.Join', methods=['POST'])
 def join():
     json_data = request.get_json(force=True)
+    ep_id = json_data["EndpointID"]
 
-    interface_source = "tmp" + json_data["EndpointID"][:10]
+    ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
+
+    interface_source = "tmp" + ep_id[:10]
     interface_destination_prefix = IF_PREFIX
 
     return jsonify({
@@ -121,9 +126,9 @@ def join():
             "SrcName": interface_source,
             "DstName": interface_destination_prefix
         }],
-        "Gateway": "192.168.50.50",  # TODO Use the right gateway from etcd
+        "Gateway": str(ep.ipv4_gateway),
         "StaticRoutes": [{
-            "Destination": "192.168.50.50/32",# TODO Use the right gateway from etcd
+            "Destination": "%s/32" % ep.ipv4_gateway,
             "RouteType": 1,  # 1 = CONNECTED
             "NextHop": "",
             "InterfaceID": 0
