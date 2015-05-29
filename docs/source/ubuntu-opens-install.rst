@@ -17,7 +17,7 @@ Ubuntu 14.04 Packaged Install Instructions
 
 These instructions will take you through a first-time install of Calico using
 the latest packages on a system running Ubuntu 14.04 with either OpenStack
-Icehouse or Juno. If you are upgrading an existing system, please see the
+Icehouse, Juno or kilo. If you are upgrading an existing system, please see the
 :doc:`opens-upgrade` document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading control
@@ -47,6 +47,8 @@ Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
 `Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_preface.html>`__ /
 `Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/ch_preface.html>`__.
+`Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/ch_preface.html>`__.
+
 
 Configuring the APT software sources
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -62,7 +64,7 @@ Add the Calico PPA.
     sudo apt-add-repository ppa:project-calico/<release>
 
 
-Where <release> is icehouse, juno or kilo
+Where ``<release>`` is icehouse, juno or kilo
 
 Edit ``/etc/apt/preferences`` to add the following lines, whose effect
 is to prefer Calico-provided packages for Nova and Neutron even if later
