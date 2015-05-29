@@ -53,17 +53,16 @@ Configuring the APT software sources
 
 The machines need to be configured such that APT can get access to the
 Calico packages. This step differs depending on whether you're using
-Icehouse or Juno.
-
-Icehouse
-^^^^^^^^
+Icehouse, Juno or Kilo.
 
 Add the Calico PPA.
 
 ::
 
-    sudo apt-add-repository ppa:project-calico/icehouse
+    sudo apt-add-repository ppa:project-calico/<release>
 
+
+Where <release> is icehouse, juno or kilo
 
 Edit ``/etc/apt/preferences`` to add the following lines, whose effect
 is to prefer Calico-provided packages for Nova and Neutron even if later
@@ -75,24 +74,6 @@ versions of those packages are released by Ubuntu.
     Pin: release o=LP-PPA-project-calico-*
     Pin-Priority: 1001
 
-Juno
-^^^^
-
-Add the Calico PPA.
-
-::
-
-    sudo add-apt-repository ppa:project-calico/juno
-
-Edit ``/etc/apt/preferences`` to add the following lines, whose effect
-is to prefer Calico-provided packages for Nova and Neutron even if later
-versions of those packages are released by Ubuntu.
-
-::
-
-    Package: *
-    Pin: release -o=LP-PPA-project-calico-*
-    Pin-Priority: 1001
 
 Common
 ^^^^^^
@@ -341,6 +322,14 @@ perform the following steps:
 6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
+
+   Note: for kilo the version of libvirt-bin should be  1.2.12-0ubuntu13.
+   If not, then:
+
+   ::
+       sudo add-apt-repository cloud-archive:kilo-proposed
+       sudo apt-get update
+       sudo apt-get upgrade
 
 7. Install the ``calico-compute`` package:
 
