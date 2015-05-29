@@ -1,7 +1,7 @@
 import sh
 from sh import docker
 
-from utils import delete_container
+from utils import get_ip, delete_container
 
 
 class DockerHost(object):
@@ -22,11 +22,14 @@ class DockerHost(object):
                      "docker load --input /code/busybox.tar && "
                      "docker load --input /code/nsenter.tar")
 
-    def execute(self, command, **kwargs):
+    def execute(self, command, docker_host=False, **kwargs):
         """
         Pass a command into a host container.
         """
-        return docker("exec", "-t", self.name, "bash", c=command, **kwargs)
+        stdin = ' '.join(["export ETCD_AUTHORITY=%s:2379;" % get_ip(), command])
+        if docker_host:
+            stdin = ' '.join(["export DOCKER_HOST=localhost:2377;", stdin])
+        return self.listen(stdin, **kwargs)
 
     def listen(self, stdin, **kwargs):
         """
