@@ -61,15 +61,21 @@ def create_endpoint():
 
         next_hop = client.get_default_next_hops(hostname)[ip.version]
         container_id = CONTAINER_NAME
-        mac = "11:22:33:44:55:66"
+        mac = "EE:EE:EE:EE:EE:EE"
         iface = IF_PREFIX + ep_id[:10]
         iface_tmp = "tmp" + ep_id[:10]
 
-        # Create the veth and set the host name to be up.
-        check_call("ip link add %s type veth peer name %s" % (iface, iface_tmp),
-                   shell=True)
-        check_call("ip link set %s up" % iface, shell=True) # at least get
-        # rid of the shell calls.
+        # Create the veth
+        check_call(['ip', 'link',
+                    'add', iface,
+                    'type', 'veth',
+                    'peer', 'name', iface_tmp])
+
+        # Set the host end of the veth to 'up' so felix notices it.
+        check_call(['ip', 'link', 'set', iface, 'up'])
+
+        # Set the mac as libnetwork doesn't do this for us.
+        check_call(['ip', 'link', 'set', 'dev', iface_tmp, 'address', mac])
 
         ep = Endpoint(ep_id=ep_id, state="active", mac=mac, if_name=iface)
         ep.ipv4_nets.add(ip)
