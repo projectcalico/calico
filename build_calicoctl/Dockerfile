@@ -10,7 +10,7 @@ RUN pip install -r requirements.txt
 
 # Can't run pyinstaller as root so add a user.
 RUN useradd -d /home/user -m -s /bin/bash user
-RUN chown -R user /code/
+RUN chown -R user:user /code/
 USER user
 # The HOME env var should be set automatically, but for some reason it's not...
 ENV HOME /home/user
