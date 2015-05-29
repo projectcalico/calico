@@ -1,5 +1,5 @@
 from test_base import TestBase
-from sh import docker, ErrorReturnCode
+from sh import ErrorReturnCode
 from time import sleep
 from docker_host import DockerHost
 
@@ -12,9 +12,8 @@ class TestMainline(TestBase):
         host = DockerHost('host')
 
         # etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
-        etcd_ip = self.ip
-        etcd_port = "ETCD_AUTHORITY=%s:2379" % etcd_ip
-        calicoctl = etcd_port + " /code/dist/calicoctl %s"
+        etcd_auth = "ETCD_AUTHORITY=%s:2379" % self.ip
+        calicoctl = etcd_auth + " /code/dist/calicoctl %s"
         calico_port = "DOCKER_HOST=localhost:2377"
 
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])

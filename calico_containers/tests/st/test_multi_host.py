@@ -15,9 +15,9 @@ class MultiHostMainline(TestBase):
         host1_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host1.name).stdout.rstrip()
         host2_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host2.name).stdout.rstrip()
 
-        etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
-        etcd_port = "export ETCD_AUTHORITY=%s:2379;" % etcd_ip
-        calicoctl = etcd_port + " /code/dist/calicoctl %s"
+        # etcd_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", "etcd").stdout.rstrip()
+        etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % self.ip
+        calicoctl = etcd_auth + " /code/dist/calicoctl %s"
 
         host1.listen(calicoctl % "reset || true")
 
