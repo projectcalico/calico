@@ -38,13 +38,13 @@ RUN add-apt-repository -y ppa:cz.nic-labs/bird && \
 RUN curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd && \
     chmod +x confd
 
-# Install Powerstrip Calico Adapter dependencies.
-ADD calico_containers/driver/requirements.txt /driver/
-RUN pip install -r /driver/requirements.txt
+# Install Python-Calico library dependencies.
+ADD calico_containers/pycalico/requirements.txt /pycalico/
+RUN pip install -r /pycalico/requirements.txt
 
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's thing they're most likely to change.
 COPY node_filesystem /
 
-COPY calico_containers/driver /calico_containers/driver
-COPY calico_containers/__init__.py /calico_containers/
+COPY calico_containers/pycalico /calico_containers/pycalico
+COPY calico_containers/docker_plugin.py /calico_containers/
