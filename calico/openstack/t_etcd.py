@@ -28,7 +28,11 @@ import weakref
 
 # OpenStack imports.
 from oslo.config import cfg
-from neutron.openstack.common import log
+
+try:  # Icehouse, Juno
+    from neutron.openstack.common import log
+except ImportError:  # Kilo
+    from oslo_log import log
 
 # Calico imports.
 from eventlet.semaphore import Semaphore

@@ -31,11 +31,15 @@ from functools import wraps
 
 # OpenStack imports.
 from neutron.common import constants
-from neutron.openstack.common import log
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from neutron import context as ctx
 from neutron import manager
+
+try:  # Icehouse, Juno
+    from neutron.openstack.common import log
+except ImportError:  # Kilo
+    from oslo_log import log
 
 # Calico imports.
 import etcd
@@ -199,6 +203,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return True
         else:
             return False
+
+    def get_allowed_network_types(self, agent=None):
+        return ('local', 'flat')
+
+    def get_mappings(self, agent):
+        # We override this primarily to satisfy the ABC checker: this method
+        # never actually gets called because we also override
+        # check_segment_for_agent.
+        assert False
 
     def _port_is_endpoint_port(self, port):
         # Return True if port is a VM port.
