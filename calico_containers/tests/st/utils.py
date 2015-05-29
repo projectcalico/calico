@@ -1,11 +1,15 @@
 import sh
 from sh import docker
+import socket
 
 
 def get_ip():
     """Return a string of the IP of the hosts eth0 interface."""
-    intf = sh.ifconfig.eth0()
-    return sh.perl(intf, "-ne", 's/dr:(\S+)/print $1/e')
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    ip = s.getsockname()[0]
+    s.close()
+    return ip
 
 
 def cleanup_inside(name):
