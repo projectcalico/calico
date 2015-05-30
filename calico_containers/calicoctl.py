@@ -543,8 +543,24 @@ def profile_add_container(container_name, profile_name):
     print "calicoctl container <CONTAINER> profile append|set " \
           "[<PROFILE>]...\n"
 
+    info = get_container_info_or_exit(container_name)
+    container_id = info["Id"]
+
+    # Check the container is actually running.
+    if not info["State"]["Running"]:
+        print "%s is not currently running." % container_name
+        sys.exit(1)
+
+    # Check that the container is already networked
+    try:
+        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+    except KeyError:
+        print "Failed to container to profile.\n"
+        print_container_not_in_calico_msg(container_name)
+        sys.exit(1)
+
     # Call through to the container profile set method to add the profile.
-    container_profile_set(container_name, [profile_name])
+    endpoint_profile_set(endpoint_id, [profile_name])
 
 
 def profile_remove(profile_name):
@@ -898,7 +914,7 @@ def container_ip_add(container_name, ip, version, interface):
     # Check that the container is already networked
     try:
         endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
-        old_endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
     except KeyError:
         print "Failed to add IP address to container.\n"
         print_container_not_in_calico_msg(container_name)
@@ -910,13 +926,12 @@ def container_ip_add(container_name, ip, version, interface):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
-    new_endpoint = old_endpoint.copy()
     try:
         if address.version == 4:
-            new_endpoint.ipv4_nets.add(IPNetwork(address))
+            endpoint.ipv4_nets.add(IPNetwork(address))
         else:
-            new_endpoint.ipv6_nets.add(IPNetwork(address))
-        client.update_endpoint(old_endpoint, new_endpoint)
+            endpoint.ipv6_nets.add(IPNetwork(address))
+        client.update_endpoint(endpoint)
     except (KeyError, ValueError):
         client.unassign_address(pool, ip)
         print "Error updating datastore. Aborting."
@@ -930,13 +945,11 @@ def container_ip_add(container_name, ip, version, interface):
                                   proc_alias="/proc")
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
-        old_endpoint = new_endpoint
-        new_endpoint = old_endpoint.copy()
         if address.version == 4:
-            new_endpoint.ipv4_nets.remove(IPNetwork(address))
+            endpoint.ipv4_nets.remove(IPNetwork(address))
         else:
-            new_endpoint.ipv6_nets.remove(IPNetwork(address))
-        client.update_endpoint(old_endpoint, new_endpoint)
+            endpoint.ipv6_nets.remove(IPNetwork(address))
+        client.update_endpoint(endpoint)
         client.unassign_address(pool, ip)
         sys.exit(1)
 
@@ -972,12 +985,11 @@ def container_ip_remove(container_name, ip, version, interface):
     # Check that the container is already networked
     try:
         endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
-        old_endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
-        new_endpoint = old_endpoint.copy()
+        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
         if address.version == 4:
-            nets = new_endpoint.ipv4_nets
+            nets = endpoint.ipv4_nets
         else:
-            nets = new_endpoint.ipv6_nets
+            nets = endpoint.ipv6_nets
 
         if not IPNetwork(address) in nets:
             print "IP address is not assigned to container. Aborting."
@@ -989,7 +1001,7 @@ def container_ip_remove(container_name, ip, version, interface):
 
     try:
         nets.remove(IPNetwork(address))
-        client.update_endpoint(old_endpoint, new_endpoint)
+        client.update_endpoint(endpoint)
     except (KeyError, ValueError):
         print "Error updating datastore. Aborting."
         sys.exit(1)
@@ -1149,6 +1161,7 @@ def validate_arguments():
 
     profile_ok = (arguments["<PROFILE>"] is None or
                   re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
+
     tag_ok = (arguments["<TAG>"] is None or
               re.match("^%s+$" % valid_chars, arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])

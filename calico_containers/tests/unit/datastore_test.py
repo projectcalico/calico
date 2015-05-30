@@ -38,15 +38,22 @@ TEST_CONT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 
 # 4 endpoints, with 2 TEST profile and 2 UNIT profile.
-EP_56 = Endpoint("567890abcdef", "active", "AA-22-BB-44-CC-66", if_name="eth0")
-EP_56.profile_id = "TEST"
-EP_78 = Endpoint("7890abcdef12", "active", "11-AA-33-BB-55-CC", if_name="eth0")
-EP_78.profile_id = "TEST"
-EP_90 = Endpoint("90abcdef1234", "active", "1A-2B-3C-4D-5E-6E", if_name="eth0")
-EP_90.profile_id = "UNIT"
-EP_12 = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66",
-                 if_name="eth0")
-EP_12.profile_id = "UNIT"
+EP_56 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "567890abcdef",
+                 "active", "AA-22-BB-44-CC-66")
+EP_56.profile_ids = ["TEST"]
+EP_56.if_name = "eth0"
+EP_78 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "7890abcdef12",
+                 "active", "11-AA-33-BB-55-CC")
+EP_78.profile_ids = ["TEST"]
+EP_78.if_name = "eth0"
+EP_90 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "90abcdef1234",
+                 "active", "1A-2B-3C-4D-5E-6E")
+EP_90.profile_ids = ["UNIT"]
+EP_90.if_name = "eth0"
+EP_12 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, TEST_ENDPOINT_ID,
+                 "active", "11-22-33-44-55-66")
+EP_12.profile_ids = ["UNIT"]
+EP_12.if_name = "eth0"
 
 # A complicated set of Rules JSON for testing serialization / deserialization.
 RULES_JSON = """
@@ -203,43 +210,22 @@ class TestEndpoint(unittest.TestCase):
         """
         Test to_json() method.
         """
-        endpoint1 = Endpoint("aabbccddeeff112233",
-                             "active",
-                             "11-22-33-44-55-66")
+        endpoint1 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID,
+                             "aabbccddeeff112233",
+                             "active", "11-22-33-44-55-66")
         assert_equal(endpoint1.ep_id, "aabbccddeeff112233")
         assert_equal(endpoint1.state, "active")
         assert_equal(endpoint1.mac, "11-22-33-44-55-66")
         assert_equal(endpoint1.profile_ids, [])  # Defaulted
-        assert_equal(endpoint1.if_name, "eth1")  # Defaulted
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
-                    "container:if_name": "eth0",
-                    "profile_id": None,
+                    "container:if_name": None,
+                    "profile_ids": [],
                     "ipv4_nets": [],
                     "ipv6_nets": [],
                     "ipv4_gateway": None,
                     "ipv6_gateway": None}
-        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
-
-        # Explicitly set a profile_id and some gateways.
-        endpoint1._profile_id = "TEST12"   # Internal field value
-        endpoint1.ipv4_nets.add(IPNetwork("192.168.1.23/32"))
-        endpoint1.ipv4_gateway = IPAddress("192.168.1.1")
-        expected["profile_id"] = "TEST12"
-        expected["ipv4_nets"] = ["192.168.1.23/32"]
-        expected["ipv4_gateway"] = "192.168.1.1"
-        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
-
-        # Now explicitly set a profile_ids list.
-        endpoint1.profile_ids = ["TEST23", "TEST24"]
-        del(expected["profile_id"])
-        expected["profile_id"] = ["TEST23", "TEST24"]
-        assert_dict_equal(json.loads(endpoint1.to_json()), expected)
-
-        # Now explicitly set an interface name.
-        endpoint1.if_name = "new_interface"
-        expected["container:if_name"] = "new_interface"
         assert_dict_equal(json.loads(endpoint1.to_json()), expected)
 
     def test_from_json(self):
@@ -248,28 +234,27 @@ class TestEndpoint(unittest.TestCase):
           - Directly from JSON
           - From to_json() method of existing Endpoint.
         """
-        ep_id = "aabbccddeeff112233"
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
-                    "container:if_name": "eth0",
                     "profile_id": "TEST23",
                     "ipv4_nets": ["192.168.3.2/32", "10.3.4.23/32"],
                     "ipv6_nets": ["fd20::4:2:1/128"],
                     "ipv4_gateway": "10.3.4.2",
                     "ipv6_gateway": "2001:2:4a::1"}
-        endpoint = Endpoint.from_json(ep_id, json.dumps(expected))
+        endpoint = Endpoint.from_json(TEST_ENDPOINT_PATH, json.dumps(expected))
         assert_equal(endpoint.state, "active")
-        assert_equal(endpoint.ep_id, ep_id)
+        assert_equal(endpoint.ep_id, TEST_ENDPOINT_ID)
+        assert_equal(endpoint.if_name, "eth1")
         assert_equal(endpoint.mac, "11-22-33-44-55-66")
-        assert_equal(endpoint.profile_id, "TEST23")
+        assert_equal(endpoint.profile_ids, ["TEST23"])
         assert_equal(endpoint.ipv4_gateway, IPAddress("10.3.4.2"))
         assert_equal(endpoint.ipv6_gateway, IPAddress("2001:2:4a::1"))
         assert_set_equal(endpoint.ipv4_nets, {IPNetwork("192.168.3.2/32"),
                                               IPNetwork("10.3.4.23/32")})
         assert_set_equal(endpoint.ipv6_nets, {IPNetwork("fd20::4:2:1/128")})
 
-        endpoint2 = Endpoint.from_json(ep_id, endpoint.to_json())
+        endpoint2 = Endpoint.from_json(TEST_ENDPOINT_PATH, endpoint.to_json())
         assert_equal(endpoint.state, endpoint2.state)
         assert_equal(endpoint.ep_id, endpoint2.ep_id)
         assert_equal(endpoint.mac, endpoint2.mac)
@@ -283,14 +268,12 @@ class TestEndpoint(unittest.TestCase):
         """
         Test Endpoint operators __eq__, __ne__ and copy.
         """
-        endpoint1 = Endpoint("aabbccddeeff112233",
-                             "active",
-                             "11-22-33-44-55-66",
-                             if_name="eth0")
-        endpoint2 = Endpoint("aabbccddeeff112233",
-                             "inactive",
-                             "11-22-33-44-55-66",
-                             if_name="eth0")
+        endpoint1 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID,
+                             "aabbccddeeff112233",
+                             "active", "11-22-33-44-55-66")
+        endpoint2 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID,
+                             "aabbccddeeff112233",
+                             "inactive", "11-22-33-44-55-66")
         endpoint3 = endpoint1.copy()
 
         assert_equal(endpoint1, endpoint3)
@@ -747,8 +730,8 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_endpoint() for an endpoint that exists.
         """
-        ep = Endpoint(TEST_ENDPOINT_ID, "active", "11-22-33-44-55-66",
-                      if_name="eth1")
+        ep = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, TEST_ENDPOINT_ID,
+                      "active", "11-22-33-44-55-66")
         self.etcd_client.read.side_effect = mock_read_for_endpoint(ep)
         ep2 = self.datastore.get_endpoint(TEST_HOST,
                                           TEST_CONT_ID,
@@ -772,18 +755,29 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test set_endpoint().
         """
+        EP_12._original_json = ""
         self.datastore.set_endpoint(TEST_HOST, TEST_CONT_ID, EP_12)
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        EP_12.to_json())
+        assert_equal(EP_12._original_json, EP_12.to_json())
 
     def test_update_endpoint(self):
         """
         Test update_endpoint().
         """
-        self.datastore.update_endpoint(TEST_HOST, TEST_CONT_ID, EP_90, EP_12)
+        ep = EP_12.copy()
+        original_json = ep.to_json()
+        ep._original_json = original_json
+        ep.if_name = "a different interface name"
+        ep.profile_ids = ["a", "different", "set", "of", "ids"]
+        assert_not_equal(ep._original_json, ep.to_json())
+
+        self.datastore.update_endpoint(ep)
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
-                                                       EP_12.to_json(),
-                                                       prevValue=EP_90.to_json())
+                                                     ep.to_json(),
+                                                     prevValue=original_json)
+        assert_not_equal(ep._original_json, original_json)
+        assert_equals(ep._original_json, ep.to_json())
 
     def test_get_ep_id_from_cont(self):
         """
@@ -835,50 +829,6 @@ class TestDatastoreClient(unittest.TestCase):
         assert_raises(KeyError,
                       self.datastore.get_endpoints,
                       TEST_HOST, TEST_CONT_ID)
-
-    def test_add_workload_to_profile(self):
-        """
-        Test add_workload_to_profile() when the workload exists.
-        """
-        ep = Endpoint.from_json(EP_12.ep_id, EP_12.to_json())
-
-        def mock_read(path):
-            if path == TEST_CONT_ENDPOINT_PATH:
-                return mock_read_2_ep_for_cont(path)
-            elif path == TEST_CONT_ENDPOINT_PATH + ep.ep_id:
-                return mock_read_for_endpoint(ep)(path)
-            else:
-                assert_true(False)
-
-        self.etcd_client.read.side_effect = mock_read
-        self.datastore.add_workload_to_profile(TEST_HOST,
-                                               "UNITTEST",
-                                               TEST_CONT_ID)
-        ep.profile_id = "UNITTEST"
-        expected_write_json = ep.to_json()
-        self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
-                                                       expected_write_json)
-
-    def test_remove_workload_from_profile(self):
-        """
-        Test remove_workload_from_profile() when the workload exists.
-        """
-        ep = Endpoint.from_json(EP_12.ep_id, EP_12.to_json())
-
-        def mock_read(path):
-            if path == TEST_CONT_ENDPOINT_PATH:
-                return mock_read_2_ep_for_cont(path)
-            elif path == TEST_CONT_ENDPOINT_PATH + ep.ep_id:
-                return mock_read_for_endpoint(ep)(path)
-            else:
-                assert_true(False)
-
-        self.etcd_client.read.side_effect = mock_read
-        self.datastore.remove_workload_from_profile(TEST_HOST, TEST_CONT_ID)
-        ep.profile_id = None
-        expected_write_json = ep.to_json()
-        self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
-                                                       expected_write_json)
 
     def test_get_hosts(self):
         """

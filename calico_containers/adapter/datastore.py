@@ -178,6 +178,12 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
 
 
 class Endpoint(object):
+    """
+    Class encapsulating an Endpoint.
+
+    This class keeps track of the original JSON representation of the
+    endpoint to allow atomic updates to be performed.
+    """
 
     def __init__(self, hostname, orchestrator_id, workload_id, endpoint_id,
                  state, mac):
@@ -195,18 +201,9 @@ class Endpoint(object):
 
         self.if_name = None
         self.profile_ids = []
-        self._json = None
+        self._original_json = None
 
     def to_json(self):
-        """
-        Return a JSON representation of this Endpoint.  Note that if this
-        Endpoint was parsed from JSON and has not been altered, the JSON
-        returned will be identical.
-        :return: A JSON string.
-        """
-        if self._json:
-            return self._json
-
         json_dict = {"state": self.state,
                      "name": IF_PREFIX + self.ep_id[:11],
                      "mac": self.mac,
@@ -260,8 +257,8 @@ class Endpoint(object):
                          json_dict.get("profile_ids", [])
         ep.if_name = json_dict.get("container:if_name", VETH_NAME)
 
-        # Store the JSON representation of this Endpoint.
-        ep._json = json_str
+        # Store the original JSON representation of this Endpoint.
+        ep._original_json = json_str
 
         return ep
 
@@ -283,19 +280,6 @@ class Endpoint(object):
         if result is NotImplemented:
             return result
         return not result
-
-    def __setattr__(self, name, value):
-        """
-        Set an attribute in this class.  This sets the value and wipes out the
-        stored JSON data representing this class.  This ensures that if this
-        Endpoint is unchanged it will return the same JSON data used to create
-        it, but if any field is altered the JSON will be recalculated.
-        :param name:  The attribute name.
-        :param value:  The attribute value.
-        :return: nothing.
-        """
-        self.__dict__["_json"] = None
-        self.__dict__["name"] = value
 
     def copy(self):
         return copy.deepcopy(self)
@@ -758,13 +742,12 @@ class DatastoreClient(object):
         """
         # Change the profiles on the endpoint.  Check that we are not adding a
         # duplicate entry, and perform an update to ensure atomicity.
-        old_ep = self.get_endpoint_from_id(endpoint_id)
-        new_ep = old_ep.copy()
-        for profile_name in new_ep.profile_ids:
+        ep = self.get_endpoint_from_id(endpoint_id)
+        for profile_name in ep.profile_ids:
             if profile_name in profile_names:
                 raise ProfileAlreadyInEndpoint(profile_name)
-        new_ep.profile_ids += profile_names
-        self.update_endpoint(old_ep, new_ep)
+        ep.profile_ids += profile_names
+        self.update_endpoint(ep)
 
     @handle_errors
     def set_profiles_on_endpoint(self, endpoint_id, profile_names):
@@ -779,13 +762,12 @@ class DatastoreClient(object):
         :return: None.
         """
         # Set the profiles on the endpoint.
-        old_ep = self.get_endpoint_from_id(endpoint_id)
-        new_ep = old_ep.copy()
-        new_ep.profile_ids = profile_names
-        self.update_endpoint(old_ep, new_ep)
+        ep = self.get_endpoint_from_id(endpoint_id)
+        ep.profile_ids = profile_names
+        self.update_endpoint(ep)
 
     @handle_errors
-    def remove_profiles_from_endpoint(self, endpoint_id, profile_names)
+    def remove_profiles_from_endpoint(self, endpoint_id, profile_names):
         """
         Remove a profiles from the endpoint profile list.  This assumes there
         is a single endpoint per container.
@@ -800,14 +782,13 @@ class DatastoreClient(object):
         :return: None.
         """
         # Change the profile on the endpoint.
-        old_ep = self.get_endpoint_from_id(endpoint_id)
-        new_ep = old_ep.copy()
+        ep = self.get_endpoint_from_id(endpoint_id)
         for profile_name in profile_names:
             try:
-                new_ep.profile_ids.remove(profile_name)
+                ep.profile_ids.remove(profile_name)
             except ValueError:
                 raise ProfileNotInEndpoint(profile_name)
-        self.update_endpoint(old_ep, new_ep)
+        self.update_endpoint(ep)
 
     @handle_errors
     def get_ep_id_from_cont(self, hostname, container_id):
@@ -868,29 +849,30 @@ class DatastoreClient(object):
         ep_path = ENDPOINT_PATH % {"hostname": hostname,
                                    "container_id": container_id,
                                    "endpoint_id": endpoint.ep_id}
-        self.etcd_client.write(ep_path, endpoint.to_json())
+        new_json = endpoint.to_json()
+        self.etcd_client.write(ep_path, new_json)
+        endpoint._original_json = new_json
 
     @handle_errors
-    def update_endpoint(self, old_endpoint, new_endpoint):
+    def update_endpoint(self, endpoint):
         """
-        Update a single endpoint object to the datastore. Fails if the
-        old_endpoint_raw that's passed in doesn't match the raw data that is
-        in the datastore.
+        Update a single endpoint object to the datastore.  This assumes the
+        endpoint was originally queried from the datastore and updated.
         Example usage:
-            old_endpoint = datastore.get_endpoint(...)
-            new_endpoint = old_endpoint.copy()
+            endpoint = datastore.get_endpoint(...)
             # modify new endpoint fields
-            datastore.update_endpoint(old_endpoint, new_endpoint)
+            datastore.update_endpoint(endpoint)
 
-        :param old_endpoint: The existing endpoint to update.
-        :param new_endpoint: The Endpoint to add to the container.
+        :param endpoint: The Endpoint to add to the container.
         """
-        ep_path = ENDPOINT_PATH % {"hostname": new_endpoint.hostname,
-                                   "container_id": new_endpoint.workload_id,
-                                   "endpoint_id": new_endpoint.ep_id}
+        ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
+                                   "container_id": endpoint.workload_id,
+                                   "endpoint_id": endpoint.ep_id}
+        new_json = endpoint.to_json()
         self.etcd_client.write(ep_path,
-                               new_endpoint.to_json(),
-                               prevValue=old_endpoint.to_json())
+                               new_json,
+                               prevValue=endpoint._original_json)
+        endpoint._original_json = new_json
 
     @handle_errors
     def get_endpoints(self, hostname, container_id):
