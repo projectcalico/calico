@@ -1,6 +1,6 @@
 from test_base import TestBase
 from time import sleep
-from sh import docker, ErrorReturnCode_1
+from sh import ErrorReturnCode, ErrorReturnCode_1
 from docker_host import DockerHost
 
 
@@ -12,22 +12,38 @@ class MultiHostMainline(TestBase):
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
 
-        host1_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host1.name).stdout.rstrip()
-        host2_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host2.name).stdout.rstrip()
-
         calicoctl = "/code/dist/calicoctl %s"
 
         host1.execute(calicoctl % "reset || true")
 
-        host1.execute(calicoctl % ("node --ip=%s" % host1_ip))
-        host2.execute(calicoctl % ("node --ip=%s" % host2_ip))
+        host1.execute(calicoctl % ("node --ip=%s" % host1.ip))
+        host2.execute(calicoctl % ("node --ip=%s" % host2.ip))
 
-        # Wait for the Calico nodes to be created.
-        sleep(3)
+        # Wait for powerstrip to come up.
+        for i in range(5):
+            try:
+                host1.execute("docker ps", docker_host=True)
+                break
+            except ErrorReturnCode:
+                if i == 4:
+                    raise AssertionError("Powerstrip failed to come up.")
+                else:
+                    sleep(1)
 
         host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox", docker_host=True)
         host1.execute("docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox", docker_host=True)
         host1.execute("docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox", docker_host=True)
+
+        # Wait for powerstrip to come up.
+        for i in range(5):
+            try:
+                host2.execute("docker ps", docker_host=True)
+                break
+            except ErrorReturnCode:
+                if i == 4:
+                    raise AssertionError("Powerstrip failed to come up.")
+                else:
+                    sleep(1)
 
         host2.execute("docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox", docker_host=True)
         host2.execute("docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox", docker_host=True)
