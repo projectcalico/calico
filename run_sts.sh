@@ -6,7 +6,7 @@ date
 pwd
 git status
 
-# nosetests calico_containers/tests/st
+nosetests calico_containers/tests/st
 
 # Run the STs. Need to run from the /code directory since the tests expect
 # to be run from the root of the codebase.
