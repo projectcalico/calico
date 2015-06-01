@@ -138,7 +138,7 @@ Calico uses etcd to provide the communication between components and as a
 consistent data store, which ensures Calico can always build an accurate
 network.
 
-Depending on the orchestrator plug-in, etcd may either be the master data store
+Depending on the orchestrator plugin, etcd may either be the master data store
 or a lightweight mirror of a separate data store.  For example, in an
 OpenStack deployment, the OpenStack database is considered the "source of
 truth" and etcd is used to mirror information about the network to the other
@@ -152,14 +152,14 @@ For small deployments the core cluster can be an etcd cluster of one node
 component). This deployment model is simple but provides no redundancy for
 etcd -- in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
 have to rebuild the database which, as noted for OpenStack, will simply require
-that the plug-in resynchonizes state to etcd from the OpenStack database.
+that the plugin resynchronizes state to etcd from the OpenStack database.
 
 In larger deployments the core cluster can be scaled up, as per the
 `etcd admin guide`_.
 
 Additionally, on each machine that hosts either a
 :ref:`calico-felix-component` or a :ref:`calico-orchestrator-plugin`, we run
-an etcd proxy. This is reduces load on the core cluster and shields nodes from
+an etcd proxy. This reduces load on the core cluster and shields nodes from
 the specifics of the etcd cluster. In the case where the etcd cluster has a
 member on the same machine as a :ref:`calico-orchestrator-plugin`, we can
 forgo the proxy on that machine.
@@ -242,7 +242,7 @@ route reflector rather than as a standard BGP client.
 
 The BGP route reflector is responsible for the following tasks:
 
-Centralised Route Distribution
+Centralized Route Distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When :ref:`calico-bgp-component` advertises routes from its FIB to the route

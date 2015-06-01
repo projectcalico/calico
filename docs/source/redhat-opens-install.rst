@@ -291,7 +291,10 @@ On each control node, perform the following steps:
        yum install calico-control
 
 6. Restart the neutron server process:
-    ``service neutron-server restart``.
+
+   ::
+
+       service neutron-server restart
 
 Compute Node Install
 --------------------
@@ -474,7 +477,9 @@ On each compute node, perform the following steps:
 
 14. Restart the Felix service:
 
-       - run ``systemctl restart calico-felix``.
+    ::
+
+       systemctl restart calico-felix
 
 Next Steps
 ----------
