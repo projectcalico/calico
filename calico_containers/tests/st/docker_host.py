@@ -17,6 +17,8 @@ class DockerHost(object):
         pwd = sh.pwd().stdout.rstrip()
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
 
+        self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
+                                 self.name).stdout.rstrip()
         self.execute("while ! docker ps; do sleep 1; done && "
                      "docker load --input /code/calico_containers/calico-node.tar && "
                      "docker load --input /code/calico_containers/busybox.tar && "
