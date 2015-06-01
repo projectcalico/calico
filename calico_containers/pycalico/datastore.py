@@ -183,6 +183,7 @@ class Endpoint(object):
         self.state = state
         self.mac = mac
         self.if_name = if_name
+        self.name = IF_PREFIX + ep_id[:11]
 
         self.profile_id = None
         self.ipv4_nets = set()
@@ -192,7 +193,7 @@ class Endpoint(object):
 
     def to_json(self):
         json_dict = {"state": self.state,
-                     "name": IF_PREFIX + self.ep_id[:11],
+                     "name": self.name,
                      "mac": self.mac,
                      "container:if_name": self.if_name,
                      "profile_id": self.profile_id,
@@ -252,6 +253,9 @@ class Endpoint(object):
 
     def copy(self):
         return copy.deepcopy(self)
+
+    def temp_interface_name(self):
+        return "tmp" + self.ep_id[:11]
 
 
 class Profile(object):
