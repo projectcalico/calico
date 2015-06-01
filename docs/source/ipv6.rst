@@ -118,11 +118,20 @@ implemented in Calico.
 OpenStack Specific Details
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For OpenStack, IPv6 works best when each OpenStack network is configured with
-both an IPv4 and IPv6 subnet with DHCP enabled, at least initially. This makes
-it possible to seamlessly handle VM images that support only IPv4 alongside
-those that support both, and guarantees it will be possible to access
-misconfigured VM images over IPv4.
+In OpenStack, IPv6 connectivity requires defining an IPv6 subnet, in
+each Neutron network, with:
 
-However, we do not believe there are any problems with providing an
-IPv6-only network in OpenStack.
+-  the IPv6 address range that you want your VMs to use
+
+-  DHCP enabled
+
+-  (from Juno onwards) IPv6 address mode set to DHCPv6 stateful.
+
+We suggest initially configuring both IPv4 and IPv6 subnets in each
+network.  This allows handling VM images that support only IPv4
+alongside those that support both IPv4 and IPv6, and allows a VM to be
+accessed over IPv4 in case this is needed to troubleshoot any issues
+with its IPv6 configuration.
+
+In principle, though, we are not aware of any problems with
+configuring and using IPv6-only networks in OpenStack.
