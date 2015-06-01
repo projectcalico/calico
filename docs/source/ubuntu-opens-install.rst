@@ -46,9 +46,9 @@ Install OpenStack
 If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
-`Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_preface.html>`__ /
-`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/ch_preface.html>`__/
-`Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/ch_preface.html>`__.
+`Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html>`__ /
+`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ / 
+`Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__.
 
 
 Configuring the APT software sources
