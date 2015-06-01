@@ -23,12 +23,13 @@ class TestDuplicateIps(TestBase):
 
         host1.execute(calicoctl % ("node --ip=%s" % host1.ip))
         host2.execute(calicoctl % ("node --ip=%s" % host2.ip))
+        host3.execute(calicoctl % ("node --ip=%s" % host3.ip))
 
         # Set up three workloads on three hosts
         self.assert_powerstrip_up(host1)
         host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload1 -tid busybox", docker_host=True)
         self.assert_powerstrip_up(host2)
-        host2.execute("docker run -e CALICO_IP=192.168.1.2 --name workload3 -tid busybox", docker_host=True)
+        host2.execute("docker run -e CALICO_IP=192.168.1.2 --name workload2 -tid busybox", docker_host=True)
         self.assert_powerstrip_up(host3)
         host3.execute("docker run -e CALICO_IP=192.168.1.3 --name workload3 -tid busybox", docker_host=True)
 
