@@ -215,7 +215,6 @@ rm -rf $RPM_BUILD_ROOT
     many local endpoints.
   - Neutron mechanism driver patches and docs for OpenStack Kilo release.
   - Correct IPv6 documentation for Juno and Kilo.
-  - Reset ARP configuration when endpoint MAC changes.
 
 * Tue May 26 2015 Matt Dupre <matt@projectcalico.org> 0.21
   - Support for running multiple neutron-server instances in OpenStack

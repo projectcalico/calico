@@ -14,7 +14,6 @@
   many local endpoints.
 - Neutron mechanism driver patches and docs for OpenStack Kilo release.
 - Correct IPv6 documentation for Juno and Kilo.
-- Reset ARP configuration when endpoint MAC changes.
 
 ## 0.21
 

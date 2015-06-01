@@ -189,7 +189,6 @@ class LocalEndpoint(RefCountedActor):
         # Will be filled in as we learn about the OS interface and the
         # endpoint config.
         self.endpoint = None
-        self._mac = None
         self._iface_name = None
         self._suffix = None
 
@@ -206,19 +205,12 @@ class LocalEndpoint(RefCountedActor):
         :param dict[str] endpoint: endpoint parameter dictionary.
         """
         _log.info("%s updated: %s", self, endpoint)
-
-        mac_changed = False
-
         if endpoint and not self.endpoint:
             # This is the first time we have seen the endpoint, so extract the
             # interface name and endpoint ID.
             self._iface_name = endpoint["name"]
             self._suffix = interface_to_suffix(self.config,
                                                self._iface_name)
-            if endpoint['mac'] != self._mac:
-                self._mac = endpoint['mac']
-                mac_changed = True
-
         was_ready = self._ready
 
         # Activate the required profile IDs (and deactivate any that we no
@@ -240,7 +232,7 @@ class LocalEndpoint(RefCountedActor):
         if endpoint:
             # Configure the network interface; may fail if not there yet (in
             # which case we'll just do it when the interface comes up).
-            self._configure_interface(mac_changed)
+            self._configure_interface()
         else:
             # Remove the network programming.
             self._deconfigure_interface()
@@ -347,12 +339,9 @@ class LocalEndpoint(RefCountedActor):
             _log.exception("Failed to delete chains for %s", self)
             self._failed = True
 
-    def _configure_interface(self, mac_changed):
+    def _configure_interface(self):
         """
         Applies sysctls and routes to the interface.
-
-        :param: bool mac_changed: Has the MAC address changed since it was last
-        configured? If so, we reconfigure ARP for the interface.
         """
         try:
             if self.ip_type == IPV4:
@@ -368,8 +357,7 @@ class LocalEndpoint(RefCountedActor):
                 ips.add(futils.net_to_ip(ip))
             devices.set_routes(self.ip_type, ips,
                                self._iface_name,
-                               self.endpoint["mac"],
-                               reset_arp=mac_changed)
+                               self.endpoint["mac"])
 
         except (IOError, FailedSystemCall, CalledProcessError):
             if not devices.interface_exists(self._iface_name):
