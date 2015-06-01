@@ -35,12 +35,12 @@ class MultiHostMainline(TestBase):
         host1.execute("docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox", docker_host=True)
 
         # Wait for powerstrip to come up.
-        for i in range(5):
+        for i in range(10):
             try:
                 host2.execute("docker ps", docker_host=True)
                 break
             except ErrorReturnCode:
-                if i == 4:
+                if i == 9:
                     raise AssertionError("Powerstrip failed to come up.")
                 else:
                     sleep(1)
