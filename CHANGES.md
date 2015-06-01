@@ -1,6 +1,9 @@
 # Changelog
 
+
 # 0.23-dev
+- Reset ARP configuration when endpoint MAC changes.
+- Firewall input characters in profiles and tags.
 
 ## 0.22
 
