@@ -30,8 +30,9 @@ Prerequisites
 
 Before starting this you will need the following:
 
--  A machine running Ubuntu 14.04.
--  SSH access to the machine.
+-  One or more machines running Ubuntu 14.04 (these will be installed as your
+   OpenStack compute or control nodes).
+-  SSH access to these machines.
 
 Common Steps
 ------------
@@ -39,8 +40,8 @@ Common Steps
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed here.
 
-Install OpenStack Icehouse or Juno
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install OpenStack
+~~~~~~~~~~~~~~~~~
 
 If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
@@ -325,14 +326,16 @@ perform the following steps:
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
 
-   Note: for kilo the version of libvirt-bin should be ``1.2.12-0ubuntu13``.
-   If not, then:
+.. warning:: For kilo the version of libvirt-bin should be at least
+             ``1.2.12-0ubuntu13``.  This will become part of the standard
+             Ubuntu Kilo repository, but at the time of writing needs to be
+             installed as follows:
 
-   ::
+             ::
 
-       sudo add-apt-repository cloud-archive:kilo-proposed
-       sudo apt-get update
-       sudo apt-get upgrade
+                 sudo add-apt-repository cloud-archive:kilo-proposed
+                 sudo apt-get update
+                 sudo apt-get upgrade
 
 7. Install the ``calico-compute`` package:
 
