@@ -24,15 +24,15 @@ class DockerHost(object):
                      "docker load --input /code/calico_containers/busybox.tar && "
                      "docker load --input /code/calico_containers/nsenter.tar")
 
-    def execute(self, command, docker_host=False, **kwargs):
+    def execute(self, command, use_powerstrip=False, **kwargs):
         """
         Pass a command into a host container.
 
-        :param docker_host: When true this sets the DOCKER_HOST env var. This
+        :param use_powerstrip: When true this sets the DOCKER_HOST env var. This
         routes through Powerstrip, so that Calico can be informed of the changes.
         """
         stdin = ' '.join(["export ETCD_AUTHORITY=%s:2379;" % get_ip(), command])
-        if docker_host:
+        if use_powerstrip:
             stdin = ' '.join(["export DOCKER_HOST=localhost:2377;", stdin])
         return self.listen(stdin, **kwargs)
 

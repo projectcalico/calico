@@ -9,7 +9,7 @@ from docker_host import DockerHost
 class TestUnixSocket(TestBase):
     def test_unix_socket(self):
         host = DockerHost('host')
-        # import pdb; pdb.set_trace()
+
         calicoctl = "sudo /code/dist/calicoctl %s"
 
         host.listen(calicoctl % "restart-docker-without-alternative-unix-socket")

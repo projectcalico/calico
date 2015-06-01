@@ -53,7 +53,7 @@ class TestBase(TestCase):
         """
         Check that powerstrip is up by running 'docker ps' through port 2377.
         """
-        powerstrip = partial(host.execute, "docker ps", docker_host=True)
+        powerstrip = partial(host.execute, "docker ps", use_powerstrip=True)
         self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)
 
     def retry_until_success(self, function, retries=10, ex_class=None):

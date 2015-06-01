@@ -27,13 +27,13 @@ class MultiHostMainline(TestBase):
         host2.execute(calicoctl % ("node --ip=%s" % host2.ip))
 
         self.assert_powerstrip_up(host1)
-        host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox", docker_host=True)
-        host1.execute("docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox", docker_host=True)
-        host1.execute("docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox", docker_host=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox", use_powerstrip=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox", use_powerstrip=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox", use_powerstrip=True)
 
         self.assert_powerstrip_up(host2)
-        host2.execute("docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox", docker_host=True)
-        host2.execute("docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox", docker_host=True)
+        host2.execute("docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox", use_powerstrip=True)
+        host2.execute("docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox", use_powerstrip=True)
 
         host1.execute(calicoctl % "profile add PROF_A_C_E")
         host1.execute(calicoctl % "profile add PROF_B")
