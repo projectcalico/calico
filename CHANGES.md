@@ -1,15 +1,20 @@
 # Changelog
 
-- Reset ARP configuration when endpoint MAC changes.
-- Firewall input characters in profiles and tags.
+# 0.23-dev
 
-## 0.22-dev
+## 0.22
 
 - Updated Mechanism driver to specify fixed MAC address for Calico tap
   interfaces.
 - Prevent the possibility of gevent context-switching during garbage collection
-  in Felix
-- Increase the number of file descriptors available to Felix
+  in Felix.
+- Increase the number of file descriptors available to Felix.
+- Firewall input characters in profiles and tags.
+- Implement tree-based dispatch chains to improve IPTables performance with
+  many local endpoints.
+- Neutron mechanism driver patches and docs for OpenStack Kilo release.
+- Correct IPv6 documentation for Juno and Kilo.
+- Reset ARP configuration when endpoint MAC changes.
 
 ## 0.21
 
