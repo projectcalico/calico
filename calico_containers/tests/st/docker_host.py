@@ -20,9 +20,9 @@ class DockerHost(object):
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
         self.execute("while ! docker ps; do sleep 1; done && "
-                     "docker load --input /code/calico-node.tar && "
-                     "docker load --input /code/busybox.tar && "
-                     "docker load --input /code/nsenter.tar")
+                     "docker load --input /code/calico_containers/calico-node.tar && "
+                     "docker load --input /code/calico_containers/busybox.tar && "
+                     "docker load --input /code/calico_containers/nsenter.tar")
 
     def execute(self, command, docker_host=False, **kwargs):
         """

@@ -1,4 +1,4 @@
-from sh import docker, ErrorReturnCode, ErrorReturnCode_1
+from sh import ErrorReturnCode, ErrorReturnCode_1
 from time import sleep
 import unittest
 
@@ -17,28 +17,21 @@ class MultiHostMainline(TestBase):
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
 
-        host1_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host1.name).stdout.rstrip()
-        host2_ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}", host2.name).stdout.rstrip()
-
         calicoctl = "/code/dist/calicoctl %s"
         try:
             host1.execute(calicoctl % "reset")
         except ErrorReturnCode:
             pass
 
-        host1.execute(calicoctl % ("node --ip=%s" % host1_ip))
-        host2.execute(calicoctl % ("node --ip=%s" % host2_ip))
-
         host1.execute(calicoctl % ("node --ip=%s" % host1.ip))
         host2.execute(calicoctl % ("node --ip=%s" % host2.ip))
 
         self.assert_powerstrip_up(host1)
-        self.assert_powerstrip_up(host2)
-
         host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox", docker_host=True)
         host1.execute("docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox", docker_host=True)
         host1.execute("docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox", docker_host=True)
 
+        self.assert_powerstrip_up(host2)
         host2.execute("docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox", docker_host=True)
         host2.execute("docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox", docker_host=True)
 
