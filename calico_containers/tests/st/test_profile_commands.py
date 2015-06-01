@@ -19,6 +19,8 @@ class TestProfileCommands(TestBase):
         host.execute("echo '%s' | " % json + calicoctl % "profile TEST_PROFILE rule update")
 
         self.assertIn('1 deny', host.execute(calicoctl % "profile TEST_PROFILE rule show").stdout.rstrip())
+        json_piece = '"outbound_rules": [\n    {\n      "action": "deny"'
+        self.assertIn(json_piece, host.execute(calicoctl % "profile TEST_PROFILE rule json").stdout.rstrip())
 
         # Test that adding and removing a tag works.
         self.assertNotIn("TEST_TAG", self.show_tag(host))

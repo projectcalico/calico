@@ -74,11 +74,3 @@ class TestArgParsing(TestBase):
         self.assertIn("aa:bb::ff/128", host.execute(calicoctl % "pool show --ipv6").stdout.rstrip())
         host.execute(calicoctl % "pool remove aa:bb::ff/128")
         self.assertNotIn("aa:bb::ff/128", host.execute(calicoctl % "pool show").stdout.rstrip())
-
-        # Not used anywhere else in the tests; added here for completeness.
-        host.execute(calicoctl % "profile add TEST_PROFILE")
-        host.execute(calicoctl % "profile TEST_PROFILE tag add TEST_TAG")
-        host.execute(calicoctl % "profile TEST_PROFILE tag remove TEST_TAG")
-        host.execute(calicoctl % "profile TEST_PROFILE tag show")
-        host.execute(calicoctl % "profile TEST_PROFILE rule json")
-        host.execute(calicoctl % "profile TEST_PROFILE rule show")
