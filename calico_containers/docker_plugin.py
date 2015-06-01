@@ -62,8 +62,8 @@ def create_endpoint():
         next_hop = client.get_default_next_hops(hostname)[ip.version]
         container_id = CONTAINER_NAME
         mac = "EE:EE:EE:EE:EE:EE"
-        iface = IF_PREFIX + ep_id[:10]
-        iface_tmp = "tmp" + ep_id[:10]
+        iface = IF_PREFIX + ep_id[:11]
+        iface_tmp = "tmp" + ep_id[:11]
 
         # Create the veth
         check_call(['ip', 'link',
@@ -77,7 +77,7 @@ def create_endpoint():
         # Set the mac as libnetwork doesn't do this for us.
         check_call(['ip', 'link', 'set', 'dev', iface_tmp, 'address', mac])
 
-        ep = Endpoint(ep_id=ep_id, state="active", mac=mac, if_name=iface)
+        ep = Endpoint(ep_id=ep_id, state="active", mac=mac, if_name='cali0')
         ep.ipv4_nets.add(ip)
         ep.ipv4_gateway = next_hop
         ep.profile_id = net_id
@@ -124,7 +124,7 @@ def join():
 
     ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
 
-    interface_source = "tmp" + ep_id[:10]
+    interface_source = "tmp" + ep_id[:11]
     interface_destination_prefix = IF_PREFIX
 
     return jsonify({
