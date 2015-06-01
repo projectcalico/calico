@@ -18,14 +18,15 @@ class TestProfileCommands(TestBase):
                   '"outbound_rules": [ { "action": "deny" } ] }')
         host.execute("echo '%s' | " % json + calicoctl % "profile TEST_PROFILE rule update")
 
-        assert '1 deny' in host.execute(calicoctl % "profile TEST_PROFILE rule show").stdout.rstrip()
+        self.assertIn('1 deny', host.execute(calicoctl % "profile TEST_PROFILE rule show").stdout.rstrip())
 
         # Test that adding and removing a tag works.
-        assert "TEST_TAG" not in self.show_tag(host)
+        self.assertNotIn("TEST_TAG", self.show_tag(host))
         host.execute(calicoctl % "profile TEST_PROFILE tag add TEST_TAG")
-        assert "TEST_TAG" in self.show_tag(host)
+        self.assertIn("TEST_TAG", self.show_tag(host))
         host.execute(calicoctl % "profile TEST_PROFILE tag remove TEST_TAG")
-        assert "TEST_TAG" not in self.show_tag(host)
+        self.assertNotIn("TEST_TAG", self.show_tag(host))
 
     def show_tag(self, host):
-        return host.execute("/code/dist/calicoctl profile TEST_PROFILE tag show").stdout.rstrip()
+        calicoctl = "/code/dist/calicoctl %s"
+        return host.execute(calicoctl % "profile TEST_PROFILE tag show").stdout.rstrip()

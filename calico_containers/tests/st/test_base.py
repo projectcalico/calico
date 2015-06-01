@@ -71,7 +71,7 @@ class TestBase(TestCase):
             try:
                 result = function()
             except Exception as e:
-                if ex_class and not issubclass(e.__class__, ex_class):
+                if ex_class and not isinstance(e, ex_class):
                     raise
                 if retry < retries:
                     sleep(1)
