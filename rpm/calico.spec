@@ -204,7 +204,7 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Tue Jun 01 2015 Matt Dupre <matt@projectcalico.org> 0.22
+* Tue Jun 01 2015 Matt Dupre <matt@projectcalico.org> 0.22.1
   - Updated Mechanism driver to specify fixed MAC address for Calico tap
     interfaces.
   - Prevent the possibility of gevent context-switching during garbage collection

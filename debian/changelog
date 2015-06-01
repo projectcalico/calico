@@ -1,4 +1,4 @@
-calico (0.22) trusty; urgency=medium
+calico (0.22.1) trusty; urgency=medium
 
   * Updated Mechanism driver to specify fixed MAC address for Calico tap
     interfaces.
