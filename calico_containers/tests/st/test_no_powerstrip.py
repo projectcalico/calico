@@ -7,7 +7,9 @@ from docker_host import DockerHost
 
 class TestNoPowerstrip(TestBase):
     def test_no_powerstrip(self):
-
+        """
+        Test mainline functionality without using powerstrip.
+        """
         host = DockerHost('host')
 
         calicoctl = "/code/dist/calicoctl %s"
@@ -52,7 +54,7 @@ class TestNoPowerstrip(TestBase):
         host.execute("docker exec node2 ping 192.168.1.1 -c 1")
         host.execute("docker exec node2 ping 192.168.1.2 -c 1")
 
-        # Tear it down
+        # Test the teardown commands
         host.execute(calicoctl % "profile remove TEST_GROUP")
         host.execute(calicoctl % "container remove node1")
         host.execute(calicoctl % "container remove node2")

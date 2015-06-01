@@ -16,23 +16,21 @@ class TestMainline(TestBase):
 
         calicoctl = "/code/dist/calicoctl %s"
         host.execute(calicoctl % "node --ip=127.0.0.1")
-        host.execute(calicoctl % "profile add TEST_GROUP")
-
-        # Wait for powerstrip to come up.
         self.assert_powerstrip_up(host)
 
         host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1, docker_host=True)
         host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2, docker_host=True)
+
+        # Configure the nodes with the same profiles.
+        host.execute(calicoctl % "profile add TEST_GROUP")
+        host.execute(calicoctl % "profile TEST_GROUP member add node1")
+        host.execute(calicoctl % "profile TEST_GROUP member add node2")
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1",
                                 docker_host=True).stdout.rstrip()
         node2_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2",
                                 docker_host=True).stdout.rstrip()
-
-        # Configure the nodes with the same profiles.
-        host.execute(calicoctl % "profile TEST_GROUP member add node1")
-        host.execute(calicoctl % "profile TEST_GROUP member add node2")
 
         node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
         node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
