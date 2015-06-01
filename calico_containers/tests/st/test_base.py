@@ -56,7 +56,7 @@ class TestBase(TestCase):
         powerstrip = partial(host.execute, "docker ps", use_powerstrip=True)
         self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)
 
-    def retry_until_success(self, function, retries=10, ex_class=None):
+    def retry_until_success(self, function, retries=10, ex_class=Exception):
         """
         Retries function until no exception is thrown. If exception continues,
         it is reraised.
@@ -70,9 +70,7 @@ class TestBase(TestCase):
         for retry in range(retries + 1):
             try:
                 result = function()
-            except Exception as e:
-                if ex_class and not isinstance(e, ex_class):
-                    raise
+            except ex_class:
                 if retry < retries:
                     sleep(1)
                 else:
