@@ -39,10 +39,10 @@ class TestAddIp(TestBase):
         host.execute("docker exec node2 ping 192.168.3.1 -c 1")
 
         # Now stop and restart node 1 and node 2.
-        host.execute("sudo docker -H=localhost:2377 stop node1")
-        host.execute("sudo docker -H=localhost:2377 stop node2")
-        host.execute("sudo docker -H=localhost:2377 start node1")
-        host.execute("sudo docker -H=localhost:2377 start node2")
+        host.execute("docker stop node1", use_powerstrip=True)
+        host.execute("docker stop node2", use_powerstrip=True)
+        host.execute("docker start node1", use_powerstrip=True)
+        host.execute("docker start node2", use_powerstrip=True)
 
         assert self.retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
