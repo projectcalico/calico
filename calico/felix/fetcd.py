@@ -104,6 +104,33 @@ class EtcdAPI(Actor):
         self._watcher.link(self._on_worker_died)
         self._watcher.start()
 
+        # Start up a greenlet to trigger periodic resyncs.
+        self._resync_greenlet = gevent.spawn(self._periodically_resync)
+        self._resync_greenlet.link_exception(self._on_worker_died)
+
+    @logging_exceptions
+    def _periodically_resync(self):
+        """
+        Greenlet: periodically triggers a resync from etcd.
+
+        :return: Does not return.
+        """
+        _log.info("Started periodic resync thread, waiting for config.")
+        self._watcher.configured.wait()
+        interval = self._config.RESYNC_INTERVAL
+        _log.info("Config loaded, resync interval %s.", interval)
+        if interval == 0:
+            _log.info("Interval is 0, periodic resync disabled.")
+            return
+        while True:
+            # Jitter by 20% of interval.
+            jitter = random.random() * 0.2 * interval
+            sleep_time = interval + jitter
+            _log.debug("After jitter, next periodic resync will be in %.1f "
+                       "seconds.", sleep_time)
+            gevent.sleep(sleep_time)
+            self.force_resync(reason="periodic resync", async=True)
+
     @actor_message()
     def load_config(self):
         """

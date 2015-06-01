@@ -168,6 +168,9 @@ class Config(object):
 
         self.add_parameter("StartupCleanupDelay", "Delay before cleanup starts",
                            30, value_is_int=True)
+        self.add_parameter("PeriodicResyncInterval",
+                           "How often to do cleanups, seconds",
+                           60 * 60, value_is_int=True)
         self.add_parameter("MetadataAddr", "Metadata IP address or hostname",
                            "127.0.0.1")
         self.add_parameter("MetadataPort", "Metadata Port",
@@ -224,6 +227,7 @@ class Config(object):
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.HOSTNAME = self.parameters["FelixHostname"].value
         self.STARTUP_CLEANUP_DELAY = self.parameters["StartupCleanupDelay"].value
+        self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
