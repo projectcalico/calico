@@ -41,9 +41,6 @@ class TestArgParsing(TestBase):
 
         # Add some pools and BGP peers and check the show commands"
         host.execute(calicoctl % "bgppeer rr add 1.2.3.4")
-        host.execute(calicoctl % "bgppeer rr show")
-        host.execute(calicoctl % "bgppeer rr show --ipv4")
-        host.execute(calicoctl % "bgppeer rr show --ipv6")
         assert "1.2.3.4" in host.execute(calicoctl % "bgppeer rr show").stdout.rstrip()
         assert "1.2.3.4" in host.execute(calicoctl % "bgppeer rr show --ipv4").stdout.rstrip()
         assert "1.2.3.4" not in host.execute(calicoctl % "bgppeer rr show --ipv6").stdout.rstrip()
@@ -51,9 +48,6 @@ class TestArgParsing(TestBase):
         assert "1.2.3.4" not in host.execute(calicoctl % "bgppeer rr show").stdout.rstrip()
 
         host.execute(calicoctl % "bgppeer rr add aa:bb::ff")
-        host.execute(calicoctl % "bgppeer rr show")
-        host.execute(calicoctl % "bgppeer rr show --ipv4")
-        host.execute(calicoctl % "bgppeer rr show --ipv6")
         assert "aa:bb::ff" in host.execute(calicoctl % "bgppeer rr show").stdout.rstrip()
         assert "aa:bb::ff" not in host.execute(calicoctl % "bgppeer rr show --ipv4").stdout.rstrip()
         assert "aa:bb::ff" in host.execute(calicoctl % "bgppeer rr show --ipv6").stdout.rstrip()
@@ -61,9 +55,6 @@ class TestArgParsing(TestBase):
         assert "aa:bb::ff" not in host.execute(calicoctl % "bgppeer rr show").stdout.rstrip()
 
         host.execute(calicoctl % "pool add 1.2.3.4")
-        host.execute(calicoctl % "pool show")
-        host.execute(calicoctl % "pool show --ipv4")
-        host.execute(calicoctl % "pool show --ipv6")
         assert "1.2.3.4/32" in host.execute(calicoctl % "pool show").stdout.rstrip()
         assert "1.2.3.4/32" in host.execute(calicoctl % "pool show --ipv4").stdout.rstrip()
         assert "1.2.3.4/32" not in host.execute(calicoctl % "pool show --ipv6").stdout.rstrip()
@@ -71,9 +62,6 @@ class TestArgParsing(TestBase):
         assert "1.2.3.4/32" not in host.execute(calicoctl % "pool show").stdout.rstrip()
 
         host.execute(calicoctl % "pool add 1.2.3.0/24")
-        host.execute(calicoctl % "pool show")
-        host.execute(calicoctl % "pool show --ipv4")
-        host.execute(calicoctl % "pool show --ipv6")
         assert "1.2.3.0/24" in host.execute(calicoctl % "pool show").stdout.rstrip()
         assert "1.2.3.0/24" in host.execute(calicoctl % "pool show --ipv4").stdout.rstrip()
         assert "1.2.3.0/24" not in host.execute(calicoctl % "pool show --ipv6").stdout.rstrip()
@@ -81,9 +69,6 @@ class TestArgParsing(TestBase):
         assert "1.2.3.0/24" not in host.execute(calicoctl % "pool show").stdout.rstrip()
 
         host.execute(calicoctl % "pool add aa:bb::ff")
-        host.execute(calicoctl % "pool show")
-        host.execute(calicoctl % "pool show --ipv4")
-        host.execute(calicoctl % "pool show --ipv6")
         assert "aa:bb::ff/128" in host.execute(calicoctl % "pool show").stdout.rstrip()
         assert "aa:bb::ff/128" not in host.execute(calicoctl % "pool show --ipv4").stdout.rstrip()
         assert "aa:bb::ff/128" in host.execute(calicoctl % "pool show --ipv6").stdout.rstrip()
