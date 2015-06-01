@@ -1,5 +1,5 @@
 from test_base import TestBase
-from sh import docker, ErrorReturnCode
+from sh import ErrorReturnCode
 from time import sleep
 from docker_host import DockerHost
 
@@ -10,22 +10,17 @@ class TestMainline(TestBase):
         Setup two endpoints on one host and check connectivity.
         """
         host = DockerHost('host')
-        host.start_etcd()
-
-        host_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", host.name).stdout.rstrip()
-        etcd_port = "ETCD_AUTHORITY=%s:2379" % host_ip
-        calicoctl = etcd_port + " /code/dist/calicoctl %s"
-        calico_port = "DOCKER_HOST=localhost:2377"
 
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
 
+        calicoctl = "/code/dist/calicoctl %s"
         host.execute(calicoctl % "node --ip=127.0.0.1")
         host.execute(calicoctl % "profile add TEST_GROUP")
 
         # Wait for powerstrip to come up.
         for i in range(5):
             try:
-                host.listen("%s docker ps" % calico_port)
+                host.execute("docker ps", docker_host=True)
                 break
             except ErrorReturnCode:
                 if i == 4:
@@ -33,23 +28,23 @@ class TestMainline(TestBase):
                 else:
                     sleep(1)
 
-        host.listen("%s docker run -e CALICO_IP=%s -tid --name=node1 busybox" % (calico_port, ip1))
-        host.listen("%s docker run -e CALICO_IP=%s -tid --name=node2 busybox" % (calico_port, ip2))
+        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1, docker_host=True)
+        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2, docker_host=True)
 
         # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.execute("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1" % calico_port).stdout.rstrip()
-        node2_ip = host.execute("%s docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2" % calico_port).stdout.rstrip()
+        node1_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1", docker_host=True).stdout.rstrip()
+        node2_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2", docker_host=True).stdout.rstrip()
 
         # Configure the nodes with the same profiles.
-        host.listen(calicoctl % "profile TEST_GROUP member add node1")
-        host.listen(calicoctl % "profile TEST_GROUP member add node2")
+        host.execute(calicoctl % "profile TEST_GROUP member add node1")
+        host.execute(calicoctl % "profile TEST_GROUP member add node2")
 
-        node1_pid = host.execute("docker inspect --format {{.State.Pid}} node1").stdout.rstrip()
-        node2_pid = host.execute("docker inspect --format {{.State.Pid}} node2").stdout.rstrip()
+        node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
+        node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
 
         for i in range(10):
             try:
-                host.listen("./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
+                host.execute("./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
                 break
             except ErrorReturnCode:
                 if i == 9:

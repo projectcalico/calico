@@ -9,20 +9,16 @@ def setup_package():
     """
     # Pull and save each image, so we can use them inside the host containers.
     print sh.bash("./build_node.sh").stdout
-    docker.save("--output", "calico-node.tar", "calico/node")
+    docker.save("--output", "calico_containers/calico-node.tar", "calico/node")
     if not os.path.isfile("busybox.tar"):
         docker.pull("busybox:latest")
-        docker.save("--output", "busybox.tar", "busybox:latest")
+        docker.save("--output", "calico_containers/busybox.tar", "busybox:latest")
     if not os.path.isfile("nsenter.tar"):
         docker.pull("jpetazzo/nsenter:latest")
-        docker.save("--output", "nsenter.tar", "jpetazzo/nsenter:latest")
-    if not os.path.isfile("etcd.tar"):
-        docker.pull("quay.io/coreos/etcd:v2.0.10")
-        docker.save("--output", "etcd.tar", "quay.io/coreos/etcd:v2.0.10")
+        docker.save("--output", "calico_containers/nsenter.tar", "jpetazzo/nsenter:latest")
 
     # Create the calicoctl binary here so it will be in the volume mounted on the hosts.
     print sh.bash("./create_binary.sh")
-    print "Calicoctl binary created."
 
 
 def teardown_package():
