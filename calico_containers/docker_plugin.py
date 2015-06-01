@@ -204,13 +204,12 @@ def assign_ipv4():
             break
     return ip
 
+
 def unassign_ipv4(ip):
     """
     Unassign a IPv4 address from the configured pools.
     :return: True if the unassignment succeeded. False otherwise.
     """
-    ip = None
-
     # For each configured pool, attempt to unassign the IP before giving up.
     for pool in client.get_ip_pools("v4"):
         if client.unassign_address(pool, ip):
