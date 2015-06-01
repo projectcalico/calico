@@ -17,7 +17,7 @@ Ubuntu 14.04 Packaged Install Instructions
 
 These instructions will take you through a first-time install of Calico using
 the latest packages on a system running Ubuntu 14.04 with either OpenStack
-Icehouse, Juno or kilo. If you are upgrading an existing system, please see the
+Icehouse, Juno or Kilo. If you are upgrading an existing system, please see the
 :doc:`opens-upgrade` document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading control
