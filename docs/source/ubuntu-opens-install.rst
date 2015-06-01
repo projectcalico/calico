@@ -17,7 +17,7 @@ Ubuntu 14.04 Packaged Install Instructions
 
 These instructions will take you through a first-time install of Calico using
 the latest packages on a system running Ubuntu 14.04 with either OpenStack
-Icehouse or Juno. If you are upgrading an existing system, please see the
+Icehouse, Juno or Kilo. If you are upgrading an existing system, please see the
 :doc:`opens-upgrade` document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading control
@@ -30,8 +30,9 @@ Prerequisites
 
 Before starting this you will need the following:
 
--  A machine running Ubuntu 14.04.
--  SSH access to the machine.
+-  One or more machines running Ubuntu 14.04 (these will be installed as your
+   OpenStack compute or control nodes).
+-  SSH access to these machines.
 
 Common Steps
 ------------
@@ -39,31 +40,32 @@ Common Steps
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed here.
 
-Install OpenStack Icehouse or Juno
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install OpenStack
+~~~~~~~~~~~~~~~~~
 
 If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
-`Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/ch_preface.html>`__ /
-`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/ch_preface.html>`__.
+`Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html>`__ /
+`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ / 
+`Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__.
+
 
 Configuring the APT software sources
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The machines need to be configured such that APT can get access to the
 Calico packages. This step differs depending on whether you're using
-Icehouse or Juno.
-
-Icehouse
-^^^^^^^^
+Icehouse, Juno or Kilo.
 
 Add the Calico PPA.
 
 ::
 
-    sudo apt-add-repository ppa:project-calico/icehouse
+    sudo apt-add-repository ppa:project-calico/<release>
 
+
+Where ``<release>`` is icehouse, juno or kilo.
 
 Edit ``/etc/apt/preferences`` to add the following lines, whose effect
 is to prefer Calico-provided packages for Nova and Neutron even if later
@@ -75,24 +77,6 @@ versions of those packages are released by Ubuntu.
     Pin: release o=LP-PPA-project-calico-*
     Pin-Priority: 1001
 
-Juno
-^^^^
-
-Add the Calico PPA.
-
-::
-
-    sudo add-apt-repository ppa:project-calico/juno
-
-Edit ``/etc/apt/preferences`` to add the following lines, whose effect
-is to prefer Calico-provided packages for Nova and Neutron even if later
-versions of those packages are released by Ubuntu.
-
-::
-
-    Package: *
-    Pin: release -o=LP-PPA-project-calico-*
-    Pin-Priority: 1001
 
 Common
 ^^^^^^
@@ -341,6 +325,18 @@ perform the following steps:
 6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
+
+.. warning:: Check the version of libvirt-bin that is installed using
+             ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
+             should be at least ``1.2.12-0ubuntu13``.   This will become part
+             of the standard Ubuntu Kilo repository, but at the time of writing
+             needs to be installed as follows:
+
+             ::
+
+                 sudo add-apt-repository cloud-archive:kilo-proposed
+                 sudo apt-get update
+                 sudo apt-get upgrade
 
 7. Install the ``calico-compute`` package:
 
