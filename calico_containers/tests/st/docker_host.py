@@ -26,22 +26,27 @@ class DockerHost(object):
 
     def execute(self, command, use_powerstrip=False, **kwargs):
         """
-        Pass a command into a host container.
+        Pass a command into a host container. Appends some environment
+        variables and then calls out to DockerHost._listen. This uses stdin via
+        'bash -s' which is more forgiving of bash syntax than 'bash -c'.
 
         :param use_powerstrip: When true this sets the DOCKER_HOST env var. This
         routes through Powerstrip, so that Calico can be informed of the changes.
         """
-        stdin = ' '.join(["export ETCD_AUTHORITY=%s:2379;" % get_ip(), command])
-        if use_powerstrip:
-            stdin = ' '.join(["export DOCKER_HOST=localhost:2377;", stdin])
-        return self.listen(stdin, **kwargs)
+        etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % get_ip()
+        stdin = ' '.join([etcd_auth, command])
 
-    def listen(self, stdin, **kwargs):
+        if use_powerstrip:
+            docker_host = "export DOCKER_HOST=localhost:2377;"
+            stdin = ' '.join([docker_host, stdin])
+        return self._listen(stdin, **kwargs)
+
+    def _listen(self, stdin, **kwargs):
         """
-        Feed a command to a container via stdin. Used when `bash -c` in
-        DockerHost.execute has bad parsing behavior.
+        Feed a raw command to a container via stdin.
         """
-        return docker("exec", "-i", self.name, "bash", s=True, _in=stdin, **kwargs)
+        return docker("exec", "--interactive", self.name,
+                      "bash", s=True, _in=stdin, **kwargs)
 
     def delete(self):
         """
