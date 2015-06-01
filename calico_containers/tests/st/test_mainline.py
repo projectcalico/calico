@@ -31,6 +31,10 @@ class TestMainline(TestBase):
                                 use_powerstrip=True).stdout.rstrip()
         node2_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2",
                                 use_powerstrip=True).stdout.rstrip()
+        if ip1 != 'auto':
+            self.assertEqual(ip1, node1_ip)
+        if ip2 != 'auto':
+            self.assertEqual(ip2, node2_ip)
 
         node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
         node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
