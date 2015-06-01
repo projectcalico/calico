@@ -6,4 +6,4 @@ date
 pwd
 git status
 
-nosetests calico_containers/tests/st
+nosetests calico_containers/tests/st -s
