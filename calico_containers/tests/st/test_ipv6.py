@@ -15,13 +15,13 @@ class TestIpv6(TestBase):
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
 
         calicoctl = "/code/dist/calicoctl %s"
-        host.execute(calicoctl % "node --ip=127.0.0.1")
+        host.execute(calicoctl % "node --ip=127.0.0.1 --ip6=fd80:24e2:f998:72d6::1")
         self.assert_powerstrip_up(host)
 
-        ip1, ip2 = "", ""
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1,
+        ip1, ip2 = "fd80:24e2:f998:72d6::1", "fd80:24e2:f998:72d6::2"
+        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 phusion/baseimage:0.9.16" % ip1,
                      use_powerstrip=True)
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2,
+        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 phusion/baseimage:0.9.16" % ip2,
                      use_powerstrip=True)
 
         # Configure the nodes with the same profiles.
