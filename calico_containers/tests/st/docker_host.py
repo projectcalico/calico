@@ -21,6 +21,7 @@ class DockerHost(object):
                                  self.name).stdout.rstrip()
         ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
                              self.name).stdout.rstrip()
+        # TODO: change this hardcoding when we set up IPv6 for hosts
         self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
 
         self.execute("while ! docker ps; do sleep 1; done && "
