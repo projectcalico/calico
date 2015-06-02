@@ -13,8 +13,6 @@ class TestMainline(TestBase):
         """
         host = DockerHost('host')
 
-        host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
-
         host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1,
                      use_powerstrip=True)
         host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2,
@@ -37,17 +35,14 @@ class TestMainline(TestBase):
         if ip2 != 'auto':
             self.assertEqual(ip2, node2_ip)
 
-        node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
-        node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
-
-        ping = partial(host.execute, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
+        ping = partial(host.execute, "docker exec node1 ping %s -c 1 -W 1" % node1_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
-        host.execute("./nsenter -t %s ping %s -c 1" % (node1_pid, node1_ip))
-        host.execute("./nsenter -t %s ping %s -c 1" % (node1_pid, node2_ip))
-        host.execute("./nsenter -t %s ping %s -c 1" % (node2_pid, node1_ip))
-        host.execute("./nsenter -t %s ping %s -c 1" % (node2_pid, node2_ip))
+        host.execute("docker exec node1 ping %s -c 1" % node1_ip)
+        host.execute("docker exec node1 ping %s -c 1" % node2_ip)
+        host.execute("docker exec node2 ping %s -c 1" % node1_ip)
+        host.execute("docker exec node2 ping %s -c 1" % node2_ip)
 
         # Test calicoctl teardown commands.
         host.calicoctl("profile remove TEST_GROUP")

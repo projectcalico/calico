@@ -25,8 +25,7 @@ class DockerHost(object):
         docker_ps = partial(self.execute, "docker ps")
         retry_until_success(docker_ps, ex_class=ErrorReturnCode)
         self.execute("docker load --input /code/calico_containers/calico-node.tar && "
-                     "docker load --input /code/calico_containers/busybox.tar && "
-                     "docker load --input /code/calico_containers/nsenter.tar")
+                     "docker load --input /code/calico_containers/busybox.tar")
 
         if start_calico:
             self.start_calico_node()
