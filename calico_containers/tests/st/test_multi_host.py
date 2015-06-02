@@ -15,16 +15,12 @@ class MultiHostMainline(TestBase):
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
 
-        host1.start_calico_node()
-        host2.start_calico_node()
-
         ip1 = "192.168.1.1"
         ip2 = "192.168.1.2"
         ip3 = "192.168.1.3"
         ip4 = "192.168.1.4"
         ip5 = "192.168.1.5"
 
-        self.assert_powerstrip_up(host1)
         host1.execute("docker run -e CALICO_IP=%s --name workload1 -tid busybox" % ip1,
                       use_powerstrip=True)
         host1.execute("docker run -e CALICO_IP=%s --name workload2 -tid busybox" % ip2,
@@ -32,7 +28,6 @@ class MultiHostMainline(TestBase):
         host1.execute("docker run -e CALICO_IP=%s --name workload3 -tid busybox" % ip3,
                       use_powerstrip=True)
 
-        self.assert_powerstrip_up(host2)
         host2.execute("docker run -e CALICO_IP=%s --name workload4 -tid busybox" % ip4,
                       use_powerstrip=True)
         host2.execute("docker run -e CALICO_IP=%s --name workload5 -tid busybox" % ip5,

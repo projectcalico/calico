@@ -7,7 +7,7 @@ class TestProfileCommands(TestBase):
         """
         Test that the profile rule update command successfully updates.
         """
-        host = DockerHost('host')
+        host = DockerHost('host', start_calico=False)
 
         host.calicoctl("profile add TEST_PROFILE")
 

@@ -14,9 +14,6 @@ class TestMainline(TestBase):
 
         host.execute("docker run --rm  -v `pwd`:/target jpetazzo/nsenter", _ok_code=[0, 1])
 
-        host.start_calico_node()
-        self.assert_powerstrip_up(host)
-
         host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1,
                      use_powerstrip=True)
         host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2,

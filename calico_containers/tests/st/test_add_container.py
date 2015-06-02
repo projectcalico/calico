@@ -13,10 +13,7 @@ class TestAddContainer(TestBase):
         host = DockerHost('host')
 
         host.execute("docker run -tid --name=node busybox")
-        host.start_calico_node()
         host.calicoctl("profile add TEST_GROUP")
-
-        self.assert_powerstrip_up(host)
 
         # Use the `container add` command instead of passing a CALICO_IP on
         # container creation. Note this no longer needs DOCKER_HOST specified.

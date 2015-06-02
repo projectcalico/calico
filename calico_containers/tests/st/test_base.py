@@ -1,6 +1,5 @@
-from sh import docker, ErrorReturnCode
+from sh import docker
 from time import sleep
-from functools import partial
 from unittest import TestCase
 
 from utils import get_ip, delete_container
@@ -48,13 +47,6 @@ class TestBase(TestCase):
             initial_cluster="calico=http://%s:2380" % self.ip,
             initial_cluster_state="new",
         )
-
-    def assert_powerstrip_up(self, host):
-        """
-        Check that powerstrip is up by running 'docker ps' through port 2377.
-        """
-        powerstrip = partial(host.execute, "docker ps", use_powerstrip=True)
-        self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)
 
     def retry_until_success(self, function, retries=10, ex_class=Exception):
         """

@@ -9,7 +9,7 @@ class TestArgParsing(TestBase):
         """
         Test that calicoctl correctly accepts or rejects given argument.
         """
-        host = DockerHost('host')
+        host = DockerHost('host', start_calico=False)
 
         # Run various commands with invalid IPs.
         with self.assertRaises(ErrorReturnCode_1):

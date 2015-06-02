@@ -1,5 +1,6 @@
 import sh
-from sh import docker
+from sh import docker, ErrorReturnCode
+from functools import partial
 
 from utils import get_ip, delete_container
 
@@ -8,7 +9,7 @@ class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by calico.
     """
-    def __init__(self, name):
+    def __init__(self, name, start_calico=True):
         """
         Create a container using an image made for docker-in-docker. Load saved images into it.
         """
@@ -23,6 +24,10 @@ class DockerHost(object):
                      "docker load --input /code/calico_containers/calico-node.tar && "
                      "docker load --input /code/calico_containers/busybox.tar && "
                      "docker load --input /code/calico_containers/nsenter.tar")
+
+        if start_calico:
+            self.start_calico_node()
+            self.assert_powerstrip_up()
 
     def delete(self):
         """
@@ -65,3 +70,10 @@ class DockerHost(object):
             args.append('--ip6=%s' % ip6)
         cmd = ' '.join(args)
         self.calicoctl(cmd)
+
+    def assert_powerstrip_up(self):
+        """
+        Check that powerstrip is up by running 'docker ps' through port 2377.
+        """
+        powerstrip = partial(self.execute, "docker ps", use_powerstrip=True)
+        self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)

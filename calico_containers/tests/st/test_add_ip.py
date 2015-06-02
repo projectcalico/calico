@@ -12,9 +12,6 @@ class TestAddIp(TestBase):
         """
         host = DockerHost('host')
 
-        host.start_calico_node()
-        self.assert_powerstrip_up(host)
-
         host.execute("docker run -e CALICO_IP=192.168.1.1 -tid --name=node1 busybox", use_powerstrip=True)
         host.execute("docker run -tid --name=node2 busybox")
         host.calicoctl("container add node2 192.168.1.2 --interface=hello")

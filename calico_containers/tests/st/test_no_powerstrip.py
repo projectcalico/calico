@@ -12,10 +12,7 @@ class TestNoPowerstrip(TestBase):
         """
         host = DockerHost('host')
 
-        host.start_calico_node()
         host.calicoctl("profile add TEST_GROUP")
-
-        self.assert_powerstrip_up(host)
 
         # Remove the environment variable such that docker run does not utilize
         # powerstrip.
