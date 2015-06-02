@@ -71,7 +71,7 @@ class TestLocalEndpoint(BaseTestCase):
         retcode = futils.CommandOutput("", "")
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
-        # Call with no data.
+        # Call with no data; should be ignored (no configuration to remove).
         result = local_ep.on_endpoint_update(None, async=False)
 
         ips = ["1.2.3.4"]
@@ -82,6 +82,7 @@ class TestLocalEndpoint(BaseTestCase):
                  'ipv4_nets': ips,
                  'profile_ids': []}
 
+        # Report an initial update (endpoint creation) and check configured
         with mock.patch('calico.felix.devices.set_routes'):
             with mock.patch('calico.felix.devices.configure_interface_ipv4'):
                 result = local_ep.on_endpoint_update(data, async=False)
@@ -93,6 +94,8 @@ class TestLocalEndpoint(BaseTestCase):
                                                            data['mac'],
                                                            reset_arp=True)
 
+        # Send through an update with no changes - should redo without
+        # resetting ARP.
         with mock.patch('calico.felix.devices.set_routes'):
             with mock.patch('calico.felix.devices.configure_interface_ipv4'):
                 result = local_ep.on_endpoint_update(data, async=False)
@@ -104,6 +107,7 @@ class TestLocalEndpoint(BaseTestCase):
                                                            data['mac'],
                                                            reset_arp=False)
 
+        # Change the MAC address and try again, leading to reset of ARP.
         data['mac'] = stub_utils.get_mac()
         with mock.patch('calico.felix.devices.set_routes'):
             with mock.patch('calico.felix.devices.configure_interface_ipv4'):
@@ -116,7 +120,7 @@ class TestLocalEndpoint(BaseTestCase):
                                                            data['mac'],
                                                            reset_arp=True)
 
-
+        # Send empty data, which deletes the endpoint.
         with mock.patch('calico.felix.devices.set_routes'):
             result = local_ep.on_endpoint_update(None, async=False)
             devices.set_routes.assert_called_once_with(ip_type, set(),
@@ -129,7 +133,7 @@ class TestLocalEndpoint(BaseTestCase):
         retcode = futils.CommandOutput("", "")
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
-        # Call with no data.
+        # Call with no data; should be ignored (no configuration to remove).
         result = local_ep.on_endpoint_update(None, async=False)
 
         ips = ["2001::abcd"]
@@ -142,6 +146,7 @@ class TestLocalEndpoint(BaseTestCase):
                  'ipv6_gateway': gway,
                  'profile_ids': []}
 
+        # Report an initial update (endpoint creation) and check configured
         with mock.patch('calico.felix.devices.set_routes'):
             with mock.patch('calico.felix.devices.configure_interface_ipv6'):
                 result = local_ep.on_endpoint_update(data, async=False)
@@ -154,6 +159,8 @@ class TestLocalEndpoint(BaseTestCase):
                                                            data['mac'],
                                                            reset_arp=False)
 
+        # Send through an update with no changes - should redo without
+        # resetting ARP.
         with mock.patch('calico.felix.devices.set_routes'):
             with mock.patch('calico.felix.devices.configure_interface_ipv6'):
                 result = local_ep.on_endpoint_update(data, async=False)
@@ -166,6 +173,8 @@ class TestLocalEndpoint(BaseTestCase):
                                                            data['mac'],
                                                            reset_arp=False)
 
+        # Send through an update with no changes - would reset ARP, but this is
+        # IPv6 so it won't.
         data['mac'] = stub_utils.get_mac()
         with mock.patch('calico.felix.devices.set_routes'):
             with mock.patch('calico.felix.devices.configure_interface_ipv6'):
@@ -179,6 +188,7 @@ class TestLocalEndpoint(BaseTestCase):
                                                            data['mac'],
                                                            reset_arp=False)
 
+        # Send empty data, which deletes the endpoint.
         with mock.patch('calico.felix.devices.set_routes'):
             result = local_ep.on_endpoint_update(None, async=False)
             devices.set_routes.assert_called_once_with(ip_type, set(),

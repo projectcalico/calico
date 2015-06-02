@@ -367,7 +367,9 @@ class LocalEndpoint(RefCountedActor):
         Applies sysctls and routes to the interface.
 
         :param: bool mac_changed: Has the MAC address changed since it was last
-        configured? If so, we reconfigure ARP for the interface.
+                     configured? If so, we reconfigure ARP for the interface in
+                     IPv4 (ARP does not exist for IPv6, which uses neighbour
+                     solicitation instead).
         """
         try:
             if self.ip_type == IPV4:
