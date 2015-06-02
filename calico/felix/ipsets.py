@@ -19,10 +19,10 @@ felix.ipsets
 
 IP sets management functions.
 """
-from collections import defaultdict
 
-import logging
+from collections import defaultdict
 from itertools import chain
+import logging
 
 from calico.felix import futils
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
@@ -32,8 +32,8 @@ from calico.felix.refcount import ReferenceManager, RefCountedActor
 _log = logging.getLogger(__name__)
 
 FELIX_PFX = "felix-"
-IPSET_PREFIX = { IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-" }
-IPSET_TMP_PREFIX = { IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-" }
+IPSET_PREFIX = {IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-"}
+IPSET_TMP_PREFIX = {IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-"}
 
 
 class IpsetManager(ReferenceManager):
@@ -50,8 +50,7 @@ class IpsetManager(ReferenceManager):
         # State.
         # Tag IDs indexed by profile IDs
         self.tags_by_prof_id = {}
-        # Endpoint dicts indexed by EndpointId objects
-        self.endpoints_by_ep_id = {}
+        self.endpoint_data_by_ep_id = {}
 
         # Main index.  Since an IP address can be assigned to multiple
         # endpoints, we need to track which endpoints reference an IP.  When
@@ -135,14 +134,16 @@ class IpsetManager(ReferenceManager):
             self.on_tags_update(profile_id, None)
             self._maybe_yield()
         del missing_profile_ids
-        missing_endpoints = set(self.endpoints_by_ep_id.keys())
+        missing_endpoints = set(self.endpoint_data_by_ep_id.keys())
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
             assert endpoint is not None
-            self.on_endpoint_update(endpoint_id, endpoint)
+            endpoint_data = self._endpoint_data_from_dict(endpoint_id,
+                                                          endpoint)
+            self._on_endpoint_data_update(endpoint_id, endpoint_data)
             missing_endpoints.discard(endpoint_id)
             self._maybe_yield()
         for endpoint_id in missing_endpoints:
-            self.on_endpoint_update(endpoint_id, None)
+            self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
             self._maybe_yield()
 
         _log.info("Tags snapshot applied: %s tags, %s endpoints",
@@ -158,8 +159,8 @@ class IpsetManager(ReferenceManager):
         # only clean up our own rubbish.
         pfx = IPSET_PREFIX[self.ip_type]
         tmppfx = IPSET_TMP_PREFIX[self.ip_type]
-        felix_ipsets = set([n for n in all_ipsets if n.startswith(pfx) or
-                                                     n.startswith(tmppfx)])
+        felix_ipsets = set([n for n in all_ipsets if (n.startswith(pfx) or
+                                                      n.startswith(tmppfx))])
         whitelist = set()
         live_ipsets = self.objects_by_id.itervalues()
         # stopping_objects_by_id is a dict of sets of ActiveIpset objects,
@@ -212,8 +213,9 @@ class IpsetManager(ReferenceManager):
         _log.debug("Profile %s removed tags: %s", profile_id, removed_tags)
 
         for endpoint_id in endpoint_ids:
-            endpoint = self.endpoints_by_ep_id.get(endpoint_id, {})
-            ip_addrs = self._extract_ips(endpoint)
+            endpoint = self.endpoint_data_by_ep_id.get(endpoint_id,
+                                                       EMPTY_ENDPOINT_DATA)
+            ip_addrs = endpoint.ip_addresses
             for tag_id in removed_tags:
                 for ip in ip_addrs:
                     self._remove_mapping(tag_id, profile_id, endpoint_id, ip)
@@ -227,18 +229,6 @@ class IpsetManager(ReferenceManager):
         else:
             self.tags_by_prof_id[profile_id] = tags
 
-    def _extract_ips(self, endpoint):
-        """
-        Extract IP address list from an endpoint dict.
-
-        :param dict endpoint: Endpoint dictionary
-        :returns: List of IP addresses of the correct IP version.
-        """
-        if endpoint is None:
-            return set()
-        return set(map(futils.net_to_ip,
-                       endpoint.get(self.nets_key, [])))
-
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
@@ -249,7 +239,45 @@ class IpsetManager(ReferenceManager):
             information or None to indicate deletion.
 
         """
+        endpoint_data = self._endpoint_data_from_dict(endpoint_id, endpoint)
+        self._on_endpoint_data_update(endpoint_id, endpoint_data)
 
+    def _endpoint_data_from_dict(self, endpoint_id, endpoint_dict):
+        """
+        Convert the endpoint dict, which may be large, into a struct-like
+        object in order to save occupancy.
+
+        As an optimization, if the endpoint doesn't contain any data relevant
+        to this manager, returns EMPTY_ENDPOINT_DATA.
+
+        :param dict|None endpoint_dict: The data model endpoint dict or None.
+        :return: An EndpointData object containing the data. If the input
+            was None, EMPTY_ENDPOINT_DATA is returned.
+        """
+        if endpoint_dict is not None:
+            profile_ids = endpoint_dict.get("profile_ids", [])
+            nets_list = endpoint_dict.get(self.nets_key, [])
+            if profile_ids and nets_list:
+                # Optimization: only return an object if this endpoint makes
+                # some contribution to the IP addresses in the tags.
+                ips = map(futils.net_to_ip, nets_list)
+                return EndpointData(profile_ids, ips)
+            else:
+                _log.debug("Endpoint makes no contribution, "
+                           "treating as missing: %s", endpoint_id)
+        return EMPTY_ENDPOINT_DATA
+
+    def _on_endpoint_data_update(self, endpoint_id, endpoint_data):
+        """
+        Update tag memberships and indices with the new EndpointData
+        object.
+
+        :param EndpointId endpoint_id: ID of the endpoint.
+        :param EndpointData endpoint_data: An EndpointData object
+            EMPTY_ENDPOINT_DATA to indicate deletion (or endpoint being
+            optimized out).
+
+        """
         # Endpoint updates are the most complex to handle because they may
         # change the profile IDs (and hence the set of tags) as well as the
         # ip addresses attached to the interface.  In addition, the endpoint
@@ -260,20 +288,22 @@ class IpsetManager(ReferenceManager):
         # previous endpoint then we default old_tags to the empty set.  Then,
         # when we calculate removed_tags, we'll get the empty set and the
         # removal loop will be skipped.
-        old_endpoint = self.endpoints_by_ep_id.pop(endpoint_id, {})
-        old_prof_ids = set(old_endpoint.get("profile_ids", []))
+        old_endpoint = self.endpoint_data_by_ep_id.pop(endpoint_id,
+                                                       EMPTY_ENDPOINT_DATA)
+        old_prof_ids = old_endpoint.profile_ids
         old_tags = set()
         for profile_id in old_prof_ids:
             for tag in self.tags_by_prof_id.get(profile_id, []):
                 old_tags.add((profile_id, tag))
 
-        if endpoint is None:
-            _log.debug("Deletion, setting new_tags to empty.")
-            new_prof_ids = set()
-        else:
-            _log.debug("Add/update, setting new_tags to indexed value.")
-            new_prof_ids = set(endpoint.get("profile_ids", []))
-            self.endpoints_by_ep_id[endpoint_id] = endpoint
+        if endpoint_data != EMPTY_ENDPOINT_DATA:
+            # EMPTY_ENDPOINT_DATA represents a deletion (or that the endpoint
+            # has been optimized out earlier in the pipeline).  Only store
+            # off real endpoints.
+            _log.debug("Endpoint %s updated", endpoint_id)
+            self.endpoint_data_by_ep_id[endpoint_id] = endpoint_data
+
+        new_prof_ids = endpoint_data.profile_ids
         new_tags = set()
         for profile_id in new_prof_ids:
             for tag in self.tags_by_prof_id.get(profile_id, []):
@@ -293,9 +323,9 @@ class IpsetManager(ReferenceManager):
         unchanged_tags = new_tags & old_tags
         removed_tags = old_tags - new_tags
 
-        # _extract_ips() will default old/new_ips to set() if there are no IPs.
-        old_ips = self._extract_ips(old_endpoint)
-        new_ips = self._extract_ips(endpoint)
+        # These default to set() if there are no IPs.
+        old_ips = old_endpoint.ip_addresses
+        new_ips = endpoint_data.ip_addresses
 
         # Add *new* IPs to new tags.  On a deletion, added_tags will be empty.
         # Do this first to avoid marking ipsets as dirty if an endpoint moves
@@ -359,7 +389,7 @@ class IpsetManager(ReferenceManager):
         """
         Notes in the index that an endpoint uses the given profiles.
 
-        :param list[str] prof_ids: List of profile IDs
+        :param set[str] prof_ids: List of profile IDs
         :param EndpointId endpoint_id: ID of the endpoint
         """
         for prof_id in prof_ids:
@@ -370,7 +400,7 @@ class IpsetManager(ReferenceManager):
         Notes in the index that an endpoint no longer uses any of the
         given profiles.
 
-        :param list[str] prof_ids: List of profile IDs
+        :param set[str] prof_ids: List of profile IDs
         :param EndpointId endpoint_id: ID of the endpoint
         """
         for prof_id in prof_ids:
@@ -392,6 +422,60 @@ class IpsetManager(ReferenceManager):
         _log.info("Finishing batch, sending updates to any dirty tags..")
         self._update_dirty_active_ipsets()
         _log.info("Finished sending updates to dirty tags.")
+
+
+class EndpointData(object):
+    """
+    Space-efficient read-only 'struct' to hold only the endpoint data
+    that we need.
+    """
+    __slots__ = ["_profile_ids", "_ip_addresses"]
+
+    def __init__(self, profile_ids, ip_addresses):
+        """
+        :param sequence profile_ids: The profile IDs for the endpoint.
+        :param sequence ip_addresses: IP addresses for the endpoint.
+        """
+        # Note: profile IDs are ordered in the data model but the ipsets
+        # code doesn't care about the ordering so it's safe to sort these here
+        # for comparison purposes.
+        self._profile_ids = tuple(sorted(profile_ids))
+        self._ip_addresses = tuple(sorted(ip_addresses))
+
+    @property
+    def profile_ids(self):
+        """:returns set[str]: profile IDs."""
+        # Generate set on demand to keep occupancy down.  250B overhead for a
+        # set vs 64 for a tuple.
+        return set(self._profile_ids)
+
+    @property
+    def ip_addresses(self):
+        """:returns set[str]: IP addresses."""
+        # Generate set on demand to keep occupancy down.  250B overhead for a
+        # set vs 64 for a tuple.
+        return set(self._ip_addresses)
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(%s,%s)" % (self._profile_ids,
+                                                      self._ip_addresses)
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        if not isinstance(other, EndpointData):
+            return False
+        return (other._profile_ids == self._profile_ids and
+                other._ip_addresses == self._ip_addresses)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self._profile_ids) + hash(self._ip_addresses)
+
+
+EMPTY_ENDPOINT_DATA = EndpointData([], [])
 
 
 class ActiveIpset(RefCountedActor):
