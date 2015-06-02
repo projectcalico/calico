@@ -1,5 +1,4 @@
 from sh import docker
-from time import sleep
 from unittest import TestCase
 
 from utils import get_ip, delete_container
@@ -47,26 +46,3 @@ class TestBase(TestCase):
             initial_cluster="calico=http://%s:2380" % self.ip,
             initial_cluster_state="new",
         )
-
-    def retry_until_success(self, function, retries=10, ex_class=Exception):
-        """
-        Retries function until no exception is thrown. If exception continues,
-        it is reraised.
-
-        :param function: the function to be repeatedly called
-        :param retries: the maximum number of times to retry the function.
-        A value of 0 will run the function once with no retries.
-        :param ex_class: The class of expected exceptions.
-        :returns: the value returned by function
-        """
-        for retry in range(retries + 1):
-            try:
-                result = function()
-            except ex_class:
-                if retry < retries:
-                    sleep(1)
-                else:
-                    raise
-            else:
-                # Successfully ran the function
-                return result

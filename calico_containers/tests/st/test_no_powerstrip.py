@@ -3,6 +3,7 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
+from utils import retry_until_success
 
 
 class TestNoPowerstrip(TestBase):
@@ -42,7 +43,7 @@ class TestNoPowerstrip(TestBase):
 
         # Check it works
         ping = partial(host.execute, "docker exec node1 ping 192.168.1.2 -c 1 -W 1")
-        self.retry_until_success(ping, ex_class=ErrorReturnCode)
+        retry_until_success(ping, ex_class=ErrorReturnCode)
 
         host.execute("docker exec node1 ping 192.168.1.1 -c 1")
         host.execute("docker exec node1 ping 192.168.1.2 -c 1")

@@ -2,7 +2,7 @@ import sh
 from sh import docker, ErrorReturnCode
 from functools import partial
 
-from utils import get_ip, delete_container
+from utils import get_ip, delete_container, retry_until_success
 
 
 class DockerHost(object):
@@ -20,8 +20,11 @@ class DockerHost(object):
 
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
-        self.execute("while ! docker ps; do sleep 1; done && "
-                     "docker load --input /code/calico_containers/calico-node.tar && "
+
+        # Make sure docker is up
+        docker_ps = partial(self.execute, "docker ps")
+        retry_until_success(docker_ps, ex_class=ErrorReturnCode)
+        self.execute("docker load --input /code/calico_containers/calico-node.tar && "
                      "docker load --input /code/calico_containers/busybox.tar && "
                      "docker load --input /code/calico_containers/nsenter.tar")
 
@@ -76,4 +79,4 @@ class DockerHost(object):
         Check that powerstrip is up by running 'docker ps' through port 2377.
         """
         powerstrip = partial(self.execute, "docker ps", use_powerstrip=True)
-        self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)
+        retry_until_success(powerstrip, ex_class=ErrorReturnCode)

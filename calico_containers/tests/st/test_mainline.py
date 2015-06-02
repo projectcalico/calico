@@ -3,6 +3,7 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
+from utils import retry_until_success
 
 
 class TestMainline(TestBase):
@@ -40,7 +41,7 @@ class TestMainline(TestBase):
         node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
 
         ping = partial(host.execute, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
-        self.retry_until_success(ping, ex_class=ErrorReturnCode)
+        retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
         host.execute("./nsenter -t %s ping %s -c 1" % (node1_pid, node1_ip))

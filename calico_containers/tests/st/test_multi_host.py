@@ -3,6 +3,7 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
+from utils import retry_until_success
 
 
 class MultiHostMainline(TestBase):
@@ -46,7 +47,7 @@ class MultiHostMainline(TestBase):
 
         # Wait for the workload networking to converge.
         ping = partial(host1.execute, "docker exec workload1 ping -c 4 %s" % ip3)
-        self.retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)
 
         with self.assertRaises(ErrorReturnCode_1):
             host1.execute("docker exec workload1 ping -c 4 %s" % ip2)

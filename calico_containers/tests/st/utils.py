@@ -1,6 +1,7 @@
 import sh
 from sh import docker
 import socket
+from time import sleep
 
 
 def get_ip():
@@ -35,3 +36,27 @@ def delete_container(name):
     # https://github.com/jpetazzo/dind#important-warning-about-disk-usage
     cleanup_inside(name)
     sh.docker.rm("-f", name, _ok_code=[0, 1])
+
+
+def retry_until_success(function, retries=10, ex_class=Exception):
+    """
+    Retries function until no exception is thrown. If exception continues,
+    it is reraised.
+
+    :param function: the function to be repeatedly called
+    :param retries: the maximum number of times to retry the function.
+    A value of 0 will run the function once with no retries.
+    :param ex_class: The class of expected exceptions.
+    :returns: the value returned by function
+    """
+    for retry in range(retries + 1):
+        try:
+            result = function()
+        except ex_class:
+            if retry < retries:
+                sleep(1)
+            else:
+                raise
+        else:
+            # Successfully ran the function
+            return result

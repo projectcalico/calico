@@ -3,6 +3,7 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
+from utils import retry_until_success
 
 
 class TestAddIp(TestBase):
@@ -21,7 +22,7 @@ class TestAddIp(TestBase):
         host.calicoctl("profile TEST_GROUP member add node2")
 
         test_ping = partial(host.execute, "docker exec node1 ping 192.168.1.2 -c 1 -W 1")
-        self.retry_until_success(test_ping, ex_class=ErrorReturnCode)
+        retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
         # Add two more addresses to node1 and one more to node2
         host.calicoctl("container node1 ip add 192.168.2.1")
@@ -40,7 +41,7 @@ class TestAddIp(TestBase):
         host.execute("docker start node1", use_powerstrip=True)
         host.execute("docker start node2", use_powerstrip=True)
 
-        self.retry_until_success(test_ping, ex_class=ErrorReturnCode)
+        retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
         # Test pings between the IPs.
         host.execute("docker exec node1 ping 192.168.1.2 -c 1")

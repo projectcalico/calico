@@ -3,6 +3,7 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
+from utils import retry_until_success
 
 
 class TestAddContainer(TestBase):
@@ -22,4 +23,4 @@ class TestAddContainer(TestBase):
 
         # Wait for felix to program down the route.
         check_route = partial(host.execute, "ip route | grep '192\.168\.1\.1'")
-        assert self.retry_until_success(check_route, ex_class=ErrorReturnCode)
+        retry_until_success(check_route, ex_class=ErrorReturnCode)
