@@ -24,6 +24,12 @@ class DockerHost(object):
                      "docker load --input /code/calico_containers/busybox.tar && "
                      "docker load --input /code/calico_containers/nsenter.tar")
 
+    def delete(self):
+        """
+        Have a container delete itself.
+        """
+        delete_container(self.name)
+
     def _listen(self, stdin, **kwargs):
         """
         Feed a raw command to a container via stdin.
@@ -52,8 +58,10 @@ class DockerHost(object):
         calicoctl = "/code/dist/calicoctl %s"
         return self.execute(calicoctl % command, **kwargs)
 
-    def delete(self):
-        """
-        Have a container delete itself.
-        """
-        delete_container(self.name)
+    def start_calico_node(self, ip=None, ip6=None):
+        ip = ip or self.ip
+        args = ['node', '--ip=%s' % ip]
+        if ip6:
+            args.append('--ip6=%s' % ip6)
+        cmd = ' '.join(args)
+        self.calicoctl(cmd)

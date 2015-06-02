@@ -12,7 +12,7 @@ class TestNoPowerstrip(TestBase):
         """
         host = DockerHost('host')
 
-        host.calicoctl("node --ip=127.0.0.1")
+        host.start_calico_node()
         host.calicoctl("profile add TEST_GROUP")
 
         self.assert_powerstrip_up(host)

@@ -15,8 +15,8 @@ class MultiHostMainline(TestBase):
         host1 = DockerHost('host1')
         host2 = DockerHost('host2')
 
-        host1.calicoctl("node --ip=%s" % host1.ip)
-        host2.calicoctl("node --ip=%s" % host2.ip)
+        host1.start_calico_node()
+        host2.start_calico_node()
 
         ip1 = "192.168.1.1"
         ip2 = "192.168.1.2"

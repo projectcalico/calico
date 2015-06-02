@@ -13,7 +13,7 @@ class TestAddContainer(TestBase):
         host = DockerHost('host')
 
         host.execute("docker run -tid --name=node busybox")
-        host.calicoctl("node --ip=127.0.0.1")
+        host.start_calico_node()
         host.calicoctl("profile add TEST_GROUP")
 
         self.assert_powerstrip_up(host)
