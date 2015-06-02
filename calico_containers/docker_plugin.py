@@ -79,7 +79,7 @@ def create_endpoint():
         ep.ipv4_nets.add(ip)
         ep.ipv4_gateway = next_hop
 
-        if_json = {
+        iface_json = {
             "ID": 0,
             "Address": str(ip),
             "MacAddress": ep.mac
@@ -88,7 +88,7 @@ def create_endpoint():
         if ip6:
             ip6 = IPNetwork(ip6)
             ep.ipv6_nets.add(ip6)
-            if_json["AddressIPv6"] = str(ip6)
+            iface_json["AddressIPv6"] = str(ip6)
 
             try:
                 next_hop6 = client.get_default_next_hops(hostname)[ip6.version]
@@ -123,7 +123,7 @@ def create_endpoint():
         client.set_endpoint(hostname, CONTAINER_NAME, ep)
 
         return jsonify({
-            "Interfaces": [if_json]
+            "Interfaces": [iface_json]
         })
     else:
         app.logger.error("Currently don't support being passed interfaces")
