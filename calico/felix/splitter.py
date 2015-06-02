@@ -53,7 +53,8 @@ class UpdateSplitter(Actor):
             of profile rules, each of which is a dict.
         :param tags_by_prof_id: A dict mapping security profile ID to a list of
             profile tags.
-        :param endpoints_by_id: A dict mapping endpoint ID to endpoint data.
+        :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
+            data dicts.
         """
         # Step 1: fire in data update events to the profile and tag managers
         # so they can build their indexes before we activate anything.
@@ -107,6 +108,7 @@ class UpdateSplitter(Actor):
     def on_rules_update(self, profile_id, rules):
         """
         Process an update to the rules of the given profile.
+        :param str profile_id: Profile ID in question
         :param dict[str,list[dict]] rules: New set of inbound/outbound rules
             or None if the rules have been deleted.
         """
@@ -118,6 +120,7 @@ class UpdateSplitter(Actor):
     def on_tags_update(self, profile_id, tags):
         """
         Called when the given tag list has changed or been deleted.
+        :param str profile_id: Profile ID in question
         :param list[str] tags: List of tags for the given profile or None if
             deleted.
         """
@@ -129,6 +132,8 @@ class UpdateSplitter(Actor):
     def on_interface_update(self, name):
         """
         Called when an interface state has changed.
+
+        :param str name: Interface name
         """
         _log.info("Interface %s state changed", name)
         for endpoint_mgr in self.endpoint_mgrs:
@@ -139,6 +144,9 @@ class UpdateSplitter(Actor):
         """
         Process an update to the given endpoint.  endpoint may be None if
         the endpoint was deleted.
+
+        :param EndpointId endpoint_id: EndpointId object in question
+        :param dict endpoint: Endpoint data dict
         """
         _log.info("Endpoint update for %s.", endpoint_id)
         for ipset_mgr in self.ipsets_mgrs:
