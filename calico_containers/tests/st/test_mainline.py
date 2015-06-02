@@ -30,9 +30,11 @@ class TestMainline(TestBase):
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' node1",).stdout.rstrip()
+                                "'{{ .NetworkSettings.IPAddress }}' node1",
+                                use_powerstrip=True).stdout.rstrip()
         node2_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' node2",).stdout.rstrip()
+                                "'{{ .NetworkSettings.IPAddress }}' node2",
+                                use_powerstrip=True).stdout.rstrip()
         if ip1 != 'auto':
             self.assertEqual(ip1, node1_ip)
         if ip2 != 'auto':
