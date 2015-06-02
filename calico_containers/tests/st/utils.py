@@ -18,7 +18,12 @@ def cleanup_inside(name):
     """
     docker("exec", "-t", name, "bash", "-c",
            "docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)",
-           _ok_code=[0, 1, 255])  # 255 is; "bash": executable file not found in $PATH
+           _ok_code=[0,
+                     1,  # Caused by 'docker: "rm" requires a minimum of 1 argument.' et al.
+                     127,  # Caused by '"docker": no command found'
+                     255,  # Caused by '"bash": executable file not found in $PATH'
+                    ]
+          )
 
 
 def delete_container(name):

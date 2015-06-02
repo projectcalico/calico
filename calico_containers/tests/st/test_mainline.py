@@ -1,6 +1,7 @@
-from test_base import TestBase
 from sh import ErrorReturnCode
-from time import sleep
+from functools import partial
+
+from test_base import TestBase
 from docker_host import DockerHost
 
 
@@ -15,42 +16,35 @@ class TestMainline(TestBase):
 
         calicoctl = "/code/dist/calicoctl %s"
         host.execute(calicoctl % "node --ip=127.0.0.1")
-        host.execute(calicoctl % "profile add TEST_GROUP")
+        self.assert_powerstrip_up(host)
 
-        # Wait for powerstrip to come up.
-        for i in range(5):
-            try:
-                host.execute("docker ps", docker_host=True)
-                break
-            except ErrorReturnCode:
-                if i == 4:
-                    raise AssertionError("Powerstrip failed to come up.")
-                else:
-                    sleep(1)
-
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1, docker_host=True)
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2, docker_host=True)
-
-        # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node1", docker_host=True).stdout.rstrip()
-        node2_ip = host.execute("docker inspect --format '{{ .NetworkSettings.IPAddress }}' node2", docker_host=True).stdout.rstrip()
+        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1,
+                     use_powerstrip=True)
+        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2,
+                     use_powerstrip=True)
 
         # Configure the nodes with the same profiles.
+        host.execute(calicoctl % "profile add TEST_GROUP")
         host.execute(calicoctl % "profile TEST_GROUP member add node1")
         host.execute(calicoctl % "profile TEST_GROUP member add node2")
+
+        # Perform a docker inspect to extract the configured IP addresses.
+        node1_ip = host.execute("docker inspect --format "
+                                "'{{ .NetworkSettings.IPAddress }}' node1",
+                                use_powerstrip=True).stdout.rstrip()
+        node2_ip = host.execute("docker inspect --format "
+                                "'{{ .NetworkSettings.IPAddress }}' node2",
+                                use_powerstrip=True).stdout.rstrip()
+        if ip1 != 'auto':
+            self.assertEqual(ip1, node1_ip)
+        if ip2 != 'auto':
+            self.assertEqual(ip2, node2_ip)
 
         node1_pid = host.execute("docker inspect --format '{{.State.Pid}}' node1").stdout.rstrip()
         node2_pid = host.execute("docker inspect --format '{{.State.Pid}}' node2").stdout.rstrip()
 
-        for i in range(10):
-            try:
-                host.execute("./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
-                break
-            except ErrorReturnCode:
-                if i == 9:
-                    raise AssertionError("Network failed to come up.")
-                else:
-                    sleep(1)
+        ping = partial(host.execute, "./nsenter -t %s ping %s -c 1 -W 1" % (node1_pid, node2_ip))
+        self.retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
         host.execute("./nsenter -t %s ping %s -c 1" % (node1_pid, node1_ip))

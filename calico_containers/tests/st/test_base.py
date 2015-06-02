@@ -1,11 +1,15 @@
+from sh import docker, ErrorReturnCode
+from time import sleep
+from functools import partial
 from unittest import TestCase
-from sh import docker
 
 from utils import get_ip, delete_container
 
 
 class TestBase(TestCase):
-    """Base class for test-wide methods."""
+    """
+    Base class for test-wide methods.
+    """
     def setUp(self):
         """
         Clean up host containers before every test.
@@ -44,3 +48,33 @@ class TestBase(TestCase):
             initial_cluster="calico=http://%s:2380" % self.ip,
             initial_cluster_state="new",
         )
+
+    def assert_powerstrip_up(self, host):
+        """
+        Check that powerstrip is up by running 'docker ps' through port 2377.
+        """
+        powerstrip = partial(host.execute, "docker ps", use_powerstrip=True)
+        self.retry_until_success(powerstrip, ex_class=ErrorReturnCode)
+
+    def retry_until_success(self, function, retries=10, ex_class=Exception):
+        """
+        Retries function until no exception is thrown. If exception continues,
+        it is reraised.
+
+        :param function: the function to be repeatedly called
+        :param retries: the maximum number of times to retry the function.
+        A value of 0 will run the function once with no retries.
+        :param ex_class: The class of expected exceptions.
+        :returns: the value returned by function
+        """
+        for retry in range(retries + 1):
+            try:
+                result = function()
+            except ex_class:
+                if retry < retries:
+                    sleep(1)
+                else:
+                    raise
+            else:
+                # Successfully ran the function
+                return result
