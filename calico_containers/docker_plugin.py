@@ -44,7 +44,9 @@ def delete_network():
 
     # Remove the network. We don't raise an error if the profile is still
     # being used by endpoints. We assume libnetwork will enforce this.
-    # TODO - link to the libnetwork docs on this.
+    # From https://github.com/docker/libnetwork/blob/master/docs/design.md
+    #   LibNetwork will not allow the delete to proceed if there are any
+    #   existing endpoints attached to the Network.
     network_id = json_data["NetworkID"]
     app.logger.info("Removing profile %s", network_id)
     client.remove_profile(network_id)
