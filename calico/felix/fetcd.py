@@ -23,6 +23,7 @@ from socket import timeout as SocketTimeout
 import httplib
 import json
 import logging
+from types import StringTypes
 
 from etcd import (EtcdException, EtcdClusterIdChanged, EtcdKeyNotFound,
                   EtcdEventIndexCleared)
@@ -231,10 +232,12 @@ class EtcdWatcher(Actor):
         for child in initial_dump.children:
             profile_id, rules = parse_if_rules(child)
             if profile_id:
+                profile_id = intern(profile_id.encode("utf8"))
                 rules_by_id[profile_id] = rules
                 continue
             profile_id, tags = parse_if_tags(child)
             if profile_id:
+                profile_id = intern(profile_id.encode("utf8"))
                 tags_by_id[profile_id] = tags
                 continue
             endpoint_id, endpoint = parse_if_endpoint(self.config, child)
@@ -395,6 +398,7 @@ class EtcdWatcher(Actor):
         """Handler for rules updates, passes the update to the splitter."""
         _log.debug("Rules for %s set", profile_id)
         rules = parse_rules(profile_id, response.value)
+        profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_rules_update(profile_id, rules, async=True)
 
     def on_rules_delete(self, response, profile_id):
@@ -406,6 +410,7 @@ class EtcdWatcher(Actor):
         """Handler for tags updates, passes the update to the splitter."""
         _log.debug("Tags for %s set", profile_id)
         rules = parse_tags(profile_id, response.value)
+        profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_tags_update(profile_id, rules, async=True)
 
     def on_tags_delete(self, response, profile_id):
@@ -470,7 +475,7 @@ class EtcdWatcher(Actor):
         _log.info("Orchestrator dir %s/%s deleted, removing contained hosts",
                   hostname, orchestrator)
         for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if endpoint_id.orchestrator == orchestrator:
+            if endpoint_id.orchestrator == orchestrator.encode("utf8"):
                 self.splitter.on_endpoint_update(endpoint_id, None, async=True)
                 self.endpoint_ids_per_host[hostname].discard(endpoint_id)
         if not self.endpoint_ids_per_host[hostname]:
@@ -486,8 +491,8 @@ class EtcdWatcher(Actor):
         _log.debug("Workload dir %s/%s/%s deleted, removing endpoints",
                    hostname, orchestrator, workload_id)
         for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if (endpoint_id.orchestrator == orchestrator and
-                    endpoint_id.workload == workload_id):
+            if (endpoint_id.orchestrator == orchestrator.encode("utf8") and
+                    endpoint_id.workload == workload_id.encode("utf8")):
                 self.splitter.on_endpoint_update(endpoint_id, None, async=True)
                 self.endpoint_ids_per_host[hostname].discard(endpoint_id)
         if not self.endpoint_ids_per_host[hostname]:
@@ -508,8 +513,45 @@ def _build_config_dict(cfg_node):
 
 
 # Intern JSON keys as we load them to reduce occupancy.
+FIELDS_TO_INTERN = set([
+    # Endpoint dicts.  It doesn't seem worth interning items like the MAC
+    # address or TAP name, which are rarely (if ever) shared.
+    "profile_id",
+    "profile_ids",
+    "state",
+    "ipv4_gateway",
+    "ipv6_gateway",
+
+    # Rules dicts.
+    "protocol",
+    "src_tag",
+    "dst_tag",
+    "action",
+])
 def intern_dict(d):
-    return dict((intern(str(k)), v) for k, v in d.iteritems())
+    out = {}
+    for k, v in d.iteritems():
+        # We can't intern unicode strings, as returned by etcd but all our
+        # keys should be ASCII anyway.  Use the utf8 encoding just in case.
+        k = intern(k.encode("utf8"))
+        if k in FIELDS_TO_INTERN:
+            if isinstance(v, StringTypes):
+                v = intern(v.encode("utf8"))
+            elif isinstance(v, list):
+                v = intern_list(v)
+        out[k] = v
+    return out
+
+
+def intern_list(l):
+    out = []
+    for item in l:
+        if isinstance(item, StringTypes):
+            item = intern(item.encode("utf8"))
+        out.append(item)
+    return out
+
+
 json_decoder = json.JSONDecoder(object_hook=intern_dict)
 
 
@@ -592,7 +634,9 @@ def parse_tags(profile_id, raw_json):
                        profile_id, tags)
         return None
     else:
-        return tags
+        # The tags aren't in a top-level object so we need to manually
+        # intern them here.
+        return intern_list(tags)
 
 
 def parse_if_host_ip(etcd_node):

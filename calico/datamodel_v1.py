@@ -112,7 +112,36 @@ def get_profile_id_for_profile_dir(key):
     return final_node if prefix == PROFILE_DIR else None
 
 
-class EndpointId(namedtuple("EndpointId", ["host", "orchestrator",
-                                           "workload", "endpoint"])):
+class EndpointId(object):
+    __slots__ = ["host", "orchestrator", "workload", "endpoint"]
+
+    def __init__(self, host, orchestrator, workload, endpoint):
+        # Host and orchestrator can be sensibly interned, they appear
+        # regularly.  They shouldn't contain any utf-8 characters but we get
+        # back a unicode string so encode it.
+        self.host = intern(host.encode("utf8"))
+        self.orchestrator = intern(orchestrator.encode("utf8"))
+        # No sensible interning to be done for workload/endpoint.
+        self.workload = workload.encode("utf8")
+        self.endpoint = endpoint.encode("utf8")
+
     def __str__(self):
-        return self.__class__.__name__ + ("<%s/%s/%s/%s>" % self)
+        return self.__class__.__name__ + ("<%s>" % self.endpoint)
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        if not isinstance(other, EndpointId):
+            return False
+        if (other.endpoint == self.endpoint and
+                other.workload == self.workload and
+                other.host == self.host and
+                other.orchestrator == self.orchestrator):
+            return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.endpoint) + hash(self.workload)
