@@ -62,6 +62,24 @@ class TestExcdWatcher(BaseTestCase):
             async=True,
         )
 
+    def test_endpoint_set_bad_json(self):
+        self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
+                      "set", value="{")
+        self.m_splitter.on_endpoint_update.assert_called_once_with(
+            EndpointId("h1", "o1", "w1", "e1"),
+            None,
+            async=True,
+        )
+
+    def test_endpoint_set_invalid(self):
+        self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
+                      "set", value="{}")
+        self.m_splitter.on_endpoint_update.assert_called_once_with(
+            EndpointId("h1", "o1", "w1", "e1"),
+            None,
+            async=True,
+        )
+
     def test_parent_dir_delete(self):
         """
         Test that deletions of parent directories of endpoints are
@@ -119,12 +137,44 @@ class TestExcdWatcher(BaseTestCase):
     def test_rules_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
                       value=RULES_STR)
-        self.m_splitter.on_rules_update("prof1", RULES, async=True)
+        self.m_splitter.on_rules_update.assert_called_once_with("prof1",
+                                                                RULES,
+                                                                async=True)
+
+    def test_rules_set_bad_json(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
+                      value="{")
+        self.m_splitter.on_rules_update.assert_called_once_with("prof1",
+                                                                None,
+                                                                async=True)
+
+    def test_rules_set_invalid(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
+                      value='{}')
+        self.m_splitter.on_rules_update.assert_called_once_with("prof1",
+                                                                None,
+                                                                async=True)
 
     def test_tags_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/tags", "set",
                       value=TAGS_STR)
-        self.m_splitter.on_tags_update("prof1", TAGS, async=True)
+        self.m_splitter.on_tags_update.assert_called_once_with("prof1",
+                                                               TAGS,
+                                                               async=True)
+
+    def test_tags_set_bad_json(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/tags", "set",
+                      value="{")
+        self.m_splitter.on_tags_update.assert_called_once_with("prof1",
+                                                               None,
+                                                               async=True)
+
+    def test_tags_set_invalid(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/tags", "set",
+                      value="[{}]")
+        self.m_splitter.on_tags_update.assert_called_once_with("prof1",
+                                                               None,
+                                                               async=True)
 
     def test_dispatch_delete_resync(self):
         """
