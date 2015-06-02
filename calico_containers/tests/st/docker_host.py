@@ -3,6 +3,7 @@ from sh import docker, ErrorReturnCode
 from functools import partial
 
 from utils import get_ip, delete_container, retry_until_success
+from workload import Workload
 
 
 class DockerHost(object):
@@ -79,3 +80,6 @@ class DockerHost(object):
         """
         powerstrip = partial(self.execute, "docker ps", use_powerstrip=True)
         retry_until_success(powerstrip, ex_class=ErrorReturnCode)
+
+    def create_workload(*args, **kwargs):
+        return Workload(*args, **kwargs)

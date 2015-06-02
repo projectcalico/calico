@@ -17,18 +17,13 @@ class TestDuplicateIps(TestBase):
         host3 = DockerHost('host3')
 
         # Set up three workloads on three hosts
-        host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload1 -tid busybox",
-                      use_powerstrip=True)
-        host2.execute("docker run -e CALICO_IP=192.168.1.2 --name workload2 -tid busybox",
-                      use_powerstrip=True)
-        host3.execute("docker run -e CALICO_IP=192.168.1.3 --name workload3 -tid busybox",
-                      use_powerstrip=True)
+        host1.create_workload("workload1", "192.168.1.1")
+        host2.create_workload("workload2", "192.168.1.2")
+        host3.create_workload("workload3", "192.168.1.3")
 
         # Set up the workloads with duplicate IPs
-        host1.execute("docker run -e CALICO_IP=192.168.1.4 --name dup1 -tid busybox",
-                      use_powerstrip=True)
-        host2.execute("docker run -e CALICO_IP=192.168.1.4 --name dup2 -tid busybox",
-                      use_powerstrip=True)
+        host1.create_workload("dup1", "192.168.1.4")
+        host2.create_workload("dup2", "192.168.1.4")
 
         host1.calicoctl("profile add TEST_PROFILE")
 

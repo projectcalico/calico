@@ -17,10 +17,8 @@ class TestNoPowerstrip(TestBase):
 
         # Remove the environment variable such that docker run does not utilize
         # powerstrip.
-        host.execute("docker run -e CALICO_IP=192.168.1.1 -tid --name=node1 busybox",
-                     use_powerstrip=False)
-        host.execute("docker run -e CALICO_IP=192.168.1.1 -tid --name=node2 busybox",
-                     use_powerstrip=False)
+        host.create_workload("node1", "192.168.1.1", use_powerstrip=False)
+        host.create_workload("node2", "192.168.1.1", use_powerstrip=False)
 
         # Attempt to configure the nodes with the same profiles.  This will fail
         # since we didn't use powerstrip to create the nodes.

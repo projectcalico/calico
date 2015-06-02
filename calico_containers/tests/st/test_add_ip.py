@@ -13,7 +13,7 @@ class TestAddIp(TestBase):
         """
         host = DockerHost('host')
 
-        host.execute("docker run -e CALICO_IP=192.168.1.1 -tid --name=node1 busybox", use_powerstrip=True)
+        host.create_workload("node1", "192.168.1.1")
         host.execute("docker run -tid --name=node2 busybox")
         host.calicoctl("container add node2 192.168.1.2 --interface=hello")
 

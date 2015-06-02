@@ -13,10 +13,8 @@ class TestMainline(TestBase):
         """
         host = DockerHost('host')
 
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1,
-                     use_powerstrip=True)
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2,
-                     use_powerstrip=True)
+        host.create_workload("node1", ip1)
+        host.create_workload("node2", ip2)
 
         # Configure the nodes with the same profiles.
         host.calicoctl("profile add TEST_GROUP")

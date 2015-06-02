@@ -22,17 +22,12 @@ class MultiHostMainline(TestBase):
         ip4 = "192.168.1.4"
         ip5 = "192.168.1.5"
 
-        host1.execute("docker run -e CALICO_IP=%s --name workload1 -tid busybox" % ip1,
-                      use_powerstrip=True)
-        host1.execute("docker run -e CALICO_IP=%s --name workload2 -tid busybox" % ip2,
-                      use_powerstrip=True)
-        host1.execute("docker run -e CALICO_IP=%s --name workload3 -tid busybox" % ip3,
-                      use_powerstrip=True)
+        host1.create_workload("workload1", ip1)
+        host1.create_workload("workload2", ip2)
+        host1.create_workload("workload3", ip3)
 
-        host2.execute("docker run -e CALICO_IP=%s --name workload4 -tid busybox" % ip4,
-                      use_powerstrip=True)
-        host2.execute("docker run -e CALICO_IP=%s --name workload5 -tid busybox" % ip5,
-                      use_powerstrip=True)
+        host2.create_workload("workload4", ip4)
+        host2.create_workload("workload5", ip5)
 
         host1.calicoctl("profile add PROF_1_3_5")
         host1.calicoctl("profile add PROF_2")
