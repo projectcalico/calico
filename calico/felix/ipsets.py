@@ -48,22 +48,26 @@ class IpsetManager(ReferenceManager):
         self.ip_type = ip_type
 
         # State.
+        # Tag IDs indexed by profile IDs
         self.tags_by_prof_id = {}
+        # Endpoint dicts indexed by EndpointId objects
         self.endpoints_by_ep_id = {}
 
         # Main index.  Since an IP address can be assigned to multiple
         # endpoints, we need to track which endpoints reference an IP.  When
         # we find the set of endpoints with an IP is empty, we remove the
         # ip from the tag.
-        # ip_owners_by_tag[tag][ip][profile_id] = set([endpoint_id,
-        #                                              endpoint_id2, ...])
+        # ip_owners_by_tag[tag][ip][profile_id] = set([combined_id,
+        #                                              combined_id2, ...])
+        # Here "combined_id" is an EndpointId object.
         self.ip_owners_by_tag = defaultdict(
             lambda: defaultdict(lambda: defaultdict(set)))
 
+        # Set of EndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
-        # Set of tag IDs that may be out of sync.  Accumulated by the
-        # index-update functions.  We apply the updates in _finish_msg_batch().
+        # Set of tag IDs that may be out of sync. Accumulated by the
+        # index-update functions. We apply the updates in _finish_msg_batch().
         # May include non-live tag IDs.
         self._dirty_tags = set()
 
@@ -111,6 +115,14 @@ class IpsetManager(ReferenceManager):
 
     @actor_message()
     def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
+        """
+        Apply a snapshot read from etcd, replacing existing state.
+
+        :param tags_by_prof_id: A dict mapping security profile ID to a list of
+            profile tags.
+        :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
+            data dicts.
+        """
         _log.info("Applying tags snapshot. %s tags, %s endpoints",
                   len(tags_by_prof_id), len(endpoints_by_id))
         missing_profile_ids = set(self.tags_by_prof_id.keys())
@@ -173,11 +185,13 @@ class IpsetManager(ReferenceManager):
     @actor_message()
     def on_tags_update(self, profile_id, tags):
         """
-        Called when the given tag list has changed or been deleted.
+        Called when the tag list of the given profile has changed or been
+        deleted.
 
         Updates the indices and notifies any live ActiveIpset objects of any
         any changes that affect them.
 
+        :param str profile_id: Profile ID affected.
         :param list[str]|NoneType tags: List of tags for the given profile or
             None if deleted.
         """
@@ -214,6 +228,12 @@ class IpsetManager(ReferenceManager):
             self.tags_by_prof_id[profile_id] = tags
 
     def _extract_ips(self, endpoint):
+        """
+        Extract IP address list from an endpoint dict.
+
+        :param dict endpoint: Endpoint dictionary
+        :returns: List of IP addresses of the correct IP version.
+        """
         if endpoint is None:
             return set()
         return set(map(futils.net_to_ip,
@@ -304,6 +324,11 @@ class IpsetManager(ReferenceManager):
         Adds the given tag->IP->profile->endpoint mapping to the index.
         Marks the tag as dirty if the update resulted in the IP being
         newly added.
+
+        :param str tag_id: Tag ID
+        :param str profile_id: Profile ID
+        :param EndpointId endpoint_id: ID of the endpoint
+        :param str ip_address: IP address to add
         """
         ip_added = not bool(self.ip_owners_by_tag[tag_id][ip_address])
         ep_ids = self.ip_owners_by_tag[tag_id][ip_address][profile_id]
@@ -316,6 +341,11 @@ class IpsetManager(ReferenceManager):
         Removes the tag->IP->profile->endpoint mapping from index.
         Marks the tag as dirty if the update resulted in the IP being
         removed.
+
+        :param str tag_id: Tag ID
+        :param str profile_id: Profile ID
+        :param EndpointId endpoint_id: ID of the endpoint
+        :param str ip_address: IP address to remove
         """
         ep_ids = self.ip_owners_by_tag[tag_id][ip_address][profile_id]
         ep_ids.discard(endpoint_id)
@@ -330,6 +360,9 @@ class IpsetManager(ReferenceManager):
     def _add_profile_index(self, prof_ids, endpoint_id):
         """
         Notes in the index that an endpoint uses the given profiles.
+
+        :param list[str] prof_ids: List of profile IDs
+        :param EndpointId endpoint_id: ID of the endpoint
         """
         for prof_id in prof_ids:
             self.endpoint_ids_by_profile_id[prof_id].add(endpoint_id)
@@ -338,6 +371,9 @@ class IpsetManager(ReferenceManager):
         """
         Notes in the index that an endpoint no longer uses any of the
         given profiles.
+
+        :param list[str] prof_ids: List of profile IDs
+        :param EndpointId endpoint_id: ID of the endpoint
         """
         for prof_id in prof_ids:
             endpoints = self.endpoint_ids_by_profile_id[prof_id]
@@ -399,6 +435,11 @@ class ActiveIpset(RefCountedActor):
 
     @actor_message()
     def replace_members(self, members):
+        """
+        Replace the members of this ipset with the supplied set.
+
+        :param set[str] members: Set of IP address strings.
+        """
         _log.info("Replacing members of ipset %s", self.name)
         assert isinstance(members, set), "Expected members to be a set"
         self.members = members
@@ -477,6 +518,10 @@ class ActiveIpset(RefCountedActor):
 def tag_to_ipset_name(ip_type, tag, tmp=False):
     """
     Turn a (possibly shortened) tag ID into an ipset name.
+
+    :param str ip_type: IP type (IPV4 or IPV6)
+    :param str tag: Tag ID
+    :param bool tmp: Is this the tmp ipset, or the permanent one?
     """
     if not tmp:
         name = IPSET_PREFIX[ip_type] + tag
@@ -489,6 +534,8 @@ def list_ipset_names():
     """
     List all names of ipsets. Note that this is *not* the same as the ipset
     list command which lists contents too (hence the name change).
+
+    :returns: List of names of ipsets.
     """
     data = futils.check_call(["ipset", "list"]).stdout
     lines = data.split("\n")
