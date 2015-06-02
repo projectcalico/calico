@@ -50,7 +50,7 @@ class DockerHost(object):
 
     def calicoctl(self, command, **kwargs):
         calicoctl = "/code/dist/calicoctl %s"
-        self.execute(calicoctl % command, **kwargs)
+        return self.execute(calicoctl % command, **kwargs)
 
     def delete(self):
         """
