@@ -9,33 +9,33 @@ from docker_host import DockerHost
 class TestUnixSocket(TestBase):
     def test_unix_socket(self):
         host = DockerHost('host')
-        # import pdb; pdb.set_trace()
+
         calicoctl = "sudo /code/dist/calicoctl %s"
 
-        host.listen(calicoctl % "restart-docker-without-alternative-unix-socket")
+        host._listen(calicoctl % "restart-docker-without-alternative-unix-socket")
 
         # host.start_etcd(restart="always")
-        host.listen("docker run --restart=always -d --net=host --name etcd quay.io/coreos/etcd:v2.0.10")
+        host._listen("docker run --restart=always -d --net=host --name etcd quay.io/coreos/etcd:v2.0.10")
 
         # Run without the unix socket. Check that docker can be accessed though both
         # the unix socket and the powerstrip TCP port.
-        host.listen(calicoctl % "node --ip=127.0.0.1")
-        host.listen("docker ps")
+        host._listen(calicoctl % "node --ip=127.0.0.1")
+        host._listen("docker ps")
         self.assert_powerstrip_up(host)
 
         # Run with the unix socket. Check that docker can be access through both
         # unix sockets.
         # TODO: Currently hangs here.
-        host.listen(calicoctl % "restart-docker-with-alternative-unix-socket")
+        host._listen(calicoctl % "restart-docker-with-alternative-unix-socket")
         # etcd is running under docker, so wait for it to come up.
         sleep(5)
-        host.listen(calicoctl % "node --ip=127.0.0.1")
-        host.listen("docker ps")
+        host._listen(calicoctl % "node --ip=127.0.0.1")
+        host._listen("docker ps")
 
         # Switch back to without the unix socket and check that everything still works.
-        host.listen(calicoctl % "restart-docker-without-alternative-unix-socket")
+        host._listen(calicoctl % "restart-docker-without-alternative-unix-socket")
         # etcd is running under docker, so wait for it to come up.
         sleep(5)
-        host.listen(calicoctl % "node --ip=127.0.0.1")
-        host.listen("docker ps")
+        host._listen(calicoctl % "node --ip=127.0.0.1")
+        host._listen("docker ps")
         self.assert_powerstrip_up(host)

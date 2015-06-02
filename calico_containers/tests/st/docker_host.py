@@ -20,25 +20,33 @@ class DockerHost(object):
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
         self.execute("while ! docker ps; do sleep 1; done && "
-                     "docker load --input /code/calico-node.tar && "
-                     "docker load --input /code/busybox.tar && "
-                     "docker load --input /code/nsenter.tar")
+                     "docker load --input /code/calico_containers/calico-node.tar && "
+                     "docker load --input /code/calico_containers/busybox.tar && "
+                     "docker load --input /code/calico_containers/nsenter.tar")
 
-    def execute(self, command, docker_host=False, **kwargs):
+    def execute(self, command, use_powerstrip=False, **kwargs):
         """
-        Pass a command into a host container.
-        """
-        stdin = ' '.join(["export ETCD_AUTHORITY=%s:2379;" % get_ip(), command])
-        if docker_host:
-            stdin = ' '.join(["export DOCKER_HOST=localhost:2377;", stdin])
-        return self.listen(stdin, **kwargs)
+        Pass a command into a host container. Appends some environment
+        variables and then calls out to DockerHost._listen. This uses stdin via
+        'bash -s' which is more forgiving of bash syntax than 'bash -c'.
 
-    def listen(self, stdin, **kwargs):
+        :param use_powerstrip: When true this sets the DOCKER_HOST env var. This
+        routes through Powerstrip, so that Calico can be informed of the changes.
         """
-        Feed a command to a container via stdin. Used when `bash -c` in
-        DockerHost.execute has bad parsing behavior.
+        etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % get_ip()
+        stdin = ' '.join([etcd_auth, command])
+
+        if use_powerstrip:
+            docker_host = "export DOCKER_HOST=localhost:2377;"
+            stdin = ' '.join([docker_host, stdin])
+        return self._listen(stdin, **kwargs)
+
+    def _listen(self, stdin, **kwargs):
         """
-        return docker("exec", "-i", self.name, "bash", s=True, _in=stdin, **kwargs)
+        Feed a raw command to a container via stdin.
+        """
+        return docker("exec", "--interactive", self.name,
+                      "bash", s=True, _in=stdin, **kwargs)
 
     def delete(self):
         """
