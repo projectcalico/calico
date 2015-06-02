@@ -71,7 +71,7 @@ class RulesManager(ReferenceManager):
 
     @actor_message()
     def on_rules_update(self, profile_id, profile):
-        if profile_id is not None:
+        if profile is not None:
             _log.info("Rules for profile %s updated.", profile_id)
             self.rules_by_profile_id[profile_id] = profile
         else:
