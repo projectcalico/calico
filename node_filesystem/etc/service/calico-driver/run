@@ -1,3 +1,15 @@
 #!/bin/sh
-cd /calico_containers/
-exec python docker_plugin.py
+
+GUNICORN=/usr/local/bin/gunicorn
+ROOT=/calico_containers
+PID=/var/run/gunicorn.pid
+LOG_DIR=/var/log/calico
+APP=docker_plugin:app
+
+if [ -f $PID ]; then rm $PID; fi
+
+exec $GUNICORN --chdir $ROOT --pid=$PID \
+-b unix:///usr/share/docker/plugins/calico.sock $APP \
+--access-logfile $LOG_DIR/plugin-access.log
+
+# Error logs are written to stderr.
