@@ -13,9 +13,6 @@ def setup_package():
     if not os.path.isfile("busybox.tar"):
         docker.pull("busybox:latest")
         docker.save("--output", "calico_containers/busybox.tar", "busybox:latest")
-    if not os.path.isfile("nsenter.tar"):
-        docker.pull("jpetazzo/nsenter:latest")
-        docker.save("--output", "calico_containers/nsenter.tar", "jpetazzo/nsenter:latest")
 
     # Create the calicoctl binary here so it will be in the volume mounted on the hosts.
     print sh.bash("./create_binary.sh")
