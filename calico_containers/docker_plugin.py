@@ -179,14 +179,6 @@ def leave():
     return jsonify({"Value": {}})
 
 
-def create_spec():
-    PLUGIN_DIR = "/usr/share/docker/plugins/"
-    if not os.path.exists(PLUGIN_DIR):
-        os.makedirs(PLUGIN_DIR)
-    with open(os.path.join(PLUGIN_DIR, 'calico.spec'), 'w') as f:
-        f.write("tcp://localhost:5000")  #TODO change the port at some point.
-
-
 def assign_ipv4():
     """
     Assign a IPv4 address from the configured pools.
@@ -217,14 +209,15 @@ def unassign_ipv4(ip):
     return False
 
 
-# Uncomment get logging of all requests.
-# @app.before_request
-# def log_request():
-#     from flask import current_app
-#     current_app.logger.debug(request.data)
-
 if __name__ == '__main__':
-    create_spec()
-    app.debug = True  # TODO Only required during development.
+    # Used when being invoked by the flask development server
+    PLUGIN_DIR = "/usr/share/docker/plugins/"
+    if not os.path.exists(PLUGIN_DIR):
+        os.makedirs(PLUGIN_DIR)
+    with open(os.path.join(PLUGIN_DIR, 'calico.spec'), 'w') as f:
+        f.write("tcp://localhost:5000")
+
+    # Turns on better error messages and reloading support.
+    app.debug = True
     app.run()
 
