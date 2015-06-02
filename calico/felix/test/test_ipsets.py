@@ -81,7 +81,7 @@ class TestIpsetManager(BaseTestCase):
         self.created_refs[tag_id].append(ipset)
         return ipset
 
-    def test_tag_then_enpdpoint(self):
+    def test_tag_then_endpoint(self):
         # Send in the messages.
         self.mgr.on_tags_update("prof1", ["tag1"], async=True)
         self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1, async=True)
