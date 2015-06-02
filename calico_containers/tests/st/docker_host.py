@@ -19,6 +19,10 @@ class DockerHost(object):
 
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
+        ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
+                             self.name).stdout.rstrip()
+        self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
+
         self.execute("while ! docker ps; do sleep 1; done && "
                      "docker load --input /code/calico_containers/calico-node.tar && "
                      "docker load --input /code/calico_containers/busybox.tar && "
