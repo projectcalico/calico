@@ -24,6 +24,13 @@ class DockerHost(object):
                      "docker load --input /code/calico_containers/busybox.tar && "
                      "docker load --input /code/calico_containers/nsenter.tar")
 
+    def _listen(self, stdin, **kwargs):
+        """
+        Feed a raw command to a container via stdin.
+        """
+        return docker("exec", "--interactive", self.name,
+                      "bash", s=True, _in=stdin, **kwargs)
+
     def execute(self, command, use_powerstrip=False, **kwargs):
         """
         Pass a command into a host container. Appends some environment
@@ -41,12 +48,9 @@ class DockerHost(object):
             stdin = ' '.join([docker_host, stdin])
         return self._listen(stdin, **kwargs)
 
-    def _listen(self, stdin, **kwargs):
-        """
-        Feed a raw command to a container via stdin.
-        """
-        return docker("exec", "--interactive", self.name,
-                      "bash", s=True, _in=stdin, **kwargs)
+    def calicoctl(self, command, **kwargs):
+        calicoctl = "/code/dist/calicoctl %s"
+        self.execute(calicoctl % command, **kwargs)
 
     def delete(self):
         """
