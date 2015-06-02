@@ -7,6 +7,7 @@ ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
   calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+                 [--log-dir=<LOG_DIR>]
   calicoctl node stop [--force]
   calicoctl status
   calicoctl shownodes [--detailed]
@@ -26,7 +27,7 @@ Usage:
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
-  calicoctl diags
+  calicoctl diags [--log-dir=<LOG_DIR>]
 
 Options:
  --interface=<INTERFACE>  The name to give to the interface in the container
@@ -38,6 +39,7 @@ Options:
                           [default: calico/node:latest]
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
+ --log-dir=<LOG_DIR>      The directory for logs [default: /var/log/calico]
 """
 import json
 import os
@@ -271,9 +273,13 @@ def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
 
-def node(ip, node_image, ip6=""):
+def node(ip, node_image, log_dir, ip6=""):
     # modprobe and sysctl require root privileges.
     enforce_root()
+
+    # Ensure log directory exists
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
     if not module_loaded("ip6_tables"):
         print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
@@ -324,7 +330,7 @@ def node(ip, node_image, ip6=""):
                 "bind": "/proc_host",
                 "ro": False
             },
-        "/var/log/calico":
+        log_dir:
             {
                 "bind": "/var/log/calico",
                 "ro": False
@@ -627,7 +633,7 @@ def node_show(detailed):
     print str(x) + "\n"
 
 
-def save_diags():
+def save_diags(log_dir):
     """
     Gather Calico diagnostics for bug reporting.
     :return: None
@@ -644,7 +650,8 @@ echo "Collecting diags"
 ROUTE_FILE=route
 IPTABLES_PREFIX=iptables
 IP6TABLES_PREFIX=ip6tables
-CALICO_DIR=/var/log/calico
+CALICO_DIR=""" + log_dir + \
+"""
 date=`date +"%F_%H-%M-%S"`
 diags_dir=`mktemp -d`
 system=`hostname`
@@ -1069,7 +1076,8 @@ if __name__ == '__main__':
                 ip6 = arguments["--ip6"]
                 node(arguments["--ip"],
                      node_image=node_image,
-                     ip6=ip6)
+                     ip6=ip6,
+                     log_dir=arguments["--log-dir"])
         elif arguments["status"]:
             status()
         elif arguments["reset"]:
@@ -1103,7 +1111,7 @@ if __name__ == '__main__':
             elif arguments["show"]:
                 profile_show(arguments["--detailed"])
         elif arguments["diags"]:
-            save_diags()
+            save_diags(arguments["--log-dir"])
         elif arguments["shownodes"]:
             node_show(arguments["--detailed"])
         elif arguments["pool"]:

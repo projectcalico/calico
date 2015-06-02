@@ -1,2 +1,3 @@
 #!/bin/sh
-exec /confd -confdir=/ -interval=5 -watch --log-level=debug -node ${ETCD_AUTHORITY} >>/var/log/calico/confd.log 2>&1
+exec 2>&1
+exec /confd -confdir=/ -interval=5 -watch --log-level=debug -node ${ETCD_AUTHORITY}
