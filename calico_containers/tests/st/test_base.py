@@ -1,7 +1,8 @@
-from sh import docker
+from sh import docker, ErrorReturnCode_1
+from functools import partial
 from unittest import TestCase
 
-from utils import get_ip, delete_container
+from utils import get_ip, delete_container, retry_until_success
 
 
 class TestBase(TestCase):
@@ -47,8 +48,14 @@ class TestBase(TestCase):
             initial_cluster_state="new",
         )
 
-    def assert_connectivity(self, pass_list):
+    def assert_can_ping(self, workload, ip, retries=5):
+        ping = partial(workload.ping, ip)
+        retry_until_success(ping, retries=retries, ex_class=ErrorReturnCode_1)
+
+    def assert_connectivity(self, pass_list, fail_list=[]):
         for source in pass_list:
             for dest in pass_list:
-                source.ping(dest.ip)
-
+                self.assert_can_ping(source, dest.ip)
+            for dest in fail_list:
+                with self.assertRaises():
+                    self.assert_can_ping(source, dest.ip)
