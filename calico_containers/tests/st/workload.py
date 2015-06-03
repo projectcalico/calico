@@ -20,7 +20,7 @@ class Workload(object):
 
         host.execute(command, use_powerstrip=use_powerstrip)
 
-        if IPAddress(ip).version == 6:
+        if ip and IPAddress(ip).version == 6:
             version = "GlobalIPv6Address"
         else:
             version = "IPAddress"
