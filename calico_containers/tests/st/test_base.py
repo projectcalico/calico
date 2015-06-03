@@ -31,7 +31,6 @@ class TestBase(TestCase):
         """
         Starts a separate etcd container.
         """
-
         docker.run(
             "--detach",
             "--publish", "2379:2379",
