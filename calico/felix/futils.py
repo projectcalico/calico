@@ -21,6 +21,7 @@ felix.futils
 
 Felix utilities.
 """
+import collections
 import functools
 import hashlib
 import logging
@@ -163,6 +164,46 @@ def uniquely_shorten(string, length):
     hash_text = h.hexdigest()
 
     return SHORTENED_PREFIX + hash_text[:length-len(SHORTENED_PREFIX)]
+
+
+_registered_diags = []
+
+
+def register_diags(name, fn):
+    _registered_diags.append((name, fn))
+
+
+class StatCounter(object):
+    def __init__(self, name):
+        self.name = name
+        self.stats = collections.defaultdict(lambda: 0)
+        register_diags(name, self._dump)
+
+    def increment(self, stat, by=1):
+        self.stats[stat] += 1
+
+    def _dump(self, log):
+        stats_copy = self.stats.items()
+        for name, stat in sorted(stats_copy):
+            log.info("%s: %s", name, stat)
+
+
+def dump_diags():
+    """
+    Dump diagnostics to the log.
+    """
+    try:
+        log.info("=== DIAGNOSTICS ===")
+        for name, diags_function in _registered_diags:
+            log.info("--- %s ---", name)
+            diags_function(log)
+        log.info("=== END OF DIAGNOSTICS ===")
+    except Exception:
+        # We don't want to take down the process we're trying to diagnose...
+        try:
+            log.exception("Failed to dump diagnostics")
+        except Exception:
+            pass
 
 
 def logging_exceptions(fn):

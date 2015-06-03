@@ -21,7 +21,11 @@ The main logic for Felix.
 """
 
 # Monkey-patch before we do anything else...
+import functools
 from gevent import monkey
+import signal
+from calico.felix import futils
+
 monkey.patch_all()
 
 import logging
@@ -110,27 +114,28 @@ def _main_greenlet(config):
 
         iface_watcher.start()
 
-        monitored_items = [
-            hosts_ipset_v4.greenlet,
-            update_splitter.greenlet,
+        top_level_actors = [
+            hosts_ipset_v4,
+            update_splitter,
 
-            v4_nat_updater.greenlet,
-            v4_filter_updater.greenlet,
-            v4_nat_updater.greenlet,
-            v4_ipset_mgr.greenlet,
-            v4_rules_manager.greenlet,
-            v4_dispatch_chains.greenlet,
-            v4_ep_manager.greenlet,
+            v4_nat_updater,
+            v4_filter_updater,
+            v4_nat_updater,
+            v4_ipset_mgr,
+            v4_rules_manager,
+            v4_dispatch_chains,
+            v4_ep_manager,
 
-            v6_filter_updater.greenlet,
-            v6_ipset_mgr.greenlet,
-            v6_rules_manager.greenlet,
-            v6_dispatch_chains.greenlet,
-            v6_ep_manager.greenlet,
+            v6_filter_updater,
+            v6_ipset_mgr,
+            v6_rules_manager,
+            v6_dispatch_chains,
+            v6_ep_manager,
 
-            iface_watcher.greenlet,
-            etcd_watcher.greenlet
+            iface_watcher,
+            etcd_watcher
         ]
+        monitored_items = [actor.greenlet for actor in top_level_actors]
 
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
@@ -144,6 +149,14 @@ def _main_greenlet(config):
         monitored_items.append(f)
         f = etcd_watcher.watch_etcd(update_splitter, async=True)
         monitored_items.append(f)
+
+        # Register a SIG_USR handler to trigger a diags dump.
+        def dump_top_level_actors(log):
+            for a in top_level_actors:
+                # The output will include queue length and the like.
+                log.info("%s", a)
+        futils.register_diags("Top-level actors", dump_top_level_actors)
+        gevent.signal(signal.SIGUSR1, functools.partial(futils.dump_diags))
 
         # Wait for something to fail.
         _log.info("All top-level actors started, waiting on failures...")

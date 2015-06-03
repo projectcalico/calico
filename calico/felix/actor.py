@@ -110,7 +110,8 @@ import weakref
 
 from gevent.event import AsyncResult
 from gevent.queue import Queue
-
+from calico.felix import futils
+from calico.felix.futils import StatCounter
 
 _log = logging.getLogger(__name__)
 
@@ -119,6 +120,9 @@ ResultOrExc = collections.namedtuple("ResultOrExc", ("result", "exception"))
 
 # Local storage to allow diagnostics.
 actor_storage = gevent.local.local()
+
+# Global diagnostic counters.
+_stats = StatCounter("Actor framework counters")
 
 
 class Actor(object):
@@ -226,8 +230,10 @@ class Actor(object):
                 except BaseException as e:
                     _log.exception("Exception processing %s", msg)
                     results.append(ResultOrExc(None, e))
+                    _stats.increment("Messages executed with exception")
                 else:
                     results.append(ResultOrExc(result, None))
+                    _stats.increment("Messages executed OK")
                 finally:
                     self._current_msg = None
             try:
@@ -242,11 +248,13 @@ class Actor(object):
                 _log.warn("Splitting batch to retry.")
                 self.__split_batch(batch, batches)
                 num_splits += 1  # For diags.
+                _stats.increment("Split batches")
                 continue
             except BaseException as e:
                 # Most-likely a bug.  Report failure to all callers.
                 _log.exception("_finish_msg_batch failed.")
                 results = [(None, e)] * len(results)
+                _stats.increment("_finish_msg_batch() exception")
 
             # Batch complete and finalized, set all the results.
             assert len(batch) == len(results)
@@ -256,6 +264,9 @@ class Actor(object):
                         future.set_exception(exc)
                     else:
                         future.set(result)
+                    _stats.increment("Messages completed")
+
+            _stats.increment("Batches processed")
         if num_splits > 0:
             _log.warn("Split batches complete. Number of splits: %s",
                       num_splits)
@@ -376,6 +387,7 @@ class Message(object):
         self.name = method.func.__name__
         self.needs_own_batch = needs_own_batch
         self.recipient = recipient
+        _stats.increment("Messages created")
 
     def __str__(self):
         data = ("%s (%s)" % (self.uuid, self.name))
@@ -430,6 +442,7 @@ def actor_message(needs_own_batch=False):
             assert async_set, "All cross-actor event calls must specify async arg."
             msg_id = uuid.uuid4().hex[:12]
             if not on_same_greenlet and not async:
+                _stats.increment("Blocking calls started")
                 _log.debug("BLOCKING CALL: [%s] %s -> %s", msg_id,
                            calling_path, method_name)
 
@@ -453,6 +466,7 @@ def actor_message(needs_own_batch=False):
                     blocking_result = e
                     raise
                 finally:
+                    _stats.increment("Blocking calls completed")
                     _log.debug("BLOCKING CALL COMPLETE: [%s] %s -> %s = %r",
                                msg_id, calling_path, method_name,
                                blocking_result)
@@ -473,6 +487,13 @@ def actor_message(needs_own_batch=False):
 # _on_ref_reaped().
 _tracked_refs_by_idx = {}
 _ref_idx = 0
+
+
+def dump_actor_diags(log):
+    log.info("Current ref index: %s", _ref_idx)
+    log.info("Number of tracked messages outstanding: %s",
+             len(_tracked_refs_by_idx))
+futils.register_diags("Actor framework", dump_actor_diags)
 
 
 class ExceptionTrackingWeakRef(weakref.ref):
