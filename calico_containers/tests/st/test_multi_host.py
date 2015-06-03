@@ -40,14 +40,11 @@ class MultiHostMainline(TestBase):
         host2.calicoctl("profile PROF_4 member add %s" % workload4)
         host2.calicoctl("profile PROF_1_3_5 member add %s" % workload5)
 
-        # Wait for the workload networking to converge.
-        ping = partial(workload1.ping, ip3)
-        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        self.assert_connectivity(pass_list=[workload1, workload3, workload5],
+                                 fail_list=[workload2, workload4])
 
-        with self.assertRaises(ErrorReturnCode_1):
-            workload1.ping(ip2)
+        self.assert_connectivity(pass_list=[workload2],
+                                 fail_list=[workload1, workload3, workload4, workload5])
 
-        with self.assertRaises(ErrorReturnCode_1):
-            workload1.ping(ip4)
-
-        workload1.ping(ip5)
+        self.assert_connectivity(pass_list=[workload4],
+                                 fail_list=[workload1, workload2, workload3, workload5])

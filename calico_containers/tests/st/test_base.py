@@ -57,5 +57,5 @@ class TestBase(TestCase):
             for dest in pass_list:
                 self.assert_can_ping(source, dest.ip)
             for dest in fail_list:
-                with self.assertRaises():
+                with self.assertRaises(ErrorReturnCode_1):
                     self.assert_can_ping(source, dest.ip)
