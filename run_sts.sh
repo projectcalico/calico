@@ -1,9 +1,11 @@
 #!/bin/bash
+./build_node.sh
+docker save --output calico_containers/calico-node.tar calico/node
+if [ -f busybox.tar ]; then
+  docker pull busybox:latest
+  docker save --output calico_containers/busybox.tar busybox:latest
+fi
 
-set -x
-set -e
-date
-pwd
-git status
-
-nosetests calico_containers/tests/st -s
+# Create the calicoctl binary here so it will be in the volume mounted on the hosts.
+./create_binary.sh
+nosetests calico_containers/tests/st --nocapture
