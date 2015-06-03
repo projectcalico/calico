@@ -1,12 +1,15 @@
 import sh
-from sh import docker
+from sh import docker, ErrorReturnCode
+from functools import partial
+
+from utils import get_ip, delete_container, retry_until_success
 
 
 class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by calico.
     """
-    def __init__(self, name):
+    def __init__(self, name, start_calico=True):
         """
         Create a container using an image made for docker-in-docker. Load saved images into it.
         """
@@ -15,63 +18,69 @@ class DockerHost(object):
         pwd = sh.pwd().stdout.rstrip()
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
 
-        self.execute("while ! docker ps; do sleep 1; done && "
-                   "docker load --input /code/calico-node.tar && "
-                   "docker load --input /code/busybox.tar && "
-                   "docker load --input /code/nsenter.tar")
+        self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
+                                 self.name).stdout.rstrip()
 
-    def execute(self, command, **kwargs):
-        """
-        Pass a command into a host container.
-        """
-        return docker("exec", "-t", self.name, "bash", c=command, **kwargs)
+        ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
+                             self.name).stdout.rstrip()
+        # TODO: change this hardcoding when we set up IPv6 for hosts
+        self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
 
-    def listen(self, stdin, **kwargs):
-        """
-        Feed a command to a container via stdin. Used when `bash -c` in
-        DockerHost.execute has bad parsing behavior.
-        """
-        return docker("exec", "-i", self.name, "bash", s=True, _in=stdin, **kwargs)
+        # Make sure docker is up
+        docker_ps = partial(self.execute, "docker ps")
+        retry_until_success(docker_ps, ex_class=ErrorReturnCode)
+        self.execute("docker load --input /code/calico_containers/calico-node.tar && "
+                     "docker load --input /code/calico_containers/busybox.tar")
+
+        if start_calico:
+            self.start_calico_node()
+            self.assert_powerstrip_up()
 
     def delete(self):
         """
         Have a container delete itself.
         """
-        self.__class__.delete_container(self.name)
+        delete_container(self.name)
 
-    def start_etcd(self):
+    def _listen(self, stdin, **kwargs):
         """
-        Start etcd on this host. Not tested for multiple etcd nodes. Start etcd
-        only after all hosts have been created.
+        Feed a raw command to a container via stdin.
         """
-        self.execute("docker load --input /code/etcd.tar")
+        return docker("exec", "--interactive", self.name,
+                      "bash", s=True, _in=stdin, **kwargs)
 
-        host_ip = docker.inspect("--format", "'{{ .NetworkSettings.IPAddress }}'", self.name).stdout.rstrip()
-        cmd = ("--name calico "
-               "--advertise-client-urls http://%s:2379 "
-               "--listen-client-urls http://0.0.0.0:2379 "
-               "--initial-advertise-peer-urls http://%s:2380 "
-               "--listen-peer-urls http://0.0.0.0:2380 "
-               "--initial-cluster-token etcd-cluster-2 "
-               "--initial-cluster calico=http://%s:2380 "
-               "--initial-cluster-state new" % (host_ip, host_ip, host_ip))
-        self.execute("docker run -d -p 2379:2379 quay.io/coreos/etcd:v2.0.10 %s" % cmd)
+    def execute(self, command, use_powerstrip=False, **kwargs):
+        """
+        Pass a command into a host container. Appends some environment
+        variables and then calls out to DockerHost._listen. This uses stdin via
+        'bash -s' which is more forgiving of bash syntax than 'bash -c'.
 
-    @classmethod
-    def delete_container(cls, name):
+        :param use_powerstrip: When true this sets the DOCKER_HOST env var. This
+        routes through Powerstrip, so that Calico can be informed of the changes.
         """
-        Cleanly delete a container.
-        """
-        # We *must* remove all inner containers and images before removing the outer
-        # container. Otherwise the inner images will stick around and fill disk.
-        # https://github.com/jpetazzo/dind#important-warning-about-disk-usage
-        cls.cleanup_inside(name)
-        sh.docker.rm("-f", name, _ok_code=[0, 1])
+        etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % get_ip()
+        stdin = ' '.join([etcd_auth, command])
 
-    @classmethod
-    def cleanup_inside(cls, name):
+        if use_powerstrip:
+            docker_host = "export DOCKER_HOST=localhost:2377;"
+            stdin = ' '.join([docker_host, stdin])
+        return self._listen(stdin, **kwargs)
+
+    def calicoctl(self, command, **kwargs):
+        calicoctl = "/code/dist/calicoctl %s"
+        return self.execute(calicoctl % command, **kwargs)
+
+    def start_calico_node(self, ip=None, ip6=None):
+        ip = ip or self.ip
+        args = ['node', '--ip=%s' % ip]
+        if ip6:
+            args.append('--ip6=%s' % ip6)
+        cmd = ' '.join(args)
+        self.calicoctl(cmd)
+
+    def assert_powerstrip_up(self):
         """
-        Clean the inside of a container by deleting the containers and images within it.
+        Check that powerstrip is up by running 'docker ps' through port 2377.
         """
-        docker("exec", "-t", name, "bash", "-c",
-               "docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)", _ok_code=[0, 1])
+        powerstrip = partial(self.execute, "docker ps", use_powerstrip=True)
+        retry_until_success(powerstrip, ex_class=ErrorReturnCode)

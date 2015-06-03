@@ -1175,6 +1175,4 @@ if __name__ == '__main__':
     except BaseException as e:
         print "Unexpected error executing command.\n"
         traceback.print_exc()
-        print dir(e)
         sys.exit(1)
-
