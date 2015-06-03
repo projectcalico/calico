@@ -30,7 +30,10 @@ class TestBase(TestCase):
 
     def start_etcd(self):
         """
-        Starts a separate etcd container.
+        Starts the single-node etcd cluster.
+
+        The etcd process runs within its own container, outside the host
+        containers. It uses port mapping and the base machine's IP to communicate.
         """
 
         docker.run(
@@ -49,10 +52,23 @@ class TestBase(TestCase):
         )
 
     def assert_can_ping(self, workload, ip, retries=5):
+        """
+        Assert than a workload can ping an IP. Use retries to compensate for
+        network uncertainty and convergence.
+        """
         ping = partial(workload.ping, ip)
         retry_until_success(ping, retries=retries, ex_class=ErrorReturnCode_1)
 
     def assert_connectivity(self, pass_list, fail_list=[]):
+        """
+        Assert partial connectivity graphs between workloads.
+
+        :param pass_list: Every workload in this list should be able to ping
+        every other workload in this list.
+        :param fail_list: Every workload in pass_list should *not* be able to
+        ping each workload in this list. Interconnectivity is not checked
+        *within* the fail_list.
+        """
         for source in pass_list:
             for dest in pass_list:
                 self.assert_can_ping(source, dest.ip)

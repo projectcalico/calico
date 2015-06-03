@@ -68,10 +68,17 @@ class DockerHost(object):
         return self._listen(stdin, **kwargs)
 
     def calicoctl(self, command, **kwargs):
+        """
+        Convenience function for abstracting away calling the calicoctl command.
+        """
         calicoctl = "/code/dist/calicoctl %s"
         return self.execute(calicoctl % command, **kwargs)
 
     def start_calico_node(self, ip=None, ip6=None):
+        """
+        Start calico in a container inside a host by calling through to the
+        calicoctl node command.
+        """
         ip = ip or self.ip
         args = ['node', '--ip=%s' % ip]
         if ip6:
@@ -86,5 +93,8 @@ class DockerHost(object):
         powerstrip = partial(self.execute, "docker ps", use_powerstrip=True)
         retry_until_success(powerstrip, ex_class=ErrorReturnCode)
 
-    def create_workload(*args, **kwargs):
-        return Workload(*args, **kwargs)
+    def create_workload(self, name, ip=None, image="busybox", use_powerstrip=True):
+        """
+        Create a workload container inside this host container.
+        """
+        return Workload(self, name, ip=ip, image=image, use_powerstrip=use_powerstrip)
