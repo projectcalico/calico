@@ -50,6 +50,7 @@ class IpsetManager(ReferenceManager):
         # State.
         # Tag IDs indexed by profile IDs
         self.tags_by_prof_id = {}
+        # EndpointData "structs" indexed by EndpointId.
         self.endpoint_data_by_ep_id = {}
 
         # Main index.  Since an IP address can be assigned to multiple
@@ -389,7 +390,7 @@ class IpsetManager(ReferenceManager):
         """
         Notes in the index that an endpoint uses the given profiles.
 
-        :param set[str] prof_ids: List of profile IDs
+        :param set[str] prof_ids: set of profile IDs that the endpoint is in.
         :param EndpointId endpoint_id: ID of the endpoint
         """
         for prof_id in prof_ids:
@@ -400,7 +401,8 @@ class IpsetManager(ReferenceManager):
         Notes in the index that an endpoint no longer uses any of the
         given profiles.
 
-        :param set[str] prof_ids: List of profile IDs
+        :param set[str] prof_ids: set of profile IDs to remove the endpoint
+            from.
         :param EndpointId endpoint_id: ID of the endpoint
         """
         for prof_id in prof_ids:

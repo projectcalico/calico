@@ -421,3 +421,6 @@ class TestEndpointData(BaseTestCase):
                                            ["10.0.0.2", "10.0.0.1"])),
                          hash(EndpointData(["prof1", "prof2"],
                                            ["10.0.0.1", "10.0.0.2"])))
+
+    def test_really_a_struct(self):
+        self.assertFalse(hasattr(EP_DATA_1_1, "__dict__"))
