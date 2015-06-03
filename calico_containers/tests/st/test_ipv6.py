@@ -13,13 +13,12 @@ class TestIpv6(TestBase):
         """
         host = DockerHost('host', start_calico=False)
         host.start_calico_node(ip=host.ip, ip6=host.ip6)
-        host.assert_powerstrip_up()
+        host.assert_driver_up()
 
-        ip1, ip2 = "fd80:24e2:f998:72d6::1:1", "fd80:24e2:f998:72d6::1:2"
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 phusion/baseimage:0.9.16" % ip1,
-                     use_powerstrip=True)
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 phusion/baseimage:0.9.16" % ip2,
-                     use_powerstrip=True)
+        host.execute("docker run --net=calico:test"
+                     " -tid --name=node1 phusion/baseimage:0.9.16")
+        host.execute("docker run --net=calico:test"
+                     " -tid --name=node2 phusion/baseimage:0.9.16")
 
         # Configure the nodes with the same profiles.
         host.calicoctl("profile add TEST_GROUP")
@@ -28,16 +27,15 @@ class TestIpv6(TestBase):
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.GlobalIPv6Address }}' node1",
-                                use_powerstrip=True).stdout.rstrip()
+                                "'{{ .NetworkSettings.GlobalIPv6Address }}' "
+                                "node1").stdout.rstrip()
         node2_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.GlobalIPv6Address }}' node2",
-                                use_powerstrip=True).stdout.rstrip()
+                                "'{{ .NetworkSettings.GlobalIPv6Address }}' "
+                                "node2").stdout.rstrip()
 
-        self.assertEqual(ip1, node1_ip)
-        self.assertEqual(ip2, node2_ip)
-
-        ping = partial(host.execute, "docker exec %s ping6 %s -c 1 -W 1" % ("node1", node2_ip))
+        ping = partial(host.execute,
+                       "docker exec %s ping6 %s -c 1 -W 1" % ("node1",
+                                                              node2_ip))
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.

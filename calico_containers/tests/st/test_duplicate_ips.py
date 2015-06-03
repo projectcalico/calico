@@ -1,3 +1,4 @@
+import unittest
 from sh import ErrorReturnCode_1
 from functools import partial
 
@@ -7,6 +8,8 @@ from utils import retry_until_success
 
 
 class TestDuplicateIps(TestBase):
+
+    @unittest.skip("Docker driver doesn't support static IP assignment yet.")
     def test_duplicate_ips(self):
         """
         Start two workloads with the same IP on different hosts. Make sure they
@@ -17,18 +20,13 @@ class TestDuplicateIps(TestBase):
         host3 = DockerHost('host3')
 
         # Set up three workloads on three hosts
-        host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload1 -tid busybox",
-                      use_powerstrip=True)
-        host2.execute("docker run -e CALICO_IP=192.168.1.2 --name workload2 -tid busybox",
-                      use_powerstrip=True)
-        host3.execute("docker run -e CALICO_IP=192.168.1.3 --name workload3 -tid busybox",
-                      use_powerstrip=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.1 --name workload1 -tid busybox")
+        host2.execute("docker run -e CALICO_IP=192.168.1.2 --name workload2 -tid busybox")
+        host3.execute("docker run -e CALICO_IP=192.168.1.3 --name workload3 -tid busybox")
 
         # Set up the workloads with duplicate IPs
-        host1.execute("docker run -e CALICO_IP=192.168.1.4 --name dup1 -tid busybox",
-                      use_powerstrip=True)
-        host2.execute("docker run -e CALICO_IP=192.168.1.4 --name dup2 -tid busybox",
-                      use_powerstrip=True)
+        host1.execute("docker run -e CALICO_IP=192.168.1.4 --name dup1 -tid busybox")
+        host2.execute("docker run -e CALICO_IP=192.168.1.4 --name dup2 -tid busybox")
 
         host1.calicoctl("profile add TEST_PROFILE")
 
