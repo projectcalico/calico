@@ -152,12 +152,14 @@ def delete_endpoint():
     app.logger.info("Removing endpoint %s", ep_id)
 
     ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
-    for ip in ep.ipv4_nets.union(ep.ipv6_nets):
-        unassign_ip(ip)
+    for net in ep.ipv4_nets.union(ep.ipv6_nets):
+        unassign_ip(net.ip)
 
     client.remove_endpoint(hostname, CONTAINER_NAME, ep_id)
 
-    # TODO - understand if we need to delete the veth or if libnetwork does it.
+    # libnetwork expects us to delete the veth pair.  (Note that we only need
+    # to delete one end).
+    check_call(['ip', 'link', 'del', ep.name])
 
     return jsonify({"Value": {}})
 
