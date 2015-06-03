@@ -479,7 +479,7 @@ def parse_if_endpoint(config, etcd_node):
 
 
 def parse_endpoint(config, endpoint_id, raw_json):
-    endpoint = json_decoder.decode(raw_json)
+    endpoint = safe_decode_json(raw_json, log_tag="endpoint %s" % endpoint_id)
     try:
         common.validate_endpoint(config, endpoint_id, endpoint)
     except ValidationFailed as e:
@@ -493,7 +493,6 @@ def parse_endpoint(config, endpoint_id, raw_json):
 
 def parse_if_rules(etcd_node):
     m = RULES_KEY_RE.match(etcd_node.key)
-    rules = None
     if m:
         # Got some rules.
         profile_id = m.group("profile_id")
@@ -506,7 +505,7 @@ def parse_if_rules(etcd_node):
 
 
 def parse_rules(profile_id, raw_json):
-    rules = json_decoder.decode(raw_json)
+    rules = safe_decode_json(raw_json, log_tag="rules %s" % profile_id)
     try:
         common.validate_rules(profile_id, rules)
     except ValidationFailed:
@@ -531,7 +530,7 @@ def parse_if_tags(etcd_node):
 
 
 def parse_tags(profile_id, raw_json):
-    tags = json_decoder.decode(raw_json)
+    tags = safe_decode_json(raw_json, log_tag="tags %s" % profile_id)
     try:
         common.validate_tags(profile_id, tags)
     except ValidationFailed:
@@ -541,6 +540,14 @@ def parse_tags(profile_id, raw_json):
     else:
         return tags
 
+
+def safe_decode_json(raw_json, log_tag=None):
+    try:
+        return json_decoder.decode(raw_json)
+    except (TypeError, ValueError):
+        _log.warning("Failed to decode JSON for %s: %r.  Returning None.",
+                     log_tag, raw_json)
+        return None
 
 class ResyncRequired(Exception):
     pass
