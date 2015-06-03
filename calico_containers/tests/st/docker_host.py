@@ -5,6 +5,8 @@ from functools import partial
 from utils import get_ip, delete_container, retry_until_success
 
 
+CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
+
 class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by calico.
@@ -34,7 +36,7 @@ class DockerHost(object):
 
         if start_calico:
             self.start_calico_node()
-            self.assert_powerstrip_up()
+            self.assert_driver_up()
 
     def delete(self):
         """
@@ -49,21 +51,16 @@ class DockerHost(object):
         return docker("exec", "--interactive", self.name,
                       "bash", s=True, _in=stdin, **kwargs)
 
-    def execute(self, command, use_powerstrip=False, **kwargs):
+    def execute(self, command, **kwargs):
         """
         Pass a command into a host container. Appends some environment
         variables and then calls out to DockerHost._listen. This uses stdin via
         'bash -s' which is more forgiving of bash syntax than 'bash -c'.
 
-        :param use_powerstrip: When true this sets the DOCKER_HOST env var. This
-        routes through Powerstrip, so that Calico can be informed of the changes.
         """
         etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % get_ip()
         stdin = ' '.join([etcd_auth, command])
 
-        if use_powerstrip:
-            docker_host = "export DOCKER_HOST=localhost:2377;"
-            stdin = ' '.join([docker_host, stdin])
         return self._listen(stdin, **kwargs)
 
     def calicoctl(self, command, **kwargs):
@@ -78,9 +75,11 @@ class DockerHost(object):
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 
-    def assert_powerstrip_up(self):
+    def assert_driver_up(self):
         """
-        Check that powerstrip is up by running 'docker ps' through port 2377.
+        Check that Calico Docker Driver is up by checking the existence of
+        the unix socket.
         """
-        powerstrip = partial(self.execute, "docker ps", use_powerstrip=True)
-        retry_until_success(powerstrip, ex_class=ErrorReturnCode)
+        sock_exists = partial(self.execute, "/bin/sh", "-c",
+                              '"[ -e %s ]"' % CALICO_DRIVER_SOCK)
+        retry_until_success(sock_exists, ex_class=ErrorReturnCode)
