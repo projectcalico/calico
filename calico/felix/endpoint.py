@@ -271,7 +271,7 @@ class LocalEndpoint(RefCountedActor):
         _log.info("%s now unreferenced, cleaning up", self)
         assert not self._ready, "Should be deleted before being unreffed."
         # Removing all profile refs should have been done already but be
-        # defensive:
+        # defensive.
         self.rules_ref_helper.discard_all()
         self._notify_cleanup_complete()
 
@@ -362,7 +362,7 @@ class LocalEndpoint(RefCountedActor):
             _log.exception("Failed to delete chains for %s", self)
             self._failed = True
 
-    def _configure_interface(self, mac_changed):
+    def _configure_interface(self, mac_changed=True):
         """
         Applies sysctls and routes to the interface.
 
