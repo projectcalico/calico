@@ -17,40 +17,41 @@ class TestNoPowerstrip(TestBase):
 
         # Remove the environment variable such that docker run does not utilize
         # powerstrip.
-        node1 = host.create_workload("node1", "192.168.1.1", use_powerstrip=False)
-        node2 = host.create_workload("node2", "192.168.1.1", use_powerstrip=False)
+        node1 = host.create_workload("node1", use_powerstrip=False)
+        node2 = host.create_workload("node2", use_powerstrip=False)
 
         # Attempt to configure the nodes with the same profiles.  This will fail
         # since we didn't use powerstrip to create the nodes.
         with self.assertRaises(ErrorReturnCode):
-            host.calicoctl("profile TEST_GROUP member add node1")
+            host.calicoctl("profile TEST_GROUP member add %s" % node1)
         with self.assertRaises(ErrorReturnCode):
-            host.calicoctl("profile TEST_GROUP member add node2")
+            host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
         # Add the nodes to Calico networking.
-        host.calicoctl("container add node1 192.168.1.1")
-        host.calicoctl("container add node2 192.168.1.2")
+        ip1, ip2 = "192.168.1.1", "192.168.1.2"
+        host.calicoctl("container add %s %s" % (node1, ip1))
+        host.calicoctl("container add %s %s" % (node2, ip2))
 
         # Now add the profiles.
-        host.calicoctl("profile TEST_GROUP member add node1")
-        host.calicoctl("profile TEST_GROUP member add node2")
+        host.calicoctl("profile TEST_GROUP member add %s" % node1)
+        host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
         # Inspect the nodes (ensure this works without powerstrip)
-        host.execute("docker inspect node1")
-        host.execute("docker inspect node2")
+        host.execute("docker inspect %s" % node1)
+        host.execute("docker inspect %s" % node2)
 
         # Check it works
-        ping = partial(node1.ping, "192.168.1.2")
+        ping = partial(node1.ping, ip2)
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
-        node1.ping("192.168.1.1")
-        node1.ping("192.168.1.2")
-        node2.ping("192.168.1.1")
-        node2.ping("192.168.1.2")
+        node1.ping(ip1)
+        node1.ping(ip2)
+        node2.ping(ip1)
+        node2.ping(ip2)
 
         # Test the teardown commands
         host.calicoctl("profile remove TEST_GROUP")
-        host.calicoctl("container remove node1")
-        host.calicoctl("container remove node2")
+        host.calicoctl("container remove %s" % node1)
+        host.calicoctl("container remove %s" % node2)
         host.calicoctl("pool remove 192.168.0.0/16")
         host.calicoctl("node stop")

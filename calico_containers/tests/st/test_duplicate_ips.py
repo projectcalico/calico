@@ -29,28 +29,27 @@ class TestDuplicateIps(TestBase):
         host1.calicoctl("profile add TEST_PROFILE")
 
         # Add everyone to the same profile
-        host1.calicoctl("profile TEST_PROFILE member add workload1")
-        host1.calicoctl("profile TEST_PROFILE member add dup1")
-        host2.calicoctl("profile TEST_PROFILE member add workload2")
-        host2.calicoctl("profile TEST_PROFILE member add dup2")
-        host3.calicoctl("profile TEST_PROFILE member add workload3")
-
-        # Wait for the workload networking to converge.
-        ping = partial(workload1.ping, dup_ip)
-        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        host1.calicoctl("profile TEST_PROFILE member add %s" % workload1)
+        host1.calicoctl("profile TEST_PROFILE member add %s" % dup1)
+        host2.calicoctl("profile TEST_PROFILE member add %s" % workload2)
+        host2.calicoctl("profile TEST_PROFILE member add %s" % dup2)
+        host3.calicoctl("profile TEST_PROFILE member add %s" % workload3)
 
         # Check for standard connectivity
-        workload1.ping(dup_ip)
-        workload2.ping(dup_ip)
-        workload3.ping(dup_ip)
+        ping = partial(workload1.ping, dup_ip)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        ping = partial(workload2.ping, dup_ip)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        ping = partial(workload3.ping, dup_ip)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)
 
         # Delete one of the duplciates.
         host2.execute("docker rm -f dup2")
 
-        # Wait for the workload networking to converge.
-        retry_until_success(ping, ex_class=ErrorReturnCode_1)
-
         # Check standard connectivity still works.
-        workload1.ping(dup_ip)
-        workload2.ping(dup_ip)
-        workload3.ping(dup_ip)
+        ping = partial(workload1.ping, dup_ip)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        ping = partial(workload2.ping, dup_ip)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        ping = partial(workload3.ping, dup_ip)
+        retry_until_success(ping, ex_class=ErrorReturnCode_1)

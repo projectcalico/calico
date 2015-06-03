@@ -18,34 +18,22 @@ class TestMainline(TestBase):
 
         # Configure the nodes with the same profiles.
         host.calicoctl("profile add TEST_GROUP")
-        host.calicoctl("profile TEST_GROUP member add node1")
-        host.calicoctl("profile TEST_GROUP member add node2")
+        host.calicoctl("profile TEST_GROUP member add %s" % node1)
+        host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
-        # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' node1",
-                                use_powerstrip=True).stdout.rstrip()
-        node2_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' node2",
-                                use_powerstrip=True).stdout.rstrip()
-        if ip1 != 'auto':
-            self.assertEqual(ip1, node1_ip)
-        if ip2 != 'auto':
-            self.assertEqual(ip2, node2_ip)
-
-        ping = partial(node1.ping, node1_ip)
+        ping = partial(node1.ping, node1.ip)
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
-        node1.ping(node1_ip)
-        node1.ping(node2_ip)
-        node2.ping(node1_ip)
-        node2.ping(node2_ip)
+        node1.ping(node1.ip)
+        node1.ping(node2.ip)
+        node2.ping(node1.ip)
+        node2.ping(node2.ip)
 
         # Test calicoctl teardown commands.
         host.calicoctl("profile remove TEST_GROUP")
-        host.calicoctl("container remove node1")
-        host.calicoctl("container remove node2")
+        host.calicoctl("container remove %s" % node1)
+        host.calicoctl("container remove %s" % node2)
         host.calicoctl("pool remove 192.168.0.0/16")
         host.calicoctl("node stop")
 

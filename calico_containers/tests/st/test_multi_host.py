@@ -33,12 +33,12 @@ class MultiHostMainline(TestBase):
         host1.calicoctl("profile add PROF_2")
         host1.calicoctl("profile add PROF_4")
 
-        host1.calicoctl("profile PROF_1_3_5 member add workload1")
-        host1.calicoctl("profile PROF_2 member add workload2")
-        host1.calicoctl("profile PROF_1_3_5 member add workload3")
+        host1.calicoctl("profile PROF_1_3_5 member add %s" % workload1)
+        host1.calicoctl("profile PROF_2 member add %s" % workload2)
+        host1.calicoctl("profile PROF_1_3_5 member add %s" % workload3)
 
-        host2.calicoctl("profile PROF_4 member add workload4")
-        host2.calicoctl("profile PROF_1_3_5 member add workload5")
+        host2.calicoctl("profile PROF_4 member add %s" % workload4)
+        host2.calicoctl("profile PROF_1_3_5 member add %s" % workload5)
 
         # Wait for the workload networking to converge.
         ping = partial(workload1.ping, ip3)
