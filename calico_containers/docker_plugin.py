@@ -2,8 +2,10 @@ from flask import Flask, jsonify, abort, request
 import os
 import socket
 from subprocess import check_call
+import logging
 
 from netaddr import IPAddress, IPNetwork
+import sys
 
 from pycalico.datastore import IF_PREFIX, Endpoint
 from pycalico.ipam import SequentialAssignment, IPAMClient
@@ -15,6 +17,12 @@ CONTAINER_NAME = "undefined"
 app = Flask(__name__)
 hostname = socket.gethostname()
 client = IPAMClient()
+
+
+app.logger.addHandler(logging.StreamHandler(sys.stdout))
+app.logger.setLevel(logging.INFO)
+
+app.logger.info("Application started")
 
 
 @app.route('/Plugin.Activate', methods=['POST'])

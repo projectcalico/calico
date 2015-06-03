@@ -1,5 +1,5 @@
 [global]
-MetadataAddr  = None
-LogFilePath = /var/log/calico/felix.log
-LogSeverityFile   = DEBUG
-LogSeverityScreen = CRITICAL
+MetadataAddr = None
+LogFilePath = None
+LogSeverityFile   = None
+LogSeverityScreen = DEBUG
