@@ -1,13 +1,14 @@
 from flask import Flask, jsonify, abort, request
 import os
 import socket
-from subprocess import check_call
 import logging
+from subprocess import check_call, CalledProcessError, STDOUT, check_output, \
+    call
 
 from netaddr import IPAddress, IPNetwork
 import sys
 
-from pycalico.datastore import IF_PREFIX, Endpoint
+from pycalico.datastore import IF_PREFIX, Endpoint, DataStoreError
 from pycalico.ipam import SequentialAssignment, IPAMClient
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"
@@ -64,85 +65,68 @@ def delete_network():
 
 @app.route('/NetworkDriver.CreateEndpoint', methods=['POST'])
 def create_endpoint():
-    # TODO - what happens when an operation fails? rollback and error codes.
     json_data = request.get_json(force=True)
     ep_id = json_data["EndpointID"]
     net_id = json_data["NetworkID"]
 
-    if len(json_data["Interfaces"]) == 0:
-        # No interfaces were passed, we need to allocated one. By default we
-        #  only assign an IPv4 address.
-        ip = assign_ip("v4")
-        ip6 = assign_ip("v6")
-        app.logger.info("Assigned IP %s and %s", ip, ip6)
-        if not ip:
-            app.logger.error("Failed to allocate IP for endpoint %s",
-                             ep_id)
-            abort(500)
+                  #TODO - Enpoint is broken. We don't know
+                  # the interface name (libnetwork decides it) so it
+                  # shouldn't be a mandatory parameter.
 
-        ip = IPNetwork(ip)
-        next_hop = client.get_default_next_hops(hostname)[ip.version]
+    # Create a calico endpoint object which we can populate and return to
+    # libnetwork at the end of this method.
+    ep = Endpoint(ep_id=ep_id,
+                  state="active",
+                  mac=FIXED_MAC,
+                  if_name='cali0')
+    ep.profile_id = net_id
 
-        # TODO - do we really have to set the if_name here. And should sort
-        # out the naming of the outside interface name.
-        ep = Endpoint(ep_id=ep_id, state="active", mac=FIXED_MAC, if_name='cali0')
-        ep.ipv4_nets.add(ip)
-        ep.ipv4_gateway = next_hop
+    # This method is split into three phases that have side effects.
+    # 1) Assigning IP addresses
+    # 2) Creating VETHs
+    # 3) Writing the endpoint to the datastore.
+    #
+    # A failure in a later phase attempts to roll back the effects of
+    # the earlier phases.
 
-        iface_json = {
-            "ID": 0,
-            "Address": str(ip),
-            "MacAddress": ep.mac
-        }
+    # First up is IP assignment. By default we assign both IPv4 and IPv6
+    # addresses.
+    # IPv4 failures may abort the request if the address couldn't be assigned.
+    ipv4_and_gateway(ep)
+    # IPv6 is currently best effort and won't abort the request.
+    ipv6_and_gateway(ep)
 
-        if ip6:
-            ip6 = IPNetwork(ip6)
-            ep.ipv6_nets.add(ip6)
-            iface_json["AddressIPv6"] = str(ip6)
-
-            try:
-                next_hop6 = client.get_default_next_hops(hostname)[ip6.version]
-            except KeyError:
-                app.logger.info("Couldn't find IPv6 gateway for endpoint %s",
-                                ep_id)
-            else:
-                ep.ipv6_gateway = next_hop6
-        else:
-            app.logger.info("Failed to allocate IPv6 address for endpoint %s",
-                            ep_id)
-
-        ep.profile_id = net_id
-
-        # This iface name must match the code in the Endpoint object.
-        iface = IF_PREFIX + ep_id[:11]
-
-        # Create the veth
-        check_call(['ip', 'link',
-                    'add', ep.name,
-                    'type', 'veth',
-                    'peer', 'name', ep.temp_interface_name()])
-
-        # Set the host end of the veth to 'up' so felix notices it.
-        check_call(['ip', 'link', 'set', iface, 'up'])
-
-        # Set the mac as libnetwork doesn't do this for us.
-        check_call(['ip', 'link', 'set',
-                    'dev', ep.temp_interface_name(),
-                    'address', FIXED_MAC])
-
-        client.set_endpoint(hostname, CONTAINER_NAME, ep)
-
-        return jsonify({
-            "Interfaces": [iface_json]
-        })
-    else:
-        app.logger.error("Currently don't support being passed interfaces")
+    # Next, create the veth.
+    try:
+        create_veth(ep)
+    except CalledProcessError as e:
+        # Failed to create or configure the veth.
+        # Back out the IP assignments and the veth creation.
+        app.logger.exception(e)
+        backout_ip_assignments(ep)
+        remove_veth(ep)
         abort(500)
-        # TODO - untested
-        # TODO - We don't know how to support multiple interfaces. How can
-        # an endpoint have multiple interfaces?
-        # TODO - Check that the provided IP is valid, and in a pool and
-        # currently unassigned.
+
+    # Finally, write the endpoint to the datastore.
+    try:
+        client.set_endpoint(hostname, CONTAINER_NAME, ep)
+    except DataStoreError as e:
+        # We've failed to write the endpoint to the datastore.
+        # Back out the IP assignments and the veth creation.
+        app.logger.exception(e)
+        backout_ip_assignments(ep)
+        remove_veth(ep)
+        abort(500)
+
+    # Everything worked, create the JSON and return it to libnetwork.
+    iface_json = {"ID": 0,
+                  "Address": str(list(ep.ipv4_nets)[0]),
+                  "MacAddress": ep.mac}
+
+    if ep.ipv6_nets:
+        iface_json["AddressIPv6"] = str(list(ep.ipv6_nets)[0])
+
+    return jsonify({"Interfaces": [iface_json]})
 
 
 @app.route('/NetworkDriver.DeleteEndpoint', methods=['POST'])
@@ -252,6 +236,75 @@ def unassign_ip(ip):
             return True
     return False
 
+
+def ipv4_and_gateway(ep):
+    # Get the gateway before trying to assign an address. This will avoid
+    # needing to backout the assignment if fetching the gateway fails.
+    try:
+        next_hop = client.get_default_next_hops(hostname)[4]
+    except KeyError as e:
+        app.logger.exception(e)
+        abort(500)
+
+    ip = assign_ip("v4")
+    app.logger.info("Assigned IPv4 %s", ip)
+
+    if not ip:
+        app.logger.error("Failed to allocate IPv4 for endpoint %s",
+                         ep.ep_id)
+        abort(500)
+
+    ip = IPNetwork(ip)
+    ep.ipv4_nets.add(ip)
+    ep.ipv4_gateway = next_hop
+
+
+def ipv6_and_gateway(ep):
+    try:
+        next_hop6 = client.get_default_next_hops(hostname)[6]
+    except KeyError:
+        app.logger.info("Couldn't find IPv6 gateway for endpoint %s. "
+                        "Skipping IPv6 assignment.",
+                        ep.ep_id)
+    else:
+        ip6 = assign_ip("v6")
+        if ip6:
+            ip6 = IPNetwork(ip6)
+            ep.ipv6_gateway = next_hop6
+            ep.ipv6_nets.add(ip6)
+        else:
+            app.logger.info("Failed to allocate IPv6 address for endpoint %s",
+                            ep.ep_id)
+
+
+def backout_ip_assignments(ep):
+    for ip in ep.ipv4_nets.union(ep.ipv6_nets):
+        # The unassignment is best effort. Just log if it fails.
+        if not unassign_ip(ip):
+            app.logger.warn("Failed to unassign IP %s", ip)
+
+
+def create_veth(ep):
+    # TODO - we may want a timeout on all the subprocess commands.
+    # Create the veth
+    check_call(['ip', 'link',
+                'add', ep.name,
+                'type', 'veth',
+                'peer', 'name', ep.temp_interface_name()])
+
+    # Set the host end of the veth to 'up' so felix notices it.
+    check_call(['ip', 'link', 'set', ep.name, 'up'])
+
+    # Set the mac as libnetwork doesn't do this for us.
+    check_call(['ip', 'link', 'set',
+                'dev', ep.temp_interface_name(),
+                'address', FIXED_MAC])
+
+def remove_veth(ep):
+    # The veth removal is best effort. If it fails then just log.
+    rc = call(['ip', 'link', 'del', ep.name])
+    if rc != 0:
+        app.logger.warn("Failed to delete veth %s", ep.name)
 
 if __name__ == '__main__':
     # Used when being invoked by the flask development server
