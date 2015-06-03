@@ -46,3 +46,9 @@ class TestBase(TestCase):
             initial_cluster="calico=http://%s:2380" % self.ip,
             initial_cluster_state="new",
         )
+
+    def assert_connectivity(self, pass_list):
+        for source in pass_list:
+            for dest in pass_list:
+                source.ping(dest.ip)
+

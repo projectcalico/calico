@@ -1,3 +1,6 @@
+from netaddr import IPAddress
+
+
 class Workload(object):
     def __init__(self, host, name, ip=None, image="busybox", use_powerstrip=True):
         self.host = host
@@ -17,8 +20,12 @@ class Workload(object):
 
         host.execute(command, use_powerstrip=use_powerstrip)
 
+        if IPAddress(ip).version == 6:
+            version = "GlobalIPv6Address"
+        else:
+            version = "IPAddress"
         self.ip = host.execute("docker inspect --format "
-                               "'{{ .NetworkSettings.IPAddress }}' %s" % name,
+                               "'{{ .NetworkSettings.%s }}' %s" % (version, name),
                                use_powerstrip=use_powerstrip).stdout.rstrip()
         if ip and ip != 'auto':
             assert ip == self.ip, "IP param = %s, configured IP = %s." % (ip, self.ip)
@@ -27,8 +34,15 @@ class Workload(object):
         return self.host.execute("docker exec %s %s" % (self.name, command))
 
     def ping(self, ip):
+        version = IPAddress(ip).version
+        assert version in [4, 6]
+        if version == 4:
+            ping = "ping"
+        elif version == 6:
+            ping = "ping6"
+
         args = [
-            "ping",
+            ping,
             "-c", "1",  # Number of pings
             "-W", "2",  # Timeout for each ping
             ip,

@@ -25,10 +25,7 @@ class TestMainline(TestBase):
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
-        node1.ping(node1.ip)
-        node1.ping(node2.ip)
-        node2.ping(node1.ip)
-        node2.ping(node2.ip)
+        self.assert_connectivity([node1, node2])
 
         # Test calicoctl teardown commands.
         host.calicoctl("profile remove TEST_GROUP")
