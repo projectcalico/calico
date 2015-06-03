@@ -13,15 +13,15 @@ class TestAddIp(TestBase):
         """
         host = DockerHost('host')
 
-        host.create_workload("node1", "192.168.1.1")
-        host.execute("docker run -tid --name=node2 busybox")
+        node1 = host.create_workload("node1", "192.168.1.1")
+        node2 = host.create_workload("node2")
         host.calicoctl("container add node2 192.168.1.2 --interface=hello")
 
         host.calicoctl("profile add TEST_GROUP")
         host.calicoctl("profile TEST_GROUP member add node1")
         host.calicoctl("profile TEST_GROUP member add node2")
 
-        test_ping = partial(host.execute, "docker exec node1 ping 192.168.1.2 -c 1 -W 1")
+        test_ping = partial(node1.ping, "192.168.1.2")
         retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
         # Add two more addresses to node1 and one more to node2
@@ -30,10 +30,10 @@ class TestAddIp(TestBase):
 
         host.calicoctl("container node2 ip add 192.168.2.2 --interface=hello")
 
-        host.execute("docker exec node1 ping 192.168.2.2 -c 1")
-        host.execute("docker exec node2 ping 192.168.1.1 -c 1")
-        host.execute("docker exec node2 ping 192.168.2.1 -c 1")
-        host.execute("docker exec node2 ping 192.168.3.1 -c 1")
+        node1.ping("192.168.2.2")
+        node2.ping("192.168.1.1")
+        node2.ping("192.168.2.1")
+        node2.ping("192.168.3.1")
 
         # Now stop and restart node 1 and node 2.
         host.execute("docker stop node1", use_powerstrip=True)
@@ -44,22 +44,22 @@ class TestAddIp(TestBase):
         retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
         # Test pings between the IPs.
-        host.execute("docker exec node1 ping 192.168.1.2 -c 1")
-        host.execute("docker exec node1 ping 192.168.2.2 -c 1")
-        host.execute("docker exec node2 ping 192.168.1.1 -c 1")
-        host.execute("docker exec node2 ping 192.168.2.1 -c 1")
-        host.execute("docker exec node2 ping 192.168.3.1 -c 1")
+        node1.ping("192.168.1.2")
+        node1.ping("192.168.2.2")
+        node2.ping("192.168.1.1")
+        node2.ping("192.168.2.1")
+        node2.ping("192.168.3.1")
 
         # Now remove and check pings to the removed addresses no longer work.
         host.calicoctl("container node1 ip remove 192.168.2.1")
         host.calicoctl("container node2 ip remove 192.168.2.2 --interface=hello")
-        host.execute("docker exec node1 ping 192.168.1.2 -c 1")
-        host.execute("docker exec node2 ping 192.168.1.1 -c 1")
+        node1.ping("192.168.1.2")
+        node2.ping("192.168.1.1")
         with self.assertRaises(ErrorReturnCode):
-            host.execute("docker exec node1 ping 192.168.2.2 -c 1 -W 1")
+            node1.ping("192.168.2.2")
         with self.assertRaises(ErrorReturnCode):
-            host.execute("docker exec node2 ping 192.168.2.1 -c 1 -W 1")
-        host.execute("docker exec node2 ping 192.168.3.1 -c 1")
+            node2.ping("192.168.2.1")
+        node2.ping("192.168.3.1")
 
         # Check that we can't remove addresses twice
         with self.assertRaises(ErrorReturnCode):

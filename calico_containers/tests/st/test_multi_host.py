@@ -22,12 +22,12 @@ class MultiHostMainline(TestBase):
         ip4 = "192.168.1.4"
         ip5 = "192.168.1.5"
 
-        host1.create_workload("workload1", ip1)
-        host1.create_workload("workload2", ip2)
-        host1.create_workload("workload3", ip3)
+        workload1 = host1.create_workload("workload1", ip1)
+        workload2 = host1.create_workload("workload2", ip2)
+        workload3 = host1.create_workload("workload3", ip3)
 
-        host2.create_workload("workload4", ip4)
-        host2.create_workload("workload5", ip5)
+        workload4 = host2.create_workload("workload4", ip4)
+        workload5 = host2.create_workload("workload5", ip5)
 
         host1.calicoctl("profile add PROF_1_3_5")
         host1.calicoctl("profile add PROF_2")
@@ -41,13 +41,13 @@ class MultiHostMainline(TestBase):
         host2.calicoctl("profile PROF_1_3_5 member add workload5")
 
         # Wait for the workload networking to converge.
-        ping = partial(host1.execute, "docker exec workload1 ping -c 4 %s" % ip3)
+        ping = partial(workload1.ping, ip3)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
 
         with self.assertRaises(ErrorReturnCode_1):
-            host1.execute("docker exec workload1 ping -c 4 %s" % ip2)
+            workload1.ping(ip2)
 
         with self.assertRaises(ErrorReturnCode_1):
-            host1.execute("docker exec workload1 ping -c 4 %s" % ip4)
+            workload1.ping(ip4)
 
-        host1.execute("docker exec workload1 ping -c 4 %s" % ip5)
+        workload1.ping(ip5)

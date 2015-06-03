@@ -17,13 +17,14 @@ class TestDuplicateIps(TestBase):
         host3 = DockerHost('host3')
 
         # Set up three workloads on three hosts
-        host1.create_workload("workload1", "192.168.1.1")
-        host2.create_workload("workload2", "192.168.1.2")
-        host3.create_workload("workload3", "192.168.1.3")
+        workload1 = host1.create_workload("workload1", "192.168.1.1")
+        workload2 = host2.create_workload("workload2", "192.168.1.2")
+        workload3 = host3.create_workload("workload3", "192.168.1.3")
 
         # Set up the workloads with duplicate IPs
-        host1.create_workload("dup1", "192.168.1.4")
-        host2.create_workload("dup2", "192.168.1.4")
+        dup_ip = "192.168.1.4"
+        dup1 = host1.create_workload("dup1", dup_ip)
+        dup2 = host2.create_workload("dup2", dup_ip)
 
         host1.calicoctl("profile add TEST_PROFILE")
 
@@ -35,13 +36,13 @@ class TestDuplicateIps(TestBase):
         host3.calicoctl("profile TEST_PROFILE member add workload3")
 
         # Wait for the workload networking to converge.
-        ping = partial(host1.execute, "docker exec workload1 ping -c 4 192.168.1.4")
+        ping = partial(workload1.ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
 
         # Check for standard connectivity
-        host1.execute("docker exec workload1 ping -c 4 192.168.1.4")
-        host2.execute("docker exec workload2 ping -c 4 192.168.1.4")
-        host3.execute("docker exec workload3 ping -c 4 192.168.1.4")
+        workload1.ping(dup_ip)
+        workload2.ping(dup_ip)
+        workload3.ping(dup_ip)
 
         # Delete one of the duplciates.
         host2.execute("docker rm -f dup2")
@@ -50,6 +51,6 @@ class TestDuplicateIps(TestBase):
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
 
         # Check standard connectivity still works.
-        host1.execute("docker exec workload1 ping -c 4 192.168.1.4")
-        host2.execute("docker exec workload2 ping -c 4 192.168.1.4")
-        host3.execute("docker exec workload3 ping -c 4 192.168.1.4")
+        workload1.ping(dup_ip)
+        workload2.ping(dup_ip)
+        workload3.ping(dup_ip)

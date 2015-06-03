@@ -17,8 +17,8 @@ class TestNoPowerstrip(TestBase):
 
         # Remove the environment variable such that docker run does not utilize
         # powerstrip.
-        host.create_workload("node1", "192.168.1.1", use_powerstrip=False)
-        host.create_workload("node2", "192.168.1.1", use_powerstrip=False)
+        node1 = host.create_workload("node1", "192.168.1.1", use_powerstrip=False)
+        node2 = host.create_workload("node2", "192.168.1.1", use_powerstrip=False)
 
         # Attempt to configure the nodes with the same profiles.  This will fail
         # since we didn't use powerstrip to create the nodes.
@@ -40,13 +40,13 @@ class TestNoPowerstrip(TestBase):
         host.execute("docker inspect node2")
 
         # Check it works
-        ping = partial(host.execute, "docker exec node1 ping 192.168.1.2 -c 1 -W 1")
+        ping = partial(node1.ping, "192.168.1.2")
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
-        host.execute("docker exec node1 ping 192.168.1.1 -c 1")
-        host.execute("docker exec node1 ping 192.168.1.2 -c 1")
-        host.execute("docker exec node2 ping 192.168.1.1 -c 1")
-        host.execute("docker exec node2 ping 192.168.1.2 -c 1")
+        node1.ping("192.168.1.1")
+        node1.ping("192.168.1.2")
+        node2.ping("192.168.1.1")
+        node2.ping("192.168.1.2")
 
         # Test the teardown commands
         host.calicoctl("profile remove TEST_GROUP")

@@ -13,8 +13,8 @@ class TestMainline(TestBase):
         """
         host = DockerHost('host')
 
-        host.create_workload("node1", ip1)
-        host.create_workload("node2", ip2)
+        node1 = host.create_workload("node1", ip1)
+        node2 = host.create_workload("node2", ip2)
 
         # Configure the nodes with the same profiles.
         host.calicoctl("profile add TEST_GROUP")
@@ -33,14 +33,14 @@ class TestMainline(TestBase):
         if ip2 != 'auto':
             self.assertEqual(ip2, node2_ip)
 
-        ping = partial(host.execute, "docker exec node1 ping %s -c 1 -W 1" % node1_ip)
+        ping = partial(node1.ping, node1_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
-        host.execute("docker exec node1 ping %s -c 1" % node1_ip)
-        host.execute("docker exec node1 ping %s -c 1" % node2_ip)
-        host.execute("docker exec node2 ping %s -c 1" % node1_ip)
-        host.execute("docker exec node2 ping %s -c 1" % node2_ip)
+        node1.ping(node1_ip)
+        node1.ping(node2_ip)
+        node2.ping(node1_ip)
+        node2.ping(node2_ip)
 
         # Test calicoctl teardown commands.
         host.calicoctl("profile remove TEST_GROUP")
