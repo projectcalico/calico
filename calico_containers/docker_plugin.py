@@ -171,8 +171,6 @@ def endpoint_oper_info():
     net_id = json_data["NetworkID"]
     app.logger.info("Endpoint operation info requested for %s", ep_id)
 
-    # TODO - check what other drivers return.
-
     # Nothing is supported yet, just pass blank data.
     return jsonify({"Value": {}})
 
