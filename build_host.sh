@@ -10,3 +10,15 @@ fi
 # calico/host. SO always commit the latest image with that name.
 docker exec calico-host bash -c 'cd /code && ./build_node.sh'
 docker commit calico-host calico/host
+
+#### TEMP CODE ####
+# if there's a customized docker binary in the current directory, run it in
+# the docker dir.
+if [ -e docker-dev ]; then
+  # Make sure the existing docker daemon is stopped and run the new one (if
+  # it's not already running)
+  docker exec calico-host pkill docker
+  docker exec -d calico-host bash -c 'pgrep docker-dev || /code/docker-dev -dD'
+  docker exec calico-host ln -s /code/docker-dev /usr/local/bin/docker
+fi
+
