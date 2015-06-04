@@ -12,9 +12,9 @@ class TestBase(TestCase):
         """
         Clean up host containers before every test.
         """
-        containers = docker.ps("-qa").split()
-        for container in containers:
-            delete_container(container)
+        # containers = docker.ps("-qa").split()
+        # for container in containers:
+        #     delete_container(container)
 
         self.ip = get_ip()
         self.start_etcd()
@@ -23,9 +23,9 @@ class TestBase(TestCase):
         """
         Clean up host containers after every test.
         """
-        containers = docker.ps("-qa").split()
-        for container in containers:
-            delete_container(container)
+        # containers = docker.ps("-qa").split()
+        # for container in containers:
+        #     delete_container(container)
 
     def start_etcd(self):
         """
