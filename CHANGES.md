@@ -1,6 +1,8 @@
 # Changelog
 
+
 # 0.23-dev
+- Reset ARP configuration when endpoint MAC changes.
 
 ## 0.22
 
