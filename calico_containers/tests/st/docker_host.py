@@ -1,6 +1,7 @@
 import sh
 from sh import docker, ErrorReturnCode
 from functools import partial
+from subprocess import check_output
 
 from utils import get_ip, delete_container, retry_until_success
 
@@ -14,10 +15,12 @@ class DockerHost(object):
     def __init__(self, name, start_calico=True):
         self.name = name
 
+        docker.rm("-f", self.name, _ok_code=[0, 1])
         pwd = sh.pwd().stdout.rstrip()
+        print "Running host"
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
-                   "-tid", "calico/host")
-
+                   "-tid", "jpetazzo/dind")
+        print "Run host"
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
 
@@ -26,9 +29,28 @@ class DockerHost(object):
         # TODO: change this hardcoding when we set up IPv6 for hosts
         self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
 
+        ### TEMP CODE ###
+        # Make sure the existing docker daemon is stopped and run the new one (if
+        # it's not already running)
+        self.execute("pkill docker")
+        check_output("docker exec -dit %s bash -c '/code/docker-dev -dD "
+                     ">/tmp/docker.log 2>/tmp/docker.err.log'" % self.name,
+                     shell=True)
+        self.execute("ln -sf /code/docker-dev /usr/local/bin/docker")
+
+        # Make sure docker is up
+        docker_ps = partial(self.execute, "docker ps")
+        retry_until_success(docker_ps, ex_class=ErrorReturnCode)
+        self.execute("docker load --input /code/calico_containers/calico-node.tar && "
+                     "docker load --input /code/calico_containers/busybox.tar")
+
         if start_calico:
+            print "Starting node"
             self.start_calico_node()
+            print "Started node"
             self.assert_driver_up()
+            print "Driver is up"
+
 
     def delete(self):
         """
@@ -36,24 +58,16 @@ class DockerHost(object):
         """
         delete_container(self.name)
 
-    def _listen(self, stdin, **kwargs):
-        """
-        Feed a raw command to a container via stdin.
-        """
-        return docker("exec", "--interactive", self.name,
-                      "bash", s=True, _in=stdin, **kwargs)
-
     def execute(self, command, **kwargs):
         """
-        Pass a command into a host container. Appends some environment
-        variables and then calls out to DockerHost._listen. This uses stdin via
-        'bash -s' which is more forgiving of bash syntax than 'bash -c'.
-
+        Pass a command into a host container.
         """
-        etcd_auth = "export ETCD_AUTHORITY=%s:2379;" % get_ip()
-        stdin = ' '.join([etcd_auth, command])
-
-        return self._listen(stdin, **kwargs)
+        etcd_auth = "ETCD_AUTHORITY=%s:2379 " % get_ip()
+        full_command = "docker exec -it %s bash -c '%s %s'" % (self.name,
+                                                               etcd_auth,
+                                                               command)
+        print "command: %s" % full_command
+        return check_output(full_command, shell=True)
 
     def calicoctl(self, command, **kwargs):
         calicoctl = "/code/dist/calicoctl %s"

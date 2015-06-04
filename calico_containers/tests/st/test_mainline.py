@@ -12,10 +12,13 @@ class TestMainline(TestBase):
         """
         Setup two endpoints on one host and check connectivity.
         """
+        print "HI"
         host = DockerHost('host')
+        print "HI2"
 
         host.execute("docker run --net=calico:test -tid --name=node1 busybox")
         host.execute("docker run --net=calico:test -tid --name=node2 busybox")
+        print "HI3"
 
         # Configure the nodes with the same profiles.
         host.calicoctl("profile add TEST_GROUP")
@@ -39,10 +42,10 @@ class TestMainline(TestBase):
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
-        host.execute("docker exec node1 ping %s -c 1" % node1_ip)
-        host.execute("docker exec node1 ping %s -c 1" % node2_ip)
-        host.execute("docker exec node2 ping %s -c 1" % node1_ip)
-        host.execute("docker exec node2 ping %s -c 1" % node2_ip)
+        host.execute("docker exec node1 ping %s -c 1 -W 1" % node1_ip)
+        host.execute("docker exec node1 ping %s -c 1 -W 1" % node2_ip)
+        host.execute("docker exec node2 ping %s -c 1 -W 1" % node1_ip)
+        host.execute("docker exec node2 ping %s -c 1 -W 1" % node2_ip)
 
         # Test calicoctl teardown commands.
         host.calicoctl("profile remove TEST_GROUP")
