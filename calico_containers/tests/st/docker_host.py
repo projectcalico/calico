@@ -12,13 +12,11 @@ class DockerHost(object):
     A host container which will hold workload containers to be networked by calico.
     """
     def __init__(self, name, start_calico=True):
-        """
-        Create a container using an image made for docker-in-docker. Load saved images into it.
-        """
         self.name = name
 
         pwd = sh.pwd().stdout.rstrip()
-        docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
+        docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
+                   "-tid", "calico/host")
 
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
@@ -27,12 +25,6 @@ class DockerHost(object):
                              self.name).stdout.rstrip()
         # TODO: change this hardcoding when we set up IPv6 for hosts
         self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
-
-        # Make sure docker is up
-        docker_ps = partial(self.execute, "docker ps")
-        retry_until_success(docker_ps, ex_class=ErrorReturnCode)
-        self.execute("docker load --input /code/calico_containers/calico-node.tar && "
-                     "docker load --input /code/calico_containers/busybox.tar")
 
         if start_calico:
             self.start_calico_node()
