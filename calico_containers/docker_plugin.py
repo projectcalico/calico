@@ -2,8 +2,7 @@ from flask import Flask, jsonify, abort, request
 import os
 import socket
 import logging
-from subprocess import check_call, CalledProcessError, STDOUT, check_output, \
-    call
+from subprocess import check_call, CalledProcessError, call
 
 from netaddr import IPAddress, IPNetwork
 import sys
@@ -69,9 +68,8 @@ def create_endpoint():
     ep_id = json_data["EndpointID"]
     net_id = json_data["NetworkID"]
 
-                  #TODO - Enpoint is broken. We don't know
-                  # the interface name (libnetwork decides it) so it
-                  # shouldn't be a mandatory parameter.
+    # TODO - Endpoint is broken. We don't know the interface name (libnetwork
+    # decides it) so it shouldn't be a mandatory parameter.
 
     # Create a calico endpoint object which we can populate and return to
     # libnetwork at the end of this method.
@@ -119,6 +117,8 @@ def create_endpoint():
         abort(500)
 
     # Everything worked, create the JSON and return it to libnetwork.
+    assert len(ep.ipv4_nets) == 1
+    assert len(ep.ipv6_nets) <= 1
     iface_json = {"ID": 0,
                   "Address": str(list(ep.ipv4_nets)[0]),
                   "MacAddress": ep.mac}
@@ -135,15 +135,24 @@ def delete_endpoint():
     ep_id = json_data["EndpointID"]
     app.logger.info("Removing endpoint %s", ep_id)
 
-    ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
-    for net in ep.ipv4_nets.union(ep.ipv6_nets):
-        unassign_ip(net.ip)
+    # Remove the endpoint from the datastore, the IPs that were assigned to
+    # it and the veth. Even if one fails, try to do the others.
+    try:
+        ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
+        backout_ip_assignments(ep)
+    except (KeyError, DataStoreError) as e:
+        app.logger.exception(e)
+        app.logger.warning("Failed to unassign IPs for endpoint %s", ep_id)
 
-    client.remove_endpoint(hostname, CONTAINER_NAME, ep_id)
+    try:
+        client.remove_endpoint(hostname, CONTAINER_NAME, ep_id)
+    except DataStoreError as e:
+        app.logger.exception(e)
+        app.logger.warning("Failed endpoint from datastore %s", ep)
 
     # libnetwork expects us to delete the veth pair.  (Note that we only need
     # to delete one end).
-    check_call(['ip', 'link', 'del', ep.name])
+    remove_veth(ep)
 
     return jsonify({"Value": {}})
 
@@ -152,7 +161,6 @@ def delete_endpoint():
 def endpoint_oper_info():
     json_data = request.get_json(force=True)
     ep_id = json_data["EndpointID"]
-    net_id = json_data["NetworkID"]
     app.logger.info("Endpoint operation info requested for %s", ep_id)
 
     # Nothing is supported yet, just pass blank data.
@@ -278,10 +286,10 @@ def ipv6_and_gateway(ep):
 
 
 def backout_ip_assignments(ep):
-    for ip in ep.ipv4_nets.union(ep.ipv6_nets):
+    for net in ep.ipv4_nets.union(ep.ipv6_nets):
         # The unassignment is best effort. Just log if it fails.
-        if not unassign_ip(ip):
-            app.logger.warn("Failed to unassign IP %s", ip)
+        if not unassign_ip(net.ip):
+            app.logger.warn("Failed to unassign IP %s", net.ip)
 
 
 def create_veth(ep):
@@ -300,11 +308,13 @@ def create_veth(ep):
                 'dev', ep.temp_interface_name(),
                 'address', FIXED_MAC])
 
+
 def remove_veth(ep):
     # The veth removal is best effort. If it fails then just log.
     rc = call(['ip', 'link', 'del', ep.name])
     if rc != 0:
         app.logger.warn("Failed to delete veth %s", ep.name)
+
 
 if __name__ == '__main__':
     # Used when being invoked by the flask development server
@@ -317,4 +327,3 @@ if __name__ == '__main__':
     # Turns on better error messages and reloading support.
     app.debug = True
     app.run()
-
