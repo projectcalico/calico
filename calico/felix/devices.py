@@ -179,7 +179,7 @@ def del_route(ip_type, ip, interface):
         futils.check_call(["ip", "-6", "route", "del", ip, "dev", interface])
 
 
-def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
+def set_routes(ip_type, ips, interface, mac=None):
     """
     Set the routes on the interface to be the specified set.
 
@@ -187,22 +187,15 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
     :param set ips: IPs to set up (any not in the set are removed)
     :param str interface: Interface name
     :param str mac|NoneType: MAC address. May not be none unless ips is empty.
-    :param bool reset_arp: Reset arp. Only valid if IPv4.
     """
     if mac is None and ips:
         raise ValueError("mac must be supplied if ips is not empty")
-    if reset_arp and ip_type != futils.IPV4:
-        raise ValueError("reset_arp may only be supplied for IPv4")
 
     current_ips = list_interface_ips(ip_type, interface)
-
     for ip in (current_ips - ips):
         del_route(ip_type, ip, interface)
     for ip in (ips - current_ips):
         add_route(ip_type, ip, interface, mac)
-    if reset_arp:
-        for ip in (ips & current_ips):
-            futils.check_call(['arp', '-s', ip, mac, '-i', interface])
 
 
 def interface_up(if_name):
@@ -221,6 +214,7 @@ def interface_up(if_name):
     try:
         with open(flags_file, 'r') as f:
             flags = f.read().strip()
+
             _log.debug("Interface %s has flags %s", if_name, flags)
     except IOError as e:
         # If we fail to check that the interface is up, then it has probably
