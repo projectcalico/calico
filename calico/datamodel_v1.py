@@ -116,14 +116,13 @@ class EndpointId(object):
     __slots__ = ["host", "orchestrator", "workload", "endpoint"]
 
     def __init__(self, host, orchestrator, workload, endpoint):
-        # Host and orchestrator can be sensibly interned, they appear
-        # regularly.  They shouldn't contain any utf-8 characters but we get
-        # back a unicode string so encode it.
+        # We intern these strings since they can occur in many IDs.  The
+        # host and orchestrator are trivially repeated for all endpoints
+        # on a host.  The others get repeated over time.
         self.host = intern(host.encode("utf8"))
         self.orchestrator = intern(orchestrator.encode("utf8"))
-        # No sensible interning to be done for workload/endpoint.
-        self.workload = workload.encode("utf8")
-        self.endpoint = endpoint.encode("utf8")
+        self.workload = intern(workload.encode("utf8"))
+        self.endpoint = intern(endpoint.encode("utf8"))
 
     def __str__(self):
         return self.__class__.__name__ + ("<%s>" % self.endpoint)
@@ -133,12 +132,10 @@ class EndpointId(object):
             return True
         if not isinstance(other, EndpointId):
             return False
-        if (other.endpoint == self.endpoint and
+        return (other.endpoint == self.endpoint and
                 other.workload == self.workload and
                 other.host == self.host and
-                other.orchestrator == self.orchestrator):
-            return True
-        return False
+                other.orchestrator == self.orchestrator)
 
     def __ne__(self, other):
         return not self.__eq__(other)

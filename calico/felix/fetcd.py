@@ -19,11 +19,11 @@ felix.fetcd
 Etcd polling functions.
 """
 from collections import defaultdict
+import functools
 from socket import timeout as SocketTimeout
 import httplib
 import json
 import logging
-from types import StringTypes
 
 from etcd import (EtcdException, EtcdClusterIdChanged, EtcdKeyNotFound,
                   EtcdEventIndexCleared)
@@ -42,7 +42,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  HOST_IP_KEY_RE)
 from calico.etcdutils import PathDispatcher
 from calico.felix.actor import Actor, actor_message
-
+from calico.felix.futils import intern_dict, intern_list
 
 _log = logging.getLogger(__name__)
 
@@ -528,31 +528,10 @@ FIELDS_TO_INTERN = set([
     "dst_tag",
     "action",
 ])
-def intern_dict(d):
-    out = {}
-    for k, v in d.iteritems():
-        # We can't intern unicode strings, as returned by etcd but all our
-        # keys should be ASCII anyway.  Use the utf8 encoding just in case.
-        k = intern(k.encode("utf8"))
-        if k in FIELDS_TO_INTERN:
-            if isinstance(v, StringTypes):
-                v = intern(v.encode("utf8"))
-            elif isinstance(v, list):
-                v = intern_list(v)
-        out[k] = v
-    return out
-
-
-def intern_list(l):
-    out = []
-    for item in l:
-        if isinstance(item, StringTypes):
-            item = intern(item.encode("utf8"))
-        out.append(item)
-    return out
-
-
-json_decoder = json.JSONDecoder(object_hook=intern_dict)
+json_decoder = json.JSONDecoder(
+    object_hook=functools.partial(intern_dict,
+                                  fields_to_intern=FIELDS_TO_INTERN)
+)
 
 
 def parse_if_endpoint(config, etcd_node):
