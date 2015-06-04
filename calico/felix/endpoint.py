@@ -62,12 +62,12 @@ class EndpointManager(ReferenceManager):
         # increffed.
         self.local_endpoint_ids = set()
 
-    def _create(self, combined_id):
+    def _create(self, endpoint_id):
         """
         Overrides ReferenceManager._create()
         """
         return LocalEndpoint(self.config,
-                             combined_id,
+                             endpoint_id,
                              self.ip_type,
                              self.iptables_updater,
                              self.dispatch_chains,
@@ -168,23 +168,14 @@ class EndpointManager(ReferenceManager):
 
 class LocalEndpoint(RefCountedActor):
 
-    def __init__(self, config, combined_id, ip_type, iptables_updater,
+    def __init__(self, config, endpoint_id, ip_type, iptables_updater,
                  dispatch_chains, rules_manager):
-        """
-        Controls a single local endpoint.
-
-        :param combined_id: EndpointId for this endpoint.
-        :param ip_type: IP type for this endpoint (IPv4 or IPv6)
-        :param iptables_updater: IptablesUpdater to use
-        :param dispatch_chains: DispatchChains to use
-        :param rules_manager: RulesManager to use
-        """
         super(LocalEndpoint, self).__init__(qualifier="%s(%s)" %
-                                            (combined_id.endpoint, ip_type))
+                                            (endpoint_id.endpoint, ip_type))
         assert isinstance(dispatch_chains, DispatchChains)
         assert isinstance(rules_manager, RulesManager)
 
-        self.combined_id = combined_id
+        self.endpoint_id = endpoint_id
 
         self.config = config
         self.ip_type = ip_type
@@ -198,7 +189,6 @@ class LocalEndpoint(RefCountedActor):
         # Will be filled in as we learn about the OS interface and the
         # endpoint config.
         self.endpoint = None
-        self._mac = None
         self._iface_name = None
         self._suffix = None
 
@@ -215,25 +205,12 @@ class LocalEndpoint(RefCountedActor):
         :param dict[str] endpoint: endpoint parameter dictionary.
         """
         _log.info("%s updated: %s", self, endpoint)
-        mac_changed = False
-
-        if not endpoint and not self.endpoint:
-            # First time we have been called, but it's a delete! Maybe some
-            # odd timing window, but we have nothing to tidy up.
-            return
-
-        if endpoint and endpoint['mac'] != self._mac:
-            # Either we have not seen this MAC before, or it has changed.
-            self._mac = endpoint['mac']
-            mac_changed = True
-
         if endpoint and not self.endpoint:
             # This is the first time we have seen the endpoint, so extract the
             # interface name and endpoint ID.
             self._iface_name = endpoint["name"]
             self._suffix = interface_to_suffix(self.config,
                                                self._iface_name)
-
         was_ready = self._ready
 
         # Activate the required profile IDs (and deactivate any that we no
@@ -255,7 +232,7 @@ class LocalEndpoint(RefCountedActor):
         if endpoint:
             # Configure the network interface; may fail if not there yet (in
             # which case we'll just do it when the interface comes up).
-            self._configure_interface(mac_changed)
+            self._configure_interface()
         else:
             # Remove the network programming.
             self._deconfigure_interface()
@@ -271,7 +248,7 @@ class LocalEndpoint(RefCountedActor):
         _log.info("%s now unreferenced, cleaning up", self)
         assert not self._ready, "Should be deleted before being unreffed."
         # Removing all profile refs should have been done already but be
-        # defensive.
+        # defensive:
         self.rules_ref_helper.discard_all()
         self._notify_cleanup_complete()
 
@@ -280,7 +257,7 @@ class LocalEndpoint(RefCountedActor):
         """
         Actor event to report that the interface is either up or changed.
         """
-        _log.info("Endpoint %s received interface kick", self.combined_id)
+        _log.info("Endpoint %s received interface kick", self.endpoint_id)
         self._configure_interface()
 
     @property
@@ -340,7 +317,7 @@ class LocalEndpoint(RefCountedActor):
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(
-            self.combined_id.endpoint,
+            self.endpoint_id.endpoint,
             self._suffix,
             self.ip_version,
             self.endpoint.get("ipv%s_nets" % self.ip_version, []),
@@ -362,45 +339,37 @@ class LocalEndpoint(RefCountedActor):
             _log.exception("Failed to delete chains for %s", self)
             self._failed = True
 
-    def _configure_interface(self, mac_changed=True):
+    def _configure_interface(self):
         """
         Applies sysctls and routes to the interface.
-
-        :param: bool mac_changed: Has the MAC address changed since it was last
-                     configured? If so, we reconfigure ARP for the interface in
-                     IPv4 (ARP does not exist for IPv6, which uses neighbour
-                     solicitation instead).
         """
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)
                 nets_key = "ipv4_nets"
-                reset_arp = mac_changed
             else:
                 ipv6_gw = self.endpoint.get("ipv6_gateway", None)
                 devices.configure_interface_ipv6(self._iface_name, ipv6_gw)
                 nets_key = "ipv6_nets"
-                reset_arp = False
 
             ips = set()
             for ip in self.endpoint.get(nets_key, []):
                 ips.add(futils.net_to_ip(ip))
             devices.set_routes(self.ip_type, ips,
                                self._iface_name,
-                               self.endpoint["mac"],
-                               reset_arp=reset_arp)
+                               self.endpoint["mac"])
 
         except (IOError, FailedSystemCall, CalledProcessError):
             if not devices.interface_exists(self._iface_name):
                 _log.info("Interface %s for %s does not exist yet",
-                          self._iface_name, self.combined_id)
+                          self._iface_name, self.endpoint_id)
             elif not devices.interface_up(self._iface_name):
                 _log.info("Interface %s for %s is not up yet",
-                          self._iface_name, self.combined_id)
+                          self._iface_name, self.endpoint_id)
             else:
                 # Interface flapped back up after we failed?
                 _log.warning("Failed to configure interface %s for %s",
-                             self._iface_name, self.combined_id)
+                             self._iface_name, self.endpoint_id)
 
     def _deconfigure_interface(self):
         """
@@ -412,20 +381,20 @@ class LocalEndpoint(RefCountedActor):
             if not devices.interface_exists(self._iface_name):
                 # Deleted under our feet - so the rules are gone.
                 _log.debug("Interface %s for %s deleted",
-                           self._iface_name, self.combined_id)
+                           self._iface_name, self.endpoint_id)
             else:
                 # An error deleting the rules. Log and continue.
                 _log.exception("Cannot delete rules for interface %s for %s",
-                               self._iface_name, self.combined_id)
+                               self._iface_name, self.endpoint_id)
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.
         _log.info("Endpoint %s acquired all required profile references",
-                  self.combined_id)
+                  self.endpoint_id)
 
     def __str__(self):
         return ("Endpoint<%s,id=%s,iface=%s>" %
-                (self.ip_type, self.combined_id,
+                (self.ip_type, self.endpoint_id,
                  self._iface_name or "unknown"))
 
 
