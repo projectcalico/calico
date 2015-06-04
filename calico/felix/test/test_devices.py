@@ -84,6 +84,10 @@ class TestDevices(unittest.TestCase):
             futils.check_call.assert_any_call(['arp', '-s', ip, mac, '-i', tap])
             futils.check_call.assert_called_with(["ip", "route", "replace", ip, "dev", tap])
 
+        with self.assertRaisesRegexp(ValueError,
+                                     "mac must be supplied if ip is provided"):
+            devices.add_route(type, ip, tap, None)
+
         type = futils.IPV6
         ip = "2001::"
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
@@ -110,6 +114,82 @@ class TestDevices(unittest.TestCase):
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             devices.del_route(type, ip, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "del", ip, "dev", tap])
+
+    def test_set_routes(self):
+        type = futils.IPV4
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
+        with self.assertRaisesRegexp(ValueError,
+                                     "mac must be supplied if ips is not empty"):
+            devices.set_routes(type, ips, interface)
+        with self.assertRaisesRegexp(ValueError,
+                                     "reset_arp may only be supplied for IPv4"):
+            devices.set_routes(futils.IPV6, ips, interface, mac=mac,
+                               reset_arp=True)
+
+        retcode = futils.CommandOutput("", "")
+        current_ips = set()
+        calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
+                 mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "2.3.4.5", "dev", interface])]
+
+        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=current_ips):
+                devices.set_routes(type, ips, interface, mac)
+                self.assertEqual(futils.check_call.call_count, len(calls))
+                futils.check_call.assert_has_calls(calls, any_order=True)
+
+        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=ips):
+                self.assertEqual(futils.check_call.call_count, 0)
+
+        current_ips = set(["2.3.4.5", "3.4.5.6"])
+        calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
+                 mock.call(['arp', '-d', "3.4.5.6", '-i', interface]),
+                 mock.call(["ip", "route", "del", "3.4.5.6", "dev", interface])]
+        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=current_ips):
+                devices.set_routes(type, ips, interface, mac)
+                self.assertEqual(futils.check_call.call_count, len(calls))
+                futils.check_call.assert_has_calls(calls, any_order=True)
+
+        retcode = futils.CommandOutput("", "")
+        current_ips = set()
+        calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
+                 mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "2.3.4.5", "dev", interface])]
+
+        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=current_ips):
+                devices.set_routes(type, ips, interface, mac, reset_arp=True)
+                self.assertEqual(futils.check_call.call_count, len(calls))
+                futils.check_call.assert_has_calls(calls, any_order=True)
+
+        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=ips):
+                self.assertEqual(futils.check_call.call_count, 0)
+
+        current_ips = set(["2.3.4.5", "3.4.5.6"])
+        calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
+                 mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
+                 mock.call(['arp', '-d', "3.4.5.6", '-i', interface]),
+                 mock.call(["ip", "route", "del", "3.4.5.6", "dev", interface])]
+        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=current_ips):
+                devices.set_routes(type, ips, interface, mac, reset_arp=True)
+                self.assertEqual(futils.check_call.call_count, len(calls))
+                futils.check_call.assert_has_calls(calls, any_order=True)
 
 
     def test_list_interface_ips(self):
