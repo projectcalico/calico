@@ -31,7 +31,7 @@ from calico import common
 from calico.felix import futils
 
 # Logger
-import re
+from calico.felix.futils import FailedSystemCall
 
 _log = logging.getLogger(__name__)
 
@@ -230,6 +230,30 @@ def interface_up(if_name):
         return False
 
     return bool(int(flags, 16) & 1)
+
+
+def remove_conntrack_flows(ip_addresses):
+    """
+    Removes any conntrack entries that use any of the given IP
+    addresses in their source/destination.
+    """
+    for ip in ip_addresses:
+        _log.debug("Removing conntrack rules for %s", ip)
+        for direction in ["--orig-src", "--orig-dst",
+                          "--reply-src", "--reply-dst"]:
+            try:
+                futils.check_call(["conntrack", "--delete", direction, ip])
+            except FailedSystemCall as e:
+                if e.retcode == 1 and "0 flow entries" in e.stderr:
+                    # Expected if there are no flows.
+                    _log.debug("No conntrack entries found for %s/%s.",
+                               ip, direction)
+                    continue
+                # Suppress the exception, conntrack entries will timeout and
+                # it's hard to think of an example where killing and
+                # restarting felix would help.
+                _log.exception("Failed to remove conntrack flows for %s. "
+                               "Ignoring.", ip)
 
 
 # These constants map to constants in the Linux kernel. This is a bit poor, but
