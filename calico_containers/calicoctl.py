@@ -382,13 +382,15 @@ def checksystem(fix=False, quit_if_error=False):
     :return: True if all system dependencies are in the proper state, False if they are not, and exit with status 1
              if the fix flag was passed in and they could not be fixed
     """
-    if fix:
-        # modprobe and sysctl require root privileges to make modifications.
-        enforce_root()
+    enforce_root()
 
-    modprobe = sh.Command._create('modprobe')
+
     system_ok = True
-    if not module_loaded("ip6_tables"):
+    modprobe = sh.Command._create('modprobe')
+    ip6tables = sh.Command._create('ip6tables')
+    try:
+        ip6tables("-L")
+    except:
         if fix:
             try:
                 modprobe('ip6_tables')
