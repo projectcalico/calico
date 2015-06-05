@@ -148,7 +148,8 @@ def delete_endpoint():
         client.remove_endpoint(hostname, CONTAINER_NAME, ep_id)
     except DataStoreError as e:
         app.logger.exception(e)
-        app.logger.warning("Failed endpoint from datastore %s", ep)
+        app.logger.warning("Failed to remove endpoint %s from datastore",
+                           ep_id)
 
     # libnetwork expects us to delete the veth pair.  (Note that we only need
     # to delete one end).
