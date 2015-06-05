@@ -50,6 +50,10 @@ import sys
 import textwrap
 import time
 import traceback
+import tempfile
+import subprocess
+import tarfile
+from datetime import datetime
 
 import netaddr
 from docopt import docopt
@@ -664,65 +668,80 @@ def save_diags():
     # This needs to be run as root.
     enforce_root()
 
-    script = """
-#!/bin/bash
-[ -z $BASH ] && echo "You must run this script in bash" && exit 1
-whoami | grep -q "root" || { echo "You must run this script as root" && exit 1; }
-echo "Collecting diags"
+    print("Collecting diags")
 
-ROUTE_FILE=route
-IPTABLES_PREFIX=iptables
-IP6TABLES_PREFIX=ip6tables
-CALICO_DIR=/var/log/calico
-date=`date +"%F_%H-%M-%S"`
-diags_dir=`mktemp -d`
-system=`hostname`
-echo "Using temp dir: $diags_dir"
-pushd $diags_dir >/dev/null
+    temp_dir = tempfile.mkdtemp()
+    temp_diags_dir = os.path.join(temp_dir, 'diagnostics')
+    os.mkdir(temp_diags_dir)
 
-echo DATE=$date > date
-echo $system > hostname
+    print("Using temp dir: %s" % temp_dir)
 
-echo "Dumping netstat output"
-netstat -an > $diags_dir/netstat
+    with open(os.path.join(temp_diags_dir, 'date'), 'w') as f:
+        f.write("DATE=%s" % datetime.strftime(datetime.today(),"%Y-%m-%d_%H-%M-%S"))
 
-echo "Dumping routes"
-for cmd in "route -n" "ip route" "ip -6 route"
-do
-  echo $cmd >> $ROUTE_FILE
-  $cmd >> $ROUTE_FILE
-  echo >> $ROUTE_FILE
-done
-netstat -an > netstat
+    with open(os.path.join(temp_diags_dir, 'hostname'), 'w') as f:
+        f.write("%s" % socket.gethostname())
 
-echo "Dumping iptables"
-iptables-save > $IPTABLES_PREFIX
-ipset list > ipset
+    print("Dumping netstat output")
+    with open(os.path.join(temp_diags_dir, 'netstat'), 'w') as f:
+        subprocess.Popen(["netstat", "-an"], stdin=subprocess.PIPE, stdout=f)
 
-echo "Copying Calico logs"
-cp -a $CALICO_DIR .
+    print("Dumping routes")
+    with open(os.path.join(temp_diags_dir, 'route'), 'w') as f:
+        # Could do this in a for loop...
+        f.write("route -n")
+        subprocess.Popen(["route", "-n"], stdin=subprocess.PIPE, stdout=f)
+        f.write('\n')
 
-echo "Dumping datastore"
-curl -s -L http://127.0.0.1:4001/v2/keys/calico?recursive=true -o etcd_calico
+        f.write("ip route")
+        subprocess.Popen(["ip", "route"], stdin=subprocess.PIPE, stdout=f)
+        f.write('\n')
 
-FILENAME=diags-`date +%Y%m%d_%H%M%S`.tar.gz
+        f.write("ip -6 route")
+        subprocess.Popen(["ip", "-6", "route"], stdin=subprocess.PIPE, stdout=f)
+        f.write('\n')
 
-tar -zcf $FILENAME *
-echo "Diags saved to $FILENAME in $diags_dir"
+    print("Dumping iptables")
+    with open(os.path.join(temp_diags_dir, 'iptables'), 'w') as f:
+        output = subprocess.Popen(["iptables-save"], stdin=subprocess.PIPE, stdout=f)
 
-echo "Uploading file. Available for 14 days from the URL printed when the upload completes"
-curl --upload-file $FILENAME https://transfer.sh/$FILENAME
+    print("Dumping ipset")
+    ipset_file = os.path.join(temp_diags_dir, 'ipset')
+    with open(ipset_file, 'w') as f:
+        try:
+            subprocess.Popen(["ipset", "list"], stdin=subprocess.PIPE, stdout=f)
+        except:
+            # System might not have ipset command. For now, we just ignore
+            print("WARNING: Couldn't dump ipset")
 
-popd >/dev/null
+    print("Copying Calico logs")
+    calico_dir = '/var/log/calico'
+    subprocess.Popen(["cp", "-a", calico_dir, temp_diags_dir])
 
-echo "Done"
-"""
-    bash = sh.Command._create('bash')
-    def process_output(line): sys.stdout.write(line)
-    bash(_in=script, _err=process_output, _out=process_output).wait()
-    # TODO: reimplement this in Python
+    print("Dumping datastore")
+    url = "http://127.0.0.1:4001/v2/keys/calico?recursive=true"
+    datastore_file = os.path.join(temp_diags_dir, 'etcd_calico')
+    curl_process = subprocess.Popen(["curl", "-s", "-L", url, "-o", datastore_file], stdout=subprocess.PIPE)
+    curl_process.communicate()
+    curl_process.wait()
+
+    # Create tar and upload
+    tar_filename = datetime.strftime(datetime.today(),"diags-%d%m%y_%H%M%S.tar.gz")
+    full_tar_path = os.path.join(temp_dir, tar_filename)
+    with tarfile.open(full_tar_path, "w:gz") as tar:
+        # pass in arcname, otherwise zip contains a directory structure like: /tmp/tmpABCDEF/diagnostics
+        tar.add(temp_dir, arcname="")
+    print("Diags saved to %s" % (full_tar_path))
+    print("Uploading file. Available for 14 days from the URL printed when the upload completes")
+    curl_cmd = ["curl", "--upload-file", full_tar_path, os.path.join("https://transfer.sh", tar_filename)]
+    curl_process = subprocess.Popen(curl_cmd)
+    curl_process.communicate()
+    curl_process.wait()
+    print("Done")
+
     # TODO: ipset might not be installed on the host. But we don't want to
     # gather the diags in the container because it might not be running...
+
 
 
 def ip_pool_add(cidr_pool, version):
