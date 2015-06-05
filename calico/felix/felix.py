@@ -21,20 +21,19 @@ The main logic for Felix.
 """
 
 # Monkey-patch before we do anything else...
-import functools
 from gevent import monkey
-import signal
-from calico.felix import futils
-
 monkey.patch_all()
 
+import functools
 import logging
 import optparse
 import os
+import signal
 
 import gevent
 
 from calico import common
+from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
