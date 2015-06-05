@@ -26,7 +26,6 @@ protocol kernel {
   learn;          # Learn all alien routes from the kernel
   persist;        # Don't remove routes on bird shutdown
   scan time 2;    # Scan kernel routing table every 2 seconds
-  device routes;
   import all;
   export all;     # Default is export none
 }
