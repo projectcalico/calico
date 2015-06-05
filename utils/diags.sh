@@ -26,13 +26,14 @@ echo "  storing system state..."
 echo DATE=$date > date
 echo $system > hostname
 
-facter 2>&1 > facter
-ps auwxx 2>&1 > ps
+facter > facter 2>&1
+ps auwxx > ps 2>&1
 df -h > df
+ss -tnlp > ss 2>&1
 
-dpkg -l 2>&1 > dpkg
-yum list 2>&1 > yum_list
-yum repolist 2>&1 > yum_repolist
+dpkg -l > dpkg 2>&1
+yum list > yum_list 2>&1
+yum repolist > yum_repolist 2>&1
 
 for cmd in "route -n" "ip route" "ip -6 route" "ip rule list"
 do
@@ -48,11 +49,17 @@ iptables-save > iptables
 ip6tables-save > ip6tables
 ipset list > ipset
 ip -6 neigh > ip6neigh
-birdc show protocols 2>&1 > bird_protocols
+birdc show protocols > bird_protocols 2>&1
 
-service calico-felix status 2>&1 > felix_status
-service neutron-server status 2>&1 > neutron_server_status
-service nova-compute status 2>&1 > nova_compute_status
+service calico-felix status > felix_status 2>&1
+service neutron-server status > neutron_server_status 2>&1
+service nova-compute status > nova_compute_status 2>&1
+rabbitmqctl status rabbitmq_status 2>&1
+
+echo "  copying contents of etcd..."
+
+etcdctl ls --recursive -p > etcdctl_ls 2>&1
+etcdctl ls --recursive -p | grep -v '/$' | xargs -n1 -t etcdctl get > etcdctl_get
 
 echo "  copying config files..."
 
@@ -65,11 +72,11 @@ fi
 cp -a "$CALICO_CFG" etc_calico
 
 # Use grep -v to attempt to strip out password information
-grep -v -i "password" /etc/nova/nova.conf 2>&1 > nova.conf
-grep -v -i "password" /etc/neutron/neutron.conf 2>&1 > neutron.conf
-grep -v -i "password" /etc/neutron/plugins/ml2/ml2_conf.ini 2>&1 > ml2_conf.ini
-grep -v -i "password" /etc/neutron/dhcp_agent.ini 2>&1 > dhcp_agent.ini
-grep -v -i "password" /etc/neutron/metadata_agent.ini 2>&1 > metadata_agent.ini
+grep -v -i "password" /etc/nova/nova.conf > nova.conf 2>&1
+grep -v -i "password" /etc/neutron/neutron.conf > neutron.conf 2>&1
+grep -v -i "password" /etc/neutron/plugins/ml2/ml2_conf.ini > ml2_conf.ini 2>&1
+grep -v -i "password" /etc/neutron/dhcp_agent.ini > dhcp_agent.ini 2>&1
+grep -v -i "password" /etc/neutron/metadata_agent.ini > metadata_agent.ini 2>&1
 
 echo "  copying log files..."
 
@@ -78,8 +85,8 @@ cp -a "$NEUTRON_DIR" .
 cp -a "$NOVA_DIR" .
 
 mkdir logs
-cp /var/log/syslog* logs 2>&1 >/dev/null
-cp /var/log/messages* logs 2>&1 >/dev/null
+cp /var/log/syslog* logs >/dev/null 2>&1
+cp /var/log/messages* logs >/dev/null 2>&1
 
 echo "  compressing..."
 cd ..
