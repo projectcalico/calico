@@ -51,7 +51,7 @@ class TestBase(TestCase):
             initial_cluster_state="new",
         )
 
-    def assert_can_ping(self, workload, ip, retries=5):
+    def assert_can_ping(self, workload, ip, retries=0):
         """
         Assert than a workload can ping an IP. Use retries to compensate for
         network uncertainty and convergence.

@@ -80,7 +80,7 @@ class Workload(object):
         args = [
             ping,
             "-c", "1",  # Number of pings
-            "-W", "2",  # Timeout for each ping
+            "-W", "1",  # Timeout for each ping
             ip,
         ]
         command = ' '.join(args)
