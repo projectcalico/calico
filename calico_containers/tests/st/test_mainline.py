@@ -1,5 +1,6 @@
 import unittest
-from sh import ErrorReturnCode
+import uuid
+from subprocess import CalledProcessError
 from functools import partial
 
 from test_base import TestBase
@@ -15,31 +16,29 @@ class TestMainline(TestBase):
         print "HI"
         host = DockerHost('host', dind=False)
         print "HI2"
+        net_name = str(uuid.uuid4())
 
-        host.execute("docker run --net=calico:test -tid --name=node1 busybox")
-        host.execute("docker run --net=calico:test -tid --name=node2 busybox")
+        host.execute("docker run --net=calico:%s -tid --name=node1 busybox" %
+                     net_name)
+        host.execute("docker run --net=calico:%s -tid --name=node2 busybox" %
+                     net_name)
         print "HI3"
-
-        # Configure the nodes with the same profiles.
-        host.calicoctl("profile add TEST_GROUP")
-        host.calicoctl("profile TEST_GROUP member add node1")
-        host.calicoctl("profile TEST_GROUP member add node2")
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format "
                                 "'{{ .NetworkSettings.IPAddress }}' "
-                                "node1").stdout.rstrip()
+                                "node1").rstrip()
         node2_ip = host.execute("docker inspect --format "
                                 "'{{ .NetworkSettings.IPAddress }}' "
-                                "node2").stdout.rstrip()
+                                "node2").rstrip()
         if ip1 != 'auto':
             self.assertEqual(ip1, node1_ip)
         if ip2 != 'auto':
             self.assertEqual(ip2, node2_ip)
 
         ping = partial(host.execute,
-                       "docker exec node1 ping %s -c 1 -W 1" % node1_ip)
-        retry_until_success(ping, ex_class=ErrorReturnCode)
+                       "docker exec node1 ping %s -c 1 -W 1" % node2_ip)
+        retry_until_success(ping, ex_class=CalledProcessError)
 
         # Check connectivity.
         host.execute("docker exec node1 ping %s -c 1 -W 1" % node1_ip)
@@ -48,9 +47,8 @@ class TestMainline(TestBase):
         host.execute("docker exec node2 ping %s -c 1 -W 1" % node2_ip)
 
         # Test calicoctl teardown commands.
-        host.calicoctl("profile remove TEST_GROUP")
-        host.calicoctl("container remove node1")
-        host.calicoctl("container remove node2")
+        host.execute("docker rm -f node1")
+        host.execute("docker rm -f node2")
         host.calicoctl("pool remove 192.168.0.0/16")
         host.calicoctl("node stop")
 
