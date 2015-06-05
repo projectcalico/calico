@@ -27,6 +27,7 @@ Usage:
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags
+  calicoctl checksystem [--fix]
   calicoctl restart-docker-with-alternative-unix-socket
   calicoctl restart-docker-without-alternative-unix-socket
 
@@ -278,16 +279,8 @@ def module_loaded(module):
 
 
 def node(ip, node_image, ip6=""):
-    # modprobe and sysctl require root privileges.
-    enforce_root()
-
-    if not module_loaded("ip6_tables"):
-        print >> sys.stderr, "WARNING: calico was unable to detect the ip6_tables module. Load with " \
-                             "`modprobe ip6_tables`"
-
-    if not module_loaded("xt_set"):
-        print >> sys.stderr, "WARNING: calico was unable to detect the xt_set module. Load with " \
-                             "`modprobe xt_set`"
+    # Print warnings for any known system issues before continuing
+    checksystem(fix=False, quit_if_error=False)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -301,15 +294,6 @@ def node(ip, node_image, ip6=""):
 
     client.ensure_global_config()
     client.create_host(hostname, ip, ip6)
-
-    # Enable IP forwarding since all compute hosts are vRouters.
-    # IPv4 forwarding should be enabled already by docker.
-
-    if "1" not in sysctl("net.ipv4.ip_forward"):
-        print >> sys.stderr, "WARNING: ipv4 forwarding is not enabled."
-
-    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
-        print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
 
     if docker_restarter.is_using_alternative_socket():
         # At this point, docker is listening on a new port but powerstrip
@@ -388,6 +372,70 @@ def node(ip, node_image, ip6=""):
         print "before using `docker run` for Calico networking.\n"
 
     print "Calico node is running with id: %s" % cid
+
+
+def checksystem(fix=False, quit_if_error=False):
+    """
+    Checks that the system is setup correctly. If --fix is passed in at command line, this command
+    will attempt to fix any issues it encounters. If any fixes fail, it will exit(1)
+
+    :return: True if all system dependencies are in the proper state, False if they are not, and exit with status 1
+             if the fix flag was passed in and they could not be fixed
+    """
+    if fix:
+        # modprobe and sysctl require root privileges to make modifications.
+        enforce_root()
+
+    modprobe = sh.Command._create('modprobe')
+    system_ok = True
+    if not module_loaded("ip6_tables"):
+        if fix:
+            try:
+                modprobe('ip6_tables')
+            except:
+                print >> sys.stderr, "ERROR: calico could not enable ip6_tables."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: calico was unable to detect the ip6_tables module. Load with " \
+                             "`modprobe ip6_tables`"
+            system_ok = False
+
+    if not module_loaded("xt_set"):
+        if fix:
+            try:
+                modprobe('xt_set')
+            except:
+                print >> sys.stderr, "ERROR: calico could not enable xt_set."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: calico was unable to detect the xt_set module. Load with " \
+                             "`modprobe xt_set`"
+            system_ok = False
+
+    # Enable IP forwarding since all compute hosts are vRouters.
+    # IPv4 forwarding should be enabled already by docker.
+    if "1" not in sysctl("net.ipv4.ip_forward"):
+        if fix:
+            if "1" not in sysctl("-w", "net.ipv4.ip_forward=1"):
+                print >> sys.stderr, "ERROR: calico could not enable ipv4 forwarding."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: ipv4 forwarding is not enabled."
+            system_ok = False
+
+    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
+        if fix:
+            if "1" not in sysctl("-w", "net.ipv6.conf.all.forwarding=1"):
+                print >> sys.stderr, "ERROR: calico could not enable ipv6 forwarding."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
+            system_ok = False
+
+    if quit_if_error and system_ok == False:
+        sys.exit(1)
+
+    return system_ok
 
 
 def _find_or_pull_node_image(image_name, client):
@@ -1107,7 +1155,6 @@ def print_paragraph(msg):
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-
     validate_arguments()
     ip_version = get_container_ipv_from_arguments()
 
@@ -1127,6 +1174,8 @@ if __name__ == '__main__':
                      ip6=ip6)
         elif arguments["status"]:
             status()
+        elif arguments["checksystem"]:
+            checksystem(arguments["--fix"], quit_if_error=True)
         elif arguments["reset"]:
             reset()
         elif arguments["profile"]:
