@@ -41,13 +41,13 @@ class TestNoPowerstrip(TestBase):
         host.execute("docker inspect %s" % node2)
 
         # Check it works
-        ping = partial(node1.ping, ip2)
+        ping = partial(node1.assert_can_ping, ip2)
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
-        node1.ping(ip1)
-        node1.ping(ip2)
-        node2.ping(ip1)
-        node2.ping(ip2)
+        node1.assert_can_ping(ip1)
+        node1.assert_can_ping(ip2)
+        node2.assert_can_ping(ip1)
+        node2.assert_can_ping(ip2)
 
         # Test the teardown commands
         host.calicoctl("profile remove TEST_GROUP")

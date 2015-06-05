@@ -24,7 +24,7 @@ class TestIpv6(TestBase):
         host.calicoctl("profile TEST_GROUP member add %s" % node1)
         host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
-        ping = partial(node1.ping, ip2)
+        ping = partial(node1.assert_can_ping, ip2)
         retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.

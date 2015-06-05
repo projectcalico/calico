@@ -27,7 +27,7 @@ class TestAddIp(TestBase):
         host.calicoctl("profile TEST_GROUP member add %s" % node1)
         host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
-        test_ping = partial(node1.ping, ip12)
+        test_ping = partial(node1.assert_can_ping, ip12)
         retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
         # Add two more addresses to node1 and one more to node2
@@ -36,10 +36,10 @@ class TestAddIp(TestBase):
 
         host.calicoctl("container %s ip add %s --interface=hello" % (node2, ip22))
 
-        node1.ping(ip22)
-        node2.ping(ip11)
-        node2.ping(ip21)
-        node2.ping(ip31)
+        node1.assert_can_ping(ip22)
+        node2.assert_can_ping(ip11)
+        node2.assert_can_ping(ip21)
+        node2.assert_can_ping(ip31)
 
         # Now stop and restart node 1 and node 2.
         host.execute("docker stop %s" % node1, use_powerstrip=True)
@@ -50,22 +50,22 @@ class TestAddIp(TestBase):
         retry_until_success(test_ping, ex_class=ErrorReturnCode)
 
         # Test pings between the IPs.
-        node1.ping(ip12)
-        node1.ping(ip22)
-        node2.ping(ip11)
-        node2.ping(ip21)
-        node2.ping(ip31)
+        node1.assert_can_ping(ip12)
+        node1.assert_can_ping(ip22)
+        node2.assert_can_ping(ip11)
+        node2.assert_can_ping(ip21)
+        node2.assert_can_ping(ip31)
 
         # Now remove and check pings to the removed addresses no longer work.
         host.calicoctl("container %s ip remove %s" % (node1, ip21))
         host.calicoctl("container %s ip remove %s --interface=hello" % (node2, ip22))
-        node1.ping(ip12)
-        node2.ping(ip11)
+        node1.assert_can_ping(ip12)
+        node2.assert_can_ping(ip11)
         with self.assertRaises(ErrorReturnCode):
-            node1.ping(ip22)
+            node1.assert_can_ping(ip22)
         with self.assertRaises(ErrorReturnCode):
-            node2.ping(ip21)
-        node2.ping(ip31)
+            node2.assert_can_ping(ip21)
+        node2.assert_can_ping(ip31)
 
         # Check that we can't remove addresses twice
         with self.assertRaises(ErrorReturnCode):

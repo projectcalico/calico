@@ -36,20 +36,20 @@ class TestDuplicateIps(TestBase):
         host3.calicoctl("profile TEST_PROFILE member add %s" % workload3)
 
         # Check for standard connectivity
-        ping = partial(workload1.ping, dup_ip)
+        ping = partial(workload1.assert_can_ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
-        ping = partial(workload2.ping, dup_ip)
+        ping = partial(workload2.assert_can_ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
-        ping = partial(workload3.ping, dup_ip)
+        ping = partial(workload3.assert_can_ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
 
         # Delete one of the duplciates.
         host2.execute("docker rm -f dup2")
 
         # Check standard connectivity still works.
-        ping = partial(workload1.ping, dup_ip)
+        ping = partial(workload1.assert_can_ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
-        ping = partial(workload2.ping, dup_ip)
+        ping = partial(workload2.assert_can_ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
-        ping = partial(workload3.ping, dup_ip)
+        ping = partial(workload3.assert_can_ping, dup_ip)
         retry_until_success(ping, ex_class=ErrorReturnCode_1)
