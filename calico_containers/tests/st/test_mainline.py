@@ -13,16 +13,13 @@ class TestMainline(TestBase):
         """
         Setup two endpoints on one host and check connectivity.
         """
-        print "HI"
         host = DockerHost('host', dind=False)
-        print "HI2"
         net_name = str(uuid.uuid4())
 
         host.execute("docker run --net=calico:%s -tid --name=node1 busybox" %
                      net_name)
         host.execute("docker run --net=calico:%s -tid --name=node2 busybox" %
                      net_name)
-        print "HI3"
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format "

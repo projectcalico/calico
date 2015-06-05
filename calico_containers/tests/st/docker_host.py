@@ -20,10 +20,8 @@ class DockerHost(object):
         if dind:
             docker.rm("-f", self.name, _ok_code=[0, 1])
             pwd = sh.pwd().stdout.rstrip()
-            print "Running host"
             docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
                        "-tid", "jpetazzo/dind")
-            print "Run host"
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
 
@@ -50,11 +48,8 @@ class DockerHost(object):
             self.ip = utils.get_ip()
 
         if start_calico:
-            print "Starting node"
             self.start_calico_node()
-            print "Started node"
             # self.assert_driver_up()
-            print "Driver is up"
 
 
     def delete(self):
@@ -72,7 +67,6 @@ class DockerHost(object):
         if self.dind:
             command = "docker exec -it %s bash -c '%s'" % (self.name,
                                                               command)
-        print "command: %s" % command
         return check_output(command, shell=True)
 
     def calicoctl(self, command, **kwargs):
