@@ -13,13 +13,8 @@ class Ipv6MultiHostMainline(TestBase):
 
         Almost identical in function to the vagrant coreOS demo.
         """
-        host1 = DockerHost('host1', start_calico=False)
-        host1.start_calico_node(ip=host1.ip, ip6="fd80:24e2:f998:72d6::1")
-        host1.assert_powerstrip_up()
-
-        host2 = DockerHost('host2', start_calico=False)
-        host2.start_calico_node(ip=host2.ip, ip6="fd80:24e2:f998:72d6::1")
-        host2.assert_powerstrip_up()
+        host1 = DockerHost('host1')
+        host2 = DockerHost('host2')
 
         ip1 = "fd80:24e2:f998:72d6::1:1"
         ip2 = "fd80:24e2:f998:72d6::1:2"

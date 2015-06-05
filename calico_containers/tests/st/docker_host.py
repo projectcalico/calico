@@ -22,10 +22,8 @@ class DockerHost(object):
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
 
-        ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
+        self.ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
                              self.name).stdout.rstrip()
-        # TODO: change this hardcoding when we set up IPv6 for hosts
-        self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
 
         # Make sure docker is up
         docker_ps = partial(self.execute, "docker ps")
@@ -80,6 +78,7 @@ class DockerHost(object):
         calicoctl node command.
         """
         ip = ip or self.ip
+        ip6 = ip6 or self.ip6
         args = ['node', '--ip=%s' % ip]
         if ip6:
             args.append('--ip6=%s' % ip6)
