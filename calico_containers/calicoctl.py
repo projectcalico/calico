@@ -282,14 +282,12 @@ def node(ip, node_image, ip6=""):
     enforce_root()
 
     if not module_loaded("ip6_tables"):
-        print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
+        print >> sys.stderr, "WARNING: calico was unable to detect the ip6_tables module. Load with " \
                              "`modprobe ip6_tables`"
-        sys.exit(2)
 
     if not module_loaded("xt_set"):
-        print >> sys.stderr, "module xt_set isn't loaded. Load with " \
+        print >> sys.stderr, "WARNING: calico was unable to detect the xt_set module. Load with " \
                              "`modprobe xt_set`"
-        sys.exit(2)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -306,8 +304,12 @@ def node(ip, node_image, ip6=""):
 
     # Enable IP forwarding since all compute hosts are vRouters.
     # IPv4 forwarding should be enabled already by docker.
-    sysctl("-w", "net.ipv4.ip_forward=1")
-    sysctl("-w", "net.ipv6.conf.all.forwarding=1")
+
+    if "1" not in sysctl("net.ipv4.ip_forward"):
+        print >> sys.stderr, "WARNING: ipv4 forwarding is not enabled."
+
+    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
+        print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
 
     if docker_restarter.is_using_alternative_socket():
         # At this point, docker is listening on a new port but powerstrip
