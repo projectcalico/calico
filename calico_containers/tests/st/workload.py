@@ -44,20 +44,30 @@ class Workload(object):
         host.execute(command, use_powerstrip=use_powerstrip)
 
         # There is an unofficial ip=auto option in addition to ip=None.
-        try:
-            version = IPAddress(ip).version
-        except AddrFormatError:
+        if ip is None or ip == 'auto':
             version = None
+        else:
+            version = IPAddress(ip).version
+
+        # if version == 6:
+        #     version_key = "GlobalIPv6Address"
+        # else:
+        #     version_key = "IPAddress"
+
+        # self.ip = host.execute("docker inspect --format "
+        #                        "'{{ .NetworkSettings.%s }}' %s" % (version_key, name),
+        #                        use_powerstrip=use_powerstrip).stdout.rstrip()
+        # if ip and ip != 'auto':
+        #     assert ip == self.ip, "IP param = %s, configured IP = %s." % (ip, self.ip)
 
         if version == 6:
-            version_key = "GlobalIPv6Address"
+            self.ip = ip
         else:
-            version_key = "IPAddress"
+            self.ip = host.execute("docker inspect --format "
+                                   "'{{ .NetworkSettings.IPAddress }}' %s" % name,
+                                   use_powerstrip=use_powerstrip).stdout.rstrip()
 
-        self.ip = host.execute("docker inspect --format "
-                               "'{{ .NetworkSettings.%s }}' %s" % (version_key, name),
-                               use_powerstrip=use_powerstrip).stdout.rstrip()
-        if ip and ip != 'auto':
+        if version == 4:
             assert ip == self.ip, "IP param = %s, configured IP = %s." % (ip, self.ip)
 
     def execute(self, command, **kwargs):
