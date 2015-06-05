@@ -36,7 +36,7 @@ Prerequisites
 
 Before starting this you will need the following:
 
--  One or more machines running RHEL 7, with OpenStack Juno installed.
+-  One or more machines running RHEL 7, with OpenStack Juno or Kilo installed.
 -  SSH access to these machines.
 -  Working DNS between these machines (use ``/etc/hosts`` if you don't
    have DNS on your network).
@@ -47,12 +47,14 @@ Common Steps
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed here.
 
-Install OpenStack Juno
-~~~~~~~~~~~~~~~~~~~~~~
+Install OpenStack
+~~~~~~~~~~~~~~~~~
 
-If you haven't already done so, install Juno with Neutron and ML2 networking.
-Instructions for installing OpenStack on RHEL can be found
-`here <http://openstack.redhat.com/Main_Page>`__.
+If you haven't already done so, install Openstack with Neutron and ML2 networking.
+Instructions for installing OpenStack on RHEL can be found here -
+`Juno <http://docs.openstack.org/juno/install-guide/install/yum/content/index.html>`__ /
+`Kilo <http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html>`__.
+
 
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -60,7 +62,9 @@ Configure YUM repositories
 As well as the repositories for OpenStack and EPEL
 (https://fedoraproject.org/wiki/EPEL) -- which you will have already
 configured as part of the previous step -- you will need to configure the
-repository for Calico::
+repository for Calico.
+
+For Juno::
 
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
@@ -72,6 +76,20 @@ repository for Calico::
     gpgkey=http://binaries.projectcalico.org/rpm/key
     priority=97
     EOF
+
+For Kilo::
+
+    cat > /etc/yum.repos.d/calico.repo <<EOF
+    [calico]
+    name=Calico Repository
+    baseurl=http://binaries.projectcalico.org/rpm_kilo/
+    enabled=1
+    skip_if_unavailable=0
+    gpgcheck=1
+    gpgkey=http://binaries.projectcalico.org/rpm/key
+    priority=97
+    EOF
+
 
 Note: The priority setting in ``calico.repo`` is needed so that the
 Calico repository can install Calico-enhanced versions of some of the
