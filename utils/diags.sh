@@ -29,6 +29,7 @@ echo $system > hostname
 facter 2>&1 > facter
 ps auwxx 2>&1 > ps
 df -h > df
+ss -tnlp 2>&1 > ss
 
 dpkg -l 2>&1 > dpkg
 yum list 2>&1 > yum_list
@@ -53,6 +54,12 @@ birdc show protocols 2>&1 > bird_protocols
 service calico-felix status 2>&1 > felix_status
 service neutron-server status 2>&1 > neutron_server_status
 service nova-compute status 2>&1 > nova_compute_status
+rabbitmqctl status 2>&1 rabbitmq_status
+
+echo "  copying contents of etcd..."
+
+etcdctl ls --recursive -p 2>&1 > etcdctl_ls
+etcdctl ls --recursive -p | grep -v '/$' | xargs -n1 -t etcdctl get > etcdctl_get
 
 echo "  copying config files..."
 
