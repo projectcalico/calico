@@ -376,11 +376,14 @@ def node(ip, node_image, ip6=""):
 
 def checksystem(fix=False, quit_if_error=False):
     """
-    Checks that the system is setup correctly. If --fix is passed in at command line, this command
-    will attempt to fix any issues it encounters. If any fixes fail, it will exit(1)
+    Checks that the system is setup correctly. fix==True, this command
+    will attempt to fix any issues it encounters. If any fixes fail, it will exit(1). Fix will automatically
+    be set to True if the user specifies --fix at the command line.
 
-    :return: True if all system dependencies are in the proper state, False if they are not, and exit with status 1
-             if the fix flag was passed in and they could not be fixed
+    :param fix: if True, try to fix any system dependency issues that are detected.
+    :param quit_if_error: if True, quit with error code 1 if any issues are detected, or if any fixes are unsuccesful.
+    :return: True if all system dependencies are in the proper state, False if they are not. This function
+             will sys.exit(1) instead of returning false if quit_if_error == True
     """
     enforce_root()
 
@@ -395,7 +398,7 @@ def checksystem(fix=False, quit_if_error=False):
             try:
                 modprobe('ip6_tables')
             except:
-                print >> sys.stderr, "ERROR: calico could not enable ip6_tables."
+                print >> sys.stderr, "ERROR: Could not enable ip6_tables."
                 system_ok = False
         else:
             print >> sys.stderr, "WARNING: calico was unable to detect the ip6_tables module. Load with " \
@@ -407,7 +410,7 @@ def checksystem(fix=False, quit_if_error=False):
             try:
                 modprobe('xt_set')
             except:
-                print >> sys.stderr, "ERROR: calico could not enable xt_set."
+                print >> sys.stderr, "ERROR: Could not enable xt_set."
                 system_ok = False
         else:
             print >> sys.stderr, "WARNING: calico was unable to detect the xt_set module. Load with " \
@@ -419,7 +422,7 @@ def checksystem(fix=False, quit_if_error=False):
     if "1" not in sysctl("net.ipv4.ip_forward"):
         if fix:
             if "1" not in sysctl("-w", "net.ipv4.ip_forward=1"):
-                print >> sys.stderr, "ERROR: calico could not enable ipv4 forwarding."
+                print >> sys.stderr, "ERROR: Could not enable ipv4 forwarding."
                 system_ok = False
         else:
             print >> sys.stderr, "WARNING: ipv4 forwarding is not enabled."
@@ -428,7 +431,7 @@ def checksystem(fix=False, quit_if_error=False):
     if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
         if fix:
             if "1" not in sysctl("-w", "net.ipv6.conf.all.forwarding=1"):
-                print >> sys.stderr, "ERROR: calico could not enable ipv6 forwarding."
+                print >> sys.stderr, "ERROR: Could not enable ipv6 forwarding."
                 system_ok = False
         else:
             print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
