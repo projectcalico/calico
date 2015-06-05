@@ -26,11 +26,14 @@ class TestBase(TestCase):
         # containers = docker.ps("-qa").split()
         # for container in containers:
         #     delete_container(container)
+        # import sh
+        # docker.rm("-f", "etcd", _ok_code=[0, 1])
 
     def start_etcd(self):
         """
         Starts a separate etcd container.
         """
+        docker.rm("-f", "etcd", _ok_code=[0, 1])
         docker.run(
             "--detach",
             "--publish", "2379:2379",

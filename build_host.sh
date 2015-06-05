@@ -18,10 +18,6 @@ fi
 # Always refesh the calico/node image in the container by running build_node.sh
 docker exec $CONTAINER_NAME bash -c 'cd /code && ./build_node.sh'
 
-# The tests expect to be able to run a host based on an image called
-# calico/host. So always commit the latest image with that name.
-docker commit $CONTAINER_NAME calico/host
-
 #### TEMP CODE ####
 # if there's a customized docker binary in the current directory, run it in
 # the $CONTAINER_NAME container, replacing the "normal" docker container.
@@ -33,3 +29,6 @@ if [ -e docker-dev ]; then
   docker exec $CONTAINER_NAME ln -sf /code/docker-dev /usr/local/bin/docker
 fi
 
+# The tests expect to be able to run a host based on an image called
+# calico/host. So always commit the latest image with that name.
+docker commit $CONTAINER_NAME calico/host
