@@ -18,6 +18,9 @@ class DockerHost(object):
         pwd = sh.pwd().stdout.rstrip()
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
 
+        # Since `calicoctl node` doesn't fix ipv6 forwarding and module loading, we must manually fix it
+        self.calicoctl("checksystem --fix")
+
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
 
