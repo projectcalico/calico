@@ -684,46 +684,50 @@ def save_diags():
 
     print("Dumping netstat output")
     with open(os.path.join(temp_diags_dir, 'netstat'), 'w') as f:
-        subprocess.Popen(["netstat", "-an"], stdin=subprocess.PIPE, stdout=f)
+        f.writelines(sh.netstat("-an"))
 
     print("Dumping routes")
     with open(os.path.join(temp_diags_dir, 'route'), 'w') as f:
         # Could do this in a for loop...
         f.write("route -n")
-        subprocess.Popen(["route", "-n"], stdin=subprocess.PIPE, stdout=f)
+        f.writelines(sh.route("-n"))
         f.write('\n')
 
         f.write("ip route")
-        subprocess.Popen(["ip", "route"], stdin=subprocess.PIPE, stdout=f)
+        f.writelines(sh.ip("route"))
         f.write('\n')
 
         f.write("ip -6 route")
-        subprocess.Popen(["ip", "-6", "route"], stdin=subprocess.PIPE, stdout=f)
+        f.writelines(sh.ip("-6", "route"))
         f.write('\n')
 
     print("Dumping iptables")
     with open(os.path.join(temp_diags_dir, 'iptables'), 'w') as f:
-        output = subprocess.Popen(["iptables-save"], stdin=subprocess.PIPE, stdout=f)
+        f.writelines(sh.iptables_save())
+
 
     print("Dumping ipset")
     ipset_file = os.path.join(temp_diags_dir, 'ipset')
     with open(ipset_file, 'w') as f:
         try:
-            subprocess.Popen(["ipset", "list"], stdin=subprocess.PIPE, stdout=f)
-        except:
+            f.writelines(sh.ipset("list"))
+        except sh.CommandNotFound as e:
             # System might not have ipset command. For now, we just ignore
             print("WARNING: Couldn't dump ipset")
 
     print("Copying Calico logs")
     calico_dir = '/var/log/calico'
-    subprocess.Popen(["cp", "-a", calico_dir, temp_diags_dir])
+    sh.cp("-a", calico_dir, temp_diags_dir)
 
     print("Dumping datastore")
     url = "http://127.0.0.1:4001/v2/keys/calico?recursive=true"
     datastore_file = os.path.join(temp_diags_dir, 'etcd_calico')
-    curl_process = subprocess.Popen(["curl", "-s", "-L", url, "-o", datastore_file], stdout=subprocess.PIPE)
-    curl_process.communicate()
-    curl_process.wait()
+    try:
+        sh.curl("-s", "-L", url, "-o", datastore_file)
+    except sh.ErrorReturnCode:
+        print("WARNING: Couldn't get datastore file")
+
+
 
     # Create tar and upload
     tar_filename = datetime.strftime(datetime.today(),"diags-%d%m%y_%H%M%S.tar.gz")
@@ -733,11 +737,7 @@ def save_diags():
         tar.add(temp_dir, arcname="")
     print("Diags saved to %s" % (full_tar_path))
     print("Uploading file. Available for 14 days from the URL printed when the upload completes")
-    curl_cmd = ["curl", "--upload-file", full_tar_path, os.path.join("https://transfer.sh", tar_filename)]
-    curl_process = subprocess.Popen(curl_cmd)
-    curl_process.communicate()
-    curl_process.wait()
-    print("Done")
+    print(sh.curl("--upload-file", full_tar_path, os.path.join("https://transfer.sh", tar_filename)))
 
     # TODO: ipset might not be installed on the host. But we don't want to
     # gather the diags in the container because it might not be running...
