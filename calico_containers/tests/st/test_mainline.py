@@ -13,7 +13,7 @@ class TestMainline(TestBase):
         """
         Setup two endpoints on one host and check connectivity.
         """
-        host = DockerHost('host', dind=False)
+        host = DockerHost('host')
         net_name = str(uuid.uuid4())
 
         host.execute("docker run --net=calico:%s -tid --name=node1 busybox" %

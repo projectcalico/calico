@@ -1,3 +1,4 @@
+import requests
 from sh import docker
 from unittest import TestCase
 
@@ -48,3 +49,8 @@ class TestBase(TestCase):
             initial_cluster="calico=http://%s:2380" % self.ip,
             initial_cluster_state="new",
         )
+
+        # TODO - talking to etcd fails until a request is made from outside
+        # the dind to etcd. Not sure why yet...
+        requests.get("http://%s:2379/version" % self.ip)
+

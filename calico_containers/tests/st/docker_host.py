@@ -1,7 +1,7 @@
 import sh
 from sh import docker, ErrorReturnCode
 from functools import partial
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 from calico_containers.tests.st import utils
 
 from utils import get_ip, delete_container, retry_until_success
@@ -21,7 +21,7 @@ class DockerHost(object):
             docker.rm("-f", self.name, _ok_code=[0, 1])
             pwd = sh.pwd().stdout.rstrip()
             docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
-                       "-tid", "jpetazzo/dind")
+                       "-tid", "calico/dind")
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
 
@@ -33,11 +33,11 @@ class DockerHost(object):
             ### TEMP CODE ###
             # Make sure the existing docker daemon is stopped and run the new one (if
             # it's not already running)
-            self.execute("pkill docker")
-            check_output("docker exec -dit %s bash -c '/code/docker-dev -dD "
-                         ">/tmp/docker.log 2>/tmp/docker.err.log'" % self.name,
-                         shell=True)
-            self.execute("ln -sf /code/docker-dev /usr/local/bin/docker")
+            # self.execute("pkill docker")
+            # check_output("docker exec -dit %s bash -c '/code/docker-dev -dD "
+            #              ">/tmp/docker.log 2>/tmp/docker.err.log'" % self.name,
+            #              shell=True)
+            # self.execute("ln -sf /code/docker-dev /usr/local/bin/docker")
 
             # Make sure docker is up
             docker_ps = partial(self.execute, "docker ps")
@@ -49,7 +49,7 @@ class DockerHost(object):
 
         if start_calico:
             self.start_calico_node()
-            # self.assert_driver_up()
+            self.assert_driver_up()
 
 
     def delete(self):
@@ -64,7 +64,10 @@ class DockerHost(object):
         """
         etcd_auth = "ETCD_AUTHORITY=%s:2379 " % get_ip()
         command = "%s %s" % (etcd_auth, command)
+
         if self.dind:
+            # TODO - work out what was wrong with the bash -s approach and fix
+            command = command.replace('\'', '\'"\'"\'')
             command = "docker exec -it %s bash -c '%s'" % (self.name,
                                                               command)
         return check_output(command, shell=True)
@@ -89,6 +92,6 @@ class DockerHost(object):
         Check that Calico Docker Driver is up by checking the existence of
         the unix socket.
         """
-        sock_exists = partial(self.execute, "/bin/sh", "-c",
-                              '"[ -e %s ]"' % CALICO_DRIVER_SOCK)
-        retry_until_success(sock_exists, ex_class=ErrorReturnCode)
+        sock_exists = partial(self.execute,
+                              "[ -e %s ]" % CALICO_DRIVER_SOCK)
+        retry_until_success(sock_exists, ex_class=CalledProcessError)
