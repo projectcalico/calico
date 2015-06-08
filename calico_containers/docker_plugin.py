@@ -68,15 +68,11 @@ def create_endpoint():
     ep_id = json_data["EndpointID"]
     net_id = json_data["NetworkID"]
 
-    # TODO - Endpoint is broken. We don't know the interface name (libnetwork
-    # decides it) so it shouldn't be a mandatory parameter.
-
     # Create a calico endpoint object which we can populate and return to
     # libnetwork at the end of this method.
     ep = Endpoint(ep_id=ep_id,
                   state="active",
-                  mac=FIXED_MAC,
-                  if_name='cali0')
+                  mac=FIXED_MAC)
     ep.profile_id = net_id
 
     # This method is split into three phases that have side effects.

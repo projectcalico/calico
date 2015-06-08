@@ -178,7 +178,7 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
 
 class Endpoint(object):
 
-    def __init__(self, ep_id, state, mac, if_name):
+    def __init__(self, ep_id, state, mac, if_name=None):
         self.ep_id = ep_id
         self.state = state
         self.mac = mac
@@ -218,7 +218,7 @@ class Endpoint(object):
         ep = cls(ep_id=ep_id,
                  state=json_dict["state"],
                  mac=json_dict["mac"],
-                 if_name= if_name)
+                 if_name=if_name)
         for net in json_dict["ipv4_nets"]:
             ep.ipv4_nets.add(IPNetwork(net))
         for net in json_dict["ipv6_nets"]:
