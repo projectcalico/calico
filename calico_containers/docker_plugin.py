@@ -2,7 +2,7 @@ from flask import Flask, jsonify, abort, request
 import os
 import socket
 import logging
-from subprocess import check_call, CalledProcessError, call
+from subprocess32 import check_call, CalledProcessError, call
 
 from netaddr import IPAddress, IPNetwork
 import sys
@@ -13,6 +13,9 @@ from pycalico.ipam import SequentialAssignment, IPAMClient
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"
 
 CONTAINER_NAME = "undefined"
+
+# How long to wait (seconds) for IP commands to complete.
+IP_CMD_TIMEOUT = 5
 
 app = Flask(__name__)
 hostname = socket.gethostname()
@@ -294,25 +297,27 @@ def backout_ip_assignments(ep):
 
 
 def create_veth(ep):
-    # TODO - we may want a timeout on all the subprocess commands.
     # Create the veth
     check_call(['ip', 'link',
                 'add', ep.name,
                 'type', 'veth',
-                'peer', 'name', ep.temp_interface_name()])
+                'peer', 'name', ep.temp_interface_name()],
+               timeout=IP_CMD_TIMEOUT)
 
     # Set the host end of the veth to 'up' so felix notices it.
-    check_call(['ip', 'link', 'set', ep.name, 'up'])
+    check_call(['ip', 'link', 'set', ep.name, 'up'],
+               timeout=IP_CMD_TIMEOUT)
 
     # Set the mac as libnetwork doesn't do this for us.
     check_call(['ip', 'link', 'set',
                 'dev', ep.temp_interface_name(),
-                'address', FIXED_MAC])
+                'address', FIXED_MAC],
+               timeout=IP_CMD_TIMEOUT)
 
 
 def remove_veth(ep):
     # The veth removal is best effort. If it fails then just log.
-    rc = call(['ip', 'link', 'del', ep.name])
+    rc = call(['ip', 'link', 'del', ep.name], timeout=IP_CMD_TIMEOUT)
     if rc != 0:
         app.logger.warn("Failed to delete veth %s", ep.name)
 
