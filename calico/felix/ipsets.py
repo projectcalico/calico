@@ -317,8 +317,6 @@ class IpsetManager(ReferenceManager):
             for ip in old_ips:
                 self._remove_mapping(tag, profile_id, endpoint_id, ip)
 
-        _log.info("Endpoint update complete")
-
     def _add_mapping(self, tag_id, profile_id, endpoint_id, ip_address):
         """
         Adds the given tag->IP->profile->endpoint mapping to the index.

@@ -291,9 +291,12 @@ class EtcdWatcher(Actor):
                 self._reconnect()
             except (ConnectTimeoutError,
                     urllib3.exceptions.HTTPError,
-                    httplib.HTTPException):
+                    httplib.HTTPException) as e:
+                # We don't log out the stack trace here because it can spam the
+                # logs heavily if the requests keep failing.  The errors are
+                # very descriptive anyway.
                 _log.warning("Low-level HTTP error, reconnecting to "
-                             "etcd.", exc_info=True)
+                             "etcd: %r.", e)
                 self._reconnect()
             except (EtcdClusterIdChanged, EtcdEventIndexCleared) as e:
                 _log.warning("Out of sync with etcd (%r).  Reconnecting "
