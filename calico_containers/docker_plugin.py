@@ -3,6 +3,7 @@ import os
 import socket
 import logging
 from subprocess32 import check_call, CalledProcessError, call
+from werkzeug.exceptions import HTTPException, default_exceptions
 
 from netaddr import IPAddress, IPNetwork
 import sys
@@ -17,16 +18,39 @@ CONTAINER_NAME = "undefined"
 # How long to wait (seconds) for IP commands to complete.
 IP_CMD_TIMEOUT = 5
 
-app = Flask(__name__)
 hostname = socket.gethostname()
 client = IPAMClient()
 
+# Return all errors as JSON. From http://flask.pocoo.org/snippets/83/
+def make_json_app(import_name, **kwargs):
+    """
+    Creates a JSON-oriented Flask app.
 
+    All error responses that you don't specifically
+    manage yourself will have application/json content
+    type, and will contain JSON like this (just an example):
+
+    { "message": "405: Method Not Allowed" }
+    """
+    def make_json_error(ex):
+        response = jsonify(message=str(ex))
+        response.status_code = (ex.code
+                                if isinstance(ex, HTTPException)
+                                else 500)
+        return response
+
+    app = Flask(import_name, **kwargs)
+
+    for code in default_exceptions.iterkeys():
+        app.error_handler_spec[None][code] = make_json_error
+
+    return app
+
+app = make_json_app(__name__)
 app.logger.addHandler(logging.StreamHandler(sys.stdout))
 app.logger.setLevel(logging.INFO)
 
 app.logger.info("Application started")
-
 
 @app.route('/Plugin.Activate', methods=['POST'])
 def activate():
