@@ -2,7 +2,11 @@
 
 ## 0.24-dev
 
+- Reduce felix occupancy by replacing endpoint dictionaries by "struct"
+  objects.
+
 ## 0.23
+
 - Reset ARP configuration when endpoint MAC changes.
 - Forget about profiles when they are deleted.
 - Treat bad JSON as missing data.
