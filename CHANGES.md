@@ -1,8 +1,15 @@
 # Changelog
 
+## 0.24-dev
 
-# 0.23-dev
+## 0.23
 - Reset ARP configuration when endpoint MAC changes.
+- Forget about profiles when they are deleted.
+- Treat bad JSON as missing data.
+- Add instructions for Kilo on RHEL7.
+- Extend diagnostics script to collect etcd and RabbitMQ information.
+- Improve BIRD config to prevent NETLINK: File Exists log spam.
+- Reduce Felix logging volume.
 
 ## 0.22
 

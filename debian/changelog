@@ -1,3 +1,15 @@
+calico (0.23) trusty; urgency=medium
+
+  * Reset ARP configuration when endpoint MAC changes.
+  * Forget about profiles when they are deleted.
+  * Treat bad JSON as missing data.
+  * Add instructions for Kilo on RHEL7.
+  * Extend diagnostics script to collect etcd and RabbitMQ information.
+  * Improve BIRD config to prevent NETLINK: File Exists log spam.
+  * Reduce Felix logging volume.
+
+ -- Matt Dupre <matt@projectcalico.org>  Mon, 08 Jun 2015 16:37:50 +0100
+
 calico (0.22.1) trusty; urgency=medium
 
   * Updated Mechanism driver to specify fixed MAC address for Calico tap
@@ -11,7 +23,7 @@ calico (0.22.1) trusty; urgency=medium
   * Neutron mechanism driver patches and docs for OpenStack Kilo release.
   * Correct IPv6 documentation for Juno and Kilo.
 
- -- Matt Dupre <matt@projectcalico.org>  Tue, 01 Jun 2015 17:15:48 +0100
+ -- Matt Dupre <matt@projectcalico.org>  Tue, 02 Jun 2015 17:15:48 +0100
 
 calico (0.21) trusty; urgency=medium
 

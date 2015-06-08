@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.22
+Version:        0.23
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,7 +204,16 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Tue Jun 01 2015 Matt Dupre <matt@projectcalico.org> 0.22.1
+* Mon Jun 08 2015 Matt Dupre <matt@projectcalico.org> 0.23
+  - Reset ARP configuration when endpoint MAC changes.
+  - Forget about profiles when they are deleted.
+  - Treat bad JSON as missing data.
+  - Add instructions for Kilo on RHEL7.
+  - Extend diagnostics script to collect etcd and RabbitMQ information.
+  - Improve BIRD config to prevent NETLINK: File Exists log spam.
+  - Reduce Felix logging volume.
+
+* Tue Jun 02 2015 Matt Dupre <matt@projectcalico.org> 0.22.1
   - Updated Mechanism driver to specify fixed MAC address for Calico tap
     interfaces.
   - Prevent the possibility of gevent context-switching during garbage collection
