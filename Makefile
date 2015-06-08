@@ -14,10 +14,13 @@ dist/calicoctl: calico-build
 	mkdir -p dist
 	chmod 777 dist
 
+	# Ignore errors on both docker commands. CircleCI throws an beign error
+	# from the use of the --rm flag
+
 	# mount calico_containers and dist under /code work directory.  Don't use /code
 	# as the mountpoint directly since the host permissions may not allow the
 	# `user` account in the container to write to it.
-	docker run -v `pwd`/calico_containers:/code/calico_containers \
+	-docker run -v `pwd`/calico_containers:/code/calico_containers \
 	 -v `pwd`/dist:/code/dist --rm \
 	 -e PYTHONPATH=/code/calico_containers \
 	 calico/build \
@@ -26,7 +29,7 @@ dist/calicoctl: calico-build
 	# mount calico_containers and dist under /code work directory.  Don't use /code
 	# as the mountpoint directly since the host permissions may not allow the
 	# `user` account in the container to write to it.
-	docker run -v `pwd`/calico_containers:/code/calico_containers \
+	-docker run -v `pwd`/calico_containers:/code/calico_containers \
 	 -v `pwd`/dist:/code/dist --rm calico/build \
 	 docopt-completion --manual-bash dist/calicoctl
 
