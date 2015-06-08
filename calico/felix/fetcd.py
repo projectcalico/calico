@@ -232,12 +232,10 @@ class EtcdWatcher(Actor):
         for child in initial_dump.children:
             profile_id, rules = parse_if_rules(child)
             if profile_id:
-                profile_id = intern(profile_id.encode("utf8"))
                 rules_by_id[profile_id] = rules
                 continue
             profile_id, tags = parse_if_tags(child)
             if profile_id:
-                profile_id = intern(profile_id.encode("utf8"))
                 tags_by_id[profile_id] = tags
                 continue
             endpoint_id, endpoint = parse_if_endpoint(self.config, child)
@@ -474,8 +472,9 @@ class EtcdWatcher(Actor):
         """
         _log.info("Orchestrator dir %s/%s deleted, removing contained hosts",
                   hostname, orchestrator)
+        orchestrator = intern(orchestrator.encode("utf8"))
         for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if endpoint_id.orchestrator == orchestrator.encode("utf8"):
+            if endpoint_id.orchestrator == orchestrator:
                 self.splitter.on_endpoint_update(endpoint_id, None, async=True)
                 self.endpoint_ids_per_host[hostname].discard(endpoint_id)
         if not self.endpoint_ids_per_host[hostname]:
@@ -490,9 +489,11 @@ class EtcdWatcher(Actor):
         """
         _log.debug("Workload dir %s/%s/%s deleted, removing endpoints",
                    hostname, orchestrator, workload_id)
+        orchestrator = intern(orchestrator.encode("utf8"))
+        workload_id = intern(workload_id.encode("utf8"))
         for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if (endpoint_id.orchestrator == orchestrator.encode("utf8") and
-                    endpoint_id.workload == workload_id.encode("utf8")):
+            if (endpoint_id.orchestrator == orchestrator and
+                    endpoint_id.workload == workload_id):
                 self.splitter.on_endpoint_update(endpoint_id, None, async=True)
                 self.endpoint_ids_per_host[hostname].discard(endpoint_id)
         if not self.endpoint_ids_per_host[hostname]:
@@ -542,12 +543,13 @@ def parse_if_endpoint(config, etcd_node):
         orch = m.group("orchestrator")
         workload_id = m.group("workload_id")
         endpoint_id = m.group("endpoint_id")
+        combined_id = EndpointId(host, orch, workload_id, endpoint_id)
         if etcd_node.action == "delete":
             _log.debug("Found deleted endpoint %s", endpoint_id)
             endpoint = None
         else:
-            combined_id = EndpointId(host, orch, workload_id, endpoint_id)
             endpoint = parse_endpoint(config, combined_id, etcd_node.value)
+        # EndpointId does the interning for us.
         return combined_id, endpoint
     return None, None
 
@@ -575,7 +577,7 @@ def parse_if_rules(etcd_node):
             rules = None
         else:
             rules = parse_rules(profile_id, etcd_node.value)
-        return profile_id, rules
+        return intern(profile_id.encode("utf8")), rules
     return None, None
 
 
@@ -600,7 +602,7 @@ def parse_if_tags(etcd_node):
             tags = None
         else:
             tags = parse_tags(profile_id, etcd_node.value)
-        return profile_id, tags
+        return intern(profile_id.encode("utf8")), tags
     return None, None
 
 
