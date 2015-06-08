@@ -8,5 +8,5 @@ class TestDiags(TestBase):
         Test that the diags command successfully uploads the diags file.
         """
         host = DockerHost('host')
-        link = host.calicoctl("diags")
-        self.assertIn("https://transfer.sh/", link)
+        results = host.calicoctl("diags")
+        self.assertIn(".tar.gz", results)

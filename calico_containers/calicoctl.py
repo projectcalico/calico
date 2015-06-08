@@ -26,7 +26,7 @@ Usage:
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
-  calicoctl diags
+  calicoctl diags [--upload]
   calicoctl restart-docker-with-alternative-unix-socket
   calicoctl restart-docker-without-alternative-unix-socket
 
@@ -50,10 +50,6 @@ import sys
 import textwrap
 import time
 import traceback
-import tempfile
-import subprocess
-import tarfile
-from datetime import datetime
 
 import netaddr
 from docopt import docopt
@@ -71,6 +67,7 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
+from adapter import diags
 
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
@@ -660,89 +657,15 @@ def node_show(detailed):
     print str(x) + "\n"
 
 
-def save_diags():
+def save_diags(upload=False):
     """
     Gather Calico diagnostics for bug reporting.
     :return: None
     """
     # This needs to be run as root.
     enforce_root()
-
     print("Collecting diags")
-
-    temp_dir = tempfile.mkdtemp()
-    temp_diags_dir = os.path.join(temp_dir, 'diagnostics')
-    os.mkdir(temp_diags_dir)
-
-    print("Using temp dir: %s" % temp_dir)
-
-    with open(os.path.join(temp_diags_dir, 'date'), 'w') as f:
-        f.write("DATE=%s" % datetime.strftime(datetime.today(),"%Y-%m-%d_%H-%M-%S"))
-
-    with open(os.path.join(temp_diags_dir, 'hostname'), 'w') as f:
-        f.write("%s" % socket.gethostname())
-
-    print("Dumping netstat output")
-    with open(os.path.join(temp_diags_dir, 'netstat'), 'w') as f:
-        f.writelines(sh.netstat("-an"))
-
-    print("Dumping routes")
-    with open(os.path.join(temp_diags_dir, 'route'), 'w') as f:
-        # Could do this in a for loop...
-        f.write("route -n")
-        f.writelines(sh.route("-n"))
-        f.write('\n')
-
-        f.write("ip route")
-        f.writelines(sh.ip("route"))
-        f.write('\n')
-
-        f.write("ip -6 route")
-        f.writelines(sh.ip("-6", "route"))
-        f.write('\n')
-
-    print("Dumping iptables")
-    with open(os.path.join(temp_diags_dir, 'iptables'), 'w') as f:
-        f.writelines(sh.iptables_save())
-
-
-    print("Dumping ipset")
-    ipset_file = os.path.join(temp_diags_dir, 'ipset')
-    with open(ipset_file, 'w') as f:
-        try:
-            f.writelines(sh.ipset("list"))
-        except sh.CommandNotFound as e:
-            # System might not have ipset command. For now, we just ignore
-            print("WARNING: Couldn't dump ipset")
-
-    print("Copying Calico logs")
-    calico_dir = '/var/log/calico'
-    sh.cp("-a", calico_dir, temp_diags_dir)
-
-    print("Dumping datastore")
-    url = "http://127.0.0.1:4001/v2/keys/calico?recursive=true"
-    datastore_file = os.path.join(temp_diags_dir, 'etcd_calico')
-    try:
-        sh.curl("-s", "-L", url, "-o", datastore_file)
-    except sh.ErrorReturnCode:
-        print("WARNING: Couldn't get datastore file")
-
-
-
-    # Create tar and upload
-    tar_filename = datetime.strftime(datetime.today(),"diags-%d%m%y_%H%M%S.tar.gz")
-    full_tar_path = os.path.join(temp_dir, tar_filename)
-    with tarfile.open(full_tar_path, "w:gz") as tar:
-        # pass in arcname, otherwise zip contains a directory structure like: /tmp/tmpABCDEF/diagnostics
-        tar.add(temp_dir, arcname="")
-    print("Diags saved to %s" % (full_tar_path))
-    print("Uploading file. Available for 14 days from the URL printed when the upload completes")
-    print(sh.curl("--upload-file", full_tar_path, os.path.join("https://transfer.sh", tar_filename)))
-
-    # TODO: ipset might not be installed on the host. But we don't want to
-    # gather the diags in the container because it might not be running...
-
-
+    diags.save_diags(upload)
 
 def ip_pool_add(cidr_pool, version):
     """
@@ -1175,7 +1098,7 @@ if __name__ == '__main__':
             elif arguments["show"]:
                 profile_show(arguments["--detailed"])
         elif arguments["diags"]:
-            save_diags()
+            save_diags(arguments["--upload"])
         elif arguments["shownodes"]:
             node_show(arguments["--detailed"])
         elif arguments["pool"]:

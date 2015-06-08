@@ -65,7 +65,7 @@ Usage:
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
-  calicoctl diags
+  calicoctl diags [--upload]
   calicoctl restart-docker-with-alternative-unix-socket
   calicoctl restart-docker-without-alternative-unix-socket
 

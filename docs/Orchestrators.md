@@ -67,7 +67,7 @@ Please note that in this set up, Calico's ACLs will only be asserted against the
 ## Collecting diags
 To collect (from the current machine only) and upload the diags, run the following command
 
-	sudo ./calicoctl diags
+	sudo ./calicoctl diags --upload
 
 It prints a local file name and a URL where the diags can be downloaded from.
 
