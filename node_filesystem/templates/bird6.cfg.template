@@ -17,7 +17,6 @@ protocol kernel {
   persist;           # Don't remove routes on bird shutdown
   scan time 2;       # Scan kernel routing table every 2 seconds
   import all;
-  device routes;
   export all;        # Default is export none
   graceful restart;  # Turn on graceful restart to reduce potential flaps in
                      # routes when reloading BIRD configuration.  With a full
