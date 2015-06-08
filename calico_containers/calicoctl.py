@@ -385,8 +385,8 @@ def checksystem(fix=False, quit_if_error=False):
     :return: True if all system dependencies are in the proper state, False if they are not. This function
              will sys.exit(1) instead of returning false if quit_if_error == True
     """
+    # modprobe and sysctl require root privileges.
     enforce_root()
-
 
     system_ok = True
     modprobe = sh.Command._create('modprobe')
@@ -397,11 +397,11 @@ def checksystem(fix=False, quit_if_error=False):
         if fix:
             try:
                 modprobe('ip6_tables')
-            except:
+            except sh.ErrorReturnCode:
                 print >> sys.stderr, "ERROR: Could not enable ip6_tables."
                 system_ok = False
         else:
-            print >> sys.stderr, "WARNING: calico was unable to detect the ip6_tables module. Load with " \
+            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables module. Load with " \
                              "`modprobe ip6_tables`"
             system_ok = False
 
@@ -409,11 +409,11 @@ def checksystem(fix=False, quit_if_error=False):
         if fix:
             try:
                 modprobe('xt_set')
-            except:
+            except sh.ErrorReturnCode:
                 print >> sys.stderr, "ERROR: Could not enable xt_set."
                 system_ok = False
         else:
-            print >> sys.stderr, "WARNING: calico was unable to detect the xt_set module. Load with " \
+            print >> sys.stderr, "WARNING: Unable to detect the xt_set module. Load with " \
                              "`modprobe xt_set`"
             system_ok = False
 
@@ -437,7 +437,7 @@ def checksystem(fix=False, quit_if_error=False):
             print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
             system_ok = False
 
-    if quit_if_error and system_ok == False:
+    if quit_if_error and not system_ok:
         sys.exit(1)
 
     return system_ok
