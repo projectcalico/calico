@@ -1,4 +1,4 @@
-.PHONEY: all node binary calico-build tests ut st clean setup-env
+.PHONEY: all node binary calico-build tests ut ut-circle st clean setup-env
 
 all: test
 
@@ -36,6 +36,16 @@ ut:
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests calico_containers/tests/unit -c nose.cfg'
+
+ut-circle:
+	# Can't use --rm on circle
+	# Circle also requires extra options for reporting.
+	docker run -v `pwd`/calico_containers:/code/calico_containers \
+	-v $(CIRCLE_TEST_REPORTS):/circle_output \
+	calico/build bash -c \
+	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
+	nosetests calico_containers/tests/unit -c nose.cfg \
+	--cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
 
 st: binary
 	# The tar files are only needed if and when we get multi host tests
