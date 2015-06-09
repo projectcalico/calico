@@ -270,7 +270,7 @@ class ValidationFailed(Exception):
     pass
 
 
-def validate_endpoint(config, endpoint_id, endpoint):
+def validate_endpoint(config, combined_id, endpoint):
     """
     Ensures that the supplied endpoint is valid. Once this routine has returned
     successfully, we know that all required fields are present and have valid
@@ -280,7 +280,7 @@ def validate_endpoint(config, endpoint_id, endpoint):
     the input dict.
 
     :param config: configuration structure
-    :param endpoint_id: endpoint id string
+    :param combined_id: EndpointId object
     :param endpoint: endpoint dictionary as read from etcd
     :raises ValidationFailed
     """
@@ -289,8 +289,8 @@ def validate_endpoint(config, endpoint_id, endpoint):
     if not isinstance(endpoint, dict):
         raise ValidationFailed("Expected endpoint to be a dict.")
 
-    if not VALID_ID_RE.match(endpoint_id):
-        issues.append("Invalid endpoint ID '%r'." % endpoint_id)
+    if not VALID_ID_RE.match(combined_id.endpoint):
+        issues.append("Invalid endpoint ID '%r'." % combined_id.endpoint)
 
     if "state" not in endpoint:
         issues.append("Missing 'state' field.")
@@ -308,10 +308,6 @@ def validate_endpoint(config, endpoint_id, endpoint):
                 issues.append("Invalid MAC address")
             else:
                 endpoint["mac"] = canonicalise_mac(endpoint.get("mac"))
-        else:
-            if not endpoint["name"].startswith(config.IFACE_PREFIX):
-                issues.append("Interface %r does not start with %r." %
-                              (endpoint["name"], config.IFACE_PREFIX))
 
     if "profile_id" in endpoint:
         if "profile_ids" not in endpoint:
@@ -329,10 +325,13 @@ def validate_endpoint(config, endpoint_id, endpoint):
             if not VALID_ID_RE.match(value):
                 issues.append("Invalid profile ID '%r'." % value)
 
-    if "name" in endpoint and isinstance(endpoint['name'], StringTypes):
-        if not endpoint["name"].startswith(config.IFACE_PREFIX):
-            issues.append("Interface %r does not start with %r." %
-                          (endpoint["name"], config.IFACE_PREFIX))
+    if ("name" in endpoint and isinstance(endpoint['name'], StringTypes)
+        and combined_id.host == config.HOSTNAME
+        and not endpoint["name"].startswith(config.IFACE_PREFIX)):
+        # Only test the interface for local endpoints - remote hosts may have
+        # a different interface prefix.
+        issues.append("Interface %r does not start with %r." %
+                      (endpoint["name"], config.IFACE_PREFIX))
 
     for version in (4, 6):
         nets = "ipv%d_nets" % version
