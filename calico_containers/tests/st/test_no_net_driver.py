@@ -1,4 +1,4 @@
-from sh import ErrorReturnCode
+from subprocess import CalledProcessError
 from functools import partial
 
 from test_base import TestBase
@@ -22,9 +22,9 @@ class TestNoNetDriver(TestBase):
 
         # Attempt to configure the nodes with the same profiles.  This will
         # fail since we didn't use the driver to create the nodes.
-        with self.assertRaises(ErrorReturnCode):
+        with self.assertRaises(CalledProcessError):
             host.calicoctl("profile TEST_GROUP member add node1")
-        with self.assertRaises(ErrorReturnCode):
+        with self.assertRaises(CalledProcessError):
             host.calicoctl("profile TEST_GROUP member add node2")
 
         # Add the nodes to Calico networking.
@@ -42,7 +42,7 @@ class TestNoNetDriver(TestBase):
         # Check it works
         ping = partial(host.execute,
                        "docker exec node1 ping 192.168.1.2 -c 1 -W 1")
-        retry_until_success(ping, ex_class=ErrorReturnCode)
+        retry_until_success(ping, ex_class=CalledProcessError)
 
         host.execute("docker exec node1 ping 192.168.1.1 -c 1")
         host.execute("docker exec node1 ping 192.168.1.2 -c 1")

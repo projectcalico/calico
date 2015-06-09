@@ -2,14 +2,24 @@ import sh
 from sh import docker
 import socket
 from time import sleep
+import os
 
+LOCAL_IP_ENV = "MY_IP"
 
 def get_ip():
     """Return a string of the IP of the hosts eth0 interface."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip = s.getsockname()[0]
-    s.close()
+
+    # Try to get the local IP from the environment variables.  This allows
+    # testers to specify the IP address in cases where there is more than one
+    # configured IP address for the test system.
+    try:
+        ip = os.environ[LOCAL_IP_ENV]
+    except KeyError:
+        # No env variable set; try to auto detect.
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
     return ip
 
 
