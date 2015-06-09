@@ -2,7 +2,8 @@ from flask import Flask, jsonify, abort, request
 import os
 import socket
 import logging
-from subprocess import check_call, CalledProcessError, call
+from subprocess32 import check_call, CalledProcessError, call
+from werkzeug.exceptions import HTTPException, default_exceptions
 
 from netaddr import IPAddress, IPNetwork
 import sys
@@ -14,16 +15,42 @@ FIXED_MAC = "EE:EE:EE:EE:EE:EE"
 
 CONTAINER_NAME = "undefined"
 
-app = Flask(__name__)
+# How long to wait (seconds) for IP commands to complete.
+IP_CMD_TIMEOUT = 5
+
 hostname = socket.gethostname()
 client = IPAMClient()
 
+# Return all errors as JSON. From http://flask.pocoo.org/snippets/83/
+def make_json_app(import_name, **kwargs):
+    """
+    Creates a JSON-oriented Flask app.
 
+    All error responses that you don't specifically
+    manage yourself will have application/json content
+    type, and will contain JSON like this (just an example):
+
+    { "message": "405: Method Not Allowed" }
+    """
+    def make_json_error(ex):
+        response = jsonify(message=str(ex))
+        response.status_code = (ex.code
+                                if isinstance(ex, HTTPException)
+                                else 500)
+        return response
+
+    app = Flask(import_name, **kwargs)
+
+    for code in default_exceptions.iterkeys():
+        app.error_handler_spec[None][code] = make_json_error
+
+    return app
+
+app = make_json_app(__name__)
 app.logger.addHandler(logging.StreamHandler(sys.stdout))
 app.logger.setLevel(logging.INFO)
 
 app.logger.info("Application started")
-
 
 @app.route('/Plugin.Activate', methods=['POST'])
 def activate():
@@ -68,15 +95,11 @@ def create_endpoint():
     ep_id = json_data["EndpointID"]
     net_id = json_data["NetworkID"]
 
-    # TODO - Endpoint is broken. We don't know the interface name (libnetwork
-    # decides it) so it shouldn't be a mandatory parameter.
-
     # Create a calico endpoint object which we can populate and return to
     # libnetwork at the end of this method.
     ep = Endpoint(ep_id=ep_id,
                   state="active",
-                  mac=FIXED_MAC,
-                  if_name='cali0')
+                  mac=FIXED_MAC)
     ep.profile_id = net_id
 
     # This method is split into three phases that have side effects.
@@ -155,7 +178,7 @@ def delete_endpoint():
     # to delete one end).
     remove_veth(ep)
 
-    return jsonify({"Value": {}})
+    return jsonify({})
 
 
 @app.route('/NetworkDriver.EndpointOperInfo', methods=['POST'])
@@ -208,7 +231,7 @@ def leave():
 
     # Noop. There's nothing to do.
 
-    return jsonify({"Value": {}})
+    return jsonify({})
 
 
 def assign_ip(version):
@@ -240,9 +263,9 @@ def unassign_ip(ip):
     # For each configured pool, attempt to unassign the IP before giving up.
     version = "v%d" % ip.version
     for pool in client.get_ip_pools(version):
-        # TODO check pool membership locally.
-        if client.unassign_address(pool, ip):
-            return True
+        if ip in pool:
+            if client.unassign_address(pool, ip):
+                return True
     return False
 
 
@@ -294,25 +317,27 @@ def backout_ip_assignments(ep):
 
 
 def create_veth(ep):
-    # TODO - we may want a timeout on all the subprocess commands.
     # Create the veth
     check_call(['ip', 'link',
                 'add', ep.name,
                 'type', 'veth',
-                'peer', 'name', ep.temp_interface_name()])
+                'peer', 'name', ep.temp_interface_name()],
+               timeout=IP_CMD_TIMEOUT)
 
     # Set the host end of the veth to 'up' so felix notices it.
-    check_call(['ip', 'link', 'set', ep.name, 'up'])
+    check_call(['ip', 'link', 'set', ep.name, 'up'],
+               timeout=IP_CMD_TIMEOUT)
 
     # Set the mac as libnetwork doesn't do this for us.
     check_call(['ip', 'link', 'set',
                 'dev', ep.temp_interface_name(),
-                'address', FIXED_MAC])
+                'address', FIXED_MAC],
+               timeout=IP_CMD_TIMEOUT)
 
 
 def remove_veth(ep):
     # The veth removal is best effort. If it fails then just log.
-    rc = call(['ip', 'link', 'del', ep.name])
+    rc = call(['ip', 'link', 'del', ep.name], timeout=IP_CMD_TIMEOUT)
     if rc != 0:
         app.logger.warn("Failed to delete veth %s", ep.name)
 
