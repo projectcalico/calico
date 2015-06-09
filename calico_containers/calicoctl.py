@@ -578,7 +578,7 @@ def profile_show(detailed):
         for name in profiles:
             x.add_row([name])
 
-    print str(x) + "\n"
+    print x.get_string(sortby="Name")
 
 
 def profile_tag_show(name):
@@ -708,7 +708,7 @@ def node_show(detailed):
                 continue
             for container_type, workloads in container_types.iteritems():
                 x.add_row([host, container_type, len(workloads)])
-    print str(x) + "\n"
+    print x.get_string(sortby="Host")
 
 
 def save_diags():
@@ -813,11 +813,12 @@ def ip_pool_show(version):
     :return: None
     """
     assert version in ("v4", "v6")
+    heading = "IP%s CIDR" % version
     pools = client.get_ip_pools(version)
-    x = PrettyTable(["IP%s CIDR" % version])
+    x = PrettyTable([heading])
     for pool in pools:
         x.add_row([pool])
-    print str(x) + "\n"
+    print x.get_string(sortby=heading)
 
 
 def restart_docker_with_alternative_unix_socket():
@@ -901,7 +902,7 @@ def bgppeer_show(version):
         for peer in peers:
             x.add_row([peer])
         x.align = "l"
-        print str(x) + "\n"
+        print x.get_string(sortby=heading)
     else:
         print "No IP%s BGP Peers defined.\n" % version
 
