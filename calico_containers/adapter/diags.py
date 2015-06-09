@@ -29,7 +29,13 @@ def save_diags(upload=False):
         try:
             print("Dumping netstat output")
             netstat = sh.Command._create("netstat")
-            f.writelines(netstat("-an"))
+
+            f.writelines(netstat(
+                # Display all sockets (default: connected)
+                all=True,
+                # Don't resolve names
+                numeric=True))
+
         except sh.CommandNotFound as e:
             print "Missing command: %s" % e.message
 
@@ -38,8 +44,8 @@ def save_diags(upload=False):
     with open(os.path.join(temp_diags_dir, 'route'), 'w') as f:
         try:
             route = sh.Command._create("route")
-            f.write("route -n")
-            f.writelines(route("-n"))
+            f.write("route --numeric")
+            f.writelines(route(numeric=True))
             f.write('\n')
         except sh.CommandNotFound as e:
             print "Missing command: %s" % e.message
@@ -84,9 +90,9 @@ def save_diags(upload=False):
     # TODO: May want to move this into datastore.py as a dump-calico function
     try:
         datastore_client = DatastoreClient()
-        datastore_data = datastore_client.etcd_client.read("/calico/v2/keys/calico", recursive=True)
-        with open(os.path.join(temp_diags_dir, 'etcd_calico')) as f:
-            f.writelines(datastore_data)
+        datastore_data = datastore_client.etcd_client.read("/calico", recursive=True)
+        with open(os.path.join(temp_diags_dir, 'etcd_calico'), 'w') as f:
+            f.write(str(datastore_data))
     except EtcdException:
         print "Unable to dump etcd datastore"
 

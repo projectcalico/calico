@@ -657,7 +657,7 @@ def node_show(detailed):
     print str(x) + "\n"
 
 
-def save_diags(upload=False):
+def save_diags(upload):
     """
     Gather Calico diagnostics for bug reporting.
     :return: None
