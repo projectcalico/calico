@@ -1,5 +1,5 @@
 import unittest
-from sh import ErrorReturnCode_1
+from subprocess import CalledProcessError
 from functools import partial
 
 from test_base import TestBase
@@ -39,7 +39,7 @@ class TestDuplicateIps(TestBase):
 
         # Wait for the workload networking to converge.
         ping = partial(host1.execute, "docker exec workload1 ping -c 4 192.168.1.4")
-        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        retry_until_success(ping, ex_class=CalledProcessError)
 
         # Check for standard connectivity
         host1.execute("docker exec workload1 ping -c 4 192.168.1.4")
@@ -50,7 +50,7 @@ class TestDuplicateIps(TestBase):
         host2.execute("docker rm -f dup2")
 
         # Wait for the workload networking to converge.
-        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        retry_until_success(ping, ex_class=CalledProcessError)
 
         # Check standard connectivity still works.
         host1.execute("docker exec workload1 ping -c 4 192.168.1.4")

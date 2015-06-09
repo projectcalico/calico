@@ -1,5 +1,5 @@
 import unittest
-from sh import ErrorReturnCode_1
+from subprocess import CalledProcessError
 from functools import partial
 
 from test_base import TestBase
@@ -45,12 +45,12 @@ class MultiHostMainline(TestBase):
 
         # Wait for the workload networking to converge.
         ping = partial(host1.execute, "docker exec workload1 ping -c 4 %s" % ip3)
-        retry_until_success(ping, ex_class=ErrorReturnCode_1)
+        retry_until_success(ping, ex_class=CalledProcessError)
 
-        with self.assertRaises(ErrorReturnCode_1):
+        with self.assertRaises(CalledProcessError):
             host1.execute("docker exec workload1 ping -c 4 %s" % ip2)
 
-        with self.assertRaises(ErrorReturnCode_1):
+        with self.assertRaises(CalledProcessError):
             host1.execute("docker exec workload1 ping -c 4 %s" % ip4)
 
         host1.execute("docker exec workload1 ping -c 4 %s" % ip5)

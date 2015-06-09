@@ -1,4 +1,4 @@
-from sh import ErrorReturnCode
+from subprocess import CalledProcessError
 from functools import partial
 
 from test_base import TestBase
@@ -28,15 +28,15 @@ class TestIpv6(TestBase):
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format "
                                 "'{{ .NetworkSettings.GlobalIPv6Address }}' "
-                                "node1").stdout.rstrip()
+                                "node1").rstrip()
         node2_ip = host.execute("docker inspect --format "
                                 "'{{ .NetworkSettings.GlobalIPv6Address }}' "
-                                "node2").stdout.rstrip()
+                                "node2").rstrip()
 
         ping = partial(host.execute,
                        "docker exec %s ping6 %s -c 1 -W 1" % ("node1",
                                                               node2_ip))
-        retry_until_success(ping, ex_class=ErrorReturnCode)
+        retry_until_success(ping, ex_class=CalledProcessError)
 
         # Check connectivity.
         host.execute("docker exec %s ping6 %s -c 1" % ("node1", node1_ip))

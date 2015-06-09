@@ -1,4 +1,4 @@
-from sh import ErrorReturnCode
+from subprocess import CalledProcessError
 from functools import partial
 
 from test_base import TestBase
@@ -23,4 +23,4 @@ class TestAddContainer(TestBase):
 
         # Wait for felix to program down the route.
         check_route = partial(host.execute, "ip route | grep '192\.168\.1\.1'")
-        retry_until_success(check_route, ex_class=ErrorReturnCode)
+        retry_until_success(check_route, ex_class=CalledProcessError)

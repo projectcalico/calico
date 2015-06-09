@@ -1,5 +1,5 @@
 import sh
-from sh import docker, ErrorReturnCode
+from sh import docker
 from functools import partial
 from subprocess import check_output, CalledProcessError
 from calico_containers.tests.st import utils
@@ -30,18 +30,9 @@ class DockerHost(object):
             # TODO: change this hardcoding when we set up IPv6 for hosts
             self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
 
-            ### TEMP CODE ###
-            # Make sure the existing docker daemon is stopped and run the new one (if
-            # it's not already running)
-            # self.execute("pkill docker")
-            # check_output("docker exec -dit %s bash -c '/code/docker-dev -dD "
-            #              ">/tmp/docker.log 2>/tmp/docker.err.log'" % self.name,
-            #              shell=True)
-            # self.execute("ln -sf /code/docker-dev /usr/local/bin/docker")
-
             # Make sure docker is up
             docker_ps = partial(self.execute, "docker ps")
-            retry_until_success(docker_ps, ex_class=ErrorReturnCode)
+            retry_until_success(docker_ps, ex_class=CalledProcessError)
             self.execute("docker load --input /code/calico_containers/calico-node.tar && "
                          "docker load --input /code/calico_containers/busybox.tar")
         else:
@@ -50,7 +41,6 @@ class DockerHost(object):
         if start_calico:
             self.start_calico_node()
             self.assert_driver_up()
-
 
     def delete(self):
         """
