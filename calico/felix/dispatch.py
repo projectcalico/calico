@@ -165,16 +165,16 @@ class DispatchChains(Actor):
         # Special case: allow the metadata IP through from all interfaces.
         if self.config.METADATA_IP is not None and self.ip_version == 4:
             # Need to allow outgoing Metadata requests.
-            root_from_upds.append("--append %s "
-                                  "--protocol tcp "
-                                  "--in-interface %s+ "
-                                  "--destination %s "
-                                  "--dport %s "
-                                  "--jump RETURN" %
-                                  (CHAIN_FROM_ENDPOINT,
-                                   self.config.IFACE_PREFIX,
-                                   self.config.METADATA_IP,
-                                   self.config.METADATA_PORT))
+            root_inbound_upds.append("--append %s "
+                                     "--protocol tcp "
+                                     "--in-interface %s+ "
+                                     "--destination %s "
+                                     "--dport %s "
+                                     "--jump RETURN" %
+                                     (CHAIN_INBOUND,
+                                      self.config.IFACE_PREFIX,
+                                      self.config.METADATA_IP,
+                                      self.config.METADATA_PORT))
 
         # Special case: allow DHCP inbound from all interfaces.
         if self.ip_version == 4:

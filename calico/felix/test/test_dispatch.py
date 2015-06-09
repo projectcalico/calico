@@ -87,8 +87,6 @@ class TestDispatchChains(BaseTestCase):
         self.step_actor(d)
 
         from_updates = [
-            '--append felix-FROM-ENDPOINT --protocol tcp --in-interface tap+ '
-            '--destination 127.0.0.1 --dport 8775 --jump RETURN',
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
@@ -101,6 +99,8 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
         inbound_updates = [
+            '--append felix-INBOUND --protocol tcp --in-interface tap+ '
+            '--destination 127.0.0.1 --dport 8775 --jump RETURN',
             '--append felix-INBOUND --protocol udp --in-interface tap+ '
             '--sport 68 --dport 67 --jump RETURN',
             '--append felix-INBOUND --jump DROP',
