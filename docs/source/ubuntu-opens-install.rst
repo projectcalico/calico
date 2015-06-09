@@ -47,7 +47,7 @@ If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
 `Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html>`__ /
-`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ / 
+`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ /
 `Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__.
 
 
@@ -235,6 +235,16 @@ perform the following steps:
    ::
 
         sudo service neutron-server restart
+
+6. Find all the currently running OpenStack Neutron agents and stop them.
+   First, run the following command to find them all::
+
+       neutron agent-list
+
+   Then, for each agent, delete them with the following command, replacing
+   ``<agent-id>`` with the ID of one of the agents::
+
+       neutron agent-delete <agent-id>
 
 Compute Node Install
 --------------------

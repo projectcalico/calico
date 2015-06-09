@@ -314,6 +314,16 @@ On each control node, perform the following steps:
 
        service neutron-server restart
 
+7. Find all the currently running OpenStack Neutron agents and stop them.
+   First, run the following command to find them all::
+
+       neutron agent-list
+
+   Then, for each agent, delete them with the following command, replacing
+   ``<agent-id>`` with the ID of one of the agents::
+
+       neutron agent-delete <agent-id>
+
 Compute Node Install
 --------------------
 
