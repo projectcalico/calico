@@ -16,9 +16,11 @@ class TestMainline(TestBase):
         host = DockerHost('host')
         net_name = str(uuid.uuid4())
 
-        host.execute("docker run --net=calico:%s -tid --name=node1 busybox" %
+        host.execute("docker network create --driver=calico %s" %
                      net_name)
-        host.execute("docker run --net=calico:%s -tid --name=node2 busybox" %
+        host.execute("docker run --net=%s -tid --name=node1 busybox" %
+                     net_name)
+        host.execute("docker run --net=%s -tid --name=node2 busybox" %
                      net_name)
 
         # Perform a docker inspect to extract the configured IP addresses.
