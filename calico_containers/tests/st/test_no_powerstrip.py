@@ -3,7 +3,6 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestNoPowerstrip(TestBase):
@@ -41,10 +40,7 @@ class TestNoPowerstrip(TestBase):
         host.execute("docker inspect %s" % node2)
 
         # Check it works
-        ping = partial(node1.assert_can_ping, ip2)
-        retry_until_success(ping, ex_class=ErrorReturnCode)
-
-        node1.assert_can_ping(ip1)
+        node1.assert_can_ping(ip1, retries=3)
         node1.assert_can_ping(ip2)
         node2.assert_can_ping(ip1)
         node2.assert_can_ping(ip2)

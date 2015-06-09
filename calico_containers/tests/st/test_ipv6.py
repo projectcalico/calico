@@ -3,7 +3,6 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestIpv6(TestBase):
@@ -24,8 +23,7 @@ class TestIpv6(TestBase):
         host.calicoctl("profile TEST_GROUP member add %s" % node1)
         host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
-        ping = partial(node1.assert_can_ping, ip2)
-        retry_until_success(ping, ex_class=ErrorReturnCode)
+        node1.assert_can_ping(ip2, retries=3)
 
         # Check connectivity.
         self.assert_connectivity([node1, node2])
