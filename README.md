@@ -66,6 +66,7 @@ Usage:
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags [--upload]
+  calicoctl checksystem [--fix]
   calicoctl restart-docker-with-alternative-unix-socket
   calicoctl restart-docker-without-alternative-unix-socket
 

@@ -40,7 +40,7 @@ You should see output like this on each node
 
     core@core-01 ~ $ docker ps
     CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:v0.4.3     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+    077ceae44fe3        calico/node:v0.4.4     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 
 ## Routing via Powerstrip
 
@@ -144,7 +144,7 @@ On core-02
 
     sudo ./calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d6::2
 
-Then, you can start containers with IPv6 connectivity by giving them an IPv6 address in `CALICO_IP`. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl ipv6 pool add` to change this).
+Then, you can start containers with IPv6 connectivity by giving them an IPv6 address in `CALICO_IP`. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl pool add` to change this).
 
 On core-01
 
