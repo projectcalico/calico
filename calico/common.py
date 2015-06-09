@@ -46,6 +46,9 @@ FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lin
 # string used by the logger.
 SYSLOG_FORMAT_STRING = '{excname}[%(process)s]: %(module)s@%(lineno)d %(message)s'
 
+KERNEL_PROTOCOLS = set(["tcp", "udp", "icmp", "icmpv6", "sctp", "udplite",
+                        "sctp"])
+
 # Valid keys for a rule JSON dict.
 KNOWN_RULE_KEYS = set([
     "action",
@@ -406,9 +409,20 @@ def validate_rules(profile_id, rules):
             # Absolutely all fields are optional, but some have valid and
             # invalid values.
             protocol = rule.get('protocol')
-            if (protocol is not None and
-                not protocol in [ "tcp", "udp", "icmp", "icmpv6" ]):
-                    issues.append("Invalid protocol in rule %s." % rule)
+            if protocol is not None and protocol not in KERNEL_PROTOCOLS:
+                # Always convert to string so we're permissive of string or
+                # int.
+                protocol = str(protocol)
+                # If it's not a white-listed string, it should be numeric.
+                if not re.match(r'^\d+$', protocol):
+                    issues.append("Invalid protocol %s in rule %s" %
+                                  (protocol, rule))
+                else:
+                    proto_num = int(protocol)
+                    if not (0 < proto_num <= 255):
+                        issues.append("Invalid protocol %s in rule %s" %
+                                      (proto_num, rule))
+                rule['protocol'] = protocol
 
             ip_version = rule.get('ip_version')
             if (ip_version is not None and
@@ -446,6 +460,9 @@ def validate_rules(profile_id, rules):
                     continue
 
                 if ports is not None:
+                    if protocol not in ("tcp", "udp"):
+                        issues.append("%s is only valid with tcp or udp in "
+                                      "rule %s" % (key, rule))
                     for port in ports:
                         error = validate_rule_port(port)
                         if error:
