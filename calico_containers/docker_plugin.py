@@ -178,7 +178,7 @@ def delete_endpoint():
     # to delete one end).
     remove_veth(ep)
 
-    return jsonify({"Value": {}})
+    return jsonify({})
 
 
 @app.route('/NetworkDriver.EndpointOperInfo', methods=['POST'])
