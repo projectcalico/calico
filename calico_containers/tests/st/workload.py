@@ -21,7 +21,8 @@ class Workload(object):
         :param name: The name given to the workload container. This name is
         passed to docker and can be used inside docker commands.
         :param ip: The IP to be assigned to this workload via calico. May be
-        either IPv4 or IPv6. Calico supports multiple IPs per workload, but
+        either IPv4 or IPv6. May also be None or 'auto' in which case it will
+        be assigned one by IPAM. Calico supports multiple IPs per workload, but
         this testing framework does not yet.
         :param image: The docker image to be used to instantiate this
         container. busybox used by default because it is extremely small and
@@ -48,20 +49,33 @@ class Workload(object):
         host.execute(command, use_powerstrip=use_powerstrip)
 
         # There is an unofficial ip=auto option in addition to ip=None.
-        try:
-            version = IPAddress(ip).version
-        except AddrFormatError:
+        if ip is None or ip == 'auto':
             version = None
+        else:
+            version = IPAddress(ip).version
+
+        # Because of a powerstrip limitation, we fail to pass the IPv6 address
+        # to docker, so the GlobalIPv6Address field is blank.
+
+        # if version == 6:
+        #     version_key = "GlobalIPv6Address"
+        # else:
+        #     version_key = "IPAddress"
+
+        # self.ip = host.execute("docker inspect --format "
+        #                        "'{{ .NetworkSettings.%s }}' %s" % (version_key, name),
+        #                        use_powerstrip=use_powerstrip).stdout.rstrip()
+        # if ip and ip != 'auto':
+        #     assert ip == self.ip, "IP param = %s, configured IP = %s." % (ip, self.ip)
 
         if version == 6:
-            version_key = "GlobalIPv6Address"
+            self.ip = ip
         else:
-            version_key = "IPAddress"
+            self.ip = host.execute("docker inspect --format "
+                                   "'{{ .NetworkSettings.IPAddress }}' %s" % name,
+                                   use_powerstrip=use_powerstrip).stdout.rstrip()
 
-        self.ip = host.execute("docker inspect --format "
-                               "'{{ .NetworkSettings.%s }}' %s" % (version_key, name),
-                               use_powerstrip=use_powerstrip).stdout.rstrip()
-        if ip and ip != 'auto':
+        if version == 4:
             assert ip == self.ip, "IP param = %s, configured IP = %s." % (ip, self.ip)
 
     def execute(self, command, **kwargs):

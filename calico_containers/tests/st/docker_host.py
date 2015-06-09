@@ -25,10 +25,8 @@ class DockerHost(object):
         self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                  self.name).stdout.rstrip()
 
-        ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
+        self.ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
                              self.name).stdout.rstrip()
-        # TODO: change this hardcoding when we set up IPv6 for hosts
-        self.ip6 = ip6 or "fd80:24e2:f998:72d6::1"
 
         # Make sure docker is up
         docker_ps = partial(self.execute, "docker ps")
@@ -77,15 +75,14 @@ class DockerHost(object):
         calicoctl = "/code/dist/calicoctl %s"
         return self.execute(calicoctl % command, **kwargs)
 
-    def start_calico_node(self, ip=None, ip6=None):
+    def start_calico_node(self):
         """
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
         """
-        ip = ip or self.ip
-        args = ['node', '--ip=%s' % ip]
-        if ip6:
-            args.append('--ip6=%s' % ip6)
+        args = ['node', '--ip=%s' % self.ip]
+        if self.ip6:
+            args.append('--ip6=%s' % self.ip6)
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 

@@ -10,11 +10,10 @@ class TestIpv6(TestBase):
         """
         Test mainline functionality with IPv6 addresses.
         """
-        host = DockerHost('host', start_calico=False)
-        host.start_calico_node(ip=host.ip, ip6=host.ip6)
-        host.assert_powerstrip_up()
+        host = DockerHost('host')
 
         ip1, ip2 = "fd80:24e2:f998:72d6::1:1", "fd80:24e2:f998:72d6::1:2"
+        # We use this image here because busybox doesn't have ping6.
         node1 = host.create_workload("node1", ip=ip1, image="phusion/baseimage:0.9.16")
         node2 = host.create_workload("node2", ip=ip2, image="phusion/baseimage:0.9.16")
 
