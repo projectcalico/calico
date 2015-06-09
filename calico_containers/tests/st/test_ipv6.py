@@ -1,5 +1,6 @@
 from subprocess import CalledProcessError
 from functools import partial
+import uuid
 
 from test_base import TestBase
 from docker_host import DockerHost
@@ -11,19 +12,19 @@ class TestIpv6(TestBase):
         """
         Test mainline functionality with IPv6 addresses.
         """
+        # Use a UUID for net name so that independent runs of the test use
+        # different names.  This helps in the case where etcd gets restarted
+        # but Docker does not, since libnetwork will only create the network
+        # if it doesn't exist.
+        net_name = uuid.uuid4()
         host = DockerHost('host', start_calico=False)
         host.start_calico_node(ip=host.ip, ip6=host.ip6)
         host.assert_driver_up()
 
-        host.execute("docker run --net=calico:test"
-                     " -tid --name=node1 phusion/baseimage:0.9.16")
-        host.execute("docker run --net=calico:test"
-                     " -tid --name=node2 phusion/baseimage:0.9.16")
-
-        # Configure the nodes with the same profiles.
-        host.calicoctl("profile add TEST_GROUP")
-        host.calicoctl("profile TEST_GROUP member add node1")
-        host.calicoctl("profile TEST_GROUP member add node2")
+        host.execute("docker run --net=calico:%s"
+                     " -tid --name=node1 phusion/baseimage:0.9.16" % net_name)
+        host.execute("docker run --net=calico:%s"
+                     " -tid --name=node2 phusion/baseimage:0.9.16" % net_name)
 
         # Perform a docker inspect to extract the configured IP addresses.
         node1_ip = host.execute("docker inspect --format "
