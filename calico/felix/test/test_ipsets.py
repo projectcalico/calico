@@ -24,7 +24,8 @@ import logging
 from mock import *
 from calico.datamodel_v1 import EndpointId
 from calico.felix.futils import IPV4, FailedSystemCall
-from calico.felix.ipsets import IpsetManager, ActiveIpset
+from calico.felix.ipsets import IpsetManager, ActiveIpset, EndpointData, \
+    EMPTY_ENDPOINT_DATA
 from calico.felix.refcount import CREATED
 from calico.felix.test.base import BaseTestCase
 
@@ -38,6 +39,7 @@ EP_1_1 = {
     "profile_ids": ["prof1", "prof2"],
     "ipv4_nets": ["10.0.0.1/32"],
 }
+EP_DATA_1_1 = EndpointData(["prof1", "prof2"], ["10.0.0.1"])
 EP_1_1_NEW_IP = {
     "profile_ids": ["prof1", "prof2"],
     "ipv4_nets": ["10.0.0.2/32", "10.0.0.3/32"],
@@ -52,6 +54,14 @@ EP_2_1 = {
     "profile_ids": ["prof1"],
     "ipv4_nets": ["10.0.0.1/32"],
 }
+EP_2_1_NO_NETS = {
+    "profile_ids": ["prof1"],
+}
+EP_2_1_IPV6 = {
+    "profile_ids": ["prof1"],
+    "ipv6_nets": ["dead:beef::/128"],
+}
+EP_DATA_2_1 = EndpointData(["prof1"], ["10.0.0.1"])
 
 
 class TestIpsetManager(BaseTestCase):
@@ -107,8 +117,8 @@ class TestIpsetManager(BaseTestCase):
             self.assert_one_ep_one_tag()
 
     def assert_one_ep_one_tag(self):
-        self.assertEqual(self.mgr.endpoints_by_ep_id, {
-            EP_ID_1_1: EP_1_1,
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
         })
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
@@ -217,6 +227,34 @@ class TestIpsetManager(BaseTestCase):
             "prof3": set([EP_ID_1_1])
         })
 
+    def test_optimize_out_v6(self):
+        self.mgr.on_tags_update("prof1", ["tag1"], async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1, async=True)
+        self.mgr.on_endpoint_update(EP_ID_2_1, EP_2_1_IPV6, async=True)
+        self.step_mgr()
+        # Index should contain only 1_1:
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
+        })
+
+    def test_optimize_out_no_nets(self):
+        self.mgr.on_tags_update("prof1", ["tag1"], async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1, async=True)
+        self.mgr.on_endpoint_update(EP_ID_2_1, EP_2_1_NO_NETS, async=True)
+        self.step_mgr()
+        # Index should contain only 1_1:
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
+        })
+        # Should be happy to then add it in.
+        self.mgr.on_endpoint_update(EP_ID_2_1, EP_2_1, async=True)
+        self.step_mgr()
+        # Index should contain both:
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
+            EP_ID_2_1: EP_DATA_2_1,
+        })
+
     def test_duplicate_ips(self):
         # Add in two endpoints with the same IP.
         self.mgr.on_tags_update("prof1", ["tag1"], async=True)
@@ -224,9 +262,9 @@ class TestIpsetManager(BaseTestCase):
         self.mgr.on_endpoint_update(EP_ID_2_1, EP_2_1, async=True)
         self.step_mgr()
         # Index should contain both:
-        self.assertEqual(self.mgr.endpoints_by_ep_id, {
-            EP_ID_1_1: EP_1_1,
-            EP_ID_2_1: EP_2_1,
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
+            EP_ID_2_1: EP_DATA_2_1,
         })
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
@@ -266,8 +304,8 @@ class TestIpsetManager(BaseTestCase):
         # Remove one, check the index gets updated.
         self.mgr.on_endpoint_update(EP_ID_2_1, None, async=True)
         self.step_mgr()
-        self.assertEqual(self.mgr.endpoints_by_ep_id, {
-            EP_ID_1_1: EP_1_1,
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
         })
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
@@ -292,7 +330,7 @@ class TestIpsetManager(BaseTestCase):
         # Remove the other, index should get completely cleaned up.
         self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
         self.step_mgr()
-        self.assertEqual(self.mgr.endpoints_by_ep_id, {})
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {})
         self.assertEqual(self.mgr.ip_owners_by_tag, {})
 
     def on_ref_acquired(self, tag_id, ipset):
@@ -348,9 +386,41 @@ class TestIpsetManager(BaseTestCase):
                              call(["ipset", "destroy", "felix-v4-baz"]),
                          ]))
 
-
     def _notify_ready(self, tags):
         for tag in tags:
             self.mgr.on_object_startup_complete(tag, self.created_refs[tag][0],
                                                 async=True)
         self.step_mgr()
+
+
+class TestEndpointData(BaseTestCase):
+    def test_repr(self):
+        self.assertEqual(repr(EP_DATA_1_1),
+                         "EndpointData(('prof1', 'prof2'),('10.0.0.1',))")
+
+    def test_equals(self):
+        self.assertEqual(EP_DATA_1_1, EP_DATA_1_1)
+        self.assertEqual(EndpointData(["prof2", "prof1"],
+                                      ["10.0.0.2", "10.0.0.1"]),
+                         EndpointData(["prof2", "prof1"],
+                                      ["10.0.0.2", "10.0.0.1"]))
+        self.assertEqual(EndpointData(["prof2", "prof1"],
+                                      ["10.0.0.2", "10.0.0.1"]),
+                         EndpointData(["prof1", "prof2"],
+                                      ["10.0.0.1", "10.0.0.2"]))
+        self.assertNotEquals(EP_DATA_1_1, None)
+        self.assertNotEquals(EP_DATA_1_1, EP_DATA_2_1)
+        self.assertNotEquals(EP_DATA_1_1, EMPTY_ENDPOINT_DATA)
+        self.assertFalse(EndpointData(["prof2", "prof1"],
+                                      ["10.0.0.2", "10.0.0.1"]) !=
+                         EndpointData(["prof2", "prof1"],
+                                      ["10.0.0.2", "10.0.0.1"]))
+
+    def test_hash(self):
+        self.assertEqual(hash(EndpointData(["prof2", "prof1"],
+                                           ["10.0.0.2", "10.0.0.1"])),
+                         hash(EndpointData(["prof1", "prof2"],
+                                           ["10.0.0.1", "10.0.0.2"])))
+
+    def test_really_a_struct(self):
+        self.assertFalse(hasattr(EP_DATA_1_1, "__dict__"))
