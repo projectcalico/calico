@@ -12,6 +12,10 @@ class TestIpv6(TestBase):
         """
         Test mainline functionality with IPv6 addresses.
         """
+        # Use a UUID for net name so that independent runs of the test use
+        # different names.  This helps in the case where etcd gets restarted
+        # but Docker does not, since libnetwork will only create the network
+        # if it doesn't exist.
         net_name = uuid.uuid4()
         host = DockerHost('host', start_calico=False)
         host.start_calico_node(ip=host.ip, ip6=host.ip6)
