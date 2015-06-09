@@ -1,4 +1,4 @@
-.PHONEY: all node binary calico-build tests ut ut-circle st clean setup-env
+.PHONEY: all node binary calico-build test ut ut-circle st clean setup-env
 
 all: test
 
@@ -33,8 +33,8 @@ dist/calicoctl: calico-build
 	 -v `pwd`/dist:/code/dist --rm calico/build \
 	 docopt-completion --manual-bash dist/calicoctl
 
-tests: ut st
-ut:
+test: ut st
+ut: calico-build
 	docker run --rm -v `pwd`/calico_containers:/code/calico_containers \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
@@ -51,14 +51,10 @@ ut-circle:
 	--cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
 
 st: binary
-	# The tar files are only needed if and when we get multi host tests
-	# working again. At that point we can uncomment and convert the lines below.
-	#	docker save --output calico_containers/calico-node.tar calico/node
-	#	if [ ! -e calico_containers/busybox.tar ]; then
-	#		docker pull busybox:latest
-	#		docker save --output calico_containers/busybox.tar busybox:latest
-	#	fi
-	nosetests calico_containers/tests/st --nocapture --nologcapture
+	docker save --output calico_containers/calico-node.tar calico/node
+	docker pull busybox:latest
+	docker save --output calico_containers/busybox.tar busybox:latest
+	nosetests calico_containers/tests/st/test_mainline.py -sv --nologcapture
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
