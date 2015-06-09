@@ -39,6 +39,7 @@ CHAIN_INPUT = FELIX_PREFIX + "INPUT"
 CHAIN_FORWARD = FELIX_PREFIX + "FORWARD"
 CHAIN_TO_ENDPOINT = FELIX_PREFIX + "TO-ENDPOINT"
 CHAIN_FROM_ENDPOINT = FELIX_PREFIX + "FROM-ENDPOINT"
+CHAIN_INBOUND = FELIX_PREFIX + "INBOUND"
 CHAIN_TO_LEAF = FELIX_PREFIX + "TO-EP-PFX"
 CHAIN_FROM_LEAF = FELIX_PREFIX + "FROM-EP-PFX"
 CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
@@ -118,7 +119,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                                         (v6_filter_updater, None)]:
         input_chain = [
             "--append %s --jump %s --in-interface %s" %
-            (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match),
+            (CHAIN_INPUT, CHAIN_INBOUND, iface_match),
             "--append %s --jump ACCEPT --in-interface %s" %
             (CHAIN_INPUT, iface_match),
         ]
@@ -148,7 +149,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             },
             {
                 CHAIN_FORWARD: set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT]),
-                CHAIN_INPUT: set([CHAIN_FROM_ENDPOINT]),
+                CHAIN_INPUT: set([CHAIN_INBOUND]),
             },
             async=False)
         iptables_updater.ensure_rule_inserted(

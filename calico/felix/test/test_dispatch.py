@@ -147,6 +147,10 @@ class TestDispatchChains(BaseTestCase):
                 '--append felix-FROM-ENDPOINT --in-interface tapb+ --goto felix-FROM-EP-PFX-b',
                 '--append felix-FROM-ENDPOINT --in-interface tapc --goto felix-from-c',
                 '--append felix-FROM-ENDPOINT --jump DROP'],
+            'felix-INBOUND': [
+                '--append felix-INBOUND --protocol udp --in-interface tap+ --sport 68 --dport 67 --jump RETURN',
+                '--append felix-INBOUND --jump DROP',
+            ],
             'felix-FROM-EP-PFX-a': [
                 # Per-prefix chain has one entry per endpoint.
                 '--append felix-FROM-EP-PFX-a --in-interface tapa1 --goto felix-from-a1',
