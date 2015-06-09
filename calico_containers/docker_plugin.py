@@ -204,7 +204,7 @@ def leave():
 
     # Noop. There's nothing to do.
 
-    return jsonify({"Value": {}})
+    return jsonify({})
 
 
 def assign_ip(version):
