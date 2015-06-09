@@ -133,14 +133,11 @@ please get in touch with us and we'll be happy to help you through the process.
 
     tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
 
-
 6. Edit ``/etc/init/etcd.conf``:
 
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
-     substituting for ``<controller_fqdn>``, ``<controller_ip>``, and
-     ``<cluster_token>`` appropriately. Each time you create a new etcd cluster
-     you should use a new cluster_token, as this is checked by Calico
-     components to check whether etcd has moved.
+     substituting for ``<controller_fqdn>`` and ``<controller_ip>``
+     appropriately.
 
      ::
 
@@ -149,7 +146,7 @@ please get in touch with us and we'll be happy to help you through the process.
                           --listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"                     \
                           --listen-peer-urls "http://0.0.0.0:2380"                                           \
                           --initial-advertise-peer-urls "http://<controller_ip>:2380"                        \
-                          --initial-cluster-token "<cluster_token>"                                          \
+                          --initial-cluster-token $(uuidgen)                                                 \
                           --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"                  \
                           --initial-cluster-state "new"
 
