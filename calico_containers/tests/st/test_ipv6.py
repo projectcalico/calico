@@ -13,6 +13,7 @@ class TestIpv6(TestBase):
         host = DockerHost('host')
 
         ip1, ip2 = "fd80:24e2:f998:72d6::1:1", "fd80:24e2:f998:72d6::1:2"
+        # We use this image here because busybox doesn't have ping6.
         node1 = host.create_workload("node1", ip=ip1, image="phusion/baseimage:0.9.16")
         node2 = host.create_workload("node2", ip=ip2, image="phusion/baseimage:0.9.16")
 

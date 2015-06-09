@@ -22,6 +22,7 @@ class Ipv6MultiHostMainline(TestBase):
         ip4 = "fd80:24e2:f998:72d6::1:4"
         ip5 = "fd80:24e2:f998:72d6::1:5"
 
+        # We use this image here because busybox doesn't have ping6.
         workload1 = host1.create_workload("workload1", ip1, image="phusion/baseimage:0.9.16")
         workload2 = host1.create_workload("workload2", ip2, image="phusion/baseimage:0.9.16")
         workload3 = host1.create_workload("workload3", ip3, image="phusion/baseimage:0.9.16")
