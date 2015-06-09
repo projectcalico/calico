@@ -317,7 +317,7 @@ def node(ip, node_image, ip6=""):
     environment = [
         "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
         "IP=%s" % ip,
-        "IP6=%s" % ip6,
+        "IP6=%s" % (ip6 or ""),
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
         "FELIX_ETCDADDR=%s" % etcd_authority,  # etcd host:port
     ]
