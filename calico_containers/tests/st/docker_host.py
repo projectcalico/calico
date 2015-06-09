@@ -75,7 +75,7 @@ class DockerHost(object):
         calicoctl = "/code/dist/calicoctl %s"
         return self.execute(calicoctl % command, **kwargs)
 
-    def start_calico_node(self, ip=None, ip6=None):
+    def start_calico_node(self):
         """
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
