@@ -13,13 +13,14 @@ class TestAddContainer(TestBase):
         """
         host = DockerHost('host')
 
-        host.execute("docker run -tid --name=node busybox")
-        host.calicoctl("profile add TEST_GROUP")
+        node = host.create_workload("node")
 
         # Use the `container add` command instead of passing a CALICO_IP on
         # container creation. Note this no longer needs DOCKER_HOST specified.
-        host.calicoctl("container add node 192.168.1.1")
-        host.calicoctl("profile TEST_GROUP member add node")
+        host.calicoctl("container add %s 192.168.1.1" % node.name)
+
+        host.calicoctl("profile add TEST_GROUP")
+        host.calicoctl("profile TEST_GROUP member add %s" % node.name)
 
         # Wait for felix to program down the route.
         check_route = partial(host.execute, "ip route | grep '192\.168\.1\.1'")

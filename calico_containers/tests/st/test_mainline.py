@@ -3,7 +3,6 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestMainline(TestBase):
@@ -13,41 +12,21 @@ class TestMainline(TestBase):
         """
         host = DockerHost('host')
 
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node1 busybox" % ip1,
-                     use_powerstrip=True)
-        host.execute("docker run -e CALICO_IP=%s -tid --name=node2 busybox" % ip2,
-                     use_powerstrip=True)
+        node1 = host.create_workload("node1", ip1)
+        node2 = host.create_workload("node2", ip2)
 
         # Configure the nodes with the same profiles.
         host.calicoctl("profile add TEST_GROUP")
-        host.calicoctl("profile TEST_GROUP member add node1")
-        host.calicoctl("profile TEST_GROUP member add node2")
-
-        # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' node1",
-                                use_powerstrip=True).stdout.rstrip()
-        node2_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' node2",
-                                use_powerstrip=True).stdout.rstrip()
-        if ip1 != 'auto':
-            self.assertEqual(ip1, node1_ip)
-        if ip2 != 'auto':
-            self.assertEqual(ip2, node2_ip)
-
-        ping = partial(host.execute, "docker exec node1 ping %s -c 1 -W 1" % node1_ip)
-        retry_until_success(ping, ex_class=ErrorReturnCode)
+        host.calicoctl("profile TEST_GROUP member add %s" % node1)
+        host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
         # Check connectivity.
-        host.execute("docker exec node1 ping %s -c 1" % node1_ip)
-        host.execute("docker exec node1 ping %s -c 1" % node2_ip)
-        host.execute("docker exec node2 ping %s -c 1" % node1_ip)
-        host.execute("docker exec node2 ping %s -c 1" % node2_ip)
+        self.assert_connectivity([node1, node2])
 
         # Test calicoctl teardown commands.
         host.calicoctl("profile remove TEST_GROUP")
-        host.calicoctl("container remove node1")
-        host.calicoctl("container remove node2")
+        host.calicoctl("container remove %s" % node1)
+        host.calicoctl("container remove %s" % node2)
         host.calicoctl("pool remove 192.168.0.0/16")
         host.calicoctl("node stop")
 
