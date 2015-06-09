@@ -13,13 +13,13 @@ class TestArgParsing(TestBase):
 
         # Run various commands with invalid IPs.
         with self.assertRaises(ErrorReturnCode_1):
-            host.start_calico_node(ip="127.a.0.1")
+            host.calicoctl('node --ip=127.a.0.1')
         with self.assertRaises(ErrorReturnCode_1):
-            host.start_calico_node(ip="aa:bb::cc")
+            host.calicoctl('node --ip=aa:bb::cc')
         with self.assertRaises(ErrorReturnCode_1):
-            host.start_calico_node(ip="127.0.0.1", ip6="127.0.0.1")
+            host.calicoctl('node --ip=127.0.0.1 --ip6=127.0.0.1')
         with self.assertRaises(ErrorReturnCode_1):
-            host.start_calico_node(ip="127.0.0.1", ip6="aa:bb::zz")
+            host.calicoctl('node --ip=127.0.0.1 --ip6=aa:bb::zz')
         with self.assertRaises(ErrorReturnCode_1):
             host.calicoctl("bgppeer rr add 127.a.0.1")
         with self.assertRaises(ErrorReturnCode_1):
