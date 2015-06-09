@@ -239,9 +239,9 @@ def unassign_ip(ip):
     # For each configured pool, attempt to unassign the IP before giving up.
     version = "v%d" % ip.version
     for pool in client.get_ip_pools(version):
-        # TODO check pool membership locally.
-        if client.unassign_address(pool, ip):
-            return True
+        if ip in pool:
+            if client.unassign_address(pool, ip):
+                return True
     return False
 
 
