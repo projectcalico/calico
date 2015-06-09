@@ -208,7 +208,7 @@ class Endpoint(object):
     def from_json(cls, ep_id, json_str):
         json_dict = json.loads(json_str)
 
-        # If there is no container if_name sepcified, assume the default
+        # If there is no container if_name specified, assume the default
         # VETH_NAME.  For containers created prior to this information being
         # stored, it will be possible to restart the containers, but the
         # interface may be named differently.
@@ -222,10 +222,10 @@ class Endpoint(object):
             ep.ipv4_nets.add(IPNetwork(net))
         for net in json_dict["ipv6_nets"]:
             ep.ipv6_nets.add(IPNetwork(net))
-        ipv4_gw = json_dict["ipv4_gateway"]
+        ipv4_gw = json_dict.get("ipv4_gateway")
         if ipv4_gw:
             ep.ipv4_gateway = IPAddress(ipv4_gw)
-        ipv6_gw = json_dict["ipv6_gateway"]
+        ipv6_gw = json_dict.get("ipv6_gateway")
         if ipv6_gw:
             ep.ipv6_gateway = IPAddress(ipv6_gw)
         ep.profile_id = json_dict["profile_id"]
@@ -889,7 +889,7 @@ class DatastoreClient(object):
         try:
             self.etcd_client.delete(container_path, recursive=True, dir=True)
         except EtcdKeyNotFound:
-            raise KeyError("%s is not a configured container on host %s" % 
+            raise KeyError("%s is not a configured container on host %s" %
                            (container_id, hostname))
 
 
@@ -906,4 +906,3 @@ class DataStoreError(Exception):
     General Datastore exception.
     """
     pass
-

@@ -85,7 +85,7 @@ try:
     sysctl = sh.Command._create("sysctl")
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
-    
+
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 POWERSTRIP_PORT = "2377"
@@ -857,7 +857,7 @@ def container_ip_add(container_name, ip, version, interface):
     :param ip: The IP to add
     :param version: The IP version ("v4" or "v6")
     :param interface: The name of the interface in the container.
-    
+
     :return: None
     """
     address = check_ip_version(ip, version, IPAddress)
@@ -994,10 +994,13 @@ def validate_arguments():
     """
     Validate common argument values.
     """
+    # List of valid characters that Felix permits
+    valid_chars = '[a-zA-Z0-9_\.\-]'
+
     profile_ok = (arguments["<PROFILE>"] is None or
-                  re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+                  re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
     tag_ok = (arguments["<TAG>"] is None or
-              re.match("^\w+$", arguments["<TAG>"]))
+              re.match("^%s$" % valid_chars, arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
     ip6_ok = arguments["--ip6"] is None or \
              netaddr.valid_ipv6(arguments["--ip6"])
@@ -1012,10 +1015,11 @@ def validate_arguments():
             cidr_ok = False
 
     if not profile_ok:
-        print_paragraph("Profile names must be <30 character long and can "
-                        "only contain numbers, letters and underscores.")
+        print_paragraph("Profile names must be < 40 character long and can "
+                        "only contain numbers, letters, dots, dashes and underscores.")
     if not tag_ok:
-        print "Tags names can only container numbers, letters and underscores."
+        print_paragraph("Tags names can only contain numbers, letters, dots, "
+                        "dashes and underscores.")
     if not ip_ok:
         print "Invalid IPv4 address specified with --ip argument."
     if not ip6_ok:
