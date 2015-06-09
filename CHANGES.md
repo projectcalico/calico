@@ -4,6 +4,8 @@
 
 - Reduce felix occupancy by replacing endpoint dictionaries by "struct"
   objects.
+- Allow different hosts to have different interface prefixes for combined
+  OpenStack and Docker systems.
 
 ## 0.23
 

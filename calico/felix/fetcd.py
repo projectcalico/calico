@@ -353,7 +353,7 @@ class EtcdWatcher(Actor):
                                  endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
         self.endpoint_ids_per_host[combined_id.host].add(combined_id)
-        endpoint = parse_endpoint(self.config, endpoint_id, response.value)
+        endpoint = parse_endpoint(self.config, combined_id, response.value)
         self.splitter.on_endpoint_update(combined_id, endpoint, async=True)
 
     def on_endpoint_delete(self, response, hostname, orchestrator,
@@ -476,18 +476,20 @@ def parse_if_endpoint(config, etcd_node):
             _log.debug("Found deleted endpoint %s", endpoint_id)
             endpoint = None
         else:
-            endpoint = parse_endpoint(config, endpoint_id, etcd_node.value)
-        return EndpointId(host, orch, workload_id, endpoint_id), endpoint
+            combined_id = EndpointId(host, orch, workload_id, endpoint_id)
+            endpoint = parse_endpoint(config, combined_id, etcd_node.value)
+        return combined_id, endpoint
     return None, None
 
 
-def parse_endpoint(config, endpoint_id, raw_json):
-    endpoint = safe_decode_json(raw_json, log_tag="endpoint %s" % endpoint_id)
+def parse_endpoint(config, combined_id, raw_json):
+    endpoint = safe_decode_json(raw_json,
+                                log_tag="endpoint %s" % combined_id.endpoint)
     try:
-        common.validate_endpoint(config, endpoint_id, endpoint)
+        common.validate_endpoint(config, combined_id, endpoint)
     except ValidationFailed as e:
         _log.warning("Validation failed for endpoint %s, treating as "
-                     "missing: %s", endpoint_id, e.message)
+                     "missing: %s", combined_id, e.message)
         endpoint = None
     else:
         _log.debug("Validated endpoint : %s", endpoint)

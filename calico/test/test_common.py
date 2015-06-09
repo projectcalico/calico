@@ -34,8 +34,9 @@ else:
 
 import calico.common as common
 from calico.common import ValidationFailed
+from calico.datamodel_v1 import EndpointId
 
-Config = namedtuple("Config", ["IFACE_PREFIX"])
+Config = namedtuple("Config", ["IFACE_PREFIX", "HOSTNAME"])
 
 # Logger
 _log = logging.getLogger(__name__)
@@ -48,6 +49,9 @@ class TestCommon(unittest.TestCase):
     def setUp(self):
         self.m_config = mock.Mock()
         self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.HOSTNAME = "localhost"
+        self.m_id = EndpointId("localhost", "orchestrator",
+                               "workload", "endpoint")
 
     def tearDown(self):
         pass
@@ -79,7 +83,7 @@ class TestCommon(unittest.TestCase):
             "ipv6_gateway": "fe80:0::1",
             "profile_id": "prof1",
         }
-        common.validate_endpoint(self.m_config, "endpoint_id", endpoint)
+        common.validate_endpoint(self.m_config, self.m_id, endpoint)
         self.assertEqual(endpoint, {
             'state': 'active',
             'name': 'tap1234',
@@ -99,7 +103,7 @@ class TestCommon(unittest.TestCase):
             "ipv4_nets": ["10.0.1/32"],
             "profile_ids": ["prof1", "prof2"],
         }
-        common.validate_endpoint(self.m_config, "endpoint_id", endpoint)
+        common.validate_endpoint(self.m_config, self.m_id, endpoint)
         self.assertEqual(endpoint, {
             'state': 'active',
             'name': 'tap1234',
@@ -153,16 +157,16 @@ class TestCommon(unittest.TestCase):
 
     def assert_invalid_endpoint(self, bad_value):
         self.assertRaises(common.ValidationFailed, common.validate_endpoint,
-                          self.m_config, "endpoint_id", bad_value)
+                          self.m_config, self.m_id, bad_value)
 
     def assert_endpoint_valid(self, original_endpoint):
         endpoint = copy.deepcopy(original_endpoint)
         try:
             # First pass at validation, may canonicalise the data.
-            common.validate_endpoint(self.m_config, "endpoint_id", endpoint)
+            common.validate_endpoint(self.m_config, self.m_id, endpoint)
             canonical_endpoint = copy.deepcopy(endpoint)
             # Second pass, should make no changes.
-            common.validate_endpoint(self.m_config, "endpoint_id", canonical_endpoint)
+            common.validate_endpoint(self.m_config, self.m_id, canonical_endpoint)
             self.assertEqual(endpoint, canonical_endpoint)
         except common.ValidationFailed as e:
             _log.exception("Validation unexpectedly failed for %s",
@@ -293,22 +297,24 @@ class TestCommon(unittest.TestCase):
         self.assertTrue(common.canonicalise_ip("::", 6), "::")
 
     def test_validate_endpoint(self):
-        endpoint_id = "valid_name-ok."
+        combined_id = EndpointId("host", "orchestrator",
+                                 "workload", "valid_name-ok.")
         endpoint_dict = {'profile_id': "valid.prof-name",
                          'state': "active",
                          'name': "tapabcdef",
                          'mac': "78:2b:cb:9f:ae:1c",
                          'ipv4_nets': [],
                          'ipv6_nets': []}
-        config = Config('tap')
+        config = Config('tap', 'localhost')
         ep_copy = endpoint_dict.copy()
-        common.validate_endpoint(config, endpoint_id, ep_copy)
+        common.validate_endpoint(config, combined_id, ep_copy)
         self.assertTrue(ep_copy.get('profile_id') is None)
         self.assertEqual(ep_copy.get('profile_ids'), ["valid.prof-name"])
 
         # Now break it various ways.
         # Bad endpoint ID.
-        for bad_id in ("with spaces", "$stuff", "^%@"):
+        for bad_str in ("with spaces", "$stuff", "^%@"):
+            bad_id = EndpointId("host", "orchestrator", "workload", bad_str)
             with self.assertRaisesRegexp(ValidationFailed,
                                          "Invalid endpoint ID"):
                 common.validate_endpoint(config, bad_id, endpoint_dict.copy())
@@ -316,18 +322,18 @@ class TestCommon(unittest.TestCase):
         # Bad dictionary.
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Expected endpoint to be a dict"):
-            common.validate_endpoint(config, endpoint_id, [1,2,3])
+            common.validate_endpoint(config, combined_id, [1,2,3])
 
         # No state, invalid state.
         bad_dict = endpoint_dict.copy()
         del bad_dict['state']
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Missing 'state' field"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
         bad_dict['state'] = "invalid"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Expected 'state' to be"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
 
         # Missing mac and name; both must be reported as two errors
         bad_dict = endpoint_dict.copy()
@@ -335,96 +341,100 @@ class TestCommon(unittest.TestCase):
         del bad_dict['mac']
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Missing 'name' field"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Missing 'mac' field"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
 
         bad_dict['name'] = [1, 2, 3]
         bad_dict['mac'] = 73
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Expected 'name' to be a string.*" +
                                      "Expected 'mac' to be a string"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
 
         # Bad profile ID
         bad_dict = endpoint_dict.copy()
         bad_dict['profile_id'] = "str£ing"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid profile ID"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
 
         bad_dict = endpoint_dict.copy()
         del bad_dict['profile_id']
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Missing 'profile_id\(s\)' field"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
 
         bad_dict = endpoint_dict.copy()
         del bad_dict['profile_id']
         bad_dict['profile_ids'] = [1, 2, 3]
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Expected profile IDs to be strings"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, combined_id, bad_dict)
 
-        # Bad interface name.
+        # Bad interface name - acceptable if not local.
         bad_dict = endpoint_dict.copy()
         bad_dict['name'] = "vethabcdef"
+        common.validate_endpoint(config, combined_id, bad_dict)
+
+        local_id = EndpointId("localhost", "orchestrator",
+                              "workload", "valid_name-ok.")
         with self.assertRaisesRegexp(ValidationFailed,
                                      "does not start with"):
-            common.validate_endpoint(config, endpoint_id, bad_dict)
+            common.validate_endpoint(config, local_id, bad_dict)
 
         # Valid networks.
         good_dict = endpoint_dict.copy()
         good_dict['ipv4_nets'] = [ "1.2.3.4/32", "172.0.0.0/8", "3.4.5.6"]
         good_dict['ipv6_nets'] = [ "::1/128", "::", "2001:db8:abc:1400::/54"]
-        common.validate_endpoint(config, endpoint_id, good_dict.copy())
+        common.validate_endpoint(config, combined_id, good_dict.copy())
 
         # Invalid networks
         bad_dict = good_dict.copy()
         bad_dict['ipv4_nets'] = [ "1.2.3.4/32", "172.0.0.0/8", "2001:db8:abc:1400::/54"]
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv4 CIDR"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
         bad_dict['ipv4_nets'] = [ "1.2.3.4/32", "172.0.0.0/8", "nonsense"]
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv4 CIDR"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
 
         bad_dict = good_dict.copy()
         bad_dict['ipv6_nets'] = [ "::1/128", "::", "1.2.3.4/8"]
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv6 CIDR"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
         bad_dict['ipv6_nets'] = [ "::1/128", "::", "nonsense"]
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv6 CIDR"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
 
         # Gateway IPs.
         good_dict['ipv4_gateway'] = "1.2.3.4"
         good_dict['ipv6_gateway'] = "2001:db8:abc:1400::"
-        common.validate_endpoint(config, endpoint_id, good_dict.copy())
+        common.validate_endpoint(config, combined_id, good_dict.copy())
 
         bad_dict = good_dict.copy()
         bad_dict['ipv4_gateway'] = "2001:db8:abc:1400::"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv4 gateway"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
         bad_dict['ipv4_gateway'] = "nonsense"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv4 gateway"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
 
         bad_dict = good_dict.copy()
         bad_dict['ipv6_gateway'] = "1.2.3.4"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv6 gateway"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
         bad_dict['ipv6_gateway'] = "nonsense"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "not a valid IPv6 gateway"):
-            common.validate_endpoint(config, endpoint_id, bad_dict.copy())
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
 
     def test_validate_rules(self):
         profile_id = "valid_name-ok."
