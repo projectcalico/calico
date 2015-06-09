@@ -27,7 +27,7 @@ docker rm -f docopt || true
 # `user` account in the container to write to it.
 docker run -v `pwd`/calico_containers:/code/calico_containers \
  -v `pwd`/dist:/code/dist --name docopt calico-build \
- docopt-completion --manual-bash dist/calicoctl
+ /bin/sh -c 'cd dist; docopt-completion --manual-bash ./calicoctl'
 docker rm -f docopt || true
 
 echo "Build output is in dist/"
