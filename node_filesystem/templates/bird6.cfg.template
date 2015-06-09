@@ -36,7 +36,8 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
-# Template for all BGP clients
+{{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
+{{else}}# Template for all BGP clients
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
@@ -53,8 +54,6 @@ template bgp bgp_template {
   graceful restart;  # See comment in kernel section about graceful restart.
 }
 
-{{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
-{{else}}
 {{if ls "/config/bgp_peer_rr_v6"}}
 # Peering with configured neighbors.
 {{range gets "/config/bgp_peer_rr_v6/*"}}{{$nums := split .Value ":"}}{{$id := join $nums "_"}}
