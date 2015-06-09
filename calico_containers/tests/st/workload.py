@@ -1,4 +1,8 @@
 from netaddr import IPAddress, AddrFormatError
+from functools import partial
+from sh import ErrorReturnCode_1
+
+from utils import retry_until_success
 
 
 class Workload(object):
@@ -76,9 +80,11 @@ class Workload(object):
         """
         return self.host.execute("docker exec %s %s" % (self.name, command))
 
-    def ping(self, ip):
+    def assert_can_ping(self, ip, retries=0):
         """
-        Execute a ping from this workload to the ip.
+        Execute a ping from this workload to the ip. Assert than a workload
+        can ping an IP. Use retries to compensate for network uncertainty and
+        convergence.
         """
         version = IPAddress(ip).version
         assert version in [4, 6]
@@ -90,11 +96,13 @@ class Workload(object):
         args = [
             ping,
             "-c", "1",  # Number of pings
-            "-W", "2",  # Timeout for each ping
+            "-W", "1",  # Timeout for each ping
             ip,
         ]
         command = ' '.join(args)
-        return self.execute(command)
+
+        ping = partial(self.execute, command)
+        return retry_until_success(ping, retries=retries, ex_class=ErrorReturnCode_1)
 
     def __str__(self):
         return self.name

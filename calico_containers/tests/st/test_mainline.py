@@ -3,7 +3,6 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestMainline(TestBase):
@@ -20,9 +19,6 @@ class TestMainline(TestBase):
         host.calicoctl("profile add TEST_GROUP")
         host.calicoctl("profile TEST_GROUP member add %s" % node1)
         host.calicoctl("profile TEST_GROUP member add %s" % node2)
-
-        ping = partial(node1.ping, node1.ip)
-        retry_until_success(ping, ex_class=ErrorReturnCode)
 
         # Check connectivity.
         self.assert_connectivity([node1, node2])

@@ -51,14 +51,6 @@ class TestBase(TestCase):
             initial_cluster_state="new",
         )
 
-    def assert_can_ping(self, workload, ip, retries=5):
-        """
-        Assert than a workload can ping an IP. Use retries to compensate for
-        network uncertainty and convergence.
-        """
-        ping = partial(workload.ping, ip)
-        retry_until_success(ping, retries=retries, ex_class=ErrorReturnCode_1)
-
     def assert_connectivity(self, pass_list, fail_list=[]):
         """
         Assert partial connectivity graphs between workloads.
@@ -71,7 +63,7 @@ class TestBase(TestCase):
         """
         for source in pass_list:
             for dest in pass_list:
-                self.assert_can_ping(source, dest.ip)
+                source.assert_can_ping(dest.ip)
             for dest in fail_list:
                 with self.assertRaises(ErrorReturnCode_1):
-                    self.assert_can_ping(source, dest.ip)
+                    source.assert_can_ping(dest.ip)
