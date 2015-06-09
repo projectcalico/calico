@@ -80,11 +80,9 @@ class DockerHost(object):
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
         """
-        ip = ip or self.ip
-        ip6 = ip6 or self.ip6
-        args = ['node', '--ip=%s' % ip]
-        if ip6:
-            args.append('--ip6=%s' % ip6)
+        args = ['node', '--ip=%s' % self.ip]
+        if self.ip6:
+            args.append('--ip6=%s' % self.ip6)
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 
