@@ -25,7 +25,7 @@ import mock
 
 from calico.felix.test.base import BaseTestCase
 from calico.felix.dispatch import (
-    DispatchChains, CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
+    DispatchChains, CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_INBOUND,
 )
 
 
@@ -53,6 +53,7 @@ class TestDispatchChains(BaseTestCase):
                                args,
                                to_updates,
                                from_updates,
+                               inbound_updates,
                                to_chain_names,
                                from_chain_names):
         # We only care about positional arguments
@@ -66,6 +67,7 @@ class TestDispatchChains(BaseTestCase):
         # is the DROP rule.
         self.assertItemsEqual(args[0][CHAIN_TO_ENDPOINT], to_updates)
         self.assertItemsEqual(args[0][CHAIN_FROM_ENDPOINT], from_updates)
+        self.assertItemsEqual(args[0][CHAIN_INBOUND], inbound_updates)
         self.assertEqual(args[0][CHAIN_TO_ENDPOINT][-1], to_updates[-1])
         self.assertEqual(args[0][CHAIN_FROM_ENDPOINT][-1], from_updates[-1])
 
@@ -98,13 +100,19 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
+        inbound_updates = [
+            '--append felix-INBOUND --protocol udp --in-interface tap+ '
+            '--sport 68 --dport 67 --jump RETURN',
+            '--append felix-INBOUND --jump DROP',
+        ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args, to_updates, from_updates, inbound_updates, to_chain_names,
+            from_chain_names
         )
 
     def test_tree_building(self):
@@ -195,13 +203,23 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
+        inbound_updates = [
+            '--append felix-INBOUND --protocol udp --in-interface tap+ '
+            '--sport 68 --dport 67 --jump RETURN',
+            '--append felix-INBOUND --jump DROP',
+        ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            inbound_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_applying_snapshot_dirty(self):
@@ -231,13 +249,23 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
+        inbound_updates = [
+            '--append felix-INBOUND --protocol udp --in-interface tap+ '
+            '--sport 68 --dport 67 --jump RETURN',
+            '--append felix-INBOUND --jump DROP',
+        ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            inbound_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_applying_empty_snapshot(self):
@@ -261,13 +289,23 @@ class TestDispatchChains(BaseTestCase):
         to_updates = [
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
+        inbound_updates = [
+            '--append felix-INBOUND --protocol udp --in-interface tap+ '
+            '--sport 68 --dport 67 --jump RETURN',
+            '--append felix-INBOUND --jump DROP',
+        ]
         from_chain_names = set()
         to_chain_names = set()
 
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            inbound_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_on_endpoint_added_simple(self):
@@ -296,13 +334,23 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
+        inbound_updates = [
+            '--append felix-INBOUND --protocol udp --in-interface tap+ '
+            '--sport 68 --dport 67 --jump RETURN',
+            '--append felix-INBOUND --jump DROP',
+        ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
 
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            inbound_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_on_endpoint_added_idempotent(self):
@@ -346,6 +394,11 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
             '--append felix-TO-ENDPOINT --jump DROP',
         ]
+        inbound_updates = [
+            '--append felix-INBOUND --protocol udp --in-interface tap+ '
+            '--sport 68 --dport 67 --jump RETURN',
+            '--append felix-INBOUND --jump DROP',
+        ]
         from_chain_names = set(['felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-123456', 'felix-to-b7d849'])
 
@@ -353,7 +406,12 @@ class TestDispatchChains(BaseTestCase):
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            inbound_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_on_endpoint_removed_idempotent(self):
