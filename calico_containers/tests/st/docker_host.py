@@ -63,7 +63,9 @@ class DockerHost(object):
         Pass a command into a host container.
         """
         etcd_auth = "ETCD_AUTHORITY=%s:2379 " % get_ip()
-        command = "%s %s" % (etcd_auth, command)
+        # Export the environment, in case the command has multiple parts, e.g.
+        # use of | or ;
+        command = "export %s; %s" % (etcd_auth, command)
 
         if self.dind:
             # TODO - work out what was wrong with the bash -s approach and fix

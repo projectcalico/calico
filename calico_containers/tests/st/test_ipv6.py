@@ -15,29 +15,17 @@ class TestIpv6(TestBase):
         # different names.  This helps in the case where etcd gets restarted
         # but Docker does not, since libnetwork will only create the network
         # if it doesn't exist.
-        net_name = uuid.uuid4()
-        with DockerHost('host', start_calico=False) as host:
-            # TODO: Fix this for real
-            host.ip6 = "fd80:1234:abcd::1"
-            host.start_calico_node()
-            host.assert_driver_up()
+        with DockerHost('host') as host:
+
+            network = host.create_network(str(uuid.uuid4()))
 
             # We use this image here because busybox doesn't have ping6.
-            node1 = host.create_workload("node1", network=net_name,
+            node1 = host.create_workload("node1", network=network,
                                          image="phusion/baseimage:0.9.16")
-            node2 = host.create_workload("node2", network=net_name,
+            node2 = host.create_workload("node2", network=network,
                                          image="phusion/baseimage:0.9.16")
 
-            # Perform a docker inspect to extract the configured IP addresses.
-            node1_ip = host.execute("docker inspect --format "
-                                    "'{{ .NetworkSettings."
-                                    "GlobalIPv6Address }}' "
-                                    "node1").rstrip()
-            node2_ip = host.execute("docker inspect --format "
-                                    "'{{ .NetworkSettings."
-                                    "GlobalIPv6Address }}' "
-                                    "node2").rstrip()
-
+            # Allow network to converge
             node1.assert_can_ping(node2.ip, retries=3)
 
             # Check connectivity.

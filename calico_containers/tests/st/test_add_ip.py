@@ -1,4 +1,4 @@
-
+import unittest
 from test_base import TestBase
 from docker_host import DockerHost
 from subprocess import CalledProcessError
@@ -6,6 +6,7 @@ from subprocess import CalledProcessError
 
 class TestAddIp(TestBase):
 
+    @unittest.skip("Libnetwork doesn't support multiple IPs.")
     def test_add_ip(self):
         """
         Test adding multiple IPs per workload.

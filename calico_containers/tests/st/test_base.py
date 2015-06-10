@@ -29,7 +29,7 @@ class TestBase(TestCase):
         # for container in containers:
         #     delete_container(container)
         # import sh
-        # docker.rm("-f", "etcd", _ok_code=[0, 1])
+        self.stop_etcd()
 
     def start_etcd(self):
         """
@@ -57,6 +57,9 @@ class TestBase(TestCase):
         # TODO - talking to etcd fails until a request is made from outside
         # the dind to etcd. Not sure why yet...
         requests.get("http://%s:2379/version" % self.ip)
+
+    def stop_etcd(self):
+        docker.rm("-f", "etcd", _ok_code=[0, 1])
 
     def assert_connectivity(self, pass_list, fail_list=[]):
         """

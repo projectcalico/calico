@@ -54,7 +54,7 @@ st: binary
 	docker save --output calico_containers/calico-node.tar calico/node
 	docker pull busybox:latest
 	docker save --output calico_containers/busybox.tar busybox:latest
-	nosetests calico_containers/tests/st/test_mainline.py -sv --nologcapture
+	nosetests calico_containers/tests/st/ -sv --nologcapture
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
