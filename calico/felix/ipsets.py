@@ -697,6 +697,13 @@ class Ipset(object):
         futils.call_silent(["ipset", "destroy", self.temp_set_name])
 
 
+# For tunnel support, a global ipset that contains the IP addresses of all
+# the calico hosts.
+HOSTS_IPSET_V4 = Ipset(FELIX_PFX + "calico-hosts-4",
+                       FELIX_PFX + "calico-hosts-4-tmp",
+                       "inet")
+
+
 def tag_to_ipset_name(ip_type, tag, tmp=False):
     """
     Turn a (possibly shortened) tag ID into an ipset name.

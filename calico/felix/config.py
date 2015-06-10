@@ -79,7 +79,8 @@ class ConfigParameter(object):
     - Where the value was read from
     """
     def __init__(self, name, description, default,
-                 sources=DEFAULT_SOURCES, value_is_int=False):
+                 sources=DEFAULT_SOURCES, value_is_int=False,
+                 value_is_bool=False):
         """
         Create a configuration parameter.
         :param str description: Description for logging
@@ -93,6 +94,7 @@ class ConfigParameter(object):
         self.value = default
         self.active_source = None
         self.value_is_int = value_is_int
+        self.value_is_bool = value_is_bool
 
     def set(self, value, source):
         """
@@ -118,6 +120,8 @@ class ConfigParameter(object):
                 except ValueError:
                     raise ConfigException("Field was not integer",
                                           self)
+            elif self.value_is_bool:
+                self.value = (str(value).lower() in ("true", "1", "yes", "y"))
             else:
                 # Calling str in principle can throw an exception, but it's
                 # hard to see how in practice, so don't catch and wrap.
@@ -169,6 +173,9 @@ class Config(object):
                            "Log severity for logging to syslog", "ERROR")
         self.add_parameter("LogSeverityScreen",
                            "Log severity for logging to screen", "ERROR")
+        self.add_parameter("IpInIpEnabled",
+                           "IP-in-IP tunnel support enabled", False,
+                           value_is_bool=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
@@ -213,6 +220,10 @@ class Config(object):
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
+        self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
+        # Hard-coded.  For now, we require the global tunnel device, which is
+        # auto-created by the kernel.
+        self.IP_IN_IP_TUNNEL_NAME = "tunl0"
 
         self._validate_cfg(final=final)
 

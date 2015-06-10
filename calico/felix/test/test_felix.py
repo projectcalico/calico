@@ -50,16 +50,21 @@ class TestBasic(BaseTestCase):
         else:
             sys.modules['etcd'] = self._real_etcd
 
+    @mock.patch("calico.felix.frules.HOSTS_IPSET_V4")
     @mock.patch("calico.felix.fetcd.EtcdWatcher.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
     @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())
-    def test_main_greenlet(self, m_iwait, m_IptablesUpdater, m_start, m_load):
+    def test_main_greenlet(self, m_iwait, m_IptablesUpdater, m_start, m_load,
+                           m_ipset_4):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_config = mock.Mock(spec=config.Config)
         m_config.HOSTNAME = "myhost"
         m_config.IFACE_PREFIX = "tap"
         m_config.METADATA_IP = None
-        self.assertRaises(TestException,
-                          felix._main_greenlet, m_config)
+        m_config.IP_IN_IP_ENABLED = False
+        m_config.IP_IN_IP_TUNNEL_NAME = "tunl0"
+        with gevent.Timeout(5):
+            self.assertRaises(TestException,
+                              felix._main_greenlet, m_config)
         m_load.assert_called_once_with(async=False)
