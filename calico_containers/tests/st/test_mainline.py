@@ -13,41 +13,41 @@ class TestMainline(TestBase):
         """
         Setup two endpoints on one host and check connectivity.
         """
-        host = DockerHost('host')
-        net_name = str(uuid.uuid4())
+        with DockerHost('host') as host:
+            net_name = str(uuid.uuid4())
 
-        host.execute("docker run --net=calico:%s -tid --name=node1 busybox" %
-                     net_name)
-        host.execute("docker run --net=calico:%s -tid --name=node2 busybox" %
-                     net_name)
+            host.execute("docker run --net=calico:%s -tid --name=node1 busybox" %
+                         net_name)
+            host.execute("docker run --net=calico:%s -tid --name=node2 busybox" %
+                         net_name)
 
-        # Perform a docker inspect to extract the configured IP addresses.
-        node1_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' "
-                                "node1").rstrip()
-        node2_ip = host.execute("docker inspect --format "
-                                "'{{ .NetworkSettings.IPAddress }}' "
-                                "node2").rstrip()
-        if ip1 != 'auto':
-            self.assertEqual(ip1, node1_ip)
-        if ip2 != 'auto':
-            self.assertEqual(ip2, node2_ip)
+            # Perform a docker inspect to extract the configured IP addresses.
+            node1_ip = host.execute("docker inspect --format "
+                                    "'{{ .NetworkSettings.IPAddress }}' "
+                                    "node1").rstrip()
+            node2_ip = host.execute("docker inspect --format "
+                                    "'{{ .NetworkSettings.IPAddress }}' "
+                                    "node2").rstrip()
+            if ip1 != 'auto':
+                self.assertEqual(ip1, node1_ip)
+            if ip2 != 'auto':
+                self.assertEqual(ip2, node2_ip)
 
-        ping = partial(host.execute,
-                       "docker exec node1 ping %s -c 1 -W 1" % node2_ip)
-        retry_until_success(ping, ex_class=CalledProcessError)
+            ping = partial(host.execute,
+                           "docker exec node1 ping %s -c 1 -W 1" % node2_ip)
+            retry_until_success(ping, ex_class=CalledProcessError)
 
-        # Check connectivity.
-        host.execute("docker exec node1 ping %s -c 1 -W 1" % node1_ip)
-        host.execute("docker exec node1 ping %s -c 1 -W 1" % node2_ip)
-        host.execute("docker exec node2 ping %s -c 1 -W 1" % node1_ip)
-        host.execute("docker exec node2 ping %s -c 1 -W 1" % node2_ip)
+            # Check connectivity.
+            host.execute("docker exec node1 ping %s -c 1 -W 1" % node1_ip)
+            host.execute("docker exec node1 ping %s -c 1 -W 1" % node2_ip)
+            host.execute("docker exec node2 ping %s -c 1 -W 1" % node1_ip)
+            host.execute("docker exec node2 ping %s -c 1 -W 1" % node2_ip)
 
-        # Test calicoctl teardown commands.
-        host.execute("docker rm -f node1")
-        host.execute("docker rm -f node2")
-        host.calicoctl("pool remove 192.168.0.0/16")
-        host.calicoctl("node stop")
+            # Test calicoctl teardown commands.
+            host.execute("docker rm -f node1")
+            host.execute("docker rm -f node2")
+            host.calicoctl("pool remove 192.168.0.0/16")
+            host.calicoctl("node stop")
 
     def test_auto(self):
         """

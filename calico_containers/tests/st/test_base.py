@@ -2,7 +2,7 @@ import requests
 from sh import docker
 from unittest import TestCase
 
-from utils import get_ip, delete_container
+from utils import get_ip
 
 
 class TestBase(TestCase):
