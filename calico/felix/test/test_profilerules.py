@@ -23,7 +23,7 @@ import logging
 from subprocess import CalledProcessError
 from mock import Mock, call
 from calico.felix.fiptables import IptablesUpdater
-from calico.felix.ipsets import IpsetManager, ActiveIpset
+from calico.felix.ipsets import IpsetManager, TagIpset
 from calico.felix.profilerules import ProfileRules, RulesManager
 
 from calico.felix.test.base import BaseTestCase
@@ -268,8 +268,8 @@ class TestProfileRules(BaseTestCase):
             obj_id = args[0]
             callback = kwargs["callback"]
             seen_tags.add(obj_id)
-            m_ipset = Mock(spec=ActiveIpset)
-            m_ipset.name = obj_id + "-name"
+            m_ipset = Mock(spec=TagIpset)
+            m_ipset.ipset_name = obj_id + "-name"
             callback(obj_id, m_ipset)
             self.step_actor(self.rules)
         self.m_ips_mgr.get_and_incref.reset_mock()
