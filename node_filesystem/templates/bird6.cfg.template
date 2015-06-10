@@ -16,7 +16,6 @@ protocol kernel {
   persist;           # Don't remove routes on bird shutdown
   scan time 2;       # Scan kernel routing table every 2 seconds
   import all;
-  device routes;
   export all;        # Default is export none
   graceful restart;  # Turn on graceful restart to reduce potential flaps in
                      # routes when reloading BIRD configuration.  With a full
@@ -36,7 +35,8 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
-# Template for all BGP clients
+{{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
+{{else}}# Template for all BGP clients
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
@@ -53,8 +53,6 @@ template bgp bgp_template {
   graceful restart;  # See comment in kernel section about graceful restart.
 }
 
-{{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
-{{else}}
 {{if ls "/config/bgp_peer_rr_v6"}}
 # Peering with configured neighbors.
 {{range gets "/config/bgp_peer_rr_v6/*"}}{{$nums := split .Value ":"}}{{$id := join $nums "_"}}

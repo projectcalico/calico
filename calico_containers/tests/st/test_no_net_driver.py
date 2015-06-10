@@ -1,9 +1,7 @@
 from subprocess import CalledProcessError
-from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestNoNetDriver(TestBase):
@@ -15,43 +13,38 @@ class TestNoNetDriver(TestBase):
 
             host.calicoctl("profile add TEST_GROUP")
 
-            # Remove the environment variable such that docker run does not
-            # utilize the docker network driver.
-            host.execute("docker run -tid --name=node1 busybox")
-            host.execute("docker run -tid --name=node2 busybox")
+            # Use standard docker bridge networking.
+            node1 = host.create_workload("node1")
+            node2 = host.create_workload("node2")
 
             # Attempt to configure the nodes with the same profiles.  This will
             # fail since we didn't use the driver to create the nodes.
             with self.assertRaises(CalledProcessError):
-                host.calicoctl("profile TEST_GROUP member add node1")
+                host.calicoctl("profile TEST_GROUP member add %s" % node1)
             with self.assertRaises(CalledProcessError):
-                host.calicoctl("profile TEST_GROUP member add node2")
+                host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
             # Add the nodes to Calico networking.
-            host.calicoctl("container add node1 192.168.1.1")
-            host.calicoctl("container add node2 192.168.1.2")
+            host.calicoctl("container add %s 192.168.1.1" % node1)
+            host.calicoctl("container add %s 192.168.1.2" % node2)
 
             # Now add the profiles.
-            host.calicoctl("profile TEST_GROUP member add node1")
-            host.calicoctl("profile TEST_GROUP member add node2")
+            host.calicoctl("profile TEST_GROUP member add %s" % node1)
+            host.calicoctl("profile TEST_GROUP member add %s" % node2)
 
             # Inspect the nodes
-            host.execute("docker inspect node1")
-            host.execute("docker inspect node2")
+            host.execute("docker inspect %s" % node1)
+            host.execute("docker inspect %s" % node2)
 
             # Check it works
-            ping = partial(host.execute,
-                           "docker exec node1 ping 192.168.1.2 -c 1 -W 1")
-            retry_until_success(ping, ex_class=CalledProcessError)
+            node1.assert_can_ping("192.168.1.2", retries=10)
 
-            host.execute("docker exec node1 ping 192.168.1.1 -c 1")
-            host.execute("docker exec node1 ping 192.168.1.2 -c 1")
-            host.execute("docker exec node2 ping 192.168.1.1 -c 1")
-            host.execute("docker exec node2 ping 192.168.1.2 -c 1")
+            # Check reverse connectivity.
+            node2.assert_can_ping("192.168.1.1")
 
             # Test the teardown commands
             host.calicoctl("profile remove TEST_GROUP")
-            host.calicoctl("container remove node1")
-            host.calicoctl("container remove node2")
+            host.calicoctl("container remove %s" % node1)
+            host.calicoctl("container remove %s" % node2)
             host.calicoctl("pool remove 192.168.0.0/16")
             host.calicoctl("node stop")

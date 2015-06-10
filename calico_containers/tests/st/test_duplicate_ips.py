@@ -4,7 +4,6 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestDuplicateIps(TestBase):
@@ -20,45 +19,33 @@ class TestDuplicateIps(TestBase):
              DockerHost('host3') as host3:
 
             # Set up three workloads on three hosts
-            host1.execute("docker run -e CALICO_IP=192.168.1.1 "
-                          "--name workload1 -tid busybox")
-            host2.execute("docker run -e CALICO_IP=192.168.1.2 "
-                          "--name workload2 -tid busybox")
-            host3.execute("docker run -e CALICO_IP=192.168.1.3 "
-                          "--name workload3 -tid busybox")
+            workload1 = host1.create_workload("workload1", "192.168.1.1")
+            workload2 = host2.create_workload("workload2", "192.168.1.2")
+            workload3 = host3.create_workload("workload3", "192.168.1.3")
 
             # Set up the workloads with duplicate IPs
-            host1.execute("docker run -e CALICO_IP=192.168.1.4 "
-                          "--name dup1 -tid busybox")
-            host2.execute("docker run -e CALICO_IP=192.168.1.4 "
-                          "--name dup2 -tid busybox")
+            dup_ip = "192.168.1.4"
+            dup1 = host1.create_workload("dup1", dup_ip)
+            dup2 = host2.create_workload("dup2", dup_ip)
 
             host1.calicoctl("profile add TEST_PROFILE")
 
             # Add everyone to the same profile
-            host1.calicoctl("profile TEST_PROFILE member add workload1")
-            host1.calicoctl("profile TEST_PROFILE member add dup1")
-            host2.calicoctl("profile TEST_PROFILE member add workload2")
-            host2.calicoctl("profile TEST_PROFILE member add dup2")
-            host3.calicoctl("profile TEST_PROFILE member add workload3")
-
-            # Wait for the workload networking to converge.
-            ping = partial(host1.execute,
-                           "docker exec workload1 ping -c 4 192.168.1.4")
-            retry_until_success(ping, ex_class=CalledProcessError)
+            host1.calicoctl("profile TEST_PROFILE member add %s" % workload1)
+            host1.calicoctl("profile TEST_PROFILE member add %s" % dup1)
+            host2.calicoctl("profile TEST_PROFILE member add %s" % workload2)
+            host2.calicoctl("profile TEST_PROFILE member add %s" % dup2)
+            host3.calicoctl("profile TEST_PROFILE member add %s" % workload3)
 
             # Check for standard connectivity
-            host1.execute("docker exec workload1 ping -c 4 192.168.1.4")
-            host2.execute("docker exec workload2 ping -c 4 192.168.1.4")
-            host3.execute("docker exec workload3 ping -c 4 192.168.1.4")
+            workload1.assert_can_ping(dup_ip, retries=3)
+            workload2.assert_can_ping(dup_ip, retries=3)
+            workload3.assert_can_ping(dup_ip, retries=3)
 
             # Delete one of the duplciates.
             host2.execute("docker rm -f dup2")
 
-            # Wait for the workload networking to converge.
-            retry_until_success(ping, ex_class=CalledProcessError)
-
             # Check standard connectivity still works.
-            host1.execute("docker exec workload1 ping -c 4 192.168.1.4")
-            host2.execute("docker exec workload2 ping -c 4 192.168.1.4")
-            host3.execute("docker exec workload3 ping -c 4 192.168.1.4")
+            workload1.assert_can_ping(dup_ip, retries=3)
+            workload2.assert_can_ping(dup_ip, retries=3)
+            workload3.assert_can_ping(dup_ip, retries=3)

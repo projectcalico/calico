@@ -4,7 +4,6 @@ import uuid
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class TestIpv6(TestBase):
@@ -16,35 +15,19 @@ class TestIpv6(TestBase):
         # different names.  This helps in the case where etcd gets restarted
         # but Docker does not, since libnetwork will only create the network
         # if it doesn't exist.
-        net_name = uuid.uuid4()
-        with DockerHost('host', start_calico=False) as host:
-            host.start_calico_node(ip=host.ip, ip6=host.ip6)
-            host.assert_driver_up()
+        with DockerHost('host') as host:
 
-            host.execute("docker run --net=calico:%s"
-                         " -tid --name=node1 phusion/baseimage:0.9.16" %
-                         net_name)
-            host.execute("docker run --net=calico:%s"
-                         " -tid --name=node2 phusion/baseimage:0.9.16" %
-                         net_name)
+            network = host.create_network(str(uuid.uuid4()))
 
-            # Perform a docker inspect to extract the configured IP addresses.
-            node1_ip = host.execute("docker inspect --format "
-                                    "'{{ .NetworkSettings."
-                                    "GlobalIPv6Address }}' "
-                                    "node1").rstrip()
-            node2_ip = host.execute("docker inspect --format "
-                                    "'{{ .NetworkSettings."
-                                    "GlobalIPv6Address }}' "
-                                    "node2").rstrip()
+            # We use this image here because busybox doesn't have ping6.
+            node1 = host.create_workload("node1", network=network,
+                                         image="phusion/baseimage:0.9.16")
+            node2 = host.create_workload("node2", network=network,
+                                         image="phusion/baseimage:0.9.16")
 
-            ping = partial(host.execute,
-                           "docker exec %s ping6 %s -c 1 -W 1" % ("node1",
-                                                                  node2_ip))
-            retry_until_success(ping, ex_class=CalledProcessError)
+            # Allow network to converge
+            node1.assert_can_ping(node2.ip, retries=3)
 
             # Check connectivity.
-            host.execute("docker exec %s ping6 %s -c 1" % ("node1", node1_ip))
-            host.execute("docker exec %s ping6 %s -c 1" % ("node1", node2_ip))
-            host.execute("docker exec %s ping6 %s -c 1" % ("node2", node1_ip))
-            host.execute("docker exec %s ping6 %s -c 1" % ("node2", node2_ip))
+            self.assert_connectivity([node1, node2])
+

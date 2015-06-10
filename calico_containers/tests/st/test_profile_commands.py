@@ -1,5 +1,6 @@
 from test_base import TestBase
 from docker_host import DockerHost
+import json
 
 
 class TestProfileCommands(TestBase):
@@ -11,22 +12,24 @@ class TestProfileCommands(TestBase):
 
             host.calicoctl("profile add TEST_PROFILE")
 
-            json = ('{ "id": "TEST_PROFILE", '
-                    '"inbound_rules": [ '
-                    '{ "action": "allow", '
-                    '"src_tag": "TEST_PROFILE" }, '
-                    '{ "action": "deny" } ], '
-                    '"outbound_rules": [ { "action": "deny" } ] }')
+            json_dict = {"id": "TEST_PROFILE",
+                         "inbound_rules": [
+                             {"action": "allow",
+                              "src_tag": "TEST_PROFILE"},
+                             {"action": "deny"}
+                         ],
+                         "outbound_rules": [{"action": "deny"}]}
 
-            calicoctl = "/code/dist/calicoctl %s"
-            host.execute("echo '%s' | " % json + calicoctl %
-                         "profile TEST_PROFILE rule update")
+            update = json.dumps(json_dict)
+            cmd = "/code/dist/calicoctl profile TEST_PROFILE rule update"
+            host.execute("echo '%s' | %s" % (update, cmd))
 
             self.assertIn('1 deny',
                           host.calicoctl("profile TEST_PROFILE rule show"))
-            json_piece = '"outbound_rules": [\n    {\n      "action": "deny"'
-            self.assertIn(json_piece,
-                          host.calicoctl("profile TEST_PROFILE rule json"))
+
+            result = host.calicoctl("profile TEST_PROFILE rule json")
+            rules = json.loads(result)
+            self.assertDictEqual(rules, json_dict)
 
             # Test that adding and removing a tag works.
             self.assertNotIn("TEST_TAG", self.show_tag(host))
