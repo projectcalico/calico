@@ -54,6 +54,7 @@ st: binary
 	docker save --output calico_containers/calico-node.tar calico/node
 	docker pull busybox:latest
 	docker save --output calico_containers/busybox.tar busybox:latest
+	dist/calicoctl checksystem --fix
 	nosetests calico_containers/tests/st/ -sv --nologcapture
 
 clean:
