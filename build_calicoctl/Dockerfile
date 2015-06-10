@@ -5,6 +5,9 @@ FROM calico/node
 
 WORKDIR /code/
 
+RUN apt-get update
+RUN apt-get install -qy python-dev python-pip curl
+
 ADD requirements.txt /code/
 RUN pip install -r requirements.txt
 
