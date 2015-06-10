@@ -204,6 +204,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         else:
             return False
 
+    def initialize(self):
+        """
+        Called shortly after __init__, when the ML2 Plugin is ready. Must not
+        create anything that involves file handles, but can safely be used to
+        set up the DB.
+        """
+        self._get_db()
+
     def get_allowed_network_types(self, agent=None):
         return ('local', 'flat')
 
