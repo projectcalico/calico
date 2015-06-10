@@ -35,6 +35,7 @@ ROOT_DIR = "/calico"
 
 # OpenStack data is stored under this path.
 OPENSTACK_DIR = ROOT_DIR + "/openstack"
+OPENSTACK_VERSION_DIR = OPENSTACK_DIR + "/v1"
 
 # Data that flows from orchestrator to felix is stored under a versioned
 # sub-tree.
@@ -48,7 +49,7 @@ POLICY_DIR = VERSION_DIR + '/policy'
 PROFILE_DIR = POLICY_DIR + "/profile"
 
 # Key used for leader election by Neutron mechanism drivers.
-NEUTRON_ELECTION_KEY = OPENSTACK_DIR + '/neutron_election'
+NEUTRON_ELECTION_KEY = OPENSTACK_VERSION_DIR + '/neutron_election'
 
 # Regex to match profile rules, capturing the profile ID in capture group
 # "profile_id".
