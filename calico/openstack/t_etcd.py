@@ -449,7 +449,7 @@ def _neutron_rule_to_etcd_rule(rule):
             etcd_rule['src_net'] = net
         if port_spec is not None:
             etcd_rule['dst_ports'] = port_spec
-        LOG.info("=> Inbound Calico rule %s" % etcd_rule)
+        LOG.debug("=> Inbound Calico rule %s" % etcd_rule)
     else:
         if rule['remote_group_id'] is not None:
             etcd_rule['dst_tag'] = rule['remote_group_id']
@@ -457,7 +457,7 @@ def _neutron_rule_to_etcd_rule(rule):
             etcd_rule['dst_net'] = net
         if port_spec is not None:
             etcd_rule['dst_ports'] = port_spec
-        LOG.info("=> Outbound Calico rule %s" % etcd_rule)
+        LOG.debug("=> Outbound Calico rule %s" % etcd_rule)
 
     return etcd_rule
 
