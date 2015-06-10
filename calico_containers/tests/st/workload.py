@@ -3,6 +3,7 @@ from functools import partial
 from subprocess import CalledProcessError
 
 from utils import retry_until_success
+from network import DockerNetwork
 
 
 class Workload(object):
@@ -28,9 +29,8 @@ class Workload(object):
         :param image: The docker image to be used to instantiate this
         container. busybox used by default because it is extremely small and
         has ping.
-        :param network: The name of the 'network' to use for this workload, as
-        defined by Docker libnetwork (i.e. all workloads on a network have
-        mutual connectivity).  Set to None to use default Docker networking.
+        :param network: The DockerNetwork to connect to.  Set to None to use
+        default Docker networking.
         """
         self.host = host
         self.name = name
@@ -44,9 +44,10 @@ class Workload(object):
         ]
         assert ip is None, "Static IP assignment not supported by libnetwork."
         if network:
+            assert isinstance(network, DockerNetwork)
             # Using @squaremo's Docker UI patch, --net accepts
             # <driver name>:<network name> as an option.
-            args.append("--net=calico:%s" % network)
+            args.append("--net=%s" % network)
         args.append(image)
         command = ' '.join(args)
 

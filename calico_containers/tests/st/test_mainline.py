@@ -1,7 +1,5 @@
 import unittest
 import uuid
-from subprocess import CalledProcessError
-from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
@@ -13,10 +11,10 @@ class TestMainline(TestBase):
         Setup two endpoints on one host and check connectivity.
         """
         with DockerHost('host') as host:
-            net_name = str(uuid.uuid4())
 
-            node1 = host.create_workload("node1", network=net_name)
-            node2 = host.create_workload("node2", network=net_name)
+            network = host.create_network(str(uuid.uuid4()))
+            node1 = host.create_workload("node1", network=network)
+            node2 = host.create_workload("node2", network=network)
 
             # Check connectivity.
             self.assert_connectivity([node1, node2])

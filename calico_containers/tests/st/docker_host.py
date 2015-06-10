@@ -6,6 +6,7 @@ from calico_containers.tests.st import utils
 
 from utils import get_ip, retry_until_success
 from workload import Workload
+from network import DockerNetwork
 
 
 CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
@@ -162,3 +163,17 @@ class DockerHost(object):
         Create a workload container inside this host container.
         """
         return Workload(self, name, ip=ip, image=image, network=network)
+
+    def create_network(self, name, driver="calico"):
+        """
+        Create a Docker network using this host.
+
+        :param name: The name of the network.  This must be unique per cluster
+        and it the user-facing identifier for the network.  (Calico itself will
+        get a UUID for the network via the driver API and will not get the
+        name).
+        :param driver: The name of the network driver to use.  (The Calico
+        driver is the default.)
+        :return: A DockerNetwork object.
+        """
+        return DockerNetwork(self, name, driver=driver)
