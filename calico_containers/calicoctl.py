@@ -28,6 +28,7 @@ Usage:
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
   calicoctl diags [--log-dir=<LOG_DIR>]
+  calicoctl checksystem [--fix]
 
 Options:
  --interface=<INTERFACE>  The name to give to the interface in the container
@@ -274,22 +275,13 @@ def module_loaded(module):
 
 
 def node(ip, node_image, log_dir, ip6=""):
-    # modprobe and sysctl require root privileges.
-    enforce_root()
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    if not module_loaded("ip6_tables"):
-        print >> sys.stderr, "module ip6_tables isn't loaded. Load with " \
-                             "`modprobe ip6_tables`"
-        sys.exit(2)
-
-    if not module_loaded("xt_set"):
-        print >> sys.stderr, "module xt_set isn't loaded. Load with " \
-                             "`modprobe xt_set`"
-        sys.exit(2)
+    # Print warnings for any known system issues before continuing
+    checksystem(fix=False, quit_if_error=False)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -304,11 +296,6 @@ def node(ip, node_image, log_dir, ip6=""):
     client.ensure_global_config()
     client.create_host(hostname, ip, ip6)
 
-    # Enable IP forwarding since all compute hosts are vRouters.
-    # IPv4 forwarding should be enabled already by docker.
-    sysctl("-w", "net.ipv4.ip_forward=1")
-    sysctl("-w", "net.ipv6.conf.all.forwarding=1")
-
     try:
         docker_client.remove_container("calico-node", force=True)
     except docker.errors.APIError as err:
@@ -319,7 +306,7 @@ def node(ip, node_image, log_dir, ip6=""):
 
     environment = [
         "IP=%s" % ip,
-        "IP6=%s" % ip6,
+        "IP6=%s" % (ip6 or ""),
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
         "FELIX_ETCDADDR=%s" % etcd_authority,  # etcd host:port
     ]
@@ -363,6 +350,75 @@ def node(ip, node_image, log_dir, ip6=""):
     docker_client.start(container)
 
     print "Calico node is running with id: %s" % cid
+
+
+def checksystem(fix=False, quit_if_error=False):
+    """
+    Checks that the system is setup correctly. fix==True, this command
+    will attempt to fix any issues it encounters. If any fixes fail, it will exit(1). Fix will automatically
+    be set to True if the user specifies --fix at the command line.
+
+    :param fix: if True, try to fix any system dependency issues that are detected.
+    :param quit_if_error: if True, quit with error code 1 if any issues are detected, or if any fixes are unsuccesful.
+    :return: True if all system dependencies are in the proper state, False if they are not. This function
+             will sys.exit(1) instead of returning false if quit_if_error == True
+    """
+    # modprobe and sysctl require root privileges.
+    enforce_root()
+
+    system_ok = True
+    modprobe = sh.Command._create('modprobe')
+    ip6tables = sh.Command._create('ip6tables')
+    try:
+        ip6tables("-L")
+    except:
+        if fix:
+            try:
+                modprobe('ip6_tables')
+            except sh.ErrorReturnCode:
+                print >> sys.stderr, "ERROR: Could not enable ip6_tables."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables module. Load with " \
+                             "`modprobe ip6_tables`"
+            system_ok = False
+
+    if not module_loaded("xt_set"):
+        if fix:
+            try:
+                modprobe('xt_set')
+            except sh.ErrorReturnCode:
+                print >> sys.stderr, "ERROR: Could not enable xt_set."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: Unable to detect the xt_set module. Load with " \
+                             "`modprobe xt_set`"
+            system_ok = False
+
+    # Enable IP forwarding since all compute hosts are vRouters.
+    # IPv4 forwarding should be enabled already by docker.
+    if "1" not in sysctl("net.ipv4.ip_forward"):
+        if fix:
+            if "1" not in sysctl("-w", "net.ipv4.ip_forward=1"):
+                print >> sys.stderr, "ERROR: Could not enable ipv4 forwarding."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: ipv4 forwarding is not enabled."
+            system_ok = False
+
+    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
+        if fix:
+            if "1" not in sysctl("-w", "net.ipv6.conf.all.forwarding=1"):
+                print >> sys.stderr, "ERROR: Could not enable ipv6 forwarding."
+                system_ok = False
+        else:
+            print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
+            system_ok = False
+
+    if quit_if_error and not system_ok:
+        sys.exit(1)
+
+    return system_ok
 
 
 def _find_or_pull_node_image(image_name, client):
@@ -500,7 +556,7 @@ def profile_show(detailed):
         for name in profiles:
             x.add_row([name])
 
-    print str(x) + "\n"
+    print x.get_string(sortby="Name")
 
 
 def profile_tag_show(name):
@@ -630,7 +686,7 @@ def node_show(detailed):
                 continue
             for container_type, workloads in container_types.iteritems():
                 x.add_row([host, container_type, len(workloads)])
-    print str(x) + "\n"
+    print x.get_string(sortby="Host")
 
 
 def save_diags(log_dir):
@@ -736,11 +792,12 @@ def ip_pool_show(version):
     :return: None
     """
     assert version in ("v4", "v6")
+    heading = "IP%s CIDR" % version
     pools = client.get_ip_pools(version)
-    x = PrettyTable(["IP%s CIDR" % version])
+    x = PrettyTable([heading])
     for pool in pools:
         x.add_row([pool])
-    print str(x) + "\n"
+    print x.get_string(sortby=heading)
 
 
 def bgppeer_add(ip, version):
@@ -803,7 +860,7 @@ def bgppeer_show(version):
         for peer in peers:
             x.add_row([peer])
         x.align = "l"
-        print str(x) + "\n"
+        print x.get_string(sortby=heading)
     else:
         print "No IP%s BGP Peers defined.\n" % version
 
@@ -1063,7 +1120,6 @@ def print_paragraph(msg):
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
-
     validate_arguments()
     ip_version = get_container_ipv_from_arguments()
 
@@ -1080,6 +1136,8 @@ if __name__ == '__main__':
                      log_dir=arguments["--log-dir"])
         elif arguments["status"]:
             status()
+        elif arguments["checksystem"]:
+            checksystem(arguments["--fix"], quit_if_error=True)
         elif arguments["reset"]:
             reset()
         elif arguments["profile"]:

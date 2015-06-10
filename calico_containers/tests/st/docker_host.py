@@ -5,6 +5,7 @@ from subprocess import check_output, CalledProcessError
 from calico_containers.tests.st import utils
 
 from utils import get_ip, retry_until_success
+from workload import Workload
 
 
 CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
@@ -23,6 +24,15 @@ class DockerHost(object):
         self._cleaned = False
 
         if dind:
+            # Since `calicoctl node` doesn't fix ipv6 forwarding and module
+            # loading, we must manually fix it
+            # try:
+            #     self.calicoctl("checksystem --fix 2>&1")
+            # except CalledProcessError as err:
+            #     print "%s \nReturned: %s\nRC: %d\n" % (err.cmd,
+            #                                            err.output,
+            #                                            err.returncode)
+
             docker.rm("-f", self.name, _ok_code=[0, 1])
             pwd = sh.pwd().stdout.rstrip()
             docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
@@ -30,10 +40,10 @@ class DockerHost(object):
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
 
-            ip6 = docker.inspect("--format", "{{ .NetworkSettings.GlobalIPv6Address }}",
-                                 self.name).stdout.rstrip()
-            # TODO: change this hardcoding when we set up IPv6 for hosts
-            self.ip6 = ip6 or "fd80:24e2:f998:abcd::1"
+            self.ip6 = docker.inspect("--format",
+                                      "{{ .NetworkSettings."
+                                      "GlobalIPv6Address }}",
+                                      self.name).stdout.rstrip()
 
             # Make sure docker is up
             docker_ps = partial(self.execute, "docker ps")
@@ -62,17 +72,24 @@ class DockerHost(object):
         return check_output(command, shell=True)
 
     def calicoctl(self, command, **kwargs):
+        """
+        Convenience function for abstracting away calling the calicoctl
+        command.
+        """
         if self.dind:
             calicoctl = "/code/dist/calicoctl %s"
         else:
             calicoctl = "dist/calicoctl %s"
         return self.execute(calicoctl % command, **kwargs)
 
-    def start_calico_node(self, ip=None, ip6=None):
-        ip = ip or self.ip
-        args = ['node', '--ip=%s' % ip]
-        if ip6:
-            args.append('--ip6=%s' % ip6)
+    def start_calico_node(self):
+        """
+        Start calico in a container inside a host by calling through to the
+        calicoctl node command.
+        """
+        args = ['node', '--ip=%s' % self.ip]
+        if self.ip6:
+            args.append('--ip6=%s' % self.ip6)
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 
@@ -139,3 +156,9 @@ class DockerHost(object):
         :return:
         """
         assert self._cleaned
+
+    def create_workload(self, name, ip=None, image="busybox", network=None):
+        """
+        Create a workload container inside this host container.
+        """
+        return Workload(self, name, ip=ip, image=image, network=network)

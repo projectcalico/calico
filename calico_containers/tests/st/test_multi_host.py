@@ -4,7 +4,6 @@ from functools import partial
 
 from test_base import TestBase
 from docker_host import DockerHost
-from utils import retry_until_success
 
 
 class MultiHostMainline(TestBase):
@@ -24,38 +23,38 @@ class MultiHostMainline(TestBase):
             ip4 = "192.168.1.4"
             ip5 = "192.168.1.5"
 
-            host1.execute("docker run -e CALICO_IP=%s "
-                          "--name workload1 -tid busybox" % ip1)
-            host1.execute("docker run -e CALICO_IP=%s "
-                          "--name workload2 -tid busybox" % ip2)
-            host1.execute("docker run -e CALICO_IP=%s "
-                          "--name workload3 -tid busybox" % ip3)
+            workload1 = host1.create_workload("workload1", ip1)
+            workload2 = host1.create_workload("workload2", ip2)
+            workload3 = host1.create_workload("workload3", ip3)
 
-            host2.execute("docker run -e CALICO_IP=%s "
-                          "--name workload4 -tid busybox" % ip4)
-            host2.execute("docker run -e CALICO_IP=%s "
-                          "--name workload5 -tid busybox" % ip5)
+            workload4 = host2.create_workload("workload4", ip4)
+            workload5 = host2.create_workload("workload5", ip5)
 
             host1.calicoctl("profile add PROF_1_3_5")
             host1.calicoctl("profile add PROF_2")
             host1.calicoctl("profile add PROF_4")
 
-            host1.calicoctl("profile PROF_1_3_5 member add workload1")
-            host1.calicoctl("profile PROF_2 member add workload2")
-            host1.calicoctl("profile PROF_1_3_5 member add workload3")
+            host1.calicoctl("profile PROF_1_3_5 member add %s" % workload1)
+            host1.calicoctl("profile PROF_2 member add %s" % workload2)
+            host1.calicoctl("profile PROF_1_3_5 member add %s" % workload3)
 
-            host2.calicoctl("profile PROF_4 member add workload4")
-            host2.calicoctl("profile PROF_1_3_5 member add workload5")
+            host2.calicoctl("profile PROF_4 member add %s" % workload4)
+            host2.calicoctl("profile PROF_1_3_5 member add %s" % workload5)
 
-            # Wait for the workload networking to converge.
-            ping = partial(host1.execute,
-                           "docker exec workload1 ping -c 4 %s" % ip3)
-            retry_until_success(ping, ex_class=CalledProcessError)
+            self.assert_connectivity(pass_list=[workload1,
+                                                workload3,
+                                                workload5],
+                                     fail_list=[workload2,
+                                                workload4])
 
-            with self.assertRaises(CalledProcessError):
-                host1.execute("docker exec workload1 ping -c 4 %s" % ip2)
+            self.assert_connectivity(pass_list=[workload2],
+                                     fail_list=[workload1,
+                                                workload3,
+                                                workload4,
+                                                workload5])
 
-            with self.assertRaises(CalledProcessError):
-                host1.execute("docker exec workload1 ping -c 4 %s" % ip4)
-
-            host1.execute("docker exec workload1 ping -c 4 %s" % ip5)
+            self.assert_connectivity(pass_list=[workload4],
+                                     fail_list=[workload1,
+                                                workload2,
+                                                workload3,
+                                                workload5])

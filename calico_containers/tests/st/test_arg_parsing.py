@@ -32,58 +32,42 @@ class TestArgParsing(TestBase):
                                  "but we expected %s" %
                                  (cmd, cm.exception.returncode, rc))
 
-            # Add some pools and BGP peers and check the show commands"
-            host.calicoctl("bgppeer rr add 1.2.3.4")
-            self.assertIn("1.2.3.4",
-                          host.calicoctl("bgppeer rr show").rstrip())
-            self.assertIn("1.2.3.4",
-                          host.calicoctl("bgppeer rr show --ipv4").rstrip())
-            self.assertNotIn("1.2.3.4",
-                             host.calicoctl("bgppeer rr show --ipv6").rstrip())
-            host.calicoctl("bgppeer rr remove 1.2.3.4")
-            self.assertNotIn("1.2.3.4",
-                             host.calicoctl("bgppeer rr show").rstrip())
+            # Add some pools and BGP peers and check the show commands
+            examples = [
+                ["1.2.3.4", 4],
+                ["aa:bb::ff", 6],
+            ]
+            for [peer, version] in examples:
+                host.calicoctl("bgppeer rr add %s" % peer)
+                self.assertIn(peer, host.calicoctl("bgppeer rr show"))
+                self.assertIn(peer,
+                              host.calicoctl("bgppeer rr show --ipv%s" %
+                                             version))
+                self.assertNotIn(peer,
+                                 host.calicoctl("bgppeer rr show --ipv%s" %
+                                                self.ip_not(version)))
+                host.calicoctl("bgppeer rr remove %s" % peer)
+                self.assertNotIn(peer, host.calicoctl("bgppeer rr show"))
 
-            host.calicoctl("bgppeer rr add aa:bb::ff")
-            self.assertIn("aa:bb::ff",
-                          host.calicoctl("bgppeer rr show").rstrip())
-            self.assertNotIn("aa:bb::ff",
-                             host.calicoctl("bgppeer rr show --ipv4").rstrip())
-            self.assertIn("aa:bb::ff",
-                          host.calicoctl("bgppeer rr show --ipv6").rstrip())
-            host.calicoctl("bgppeer rr remove aa:bb::ff")
-            self.assertNotIn("aa:bb::ff",
-                             host.calicoctl("bgppeer rr show").rstrip())
+            examples = [
+                ["1.2.3.4", "1.2.3.4/32", 4],
+                ["1.2.3.0/24", "1.2.3.0/24", 4],
+                ["aa:bb::ff", "aa:bb::ff/128", 6],
+            ]
+            for [ip, subnet, version] in examples:
+                host.calicoctl("pool add %s" % ip)
+                self.assertIn(subnet, host.calicoctl("pool show"))
+                self.assertIn(subnet,
+                              host.calicoctl("pool show --ipv%s" % version))
+                self.assertNotIn(subnet,
+                                 host.calicoctl("pool show --ipv%s" %
+                                                self.ip_not(version)))
+                host.calicoctl("pool remove %s" % subnet)
+                self.assertNotIn(subnet, host.calicoctl("pool show"))
 
-            host.calicoctl("pool add 1.2.3.4")
-            self.assertIn("1.2.3.4/32",
-                          host.calicoctl("pool show").rstrip())
-            self.assertIn("1.2.3.4/32",
-                          host.calicoctl("pool show --ipv4").rstrip())
-            self.assertNotIn("1.2.3.4/32",
-                             host.calicoctl("pool show --ipv6").rstrip())
-            host.calicoctl("pool remove 1.2.3.4")
-            self.assertNotIn("1.2.3.4/32",
-                             host.calicoctl("pool show").rstrip())
-
-            host.calicoctl("pool add 1.2.3.0/24")
-            self.assertIn("1.2.3.0/24",
-                          host.calicoctl("pool show").rstrip())
-            self.assertIn("1.2.3.0/24",
-                          host.calicoctl("pool show --ipv4").rstrip())
-            self.assertNotIn("1.2.3.0/24",
-                             host.calicoctl("pool show --ipv6").rstrip())
-            host.calicoctl("pool remove 1.2.3.0/24")
-            self.assertNotIn("1.2.3.0/24",
-                             host.calicoctl("pool show").rstrip())
-
-            host.calicoctl("pool add aa:bb::ff")
-            self.assertIn("aa:bb::ff/128",
-                          host.calicoctl("pool show").rstrip())
-            self.assertNotIn("aa:bb::ff/128",
-                             host.calicoctl("pool show --ipv4").rstrip())
-            self.assertIn("aa:bb::ff/128",
-                          host.calicoctl("pool show --ipv6").rstrip())
-            host.calicoctl("pool remove aa:bb::ff/128")
-            self.assertNotIn("aa:bb::ff/128",
-                             host.calicoctl("pool show").rstrip())
+    def ip_not(self, version):
+        self.assertIn(version, [4, 6])
+        if version == 4:
+            return 6
+        if version == 6:
+            return 4
