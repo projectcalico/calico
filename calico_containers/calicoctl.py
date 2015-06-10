@@ -26,7 +26,7 @@ Usage:
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl reset
-  calicoctl diags
+  calicoctl diags [--upload]
   calicoctl checksystem [--fix]
   calicoctl restart-docker-with-alternative-unix-socket
   calicoctl restart-docker-without-alternative-unix-socket
@@ -68,6 +68,7 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
+from adapter import diags
 
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
@@ -711,74 +712,15 @@ def node_show(detailed):
     print x.get_string(sortby="Host")
 
 
-def save_diags():
+def save_diags(upload):
     """
     Gather Calico diagnostics for bug reporting.
     :return: None
     """
     # This needs to be run as root.
     enforce_root()
-
-    script = """
-#!/bin/bash
-[ -z $BASH ] && echo "You must run this script in bash" && exit 1
-whoami | grep -q "root" || { echo "You must run this script as root" && exit 1; }
-echo "Collecting diags"
-
-ROUTE_FILE=route
-IPTABLES_PREFIX=iptables
-IP6TABLES_PREFIX=ip6tables
-CALICO_DIR=/var/log/calico
-date=`date +"%F_%H-%M-%S"`
-diags_dir=`mktemp -d`
-system=`hostname`
-echo "Using temp dir: $diags_dir"
-pushd $diags_dir >/dev/null
-
-echo DATE=$date > date
-echo $system > hostname
-
-echo "Dumping netstat output"
-netstat -an > $diags_dir/netstat
-
-echo "Dumping routes"
-for cmd in "route -n" "ip route" "ip -6 route"
-do
-  echo $cmd >> $ROUTE_FILE
-  $cmd >> $ROUTE_FILE
-  echo >> $ROUTE_FILE
-done
-netstat -an > netstat
-
-echo "Dumping iptables"
-iptables-save > $IPTABLES_PREFIX
-ipset list > ipset
-
-echo "Copying Calico logs"
-cp -a $CALICO_DIR .
-
-echo "Dumping datastore"
-curl -s -L http://127.0.0.1:4001/v2/keys/calico?recursive=true -o etcd_calico
-
-FILENAME=diags-`date +%Y%m%d_%H%M%S`.tar.gz
-
-tar -zcf $FILENAME *
-echo "Diags saved to $FILENAME in $diags_dir"
-
-echo "Uploading file. Available for 14 days from the URL printed when the upload completes"
-curl --upload-file $FILENAME https://transfer.sh/$FILENAME
-
-popd >/dev/null
-
-echo "Done"
-"""
-    bash = sh.Command._create('bash')
-    def process_output(line): sys.stdout.write(line)
-    bash(_in=script, _err=process_output, _out=process_output).wait()
-    # TODO: reimplement this in Python
-    # TODO: ipset might not be installed on the host. But we don't want to
-    # gather the diags in the container because it might not be running...
-
+    print("Collecting diags")
+    diags.save_diags(upload)
 
 def ip_pool_add(cidr_pool, version):
     """
@@ -1213,7 +1155,7 @@ if __name__ == '__main__':
             elif arguments["show"]:
                 profile_show(arguments["--detailed"])
         elif arguments["diags"]:
-            save_diags()
+            save_diags(arguments["--upload"])
         elif arguments["shownodes"]:
             node_show(arguments["--detailed"])
         elif arguments["pool"]:
