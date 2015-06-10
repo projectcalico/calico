@@ -11,7 +11,6 @@ class TestMainline(TestBase):
         Setup two endpoints on one host and check connectivity.
         """
         with DockerHost('host') as host:
-
             network = host.create_network(str(uuid.uuid4()))
             node1 = host.create_workload("node1", network=network)
             node2 = host.create_workload("node2", network=network)

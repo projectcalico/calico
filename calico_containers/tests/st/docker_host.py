@@ -1,7 +1,7 @@
 import sh
 from sh import docker
 from functools import partial
-from subprocess import check_output, CalledProcessError
+from subprocess import check_output, CalledProcessError, STDOUT
 from calico_containers.tests.st import utils
 
 from utils import get_ip, retry_until_success
@@ -72,7 +72,13 @@ class DockerHost(object):
             command = command.replace('\'', '\'"\'"\'')
             command = "docker exec -it %s bash -c '%s'" % (self.name,
                                                               command)
-        return check_output(command, shell=True)
+        try:
+            output = check_output(command, shell=True, stderr=STDOUT)
+        except CalledProcessError as e:
+            print "Command failed with:\n%s" % e.output
+            raise e
+        else:
+            return output
 
     def calicoctl(self, command, **kwargs):
         """
