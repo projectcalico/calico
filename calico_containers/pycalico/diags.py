@@ -83,7 +83,10 @@ def save_diags(log_dir, upload=False):
             print "Missing command: %s" % e.message
 
     print("Copying Calico logs")
-    copytree(log_dir, os.path.join(temp_diags_dir, "logs"))
+    try:
+        copytree(log_dir, os.path.join(temp_diags_dir, "logs"))
+    except OSError:
+        print "No Calico logs found at %s" % log_dir
 
     print("Dumping datastore")
     # TODO: May want to move this into datastore.py as a dump-calico function
