@@ -25,15 +25,6 @@ class DockerHost(object):
         self._cleaned = False
 
         if dind:
-            # Since `calicoctl node` doesn't fix ipv6 forwarding and module
-            # loading, we must manually fix it
-            # try:
-            #     self.calicoctl("checksystem --fix 2>&1")
-            # except CalledProcessError as err:
-            #     print "%s \nReturned: %s\nRC: %d\n" % (err.cmd,
-            #                                            err.output,
-            #                                            err.returncode)
-
             docker.rm("-f", self.name, _ok_code=[0, 1])
             pwd = sh.pwd().stdout.rstrip()
             docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
@@ -68,8 +59,7 @@ class DockerHost(object):
         command = "export %s; %s" % (etcd_auth, command)
 
         if self.dind:
-            # TODO - work out what was wrong with the bash -s approach and fix
-            command = command.replace('\'', '\'"\'"\'')
+            command = escape_bash_single_quotes(command)
             command = "docker exec -it %s bash -c '%s'" % (self.name,
                                                            command)
         try:
@@ -186,6 +176,25 @@ class DockerHost(object):
         :return: A DockerNetwork object.
         """
         return DockerNetwork(self, name, driver=driver)
+
+    def escape_bash_single_quotes(self, command):
+        """
+        Escape single quotes in bash string strings.
+
+        Replace ' (single-quote) in the command with an escaped version.
+        This needs to be done, since the command is passed to "docker
+        exec" to execute and needs to be single quoted.
+        Strictly speaking, it's impossible to escape single-quoted
+        bash script, but there is a workaround - end the single quoted
+         string, then concatenate a double quoted single quote,
+        and finally re-open the string with a single quote. Because
+        this is inside a single quoted python, string, the single
+        quotes also need escaping.
+
+        :param command: The string to escape.
+        :return: The escaped string
+        """
+        return command.replace('\'', '\'"\'"\'')
 
 
 class DockerHostExecError(CalledProcessError):
