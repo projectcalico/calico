@@ -966,7 +966,9 @@ def validate_arguments():
     if arguments["<CIDR>"]:
         try:
             IPNetwork(arguments["<CIDR>"])
-        except AddrFormatError:
+        except (AddrFormatError, ValueError):
+            # Some versions of Netaddr have a bug causing them to return a
+            # ValueError rather than an AddrFormatError, so catch both.
             cidr_ok = False
 
     if not profile_ok:
