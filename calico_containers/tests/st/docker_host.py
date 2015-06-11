@@ -62,7 +62,7 @@ class DockerHost(object):
         """
         Pass a command into a host container.
         """
-        etcd_auth = "ETCD_AUTHORITY=%s:2379 " % get_ip()
+        etcd_auth = "ETCD_AUTHORITY=%s:2379" % get_ip()
         # Export the environment, in case the command has multiple parts, e.g.
         # use of | or ;
         command = "export %s; %s" % (etcd_auth, command)
@@ -71,12 +71,13 @@ class DockerHost(object):
             # TODO - work out what was wrong with the bash -s approach and fix
             command = command.replace('\'', '\'"\'"\'')
             command = "docker exec -it %s bash -c '%s'" % (self.name,
-                                                              command)
+                                                           command)
         try:
             output = check_output(command, shell=True, stderr=STDOUT)
         except CalledProcessError as e:
-            print "Command failed with:\n%s" % e.output
-            raise e
+            # Wrap the original exception with one that gives a better error
+            # message (including command output).
+            raise DockerHostExecError(e)
         else:
             return output
 
@@ -185,3 +186,32 @@ class DockerHost(object):
         :return: A DockerNetwork object.
         """
         return DockerNetwork(self, name, driver=driver)
+
+
+class DockerHostExecError(CalledProcessError):
+    """
+    Wrapper for CalledProcessError with an Exception message that gives the
+    output captured from the failed command.
+    """
+
+    def __init__(self, called_process_error):
+        self.called_process_error = called_process_error
+
+    @property
+    def returncode(self):
+        return self.called_process_error.returncode
+
+    @property
+    def output(self):
+        return self.called_process_error.output
+
+    @property
+    def cmd(self):
+        return self.called_process_error.cmd
+
+    def __str__(self):
+        return "Command %s failed with RC %s and output:\n%s" % \
+               (self.called_process_error.cmd,
+                self.called_process_error.returncode,
+                self.called_process_error.output)
+
