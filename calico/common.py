@@ -46,8 +46,20 @@ FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lin
 # string used by the logger.
 SYSLOG_FORMAT_STRING = '{excname}[%(process)s]: %(module)s@%(lineno)d %(message)s'
 
-KERNEL_PROTOCOLS = set(["tcp", "udp", "icmp", "icmpv6", "sctp", "udplite",
-                        "sctp"])
+# White-list for the --protocol match criteria.  We allow the guaranteed
+# string shortcuts as well as int/string versions of the raw IDs.  We disallow
+# 0 because the kernel cannot match on it directly.
+KERNEL_PROTOCOLS = set(["tcp", "udp", "icmp", "icmpv6", "sctp", "udplite"])
+KERNEL_PROTOCOLS.update(xrange(1, 256))
+KERNEL_PROTOCOLS.update(intern(str(p)) for p in xrange(1, 256))
+
+# Protocols that support a port match in iptables.  We allow the name and
+# protocol number.
+KERNEL_PORT_PROTOCOLS = set(["tcp", 6,
+                             "udp", 17,
+                             "udplite", 136,
+                             "sctp", 132,
+                             "dccp", 33])
 
 # Valid keys for a rule JSON dict.
 KNOWN_RULE_KEYS = set([
@@ -410,23 +422,14 @@ def validate_rules(profile_id, rules):
             # invalid values.
             protocol = rule.get('protocol')
             if protocol is not None and protocol not in KERNEL_PROTOCOLS:
-                # Always convert to string so we're permissive of string or
-                # int.
-                protocol = str(protocol)
-                # If it's not a white-listed string, it should be numeric.
-                if not re.match(r'^\d+$', protocol):
-                    issues.append("Invalid protocol %s in rule %s" %
-                                  (protocol, rule))
-                else:
-                    proto_num = int(protocol)
-                    if not (0 < proto_num <= 255):
-                        issues.append("Invalid protocol %s in rule %s" %
-                                      (proto_num, rule))
-                rule['protocol'] = protocol
+                issues.append("Invalid protocol %s in rule %s" %
+                              (protocol, rule))
+            elif protocol is not None:
+                protocol = intern(str(protocol))
+                rule['protocol'] = str(protocol)
 
             ip_version = rule.get('ip_version')
-            if (ip_version is not None and
-                not ip_version in [ 4, 6 ]):
+            if ip_version is not None and ip_version not in (4, 6):
                 # Bad IP version prevents further validation
                 issues.append("Invalid ip_version in rule %s." % rule)
                 continue
@@ -460,9 +463,9 @@ def validate_rules(profile_id, rules):
                     continue
 
                 if ports is not None:
-                    if protocol not in ("tcp", "udp"):
-                        issues.append("%s is only valid with tcp or udp in "
-                                      "rule %s" % (key, rule))
+                    if protocol not in KERNEL_PORT_PROTOCOLS:
+                        issues.append("%s is not allowed for protocol %s in "
+                                      "rule %s" % (key, protocol, rule))
                     for port in ports:
                         error = validate_rule_port(port)
                         if error:
