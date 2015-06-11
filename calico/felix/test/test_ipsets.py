@@ -433,14 +433,13 @@ class TestIpset(BaseTestCase):
 
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_mainline(self, m_check_call):
-        self.ipset.replace_members(set(["10.0.0.1", "10.0.0.2"]))
+        self.ipset.replace_members(set(["10.0.0.1"]))
         m_check_call.assert_called_once_with(
             ["ipset", "restore"],
             input_str='create foo hash:ip family inet --exist\n'
                       'create foo-tmp hash:ip family inet --exist\n'
                       'flush foo-tmp\n'
                       'add foo-tmp 10.0.0.1\n'
-                      'add foo-tmp 10.0.0.2\n'
                       'swap foo foo-tmp\n'
                       'destroy foo-tmp\n'
                       'COMMIT\n'
