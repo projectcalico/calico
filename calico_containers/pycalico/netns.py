@@ -115,7 +115,7 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
                     proc_alias=PROC_ALIAS,
                     mac=None):
     """
-    Set up an endpoint (veth) in the network namespace idenfitied by the PID.
+    Set up an endpoint (veth) in the network namespace identified by the PID.
 
     :param ip: The IP address to assign to the endpoint (veth) as Netaddr
     IPAddress.
