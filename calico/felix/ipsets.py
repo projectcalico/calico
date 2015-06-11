@@ -631,6 +631,7 @@ class Ipset(object):
         self.set_name = ipset_name
         self.temp_set_name = temp_ipset_name
         self.type = ipset_type
+        assert ip_family in ("inet", "inet6")
         self.family = ip_family
 
     def ensure_exists(self):
