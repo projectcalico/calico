@@ -494,7 +494,7 @@ def validate_rule_port(port):
     :returns: None or an error string if invalid
     """
     if isinstance(port, int):
-        if port < 1 or port > 65535:
+        if port < 0 or port > 65535:
             return "integer out of range"
         return None
 
@@ -513,7 +513,7 @@ def validate_rule_port(port):
     except ValueError:
         return "range invalid"
 
-    if start >= end or start < 1 or end > 65535:
+    if start >= end or start < 0 or end > 65535:
         return "range invalid"
 
     return None

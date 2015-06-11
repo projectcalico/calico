@@ -8,6 +8,7 @@
   objects.
 - Allow different hosts to have different interface prefixes for combined
   OpenStack and Docker systems.
+- Add missing support for 0 as a TCP port.
 
 ## 0.23
 
