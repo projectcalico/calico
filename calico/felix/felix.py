@@ -41,7 +41,7 @@ from calico.felix.futils import IPV4, IPV6
 from calico.felix.devices import InterfaceWatcher
 from calico.felix.endpoint import EndpointManager
 from calico.felix.fetcd import EtcdWatcher
-from calico.felix.ipsets import IpsetManager
+from calico.felix.ipsets import IpsetManager, IpsetActor, HOSTS_IPSET_V4
 
 _log = logging.getLogger(__name__)
 
@@ -53,7 +53,9 @@ def _main_greenlet(config):
     """
     try:
         _log.info("Connecting to etcd to get our configuration.")
-        etcd_watcher = EtcdWatcher(config)
+        hosts_ipset_v4 = IpsetActor(HOSTS_IPSET_V4)
+
+        etcd_watcher = EtcdWatcher(config, hosts_ipset_v4)
         etcd_watcher.start()
         # Ask the EtcdWatcher to fill in the global config object before we
         # proceed.  We don't yet support config updates.
@@ -90,6 +92,7 @@ def _main_greenlet(config):
         iface_watcher = InterfaceWatcher(update_splitter)
 
         _log.info("Starting actors.")
+        hosts_ipset_v4.start()
         update_splitter.start()
 
         v4_filter_updater.start()
@@ -108,6 +111,7 @@ def _main_greenlet(config):
         iface_watcher.start()
 
         monitored_items = [
+            hosts_ipset_v4.greenlet,
             update_splitter.greenlet,
 
             v4_nat_updater.greenlet,

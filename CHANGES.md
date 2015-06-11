@@ -2,6 +2,8 @@
 
 ## 0.24-dev
 
+- Add support for routing over IP-in-IP interfaces in order to make it 
+  easier to evaluate Calico without reconfiguring underlying network.
 - Reduce felix occupancy by replacing endpoint dictionaries by "struct"
   objects.
 - Allow different hosts to have different interface prefixes for combined

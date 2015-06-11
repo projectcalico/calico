@@ -6,6 +6,7 @@ from etcd import EtcdResult
 from mock import Mock, call
 from calico.datamodel_v1 import EndpointId
 from calico.felix.fetcd import EtcdWatcher, ResyncRequired
+from calico.felix.ipsets import IpsetActor
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase
 
@@ -40,9 +41,10 @@ class TestExcdWatcher(BaseTestCase):
 
     def setUp(self):
         super(TestExcdWatcher, self).setUp()
-        m_config = Mock()
-        m_config.IFACE_PREFIX = "tap"
-        self.watcher = EtcdWatcher(m_config)
+        self.m_config = Mock()
+        self.m_config.IFACE_PREFIX = "tap"
+        self.m_hosts_ipset = Mock(spec=IpsetActor)
+        self.watcher = EtcdWatcher(self.m_config, self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
 
@@ -226,6 +228,71 @@ class TestExcdWatcher(BaseTestCase):
         self.m_splitter.on_endpoint_update.assert_called_once_with(
             EndpointId("h1", "o1", "w1", "e1"),
             None,
+            async=True,
+        )
+
+    def test_host_ip_set(self):
+        """
+        Test set for the IP of a host.
+        """
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="set", value="10.0.0.1")
+        self.m_hosts_ipset.replace_members.assert_called_once_with(
+            ["10.0.0.1"],
+            async=True,
+        )
+
+    def test_host_ip_ipip_disabled(self):
+        """
+        Test set for the IP of a host.
+        """
+        self.m_config.IP_IN_IP_ENABLED = False
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="set", value="10.0.0.1")
+        self.assertFalse(self.m_hosts_ipset.replace_members.called)
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="delete")
+        self.assertFalse(self.m_hosts_ipset.replace_members.called)
+
+    def test_host_ip_del(self):
+        """
+        Test set for the IP of a host.
+        """
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="set", value="10.0.0.1")
+        self.m_hosts_ipset.reset_mock()
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="delete")
+        self.m_hosts_ipset.replace_members.assert_called_once_with(
+            [],
+            async=True,
+        )
+
+    def test_host_ip_invalid(self):
+        """
+        Test set for the IP of a host.
+        """
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="set", value="10.0.0.1")
+        self.m_hosts_ipset.reset_mock()
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="set", value="gibberish")
+        self.m_hosts_ipset.replace_members.assert_called_once_with(
+            [],
+            async=True,
+        )
+
+    def test_host_del_clears_ip(self):
+        """
+        Test set for the IP of a host.
+        """
+        self.dispatch("/calico/v1/host/foo/bird_ip",
+                      action="set", value="10.0.0.1")
+        self.m_hosts_ipset.reset_mock()
+        self.dispatch("/calico/v1/host/foo",
+                      action="delete")
+        self.m_hosts_ipset.replace_members.assert_called_once_with(
+            [],
             async=True,
         )
 

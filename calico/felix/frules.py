@@ -19,11 +19,12 @@ felix.frules
 Felix rule management, including iptables and ipsets.
 """
 import logging
-from subprocess import CalledProcessError
 import itertools
+from calico.felix import devices
 from calico.felix import futils
 from calico.common import KNOWN_RULE_KEYS
 import re
+from calico.felix.ipsets import HOSTS_IPSET_V4
 
 _log = logging.getLogger(__name__)
 
@@ -43,6 +44,9 @@ CHAIN_FROM_LEAF = FELIX_PREFIX + "FROM-EP-PFX"
 CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
+
+# Name of the global, stateless IP-in-IP device name.
+IP_IN_IP_DEV_NAME = "tunl0"
 
 
 def profile_to_chain_name(inbound_or_outbound, profile_id):
@@ -75,6 +79,21 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # then this string is "tap+".
     iface_match = config.IFACE_PREFIX + "+"
 
+    # If enabled, create the IP-in-IP device
+    if config.IP_IN_IP_ENABLED:
+        _log.info("IP-in-IP enabled, ensuring device exists.")
+        if not devices.interface_exists(IP_IN_IP_DEV_NAME):
+            # Make sure the IP-in-IP device exists; since we use the global
+            # device, this command actually creates it as a side-effect of
+            # initialising the kernel module rather than explicitly creating
+            # it.
+            _log.info("Tunnel device didn't exist; creating.")
+            futils.check_call(["ip", "tunnel", "add", IP_IN_IP_DEV_NAME,
+                               "mode", "ipip"])
+        if not devices.interface_up(IP_IN_IP_DEV_NAME):
+            _log.info("Tunnel device wasn't up; enabling.")
+            futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
+
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
     nat_pr = []
     if config.METADATA_IP is not None:
@@ -94,25 +113,38 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # Now the filter table. This needs to have calico-filter-FORWARD and
     # calico-filter-INPUT chains, which we must create before adding any
     # rules that send to them.
-    for iptables_updater in [v4_filter_updater, v6_filter_updater]:
+    for iptables_updater, hosts_set in [(v4_filter_updater, HOSTS_IPSET_V4),
+                                        # FIXME support IP-in-IP for IPv6.
+                                        (v6_filter_updater, None)]:
+        input_chain = [
+            "--append %s --jump %s --in-interface %s" %
+            (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match),
+            "--append %s --jump ACCEPT --in-interface %s" %
+            (CHAIN_INPUT, iface_match),
+        ]
+        forward_chain = [
+            "--append %s --jump %s --in-interface %s" %
+            (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, iface_match),
+            "--append %s --jump %s --out-interface %s" %
+            (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, iface_match),
+            "--append %s --jump ACCEPT --in-interface %s" %
+            (CHAIN_FORWARD, iface_match),
+            "--append %s --jump ACCEPT --out-interface %s" %
+            (CHAIN_FORWARD, iface_match),
+        ]
+        if hosts_set and config.IP_IN_IP_ENABLED:
+            # Can't program a rule referencing an ipset before it exists.
+            hosts_set.ensure_exists()
+            input_chain.insert(
+                0,
+                "--append %s --protocol ipencap "
+                "--match set ! --match-set %s src --jump DROP" %
+                (CHAIN_INPUT, hosts_set.set_name)
+            )
         iptables_updater.rewrite_chains(
             {
-                CHAIN_FORWARD: [
-                    "--append %s --jump %s --in-interface %s" %
-                        (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, iface_match),
-                    "--append %s --jump %s --out-interface %s" %
-                        (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, iface_match),
-                    "--append %s --jump ACCEPT --in-interface %s" %
-                        (CHAIN_FORWARD, iface_match),
-                    "--append %s --jump ACCEPT --out-interface %s" %
-                        (CHAIN_FORWARD, iface_match),
-                ],
-                CHAIN_INPUT: [
-                    "--append %s --jump %s --in-interface %s" %
-                        (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match),
-                    "--append %s --jump ACCEPT --in-interface %s" %
-                        (CHAIN_INPUT, iface_match),
-                ]
+                CHAIN_FORWARD: forward_chain,
+                CHAIN_INPUT: input_chain
             },
             {
                 CHAIN_FORWARD: set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT]),

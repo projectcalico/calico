@@ -218,7 +218,7 @@ class ProfileRules(RefCountedActor):
             new_rules = new_profile.get(rules_key, [])
             tag_to_ip_set_name = {}
             for tag, ipset in self._ipset_refs.iteritems():
-                tag_to_ip_set_name[tag] = ipset.name
+                tag_to_ip_set_name[tag] = ipset.ipset_name
             updates[chain_name] = rules_to_chain_rewrite_lines(
                 chain_name,
                 new_rules,

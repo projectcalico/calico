@@ -24,8 +24,8 @@ import logging
 from mock import *
 from calico.datamodel_v1 import EndpointId
 from calico.felix.futils import IPV4, FailedSystemCall
-from calico.felix.ipsets import IpsetManager, ActiveIpset, EndpointData, \
-    EMPTY_ENDPOINT_DATA
+from calico.felix.ipsets import (EndpointData,  IpsetManager, TagIpset,
+                                 EMPTY_ENDPOINT_DATA, Ipset)
 from calico.felix.refcount import CREATED
 from calico.felix.test.base import BaseTestCase
 
@@ -78,7 +78,7 @@ class TestIpsetManager(BaseTestCase):
         self.mgr._create = self.m_create
 
     def m_create(self, tag_id):
-        ipset = Mock(spec=ActiveIpset)
+        ipset = Mock(spec=TagIpset)
 
         ipset._manager = None
         ipset._id = None
@@ -424,3 +424,44 @@ class TestEndpointData(BaseTestCase):
 
     def test_really_a_struct(self):
         self.assertFalse(hasattr(EP_DATA_1_1, "__dict__"))
+
+
+class TestIpset(BaseTestCase):
+    def setUp(self):
+        super(TestIpset, self).setUp()
+        self.ipset = Ipset("foo", "foo-tmp", "inet")
+
+    @patch("calico.felix.futils.check_call", autospec=True)
+    def test_mainline(self, m_check_call):
+        self.ipset.replace_members(set(["10.0.0.1", "10.0.0.2"]))
+        m_check_call.assert_called_once_with(
+            ["ipset", "restore"],
+            input_str='create foo hash:ip family inet --exist\n'
+                      'create foo-tmp hash:ip family inet --exist\n'
+                      'flush foo-tmp\n'
+                      'add foo-tmp 10.0.0.1\n'
+                      'add foo-tmp 10.0.0.2\n'
+                      'swap foo foo-tmp\n'
+                      'destroy foo-tmp\n'
+                      'COMMIT\n'
+        )
+
+    @patch("calico.felix.futils.check_call", autospec=True)
+    def test_ensure_exists(self, m_check_call):
+        self.ipset.ensure_exists()
+        m_check_call.assert_called_once_with(
+            ["ipset", "restore"],
+            input_str='create foo hash:ip family inet --exist\n'
+                      'COMMIT\n'
+        )
+
+    @patch("calico.felix.futils.call_silent", autospec=True)
+    def test_delete(self, m_call_silent):
+        self.ipset.delete()
+        self.assertEqual(
+            m_call_silent.mock_calls,
+            [
+                call(["ipset", "destroy", "foo"]),
+                call(["ipset", "destroy", "foo-tmp"]),
+            ]
+        )

@@ -68,6 +68,8 @@ ENDPOINT_KEY_RE = re.compile(
     r'(?P<workload_id>[^/]+)/'
     r'endpoint/(?P<endpoint_id>[^/]+)')
 
+HOST_IP_KEY_RE = re.compile(r'^' + HOST_DIR +
+                            r'/(?P<hostname>[^/]+)/bird_ip')
 
 def dir_for_host(hostname):
     return HOST_DIR+ "/%s" % hostname
