@@ -3,7 +3,8 @@ from sh import docker
 from subprocess import CalledProcessError
 from unittest import TestCase
 
-from utils import get_ip
+from utils import get_ip, retry_until_success
+from functools import partial
 
 
 class TestBase(TestCase):
@@ -56,7 +57,8 @@ class TestBase(TestCase):
 
         # TODO - talking to etcd fails until a request is made from outside
         # the dind to etcd. Not sure why yet...
-        requests.get("http://%s:2379/version" % self.ip)
+        get = partial(requests.get, "http://%s:2379/version" % self.ip)
+        retry_until_success(get)
 
     def stop_etcd(self):
         docker.rm("-f", "etcd", _ok_code=[0, 1])
