@@ -45,6 +45,9 @@ CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
+# Name of the global, stateless IP-in-IP device name.
+IP_IN_IP_DEV_NAME = "tunl0"
+
 
 def profile_to_chain_name(inbound_or_outbound, profile_id):
     """
@@ -78,15 +81,18 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
 
     # If enabled, create the IP-in-IP device
     if config.IP_IN_IP_ENABLED:
-        _log.info("IP-in-IP tunnel enabled ensuring tunnel device exists.")
-        tunnel_name = config.IP_IN_IP_TUNNEL_NAME
-        if not devices.interface_exists(tunnel_name):
+        _log.info("IP-in-IP enabled, ensuring device exists.")
+        if not devices.interface_exists(IP_IN_IP_DEV_NAME):
+            # Make sure the IP-in-IP device exists; since we use the global
+            # device, this command actually creates it as a side-effect of
+            # initialising the kernel module rather than explicitly creating
+            # it.
             _log.info("Tunnel device didn't exist; creating.")
-            futils.check_call(["ip", "tunnel", "add", tunnel_name,
+            futils.check_call(["ip", "tunnel", "add", IP_IN_IP_DEV_NAME,
                                "mode", "ipip"])
-        if not devices.interface_up(tunnel_name):
+        if not devices.interface_up(IP_IN_IP_DEV_NAME):
             _log.info("Tunnel device wasn't up; enabling.")
-            futils.check_call(["ifconfig", tunnel_name, "up"])
+            futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
 
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
     nat_pr = []
@@ -110,7 +116,6 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     for iptables_updater, hosts_set in [(v4_filter_updater, HOSTS_IPSET_V4),
                                         # FIXME support IP-in-IP for IPv6.
                                         (v6_filter_updater, None)]:
-        # Can't program a rule referencing an ipset before it exists.
         input_chain = [
             "--append %s --jump %s --in-interface %s" %
             (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match),
@@ -128,13 +133,14 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             (CHAIN_FORWARD, iface_match),
         ]
         if hosts_set and config.IP_IN_IP_ENABLED:
+            # Can't program a rule referencing an ipset before it exists.
             hosts_set.ensure_exists()
-            input_chain[:0] = [
-                # Block IP-in-IP except from white-listed hosts.
+            input_chain.insert(
+                0,
                 "--append %s --protocol ipencap "
                 "--match set ! --match-set %s src --jump DROP" %
-                (CHAIN_INPUT, hosts_set.set_name),
-            ]
+                (CHAIN_INPUT, hosts_set.set_name)
+            )
         iptables_updater.rewrite_chains(
             {
                 CHAIN_FORWARD: forward_chain,

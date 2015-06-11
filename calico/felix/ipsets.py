@@ -635,7 +635,7 @@ class Ipset(object):
 
     def ensure_exists(self):
         """
-        Creates the ipset iif it does not exist.
+        Creates the ipset iff it does not exist.
 
         Leaves the set and its contents untouched if it already exists.
         """
@@ -697,8 +697,9 @@ class Ipset(object):
         futils.call_silent(["ipset", "destroy", self.temp_set_name])
 
 
-# For tunnel support, a global ipset that contains the IP addresses of all
-# the calico hosts.
+# For IP-in-IP support, a global ipset that contains the IP addresses of all
+# the calico hosts.  Only populated when IP-in-IP is enabled and the data is
+# in etcd.
 HOSTS_IPSET_V4 = Ipset(FELIX_PFX + "calico-hosts-4",
                        FELIX_PFX + "calico-hosts-4-tmp",
                        "inet")

@@ -121,7 +121,15 @@ class ConfigParameter(object):
                     raise ConfigException("Field was not integer",
                                           self)
             elif self.value_is_bool:
-                self.value = (str(value).lower() in ("true", "1", "yes", "y"))
+                lower_val = str(value).lower()
+                log.debug("Parsing %r as a Boolean.", lower_val)
+                if lower_val in ("true", "1", "yes", "y", "t"):
+                    self.value = True
+                elif lower_val in ("false", "0", "no", "n", "f"):
+                    self.value = False
+                else:
+                    raise ConfigException("Field was not a valid Boolean",
+                                          self)
             else:
                 # Calling str in principle can throw an exception, but it's
                 # hard to see how in practice, so don't catch and wrap.
@@ -174,7 +182,7 @@ class Config(object):
         self.add_parameter("LogSeverityScreen",
                            "Log severity for logging to screen", "ERROR")
         self.add_parameter("IpInIpEnabled",
-                           "IP-in-IP tunnel support enabled", False,
+                           "IP-in-IP device support enabled", False,
                            value_is_bool=True)
 
         # Read the environment variables, then the configuration file.
@@ -221,9 +229,6 @@ class Config(object):
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
         self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
-        # Hard-coded.  For now, we require the global tunnel device, which is
-        # auto-created by the kernel.
-        self.IP_IN_IP_TUNNEL_NAME = "tunl0"
 
         self._validate_cfg(final=final)
 
