@@ -35,6 +35,7 @@ CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
 
 # Logger
 log = logging.getLogger(__name__)
+stat_log = logging.getLogger("calico.stats")
 
 # Flag to indicate "IP v4" or "IP v6"; format that can be printed in logs.
 IPV4 = "IPv4"
@@ -193,15 +194,15 @@ def dump_diags():
     Dump diagnostics to the log.
     """
     try:
-        log.info("=== DIAGNOSTICS ===")
+        stat_log.info("=== DIAGNOSTICS ===")
         for name, diags_function in _registered_diags:
-            log.info("--- %s ---", name)
-            diags_function(log)
-        log.info("=== END OF DIAGNOSTICS ===")
+            stat_log.info("--- %s ---", name)
+            diags_function(stat_log)
+        stat_log.info("=== END OF DIAGNOSTICS ===")
     except Exception:
         # We don't want to take down the process we're trying to diagnose...
         try:
-            log.exception("Failed to dump diagnostics")
+            stat_log.exception("Failed to dump diagnostics")
         except Exception:
             pass
 
