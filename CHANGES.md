@@ -2,6 +2,7 @@
 
 ## 0.24-dev
 
+- Add Felix statistics logging on USR1 signal.
 - Add support for routing over IP-in-IP interfaces in order to make it 
   easier to evaluate Calico without reconfiguring underlying network.
 - Reduce felix occupancy by replacing endpoint dictionaries by "struct"
