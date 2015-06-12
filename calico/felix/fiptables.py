@@ -34,8 +34,7 @@ from calico.felix.actor import (
     Actor, actor_message, ResultOrExc, SplitBatchAndRetry
 )
 from calico.felix.frules import FELIX_PREFIX
-from calico.felix.futils import FailedSystemCall
-
+from calico.felix.futils import FailedSystemCall, StatCounter
 
 _log = logging.getLogger(__name__)
 
@@ -140,6 +139,10 @@ class IptablesUpdater(Actor):
         self._completion_callbacks = None
         """List of callbacks to issue once the current batch completes."""
 
+        # Diagnostic counters.
+        self._stats = StatCounter("IPv%s %s iptables updater" %
+                                  (ip_version, table))
+
         # Avoid duplicating init logic.
         self._reset_batched_work()
         self._refresh_chains_in_dataplane(async=True)
@@ -147,12 +150,13 @@ class IptablesUpdater(Actor):
     def _reset_batched_work(self):
         """Reset the per-batch state in preparation for a new batch."""
         self._txn = _Transaction(self._explicitly_prog_chains,
-                                         self._required_chains,
-                                         self._requiring_chains)
+                                 self._required_chains,
+                                 self._requiring_chains)
         self._completion_callbacks = []
 
     @actor_message(needs_own_batch=True)
     def _refresh_chains_in_dataplane(self):
+        self._stats.increment("Refreshed chain list")
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",
                                                   self._table])
         self._chains_in_dataplane = _extract_our_chains(self._table,
@@ -188,6 +192,7 @@ class IptablesUpdater(Actor):
         # changes by table and chain.
         _log.info("Iptables update: %s", update_calls_by_chain)
         _log.info("Iptables deps: %s", dependent_chains)
+        self._stats.increment("Chain rewrites")
         for chain, updates in update_calls_by_chain.iteritems():
             # TODO: double-check whether this flush is needed.
             updates = ["--flush %s" % chain] + updates
@@ -212,6 +217,7 @@ class IptablesUpdater(Actor):
         :param rule_fragment: fragment to be inserted. For example,
            "INPUT --jump felix-INPUT"
         """
+        self._stats.increment("Rule inserts")
         try:
             # Do an atomic delete + insert of the rule.  If the rule already
             # exists then the rule will be moved to the start of the chain.
@@ -235,6 +241,7 @@ class IptablesUpdater(Actor):
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
         _log.info("Deleting chains %s", chain_names)
+        self._stats.increment("Chain deletes")
         for chain in chain_names:
             self._txn.store_delete(chain)
         if callback:
@@ -249,6 +256,7 @@ class IptablesUpdater(Actor):
         are no longer required.
         """
         _log.info("Cleaning up left-over iptables state.")
+        self._stats.increment("Cleanups performed")
 
         # Start with the current state.
         self._refresh_chains_in_dataplane()
@@ -285,6 +293,8 @@ class IptablesUpdater(Actor):
             if not chains_we_tried_to_delete.issuperset(orphans):
                 _log.info("Cleanup found these unreferenced chains to "
                           "delete: %s", orphans)
+                self._stats.increment("Orphans found during cleanup",
+                                      by=len(orphans))
                 chains_we_tried_to_delete.update(orphans)
                 self._delete_best_effort(orphans)
             else:
@@ -344,6 +354,8 @@ class IptablesUpdater(Actor):
                 # We only executed a single message, report the failure.
                 _log.error("Non-retryable %s failure. RC=%s",
                            self._restore_cmd, rc)
+                self._stats.increment("Messages failed due to iptables "
+                                      "error")
                 if self._completion_callbacks:
                     self._completion_callbacks[0](e)
                 final_result = ResultOrExc(None, e)
@@ -351,6 +363,7 @@ class IptablesUpdater(Actor):
             else:
                 _log.error("Non-retryable error from a combined batch, "
                            "splitting the batch to narrow down culprit.")
+                self._stats.increment("Split batch due to error")
                 raise SplitBatchAndRetry()
         else:
             # Modify succeeded, update our indexes for next time.
@@ -363,6 +376,7 @@ class IptablesUpdater(Actor):
                 c(None)
         finally:
             self._reset_batched_work()
+            self._stats.increment("Batches finished")
 
         end = time.time()
         _log.debug("Batch time: %.2f %s", end - start, len(batch))
@@ -402,6 +416,7 @@ class IptablesUpdater(Actor):
                     # be referenced.
                     _log.error("Failed to delete chain %s, giving up. Maybe "
                                "it is still referenced?", batch[0])
+                    self._stats.increment("Chain delete failures")
             else:
                 _log.debug("Deleted chains %s successfully, remaining "
                            "batches: %s", batch, len(chain_batches))
@@ -542,6 +557,8 @@ class IptablesUpdater(Actor):
                     if num_tries < MAX_IPT_RETRIES:
                         _log.info("%s failed with retryable error. Retry in "
                                   "%.2fs", self._iptables_cmd, backoff)
+                        self._stats.increment("iptables commit failure "
+                                              "(retryable)")
                         gevent.sleep(backoff)
                         if backoff > MAX_IPT_BACKOFF:
                             backoff = MAX_IPT_BACKOFF
@@ -556,6 +573,8 @@ class IptablesUpdater(Actor):
                             "Input was:\n%s",
                             self._restore_cmd, detail, e.stdout, e.stderr,
                             input_str)
+                        self._stats.increment("iptables commit failure "
+                                              "(out of retries)")
                 else:
                     _log.log(
                         fail_log_level,
@@ -565,8 +584,10 @@ class IptablesUpdater(Actor):
                         "Input was:\n%s",
                         self._restore_cmd, detail, e.stdout, e.stderr,
                         input_str)
+                    self._stats.increment("iptables non-retryable failure")
                 raise
             else:
+                self._stats.increment("iptables success")
                 success = True
 
 

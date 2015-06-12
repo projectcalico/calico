@@ -110,7 +110,8 @@ import weakref
 
 from gevent.event import AsyncResult
 from gevent.queue import Queue
-
+from calico.felix import futils
+from calico.felix.futils import StatCounter
 
 _log = logging.getLogger(__name__)
 
@@ -119,6 +120,9 @@ ResultOrExc = collections.namedtuple("ResultOrExc", ("result", "exception"))
 
 # Local storage to allow diagnostics.
 actor_storage = gevent.local.local()
+
+# Global diagnostic counters.
+_stats = StatCounter("Actor framework counters")
 
 
 class Actor(object):
@@ -160,6 +164,7 @@ class Actor(object):
         """
         Main greenlet loop, repeatedly runs _step().  Doesn't return normally.
         """
+        actor_storage.class_name = self.__class__.__name__
         actor_storage.name = self.name
         actor_storage.msg_uuid = None
 
@@ -180,7 +185,6 @@ class Actor(object):
         """
         # Block waiting for work.
         msg = self._event_queue.get()
-        actor_storage.msg_uuid = msg.uuid
 
         batch = [msg]
         batches = []
@@ -219,6 +223,8 @@ class Actor(object):
                            msg, msg.recipient, msg.caller,
                            self._event_queue.qsize())
                 self._current_msg = msg
+                actor_storage.msg_uuid = msg.uuid
+                actor_storage.msg_name = msg.name
                 try:
                     # Actually execute the per-message method and record its
                     # result.
@@ -226,13 +232,18 @@ class Actor(object):
                 except BaseException as e:
                     _log.exception("Exception processing %s", msg)
                     results.append(ResultOrExc(None, e))
+                    _stats.increment("Messages executed with exception")
                 else:
                     results.append(ResultOrExc(result, None))
+                    _stats.increment("Messages executed OK")
                 finally:
                     self._current_msg = None
+                    actor_storage.msg_uuid = None
+                    actor_storage.msg_name = None
             try:
                 # Give subclass a chance to post-process the batch.
                 _log.debug("Finishing message batch")
+                actor_storage.msg_name = "<finish batch>"
                 self._finish_msg_batch(batch, results)
             except SplitBatchAndRetry:
                 # The subclass couldn't process the batch as is (probably
@@ -242,11 +253,15 @@ class Actor(object):
                 _log.warn("Splitting batch to retry.")
                 self.__split_batch(batch, batches)
                 num_splits += 1  # For diags.
+                _stats.increment("Split batches")
                 continue
             except BaseException as e:
                 # Most-likely a bug.  Report failure to all callers.
                 _log.exception("_finish_msg_batch failed.")
                 results = [(None, e)] * len(results)
+                _stats.increment("_finish_msg_batch() exception")
+            finally:
+                actor_storage.msg_name = None
 
             # Batch complete and finalized, set all the results.
             assert len(batch) == len(results)
@@ -256,6 +271,9 @@ class Actor(object):
                         future.set_exception(exc)
                     else:
                         future.set(result)
+                    _stats.increment("Messages completed")
+
+            _stats.increment("Batches processed")
         if num_splits > 0:
             _log.warn("Split batches complete. Number of splits: %s",
                       num_splits)
@@ -376,6 +394,7 @@ class Message(object):
         self.name = method.func.__name__
         self.needs_own_batch = needs_own_batch
         self.recipient = recipient
+        _stats.increment("Messages created")
 
     def __str__(self):
         data = ("%s (%s)" % (self.uuid, self.name))
@@ -404,6 +423,7 @@ def actor_message(needs_own_batch=False):
     """
     def decorator(fn):
         method_name = fn.__name__
+
         @functools.wraps(fn)
         def queue_fn(self, *args, **kwargs):
             # Get call information for logging purposes.
@@ -411,25 +431,40 @@ def actor_message(needs_own_batch=False):
             calling_file = os.path.basename(calling_file)
             calling_path = "%s:%s:%s" % (calling_file, line_no, func)
             try:
+                caller_name = "%s.%s" % (actor_storage.class_name,
+                                         actor_storage.msg_name)
                 caller = "%s (processing %s)" % (actor_storage.name,
                                                  actor_storage.msg_uuid)
             except AttributeError:
+                caller_name = calling_path
                 caller = calling_path
 
             # Figure out our arguments.
             async_set = "async" in kwargs
             async = kwargs.pop("async", False)
             on_same_greenlet = (self.greenlet == gevent.getcurrent())
-
             if on_same_greenlet and not async:
                 # Bypass the queue if we're already on the same greenlet, or we
                 # would deadlock by waiting for ourselves.
                 return fn(self, *args, **kwargs)
+            else:
+                # Only log a stat if we're not simulating a normal method call.
+                # WARNING: only use stable values in the stat name.
+                # For example, Actor.name can be different for every actor,
+                # resulting in leak if we use that.
+                _stats.increment(
+                    "%s message %s --[%s]-> %s" %
+                    ("ASYNC" if async else "BLOCKING",
+                     caller_name,
+                     method_name,
+                     self.__class__.__name__)
+                )
 
             # async must be specified, unless on the same actor.
             assert async_set, "All cross-actor event calls must specify async arg."
             msg_id = uuid.uuid4().hex[:12]
             if not on_same_greenlet and not async:
+                _stats.increment("Blocking calls started")
                 _log.debug("BLOCKING CALL: [%s] %s -> %s", msg_id,
                            calling_path, method_name)
 
@@ -453,6 +488,7 @@ def actor_message(needs_own_batch=False):
                     blocking_result = e
                     raise
                 finally:
+                    _stats.increment("Blocking calls completed")
                     _log.debug("BLOCKING CALL COMPLETE: [%s] %s -> %s = %r",
                                msg_id, calling_path, method_name,
                                blocking_result)
@@ -473,6 +509,13 @@ def actor_message(needs_own_batch=False):
 # _on_ref_reaped().
 _tracked_refs_by_idx = {}
 _ref_idx = 0
+
+
+def dump_actor_diags(log):
+    log.info("Current ref index: %s", _ref_idx)
+    log.info("Number of tracked messages outstanding: %s",
+             len(_tracked_refs_by_idx))
+futils.register_diags("Actor framework", dump_actor_diags)
 
 
 class ExceptionTrackingWeakRef(weakref.ref):

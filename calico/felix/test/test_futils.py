@@ -126,3 +126,44 @@ class TestFutils(unittest.TestCase):
                                           "should have given output "
                                           "%r but got %r" %
                                           (inp, length, exp, output))
+
+class TestStats(unittest.TestCase):
+    def setUp(self):
+        self.sc = futils.StatCounter("foo")
+
+    def tearDown(self):
+        try:
+            futils._registered_diags.remove(("foo", self.sc._dump))
+        except ValueError:
+            pass
+
+    def test_stats_counter(self):
+        self.assertTrue(("foo", self.sc._dump) in futils._registered_diags)
+        self.sc.increment("bar")
+        self.sc.increment("baz")
+        self.assertEqual(self.sc.stats["bar"], 1)
+        self.sc.increment("bar")
+        self.assertEqual(self.sc.stats["bar"], 2)
+        m_log = mock.Mock(spec=logging.Logger)
+        self.sc._dump(m_log)
+        m_log.assert_has_calls([
+            mock.call.info("%s: %s", "bar", 2),
+            mock.call.info("%s: %s", "baz", 1),
+        ])
+
+    def test_dump_diags(self):
+        with mock.patch("calico.felix.futils.stat_log") as m_log:
+            self.sc.increment("bar")
+            futils.dump_diags()
+            m_log.assert_has_calls([
+                mock.call.info("=== DIAGNOSTICS ==="),
+                mock.call.info("--- %s ---", "foo"),
+                mock.call.info("%s: %s", "bar", 1),
+                mock.call.info("=== END OF DIAGNOSTICS ==="),
+            ], any_order=True)
+
+    def test_dump_diags_cover(self):
+        with mock.patch("calico.felix.futils.stat_log") as m_log:
+            m_log.info.side_effect = Exception()
+            m_log.exception.side_effect = Exception()
+            futils.dump_diags()
