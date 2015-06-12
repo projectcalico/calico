@@ -87,7 +87,7 @@ VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
 # Not that thorough: we don't care if it's a valid CIDR, only that it doesn't
 # have anything malicious in it.
 VALID_IPAM_POOL_ID_RE = re.compile(r'^[0-9\.:a-fA-F\-]{1,43}$')
-EXPECTED_IPAM_POOL_KEYS = set(["cidr", "ipip", "masquerade"])
+EXPECTED_IPAM_POOL_KEYS = set(["cidr", "masquerade"])
 
 tid_storage = gevent.local.local()
 tid_counter = itertools.count()
@@ -603,14 +603,6 @@ def validate_ipam_pool(pool_id, pool, ip_version):
             issues.append("Invalid CIDR: %r" % cidr)
         else:
             pool["cidr"] = canonicalise_cidr(cidr, ip_version)
-
-    if "ipip" in pool:
-        ipip_name = pool["ipip"]
-        if not isinstance("ipip", StringTypes):
-            issues.append("'ipip' field should be a string, not %r" %
-                          ipip_name)
-        elif not VALID_LINUX_IFACE_NAME_RE.match(ipip_name):
-            issues.append("Invalid interface name for 'ipip': %r" % ipip_name)
 
     if not isinstance(pool.get("masquerade", False), bool):
         issues.append("Invalid 'masquerade' field: %r" % pool["masquerade"])

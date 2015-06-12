@@ -172,7 +172,7 @@ class TestCommon(unittest.TestCase):
             _log.exception("Validation unexpectedly failed for %s",
                            original_endpoint)
             self.fail("Validation unexpectedly failed for %s: %r" %
-                      original_endpoint, e)
+                      (original_endpoint, e))
 
     def assert_tweak_invalidates_endpoint(self, **tweak):
         valid_endpoint = {
@@ -696,3 +696,23 @@ class TestCommon(unittest.TestCase):
 
         self.assertTrue(child_tid > tid)
         self.assertEqual(tid, new_tid)
+
+    def test_validate_ipam_pool(self):
+        self.assert_ipam_pool_valid({"cidr": "10/16", "foo": "bar"},
+                                    {"cidr": "10.0.0.0/16"}, 4)
+        self.assert_ipam_pool_valid({"cidr": "1234:0::/64"},
+                                    {"cidr": "1234::/64"}, 6)
+        self.assert_ipam_pool_invalid({"cidr": None}, 4)
+        self.assert_ipam_pool_invalid({"cidr": "10/16"}, 4, pool_id="nonsense")
+        self.assert_ipam_pool_invalid({}, 6)
+        self.assert_ipam_pool_invalid({"cidr": "10.0.0.0/16",
+                                       "masquerade": "foo"}, 4)
+
+    def assert_ipam_pool_valid(self, pool, expected, version,
+                               pool_id="1234-5"):
+        common.validate_ipam_pool(pool_id, pool, version)
+        self.assertEqual(pool, expected)
+
+    def assert_ipam_pool_invalid(self, pool, version, pool_id="1234-5"):
+        self.assertRaises(ValidationFailed,
+                          common.validate_ipam_pool, pool_id, pool, version)
