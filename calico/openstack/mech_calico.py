@@ -36,6 +36,9 @@ from neutron.plugins.ml2.drivers import mech_agent
 from neutron import context as ctx
 from neutron import manager
 
+# Monkeypatch import
+import neutron.plugins.ml2.rpc as rpc
+
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
 except ImportError:  # Kilo
@@ -65,6 +68,15 @@ STARTUP_DELAY_SECS = 30
 SecurityProfile = namedtuple(
     'SecurityProfile', ['id', 'inbound_rules', 'outbound_rules']
 )
+
+
+# This terrible global variable points to the running instance of the
+# Calico Mechanism Driver. This variable relies on the basic assertion that
+# any Neutron process, forked or not, should only ever have *one* Calico
+# Mechanism Driver in it. It's used by our monkeypatch of the
+# security_groups_rule_updated method below to locate the mechanism driver.
+# TODO: Let's not do this any more. Please?
+mech_driver = None
 
 
 def requires_state(f):
@@ -138,6 +150,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._periodic_resync_greenlet = None
         self._epoch = 0
 
+        # Tell the monkeypatch where we are.
+        global mech_driver
+        mech_driver = self
+
         # Make sure we initialise even if we don't see any API calls.
         eventlet.spawn_after(STARTUP_DELAY_SECS, self._init_state)
 
@@ -186,16 +202,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.db = manager.NeutronManager.get_plugin()
             LOG.info("db = %s" % self.db)
 
-            # Installer a notifier proxy in order to catch security group
-            # changes, if we haven't already.
-            if self.db.notifier.__class__ != CalicoNotifierProxy:
-                self.db.notifier = CalicoNotifierProxy(self.db.notifier, self)
-            else:
-                # In case the notifier proxy already exists but the current
-                # CalicoMechanismDriver instance has changed, ensure that the
-                # notifier proxy will delegate to the current
-                # CalicoMechanismDriver instance.
-                self.db.notifier.calico_driver = self
+            # Update the reference to ourselves.
+            global mech_driver
+            mech_driver = self
 
     def check_segment_for_agent(self, segment, agent):
         LOG.debug("Checking segment %s with agent %s" % (segment, agent))
@@ -203,14 +212,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return True
         else:
             return False
-
-    def initialize(self):
-        """
-        Called shortly after __init__, when the ML2 Plugin is ready. Must not
-        create anything that involves file handles, but can safely be used to
-        set up the DB.
-        """
-        self._get_db()
 
     def get_allowed_network_types(self, agent=None):
         return ('local', 'flat')
@@ -752,22 +753,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         return [binding['security_group_id'] for binding in bindings]
 
 
-class CalicoNotifierProxy(object):
-    """Proxy pattern class used to intercept security-related notifications
-    from the ML2 plugin.
-    """
+# This section monkeypatches the AgentNotifierApi.security_groups_rule_updated
+# method to ensure that the Calico driver gets told about security group
+# updates at all times. This is a deeply unpleasant hack. Please, do as I say,
+# not as I do.
+#
+# For more info, please see issues #635 and #641.
+original_sgr_updated = rpc.AgentNotifierApi.security_groups_rule_updated
 
-    def __init__(self, ml2_notifier, calico_driver):
-        self.ml2_notifier = ml2_notifier
-        self.calico_driver = calico_driver
 
-    def __getattr__(self, name):
-        return getattr(self.ml2_notifier, name)
+def security_groups_rule_updated(self, context, sgids):
+    LOG.info("security_groups_rule_updated: %s %s" % (context, sgids))
+    mech_driver.send_sg_updates(sgids, context)
+    original_sgr_updated(self, context, sgids)
 
-    def security_groups_rule_updated(self, context, sgids):
-        LOG.info("security_groups_rule_updated: %s %s" % (context, sgids))
-        self.calico_driver.send_sg_updates(sgids, context)
-        self.ml2_notifier.security_groups_rule_updated(context, sgids)
+
+rpc.AgentNotifierApi.security_groups_rule_updated = (
+    security_groups_rule_updated
+)
 
 
 def profile_from_neutron_rules(profile_id, rules):

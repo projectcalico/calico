@@ -35,6 +35,7 @@ sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
 sys.modules['neutron.plugins'] = m_neutron.plugins
 sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
+sys.modules['neutron.plugins.ml2.rpc'] = m_neutron.plugins.ml2.rpc
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
 sys.modules['time'] = m_time = mock.Mock()
@@ -404,13 +405,8 @@ class Lib(object):
 
         if type == 'rule':
             # Call security_groups_rule_updated with the new or changed ID.
-            self.db.notifier.security_groups_rule_updated(
-                mock.MagicMock(), [id]
-            )
-        else:
-            # Call security_groups_member_updated with the new or changed ID.
-            self.db.notifier.security_groups_member_updated(
-                mock.MagicMock(), [id]
+            mech_calico.security_groups_rule_updated(
+                mock.MagicMock(), mock.MagicMock(), [id]
             )
 
     def get_port_security_group_bindings(self, context, filters):
