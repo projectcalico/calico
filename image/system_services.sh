@@ -1,4 +1,6 @@
 #!/bin/bash
+# Taken in part from https://github.com/phusion/baseimage-docker/blob/6e55e3d515a1c25767c82fb87495d969f3b04a1e/image/system_services.sh
+
 set -e
 source /build/buildconfig
 set -x

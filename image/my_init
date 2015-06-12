@@ -1,4 +1,5 @@
 #!/usr/bin/python3 -u
+# Copied from https://github.com/phusion/baseimage-docker/blob/19c2df66b392aee5b013d81705dd9fe70d8e2ad9/image/bin/my_init
 import os, os.path, sys, stat, signal, errno, argparse, time, json, re
 
 KILL_PROCESS_TIMEOUT = 5

@@ -6,7 +6,11 @@ ENV HOME /root
 
 ADD calico_containers/pycalico/requirements.txt /pycalico/
 
-# Incremental approach used for dev.
+# Uncomment these lines and comment the section underneath to allow faster
+# rebuilds when making changes to the scripts.
+# The early scripts take a long time to run but change infrequently so
+# putting them on a their own lines allow developers to take advantage of
+# Docker's layer caching. The downside is much larger images.
 #ADD /image/buildconfig /build/buildconfig
 #ADD /image/my_init /build/my_init
 #ADD /image/base.sh /build/base.sh
@@ -18,7 +22,7 @@ ADD calico_containers/pycalico/requirements.txt /pycalico/
 #ADD /image/cleanup.sh /build/cleanup.sh
 #RUN	/build/cleanup.sh
 
-# All in one approach used for prod.
+# Comment these lines out if using the developer-focused alternative instead.
 ADD /image /build
 RUN /build/base.sh && \
     /build/system_services.sh && \
