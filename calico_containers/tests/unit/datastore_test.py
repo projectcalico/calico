@@ -467,9 +467,11 @@ class TestDatastoreClient(unittest.TestCase):
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
-        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip)
+        bgp_as = 65531
+        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip, bgp_as)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
+                           call(TEST_HOST_PATH + "/bgp_as", bgp_as),
                            call(TEST_HOST_PATH + "/config/marker",
                                 "created")]
         self.etcd_client.write.assert_has_calls(expected_writes,
@@ -492,9 +494,11 @@ class TestDatastoreClient(unittest.TestCase):
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
-        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip)
+        bgp_as = None
+        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip, bgp_as)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
+                           call(TEST_HOST_PATH + "/bgp_as", bgp_as),
                            call(TEST_HOST_PATH + "/config/marker",
                                 "created"),
                            call(TEST_HOST_PATH + "/workload",

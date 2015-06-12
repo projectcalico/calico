@@ -37,11 +37,12 @@ protocol direct {
 }
 
 {{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
-{{else}}# Template for all BGP clients
+{{else}}{{$node_as_key := printf "/host/%s/bgp_as" (getenv "HOSTNAME")}}
+# Template for all BGP clients
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
-  local as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+  local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
@@ -53,6 +54,43 @@ template bgp bgp_template {
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
 }
+
+{{/* ------------- Node-to-node mesh ------------- */}}
+{{$mesh := true}}{{if exists "/config/bgp_node_mesh"}}{{$mesh := (json (getv "/config/bgp_node_mesh")).enabled}}{{end}}
+{{if $mesh}}# Peering with all neighbours (mesh).
+{{range gets "/host/*}}{{$onode_as_key := printf "%s/bgp_as" .Value}}{{$onode_ip_key := printf "%s/bird6_ip" .Value}}
+{{if exists $onode_ip_key}}{{$onode_ip = getv $onode_ip_key}}{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
+# For peer {{$onode_ip_key}}
+{{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
+{{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+}{{end}}{{end}}{{else}}# Node-to-node mesh disabled{{end}}
+
+{{/* ------------- Global peers ------------- */}}
+{{if ls "/config/bgp_peer_v6"}}
+# Peering with globally configured neighbors.
+{{range gets "/config/bgp_peer_v6/*"}}{{$data := json .Value}}{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+# For peer {{.Key}}
+protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$data.ip}} as {{$data.as_num}};
+}
+{{end}}
+{{else}}# No global peers configured.{{end}}
+
+{{/* ------------- Node-specific peers ------------- */}}
+{{$node_peers_key := printf "/host/%s/bgp_peer_v6" (getenv "HOSTNAME")}}
+{{if ls $node_peers_key}}
+# Peering with node-specific neighbors.
+{{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+# For peer {{.Key}}
+protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$data.ip}} as {{$data.as_num}};
+}
+{{end}}
+{{else}}# No node-specific peers configured.{{end}}
+
+
+
 
 {{if ls "/config/bgp_peer_rr_v6"}}
 # Peering with configured neighbors.

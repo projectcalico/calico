@@ -43,7 +43,10 @@ TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
 IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool"
 IP_POOL_KEY = IP_POOL_PATH + "/%(pool)s"
-BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_%(version)s/"
+BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/"
+BGP_NODE_DEF_AS = CONFIG_PATH + "bgp_as"
+BGP_NODE_MESH_PATH = CONFIG_PATH + "bgp_node_mesh"
+HOST_BGP_PEER_PATH = HOST_PATH + "/bgp_peer_%(version)s/"
 
 # Paths used in endpoint enumeration depending on available parameters.
 ALL_ENDP_PATH = HOSTS_PATH
@@ -67,6 +70,9 @@ cali123456789ab.
 VETH_NAME = "eth1"
 """The name to give to the veth in the target container's namespace. Default
 to eth1 because eth0 could be in use"""
+
+# The default node AS number
+DEFAULT_AS_NUM = 64511
 
 
 def handle_errors(fn):
@@ -387,7 +393,7 @@ class DatastoreClient(object):
         self.etcd_client.write(CALICO_V_PATH + "/Ready", "true")
 
     @handle_errors
-    def create_host(self, hostname, bird_ip, bird6_ip):
+    def create_host(self, hostname, bird_ip, bird6_ip, as_num):
         """
         Create a new Calico host.
 
@@ -400,6 +406,7 @@ class DatastoreClient(object):
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
+        self.etcd_client.write(host_path + "bgp_as", as_num)
         self.etcd_client.write(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
@@ -532,36 +539,34 @@ class DatastoreClient(object):
         Get the configured BGP Peers
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :return: List of netaddr.IPAddress IP addresses.
+        :return: List of dictionaries:
+                    [
+                      {
+                        "ip": <peer ip address>,
+                        "as_num": <peer as num>
+                      },
+                      ...
+                    ]
         """
         assert version in ("v4", "v6")
         bgp_peer_path = BGP_PEER_PATH % {"version": version}
-        return map(IPAddress, self._get_path_with_keys(bgp_peer_path).keys())
-
-    def _get_path_with_keys(self, path):
-        """
-        Retrieve all the keys in a path and create a reverse dict
-        values -> keys
-
-        :param path: The path to get the keys from.
-        :return: dict of {<values>: <etcd key>}
-        """
 
         try:
-            nodes = self.etcd_client.read(path).children
+            nodes = self.etcd_client.read(bgp_peer_path).children
         except EtcdKeyNotFound:
             # Path doesn't exist.
-            return {}
-        else:
-            values = {}
-            for child in nodes:
-                value = child.value
-                if value:
-                    values[value] = child.key
-            return values
+            return []
+
+        peers = []
+        for node in nodes:
+            ip = node.key.split("/")[-1]
+            data = json.loads(node.value)
+            data["ip"] = ip
+            peers.append(data)
+        return data
 
     @handle_errors
-    def add_bgp_peer(self, version, ip):
+    def add_bgp_peer(self, version, ip, as_num):
         """
         Add a BGP Peer.
 
@@ -573,13 +578,9 @@ class DatastoreClient(object):
         """
         assert version in ("v4", "v6")
         assert isinstance(ip, IPAddress)
-        bgp_peer_path = BGP_PEER_PATH % {"version": version}
-
-        # Check if the peer exists.
-        if ip in self.get_bgp_peers(version):
-            return
-
-        self.etcd_client.write(bgp_peer_path, str(ip), append=True)
+        bgp_peer_path = BGP_PEER_PATH % {"version": version} + str(ip)
+        data = {"as_num": as_num, "ip": str(ip)}
+        self.etcd_client.write(bgp_peer_path, json.dumps(data))
 
     @handle_errors
     def remove_bgp_peer(self, version, ip):
@@ -592,13 +593,82 @@ class DatastoreClient(object):
         """
         assert version in ("v4", "v6")
         assert isinstance(ip, IPAddress)
-        bgp_peer_path = BGP_PEER_PATH % {"version": version}
+        bgp_peer_path = BGP_PEER_PATH % {"version": version} + str(ip)
 
-        peers = self._get_path_with_keys(bgp_peer_path)
         try:
-            key = peers[str(ip)]
-            self.etcd_client.delete(key)
-        except (KeyError, EtcdKeyNotFound):
+            self.etcd_client.delete(bgp_peer_path)
+        except EtcdKeyNotFound:
+            # Re-raise with a better error message.
+            raise KeyError("%s is not a configured peer." % ip)
+
+    @handle_errors
+    def get_node_bgp_peers(self, hostname, version):
+        """
+        Get the configured BGP Peers
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :return: List of dictionaries:
+                    [
+                      {
+                        "ip": <peer ip address>,
+                        "as_num": <peer as num>
+                      },
+                      ...
+                    ]
+        """
+        assert version in ("v4", "v6")
+        bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+                                              "version": version}
+
+        try:
+            nodes = self.etcd_client.read(bgp_peer_path).children
+        except EtcdKeyNotFound:
+            # Path doesn't exist.
+            return []
+
+        peers = []
+        for node in nodes:
+            ip = node.key.split("/")[-1]
+            data = json.loads(node.value)
+            data["ip"] = ip
+            peers.append(data)
+        return data
+
+    @handle_errors
+    def add_node_bgp_peer(self, hostname, version, ip, as_num):
+        """
+        Add a BGP Peer.
+
+        If the peer already exists then do nothing.
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param ip: The IP address to add. (an IPAddress)
+        :return: Nothing
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(ip, IPAddress)
+        bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+                                              "version": version} + str(ip)
+        data = {"as_num": as_num, "ip": str(ip)}
+        self.etcd_client.write(bgp_peer_path, json.dumps(data))
+
+    @handle_errors
+    def remove_node_bgp_peer(self, hostname, version, ip):
+        """
+        Delete a BGP Peer
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param ip: The IP address to delete. (an IPAddress)
+        :return: Nothing
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(ip, IPAddress)
+        bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+                                              "version": version} + str(ip)
+
+        try:
+            self.etcd_client.delete(bgp_peer_path)
+        except EtcdKeyNotFound:
             # Re-raise with a better error message.
             raise KeyError("%s is not a configured peer." % ip)
 
@@ -1089,6 +1159,80 @@ class DatastoreClient(object):
         except EtcdKeyNotFound:
             raise KeyError("%s is not a configured container on host %s" %
                            (container_id, hostname))
+
+    @handle_errors
+    def set_bgp_node_mesh(self, enable):
+        """
+        Set whether the BGP node mesh is enabled or not.
+
+        :param enable: Whether the mesh is enabled or not.
+        :return: None.
+        """
+        node_mesh = {"enabled": enable}
+        self.etcd_client.write(BGP_NODE_MESH_PATH, json.dumps(node_mesh))
+
+    @handle_errors
+    def get_bgp_node_mesh(self):
+        """
+        Determine whether the BGP node mesh is enabled or not.
+
+        :param enable: Whether the mesh is enabled or not.  A value of None
+        leaves the configuration unchanged.
+        :return: Whether the BGP node mesh is enabled.
+        """
+        try:
+            node_mesh = json.loads(
+                               self.etcd_client.read(BGP_NODE_MESH_PATH).value)
+        except EtcdKeyNotFound:
+            enabled = True
+        else:
+            enabled = node_mesh["enabled"]
+        return enabled
+
+    @handle_errors
+    def set_default_node_as(self, as_num):
+        """
+        Return the default node BGP AS Number
+
+        :return: The default node BGP AS Number.
+        """
+        self.etcd_client.write(BGP_NODE_DEF_AS, as_num)
+
+    @handle_errors
+    def get_default_node_as(self):
+        """
+        Return the default node BGP AS Number
+
+        :return: The default node BGP AS Number.
+        """
+        try:
+            as_num = self.etcd_client.read(BGP_NODE_DEF_AS).value
+        except EtcdKeyNotFound:
+            as_num = DEFAULT_AS_NUM
+
+        return as_num
+
+    def _get_path_with_keys(self, path):
+        """
+        Retrieve all the keys in a path and create a reverse dict
+        values -> keys
+
+        :param path: The path to get the keys from.
+        :return: dict of {<values>: <etcd key>}
+        """
+
+        try:
+            nodes = self.etcd_client.read(path).children
+        except EtcdKeyNotFound:
+            # Path doesn't exist.
+            return {}
+        else:
+            values = {}
+            for child in nodes:
+                value = child.value
+                if value:
+                    values[value] = child.key
+            return values
 
 
 class NoEndpointForContainer(Exception):
