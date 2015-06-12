@@ -482,7 +482,8 @@ class TestCommon(unittest.TestCase):
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
-                                     "Invalid protocol in rule"):
+                                     "Invalid protocol bloop in rule "
+                                     "{'protocol': 'bloop'}"):
             common.validate_rules(profile_id, rules)
 
         rule = {'ip_version': 5}
@@ -513,6 +514,26 @@ class TestCommon(unittest.TestCase):
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         common.validate_rules(profile_id, rules)
+
+        rule = {'src_tag': "abc",
+                'protocol': "123"}
+        rules = {'inbound_rules': [rule],
+                 'outbound_rules': []}
+        common.validate_rules(profile_id, rules)
+
+        rule = {'protocol': "256"}
+        rules = {'inbound_rules': [rule],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid protocol 256 in rule"):
+            common.validate_rules(profile_id, rules)
+
+        rule = {'protocol': "0"}
+        rules = {'inbound_rules': [rule],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid protocol 0 in rule"):
+            common.validate_rules(profile_id, rules)
 
         rule = {'src_tag': "a!b",
                 'protocol': "icmp"}

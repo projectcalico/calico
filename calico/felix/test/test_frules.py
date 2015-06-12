@@ -129,3 +129,8 @@ class TestRules(BaseTestCase):
     def test_bad_icmp_type(self):
         with self.assertRaises(UnsupportedICMPType):
             _rule_to_iptables_fragment("foo", {"icmp_type": 255}, 4, {})
+
+    def test_bad_protocol_with_ports(self):
+        with self.assertRaises(AssertionError):
+            _rule_to_iptables_fragment("foo", {"protocol": "10",
+                                               "src_ports": [1]}, 4, {})
