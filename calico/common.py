@@ -87,6 +87,7 @@ VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
 # Not that thorough: we don't care if it's a valid CIDR, only that it doesn't
 # have anything malicious in it.
 VALID_IPAM_POOL_ID_RE = re.compile(r'^[0-9\.:a-fA-F\-]{1,43}$')
+EXPECTED_IPAM_POOL_KEYS = set(["cidr", "ipip", "masquerade"])
 
 tid_storage = gevent.local.local()
 tid_counter = itertools.count()
@@ -576,18 +577,25 @@ def validate_tags(profile_id, tags):
         raise ValidationFailed(" ".join(issues))
 
 def validate_ipam_pool(pool_id, pool, ip_version):
+    """
+    Validates and canonicalises an IPAM pool dict.  Removes any fields that
+    it doesn't know about.
+
+    Modifies the dict in-place.
+    """
     # Remove any keys that we're not expecting.  Stops unvalidated data from
     # slipping through.  We ignore other keys since this structure is used
     # by calicoctl for its own purposes too.
     keys_to_remove = set()
     for key in pool:
-        if key not in ("cidr", "ipip", "masquerade"):
+        if key not in EXPECTED_IPAM_POOL_KEYS:
             keys_to_remove.add(key)
     for key in keys_to_remove:
         pool.pop(key)
 
     issues = []
     if "cidr" not in pool:
+        # CIDR is mandatory.
         issues.append("'cidr' field is missing")
     else:
         cidr = pool["cidr"]

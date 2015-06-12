@@ -11,6 +11,11 @@ _log = logging.getLogger(__name__)
 ALL_POOLS_SET_NAME = FELIX_PFX + "all-ipam-pools"
 MASQ_POOLS_SET_NAME = FELIX_PFX + "masq-ipam-pools"
 
+MASQ_RULE_FRAGMENT = ("POSTROUTING "
+                      "--match set --match-set %s src "
+                      "--match set ! --match-set %s dst "
+                      "--jump MASQUERADE" % (MASQ_POOLS_SET_NAME,
+                                             ALL_POOLS_SET_NAME))
 
 class MasqueradeManager(Actor):
     def __init__(self, ip_type, iptables_mgr):
@@ -30,26 +35,6 @@ class MasqueradeManager(Actor):
                                        ip_family,
                                        "hash:net")
         self._dirty = False
-        self._install_rules(async=True)
-
-    @actor_message()
-    def _install_rules(self):
-        # Can't program a rule before we create a ipset but we won't know what
-        # to put in the ipset until we hear about it.
-        self._all_pools_ipset.ensure_exists()
-        self._masq_pools_ipset.ensure_exists()
-        # Enable masquerading for traffic coming from pools that have it
-        # enabled only when the traffic is heading to an IP that isn't in any
-        # Calico-owned pool.  (We assume that NAT is not required for
-        # Calico-owned IPs.)
-        self._iptables_mgr.ensure_rule_inserted(
-            "POSTROUTING "
-            "--match set --match-set %s src "
-            "--match set ! --match-set %s dst "
-            "--jump MASQUERADE" % (MASQ_POOLS_SET_NAME,
-                                   ALL_POOLS_SET_NAME),
-            async=True
-        )
 
     @actor_message()
     def apply_snapshot(self, pools_by_id):
@@ -73,14 +58,40 @@ class MasqueradeManager(Actor):
     def _finish_msg_batch(self, batch, results):
         _log.debug("Finishing batch of IPAM pool changes")
         if self._dirty:
-            _log.info("Marked as dirty, refreshing ipsets")
+            _log.info("Marked as dirty, looking for masq-enabled pools")
             masq_enabled_cidrs = set()
             all_cidrs = set()
             for pool in self.pools_by_id.itervalues():
                 all_cidrs.add(pool["cidr"])
                 if pool.get("masquerade", False):
                     masq_enabled_cidrs.add(pool["cidr"])
-            self._all_pools_ipset.replace_members(all_cidrs)
-            self._masq_pools_ipset.replace_members(masq_enabled_cidrs)
+            if masq_enabled_cidrs:
+                _log.info("There are masquerade-enabled pools present. "
+                          "Updating.")
+                self._all_pools_ipset.replace_members(all_cidrs)
+                self._masq_pools_ipset.replace_members(masq_enabled_cidrs)
+                # Enable masquerading for traffic coming from pools that
+                # have it enabled only when the traffic is heading to an IP
+                # that isn't in any Calico-owned pool.  (We assume that NAT
+                # is not required for Calico-owned IPs.)
+                self._iptables_mgr.ensure_rule_inserted(MASQ_RULE_FRAGMENT,
+                                                        async=True)
+            else:
+                _log.info("No masquerade-enabled pools present. "
+                          "Removing rules and ipsets.")
+                # We can only have programmed the rule if the ipsets are
+                # present.  If they're not present, iptables rejects the
+                # delete with an error that IptablesUpdater doesn't expect.
+                if (self._all_pools_ipset.exists() and
+                        self._masq_pools_ipset.exists()):
+                    # Have to make a blocking call so that we don't try to
+                    # remove the ipsets before we've cleaned up the rule that
+                    # references them.
+                    self._iptables_mgr.ensure_rule_removed(MASQ_RULE_FRAGMENT,
+                                                           async=False)
+                # Safe to call even if the ipsets don't exist:
+                self._all_pools_ipset.delete()
+                self._masq_pools_ipset.delete()
             self._dirty = False
             _log.info("Finished refreshing ipsets")
+

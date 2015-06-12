@@ -231,10 +231,42 @@ class IptablesUpdater(Actor):
         except FailedSystemCall:
             # Assume the rule didn't exist. Try inserting it.
             _log.info("Didn't find any existing instance of rule %r, "
-                      "inserting it instead.")
+                      "inserting it instead.", rule_fragment)
             self._execute_iptables(['*%s' % self.table,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
+
+    @actor_message(needs_own_batch=True)
+    def ensure_rule_removed(self, rule_fragment):
+        """
+        Runs the given rule fragment, prefixed with --delete.
+
+        :param rule_fragment: fragment to be deleted. For example,
+           "INPUT --jump felix-INPUT"
+        """
+        _log.info("Removing rule %r", rule_fragment)
+        num_instances = 0
+        try:
+            while True:  # Delete all instances of rule.
+                self._execute_iptables(['*%s' % self.table,
+                                        '--delete %s' % rule_fragment,
+                                        'COMMIT'],
+                                       fail_log_level=logging.DEBUG)
+                num_instances += 1
+        except FailedSystemCall as e:
+            if num_instances == 0:
+                if "line 2 failed" in e.stderr:
+                    # Rule was parsed OK but failed to apply, this means that
+                    # it wasn't present.
+                    _log.warning("Removal of rule %r failed; not present?",
+                                 rule_fragment)
+                else:
+                    _log.exception("Unexpected failure when trying to "
+                                   "delete rule %r" % rule_fragment)
+                    raise
+            else:
+                _log.info("%s instances of rule %r removed", num_instances,
+                          rule_fragment)
 
     @actor_message()
     def delete_chains(self, chain_names, callback=None):

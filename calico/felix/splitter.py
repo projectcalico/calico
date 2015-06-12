@@ -33,14 +33,14 @@ class UpdateSplitter(Actor):
     and IPv6-specific actors.
     """
     def __init__(self, config, ipsets_mgrs, rules_managers, endpoint_managers,
-                 iptables_updaters, ipv4_nat_manager):
+                 iptables_updaters, ipv4_masq_manager):
         super(UpdateSplitter, self).__init__()
         self.config = config
         self.ipsets_mgrs = ipsets_mgrs
         self.iptables_updaters = iptables_updaters
         self.rules_mgrs = rules_managers
         self.endpoint_mgrs = endpoint_managers
-        self.ipv4_nat_manager = ipv4_nat_manager
+        self.ipv4_masq_manager = ipv4_masq_manager
         self._cleanup_scheduled = False
 
     @actor_message()
@@ -76,11 +76,13 @@ class UpdateSplitter(Actor):
             ep_mgr.apply_snapshot(endpoints_by_id, async=True)
 
         # Step 3: send update to NAT manager.
-        self.ipv4_nat_manager.apply_snapshot(ipv4_pools_by_id, async=True)
+        _log.info("Applying snapshot.  Queueing IPv4 pools -> masq mgr.")
+        self.ipv4_masq_manager.apply_snapshot(ipv4_pools_by_id, async=True)
 
         _log.info("Applying snapshot. DONE. %s rules, %s tags, "
-                  "%s endpoints", len(rules_by_prof_id), len(tags_by_prof_id),
-                  len(endpoints_by_id))
+                  "%s endpoints, %s pools", len(rules_by_prof_id),
+                  len(tags_by_prof_id), len(endpoints_by_id),
+                  len(ipv4_pools_by_id))
 
         # Since we don't wait for all the above processing to finish, set a
         # timer to clean up orphaned ipsets and tables later.  If the snapshot
@@ -163,4 +165,4 @@ class UpdateSplitter(Actor):
     @actor_message()
     def on_ipam_pool_update(self, pool_id, pool):
         _log.info("IPAM pool %s updated", pool_id)
-        self.ipv4_nat_manager.on_ipam_pool_updated(pool_id, pool, async=True)
+        self.ipv4_masq_manager.on_ipam_pool_updated(pool_id, pool, async=True)
