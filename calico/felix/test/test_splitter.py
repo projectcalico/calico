@@ -22,6 +22,7 @@ import collections
 
 import gevent
 import mock
+from calico.felix.masq import MasqueradeManager
 
 from calico.felix.test.base import BaseTestCase
 from calico.felix.splitter import UpdateSplitter
@@ -43,6 +44,7 @@ class TestUpdateSplitter(BaseTestCase):
         self.rules_mgrs = [mock.MagicMock(), mock.MagicMock()]
         self.endpoint_mgrs = [mock.MagicMock(), mock.MagicMock()]
         self.iptables_updaters = [mock.MagicMock(), mock.MagicMock()]
+        self.masq_manager = mock.Mock(spec=MasqueradeManager)
 
     def get_splitter(self):
         return UpdateSplitter(
@@ -51,6 +53,7 @@ class TestUpdateSplitter(BaseTestCase):
             self.rules_mgrs,
             self.endpoint_mgrs,
             self.iptables_updaters,
+            self.masq_manager
         )
 
     def test_apply_whole_snapshot_clean(self):
@@ -63,10 +66,12 @@ class TestUpdateSplitter(BaseTestCase):
         rules = {'profileA': ['first rule', 'second rule']}
         tags = {'profileA': ['first tag', 'second tag']}
         endpoints = {'endpointA': 'endpoint object'}
+        ipv4_pools_by_id = {"10.0.0.1-5": {"cidr": "10.0.0.1/5",
+                                           "masquerade": True}}
         s = self.get_splitter()
 
         # Apply the snapshot and let it run.
-        s.apply_snapshot(rules, tags, endpoints, async=True)
+        s.apply_snapshot(rules, tags, endpoints, ipv4_pools_by_id, async=True)
         self.step_actor(s)
 
         # At this point, each of our managers should have been notified (one
@@ -84,6 +89,8 @@ class TestUpdateSplitter(BaseTestCase):
             self.assertEqual(mgr.cleanup.call_count, 0)
         for mgr in self.iptables_updaters:
             self.assertEqual(mgr.cleanup.call_count, 0)
+        self.masq_manager.apply_snapshot.assert_called_once_with(
+            ipv4_pools_by_id, async=True)
 
         # If we spin the scheduler again, we should begin cleanup.
         # Warning: this might be a bit brittle, we may not be waiting long
@@ -113,13 +120,14 @@ class TestUpdateSplitter(BaseTestCase):
         rules = {'profileA': ['first rule', 'second rule']}
         tags = {'profileA': ['first tag', 'second tag']}
         endpoints = {'endpointA': 'endpoint object'}
+        ipv4_pools_by_id = {}
         s = self.get_splitter()
 
         # Apply three snapshots and let them run. Because of batching logic,
         # we should only need to spin the actor once.
-        s.apply_snapshot(rules, tags, endpoints, async=True)
-        s.apply_snapshot(rules, tags, endpoints, async=True)
-        s.apply_snapshot(rules, tags, endpoints, async=True)
+        s.apply_snapshot(rules, tags, endpoints, ipv4_pools_by_id, async=True)
+        s.apply_snapshot(rules, tags, endpoints, ipv4_pools_by_id,  async=True)
+        s.apply_snapshot(rules, tags, endpoints, ipv4_pools_by_id,  async=True)
         self.step_actor(s)
 
         # At this point, each of our managers should have been notified (one
@@ -140,6 +148,7 @@ class TestUpdateSplitter(BaseTestCase):
             self.assertEqual(mgr.cleanup.call_count, 0)
         for mgr in self.iptables_updaters:
             self.assertEqual(mgr.cleanup.call_count, 0)
+        self.assertEqual(self.masq_manager.apply_snapshot.call_count, 3)
 
         # If we spin the scheduler again, we should begin cleanup.
         # Warning: this might be a bit brittle, we may not be waiting long

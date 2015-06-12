@@ -59,11 +59,14 @@ class TestBasic(BaseTestCase):
     @mock.patch("calico.felix.fetcd.EtcdWatcher.load_config", autospec=True)
     @mock.patch("gevent.Greenlet.start", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
+    @mock.patch("calico.felix.felix.MasqueradeManager", autospec=True)
     @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())
-    def test_main_greenlet(self, m_iwait, m_IptablesUpdater, m_start, m_load,
+    def test_main_greenlet(self, m_iwait, m_MasqueradeManager,
+                           m_IptablesUpdater, m_start, m_load,
                            m_ipset_4, m_check_call, m_iface_exists,
                            m_iface_up):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
+        m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_config = mock.Mock(spec=config.Config)
         m_config.HOSTNAME = "myhost"
         m_config.IFACE_PREFIX = "tap"
