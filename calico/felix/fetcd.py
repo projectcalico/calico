@@ -19,6 +19,7 @@ felix.fetcd
 Etcd polling functions.
 """
 from collections import defaultdict
+import functools
 from socket import timeout as SocketTimeout
 import httplib
 import json
@@ -41,7 +42,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  HOST_IP_KEY_RE)
 from calico.etcdutils import PathDispatcher
 from calico.felix.actor import Actor, actor_message
-
+from calico.felix.futils import intern_dict, intern_list
 
 _log = logging.getLogger(__name__)
 
@@ -395,6 +396,7 @@ class EtcdWatcher(Actor):
         """Handler for rules updates, passes the update to the splitter."""
         _log.debug("Rules for %s set", profile_id)
         rules = parse_rules(profile_id, response.value)
+        profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_rules_update(profile_id, rules, async=True)
 
     def on_rules_delete(self, response, profile_id):
@@ -406,6 +408,7 @@ class EtcdWatcher(Actor):
         """Handler for tags updates, passes the update to the splitter."""
         _log.debug("Tags for %s set", profile_id)
         rules = parse_tags(profile_id, response.value)
+        profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_tags_update(profile_id, rules, async=True)
 
     def on_tags_delete(self, response, profile_id):
@@ -469,6 +472,7 @@ class EtcdWatcher(Actor):
         """
         _log.info("Orchestrator dir %s/%s deleted, removing contained hosts",
                   hostname, orchestrator)
+        orchestrator = intern(orchestrator.encode("utf8"))
         for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
             if endpoint_id.orchestrator == orchestrator:
                 self.splitter.on_endpoint_update(endpoint_id, None, async=True)
@@ -485,6 +489,8 @@ class EtcdWatcher(Actor):
         """
         _log.debug("Workload dir %s/%s/%s deleted, removing endpoints",
                    hostname, orchestrator, workload_id)
+        orchestrator = intern(orchestrator.encode("utf8"))
+        workload_id = intern(workload_id.encode("utf8"))
         for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
             if (endpoint_id.orchestrator == orchestrator and
                     endpoint_id.workload == workload_id):
@@ -508,9 +514,25 @@ def _build_config_dict(cfg_node):
 
 
 # Intern JSON keys as we load them to reduce occupancy.
-def intern_dict(d):
-    return dict((intern(str(k)), v) for k, v in d.iteritems())
-json_decoder = json.JSONDecoder(object_hook=intern_dict)
+FIELDS_TO_INTERN = set([
+    # Endpoint dicts.  It doesn't seem worth interning items like the MAC
+    # address or TAP name, which are rarely (if ever) shared.
+    "profile_id",
+    "profile_ids",
+    "state",
+    "ipv4_gateway",
+    "ipv6_gateway",
+
+    # Rules dicts.
+    "protocol",
+    "src_tag",
+    "dst_tag",
+    "action",
+])
+json_decoder = json.JSONDecoder(
+    object_hook=functools.partial(intern_dict,
+                                  fields_to_intern=FIELDS_TO_INTERN)
+)
 
 
 def parse_if_endpoint(config, etcd_node):
@@ -521,12 +543,13 @@ def parse_if_endpoint(config, etcd_node):
         orch = m.group("orchestrator")
         workload_id = m.group("workload_id")
         endpoint_id = m.group("endpoint_id")
+        combined_id = EndpointId(host, orch, workload_id, endpoint_id)
         if etcd_node.action == "delete":
             _log.debug("Found deleted endpoint %s", endpoint_id)
             endpoint = None
         else:
-            combined_id = EndpointId(host, orch, workload_id, endpoint_id)
             endpoint = parse_endpoint(config, combined_id, etcd_node.value)
+        # EndpointId does the interning for us.
         return combined_id, endpoint
     return None, None
 
@@ -554,7 +577,7 @@ def parse_if_rules(etcd_node):
             rules = None
         else:
             rules = parse_rules(profile_id, etcd_node.value)
-        return profile_id, rules
+        return intern(profile_id.encode("utf8")), rules
     return None, None
 
 
@@ -579,7 +602,7 @@ def parse_if_tags(etcd_node):
             tags = None
         else:
             tags = parse_tags(profile_id, etcd_node.value)
-        return profile_id, tags
+        return intern(profile_id.encode("utf8")), tags
     return None, None
 
 
@@ -592,7 +615,9 @@ def parse_tags(profile_id, raw_json):
                        profile_id, tags)
         return None
     else:
-        return tags
+        # The tags aren't in a top-level object so we need to manually
+        # intern them here.
+        return intern_list(tags)
 
 
 def parse_if_host_ip(etcd_node):
