@@ -1,0 +1,4 @@
+# Copied from https://github.com/phusion/baseimage-docker/blob/16ccc1e40d34a4cec8975e28a6a4f1d954b408b9/image/buildconfig
+export LC_ALL=C
+export DEBIAN_FRONTEND=noninteractive
+minimal_apt_get_install='apt-get install -y --no-install-recommends'
