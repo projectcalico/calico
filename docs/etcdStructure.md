@@ -4,7 +4,7 @@
 
 The following illustrates the directory structure calico uses in etcd.
 
- 	+--calico  # root namespace
+ 	+--calico/v1  # root namespace
  	   |--config
  	   |  |--InterfacePrefix # the prefix for Calico interface names
  	   |  `--LogSeverityFile # Log severity level for writing to file e.g. "DEBUG"
@@ -26,18 +26,25 @@ The following illustrates the directory structure calico uses in etcd.
 	   |        `--rules  # JSON rules config (see below)
 	   `--ipam  #IP Address Management
 	      |--v4
-	      |   `--pool
-	      |      |--1  # CIDR range to allocate from
-	      |      `--2
+	      |   |--pool
+	      |   |  `--<CIDR>  # One per pool, key is CIDR with '/' replaced 
+	      |   |             # by '-', value is JSON object (see below)
+	      |   `--assignment
+	      |      `--<CIDR>  # One per pool
+	      |         `--<address>  # One per assigned address in the pool
 	      `--v6
-	          `--pool
-	             `--1  # CIDR range to allocate from
+	          |--pool
+	          |  `--<CIDR>  # One per pool, key is CIDR with '/' replaced
+	          |             # by '-', value is JSON object (see below)
+	          `--assignment
+	             `--<CIDR>  # One per pool
+	                `--<address>  # One per assigned address in the pool
 
 # JSON endpoint config
 
 The endpoint configuration stored at 
 
-	/calico/host/<hostname>/workload/docker/<container_id>/endpoint/<endpoint_id>
+	/calico/v1/host/<hostname>/workload/docker/<container_id>/endpoint/<endpoint_id>
 
 is a JSON blob in this form:
 
@@ -69,7 +76,7 @@ is a JSON blob in this form:
 
 The rules leaf at 
 
-	/calico/policy/profile/<profile_id>/rules
+	/calico/v1/policy/profile/<profile_id>/rules
 
 contains a JSON blob in this format
 
@@ -101,4 +108,18 @@ where each entry in the inbound/outbound list is a rule object:
 	  "action": "deny|allow",
 	} 
 
+JSON IP pool config
 
+The IP pool configuration stored at
+
+        /calico/v1/ipam/v4/pool/<CIDR> and
+        /calico/v1/ipma/v6/pool/<CIDR>
+
+is a JSON blob in this form:
+
+        {
+          "cidr": "<CIDR of pool - eg. 192.168.0.0/16 or fd80:24e2:f998:72d6::/64>",
+          "ipip": "<IPIP device name if IPIP configured for the pool - usually tunl0>",
+        }
+
+The ipip field is only included if IPIP is enabled for this pool.  IPIP is only supported on IPv4 pools.

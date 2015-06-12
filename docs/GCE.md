@@ -1,6 +1,5 @@
 # Running calico-docker on GCE
-Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.
-The GCE fabric itself provides L3 routing for endpoint addresses between hosts and so does not require the Calico routing function in order to provide endpoint connectivity. However, the full Calico routing and security model can be run on GCE, allowing the full power of Calico's security model on GCE (and allowing GCE to be used for testing)
+Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on GCE (and allow GCE to be used for testing)
 
 ## Getting started
 These instructions assume a total of three GCE hosts running CoreOS. One to run an etcd "cluster", and then two compute nodes.
@@ -38,25 +37,15 @@ gcloud compute instances create core1 core2 --image https://www.googleapis.com/c
 You can get the cloud-config*.yaml files from the tests/scale directory of this repo.
 
 ## Setting up GCE networking
-In order for routing to work correctly between hosts, you must notify GCE of the network address configuration you are using for your endpoints. For this demo we do this by manually running the `gcloud` utility; a production instance would almost certainly use the RESTful API. In these instructions, we'll assume that you plan on hosting addresses in the 192.168.1.0/24 range on core1, and addresses in the 192.168.2.0/24 range on core2. The instructions for doing this are as follows.
+In order for routing to work correctly between hosts, you must set up a firewall rule on GCE to allow IPIP packets to flow between the instances. The command for doing this are as follows.
 
-
-Install each route in turn.
 ```
-gcloud compute routes create ip-192-168-1-0 --next-hop-instance core1 --next-hop-instance-zone us-central1-a --destination-range 192.168.1.0/24
-gcloud compute routes create ip-192-168-2-0 --next-hop-instance core2 --next-hop-instance-zone us-central1-a --destination-range 192.168.2.0/24
+gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
 ```
-Note that this assumes that your hosts are called `core1` and `core2` in zone `us-central1-a`; change as appropriate for your configuration.
-
-Now verify that you can view your instances and lists.
+Now verify that you can view your instances and firewall rule.
 ```
 gcloud compute instances list
-gcloud compute routes list
-```
-
-When you come to create endpoints (i.e. test containers) they will be able to ping one another but not do TCP or UDP because the GCE firewalls do not permit it. To enable this, add a firewall rule to allow all traffic to/from 192.168.0.0/16
-```
-gcloud compute firewall-rules create "any" --allow tcp:1-65535 --network "default" --source-ranges "192.168.0.0/16"
+gcloud compute firewall-rules list
 ```
 
 BIRD will not accept routes where the default gateway is not in the same subnet as the local IP on the interface, and for GCE the local IP is always a /32 (so no routes are in the same subnet). To resolve this, you must add a route that convinces BIRD that the default gateway really is valid by running a command such as that given below (where 10.240.10.1 is the IP of the server, and 10.240.0.1 is the gateway address; obviously change those for your deployment!). Note that you must do this on *both* hosts.
@@ -67,19 +56,21 @@ ip addr add 10.240.10.1 peer 10.240.0.1 dev ens4v1
 
 There's more on this situation here, in case you want to understand this further [http://marc.info/?l=bird-users&m=139809577125938&w=2](http://marc.info/?l=bird-users&m=139809577125938&w=2)
 
-So that BIRD is not just adding routes that have no effect (since they match the default route), we want to ban all traffic to the network that your endpoints are on. This unreachable route will be overridden when endpoints are created; on each host, the Calico Felix agent will add the route locally which will then be picked up and distributed by the BIRD clients.
-
-```
-ip route add unreachable 192.168.0.0/16
-```
-
 ## Starting calico and running containers
 Now, you can just follow the standard getting started instructions for downloading calico and creating workloads. See https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#installing-calico for more details.
 
+Note that etcd should already be running on the master, core1 and core2 nodes, with data stored on the master node, and core1 and core2 run etcd in proxy mode, so no clustering is required.  Check this by running ```etcdctl ls /``` on each node.  If it is not running, then restart it by running ```docker start etcd```.
 
 ## (Optional) Enabling traffic from containers to the internet
- The test endpoints will be unable to access the internet - that is because the internal range we are using is not routable. Hence to get external connectivity, SNAT is called for using the following `iptables` rule (on both hosts).
+The test endpoints will be unable to access the internet - that is because the internal range we are using is not routable. Hence to get external connectivity, SNAT is called for using the following `iptables` rule (on both hosts).
 
 ```
 iptables -t nat -A POSTROUTING -s 192.168.0.0/16 ! -d 192.168.0.0/16 -j MASQUERADE
+```
+
+## (Optional) Enabling traffic from the internet to containers
+Services running on containers in GCE can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following command to add the port mapping:
+
+```
+iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 8000 -j DNAT  --to 172.168.7.4:80
 ```

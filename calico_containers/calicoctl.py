@@ -18,7 +18,7 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl pool (add|remove) <CIDR>
+  calicoctl pool (add|remove) <CIDR> [--ipip]
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl bgppeer rr (add|remove) <IP>
   calicoctl bgppeer rr show [--ipv4 | --ipv6]
@@ -722,16 +722,21 @@ def save_diags(upload):
     print("Collecting diags")
     diags.save_diags(upload)
 
-def ip_pool_add(cidr_pool, version):
+def ip_pool_add(cidr_pool, version, ipip):
     """
     Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :param version: v4 or v6
+    :param ipip: Use IP in IP for this pool.
     :return: None
     """
+    if version == "v6" and ipip:
+        print "IP in IP not supported for IPv6 pools"
+        sys.exit(1)
+
     pool = check_ip_version(cidr_pool, version, IPNetwork)
-    client.add_ip_pool(version, pool)
+    client.add_ip_pool(version, pool, ipip)
 
 
 def ip_pool_remove(cidr_pool, version):
@@ -755,12 +760,21 @@ def ip_pool_show(version):
     :return: None
     """
     assert version in ("v4", "v6")
-    heading = "IP%s CIDR" % version
+    headings = ["IP%s CIDR" % version]
+    if version == "v4":
+        headings.append("IP-IP")
     pools = client.get_ip_pools(version)
-    x = PrettyTable([heading])
+    x = PrettyTable(headings)
     for pool in pools:
-        x.add_row([pool])
-    print x.get_string(sortby=heading)
+        row = [pool]
+        if version == "v4":
+            cfg = client.get_ip_pool_config(version, pool)
+            if "ipip" in cfg:
+                row.append("Enabled")
+            else:
+                row.append("Disabled")
+        x.add_row(row)
+    print x.get_string(sortby=headings[0])
 
 
 def restart_docker_with_alternative_unix_socket():
@@ -1164,7 +1178,7 @@ if __name__ == '__main__':
             node_show(arguments["--detailed"])
         elif arguments["pool"]:
             if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"], ip_version)
+                ip_pool_add(arguments["<CIDR>"], ip_version, arguments["--ipip"])
             elif arguments["remove"]:
                 ip_pool_remove(arguments["<CIDR>"], ip_version)
             elif arguments["show"]:
