@@ -59,7 +59,7 @@ class DockerHost(object):
         command = "export %s; %s" % (etcd_auth, command)
 
         if self.dind:
-            command = escape_bash_single_quotes(command)
+            command = self.escape_bash_single_quotes(command)
             command = "docker exec -it %s bash -c '%s'" % (self.name,
                                                            command)
         try:
