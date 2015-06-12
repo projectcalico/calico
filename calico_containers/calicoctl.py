@@ -23,12 +23,11 @@ Usage:
   calicoctl bgppeer rr (add|remove) <IP>
   calicoctl bgppeer rr show [--ipv4 | --ipv6]
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
-  calicoctl container <CONTAINER> profile (append|remove|set|show) [<PROFILE>]...
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [profile]...
-  calicoctl endpoint <ENDPOINT_ID> profile list
-  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
+  calicoctl endpoint show [--endpoint=<ENDPOINT_ID>] [--workload=<WORKLOAD_ID>] [--orchestrator=<ORCHESTRATOR_ID>] [--host=<HOSTNAME>] [--detailed]
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [--detailed] [<PROFILES>...]
+  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
   calicoctl reset
   calicoctl diags [--upload]
   calicoctl checksystem [--fix]
@@ -70,7 +69,8 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
                                Rules,
                                DataStoreError,
                                ProfileNotInEndpoint,
-                               ProfileAlreadyInEndpoint)
+                               ProfileAlreadyInEndpoint,
+                               MultipleEndpointsMatch)
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
@@ -87,6 +87,8 @@ docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
                                                  "unix://var/run/docker.sock"))
 docker_restarter = docker_restart.create_restarter()
+
+ORCHESTRATOR_ID = "docker"
 
 try:
     sysctl = sh.Command._create("sysctl")
@@ -174,7 +176,7 @@ def container_add(container_name, ip, interface):
 
     # Check if the container already exists
     try:
-        _ = client.get_ep_id_from_cont(hostname, container_id)
+        _ = client.get_endpoint_id_from_cont(hostname, container_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
@@ -213,7 +215,10 @@ def container_add(container_name, ip, interface):
     # Actually configure the netns. Defaults to eth1 since eth0 could
     # already be in use (e.g. by the Docker bridge)
     pid = info["State"]["Pid"]
-    endpoint = netns.set_up_endpoint(ip, pid, next_hops,
+    endpoint = netns.set_up_endpoint(ip=ip,
+                                     hostname=hostname,
+                                     cpid=pid,
+                                     next_hop_ips=next_hops,
                                      veth_name=interface,
                                      proc_alias="/proc")
 
@@ -232,22 +237,26 @@ def container_remove(container_name):
     then it is removed.
 
     :param container_name: The name or ID of the container.
+    :param orchestrator_id: If the orchestrator ID for the
     """
     # The netns manipulations must be done as root.
     enforce_root()
 
     # Resolve the name to ID.
-    container_id = get_container_id(container_name)
+    workload_id = get_container_id(container_name)
 
     # Find the endpoint ID. We need this to find any ACL rules
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, workload_id)
     except KeyError:
         print "Container %s doesn't contain any endpoints" % container_name
         sys.exit(1)
 
     # Remove any IP address assignments that this endpoint has
-    endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+    endpoint = client.get_endpoint(hostname=hostname,
+                                   orchestrator_id=ORCHESTRATOR_ID,
+                                   workload_id=workload_id,
+                                   endpoint_id=endpoint_id)
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
         assert(net.size == 1)
         ip = net.ip
@@ -262,7 +271,7 @@ def container_remove(container_name):
     netns.remove_endpoint(endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(hostname, container_id)
+    client.remove_container(hostname, workload_id)
 
     print "Removed Calico interface from %s" % container_name
 
@@ -523,7 +532,7 @@ def profile_add(profile_name):
         print "Created profile %s" % profile_name
 
 
-def profile_add_container(container_name, profile_name):
+def profile_add_container(container_name, profile_name, workload_id="docker"):
     """
     Add a container (on this host) to the profile with the given name.  This
     adds the first endpoint on the container to the profile.
@@ -535,14 +544,6 @@ def profile_add_container(container_name, profile_name):
     :param profile_name:  The Calico policy profile name.
     :return: None.
     """
-    # Print a warning message that this method is deprecated.
-    print_paragraph("This function is deprecated and may be removed from "
-                    "future versions of calicoctl.  Please use the container "
-                    "profile functions to manage the lists of profiles "
-                    "assigned to a container:")
-    print "calicoctl container <CONTAINER> profile append|set " \
-          "[<PROFILE>]...\n"
-
     info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
 
@@ -553,14 +554,15 @@ def profile_add_container(container_name, profile_name):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
     except KeyError:
         print "Failed to container to profile.\n"
         print_container_not_in_calico_msg(container_name)
         sys.exit(1)
 
     # Call through to the container profile set method to add the profile.
-    endpoint_profile_set(endpoint_id, [profile_name])
+    endpoint_profile_append(endpoint_id, container_name, ORCHESTRATOR_ID, hostname, [profile_name])
+    endpoint_profile_append(endpoint_id, container_name, ORCHESTRATOR_ID, hostname, [profile_name])
 
 
 def profile_remove(profile_name):
@@ -588,13 +590,13 @@ def profile_show(detailed):
             for host, ctypes in members.iteritems():
                 for ctype, workloads in ctypes.iteritems():
                     for workload, endpoints in workloads.iteritems():
-                        for ep_id, endpoint in endpoints.iteritems():
+                        for endpoint_id, endpoint in endpoints.iteritems():
                             x.add_row([name,
                                        host,
                                        ctype,
                                        # Truncate ID to 12 chars like Docker
                                        workload[:12],
-                                       ep_id,
+                                       endpoint_id,
                                        endpoint.state])
     else:
         x = PrettyTable(["Name"])
@@ -712,12 +714,12 @@ def node_show(detailed):
                 continue
             for container_type, workloads in container_types.iteritems():
                 for workload, endpoints in workloads.iteritems():
-                    for ep_id, endpoint in endpoints.iteritems():
+                    for endpoint_id, endpoint in endpoints.iteritems():
                         x.add_row([host,
                                    container_type,
                                    # Truncate ID to 12 chars like Docker
                                    workload[:12],
-                                   ep_id,
+                                   endpoint_id,
                                    "\n".join([str(net) for net in
                                              endpoint.ipv4_nets |
                                              endpoint.ipv6_nets]),
@@ -913,8 +915,9 @@ def container_ip_add(container_name, ip, version, interface):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
-        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint_id)
+
     except KeyError:
         print "Failed to add IP address to container.\n"
         print_container_not_in_calico_msg(container_name)
@@ -953,7 +956,7 @@ def container_ip_add(container_name, ip, version, interface):
         client.unassign_address(pool, ip)
         sys.exit(1)
 
-    print "IP %s added to %s" % (ip, container_name)
+    print "IP %s added to %s" % (ip, workload_id)
 
 
 def container_ip_remove(container_name, ip, version, interface):
@@ -984,8 +987,8 @@ def container_ip_remove(container_name, ip, version, interface):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
-        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint_id)
         if address.version == 4:
             nets = endpoint.ipv4_nets
         else:
@@ -1021,8 +1024,56 @@ def container_ip_remove(container_name, ip, version, interface):
 
     print "IP %s removed from %s" % (ip, container_name)
 
+def endpoint_show(endpoint_id, workload_id, orchestrator_id, hostname, detailed):
+    """
+    List the profiles for a given endpoint. All parameters will be used to filter down
+    which endpoints should be shown.
 
-def endpoint_profile_append(endpoint_id, profile_names):
+    :param endpoint_id: The endpoint ID.
+    :param workload_id: The workload ID.
+    :param orchestrator_id: The orchestrator ID.
+    :param hostname: The hostname.
+    :param detailed: Optional flag, when set to True, will provide more information in the shown table
+    :return: Nothing
+    """
+    endpoints = client.get_endpoints(hostname, orchestrator_id, workload_id, endpoint_id)
+
+    if detailed:
+        headings = ["Hostname",
+                    "Orchestrator ID",
+                    "Workload ID",
+                    "Endpoint ID",
+                    "Addresses",
+                    "MAC",
+                    "Profiles",
+                    "State"]
+        x = PrettyTable(headings, sortby="Hostname")
+
+        for endpoint in endpoints:
+            x.add_row([endpoint.hostname,
+                       endpoint.orchestrator_id,
+                       endpoint.workload_id,
+                       endpoint.endpoint_id,
+                       "\n".join([str(net) for net in endpoint.ipv4_nets | endpoint.ipv6_nets]),
+                       endpoint.mac,
+                       ','.join(endpoint.profile_ids),
+                       endpoint.state])
+    else:
+        headings = ["Hostname",
+                    "Orchestrator ID",
+                    "NumWorkloads",
+                    "NumEndpoints"]
+        x = PrettyTable(headings, sortby="Hostname")
+
+        for endpoint in endpoints:
+            # TODO: remove duplicates rows
+            num_workloads = len([other_endpoint for other_endpoint in endpoints if other_endpoint.workload_id == endpoint.workload_id])
+            num_endpoints = len([other_endpoint for other_endpoint in endpoints if other_endpoint.endpoint_id == endpoint.endpoint_id])
+            x.add_row([endpoint.hostname, endpoint.orchestrator_id, num_workloads, num_endpoints])
+    print str(x) + "\n"
+
+
+def endpoint_profile_append(hostname, orchestrator_id, workload_id, endpoint_id, profile_names):
     """
     Append a list of profiles to the container endpoint profile list.
 
@@ -1036,9 +1087,12 @@ def endpoint_profile_append(endpoint_id, profile_names):
     """
     # Validate the profile list.
     validate_profile_list(profile_names)
-
     try:
-        client.append_profiles_to_endpoint(endpoint_id, profile_names)
+        client.append_profiles_to_endpoint(profile_names=profile_names,
+                                           endpoint_id=endpoint_id,
+                                           workload_id=workload_id,
+                                           orchestrator_id=orchestrator_id,
+                                           hostname=hostname)
         print_paragraph("Profiles %s appended to %s." %
                           (", ".join(profile_names), endpoint_id))
     except KeyError:
@@ -1048,9 +1102,13 @@ def endpoint_profile_append(endpoint_id, profile_names):
     except ProfileAlreadyInEndpoint, e:
         print_paragraph("Profile %s is already in endpoint "
                         "profile list" % e.profile_name)
+    except MultipleEndpointsMatch:
+        print "More than 1 endpoint matches the provided criteria. " \
+              "Please provide additional parameters to refine the search."
+        sys.exit(1)
 
 
-def endpoint_profile_set(endpoint_id, profile_names):
+def endpoint_profile_set(endpoint_id, workload_id, orchestrator_id, hostname, profile_names):
     """
     Set the complete list of profiles for the container endpoint profile list.
 
@@ -1065,7 +1123,11 @@ def endpoint_profile_set(endpoint_id, profile_names):
     validate_profile_list(profile_names)
 
     try:
-        client.set_profiles_on_endpoint(endpoint_id, profile_names)
+        client.set_profiles_on_endpoint(profile_names,
+                                        endpoint_id=endpoint_id,
+                                        workload_id=workload_id,
+                                        orchestrator_id=orchestrator_id,
+                                        hostname=hostname)
         print_paragraph("Profiles %s set for %s." %
                           (", ".join(profile_names), endpoint_id))
     except KeyError:
@@ -1074,7 +1136,7 @@ def endpoint_profile_set(endpoint_id, profile_names):
         sys.exit(1)
 
 
-def endpoint_profile_remove(endpoint_id, profile_names):
+def endpoint_profile_remove(profile_names, endpoint_id, workload_id, orchestrator_id, hostname):
     """
     Remove a list of profiles from the endpoint profile list.
 
@@ -1090,7 +1152,7 @@ def endpoint_profile_remove(endpoint_id, profile_names):
     validate_profile_list(profile_names)
 
     try:
-        client.remove_profiles_from_endpoint(endpoint_id, profile_names)
+        client.remove_profiles_from_endpoint(profile_names, endpoint_id, workload_id, orchestrator_id, hostname)
         print_paragraph("Profiles %s removed from %s." %
                           (",".join(profile_names), endpoint_id))
     except KeyError:
@@ -1100,29 +1162,36 @@ def endpoint_profile_remove(endpoint_id, profile_names):
     except ProfileNotInEndpoint, e:
         print_paragraph("Profile %s is not in endpoint profile " \
                         "list." % e.profile_name)
+    except MultipleEndpointsMatch:
+        print "More than 1 endpoint matches the provided criteria. " \
+              "Please provide additional parameters to refine the search."
+        sys.exit(1)
 
 
-def endpoint_profile_list(endpoint_id):
+def endpoint_profile_show(endpoint_id, workload_id, orchestrator_id, hostname):
     """
-    List the profiles assigned to an endpoint.
+    List the profiles assigned to a particular endpoint.
 
     :param hostname: The hostname.
     :param orchestrator_id: The orchestrator ID.
     :param workload_id: The workload ID.
     :param endpoint_id: The endpoint ID.
-    :param profile_names: The list of profiles to append.
 
     :return: None
     """
     try:
-        endpoint = client.get_endpoint_from_id(self, endpoint_id)
+        endpoint = client.get_endpoint(hostname, orchestrator_id, workload_id, endpoint_id)
+    except MultipleEndpointsMatch:
+        print "More than 1 endpoint matches the provided criteria. " \
+              "Please provide additional parameters to refine the search."
+        sys.exit(1)
     except KeyError:
         print "Failed to list profiles in endpoint.\n"
         print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
         sys.exit(1)
 
     if endpoint.profile_ids:
-        x = PrettyTable(["Name"])
+        x = PrettyTable(["Name"], sortby="Name")
         for name in endpoint.profile_ids:
             x.add_row([name])
         print str(x) + "\n"
@@ -1272,7 +1341,6 @@ if __name__ == '__main__':
     arguments = docopt(__doc__)
     validate_arguments()
     ip_version = get_container_ipv_from_arguments()
-
     try:
         if arguments["restart-docker-with-alternative-unix-socket"]:
             restart_docker_with_alternative_unix_socket()
@@ -1293,6 +1361,38 @@ if __name__ == '__main__':
             checksystem(arguments["--fix"], quit_if_error=True)
         elif arguments["reset"]:
             reset()
+        elif arguments["endpoint"]:
+            if arguments["profile"]:
+                if arguments["append"]:
+                    endpoint_profile_append(arguments["<ENDPOINT_ID>"],
+                                            arguments["--workload"],
+                                            arguments["--orchestrator"],
+                                            arguments["--host"],
+                                            arguments['<PROFILES>'] or [])
+                elif arguments["remove"]:
+                    endpoint_profile_remove(arguments["<ENDPOINT_ID>"],
+                                            arguments["--workload"],
+                                            arguments["--orchestrator"],
+                                            arguments["--host"],
+                                            arguments['<PROFILES>'] or [])
+                elif arguments["set"]:
+                    endpoint_profile_set(arguments["<ENDPOINT_ID>"],
+                                         arguments["--workload"],
+                                         arguments["--orchestrator"],
+                                         arguments["--host"],
+                                         arguments['<PROFILES>'] or [])
+                elif arguments["show"]:
+                    endpoint_profile_show(arguments["<ENDPOINT_ID>"],
+                                          arguments["--workload"],
+                                          arguments["--orchestrator"],
+                                          arguments["--host"])
+            else:
+                # calicoctl endpoint show
+                endpoint_show(arguments["--endpoint"],
+                              arguments["--workload"],
+                              arguments["--orchestrator"],
+                              arguments["--host"],
+                              arguments["--detailed"])
         elif arguments["profile"]:
             if arguments["tag"]:
                 if arguments["show"]:
@@ -1305,7 +1405,8 @@ if __name__ == '__main__':
                                        arguments["<TAG>"])
             elif arguments["member"]:
                 profile_add_container(arguments["<CONTAINER>"],
-                                      arguments["<PROFILE>"])
+                                      arguments["<PROFILE>"],
+                                      ORCHESTRATOR_ID)
             elif arguments["rule"]:
                 if arguments["show"]:
                     profile_rule_show(arguments["<PROFILE>"],
@@ -1373,19 +1474,6 @@ if __name__ == '__main__':
                                   arguments["--interface"])
                 if arguments["remove"]:
                     container_remove(arguments["<CONTAINER>"])
-        elif arguments["endpoint"]:
-            if arguments["profile"]:
-                if arguments["append"]:
-                    endpoint_profile_append(arguments["<ENDPOINT_ID>"],
-                                            arguments["<PROFILE>"])
-                elif arguments["remove"]:
-                    endpoint_profile_remove(arguments["<ENDPOINT_ID>"],
-                                            arguments["<PROFILE>"])
-                elif arguments["set"]:
-                    endpoint_profile_set(arguments["<ENDPOINT_ID>"],
-                                         arguments["<PROFILE>"])
-                elif arguments["list"]:
-                    endpoint_profile_list(arguments["<ENDPOINT_ID>"])
     except SystemExit:
         raise
     except ConnectionError as e:

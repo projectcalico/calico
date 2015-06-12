@@ -213,7 +213,7 @@ class TestEndpoint(unittest.TestCase):
         endpoint1 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID,
                              "aabbccddeeff112233",
                              "active", "11-22-33-44-55-66")
-        assert_equal(endpoint1.ep_id, "aabbccddeeff112233")
+        assert_equal(endpoint1.endpoint_id, "aabbccddeeff112233")
         assert_equal(endpoint1.state, "active")
         assert_equal(endpoint1.mac, "11-22-33-44-55-66")
         assert_equal(endpoint1.profile_ids, [])  # Defaulted
@@ -244,7 +244,7 @@ class TestEndpoint(unittest.TestCase):
                     "ipv6_gateway": "2001:2:4a::1"}
         endpoint = Endpoint.from_json(TEST_ENDPOINT_PATH, json.dumps(expected))
         assert_equal(endpoint.state, "active")
-        assert_equal(endpoint.ep_id, TEST_ENDPOINT_ID)
+        assert_equal(endpoint.endpoint_id, TEST_ENDPOINT_ID)
         assert_equal(endpoint.if_name, "eth1")
         assert_equal(endpoint.mac, "11-22-33-44-55-66")
         assert_equal(endpoint.profile_ids, ["TEST23"])
@@ -256,7 +256,7 @@ class TestEndpoint(unittest.TestCase):
 
         endpoint2 = Endpoint.from_json(TEST_ENDPOINT_PATH, endpoint.to_json())
         assert_equal(endpoint.state, endpoint2.state)
-        assert_equal(endpoint.ep_id, endpoint2.ep_id)
+        assert_equal(endpoint.endpoint_id, endpoint2.endpoint_id)
         assert_equal(endpoint.mac, endpoint2.mac)
         assert_equal(endpoint.profile_ids, endpoint2.profile_ids)
         assert_equal(endpoint.ipv4_gateway, endpoint2.ipv4_gateway)
@@ -659,29 +659,29 @@ class TestDatastoreClient(unittest.TestCase):
         profiles = self.datastore.get_profile_names()
         assert_set_equal(profiles, set())
 
-    def test_get_profile_members_ep_ids(self):
+    def test_get_profile_members_endpoint_ids(self):
         """
-        Test get_profile_members_ep_ids() when there are endpoints.
+        Test get_profile_members_endpoint_ids() when there are endpoints.
         """
         self.etcd_client.read.side_effect = mock_read_4_endpoints
-        members = self.datastore.get_profile_members_ep_ids("TEST")
+        members = self.datastore.get_profile_members_endpoint_ids("TEST")
         assert_set_equal({"567890abcdef", "7890abcdef12"},
                          set(members))
 
-        members = self.datastore.get_profile_members_ep_ids("UNIT")
+        members = self.datastore.get_profile_members_endpoint_ids("UNIT")
         assert_set_equal({"90abcdef1234", TEST_ENDPOINT_ID},
                          set(members))
 
-        members = self.datastore.get_profile_members_ep_ids("UNIT_TEST")
+        members = self.datastore.get_profile_members_endpoint_ids("UNIT_TEST")
         assert_set_equal(set(), set(members))
 
-    def test_get_profile_members_ep_ids_no_key(self):
+    def test_get_profile_members_endpoint_ids_no_key(self):
         """
-        Test get_profile_members_ep_ids() when the endpoints path has not been
+        Test get_profile_members_endpoint_ids() when the endpoints path has not been
         set up.
         """
         self.etcd_client.read.side_effect = mock_read_endpoints_key_error
-        members = self.datastore.get_profile_members_ep_ids("UNIT_TEST")
+        members = self.datastore.get_profile_members_endpoint_ids("UNIT_TEST")
         assert_set_equal(set(), set(members))
 
     def test_get_profile_members(self):
@@ -737,7 +737,7 @@ class TestDatastoreClient(unittest.TestCase):
                                           TEST_CONT_ID,
                                           TEST_ENDPOINT_ID)
         assert_equal(ep.to_json(), ep2.to_json())
-        assert_equal(ep.ep_id, ep2.ep_id)
+        assert_equal(ep.endpoint_id, ep2.endpoint_id)
 
     def test_get_endpoint_doesnt_exist(self):
         """
@@ -779,31 +779,31 @@ class TestDatastoreClient(unittest.TestCase):
         assert_not_equal(ep._original_json, original_json)
         assert_equals(ep._original_json, ep.to_json())
 
-    def test_get_ep_id_from_cont(self):
+    def test_get_endpoint_id_from_cont(self):
         """
-        Test get_ep_id_from_cont() when container and endpoint exist.
+        Test get_endpoint_id_from_cont() when container and endpoint exist.
         """
         self.etcd_client.read.side_effect = mock_read_2_ep_for_cont
-        ep_id = self.datastore.get_ep_id_from_cont(TEST_HOST, TEST_CONT_ID)
-        assert_equal(ep_id, EP_12.ep_id)
+        endpoint_id = self.datastore.get_endpoint_id_from_cont(TEST_HOST, TEST_CONT_ID)
+        assert_equal(endpoint_id, EP_12.endpoint_id)
 
-    def test_get_ep_id_from_cont_no_ep(self):
+    def test_get_endpoint_id_from_cont_no_ep(self):
         """
-        Test get_ep_id_from_cont() when the container exists, but there are
+        Test get_endpoint_id_from_cont() when the container exists, but there are
         no endpoints.
         """
         self.etcd_client.read.side_effect = mock_read_0_ep_for_cont
         assert_raises(NoEndpointForContainer,
-                      self.datastore.get_ep_id_from_cont,
+                      self.datastore.get_endpoint_id_from_cont,
                       TEST_HOST, TEST_CONT_ID)
 
-    def test_get_ep_id_from_cont_no_cont(self):
+    def test_get_endpoint_id_from_cont_no_cont(self):
         """
-        Test get_ep_id_from_cont() when the container doesn't exist.
+        Test get_endpoint_id_from_cont() when the container doesn't exist.
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound
         assert_raises(KeyError,
-                      self.datastore.get_ep_id_from_cont,
+                      self.datastore.get_endpoint_id_from_cont,
                       TEST_HOST, TEST_CONT_ID)
 
     def test_get_endpoints_exists(self):
@@ -814,9 +814,9 @@ class TestDatastoreClient(unittest.TestCase):
         eps = self.datastore.get_endpoints(TEST_HOST, TEST_CONT_ID)
         assert_equal(len(eps), 2)
         assert_equal(eps[0].to_json(), EP_12.to_json())
-        assert_equal(eps[0].ep_id, EP_12.ep_id)
+        assert_equal(eps[0].endpoint_id, EP_12.endpoint_id)
         assert_equal(eps[1].to_json(), EP_78.to_json())
-        assert_equal(eps[1].ep_id, EP_78.ep_id)
+        assert_equal(eps[1].endpoint_id, EP_78.endpoint_id)
 
     def test_get_endpoints_doesnt_exist(self):
         """
@@ -849,9 +849,9 @@ class TestDatastoreClient(unittest.TestCase):
         assert_equal(len(test_host_workloads), 2)
         assert_true(TEST_CONT_ID in test_host_workloads)
         assert_true("5678" in test_host_workloads)
-        assert_true(EP_56.ep_id in test_host_workloads[TEST_CONT_ID])
+        assert_true(EP_56.endpoint_id in test_host_workloads[TEST_CONT_ID])
         assert_equal(len(test_host_workloads[TEST_CONT_ID]), 1)
-        assert_true(EP_90.ep_id in test_host_workloads["5678"])
+        assert_true(EP_90.endpoint_id in test_host_workloads["5678"])
         assert_equal(len(test_host_workloads["5678"]), 1)
 
         test_host2 = hosts["TEST_HOST2"]
@@ -861,9 +861,9 @@ class TestDatastoreClient(unittest.TestCase):
         assert_equal(len(test_host2_workloads), 2)
         assert_true(TEST_CONT_ID in test_host2_workloads)
         assert_true("5678" in test_host2_workloads)
-        assert_true(EP_78.ep_id in test_host2_workloads[TEST_CONT_ID])
+        assert_true(EP_78.endpoint_id in test_host2_workloads[TEST_CONT_ID])
         assert_equal(len(test_host2_workloads[TEST_CONT_ID]), 1)
-        assert_true(EP_12.ep_id in test_host2_workloads["5678"])
+        assert_true(EP_12.endpoint_id in test_host2_workloads["5678"])
         assert_equal(len(test_host2_workloads["5678"]), 1)
 
     def test_get_hosts_key_error(self):

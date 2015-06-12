@@ -10,6 +10,7 @@ ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # etcd paths for Calico
+# TODO: modify string constants to accept orchestrator_id, replacing "docker" hardcoding
 CALICO_V_PATH = "/calico/v1"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 HOSTS_PATH = CALICO_V_PATH + "/host/"
@@ -190,7 +191,7 @@ class Endpoint(object):
         self.hostname = hostname
         self.orchestrator_id = orchestrator_id
         self.workload_id = workload_id
-        self.ep_id = endpoint_id
+        self.endpoint_id = endpoint_id
         self.state = state
         self.mac = mac
 
@@ -205,7 +206,7 @@ class Endpoint(object):
 
     def to_json(self):
         json_dict = {"state": self.state,
-                     "name": IF_PREFIX + self.ep_id[:11],
+                     "name": IF_PREFIX + self.endpoint_id[:11],
                      "mac": self.mac,
                      "container:if_name": self.if_name,
                      "profile_ids": self.profile_ids,
@@ -262,10 +263,29 @@ class Endpoint(object):
 
         return ep
 
+    def matches(self, hostname=None, orchestrator_id=None,
+                workload_id=None, endpoint_id=None):
+        """
+        A less strict 'equals' function, which compares provided parameters to the current endpoint object.
+
+        :return: True if the provided parameters match the Endpoint's parameters,
+                 False if any of the provided parameters are different from the Endpoint's parameters.
+        """
+        if hostname and hostname != self.hostname:
+            return False
+        elif orchestrator_id and orchestrator_id != self.orchestrator_id:
+            return False
+        elif workload_id and workload_id != self.workload_id:
+            return False
+        elif endpoint_id and endpoint_id != self.endpoint_id:
+            return False
+        else:
+            return True
+
     def __eq__(self, other):
         if not isinstance(other, Endpoint):
             return NotImplemented
-        return (self.ep_id == other.ep_id and
+        return (self.endpoint_id == other.endpoint_id and
                 self.state == other.state and
                 self.if_name == other.if_name and
                 self.mac == other.mac and
@@ -656,7 +676,7 @@ class DatastoreClient(object):
         return profile
 
     @handle_errors
-    def get_profile_members_ep_ids(self, name):
+    def get_profile_members_endpoint_ids(self, name):
         """
         Get all endpoint IDs that are members of named profile.
 
@@ -675,7 +695,7 @@ class DatastoreClient(object):
         for child in endpoints.leaves:
             ep = Endpoint.from_json(child.key, child.value)
             if ep and name in ep.profile_ids:
-                members.append(ep.ep_id)
+                members.append(ep.endpoint_id)
         return members
 
     @handle_errors
@@ -699,7 +719,7 @@ class DatastoreClient(object):
             for child in endpoints:
                 ep = Endpoint.from_json(child.key, child.value)
                 if ep and profile_name in ep.profile_ids:
-                    eps[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.ep_id] = ep
+                    eps[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.endpoint_id] = ep
         except EtcdKeyNotFound:
             pass
 
@@ -728,7 +748,7 @@ class DatastoreClient(object):
         self.etcd_client.write(rules_path, profile.rules.to_json())
 
     @handle_errors
-    def append_profiles_to_endpoint(self, endpoint_id, profile_names):
+    def append_profiles_to_endpoint(self, profile_names, hostname=None, orchestrator_id=None, workload_id=None, endpoint_id=None):
         """
         Append a list of profiles to the endpoint.  This assumes there is a
         single endpoint per container.
@@ -744,7 +764,8 @@ class DatastoreClient(object):
         """
         # Change the profiles on the endpoint.  Check that we are not adding a
         # duplicate entry, and perform an update to ensure atomicity.
-        ep = self.get_endpoint_from_id(endpoint_id)
+        ep = self.get_endpoint(hostname, orchestrator_id, workload_id, endpoint_id)
+
         for profile_name in ep.profile_ids:
             if profile_name in profile_names:
                 raise ProfileAlreadyInEndpoint(profile_name)
@@ -752,7 +773,7 @@ class DatastoreClient(object):
         self.update_endpoint(ep)
 
     @handle_errors
-    def set_profiles_on_endpoint(self, endpoint_id, profile_names):
+    def set_profiles_on_endpoint(self, profile_names, **kwargs):
         """
         Set a list of profiles on the endpoint.  This assumes there is a single
         endpoint per container.
@@ -764,18 +785,20 @@ class DatastoreClient(object):
         :return: None.
         """
         # Set the profiles on the endpoint.
-        ep = self.get_endpoint_from_id(endpoint_id)
+        ep = self.get_endpoint(**kwargs)
         ep.profile_ids = profile_names
         self.update_endpoint(ep)
 
     @handle_errors
-    def remove_profiles_from_endpoint(self, endpoint_id, profile_names):
+    def remove_profiles_from_endpoint(self, profile_names, **kwargs):
         """
         Remove a profiles from the endpoint profile list.  This assumes there
         is a single endpoint per container.
 
         Raises ProfileNotInEndpoint if any of the profiles are not configured
         in the endpoint profile list.
+
+        Raises MultipleEndpointsMatch if the spe
 
         :param hostname: The name of the host the container is on.
         :param profile_names: The profiles to remove from the endpoint profile
@@ -784,7 +807,7 @@ class DatastoreClient(object):
         :return: None.
         """
         # Change the profile on the endpoint.
-        ep = self.get_endpoint_from_id(endpoint_id)
+        ep = self.get_endpoint(**kwargs)
         for profile_name in profile_names:
             try:
                 ep.profile_ids.remove(profile_name)
@@ -793,7 +816,7 @@ class DatastoreClient(object):
         self.update_endpoint(ep)
 
     @handle_errors
-    def get_ep_id_from_cont(self, hostname, container_id):
+    def get_endpoint_id_from_cont(self, hostname, container_id):
         """
         Get a single endpoint ID from a container ID.
 
@@ -820,24 +843,69 @@ class DatastoreClient(object):
                 "Container with ID %s has no endpoints." % container_id)
 
     @handle_errors
-    def get_endpoint(self, hostname, container_id, endpoint_id):
+    def get_endpoints(self, hostname=None, orchestrator_id=None, workload_id=None, endpoint_id=None):
         """
-        Get all of the details for a single endpoint.
+        Optimized function to get endpoint(s).
 
-        :param hostname: The hostname that the endpoint lives on.
-        :param container_id: The container that the endpoint belongs to.
+        Constructs a etcd-path that it as specific as possible given the provided criteria, in order
+        to return the smallest etcd tree as possible. After querying with the ep_path, it will then
+        compare the returned endpoints to the provided criteria, and return all matches.
+
         :param endpoint_id: The ID of the endpoint
-        :return:  an Endpoint Object
+        :param hostname: The hostname that the endpoint lives on.
+        :param workload_id: The workload (or container) that the endpoint belongs to.
+        :param orchestrator_id: The workload (or container) that the endpoint belongs to.
+
+        :return: A list of Endpoint Objects which match the criteria, or an empty list if none match
         """
-        ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                   "container_id": container_id,
-                                   "endpoint_id": endpoint_id}
+        # First build the query string as specific as possible. Note, we want the query to be as specific as
+        # possible, so we proceed any variables with known constants e.g. we add '/workload' after the hostname
+        # variable.
+        ep_path = HOSTS_PATH
+        if hostname:
+            ep_path = HOST_PATH % { "hostname": hostname }
+            if orchestrator_id or True:
+                # TODO: interpolate orchestrator ID (and remove True condition) once "docker" is no longer hardcoded
+                # into string constants
+                if workload_id:
+                    ep_path = CONTAINER_PATH % { "container_id": workload_id,
+                                                 "hostname": hostname }
+                    if endpoint_id:
+                        ep_path = ENDPOINT_PATH % { "container_id": workload_id,
+                                                    "hostname": hostname,
+                                                    "profile_ids": endpoint_id }
         try:
-            ep_json = self.etcd_client.read(ep_path).value
-            ep = Endpoint.from_json(ep_path, ep_json)
-            return ep
+            # Search etcd
+            leaves = self.etcd_client.read(ep_path, recursive=True).leaves
         except EtcdKeyNotFound:
-            raise KeyError("Endpoint %s not found" % ep_path)
+            # Path doesn't exist, which is fine, as they may have just queried an endpoint which does not exist.
+            return []
+
+        # Filter through result
+        matches = []
+        for leaf in leaves:
+            endpoint = Endpoint.from_json(leaf.key, leaf.value)
+
+            # If its an endpoint, compare it to search criteria
+            if endpoint and endpoint.matches(hostname, orchestrator_id, workload_id, endpoint_id):
+                matches.append(endpoint)
+        return matches
+
+    @handle_errors
+    def get_endpoint(self, hostname=None, orchestrator_id=None, workload_id=None, endpoint_id=None):
+        """
+        Calls through to get_endpoints to find an endpoint matching the passed-in criteria.
+        However, it raises a MultipleEndpointsMatch exception if more than one endpoint matches.
+
+        :return: An Endpoint Object
+        """
+        eps = self.get_endpoints(hostname, orchestrator_id, workload_id, endpoint_id)
+        if len(eps) == 0:
+            raise KeyError("No endpoint found matching specified criteria")
+        elif len(eps) > 1:
+            raise MultipleEndpointsMatch
+        else:
+            return eps.pop()
 
     @handle_errors
     def set_endpoint(self, hostname, container_id, endpoint):
@@ -850,7 +918,7 @@ class DatastoreClient(object):
         """
         ep_path = ENDPOINT_PATH % {"hostname": hostname,
                                    "container_id": container_id,
-                                   "endpoint_id": endpoint.ep_id}
+                                   "endpoint_id": endpoint.endpoint_id}
         new_json = endpoint.to_json()
         self.etcd_client.write(ep_path, new_json)
         endpoint._original_json = new_json
@@ -869,54 +937,12 @@ class DatastoreClient(object):
         """
         ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
                                    "container_id": endpoint.workload_id,
-                                   "endpoint_id": endpoint.ep_id}
+                                   "endpoint_id": endpoint.endpoint_id}
         new_json = endpoint.to_json()
         self.etcd_client.write(ep_path,
                                new_json,
                                prevValue=endpoint._original_json)
         endpoint._original_json = new_json
-
-    @handle_errors
-    def get_endpoints(self, hostname, container_id):
-        """
-        Get all of the Endpoints for a container.
-
-        :param hostname: The hostname that the endpoint lives on.
-        :param container_id: The container that the endpoint belongs to.
-        :return:  a list of Endpoint Object
-        """
-        eps_path = LOCAL_ENDPOINTS_PATH % {"hostname": hostname,
-                                          "container_id": container_id}
-        try:
-            endpoints = self.etcd_client.read(eps_path).leaves
-        except EtcdKeyNotFound:
-            # Re-raise with better message
-            raise KeyError("Container with ID %s was not found." %
-                           container_id)
-
-        # Extract all of the endpoints.
-        eps = []
-        for endpoint in endpoints:
-            eps.append(Endpoint.from_json(endpoint.key, endpoint.value))
-        return eps
-
-    @handle_errors
-    def get_endpoint_from_id(self, endpoint_id):
-        """
-        Get the endpoint specified by the endpoint id.
-
-        :param endpoint_id: The endpoint ID.
-        :return:  a tuple of: (raw json, Endpoint)
-        """
-        leaves = self.etcd_client.read(HOSTS_PATH).leaves
-
-        # Extract all of the endpoints.
-        for leaf in leaves:
-            ep = Endpoint.from_json(leaf.key, leaf.value)
-            if ep and ep.ep_id == endpoint_id:
-                return ep
-        raise KeyError("Endpoint with ID %s was not found." %
-                       endpoint_id)
 
     @handle_errors
     def get_hosts(self):
@@ -937,7 +963,7 @@ class DatastoreClient(object):
             for child in etcd_hosts:
                 ep = Endpoint.from_json(child.key, child.value)
                 if ep:
-                    hosts[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.ep_id] = ep
+                    hosts[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.endpoint_id] = ep
                 else:
                     packed = child.key.split("/")
                     if 10 > len(packed) > 5:
@@ -1042,3 +1068,10 @@ class ProfileAlreadyInEndpoint(Exception):
     """
     def __init__(self, profile_name):
         self.profile_name = profile_name
+
+
+class MultipleEndpointsMatch(Exception):
+    """
+    More than one endpoint was found for the specified criteria.
+    """
+    pass
