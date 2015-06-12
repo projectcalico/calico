@@ -82,6 +82,11 @@ KNOWN_RULE_KEYS = set([
 # valid characters is the same for endpoints, profiles, and tags.
 VALID_ID_RE = re.compile('^[a-zA-Z0-9_\.\-]+$')
 
+VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
+
+# Not that thorough: we don't care if it's a valid CIDR, only that it doesn't
+# have anything malicious in it.
+VALID_IPAM_POOL_ID_RE = re.compile(r'^[0-9\.:a-fA-F\-]{1,43}$')
 
 tid_storage = gevent.local.local()
 tid_counter = itertools.count()
@@ -569,3 +574,41 @@ def validate_tags(profile_id, tags):
 
     if issues:
         raise ValidationFailed(" ".join(issues))
+
+def validate_ipam_pool(pool_id, pool, ip_version):
+    # Remove any keys that we're not expecting.  Stops unvalidated data from
+    # slipping through.  We ignore other keys since this structure is used
+    # by calicoctl for its own purposes too.
+    keys_to_remove = set()
+    for key in pool:
+        if key not in ("cidr", "ipip", "masquerade"):
+            keys_to_remove.add(key)
+    for key in keys_to_remove:
+        pool.pop(key)
+
+    issues = []
+    if "cidr" not in pool:
+        issues.append("'cidr' field is missing")
+    else:
+        cidr = pool["cidr"]
+        if cidr is None or not validate_cidr(cidr, ip_version):
+            issues.append("Invalid CIDR: %r" % cidr)
+        else:
+            pool["cidr"] = canonicalise_cidr(cidr, ip_version)
+
+    if "ipip" in pool:
+        ipip_name = pool["ipip"]
+        if not isinstance("ipip", StringTypes):
+            issues.append("'ipip' field should be a string, not %r" %
+                          ipip_name)
+        elif not VALID_LINUX_IFACE_NAME_RE.match(ipip_name):
+            issues.append("Invalid interface name for 'ipip': %r" % ipip_name)
+
+    if not isinstance(pool.get("masquerade", False), bool):
+        issues.append("Invalid 'masquerade' field: %r" % pool["masquerade"])
+
+    if not VALID_IPAM_POOL_ID_RE.match(pool_id):
+        issues.append("Invalid pool ID: %r" % pool)
+
+    if issues:
+        raise ValidationFailed(','.join(issues))

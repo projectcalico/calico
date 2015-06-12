@@ -39,7 +39,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  RULES_KEY_RE, TAGS_KEY_RE, ENDPOINT_KEY_RE,
                                  dir_for_per_host_config,
                                  PROFILE_DIR, HOST_DIR, EndpointId, POLICY_DIR,
-                                 HOST_IP_KEY_RE)
+                                 HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE)
 from calico.etcdutils import PathDispatcher
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import intern_dict, intern_list
@@ -61,6 +61,22 @@ PER_ORCH_DIR = WORKLOAD_DIR + "/<orchestrator>"
 PER_WORKLOAD_DIR = PER_ORCH_DIR + "/<workload_id>"
 ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
 PER_ENDPOINT_KEY = ENDPOINT_DIR + "/<endpoint_id>"
+
+IPAM_DIR = VERSION_DIR + "/ipam"
+IPAM_V4_DIR = IPAM_DIR + "/v4"
+POOL_V4_DIR = IPAM_V4_DIR + "/pool"
+CIDR_V4_KEY = POOL_V4_DIR + "/<pool_id>"
+
+RESYNC_KEYS = [
+    VERSION_DIR,
+    POLICY_DIR,
+    PROFILE_DIR,
+    CONFIG_DIR,
+    HOST_DIR,
+    IPAM_DIR,
+    IPAM_V4_DIR,
+    POOL_V4_DIR,
+]
 
 
 class EtcdWatcher(Actor):
@@ -90,17 +106,14 @@ class EtcdWatcher(Actor):
         reg = self.dispatcher.register
         # Top-level directories etc.  If these go away, stop polling and
         # resync.
-        reg(VERSION_DIR, on_del=self._resync)
-        reg(POLICY_DIR, on_del=self._resync)
-        reg(PROFILE_DIR, on_del=self._resync)
-        reg(CONFIG_DIR, on_del=self._resync)
+        for key in RESYNC_KEYS:
+            reg(key, on_del=self._resync)
         reg(READY_KEY, on_set=self.on_ready_flag_set, on_del=self._resync)
         # Profiles and their contents.
         reg(PER_PROFILE_DIR, on_del=self.on_profile_delete)
         reg(TAGS_KEY, on_set=self.on_tags_set, on_del=self.on_tags_delete)
         reg(RULES_KEY, on_set=self.on_rules_set, on_del=self.on_rules_delete)
         # Hosts, workloads and endpoints.
-        reg(HOST_DIR, on_del=self._resync)
         reg(PER_HOST_DIR, on_del=self.on_host_delete)
         reg(HOST_IP_KEY,
             on_set=self.on_host_ip_set,
@@ -111,6 +124,9 @@ class EtcdWatcher(Actor):
         reg(ENDPOINT_DIR, on_del=self.on_workload_delete)
         reg(PER_ENDPOINT_KEY,
             on_set=self.on_endpoint_set, on_del=self.on_endpoint_delete)
+        reg(CIDR_V4_KEY,
+            on_set=self.on_ipam_v4_pool_set,
+            on_del=self.on_ipam_v4_pool_delete)
 
     @actor_message()
     def load_config(self):
@@ -226,6 +242,7 @@ class EtcdWatcher(Actor):
         rules_by_id = {}
         tags_by_id = {}
         endpoints_by_id = {}
+        ipv4_pools_by_id = {}
         self.endpoint_ids_per_host.clear()
         self.ipv4_by_hostname.clear()
         still_ready = False
@@ -242,6 +259,10 @@ class EtcdWatcher(Actor):
             if endpoint_id and endpoint:
                 endpoints_by_id[endpoint_id] = endpoint
                 self.endpoint_ids_per_host[endpoint_id.host].add(endpoint_id)
+                continue
+            pool_id, pool = parse_if_ipam_v4_pool(child)
+            if pool_id and pool:
+                ipv4_pools_by_id[pool_id] = pool
                 continue
             if self.config.IP_IN_IP_ENABLED:
                 hostname, ip = parse_if_host_ip(child)
@@ -269,6 +290,7 @@ class EtcdWatcher(Actor):
         self.splitter.apply_snapshot(rules_by_id,
                                      tags_by_id,
                                      endpoints_by_id,
+                                     ipv4_pools_by_id,
                                      async=True)
         if self.config.IP_IN_IP_ENABLED:
             # We only support IPv4 for host tracking right now so there's not
@@ -464,6 +486,13 @@ class EtcdWatcher(Actor):
             self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
                                              async=True)
 
+    def on_ipam_v4_pool_set(self, response, pool_id):
+        pool = parse_ipam_pool(pool_id, response.value)
+        self.splitter.on_ipam_pool_update(pool_id, pool, async=True)
+
+    def on_ipam_v4_pool_delete(self, response, pool_id):
+        self.splitter.on_ipam_pool_update(pool_id, None, async=True)
+
     def on_orch_delete(self, response, hostname, orchestrator):
         """
         Handler for deletion of a whole host orchestrator directory.
@@ -639,6 +668,31 @@ def parse_host_ip(hostname, raw_value):
     else:
         _log.debug("%s has invalid IP: %r", hostname, raw_value)
         return None
+
+
+def parse_if_ipam_v4_pool(etcd_node):
+    m = IPAM_V4_CIDR_KEY_RE.match(etcd_node.key)
+    if m:
+        # Got some rules.
+        pool_id = m.group("encoded_cidr")
+        if etcd_node.action == "delete":
+            pool = None
+        else:
+            pool = parse_ipam_pool(pool_id, etcd_node.value)
+        return pool_id, pool
+    return None, None
+
+
+def parse_ipam_pool(pool_id, raw_json):
+    pool = safe_decode_json(raw_json, log_tag="ipam pool %s" % pool_id)
+    try:
+        common.validate_ipam_pool(pool_id, pool, 4)
+    except ValidationFailed as e:
+        _log.exception("Validation failed for ipam pool %s: %s; %r",
+                       pool_id, pool, e)
+        return None
+    else:
+        return pool
 
 
 def safe_decode_json(raw_json, log_tag=None):

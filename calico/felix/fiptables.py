@@ -98,7 +98,7 @@ class IptablesUpdater(Actor):
 
     def __init__(self, table, ip_version=4):
         super(IptablesUpdater, self).__init__(qualifier="v%d" % ip_version)
-        self._table = table
+        self.table = table
         if ip_version == 4:
             self._restore_cmd = "iptables-restore"
             self._save_cmd = "iptables-save"
@@ -158,8 +158,8 @@ class IptablesUpdater(Actor):
     def _refresh_chains_in_dataplane(self):
         self._stats.increment("Refreshed chain list")
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",
-                                                  self._table])
-        self._chains_in_dataplane = _extract_our_chains(self._table,
+                                                  self.table])
+        self._chains_in_dataplane = _extract_our_chains(self.table,
                                                         raw_ipt_output)
 
     def _read_unreferenced_chains(self):
@@ -170,7 +170,7 @@ class IptablesUpdater(Actor):
             are not referenced by other chains.
         """
         raw_ipt_output = subprocess.check_output(
-            [self._iptables_cmd, "--wait", "--list", "--table", self._table])
+            [self._iptables_cmd, "--wait", "--list", "--table", self.table])
         return _extract_our_unreffed_chains(raw_ipt_output)
 
     @actor_message()
@@ -223,7 +223,7 @@ class IptablesUpdater(Actor):
             # exists then the rule will be moved to the start of the chain.
             _log.info("Attempting to move any existing instance of rule %r"
                       "to top of chain.", rule_fragment)
-            self._execute_iptables(['*%s' % self._table,
+            self._execute_iptables(['*%s' % self.table,
                                     '--delete %s' % rule_fragment,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'],
@@ -232,7 +232,7 @@ class IptablesUpdater(Actor):
             # Assume the rule didn't exist. Try inserting it.
             _log.info("Didn't find any existing instance of rule %r, "
                       "inserting it instead.")
-            self._execute_iptables(['*%s' % self._table,
+            self._execute_iptables(['*%s' % self.table,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
 
@@ -487,7 +487,7 @@ class IptablesUpdater(Actor):
             input_lines.extend(chain_updates)
         if not input_lines:
             raise NothingToDo
-        return ["*%s" % self._table] + input_lines + ["COMMIT"]
+        return ["*%s" % self.table] + input_lines + ["COMMIT"]
 
     def _calculate_ipt_delete_input(self, chains):
         """
@@ -498,7 +498,7 @@ class IptablesUpdater(Actor):
         """
         input_lines = []
         found_delete = False
-        input_lines.append("*%s" % self._table)
+        input_lines.append("*%s" % self.table)
         for chain_name in chains:
             # Delete the chain
             input_lines.append(":%s -" % chain_name)
@@ -516,7 +516,7 @@ class IptablesUpdater(Actor):
         """
         input_lines = []
         found_chain_to_stub = False
-        input_lines.append("*%s" % self._table)
+        input_lines.append("*%s" % self.table)
         for chain_name in chains:
             # Stub the chain
             input_lines.append(":%s -" % chain_name)
