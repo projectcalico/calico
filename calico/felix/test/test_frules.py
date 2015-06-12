@@ -62,16 +62,16 @@ RULES_TESTS = [
 
     ([{"protocol": "tcp",
        "src_tag": "tag-foo",
-       "src_ports": [10, "11:12"]}], 4,
+       "src_ports": ["0:12", 13]}], 4,
      ["--append chain-foo --protocol tcp "
       "--match set --match-set ipset-foo src "
-      "--match multiport --source-ports 10,11:12 --jump RETURN",
+      "--match multiport --source-ports 0:12,13 --jump RETURN",
       DEFAULT_MARK]),
 
     ([{"protocol": "tcp",
-       "src_ports": [1, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}], 4,
+       "src_ports": [0, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}], 4,
      ["--append chain-foo --protocol tcp "
-      "--match multiport --source-ports 1,2:3,4,5,6,7,8,9,10,11,12,13,14,15 "
+      "--match multiport --source-ports 0,2:3,4,5,6,7,8,9,10,11,12,13,14,15 "
       "--jump RETURN",
       "--append chain-foo --protocol tcp "
       "--match multiport --source-ports 16,17 "

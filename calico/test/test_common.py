@@ -621,8 +621,8 @@ class TestCommon(unittest.TestCase):
     def test_validate_rule_port(self):
         self.assertEqual(common.validate_rule_port(73), None)
         self.assertEqual(common.validate_rule_port("57:123"), None)
-        self.assertEqual(common.validate_rule_port(0),
-                         "integer out of range")
+        self.assertEqual(common.validate_rule_port("0:1024"), None)
+        self.assertEqual(common.validate_rule_port(0), None)
         self.assertEqual(common.validate_rule_port(65536),
                          "integer out of range")
         self.assertEqual(common.validate_rule_port([]),
@@ -637,7 +637,7 @@ class TestCommon(unittest.TestCase):
                          "range invalid")
         self.assertEqual(common.validate_rule_port("3:1"),
                          "range invalid")
-        self.assertEqual(common.validate_rule_port("0:3"),
+        self.assertEqual(common.validate_rule_port("-1:3"),
                          "range invalid")
         self.assertEqual(common.validate_rule_port("5:65536"),
                          "range invalid")
