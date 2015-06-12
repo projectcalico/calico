@@ -55,11 +55,13 @@ KERNEL_PROTOCOLS.update(intern(str(p)) for p in xrange(1, 256))
 
 # Protocols that support a port match in iptables.  We allow the name and
 # protocol number.
-KERNEL_PORT_PROTOCOLS = set(["tcp", 6,
-                             "udp", 17,
-                             "udplite", 136,
-                             "sctp", 132,
-                             "dccp", 33])
+KERNEL_PORT_PROTOCOLS = set([
+    "tcp", 6, "6",
+    "udp", 17, "17",
+    "udplite", 136, "136",
+    "sctp", 132, "132",
+    "dccp", 33, "33",
+])
 
 # Valid keys for a rule JSON dict.
 KNOWN_RULE_KEYS = set([
