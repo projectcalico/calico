@@ -82,9 +82,12 @@ def save_diags(upload=False):
         except sh.CommandNotFound as e:
             print "Missing command: %s" % e.message
 
-    print("Copying Calico logs")
     calico_dir = '/var/log/calico'
-    copytree(calico_dir, os.path.join(temp_diags_dir, "logs"))
+    if os.path.isdir(calico_dir):
+        print("Copying Calico logs")
+        copytree(calico_dir, os.path.join(temp_diags_dir, "logs"))
+    else:
+        print('No logs found in %s; skipping log copying' % calico_dir)
 
     print("Dumping datastore")
     # TODO: May want to move this into datastore.py as a dump-calico function
