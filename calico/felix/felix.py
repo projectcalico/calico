@@ -126,7 +126,7 @@ def _main_greenlet(config):
             v4_filter_updater,
             v4_nat_updater,
             v4_ipset_mgr,
-            v4_masq_manager
+            v4_masq_manager,
             v4_rules_manager,
             v4_dispatch_chains,
             v4_ep_manager,
