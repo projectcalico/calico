@@ -10,7 +10,7 @@ def setup_package():
     # Pull and save each image, so we can use them inside the host containers.
     print sh.bash("./build_node.sh").stdout
     docker.save("--output", "calico_containers/calico-node.tar", "calico/node")
-    if not os.path.isfile("busybox.tar"):
+    if not os.path.isfile("calico_containers/busybox.tar"):
         docker.pull("busybox:latest")
         docker.save("--output", "calico_containers/busybox.tar", "busybox:latest")
 
