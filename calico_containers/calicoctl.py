@@ -1000,7 +1000,7 @@ def validate_arguments():
     profile_ok = (arguments["<PROFILE>"] is None or
                   re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
     tag_ok = (arguments["<TAG>"] is None or
-              re.match("^%s$" % valid_chars, arguments["<TAG>"]))
+              re.match("^%s+$" % valid_chars, arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
     ip6_ok = arguments["--ip6"] is None or \
              netaddr.valid_ipv6(arguments["--ip6"])
