@@ -576,11 +576,13 @@ class DatastoreClient(object):
         self.etcd_client.write(profile_path + "tags", '["%s"]' % name)
 
         # Accept inbound traffic from self, allow outbound traffic to anywhere.
-        default_deny = Rule(action="deny")
+        # Note: We do not need to add a default_deny to outbound packet traffic since Felix implements a default
+        # drop at the end if no profile has accepted. Dropping the packet will kill it before it can potentially
+        # be accepted by another profile on the container.
         accept_self = Rule(action="allow", src_tag=name)
         default_allow = Rule(action="allow")
         rules = Rules(id=name,
-                      inbound_rules=[accept_self, default_deny],
+                      inbound_rules=[accept_self],
                       outbound_rules=[default_allow])
         self.etcd_client.write(profile_path + "rules", rules.to_json())
 
