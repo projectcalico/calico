@@ -71,6 +71,9 @@ ENDPOINT_KEY_RE = re.compile(
 HOST_IP_KEY_RE = re.compile(r'^' + HOST_DIR +
                             r'/(?P<hostname>[^/]+)/bird_ip')
 
+IPAM_V4_CIDR_KEY_RE = re.compile(r'^' + VERSION_DIR +
+                                 r'/ipam/v4/pool/(?P<encoded_cidr>[^/]+)')
+
 def dir_for_host(hostname):
     return HOST_DIR+ "/%s" % hostname
 

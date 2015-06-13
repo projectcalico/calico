@@ -634,6 +634,18 @@ class Ipset(object):
         assert ip_family in ("inet", "inet6")
         self.family = ip_family
 
+    def exists(self):
+        try:
+            futils.check_call(["ipset", "list", self.set_name])
+        except FailedSystemCall as e:
+            if e.retcode == 1 and "does not exist" in e.stderr:
+                return False
+            else:
+                _log.exception("Failed to check if ipset exists")
+                raise
+        else:
+            return True
+
     def ensure_exists(self):
         """
         Creates the ipset iff it does not exist.

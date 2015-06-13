@@ -45,6 +45,7 @@ from calico.felix.devices import InterfaceWatcher
 from calico.felix.endpoint import EndpointManager
 from calico.felix.fetcd import EtcdWatcher
 from calico.felix.ipsets import IpsetManager, IpsetActor, HOSTS_IPSET_V4
+from calico.felix.masq import MasqueradeManager
 
 _log = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ def _main_greenlet(config):
         v4_filter_updater = IptablesUpdater("filter", ip_version=4)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4)
         v4_ipset_mgr = IpsetManager(IPV4)
+        v4_masq_manager = MasqueradeManager(IPV4, v4_nat_updater)
         v4_rules_manager = RulesManager(4, v4_filter_updater, v4_ipset_mgr)
         v4_dispatch_chains = DispatchChains(config, 4, v4_filter_updater)
         v4_ep_manager = EndpointManager(config,
@@ -91,7 +93,9 @@ def _main_greenlet(config):
                                          [v4_ipset_mgr, v6_ipset_mgr],
                                          [v4_rules_manager, v6_rules_manager],
                                          [v4_ep_manager, v6_ep_manager],
-                                         [v4_filter_updater, v6_filter_updater])
+                                         [v4_filter_updater,
+                                          v6_filter_updater],
+                                         v4_masq_manager)
         iface_watcher = InterfaceWatcher(update_splitter)
 
         _log.info("Starting actors.")
@@ -101,6 +105,7 @@ def _main_greenlet(config):
         v4_filter_updater.start()
         v4_nat_updater.start()
         v4_ipset_mgr.start()
+        v4_masq_manager.start()
         v4_rules_manager.start()
         v4_dispatch_chains.start()
         v4_ep_manager.start()
@@ -121,6 +126,7 @@ def _main_greenlet(config):
             v4_filter_updater,
             v4_nat_updater,
             v4_ipset_mgr,
+            v4_masq_manager,
             v4_rules_manager,
             v4_dispatch_chains,
             v4_ep_manager,
@@ -132,7 +138,7 @@ def _main_greenlet(config):
             v6_ep_manager,
 
             iface_watcher,
-            etcd_watcher
+            etcd_watcher,
         ]
         monitored_items = [actor.greenlet for actor in top_level_actors]
 

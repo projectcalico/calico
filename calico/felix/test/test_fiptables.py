@@ -23,9 +23,10 @@ import copy
 
 import logging
 import re
-from mock import patch
+from mock import patch, call
 from calico.felix import fiptables
 from calico.felix.fiptables import IptablesUpdater
+from calico.felix.futils import FailedSystemCall
 from calico.felix.test.base import BaseTestCase
 
 _log = logging.getLogger(__name__)
@@ -216,6 +217,46 @@ class TestIptablesUpdater(BaseTestCase):
             # before.
         })
 
+    def test_ensure_rule_removed(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([None,
+                                       FailedSystemCall("Message", [], 1, "",
+                                                        "line 2 failed")])
+            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call] * 2)
+
+    def test_ensure_rule_removed_not_present(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
+                                                        "line 2 failed")])
+            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call])
+
+    def test_ensure_rule_removed_error(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
+                                                        "the foo is barred")])
+            f = self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            self.assertRaises(FailedSystemCall, f.get)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call])
 
 
 class TestIptablesStub(BaseTestCase):
