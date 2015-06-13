@@ -561,8 +561,7 @@ def profile_add_container(container_name, profile_name, workload_id="docker"):
         sys.exit(1)
 
     # Call through to the container profile set method to add the profile.
-    endpoint_profile_append(endpoint_id, container_name, ORCHESTRATOR_ID, hostname, [profile_name])
-    endpoint_profile_append(endpoint_id, container_name, ORCHESTRATOR_ID, hostname, [profile_name])
+    endpoint_profile_append(hostname, ORCHESTRATOR_ID, container_id, endpoint_id, [profile_name])
 
 
 def profile_remove(profile_name):
@@ -1364,10 +1363,10 @@ if __name__ == '__main__':
         elif arguments["endpoint"]:
             if arguments["profile"]:
                 if arguments["append"]:
-                    endpoint_profile_append(arguments["<ENDPOINT_ID>"],
-                                            arguments["--workload"],
+                    endpoint_profile_append(arguments["--host"],
                                             arguments["--orchestrator"],
-                                            arguments["--host"],
+                                            arguments["--workload"],
+                                            arguments["<ENDPOINT_ID>"],
                                             arguments['<PROFILES>'] or [])
                 elif arguments["remove"]:
                     endpoint_profile_remove(arguments["<ENDPOINT_ID>"],
