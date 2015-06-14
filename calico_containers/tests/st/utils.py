@@ -1,15 +1,21 @@
+import os
 import sh
 from sh import docker
 import socket
 from time import sleep
 
+LOCAL_IP_ENV = "MY_IP"
 
 def get_ip():
     """Return a string of the IP of the hosts eth0 interface."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip = s.getsockname()[0]
-    s.close()
+    try:
+        ip = os.environ[LOCAL_IP_ENV]
+    except KeyError:
+        # No env variable set; try to auto detect.
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
     return ip
 
 
