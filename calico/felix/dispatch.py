@@ -24,7 +24,7 @@ import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
     CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_FROM_LEAF, CHAIN_TO_LEAF,
-    CHAIN_INBOUND, chain_names, interface_to_suffix
+    chain_names, interface_to_suffix
 )
 
 _log = logging.getLogger(__name__)
@@ -156,45 +156,10 @@ class DispatchChains(Actor):
         updates = defaultdict(list)
         root_to_upds = updates[CHAIN_TO_ENDPOINT]
         root_from_upds = updates[CHAIN_FROM_ENDPOINT]
-        root_inbound_upds = updates[CHAIN_INBOUND]
 
         dependencies = defaultdict(set)
         root_to_deps = dependencies[CHAIN_TO_ENDPOINT]
         root_from_deps = dependencies[CHAIN_FROM_ENDPOINT]
-
-        # Special case: allow the metadata IP through from all interfaces.
-        if self.config.METADATA_IP is not None and self.ip_version == 4:
-            # Need to allow outgoing Metadata requests.
-            root_inbound_upds.append("--append %s "
-                                     "--protocol tcp "
-                                     "--in-interface %s+ "
-                                     "--destination %s "
-                                     "--dport %s "
-                                     "--jump RETURN" %
-                                     (CHAIN_INBOUND,
-                                      self.config.IFACE_PREFIX,
-                                      self.config.METADATA_IP,
-                                      self.config.METADATA_PORT))
-
-        # Special case: allow DHCP inbound from all interfaces.
-        if self.ip_version == 4:
-            dhcp_src_port = 68
-            dhcp_dst_port = 67
-        else:
-            assert self.ip_version == 6
-            dhcp_src_port = 546
-            dhcp_dst_port = 547
-
-        root_inbound_upds.append("--append %s "
-                                 "--protocol udp "
-                                 "--in-interface %s+ "
-                                 "--sport %s "
-                                 "--dport %s "
-                                 "--jump RETURN" %
-                                 (CHAIN_INBOUND,
-                                  self.config.IFACE_PREFIX,
-                                  dhcp_src_port,
-                                  dhcp_dst_port))
 
         # Separate the interface names by their prefixes so we can count them
         # and decide whether to program a leaf chain or not.
@@ -268,7 +233,6 @@ class DispatchChains(Actor):
         # we don't know about yet can't bypass our rules.
         root_from_upds.append("--append %s --jump DROP" % CHAIN_FROM_ENDPOINT)
         root_to_upds.append("--append %s --jump DROP" % CHAIN_TO_ENDPOINT)
-        root_inbound_upds.append("--append %s --jump DROP" % CHAIN_INBOUND)
         chains_to_delete = self.programmed_leaf_chains - new_leaf_chains
 
         return chains_to_delete, dependencies, updates, new_leaf_chains
