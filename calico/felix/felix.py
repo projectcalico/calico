@@ -161,7 +161,12 @@ def _main_greenlet(config):
                 # The output will include queue length and the like.
                 log.info("%s", a)
         futils.register_diags("Top-level actors", dump_top_level_actors)
-        gevent.signal(signal.SIGUSR1, functools.partial(futils.dump_diags))
+        try:
+            gevent.signal(signal.SIGUSR1, functools.partial(futils.dump_diags))
+        except AttributeError:
+            # It doesn't matter too much if we fail to do this.
+            _log.warning("Unable to install diag dump handler")
+            pass
 
         # Wait for something to fail.
         _log.info("All top-level actors started, waiting on failures...")
