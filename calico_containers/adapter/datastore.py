@@ -414,7 +414,8 @@ class DatastoreClient(object):
             # the children function is bugged when the directory is entry as
             # it contains a single entry equal to the directory path, so we
             # must filter this out.
-            pools = [x.key.split("/")[-1].replace("-", "/") for x in keys if x.key != pool_path]
+            pools = [x.key.split("/")[-1].replace("-", "/")
+                       for x in keys if x.key != pool_path]
 
         return map(IPNetwork, pools)
 
@@ -873,21 +874,22 @@ class DatastoreClient(object):
         # the query to be as specific as possible, so we proceed any variables
         # with known constants e.g. we add '/workload' after the hostname
         # variable.
-        ep_path = HOSTS_PATH
-        if hostname:
-            ep_path = HOST_PATH % { "hostname": hostname }
-            if orchestrator_id:
-                ep_path = ORCHESTRATOR_PATH % { "hostname": hostname,
-                                                "orchestrator_id": orchestrator_id }
-                if workload_id:
-                    ep_path = WORKLOAD_PATH_OID % { "hostname": hostname,
-                                                    "orchestrator_id": orchestrator_id,
-                                                    "workload_id": workload_id }
-                    if endpoint_id:
-                        ep_path = ENDPOINT_PATH_OID % { "hostname": hostname,
-                                                        "orchestrator_id": orchestrator_id,
-                                                        "workload_id": workload_id,
-                                                        "endpoint_id": endpoint_id }
+        if not hostname:
+            ep_path = HOSTS_PATH
+        elif not orchestrator_id:
+            ep_path = HOST_PATH % {"hostname": hostname}
+        elif not workload_id:
+            ep_path = ORCHESTRATOR_PATH % {"hostname": hostname,
+                                           "orchestrator_id": orchestrator_id}
+        elif not endpoint_id:
+            ep_path = WORKLOAD_PATH_OID % {"hostname": hostname,
+                                           "orchestrator_id": orchestrator_id,
+                                           "workload_id": workload_id}
+        else:
+            ep_path = ENDPOINT_PATH_OID % {"hostname": hostname,
+                                           "orchestrator_id": orchestrator_id,
+                                           "workload_id": workload_id,
+                                           "endpoint_id": endpoint_id}
         try:
             # Search etcd
             leaves = self.etcd_client.read(ep_path, recursive=True).leaves
