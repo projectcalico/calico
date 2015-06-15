@@ -1265,15 +1265,11 @@ def validate_arguments():
     """
     # List of valid characters that Felix permits
     valid_chars = '[a-zA-Z0-9_\.\-]'
-
-    profile_ok = (arguments["<PROFILE>"] is None or
-                  re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
-
     profile_ok = True
     if arguments["<PROFILES>"] or arguments["<PROFILE>"]:
         profiles = arguments["<PROFILES>"] or [arguments["<PROFILE>"]]
         for profile in profiles:
-            if not re.match("^\w{1,30}$", profile):
+            if not re.match("^%s{1,40}$" % valid_chars, profile):
                 profile_ok = False
                 break
 
