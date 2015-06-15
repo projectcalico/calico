@@ -37,7 +37,7 @@ gcloud compute instances create core1 core2 --image https://www.googleapis.com/c
 You can get the cloud-config*.yaml files from the tests/scale directory of this repo.
 
 ## Setting up GCE networking
-In order for routing to work correctly between hosts, you must set up a firewall rule on GCE to allow IPIP packets to flow between the instances. The command for doing this are as follows.
+In order for routing to work correctly between hosts, you must set up a firewall rule on GCE to allow IPIP packets to flow between the instances. The command for doing this is as follows.
 
 ```
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
