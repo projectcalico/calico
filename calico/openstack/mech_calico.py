@@ -152,6 +152,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # Tell the monkeypatch where we are.
         global mech_driver
+        assert mech_driver is None
         mech_driver = self
 
         # Make sure we initialise even if we don't see any API calls.
