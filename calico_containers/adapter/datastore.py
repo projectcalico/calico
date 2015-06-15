@@ -117,21 +117,23 @@ class Rule(dict):
 
         if "src_tag" in self or "src_ports" in self or "src_net" in self:
             out.append("from")
+        if "src_ports" in self:
+            ports = ",".join(str(p) for p in self["src_ports"])
+            out.extend(["ports", ports])
         if "src_tag" in self:
             out.extend(["tag", self["src_tag"]])
-        elif "src_net" in self:
+        if "src_net" in self:
             out.append(str(self["src_net"]))
-        if "src_ports" in self:
-            out.extend(["ports", str(self["src_ports"])])
 
         if "dst_tag" in self or "dst_ports" in self or "dst_net" in self:
             out.append("to")
+        if "dst_ports" in self:
+            ports = ",".join(str(p) for p in self["dst_ports"])
+            out.extend(["ports", ports])
         if "dst_tag" in self:
             out.extend(["tag", self["dst_tag"]])
-        elif "dst_net" in self:
+        if "dst_net" in self:
             out.append(str(self["dst_net"]))
-        if "dst_ports" in self:
-            out.extend(["ports", str(self["dst_ports"])])
 
         return " ".join(out)
 
