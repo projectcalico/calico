@@ -397,13 +397,7 @@ On each compute node, perform the following steps:
 4. Run ``yum update``. This will bring in Calico-specific updates to the
    OpenStack packages and to ``dnsmasq``.
 
-5. Install build dependencies:
-
-   ::
-
-       yum groupinstall 'Development Tools'
-
-6. Install and configure the DHCP agent on the compute host:
+5. Install and configure the DHCP agent on the compute host:
 
    ::
 
@@ -416,14 +410,14 @@ On each compute node, perform the following steps:
 
            interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
-7.  Restart and enable the DHCP agent
+6.  Restart and enable the DHCP agent
 
     ::
 
         service neutron-dhcp-agent restart
         chkconfig neutron-dhcp-agent on
 
-8.  Stop and disable any other routing/bridging agents such as the L3
+7.  Stop and disable any other routing/bridging agents such as the L3
     routing agent or the Linux bridging agent.  These conflict with Calico.
 
     ::
@@ -432,7 +426,7 @@ On each compute node, perform the following steps:
         chkconfig neutron-l3-agent off
         ... repeat for bridging agent and any others ...
 
-9.  If this node is not a controller, install and start the Nova
+8.  If this node is not a controller, install and start the Nova
     Metadata API. This step is not required on combined compute and
     controller nodes.
 
@@ -442,16 +436,16 @@ On each compute node, perform the following steps:
         service openstack-nova-metadata-api restart
         chkconfig openstack-nova-metadata-api on
 
-10. Install the BIRD BGP client from EPEL:
+9. Install the BIRD BGP client from EPEL:
     ``yum install -y bird bird6``
 
-11. Install the ``calico-compute`` package:
+10. Install the ``calico-compute`` package:
 
     ::
 
         yum install calico-compute
 
-12. Configure BIRD. By default Calico assumes that you'll be deploying a
+11. Configure BIRD. By default Calico assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's
@@ -492,11 +486,11 @@ On each compute node, perform the following steps:
          chkconfig bird on
          chkconfig bird6 on
 
-13. Create the ``/etc/calico/felix.cfg`` file by copying
+12. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
     used, but see :doc:`configuration` for more details.
 
-14. Restart the Felix service:
+13. Restart the Felix service:
 
     ::
 
