@@ -30,6 +30,7 @@ _log = logging.getLogger(__name__)
 
 ENV_IP = "CALICO_IP"
 ENV_PROFILE = "CALICO_PROFILE"
+ORCHESTRATOR_ID = "docker"
 
 hostname = socket.gethostname()
 
@@ -234,6 +235,7 @@ class AdapterResource(resource.Resource):
         next_hop_ips = self.datastore.get_default_next_hops(hostname)
         endpoint = netns.set_up_endpoint(ip=ip,
                                          hostname=hostname,
+                                         orchestrator_id=ORCHESTRATOR_ID,
                                          cpid=pid,
                                          next_hop_ips=next_hop_ips)
         if profile is not None:

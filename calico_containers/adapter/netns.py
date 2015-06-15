@@ -110,7 +110,7 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
                       shell=True)
 
 
-def set_up_endpoint(ip, hostname, cpid, next_hop_ips,
+def set_up_endpoint(ip, hostname, orchestrator_id, cpid, next_hop_ips,
                     veth_name=VETH_NAME,
                     proc_alias=PROC_ALIAS,
                     ep_id=None,
@@ -192,9 +192,8 @@ def set_up_endpoint(ip, hostname, cpid, next_hop_ips,
 
     # Return an Endpoint.
     network = IPNetwork(IPAddress(ip))
-    # TODO: remove docker hardcoding
     ep = Endpoint(hostname=hostname,
-                  orchestrator_id="docker",
+                  orchestrator_id=orchestrator_id,
                   workload_id=cpid,
                   endpoint_id=ep_id,
                   state="active",
@@ -225,6 +224,7 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
     net = nets.pop()
     new_endpoint = set_up_endpoint(ip=net.ip,
                                    hostname=old_endpoint.hostname,
+                                   orchestrator_id=old_endpoint.orchestrator_id,
                                    cpid=cpid,
                                    next_hop_ips=next_hop_ips,
                                    veth_name=if_name,

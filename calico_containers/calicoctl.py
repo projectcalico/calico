@@ -217,6 +217,7 @@ def container_add(container_name, ip, interface):
     pid = info["State"]["Pid"]
     endpoint = netns.set_up_endpoint(ip=ip,
                                      hostname=hostname,
+                                     orchestrator_id=ORCHESTRATOR_ID,
                                      cpid=pid,
                                      next_hop_ips=next_hops,
                                      veth_name=interface,
