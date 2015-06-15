@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.23
+Version:        0.24
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,21 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Jun 15 2015 Cory Benfield <cory@projectcalico.org> 0.24
+  - Add Felix statistics logging on USR1 signal.
+  - Add support for routing over IP-in-IP interfaces in order to make it
+    easier to evaluate Calico without reconfiguring underlying network.
+  - Reduce felix occupancy by replacing endpoint dictionaries by "struct"
+    objects.
+  - Allow different hosts to have different interface prefixes for combined
+    OpenStack and Docker systems.
+  - Add missing support for 0 as a TCP port.
+  - Add support for arbitrary IP protocols.
+  - Intern various IDs in felix to reduce occupancy.
+  - Fix bug where Calico may not propagate security group rule changes from
+    OpenStack.
+  - Reduced logspam from Calico Mechanism Driver.
+
 * Mon Jun 08 2015 Matt Dupre <matt@projectcalico.org> 0.23
   - Reset ARP configuration when endpoint MAC changes.
   - Forget about profiles when they are deleted.

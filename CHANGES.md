@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.24-dev
+## 0.24
 
 - Add Felix statistics logging on USR1 signal.
-- Add support for routing over IP-in-IP interfaces in order to make it 
+- Add support for routing over IP-in-IP interfaces in order to make it
   easier to evaluate Calico without reconfiguring underlying network.
 - Reduce felix occupancy by replacing endpoint dictionaries by "struct"
   objects.
@@ -12,6 +12,9 @@
 - Add missing support for 0 as a TCP port.
 - Add support for arbitrary IP protocols.
 - Intern various IDs in felix to reduce occupancy.
+- Fix bug where Calico may not propagate security group rule changes from
+  OpenStack.
+- Reduced logspam from Calico Mechanism Driver.
 
 ## 0.23
 
