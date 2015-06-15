@@ -320,7 +320,7 @@ On each control node, perform the following steps:
        neutron agent-list
 
    Then, for each agent, delete them with the following command, replacing
-   ``<agent-id>`` with the ID of one of the agents::
+   ``<agent-id>`` with the ID of the agent::
 
        neutron agent-delete <agent-id>
 
