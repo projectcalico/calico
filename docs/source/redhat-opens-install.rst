@@ -456,13 +456,13 @@ On each compute node, perform the following steps:
 
     ::
 
-        sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
+        calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
 
     And/or for IPv6 connectivity between compute hosts:
 
     ::
 
-        sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
+        calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
 
     Note that you'll also need to configure your route reflector to allow
     connections from the compute node as a route reflector client. If you are
