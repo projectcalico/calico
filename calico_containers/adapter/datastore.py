@@ -27,6 +27,11 @@ IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool"
 IP_POOL_KEY = IP_POOL_PATH + "/%(pool)s"
 BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_%(version)s/"
 
+# New paths to maintain backwards compatability for "docker" hardcoding
+ORCHESTRATOR_PATH = HOST_PATH + "workload/%(orchestrator_id)s/"
+WORKLOAD_PATH_OID = ORCHESTRATOR_PATH + "%(workload_id)s/"
+ENDPOINT_PATH_OID = WORKLOAD_PATH_OID + "endpoint/%(endpoint_id)s"
+
 IF_PREFIX = "cali"
 """
 prefix that appears in all Calico interface names in the root namespace. e.g.
@@ -871,17 +876,18 @@ class DatastoreClient(object):
         ep_path = HOSTS_PATH
         if hostname:
             ep_path = HOST_PATH % { "hostname": hostname }
-            if orchestrator_id or True:
-                # TODO: interpolate orchestrator ID (and remove True condition)
-                # once "docker" is no longer hardcoded into string constants
-                #@RLB No, we should not be hardcoding "docker" still.
+            if orchestrator_id:
+                ep_path = ORCHESTRATOR_PATH % { "hostname": hostname,
+                                                "orchestrator_id": orchestrator_id }
                 if workload_id:
-                    ep_path = CONTAINER_PATH % { "container_id": workload_id,
-                                                 "hostname": hostname }
+                    ep_path = WORKLOAD_PATH_OID % { "hostname": hostname,
+                                                    "orchestrator_id": orchestrator_id,
+                                                    "workload_id": workload_id }
                     if endpoint_id:
-                        ep_path = ENDPOINT_PATH % { "container_id": workload_id,
-                                                    "hostname": hostname,
-                                                    "endpoint_id": endpoint_id }
+                        ep_path = ENDPOINT_PATH_OID % { "hostname": hostname,
+                                                        "orchestrator_id": orchestrator_id,
+                                                        "workload_id": workload_id,
+                                                        "endpoint_id": endpoint_id }
         try:
             # Search etcd
             leaves = self.etcd_client.read(ep_path, recursive=True).leaves
