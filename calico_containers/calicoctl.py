@@ -532,7 +532,7 @@ def profile_add(profile_name):
         print "Created profile %s" % profile_name
 
 
-def profile_add_container(container_name, profile_name, workload_id="docker"):
+def profile_add_container(container_name, profile_name):
     """
     Add a container (on this host) to the profile with the given name.  This
     adds the first endpoint on the container to the profile.
@@ -556,12 +556,15 @@ def profile_add_container(container_name, profile_name, workload_id="docker"):
     try:
         endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
     except KeyError:
-        print "Failed to container to profile.\n"
+        print "Failed to add container to profile.\n"
         print_container_not_in_calico_msg(container_name)
         sys.exit(1)
 
+    assert not isinstance(profile_name, list), "Expecting single profile"
+
     # Call through to the container profile set method to add the profile.
-    endpoint_profile_append(hostname, ORCHESTRATOR_ID, container_id, endpoint_id, [profile_name])
+    endpoint_profile_set(hostname, ORCHESTRATOR_ID, container_id, endpoint_id,
+                         [profile_name])
 
 
 def profile_remove(profile_name):
@@ -1023,7 +1026,9 @@ def container_ip_remove(container_name, ip, version, interface):
 
     print "IP %s removed from %s" % (ip, container_name)
 
-def endpoint_show(endpoint_id, workload_id, orchestrator_id, hostname, detailed):
+
+def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
+                  detailed):
     """
     List the profiles for a given endpoint. All parameters will be used to filter down
     which endpoints should be shown.
@@ -1035,7 +1040,10 @@ def endpoint_show(endpoint_id, workload_id, orchestrator_id, hostname, detailed)
     :param detailed: Optional flag, when set to True, will provide more information in the shown table
     :return: Nothing
     """
-    endpoints = client.get_endpoints(hostname, orchestrator_id, workload_id, endpoint_id)
+    endpoints = client.get_endpoints(hostname=hostname,
+                                     orchestrator_id=orchestrator_id,
+                                     workload_id=workload_id,
+                                     endpoint_id=endpoint_id)
 
     if detailed:
         headings = ["Hostname",
@@ -1064,6 +1072,7 @@ def endpoint_show(endpoint_id, workload_id, orchestrator_id, hostname, detailed)
                     "NumEndpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
+        #@RLB This needs a complete rework
         for endpoint in endpoints:
             # TODO: remove duplicates rows
             num_workloads = len([other_endpoint for other_endpoint in endpoints if other_endpoint.workload_id == endpoint.workload_id])
@@ -1072,7 +1081,8 @@ def endpoint_show(endpoint_id, workload_id, orchestrator_id, hostname, detailed)
     print str(x) + "\n"
 
 
-def endpoint_profile_append(hostname, orchestrator_id, workload_id, endpoint_id, profile_names):
+def endpoint_profile_append(hostname, orchestrator_id, workload_id,
+                            endpoint_id, profile_names):
     """
     Append a list of profiles to the container endpoint profile list.
 
@@ -1087,11 +1097,11 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id, endpoint_id,
     # Validate the profile list.
     validate_profile_list(profile_names)
     try:
-        client.append_profiles_to_endpoint(profile_names=profile_names,
-                                           endpoint_id=endpoint_id,
-                                           workload_id=workload_id,
+        client.append_profiles_to_endpoint(profile_names,
+                                           hostname=hostname,
                                            orchestrator_id=orchestrator_id,
-                                           hostname=hostname)
+                                           workload_id=workload_id,
+                                           endpoint_id=endpoint_id)
         print_paragraph("Profiles %s appended to %s." %
                           (", ".join(profile_names), endpoint_id))
     except KeyError:
@@ -1107,7 +1117,8 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id, endpoint_id,
         sys.exit(1)
 
 
-def endpoint_profile_set(endpoint_id, workload_id, orchestrator_id, hostname, profile_names):
+def endpoint_profile_set(hostname, orchestrator_id, workload_id,
+                         endpoint_id, profile_names):
     """
     Set the complete list of profiles for the container endpoint profile list.
 
@@ -1123,10 +1134,10 @@ def endpoint_profile_set(endpoint_id, workload_id, orchestrator_id, hostname, pr
 
     try:
         client.set_profiles_on_endpoint(profile_names,
-                                        endpoint_id=endpoint_id,
-                                        workload_id=workload_id,
+                                        hostname=hostname,
                                         orchestrator_id=orchestrator_id,
-                                        hostname=hostname)
+                                        workload_id=workload_id,
+                                        endpoint_id=endpoint_id)
         print_paragraph("Profiles %s set for %s." %
                           (", ".join(profile_names), endpoint_id))
     except KeyError:
@@ -1135,7 +1146,8 @@ def endpoint_profile_set(endpoint_id, workload_id, orchestrator_id, hostname, pr
         sys.exit(1)
 
 
-def endpoint_profile_remove(profile_names, endpoint_id, workload_id, orchestrator_id, hostname):
+def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
+                            endpoint_id, profile_names):
     """
     Remove a list of profiles from the endpoint profile list.
 
@@ -1151,7 +1163,11 @@ def endpoint_profile_remove(profile_names, endpoint_id, workload_id, orchestrato
     validate_profile_list(profile_names)
 
     try:
-        client.remove_profiles_from_endpoint(profile_names, endpoint_id, workload_id, orchestrator_id, hostname)
+        client.remove_profiles_from_endpoint(profile_names,
+                                             hostname=hostname,
+                                             orchestrator_id=orchestrator_id,
+                                             workload_id=workload_id,
+                                             endpoint_id=endpoint_id)
         print_paragraph("Profiles %s removed from %s." %
                           (",".join(profile_names), endpoint_id))
     except KeyError:
@@ -1167,7 +1183,7 @@ def endpoint_profile_remove(profile_names, endpoint_id, workload_id, orchestrato
         sys.exit(1)
 
 
-def endpoint_profile_show(endpoint_id, workload_id, orchestrator_id, hostname):
+def endpoint_profile_show(hostname, orchestrator_id, workload_id, endpoint_id):
     """
     List the profiles assigned to a particular endpoint.
 
@@ -1179,10 +1195,15 @@ def endpoint_profile_show(endpoint_id, workload_id, orchestrator_id, hostname):
     :return: None
     """
     try:
-        endpoint = client.get_endpoint(hostname, orchestrator_id, workload_id, endpoint_id)
+        endpoint = client.get_endpoints(hostname=hostname,
+                                        orchestrator_id=orchestrator_id,
+                                        workload_id=workload_id,
+                                        endpoint_id=endpoint_id)
     except MultipleEndpointsMatch:
-        print "More than 1 endpoint matches the provided criteria. " \
-              "Please provide additional parameters to refine the search."
+        print "Failed to list profiles in endpoint.\n"
+        print_paragraph("More than 1 endpoint matches the provided "
+                        "criteria.  Please provide additional parameters to "
+                        "refine the search.")
         sys.exit(1)
     except KeyError:
         print "Failed to list profiles in endpoint.\n"
@@ -1229,6 +1250,14 @@ def validate_arguments():
 
     profile_ok = (arguments["<PROFILE>"] is None or
                   re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
+
+    profile_ok = True
+    if arguments["<PROFILES>"] or arguments["<PROFILE>"]:
+        profiles = arguments["<PROFILES>"] or [arguments["<PROFILE>"]]
+        for profile in profiles:
+            if not re.match("^\w{1,30}$", profile):
+                profile_ok = False
+                break
 
     tag_ok = (arguments["<TAG>"] is None or
               re.match("^%s+$" % valid_chars, arguments["<TAG>"]))
@@ -1367,30 +1396,30 @@ if __name__ == '__main__':
                                             arguments["--orchestrator"],
                                             arguments["--workload"],
                                             arguments["<ENDPOINT_ID>"],
-                                            arguments['<PROFILES>'] or [])
+                                            arguments['<PROFILES>'])
                 elif arguments["remove"]:
-                    endpoint_profile_remove(arguments["<ENDPOINT_ID>"],
-                                            arguments["--workload"],
+                    endpoint_profile_remove(arguments["--host"],
                                             arguments["--orchestrator"],
-                                            arguments["--host"],
-                                            arguments['<PROFILES>'] or [])
+                                            arguments["--workload"],
+                                            arguments["<ENDPOINT_ID>"],
+                                            arguments['<PROFILES>'])
                 elif arguments["set"]:
-                    endpoint_profile_set(arguments["<ENDPOINT_ID>"],
-                                         arguments["--workload"],
+                    endpoint_profile_set(arguments["--host"],
                                          arguments["--orchestrator"],
-                                         arguments["--host"],
-                                         arguments['<PROFILES>'] or [])
+                                         arguments["--workload"],
+                                         arguments["<ENDPOINT_ID>"],
+                                         arguments['<PROFILES>'])
                 elif arguments["show"]:
-                    endpoint_profile_show(arguments["<ENDPOINT_ID>"],
-                                          arguments["--workload"],
+                    endpoint_profile_show(arguments["--host"],
                                           arguments["--orchestrator"],
-                                          arguments["--host"])
+                                          arguments["--workload"],
+                                          arguments["<ENDPOINT_ID>"])
             else:
                 # calicoctl endpoint show
-                endpoint_show(arguments["--endpoint"],
-                              arguments["--workload"],
+                endpoint_show(arguments["--host"],
                               arguments["--orchestrator"],
-                              arguments["--host"],
+                              arguments["--workload"],
+                              arguments["--endpoint"],
                               arguments["--detailed"])
         elif arguments["profile"]:
             if arguments["tag"]:
@@ -1404,8 +1433,7 @@ if __name__ == '__main__':
                                        arguments["<TAG>"])
             elif arguments["member"]:
                 profile_add_container(arguments["<CONTAINER>"],
-                                      arguments["<PROFILE>"],
-                                      ORCHESTRATOR_ID)
+                                      arguments["<PROFILE>"])
             elif arguments["rule"]:
                 if arguments["show"]:
                     profile_rule_show(arguments["<PROFILE>"],
