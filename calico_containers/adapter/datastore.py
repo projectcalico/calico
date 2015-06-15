@@ -22,7 +22,8 @@ PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
-IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool/"
+IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool"
+IP_POOL_KEY = IP_POOL_PATH + "/%(pool)s"
 BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_%(version)s/"
 
 IF_PREFIX = "cali"
@@ -48,8 +49,8 @@ def handle_errors(fn):
             return fn(*args, **kwargs)
         except EtcdException as e:
             # Don't leak out etcd exceptions.
-            raise DataStoreError("Error accessing etcd (%s).  Is etcd "
-                                 "running?" % e.message)
+            raise DataStoreError("%s: Error accessing etcd (%s).  Is etcd "
+                                 "running?" % (fn.__name__, e.message))
     return wrapped
 
 
@@ -346,17 +347,56 @@ class DatastoreClient(object):
         """
         assert version in ("v4", "v6")
         pool_path = IP_POOL_PATH % {"version": version}
-        return map(IPNetwork, self._get_path_with_keys(pool_path).keys())
+        try:
+            keys = self.etcd_client.read(pool_path).children
+        except EtcdKeyNotFound:
+            # Path doesn't exist.
+            pools = []
+        else:
+            # Path exists so convert directory names to CIDRs.  Note that
+            # the children function is bugged when the directory is entry as
+            # it contains a single entry equal to the directory path, so we
+            # must filter this out.
+            pools = [x.key.split("/")[-1].replace("-", "/") for x in keys if x.key != pool_path]
+
+        return map(IPNetwork, pools)
 
     @handle_errors
-    def add_ip_pool(self, version, pool):
+    def get_ip_pool_config(self, version, pool):
         """
-        Add the given pool to the list of IP allocation pools.  If the pool
-        already exists, this method completes silently without modifying the
-        list of pools.
+        Get the configuration for the given pool.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
+        :return: Dictionary of pool configuration
+        """
+        assert version in ("v4", "v6")
+        assert isinstance(pool, IPNetwork)
+
+        # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
+        pool = pool.cidr
+
+        key = IP_POOL_KEY % {"version": version,
+                             "pool": str(pool).replace("/", "-")}
+
+        try:
+            data = json.loads(self.etcd_client.read(key).value)
+        except (KeyError, EtcdKeyNotFound):
+            # Re-raise with a better error message.
+            raise KeyError("%s is not a configured IP pool." % pool)
+
+        return data
+
+    @handle_errors
+    def add_ip_pool(self, version, pool, ipip=False):
+        """
+        Add the given pool to the list of IP allocation pools.  If the pool
+        already exists, this method completes silently without modifying the
+        list of pools, other than possibly updating the ipip config.
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param pool: IPNetwork object representing the pool
+        :param ipip: Use IP-IP for pool
         :return: None
         """
         assert version in ("v4", "v6")
@@ -365,12 +405,14 @@ class DatastoreClient(object):
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
         pool = pool.cidr
 
-        # Check if the pool exists.
-        if pool in self.get_ip_pools(version):
-            return
+        key = IP_POOL_KEY % {"version": version,
+                             "pool": str(pool).replace("/", "-")}
 
-        pool_path = IP_POOL_PATH % {"version": version}
-        self.etcd_client.write(pool_path, str(pool), append=True)
+        data = {"cidr" : str(pool)}
+        if ipip:
+            data["ipip"] = "tunl0"
+
+        self.etcd_client.write(key, json.dumps(data))
 
     @handle_errors
     def remove_ip_pool(self, version, pool):
@@ -385,10 +427,12 @@ class DatastoreClient(object):
         assert version in ("v4", "v6")
         assert isinstance(pool, IPNetwork)
 
-        pool_path = IP_POOL_PATH % {"version": version}
-        pools = self._get_path_with_keys(pool_path)
+        # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
+        pool = pool.cidr
+
+        key = IP_POOL_KEY % {"version": version,
+                             "pool": str(pool).replace("/", "-")}
         try:
-            key = pools[str(pool.cidr)]
             self.etcd_client.delete(key)
         except (KeyError, EtcdKeyNotFound):
             # Re-raise with a better error message.

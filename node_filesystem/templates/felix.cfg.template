@@ -1,5 +1,6 @@
 [global]
 MetadataAddr  = None
+IpInIpEnabled = True
 LogFilePath = /var/log/calico/felix.log
 LogSeverityFile   = DEBUG
 LogSeverityScreen = CRITICAL

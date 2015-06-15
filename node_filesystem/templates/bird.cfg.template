@@ -2,13 +2,23 @@
 router id {{getenv "IP"}};
 log "/var/log/calico/bird.log" all;
 
-filter calico_pools { {{/* Check the ipam dir is not empty before enumerating over pool CIDRs */}}
-{{if ls "/ipam"}}{{range gets "/ipam/v4/pool/*"}}
-  if ( net ~ {{.Value}} ) then {
+filter calico_pools {
+{{if ls "/ipam"}}{{range ls "/ipam/v4/pool"}}{{$data := json (getv (printf "/ipam/v4/pool/%s" .))}}
+  if ( net ~ {{$data.cidr}} ) then {
     accept;
   }
 {{end}}{{end}}
   reject;
+}
+
+filter calico_ipip {
+{{if ls "/ipam"}}{{range ls "/ipam/v4/pool"}}{{$data := json (getv (printf "/ipam/v4/pool/%s" .))}}{{if $data.ipip}}
+  if ( net ~ {{$data.cidr}} ) then {
+    krt_tunnel = "{{$data.ipip}}";
+    accept;
+  }
+{{end}}{{end}}{{end}}
+  accept;
 }
 
 # Configure synchronization between routing tables and kernel.
@@ -17,7 +27,7 @@ protocol kernel {
   persist;           # Don't remove routes on bird shutdown
   scan time 2;       # Scan kernel routing table every 2 seconds
   import all;
-  export all;        # Default is export none
+  export filter calico_ipip; # Default is export none
   graceful restart;  # Turn on graceful restart to reduce potential flaps in
                      # routes when reloading BIRD configuration.  With a full
                      # automatic mesh, there is no way to prevent BGP from
