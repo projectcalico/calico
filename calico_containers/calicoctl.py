@@ -393,14 +393,18 @@ def node(ip, node_image, ip6=""):
 
 def checksystem(fix=False, quit_if_error=False):
     """
-    Checks that the system is setup correctly. fix==True, this command
-    will attempt to fix any issues it encounters. If any fixes fail, it will exit(1). Fix will automatically
-    be set to True if the user specifies --fix at the command line.
+    Checks that the system is setup correctly. fix==True, this command will
+    attempt to fix any issues it encounters. If any fixes fail, it will
+    exit(1). Fix will automatically be set to True if the user specifies --fix
+    at the command line.
 
-    :param fix: if True, try to fix any system dependency issues that are detected.
-    :param quit_if_error: if True, quit with error code 1 if any issues are detected, or if any fixes are unsuccesful.
-    :return: True if all system dependencies are in the proper state, False if they are not. This function
-             will sys.exit(1) instead of returning false if quit_if_error == True
+    :param fix: if True, try to fix any system dependency issues that are
+    detected.
+    :param quit_if_error: if True, quit with error code 1 if any issues are
+    detected, or if any fixes are unsuccesful.
+    :return: True if all system dependencies are in the proper state, False if
+    they are not. This function will sys.exit(1) instead of returning false if
+    quit_if_error == True
     """
     # modprobe and sysctl require root privileges.
     enforce_root()
@@ -1030,14 +1034,15 @@ def container_ip_remove(container_name, ip, version, interface):
 def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
                   detailed):
     """
-    List the profiles for a given endpoint. All parameters will be used to filter down
-    which endpoints should be shown.
+    List the profiles for a given endpoint. All parameters will be used to
+    filter down which endpoints should be shown.
 
     :param endpoint_id: The endpoint ID.
     :param workload_id: The workload ID.
     :param orchestrator_id: The orchestrator ID.
     :param hostname: The hostname.
-    :param detailed: Optional flag, when set to True, will provide more information in the shown table
+    :param detailed: Optional flag, when set to True, will provide more
+    information in the shown table
     :return: Nothing
     """
     endpoints = client.get_endpoints(hostname=hostname,
@@ -1075,9 +1080,20 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
         #@RLB This needs a complete rework
         for endpoint in endpoints:
             # TODO: remove duplicates rows
-            num_workloads = len([other_endpoint for other_endpoint in endpoints if other_endpoint.workload_id == endpoint.workload_id])
-            num_endpoints = len([other_endpoint for other_endpoint in endpoints if other_endpoint.endpoint_id == endpoint.endpoint_id])
-            x.add_row([endpoint.hostname, endpoint.orchestrator_id, num_workloads, num_endpoints])
+            workloads = [other_endpoint for other_endpoint in endpoints if
+                         other_endpoint.workload_id == endpoint.workload_id]
+            num_workloads = len(workloads)
+
+            endpoints = [other_endpoint for other_endpoint in endpoints if
+                         other_endpoint.endpoint_id == endpoint.endpoint_id]
+            num_endpoints = len(endpoints)
+
+            new_row = [endpoint.hostname,
+                       endpoint.orchestrator_id,
+                       num_workloads,
+                       num_endpoints]
+
+            x.add_row(new_row)
     print str(x) + "\n"
 
 
@@ -1094,6 +1110,7 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
 
     :return: None
     """
+    # TODO: Make sure this doesn't error when profile_names == None
     # Validate the profile list.
     validate_profile_list(profile_names)
     try:

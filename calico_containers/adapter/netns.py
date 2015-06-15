@@ -192,6 +192,7 @@ def set_up_endpoint(ip, hostname, cpid, next_hop_ips,
 
     # Return an Endpoint.
     network = IPNetwork(IPAddress(ip))
+    # TODO: remove docker hardcoding
     ep = Endpoint(hostname=hostname,
                   orchestrator_id="docker",
                   workload_id=cpid,

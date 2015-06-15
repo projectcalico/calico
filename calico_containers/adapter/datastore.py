@@ -266,10 +266,12 @@ class Endpoint(object):
     def matches(self, hostname=None, orchestrator_id=None,
                 workload_id=None, endpoint_id=None):
         """
-        A less strict 'equals' function, which compares provided parameters to the current endpoint object.
+        A less strict 'equals' function, which compares provided parameters to
+        the current endpoint object.
 
-        :return: True if the provided parameters match the Endpoint's parameters,
-                 False if any of the provided parameters are different from the Endpoint's parameters.
+        :return: True if the provided parameters match the Endpoint's
+        parameters, False if any of the provided parameters are different from
+        the Endpoint's parameters.
         """
         if hostname and hostname != self.hostname:
             return False
@@ -870,8 +872,8 @@ class DatastoreClient(object):
         if hostname:
             ep_path = HOST_PATH % { "hostname": hostname }
             if orchestrator_id or True:
-                # TODO: interpolate orchestrator ID (and remove True condition) once "docker" is no longer hardcoded
-                # into string constants
+                # TODO: interpolate orchestrator ID (and remove True condition)
+                # once "docker" is no longer hardcoded into string constants
                 #@RLB No, we should not be hardcoding "docker" still.
                 if workload_id:
                     ep_path = CONTAINER_PATH % { "container_id": workload_id,
