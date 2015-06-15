@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,143 +16,260 @@
 felix.test.test_endpoint
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Test the endpoint handling code.
+Tests of endpoint module.
 """
-import mock
-import sys
-import uuid
+import gevent
+import logging
+import itertools
 from contextlib import nested
+from calico.felix.endpoint import EndpointManager
+from calico.felix.fiptables import IptablesUpdater
+from calico.felix.dispatch import DispatchChains
+from calico.felix.profilerules import RulesManager
+from gevent.event import AsyncResult
 
-import calico.felix.devices as devices
-import calico.felix.endpoint as endpoint
-import calico.felix.frules as frules
-import calico.felix.futils as futils
+import mock
+from mock import Mock, MagicMock, patch
 
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
+from calico.felix.actor import actor_message, ResultOrExc, SplitBatchAndRetry
+from calico.felix.test.base import BaseTestCase
+from calico.felix.test import stub_utils
+from calico.felix import config
+from calico.felix import devices
+from calico.felix import endpoint
+from calico.felix import futils
+from calico.datamodel_v1 import EndpointId
 
-from collections import namedtuple
-Config = namedtuple('Config', ['IFACE_PREFIX', 'SUFFIX_LEN'])
+_log = logging.getLogger(__name__)
 
-# Supplied, but never accessed thanks to mocks.
-iptables_state = None
 
-config = Config("tap", 11)
+class TestLocalEndpoint(BaseTestCase):
+    def setUp(self):
+        super(TestLocalEndpoint, self).setUp()
+        self.m_config = Mock(spec=config.Config)
+        self.m_config.IFACE_PREFIX = "tap"
+        self.m_iptables_updater = Mock(spec=IptablesUpdater)
+        self.m_dispatch_chains = Mock(spec=DispatchChains)
+        self.m_rules_mgr = Mock(spec=RulesManager)
 
-class TestEndpoint(unittest.TestCase):
-    def test_program_bails_early(self):
-        """
-        Test that programming an endpoint fails early if the endpoint is down.
-        """
-        devices.interface_up = mock.MagicMock()
-        devices.interface_up.return_value = False
+    def get_local_endpoint(self, combined_id, ip_type):
+        local_endpoint = endpoint.LocalEndpoint(self.m_config,
+                                                combined_id,
+                                                ip_type,
+                                                self.m_iptables_updater,
+                                                self.m_dispatch_chains,
+                                                self.m_rules_mgr)
 
-        # iptables_state is never accessed (as the code returns too early).
-        iptables_state = None
+        # For purposes of our testing, we force things to happen in line.
+        local_endpoint.greenlet = gevent.getcurrent()
+        return local_endpoint
 
-        ep_id = str(uuid.uuid4())
-        prefix = "tap"
-        interface = prefix + ep_id[:11]
-        ep = endpoint.Endpoint(ep_id,
-                               'aa:bb:cc:dd:ee:ff',
-                               interface,
-                               prefix)
-        retval = ep.program_endpoint(iptables_state)
+    def test_on_endpoint_update_v4(self):
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        retcode = futils.CommandOutput("", "")
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
 
-        self.assertFalse(retval)
+        # Call with no data; should be ignored (no configuration to remove).
+        local_ep.on_endpoint_update(None, async=False)
 
-    def test_remove_deleted(self):
-        """
-        Removal of an endpoint where tap interface deleted under our feet.
-        """
-        ep_id = str(uuid.uuid4())
-        prefix = "tap"
-        interface = prefix + ep_id[:11]
-        ep = endpoint.Endpoint(ep_id,
-                               'aa:bb:cc:dd:ee:ff',
-                               interface,
-                               prefix)
+        ips = ["1.2.3.4"]
+        iface = "tapabcdef"
+        data = { 'endpoint': "endpoint_id",
+                 'mac': stub_utils.get_mac(),
+                 'name': iface,
+                 'ipv4_nets': ips,
+                 'profile_ids': []}
 
-        p_exists = mock.patch('calico.felix.devices.interface_exists',
-                              side_effect=[True, False])
-        p_list = mock.patch('calico.felix.devices.list_interface_ips',
-                            return_value = set(["1.2.3.4", "1.2.3.5"]))
-        p_del_route = mock.patch('calico.felix.devices.del_route',
-            side_effect=futils.FailedSystemCall("blah",
-                                                ["dummy", "args"],
-                                                1,
-                                                "",
-                                                ""))
-        p_del_rules = mock.patch('calico.felix.frules.del_rules')
+        # Report an initial update (endpoint creation) and check configured
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv4'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv4.assert_called_once_with(iface)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=True)
 
-        with nested(p_exists, p_list, p_del_route, p_del_rules) as (
-            mock_exists, mock_list, mock_del_route, mock_del_rules):
-            ep.remove(iptables_state)
-        self.assertEqual(mock_exists.call_count, 2)
-        self.assertEqual(mock_list.call_count, 1)
-        self.assertEqual(mock_del_route.call_count, 1)
-        self.assertEqual(mock_del_rules.call_count, 2)
+        # Send through an update with no changes - should redo without
+        # resetting ARP.
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv4'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv4.assert_called_once_with(iface)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=False)
 
-    def test_remove_sys_error(self):
-        """
-        Removal of an endpoint where other system error happens.
-        """
-        ep_id = str(uuid.uuid4())
-        prefix = "tap"
-        interface = prefix + ep_id[:11]
-        ep = endpoint.Endpoint(ep_id,
-                               'aa:bb:cc:dd:ee:ff',
-                               interface,
-                               prefix)
+        # Change the MAC address and try again, leading to reset of ARP.
+        data['mac'] = stub_utils.get_mac()
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv4'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv4.assert_called_once_with(iface)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=True)
 
-        with self.assertRaisesRegexp(futils.FailedSystemCall, "blah"):
-            p_exists = mock.patch('calico.felix.devices.interface_exists',
-                                  side_effect=[True, True])
-            p_list = mock.patch('calico.felix.devices.list_interface_ips',
-                                return_value = set(["1.2.3.4", "1.2.3.5"]))
-            p_del_route = mock.patch('calico.felix.devices.del_route',
-                side_effect=futils.FailedSystemCall("blah",
-                                                    ["dummy", "args"],
-                                                    1,
-                                                    "",
-                                                    ""))
-            p_del_rules = mock.patch('calico.felix.frules.del_rules')
-            with nested(p_exists, p_list, p_del_route, p_del_rules) as (
-                mock_exists, mock_list, mock_del_route, mock_del_rules):
-                ep.remove(iptables_state)
+        # Send empty data, which deletes the endpoint.
+        with mock.patch('calico.felix.devices.set_routes'):
+            local_ep.on_endpoint_update(None, async=False)
+            devices.set_routes.assert_called_once_with(ip_type, set(),
+                                                       data["name"], None)
 
-        self.assertEqual(mock_exists.call_count, 2)
-        self.assertEqual(mock_list.call_count, 1)
-        self.assertEqual(mock_del_route.call_count, 1)
-        self.assertEqual(mock_del_rules.call_count, 0)
+    def test_on_endpoint_update_v6(self):
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV6
+        retcode = futils.CommandOutput("", "")
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
 
-    def test_remove_other_error(self):
-        """
-        Removal of an endpoint where some random exception appears.
-        """
-        ep_id = str(uuid.uuid4())
-        prefix = "tap"
-        interface = prefix + ep_id[:11]
-        ep = endpoint.Endpoint(ep_id,
-                               'aa:bb:cc:dd:ee:ff',
-                               interface,
-                               prefix)
+        # Call with no data; should be ignored (no configuration to remove).
+        local_ep.on_endpoint_update(None, async=False)
 
-        with self.assertRaisesRegexp(Exception, "blah"):
-            p_exists = mock.patch('calico.felix.devices.interface_exists',
-                                  side_effect=[True, True])
-            p_list = mock.patch('calico.felix.devices.list_interface_ips',
-                                return_value = set(["1.2.3.4", "1.2.3.5"]))
-            p_del_route = mock.patch('calico.felix.devices.del_route',
-                                     side_effect=Exception("blah"))
-            p_del_rules = mock.patch('calico.felix.frules.del_rules')
-            with nested(p_exists, p_list, p_del_route, p_del_rules) as (
-                mock_exists, mock_list, mock_del_route, mock_del_rules):
-                ep.remove(iptables_state)
+        ips = ["2001::abcd"]
+        gway = "2020:ab::9876"
+        iface = "tapabcdef"
+        data = { 'endpoint': "endpoint_id",
+                 'mac': stub_utils.get_mac(),
+                 'name': iface,
+                 'ipv6_nets': ips,
+                 'ipv6_gateway': gway,
+                 'profile_ids': []}
 
-        self.assertEqual(mock_exists.call_count, 1)
-        self.assertEqual(mock_list.call_count, 1)
-        self.assertEqual(mock_del_route.call_count, 1)
-        self.assertEqual(mock_del_rules.call_count, 0)
+        # Report an initial update (endpoint creation) and check configured
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv6'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv6.assert_called_once_with(iface,
+                                                                         gway)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=False)
+
+        # Send through an update with no changes - should redo without
+        # resetting ARP.
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv6'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv6.assert_called_once_with(iface,
+                                                                         gway)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=False)
+
+        # Send through an update with no changes - would reset ARP, but this is
+        # IPv6 so it won't.
+        data['mac'] = stub_utils.get_mac()
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv6'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv6.assert_called_once_with(iface,
+                                                                         gway)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=False)
+
+        # Send empty data, which deletes the endpoint.
+        with mock.patch('calico.felix.devices.set_routes'):
+            local_ep.on_endpoint_update(None, async=False)
+            devices.set_routes.assert_called_once_with(ip_type, set(),
+                                                       data["name"], None)
+
+    def test_on_interface_update_v4(self):
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        retcode = futils.CommandOutput("", "")
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+
+        ips = ["1.2.3.4"]
+        iface = "tapabcdef"
+        data = { 'endpoint': "endpoint_id",
+                 'mac': stub_utils.get_mac(),
+                 'name': iface,
+                 'ipv4_nets': ips,
+                 'profile_ids': []}
+
+        # We can only get on_interface_update calls after the first
+        # on_endpoint_update, so trigger that.
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv4'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv4.assert_called_once_with(iface)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=True)
+
+        # Now pretend to get an interface update - does all the same work.
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv4'):
+                local_ep.on_interface_update()
+                devices.configure_interface_ipv4.assert_called_once_with(iface)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=True)
+
+    def test_on_interface_update_v6(self):
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV6
+        retcode = futils.CommandOutput("", "")
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+
+        ips = ["1234::5678"]
+        iface = "tapabcdef"
+        data = { 'endpoint': "endpoint_id",
+                 'mac': stub_utils.get_mac(),
+                 'name': iface,
+                 'ipv6_nets': ips,
+                 'profile_ids': []}
+
+        # We can only get on_interface_update calls after the first
+        # on_endpoint_update, so trigger that.
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv6'):
+                local_ep.on_endpoint_update(data, async=False)
+                self.assertEqual(local_ep._mac, data['mac'])
+                devices.configure_interface_ipv6.assert_called_once_with(iface,
+                                                                         None)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=False)
+
+        # Now pretend to get an interface update - does all the same work.
+        with mock.patch('calico.felix.devices.set_routes'):
+            with mock.patch('calico.felix.devices.configure_interface_ipv6'):
+                local_ep.on_interface_update()
+                devices.configure_interface_ipv6.assert_called_once_with(iface,
+                                                                         None)
+                devices.set_routes.assert_called_once_with(ip_type,
+                                                           set(ips),
+                                                           iface,
+                                                           data['mac'],
+                                                           reset_arp=False)

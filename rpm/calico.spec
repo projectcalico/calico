@@ -2,15 +2,13 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.12.1
+Version:        0.23
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
-Source35:	calico-felix.init
-Source45:	calico-felix.upstart
-Source55:	calico-acl-manager.init
-Source65:	calico-acl-manager.upstart
+Source35:	calico-felix.conf
+Source45:	calico-felix.service
 BuildArch:	noarch
 
 
@@ -27,7 +25,12 @@ Virtualization (NFV).
 %package compute
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
+%if 0%{?el6}
+Requires:       calico-common, calico-felix, openstack-neutron, iptables, python-argparse
+%else
 Requires:       calico-common, calico-felix, openstack-neutron, iptables
+%endif
+
 
 %description compute
 This package provides the pieces needed on a compute node.
@@ -71,7 +74,7 @@ fi
 %package control
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, calico-acl-manager
+Requires:       calico-common, python-six
 
 %description control
 This package provides the pieces needed on a controller node.
@@ -88,58 +91,40 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, ipset, python-devel, python-zmq, python-netaddr
+Requires:       calico-common, ipset, net-tools, python-devel, python-netaddr, python-gevent
 
 %description felix
 This package provides the Felix component.
 
 %post felix
+%if 0%{?el7}
 if [ $1 -eq 1 ] ; then
     # Initial installation
-    /sbin/chkconfig --add calico-felix
-    /sbin/service calico-felix start >/dev/null 2>&1
+    /usr/bin/systemctl daemon-reload
+    /usr/bin/systemctl enable calico-felix
+    /usr/bin/systemctl start calico-felix
 fi
+%endif
 
 %preun felix
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
-    /sbin/service calico-felix stop >/dev/null 2>&1
-    /sbin/chkconfig --del calico-felix
+%if 0%{?el7}
+    /usr/bin/systemctl disable calico-felix
+    /usr/bin/systemctl stop calico-felix
+%else
+    /sbin/initctl stop calico-felix >/dev/null 2>&1 || :
+%endif
 fi
 
 %postun felix
 if [ $1 -ge 1 ] ; then
     # Package upgrade, not uninstall
-    /sbin/service calico-felix condrestart >/dev/null 2>&1 || :
-fi
-
-
-%package acl-manager
-Group:          Applications/Engineering
-Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, python-zmq
-
-%description acl-manager
-This package provides the ACL Manager component.
-
-%post acl-manager
-if [ $1 -eq 1 ] ; then
-    # Initial installation
-    /sbin/chkconfig --add calico-acl-manager
-    /sbin/service calico-acl-manager start >/dev/null 2>&1
-fi
-
-%preun acl-manager
-if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
-    /sbin/service calico-acl-manager stop >/dev/null 2>&1
-    /sbin/chkconfig --del calico-acl-manager
-fi
-
-%postun acl-manager
-if [ $1 -ge 1 ] ; then
-    # Package upgrade, not uninstall
-    /sbin/service calico-acl-manager condrestart >/dev/null 2>&1 || :
+%if 0%{?el7}
+    /usr/bin/systemctl condrestart calico-felix >/dev/null 2>&1 || :
+%else
+    /sbin/initctl restart calico-felix >/dev/null 2>&1 || :
+%endif
 fi
 
 
@@ -157,16 +142,22 @@ rm -rf $RPM_BUILD_ROOT
 
 # Setup directories
 install -d -m 755 %{buildroot}%{_datadir}/calico
-install -d -m 755 %{buildroot}%{_initrddir}
 install -d -m 755 %{buildroot}%{_sysconfdir}
+%if 0%{?el7}
+    install -d -m 755 %{buildroot}%{_unitdir}
+%else
+    install -d -m 755 %{buildroot}%{_sysconfdir}/init
+%endif
 
-# Install sysv init scripts
-install -p -D -m 755 %{SOURCE35} %{buildroot}%{_initrddir}/calico-felix
-install -p -D -m 755 %{SOURCE55} %{buildroot}%{_initrddir}/calico-acl-manager
+# For EL6, install upstart jobs
+%if 0%{?el6}
+    install -p -m 755 %{SOURCE35} %{buildroot}%{_sysconfdir}/init/calico-felix.conf
+%endif
 
-# Install upstart jobs examples
-install -p -m 644 %{SOURCE45} %{buildroot}%{_datadir}/calico/
-install -p -m 644 %{SOURCE65} %{buildroot}%{_datadir}/calico/
+# For EL7, install systemd service files
+%if 0%{?el7}
+    install -p -D -m 755 %{SOURCE45} %{buildroot}%{_unitdir}/calico-felix.service
+%endif
 
 # Install config and other non-Python files
 install -d %{buildroot}%{_sysconfdir}/calico
@@ -175,6 +166,7 @@ install -d %{buildroot}%{_datadir}/calico/bird
 install etc/bird/*.template %{buildroot}%{_datadir}/calico/bird
 install -d %{buildroot}%{_bindir}
 install -m 755 etc/*.sh %{buildroot}%{_bindir}
+install -m 755 utils/diags.sh %{buildroot}%{_bindir}/calico-diags
 
 
 %clean
@@ -184,6 +176,7 @@ rm -rf $RPM_BUILD_ROOT
 %files common
 %defattr(-,root,root,-)
 %{python_sitelib}/calico*
+/usr/bin/calico-diags
 %doc
 
 %files compute
@@ -201,21 +194,212 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 /usr/bin/calico-felix
 /etc/calico/felix.cfg.example
-%{_initrddir}/calico-felix
-%{_datadir}/calico/calico-felix.upstart
-%doc
-
-%files acl-manager
-%defattr(-,root,root,-)
-/usr/bin/calico-acl-manager
-/etc/calico/acl_manager.cfg.example
-%{_initrddir}/calico-acl-manager
-%{_datadir}/calico/calico-acl-manager.upstart
+%if 0%{?el7}
+    %{_unitdir}/calico-felix.service
+%else
+    %{_sysconfdir}/init/calico-felix.conf
+%endif
 %doc
 
 
 
 %changelog
+* Mon Jun 08 2015 Matt Dupre <matt@projectcalico.org> 0.23
+  - Reset ARP configuration when endpoint MAC changes.
+  - Forget about profiles when they are deleted.
+  - Treat bad JSON as missing data.
+  - Add instructions for Kilo on RHEL7.
+  - Extend diagnostics script to collect etcd and RabbitMQ information.
+  - Improve BIRD config to prevent NETLINK: File Exists log spam.
+  - Reduce Felix logging volume.
+
+* Tue Jun 02 2015 Matt Dupre <matt@projectcalico.org> 0.22.1
+  - Updated Mechanism driver to specify fixed MAC address for Calico tap
+    interfaces.
+  - Prevent the possibility of gevent context-switching during garbage collection
+    in Felix.
+  - Increase the number of file descriptors available to Felix.
+  - Firewall input characters in profiles and tags.
+  - Implement tree-based dispatch chains to improve IPTables performance with
+    many local endpoints.
+  - Neutron mechanism driver patches and docs for OpenStack Kilo release.
+  - Correct IPv6 documentation for Juno and Kilo.
+
+* Tue May 26 2015 Matt Dupre <matt@projectcalico.org> 0.21
+  - Support for running multiple neutron-server instances in OpenStack
+  - Support for running neutron-server API workers in OpenStack
+  - Calico Mechanism Driver now performs leader election to control state
+    resynchronization
+  - Extended data model to support multiple security profiles per endpoint
+  - Calico Mechanism Driver now attempts to delete empty etcd directories
+  - Felix no longer leaks memory when etcd directories it watches are deleted
+  - Fix error on port creation where the Mechanism Driver would create, delete,
+    and then recreate the port in etcd
+  - Handle EtcdKeyNotFound from atomic delete methods
+  - Handle etcd cluster ID changes on API actions
+  - Fix ipsets cleanup to correctly iterate through stopping ipsets
+  - Ensure that metadata is not blocked by over-restrictive rules on outbound
+    traffic
+  - Updates and clarifications to documentation
+
+* Mon May 18 2015 Matt Dupre <matt@projectcalico.org> 0.20
+  - Felix graceful restart support
+  - Refactoring and additional unit testing
+
+* Mon May 11 2015 Neil Jerram <neil@projectcalico.org> 0.19
+- Further fixes and improvements to Calico components
+  - Add script that automates the merging required for a Debian/Ubuntu package
+  - Actually save off the endpoints in the endpoint index.
+  - Fix reference leak in felix caused by reference cycle.
+  - Core review markups and cleanups to ref-tracking code.
+  - Add FV-level test that genuinely leaks an exception.
+
+* Tue May 05 2015 Neil Jerram <neil@projectcalico.org> 0.18
+- Further fixes and improvements to Calico components
+  - Note that RHEL 6.5 instructions are not yet complete
+  - Document that Felix requires a config file, or it won't start on RHEL
+  - Tidy up line wrapping in RHEL install docs
+  - Move utility functions to frules
+  - Minor code tidies in dispatch.py
+  - Refactor DispatchManager API to not use dicts
+  - Add unit tests for DispatchChains
+  - Clarify DispatchChains comparison logic
+  - Move common validation code to single place.
+  - Reinstate etc after overwriting import.
+  - Initial code review markups for iptables updater.
+  - Code review markups for fiptables.py.
+  - Address some RHEL 7 install instruction issues:
+  - Minor grammar markups
+  - Fix missing import in common
+  - Revert "Initial code review markups for iptables updater."
+  - Docstrings for UpdateSplitter
+  - Remove invalid module reference
+  - Retire RHEL 6.5 instructions until we can fix them up, or are convinced there is no demand.
+  - Allow for config to be read from config files.
+  - Code review feedback
+  - changed bgp_export policy to be interface of origin based
+  - Ensure no logs are made to screen in mainline with screen logging disabled
+  - syntax cleanup, prettified, and default filter added back in.
+  - cut and paste doh... - v4 default address used in v6 config file
+  - Work in progress on cleanup/support for anycast IPs.
+  - Minor fixes: typos and incorrect indexing into dicts.
+  - Fixes and cleanups: move updates into lower level methods.
+  - Fix missing delete when cleaning up ip address.
+  - Minor cleanups and self-review markups.
+  - Code review markups.  Track dirty tags and update en-masse.
+  - Revert "Revert "Initial code review markups for iptables updater.""
+  - Revert rename of _Transaction.updates, it is referenced by IptablesUpdater.
+  - Suppress start-of-day iptables-restore errors from CaS-type operations.
+  - Tidy up etcd exception logging.
+  - Clean up devices exception logging.
+  - Add actor life-cycle logging.
+  - Add endpoint and profile IDs as comments in iptables chains.
+  - Unit tests for the UpdateSplitter
+  - RHEL7 doc: fix formatting of Calico repo config
+  - RHEL7 doc: don't mention Icehouse
+  - Clarify that mapping is dict
+  - Update documentation of configuration for Felix.
+  - Felix review and some UT (actor, refcount)
+  - Replace endpoint ID with tuple that includes host and workload too.
+  - Code review markups to refcount.py.
+  - Don't process endpoint creation until SOD complete
+  - Docs typo fix: incorrect etcd mount in fstab
+  - Remove comments
+  - Document the new mailing lists
+  - Update involved.rst
+  - Plugin: provide correct workload ID - fixes #445
+  - Plugin: provide correct workload ID - UT updates
+  - Update README.md
+  - Cleanup README line length
+  - Missing sec group retries
+  - Close race between resync and access to self.sgs in plugin.
+  - Remove race in needed_profile cleanup by using a semaphore.
+  - Be resilient to ports disappearing while loading SG members.
+  - Protect all access to the security groups dict.
+  - Fix up UT environment to include neutron.common.exceptions.
+  - Reinstate ability to take file path as command line parameter.
+  - Markups to config file specification - tidy exception handling
+  - Wording tweaks based on previous version of config documentation.
+
+* Mon Apr 27 2015 Neil Jerram <neil@projectcalico.org> 0.17
+- Bug fixes and improvements to Calico components
+  - Clean up config loading (code review markups).
+  - Remove references to ACL manager from RHEL docs
+  - Etcd install instructions for RHEL
+  - Be more defensive in etcd polling, catch various HTTP-related exceptions.
+  - Fix import order in felix.py to invoke gevent monkey-patch first.
+  - Fix missing arg to log message.
+  - Remove incorrect comment.
+  - Fix plugin to set only icmp_type/code and not port range for ICMP.
+  - Add UTs for ICMP rule generation.
+  - Add felix support for ICMP code, firewall values.
+  - Validate plugin data agsint felix's validation routines.
+  - Code review markups.
+  - Fix missing continue: use setting of response as a gate in fetcd.py.
+  - Increase severity of socket.timeout warning.
+  - Add httplib errors into excepts.
+  - Code review markups.
+  - Update involved.rst
+  - Update contribute.rst
+  - Tidy up line lengths
+  - Revert "Tidy up line lengths"
+  - Tidy up line lengths
+  - Don't unnecessarily pin versions
+  - Fix up a range of commnents.
+  - Cleanup toctree for contribution doc
+  - Further README cleanup
+  - The letter 'a' is tricksy
+  - Update contribute.rst
+  - RPM Version 0.16
+  - Fix RPM version
+  - Beef up syslog format, add a couple of additional logs.
+  - Debian packaging: python-gevent is not actually needed on controller
+  - RPM packaging: remove ACL manager and ZMQ deps; add python-gevent (fixes #435)
+  - Packaging: add dependency of Felix on net-tools, for the arp command (fixes #146)
+  - Make ipset uperations idempotent.
+  - Fix cluster UUID check.  Copy UUID from old client to new, fix typo in arg name.
+  - RHEL install markups
+  - Fix my own review markups
+  - Run etcd on startup
+  - After reboots
+  - Copy etcd binaries to the right place
+  - Update bundle for etcd architecture
+  - Use commit id instead of tag in tox dependency
+  - Code review markups.
+  - Prevent ActiveIpset from recreating ipset after on_unreferenced().
+  - Fix missing stdin argument to Popen, beef up diags for ActiveIpset.
+  - Code review markups.
+  - Update openstack.rst
+  - Don't setuid on RHEL 6.5.
+  - Wrapping lines
+  - Fix numbering in ubuntu-opens-install.rst
+  - Add missing jump target to ICMPv6 from endpoint rule.
+  - Add "icmp_code" to whitelist of allowed rule fields.
+  - Prevent programming of ICMP type 255, which the kernel treats as wildcard.
+  - Isolate rule parsing failure to individual rule.
+
+* Tue Apr 21 2015 Matt Dupre <matt@projectcalico.org> 0.16
+- First release with etcd
+
+* Fri Apr 10 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.15
+- Fix exception in Neutron mechanism driver
+- Many documentation changes and additions
+
+* Fri Mar 20 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.14
+- Move documentation from separate calico-docs GitHub wiki to Read the Docs
+- Neutron mechanism driver fixes
+
+* Fri Mar 06 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.13
+- Bug fixes and enhancements to Calico components
+  - Remove python-iptables
+  - Add EL6.5 support
+  - Make Calico components restart after failures
+  - Enhance diagnostics gathering script
+  - Fix live migration support
+  - Many logging, testing and configuration improvements
+  - Improve handling of connection timeouts
+  - Program proxy NDP
+
 * Fri Feb 13 2015 Matt Dupre <matthew.dupre@metaswitch.com> 0.12.1
 - Bug fixes and improvements to Calico components
   - Initial refactor of fsocket.

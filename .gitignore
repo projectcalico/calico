@@ -7,3 +7,5 @@ tmp/
 /htmlcov
 /.dir-locals.el
 /.tox
+/docs/build
+.idea/

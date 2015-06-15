@@ -1,0 +1,169 @@
+{#
+    basic/search.html
+    ~~~~~~~~~~~~~~~~~
+
+    Template for the search page.
+
+    :copyright: Copyright 2007-2013 by the Sphinx team, see AUTHORS.
+    :license: BSD, see LICENSE for details.
+#}
+{%- extends "layout.html" %}
+{% set title = _('Search') %}
+{% set script_files = script_files + ['_static/searchtools.js'] %}
+{% block footer %}
+  <script type="text/javascript">
+    jQuery(function() { Search.loadIndex("{{ pathto('searchindex.js', 1) }}"); });
+  </script>
+  {# this is used when loading the search index using $.ajax fails,
+     such as on Chrome for documents on localhost #}
+  <script type="text/javascript" id="searchindexloader"></script>
+  {{ super() }}
+{% endblock %}
+{% block body %}
+  <noscript>
+  <div id="fallback" class="admonition warning">
+    <p class="last">
+      {% trans %}Please activate JavaScript to enable the search
+      functionality.{% endtrans %}
+    </p>
+  </div>
+  </noscript>
+
+  {% if search_performed %}
+    <h2>{{ _('Search Results') }}</h2>
+    {% if not search_results %}
+      <p>{{ _('Your search did not match any documents. Please make sure that all words are spelled correctly and that you\'ve selected enough categories.') }}</p>
+    {% endif %}
+  {% endif %}
+  <div id="search-results">
+
+    <!--
+      There's a bug in the ReadTheDocs search where a search containing a word
+      with only one or two letters will return no search results.
+
+      e.g. of searches for "IP", "IP fabric" and "fabric", only the latter
+      returns any results.
+
+      This JavaScript block tries to work around that issue:
+      i)  remove these short tokens from the search
+      ii) warn the user that a short token has been removed.
+    -->
+    <script>
+
+      // Maximum length of a token
+      var maxlength = 3;
+
+      // This function reads the parameters from the URL, and returns them as
+      // key-value pairs in a JSON object
+      function getJsonFromUrl() {
+        var result = {};
+        var parts = location.search.substr(1).split("&");
+        for (var i = 0; i < parts.length; i++) {
+          var part = parts[i];
+          var item = part.split("=");
+          result[item[0]] = decodeURIComponent(item[1]);
+        }
+        return result;
+      }
+      var jsonParameters = getJsonFromUrl();
+
+      // Important URL parameters:
+      // - "q": actual search terms
+      // - "s": old search terms which have been filtered as too short
+
+      if ("s" in jsonParameters) {
+        // If we have a list of search terms that are too short, then we need
+        // to print a message to the user.
+
+        var strippedTerms = unescape(jsonParameters.s).split("+");
+
+        // Beginning of the message
+        var linesToWrite = [
+          "<div class=\"admonition note\">",
+          "<p class=\"first admonition-title\">Note</p>",
+          "<p class=\"last\">",
+          "Search terms must be at least three characters long, so the search term"
+        ];
+
+        if (strippedTerms.length > 1) {
+          linesToWrite.push("s");
+        }
+
+        // Add each search term which was filtered out for length
+        for (var i = 0; i < strippedTerms.length; i++) {
+          linesToWrite.push(" <strong>&ldquo;" + strippedTerms[i] + "&rdquo;</strong>");
+          if (i < strippedTerms.length - 2) {
+            linesToWrite.push(",");
+          } else if (i == strippedTerms.length - 2) {
+            linesToWrite.push(" and");
+          }
+        }
+
+        if (strippedTerms.length > 1) {
+          linesToWrite.push(" were ");
+        } else {
+          linesToWrite.push(" was ");
+        }
+
+        linesToWrite.push("removed.</div>");
+
+        // Write all the text out to the document
+        for (var i = 0; i < linesToWrite.length; i++) {
+          document.write(linesToWrite[i]);
+        }
+
+      } else {
+        // Either all of the search tokens were long enough, or we haven't done
+        // it yet. There's no way to tell, so we need to analyse the search
+        // tokens.
+
+        // Get an array of search tokens
+        var searchTokens = unescape(jsonParameters.q).split("+");
+
+        function isLongEnough(element) { return element.length >= maxlength; }
+        function isNotLongEnough(element) { return element.length < maxlength; }
+
+        // Filter the tokens by whether they're long enough
+        var validTokens = searchTokens.filter(isLongEnough);
+        var invalidTokens = searchTokens.filter(isNotLongEnough);
+
+        // We only have to do something if there were some invalid tokens
+        if (invalidTokens.length > 0) {
+
+          // Update the search only to use the valid tokens. If no tokens are 
+          // left, don't do a search at all
+          if (validTokens.length > 0) {
+            jsonParameters.q = validTokens.join("+");
+          } else {
+            delete jsonParameters.q;
+          }
+
+          // Add the list of invalid tokens to the URL parameters
+          jsonParameters.s = invalidTokens.join("+");
+
+          // Construct a new URL from the updated parameters
+          var urlParameters = Object.keys(jsonParameters).map(function(k) {
+            return encodeURIComponent(k) + "=" + encodeURIComponent(jsonParameters[k]);
+          }).join("&");
+
+          // Get the base URL which occurs before the URL parameters
+          var baseUrl = (document.URL).substr(0, document.URL.indexOf("?"));
+
+          // Redirect the page to a page which excludes the invalid search tokens
+          window.location = baseUrl + "?" + urlParameters;
+        }
+      }
+    </script>
+
+  {% if search_results %}
+    <ul>
+    {% for href, caption, context in search_results %}
+      <li>
+        <a href="{{ pathto(item.href) }}">{{ caption }}</a>
+        <p class="context">{{ context|e }}</p>
+      </li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+  </div>
+{% endblock %}

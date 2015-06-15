@@ -24,30 +24,30 @@ environments.
 ## What does Calico do?
 
 Calico integrates seamlessly with the cloud orchestration system (such as
-OpenStack) to enable secure IP communication between virtual machines. As VMs
-are created or destroyed, their IP addresses are advertised to the rest of the
-network and they are able to send/receive data over IP just as they would with
-the native networking implementation – but with higher security,
-[scalability and performance](http://www.projectcalico.org/technical/scalability-and-performance/).
+OpenStack) to enable secure IP communication between virtual machines or
+containers. As VMs or containers are created or destroyed, their IP addresses
+are advertised to the rest of the network and they are able to send/receive
+data over IP just as they would with the native networking implementation – but
+with higher
+[security, scalability and performance](http://www.projectcalico.org/learn/).
 
 ## How do I get started with Project Calico?
 
-To get started, you first need a working installation of
-[OpenStack](http://www.openstack.org/). Then download and install the latest
-stable build of Calico following the instructions
-[here](http://www.projectcalico.org/download/).
+To get started on [OpenStack](http://www.openstack.org/) follow the
+instructions [in our docs](http://docs.projectcalico.org/en/latest/openstack.html).
+To get started on [Docker](http://www.docker.com/) follow the instructions
+[in the calico-docker repo](https://github.com/Metaswitch/calico-docker/blob/master/README.md).
 
-Technical documentation is
-[here](https://github.com/Metaswitch/calico-docs/wiki);
-if you are going to contribute to the project, you'll also need to run the
-[tests](doc/CalicoUTs.md).
+Technical documentation is at <http://docs.projectcalico.org/>. For
+information about contributing to Calico itself, see the section titled
+'Contributing' below.
 
 ## How can I get support for Project Calico?
 
 There are two options for getting support for Calico. You can simply
-[ask the community](http://www.projectcalico.org/community/) any question you
-like – there is an active group of users and developers who will usually try
-their best to help you or point you in the right direction. Or you can work
+[get in contact](http://www.projectcalico.org/contact/) and ask any question
+you like – there is an active group of users and developers who will usually
+try their best to help you or point you in the right direction. Or you can work
 with one of the commercial vendors and system integrators who provide
 installation, integration, customization and support services for Calico.
 
@@ -56,7 +56,7 @@ services:
 
 - Metaswitch Networks.
 
-Please [contact us](http://www.projectcalico.org/contact-us/) if you are a
+Please [contact us](http://www.projectcalico.org/contact/) if you are a
 vendor providing commercial support services and wish to be added to this list.
 
 ## Who is behind Project Calico?
@@ -66,7 +66,7 @@ original implementation to open source and are responsible for the ongoing
 management of the project. However, it is open to any members of the community
 – individuals or organizations – to get involved and contribute code.
 
-Please [contact us](http://www.projectcalico.org/contact-us/) if you are
+Please [contact us](http://www.projectcalico.org/contact/) if you are
 interested in getting involved and contributing to the project.
 
 ## Contributing
@@ -90,13 +90,15 @@ type:
 
     pip install -e .
 
-This will install the code and all its dependencies, *except for Neutron*. This
-is all you need to work on Felix or the ACL Manager. If you want to work on our
-OpenStack plugin, you'll also need to install Neutron: doing that is outside
-the scope of this article.
+This will install the code and all its dependencies, *except for Neutron or
+Docker dependencies*. This is all you need to work on Felix. If you want to
+work on our OpenStack plugin, you'll also need to install Neutron: doing that
+is outside the scope of this article.  If you want to work on Docker
+integration please see the
+[calico-docker](https://github.com/Metaswitch/calico-docker) repo.
 
 To run the unit tests, you'll also need to type:
-    
+
     pip install nose mock
 
 Then, still at the root of the calico directory, run:
@@ -111,7 +113,6 @@ environment variable before installing the code. Set the variable to a
 comma-separated list of the names of the components you want to install the
 dependencies for.
 
-For example, if you want to work on Felix and the ACL manager, you will want to
-set it to `felix,acl_manager`. With that set, you can then run
-`pip install -e .`, which will install the subset of the dependencies needed
-for those components.
+For example, if you want to work on Felix, you will want to set it to `felix`.
+With that set, you can then run `pip install -e .`, which will install the
+subset of the dependencies needed for those components.

@@ -1,12 +1,10 @@
 [run]
 include =
     calico/felix/*
-    calico/acl_manager/*
     calico/openstack/*
-    calico/common.py
+    calico/*.py
 omit =
     calico/felix/test/*
-    calico/acl_manager/test/*
     calico/openstack/test/*
 branch = True
 concurrency = eventlet

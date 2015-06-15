@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,6 +33,25 @@ import calico.felix.futils as futils
 
 # Logger
 log = logging.getLogger(__name__)
+
+UNIQUE_SHORTEN_TESTS = [
+    # Tries to return the input string if it can.
+    ("foo", 10, "foo"),
+    ("foobarbaz1", 10, "foobarbaz1"),
+    # Too long, truncated hash
+    ("foobarbaz12", 10, '_d71c1ff3e'),
+    ("foobarbaz12", 9, '_94df2800'),
+    # Different input, different hash
+    ("foobarbaz123", 10, '_438f419f9'),
+    # This is OK, it starts with the prefix but it's the wrong length so it
+    # can't clash with our output:
+    ("_foobar", 10, "_foobar"),
+    # But this is not since it's the same length as our output and starts with
+    # a _.
+    ("_foobar", 7, "_9f4764"),
+    ("_78c38617f", 10, '_f13be85cf'),
+]
+
 
 class TestFutils(unittest.TestCase):
     def setUp(self):
@@ -99,3 +118,52 @@ class TestFutils(unittest.TestCase):
 
         self.assertEqual(expected, self.data)
 
+    def test_uniquely_shorten(self):
+        for inp, length, exp in UNIQUE_SHORTEN_TESTS:
+            output = futils.uniquely_shorten(inp, length)
+            self.assertTrue(len(output) <= length)
+            self.assertEqual(exp, output, "Input %r truncated to length %s "
+                                          "should have given output "
+                                          "%r but got %r" %
+                                          (inp, length, exp, output))
+
+class TestStats(unittest.TestCase):
+    def setUp(self):
+        self.sc = futils.StatCounter("foo")
+
+    def tearDown(self):
+        try:
+            futils._registered_diags.remove(("foo", self.sc._dump))
+        except ValueError:
+            pass
+
+    def test_stats_counter(self):
+        self.assertTrue(("foo", self.sc._dump) in futils._registered_diags)
+        self.sc.increment("bar")
+        self.sc.increment("baz")
+        self.assertEqual(self.sc.stats["bar"], 1)
+        self.sc.increment("bar")
+        self.assertEqual(self.sc.stats["bar"], 2)
+        m_log = mock.Mock(spec=logging.Logger)
+        self.sc._dump(m_log)
+        m_log.assert_has_calls([
+            mock.call.info("%s: %s", "bar", 2),
+            mock.call.info("%s: %s", "baz", 1),
+        ])
+
+    def test_dump_diags(self):
+        with mock.patch("calico.felix.futils.stat_log") as m_log:
+            self.sc.increment("bar")
+            futils.dump_diags()
+            m_log.assert_has_calls([
+                mock.call.info("=== DIAGNOSTICS ==="),
+                mock.call.info("--- %s ---", "foo"),
+                mock.call.info("%s: %s", "bar", 1),
+                mock.call.info("=== END OF DIAGNOSTICS ==="),
+            ], any_order=True)
+
+    def test_dump_diags_cover(self):
+        with mock.patch("calico.felix.futils.stat_log") as m_log:
+            m_log.info.side_effect = Exception()
+            m_log.exception.side_effect = Exception()
+            futils.dump_diags()

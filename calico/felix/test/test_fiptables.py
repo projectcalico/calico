@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,473 +14,539 @@
 # limitations under the License.
 """
 felix.test.test_fiptables
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Tests for fiptables. Most of this module is tested in test_felix, but this covers
-some parts that are not.
+Tests of iptables handling function.
 """
-from copy import copy
+from collections import defaultdict
+import copy
+
 import logging
-import mock
-import sys
+import re
+from mock import patch, call
+from calico.felix import fiptables
+from calico.felix.fiptables import IptablesUpdater
+from calico.felix.futils import FailedSystemCall
+from calico.felix.test.base import BaseTestCase
 
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
+_log = logging.getLogger(__name__)
 
-import calico.felix.fiptables as fiptables
-import calico.felix.futils as futils
-from calico.felix.futils import IPV4, IPV6
-import calico.felix.test.stub_fiptables as stub_fiptables
 
-# Logger
-log = logging.getLogger(__name__)
+EXTRACT_UNREF_TESTS = [
+("""Chain INPUT (policy DROP)
+target     prot opt source               destination
+felix-INPUT  all  --  anywhere             anywhere
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:domain
 
-class TestFiptables(unittest.TestCase):
-    def test_read_table(self):
-        state = fiptables.TableState()
+Chain FORWARD (policy DROP)
+target     prot opt source               destination
+felix-FORWARD  all  --  anywhere             anywhere
+ufw-track-forward  all  --  anywhere             anywhere
 
-        with mock.patch('calico.felix.futils.check_call'):
-            state.read_table(IPV4, "blah")
-            futils.check_call.assert_called_with(["iptables", "--wait", "--list-rules", "--table", "blah"])
+Chain DOCKER (1 references)
+target     prot opt source               destination
 
-        with mock.patch('calico.felix.futils.check_call'):
-            state.read_table(IPV6, "blah")
-            futils.check_call.assert_called_with(["ip6tables", "--wait", "--list-rules", "--table", "blah"])
+Chain felix-FORWARD (1 references)
+target     prot opt source               destination
+felix-FROM-ENDPOINT  all  --  anywhere             anywhere
+felix-TO-ENDPOINT  all  --  anywhere             anywhere
+Chain-with-bad-name   all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
 
-    def test_load_table(self):
-        state = fiptables.TableState()
+Chain felix-temp (0 references)
+target     prot opt source               destination
+felix-FROM-ENDPOINT  all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+""",
+set(["felix-temp"])),
+]
 
-        data = "\n".join(["-P INPUT ACCEPT\n",
-                          "-P FORWARD ACCEPT\n",
-                          "-P OUTPUT ACCEPT\n",
-                          "-N felix-FORWARD\n",
-                          "-N felix-FROM-ENDPOINT\n",
-                          "-N felix-INPUT\n",
-                          "-N felix-TO-ENDPOINT\n",
-                          "-N felix-from-19f8308f-81\n",
-                          "-N felix-from-e6d6a9a9-37\n",
-                          "-N felix-to-19f8308f-81\n",
-                          "-N felix-to-e6d6a9a9-37\n",
-                          "-A INPUT -j felix-INPUT\n",
-                          "-A INPUT -i virbr0 -p udp -m udp --dport 53 -j ACCEPT\n",
-                          "-A INPUT -i virbr0 -p tcp -m tcp --dport 53 -j ACCEPT\n",
-                          "-A INPUT -i virbr0 -p udp -m udp --dport 67 -j ACCEPT\n",
-                          "-A INPUT -i virbr0 -p tcp -m tcp --dport 67 -j ACCEPT\n",
-                          "-A INPUT -j nova-api-INPUT\n",
-                          "-A FORWARD -j felix-FORWARD\n",
-                          "-A FORWARD -d 192.168.122.0/24 -o virbr0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT\n",
-                          "-A FORWARD -s 192.168.122.0/24 -i virbr0 -j ACCEPT\n",
-                          "-A FORWARD -i virbr0 -o virbr0 -j ACCEPT\n",
-                          "-A FORWARD -o virbr0 -j REJECT --reject-with icmp-port-unreachable\n",
-                          "-A FORWARD -i virbr0 -j REJECT --reject-with icmp-port-unreachable\n",
-                          "-A FORWARD -j nova-filter-top\n",
-                          "-A FORWARD -j nova-api-FORWARD\n"])
-        state.read_table = mock.Mock(return_value = data)
-        table = state.load_table(IPV4, "filter")
+MISSING_CHAIN_DROP = '--append %s --jump DROP -m comment --comment "WARNING Missing chain DROP:"'
 
-        # Check that the state contains what we expect.
-        self.assertEqual(len(table.chains), 11)
 
-        # Check a rules is present as expected.
-        rule = fiptables.Rule(IPV4, "ACCEPT")
-        rule.protocol = "udp"
-        rule.in_interface = "virbr0"
-        rule.match = "udp"
-        rule.parameters["dport"] = "53"
+class TestIptablesUpdater(BaseTestCase):
 
-        self.assertEqual(str(table.chains["INPUT"].rules[1]),
-                         "-p udp -i virbr0 -m udp -j ACCEPT --dport 53")
-        self.assertEqual(table.chains["INPUT"].rules[1], rule)
+    def setUp(self):
+        super(TestIptablesUpdater, self).setUp()
+        self.stub = IptablesStub("filter")
+        self.ipt = IptablesUpdater("filter", 4)
+        self.ipt._execute_iptables = self.stub.apply_iptables_restore
+        self.check_output_patch = patch("gevent.subprocess.check_output",
+                                        autospec=True)
+        self.m_check_output = self.check_output_patch.start()
+        self.m_check_output.side_effect = self.fake_check_output
 
-    def test_load_table_no_chain(self):
+    def fake_check_output(self, cmd, *args, **kwargs):
+        if cmd == ["iptables-save", "--table", "filter"]:
+            return self.stub.generate_iptables_save()
+        elif cmd == ['iptables', '--wait', '--list', '--table', 'filter']:
+            return self.stub.generate_iptables_list()
+        else:
+            raise AssertionError("Unexpected call %r" % cmd)
+
+    def tearDown(self):
+        self.check_output_patch.stop()
+        super(TestIptablesUpdater, self).tearDown()
+
+    def test_rewrite_chains_stub(self):
         """
-        Test that loading a rule in a chain which does not exist fails.
+        Tests that referencing a chain causes it to get stubbed out.
         """
-        state = fiptables.TableState()
-        data = "\n".join(["-P INPUT ACCEPT\n",
-                          "-A no-chain -j felix-INPUT\n"])
+        self.ipt.rewrite_chains(
+            {"foo": ["--append foo --jump bar"]},
+            {"foo": set(["bar"])},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+        self.assertEqual(self.stub.chains_contents,
+            {"foo": ["--append foo --jump bar"],
+             'bar': [MISSING_CHAIN_DROP % "bar"] })
 
-        state.read_table = mock.Mock(return_value = data)
-        with self.assertRaisesRegexp(fiptables.UnrecognisedIptablesField,
-                                     "chain which does not exist"):
-            state.load_table(IPV4, "filter")
-
-    def test_load_table_bad_flag(self):
+    def test_delete_required_chain_stub(self):
         """
-        Test that loading a rule with an unknown flag fails.
+        Tests that deleting a required chain stubs it out instead.
         """
-        state = fiptables.TableState()
-        data = "\n".join(["-P INPUT ACCEPT\n",
-                          "-A INPUT -x felix-INPUT\n"])
+        # Exit the graceful restart period, during which we do not stub out
+        # chains.
+        self.ipt.cleanup(async=True)
+        # Install a couple of chains.  foo depends on bar.
+        self.ipt.rewrite_chains(
+            {"foo": ["--append foo --jump bar"],
+             "bar": ["--append bar --jump ACCEPT"]},
+            {"foo": set(["bar"]),
+             "bar": set()},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+        # Both chains should be programmed as normal.
+        self.assertEqual(self.stub.chains_contents,
+            {"foo": ["--append foo --jump bar"],
+             'bar': ["--append bar --jump ACCEPT"] })
 
-        state.read_table = mock.Mock(return_value = data)
-        with self.assertRaisesRegexp(fiptables.UnrecognisedIptablesField,
-                                     "Unable to parse"):
-            state.load_table(IPV4, "filter")
+        # Deleting bar should stub it out instead.
+        self.ipt.delete_chains(["bar"], async=True)
+        self.step_actor(self.ipt)
+        self.assertEqual(self.stub.chains_contents,
+            {"foo": ["--append foo --jump bar"],
+             'bar': [MISSING_CHAIN_DROP % "bar"] })
 
-    def test_load_table_bad_line(self):
+    def test_cleanup_with_dependencies(self):
+        # Set up the dataplane with some chains that the IptablesUpdater
+        # doesn't know about and some that it will know about.
+        self.stub.apply_iptables_restore("""
+        *filter
+        :INPUT DROP [10:505]
+        :FORWARD DROP [0:0]
+        :OUTPUT ACCEPT [40:1600]
+        # These non-felix chains should be ignored
+        :ignore-me -
+        :ignore-me-too -
+        # These are left-over felix chains.  Some depend on each other.  They
+        # can only be cleaned up in the correct order.
+        :felix-foo - [0:0]
+        :felix-bar -
+        :felix-foo -
+        :felix-baz -
+        :felix-biff -
+        --append felix-foo --src 10.0.0.1/32 --jump felix-bar
+        # baz depends on biff; cleanup needs to detect that.
+        --append felix-baz --src 10.0.0.2/32 --jump felix-biff
+        --append felix-biff --src 10.0.0.3/32 --jump DROP
+        --append ignore-me --jump ignore-me-too
+        --append ignore-me-too --jump DROP
+        """.splitlines())
+
+        # IptablesUpdater hears about some chains before the cleanup.  These
+        # partially overlap with the ones that are already there.
+        self.ipt.rewrite_chains(
+            {"felix-foo": ["--append felix-foo --jump felix-bar",
+                           "--append felix-foo --jump felix-baz",
+                           "--append felix-foo --jump felix-boff"],
+             "felix-bar": ["--append felix-bar --jump ACCEPT"]},
+            # felix-foo depends on:
+            # * a new chain that's also being programmed
+            # * a pre-existing chain that is present at start of day
+            # * a new chain that isn't present at all.
+            {"felix-foo": set(["felix-bar", "felix-baz", "felix-boff"]),
+             "felix-bar": set()},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+
+        # Dataplane should now have all the new chains in place, including
+        # a stub for felix-boff.  However, the old chains should not have been
+        # cleaned up.
+        self.stub.assert_chain_contents({
+            "INPUT": [],
+            "FORWARD": [],
+            "OUTPUT": [],
+            "ignore-me": ["--append ignore-me --jump ignore-me-too"],
+            "ignore-me-too": ["--append ignore-me-too --jump DROP"],
+            "felix-foo": ["--append felix-foo --jump felix-bar",
+                          "--append felix-foo --jump felix-baz",
+                          "--append felix-foo --jump felix-boff"],
+            "felix-bar": ["--append felix-bar --jump ACCEPT"],
+            "felix-baz": ["--append felix-baz --src 10.0.0.2/32 "
+                          "--jump felix-biff"],
+            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            "felix-biff": ["--append felix-biff --src 10.0.0.3/32 --jump DROP"],
+        })
+
+        # Issue the cleanup.
+        self.ipt.cleanup(async=True)
+        self.step_actor(self.ipt)
+
+        # Should now have stubbed-out chains for all the ones that are not
+        # programmed.
+        self.stub.assert_chain_contents({
+            # Non felix chains ignored:
+            "INPUT": [],
+            "FORWARD": [],
+            "OUTPUT": [],
+            "ignore-me": ["--append ignore-me --jump ignore-me-too"],
+            "ignore-me-too": ["--append ignore-me-too --jump DROP"],
+            # Explicitly-programmed chains programmed.
+            "felix-foo": ["--append felix-foo --jump felix-bar",
+                          "--append felix-foo --jump felix-baz",
+                          "--append felix-foo --jump felix-boff"],
+            "felix-bar": ["--append felix-bar --jump ACCEPT"],
+            # All required but unknown chains stubbed.
+            "felix-baz": [MISSING_CHAIN_DROP % "felix-baz"],
+            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            # felix-biff deleted, even though it was referenced by felix-baz
+            # before.
+        })
+
+    def test_ensure_rule_removed(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([None,
+                                       FailedSystemCall("Message", [], 1, "",
+                                                        "line 2 failed")])
+            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call] * 2)
+
+    def test_ensure_rule_removed_not_present(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
+                                                        "line 2 failed")])
+            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call])
+
+    def test_ensure_rule_removed_error(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
+                                                        "the foo is barred")])
+            f = self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            self.assertRaises(FailedSystemCall, f.get)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call])
+
+
+class TestIptablesStub(BaseTestCase):
+    """
+    Tests of our dummy iptables "stub".  It's sufficiently complex
+    that giving it a few tests of its own adds a lot of confidence to
+    the tests that really rely on it.
+    """
+    def setUp(self):
+        super(TestIptablesStub, self).setUp()
+        self.stub = IptablesStub("filter")
+
+    def test_gen_ipt_save(self):
+        self.stub.chains_contents = {
+            "foo": ["--append foo"]
+        }
+        self.assertEqual(
+            self.stub.generate_iptables_save(),
+            "*filter\n"
+            ":foo - [0:0]\n"
+            "--append foo\n"
+            "COMMIT"
+        )
+
+    def test_gen_ipt_list(self):
+        self.stub.apply_iptables_restore("""
+        *filter
+        :foo - [0:0]
+        :bar -
+        --append foo --src 10.0.0.8/32 --jump bar
+        --append bar --jump DROP
+        """.splitlines())
+        self.assertEqual(
+            self.stub.generate_iptables_list(),
+            "Chain bar (1 references)\n"
+            "target     prot opt source               destination\n"
+            "DROP dummy -- anywhere anywhere\n"
+            "\n"
+            "Chain foo (0 references)\n"
+            "target     prot opt source               destination\n"
+            "bar dummy -- anywhere anywhere\n"
+        )
+
+
+class TestUtilityFunctions(BaseTestCase):
+
+    def test_extract_unreffed_chains(self):
+        for inp, exp in EXTRACT_UNREF_TESTS:
+            output = fiptables._extract_our_unreffed_chains(inp)
+            self.assertEqual(exp, output, "Expected\n\n%s\n\nTo parse as: %s\n"
+                                          "but got: %s" % (inp, exp, output))
+
+
+class IptablesStub(object):
+    """
+    Fake version of the dataplane, accepts iptables-restore input and
+    stores it off.  Can generate dummy versions of the corresponding
+    iptables-save and iptables --list output.
+    """
+
+    def __init__(self, table):
+        self.table = table
+        self.chains_contents = {}
+        self.chain_dependencies = defaultdict(set)
+
+        self.new_contents = None
+        self.new_dependencies = None
+        self.declared_chains = None
+        
+    def generate_iptables_save(self):
+        lines = ["*" + self.table]
+        for chain_name in sorted(self.chains_contents.keys()):
+            lines.append(":%s - [0:0]" % chain_name)
+        for _, chain_content in sorted(self.chains_contents.items()):
+            lines.extend(chain_content)
+        lines.append("COMMIT")
+        return "\n".join(lines)
+
+    def generate_iptables_list(self):
+        _log.debug("Generating iptables --list for chsins %s\n%s",
+                   self.chains_contents, self.chain_dependencies)
+        chunks = []
+        for chain, entries in sorted(self.chains_contents.items()):
+            num_refs = 0
+            for deps in self.chain_dependencies.values():
+                if chain in deps:
+                    num_refs += 1
+            chain_lines = [
+                "Chain %s (%s references)" % (chain, num_refs),
+                "target     prot opt source               destination"]
+            for rule in entries:
+                m = re.search(r'(?:--jump|-j|--goto|-g)\s+(\S+)', rule)
+                assert m, "Failed to generate listing for %r" % rule
+                action = m.group(1)
+                chain_lines.append(action + " dummy -- anywhere anywhere")
+            chunks.append("\n".join(chain_lines))
+        return "\n\n".join(chunks) + "\n"
+
+    def apply_iptables_restore(self, lines, **kwargs):
+        _log.debug("iptables-restore input:\n%s", "\n".join(lines))
+        table_name = None
+        self.new_contents = copy.deepcopy(self.chains_contents)
+        self.declared_chains = set()
+        self.new_dependencies = copy.deepcopy(self.chain_dependencies)
+        for line in lines:
+            line = line.strip()
+            if line.startswith("#") or not line:
+                continue
+            elif line.startswith("*"):
+                table_name = line[1:]
+                _log.debug("Processing table %s", table_name)
+                assert table_name == self.table
+            elif line.startswith(":"):
+                assert table_name, "Table should occur before chains."
+                splits = line[1:].split(" ")
+                _log.debug("Forward declaration %s, flushing chain", splits)
+                if len(splits) == 3:
+                    chain_name, policy, counts = splits
+                    if not re.match(r'\[\d+:\d+\]', counts):
+                        raise AssertionError("Bad counts: %r" % line)
+                elif len(splits) == 2:
+                    chain_name, policy = splits
+                else:
+                    raise AssertionError(
+                        "Invalid chain forward declaration line %r" % line)
+                if policy not in ("-", "DROP", "ACCEPT"):
+                    raise AssertionError("Unexpected policy %r" % line)
+                self.declared_chains.add(chain_name)
+                self.new_contents[chain_name] = []
+                self.new_dependencies[chain_name] = set()
+            elif line.strip() == "COMMIT":
+                self._handle_commit()
+            else:
+                # Should be a rule fragment of some sort
+                assert table_name, "Table should occur before rules."
+                self._handle_rule(line)
+        # Implicit commit at end.
+        self._handle_commit()
+
+    def _handle_rule(self, rule):
+        splits = rule.split(" ")
+        ipt_op = splits[0]
+        chain = splits[1]
+        _log.debug("Rule op: %s, chain name: %s", ipt_op, chain)
+        if ipt_op in ("--append", "-A"):
+            if chain not in self.declared_chains:
+                raise AssertionError("Append to non-existent chain %s" % chain)
+            self.new_contents[chain].append(rule)
+            m = re.search(r'(?:--jump|-j|--goto|-g)\s+(\S+)', rule)
+            if m:
+                action = m.group(1)
+                _log.debug("Action %s", action)
+                if action not in ("MARK", "ACCEPT", "DROP", "RETURN"):
+                    # Assume a dependent chain.
+                    self.new_dependencies[chain].add(action)
+        elif ipt_op in ("--delete-chain", "-X"):
+            if chain not in self.declared_chains:
+                raise AssertionError("Delete to non-existent chain %s" % chain)
+            del self.new_contents[chain]
+            del self.new_dependencies[chain]
+        elif ipt_op in ("--flush", "-F"):
+            if chain not in self.declared_chains:
+                raise AssertionError("Flush to non-existent chain %s" % chain)
+            self.new_contents[chain] = []
+            self.new_dependencies[chain] = set()
+        else:
+            raise AssertionError("Unknown operation %s" % ipt_op)
+
+    def _handle_commit(self):
+        for chain, deps in self.chain_dependencies.iteritems():
+            for dep in deps:
+                if dep not in self.new_contents:
+                    raise AssertionError("Chain %s depends on %s but that "
+                                         "chain is not present" % (chain, dep))
+        self.chains_contents = self.new_contents
+        self.chain_dependencies = self.new_dependencies
+
+    def assert_chain_contents(self, expected):
+        differences = zip(sorted(self.chains_contents.items()),
+                          sorted(expected.items()))
+        differences = ["%s != %s" % (p1, p2) for
+                       (p1, p2) in differences
+                       if p1 != p2]
+        if self.chains_contents != expected:
+            raise AssertionError("Differences:\n%s" % "\n".join(differences))
+
+
+class TestTransaction(BaseTestCase):
+    def setUp(self):
+        super(TestTransaction, self).setUp()
+        self.txn = fiptables._Transaction(
+            set(["felix-a", "felix-b", "felix-c"]),
+            defaultdict(set, {"felix-a": set(["felix-b", "felix-stub"])}),
+            defaultdict(set, {"felix-b": set(["felix-a"]),
+                              "felix-stub": set(["felix-a"])}),
+        )
+
+    def test_rewrite_existing_chain_remove_stub_dependency(self):
         """
-        Test that loading an unparseable line fails.
+        Test that a no-longer-required stub is deleted.
         """
-        state = fiptables.TableState()
+        self.txn.store_rewrite_chain("felix-a", ["foo"], set(["felix-b"]))
+        self.assertEqual(self.txn.affected_chains,
+                         set(["felix-a", "felix-stub"]))
+        self.assertEqual(self.txn.chains_to_stub_out, set([]))
+        self.assertEqual(self.txn.chains_to_delete, set(["felix-stub"]))
+        self.assertEqual(self.txn.referenced_chains, set(["felix-b"]))
+        self.assertEqual(self.txn.expl_prog_chains,
+                         set(["felix-a", "felix-b", "felix-c"]))
+        self.assertEqual(self.txn.required_chns,
+                         {"felix-a": set(["felix-b"])})
+        self.assertEqual(self.txn.requiring_chns,
+                         {"felix-b": set(["felix-a"])})
 
-        data = "\n".join(["-P INPUT ACCEPT\n",
-                          "-Z no-chain -j felix-INPUT\n"])
-
-        state.read_table = mock.Mock(return_value = data)
-        with self.assertRaisesRegexp(fiptables.UnrecognisedIptablesField,
-                                     "Unable to parse"):
-            state.load_table(IPV4, "filter")
-
-    def test_load_table_rule_not_known(self):
+    def test_rewrite_existing_chain_remove_normal_dependency(self):
         """
-        Test that loading a rule which we cannot understand is still valid.
+        Test that removing a dependency on an explicitly programmed chain
+        correctly updates the indices.
         """
-        state = fiptables.TableState()
+        self.txn.store_rewrite_chain("felix-a", ["foo"], set(["felix-stub"]))
+        self.assertEqual(self.txn.affected_chains, set(["felix-a"]))
+        self.assertEqual(self.txn.chains_to_stub_out, set([]))
+        self.assertEqual(self.txn.chains_to_delete, set([]))
+        self.assertEqual(self.txn.referenced_chains, set(["felix-stub"]))
+        self.assertEqual(self.txn.expl_prog_chains,
+                         set(["felix-a", "felix-b", "felix-c"]))
+        self.assertEqual(self.txn.required_chns,
+                         {"felix-a": set(["felix-stub"])})
+        self.assertEqual(self.txn.requiring_chns,
+                         {"felix-stub": set(["felix-a"])})
 
-        data = "\n".join(["-P INPUT ACCEPT\n",
-                          "-A INPUT -i eth0 -p tcp --some-thing x y -j DROP"])
-
-        state.read_table = mock.Mock(return_value = data)
-        table = state.load_table(IPV4, "filter")
-
-        self.assertEqual(str(table.chains["INPUT"].rules[0]),
-                         "-p tcp -i eth0 -j DROP --some-thing x y")
-
-        rule = fiptables.Rule(IPV4, "DROP")
-        rule.protocol = "tcp"
-        rule.in_interface = "eth0"
-        rule.parameters["some-thing"] = "x y"
-
-        self.assertEqual(rule, table.chains["INPUT"].rules[0])
-
-
-    def test_apply(self):
+    def test_unrequired_chain_delete(self):
         """
-        Test apply method.
+        Test that deleting an orphan chain triggers deletion and
+        updates the indices.
         """
-        data = "\n".join(["-P INPUT ACCEPT",
-                          "-P FORWARD ACCEPT",
-                          "-P OUTPUT ACCEPT",
-                          "-N felix-FORWARD",
-                          "-N felix-FROM-ENDPOINT",
-                          "-N felix-INPUT",
-                          "-N felix-TO-ENDPOINT",
-                          "-N felix-from-19f8308f-81",
-                          "-N felix-from-e6d6a9a9-37",
-                          "-N felix-to-19f8308f-81",
-                          "-N felix-to-e6d6a9a9-37",
-                          "-A INPUT -j felix-INPUT",
-                          "-A INPUT -i virbr0 -p udp -m udp --dport 53 -j ACCEPT",
-                          "-A INPUT -i virbr0 -p tcp -m tcp --dport 53 -j ACCEPT",
-                          "-A INPUT -i virbr0 -p udp -m udp --dport 67 -j ACCEPT",
-                          "-A INPUT -i virbr0 -p tcp -m tcp --dport 67 -j ACCEPT",
-                          "-A INPUT -j nova-api-INPUT",
-                          "-A FORWARD -j felix-FORWARD",
-                          "-A FORWARD -d 192.168.122.0/24 -o virbr0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
-                          "-A FORWARD -s 192.168.122.0/24 -i virbr0 -j ACCEPT",
-                          "-A FORWARD -i virbr0 -o virbr0 -j ACCEPT",
-                          "-A FORWARD -o virbr0 -j REJECT --reject-with icmp-port-unreachable",
-                          "-A FORWARD -i virbr0 -j REJECT --reject-with icmp-port-unreachable",
-                          "-A FORWARD -j nova-filter-top",
-                          "-A FORWARD -j nova-api-FORWARD"])
+        self.txn.store_delete("felix-c")
+        self.assertEqual(self.txn.affected_chains, set(["felix-c"]))
+        self.assertEqual(self.txn.chains_to_stub_out, set([]))
+        self.assertEqual(self.txn.chains_to_delete, set(["felix-c"]))
+        self.assertEqual(self.txn.referenced_chains,
+                         set(["felix-b", "felix-stub"]))
+        self.assertEqual(self.txn.expl_prog_chains,
+                         set(["felix-a", "felix-b"]))
+        self.assertEqual(self.txn.required_chns,
+                         {"felix-a": set(["felix-b", "felix-stub"])})
+        self.assertEqual(self.txn.requiring_chns,
+                         {"felix-b": set(["felix-a"]),
+                          "felix-stub": set(["felix-a"])})
 
-        state = fiptables.TableState()
-        state.read_table = mock.Mock(return_value = data)
-        table = state.get_table(IPV4, "filter")
-
-        # Build up a list of rules as they will be after changes.
-        rules = []
-        rules.append(fiptables.Rule(IPV4))
-        line = "-j felix-FORWARD"
-        rules[0].parse_fields(line, line.split())
-
-        # New rule to be added at location 1
-        rules.append(fiptables.Rule(IPV4, "somewhere"))
-        rules[1].protocol = "udp"
-        rules[1].in_interface = "blah"
-        rules[1].out_interface = "stuff"
-        rules[1].match = "udp"
-        rules[1].parameters["dport"] = "53"
-
-        line = "-d 192.168.122.0/24 -o virbr0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
-        rules.append(fiptables.Rule(IPV4))
-        rules[2].parse_fields(line, line.split())
-
-        chain = table.get_chain("FORWARD")
-        self.assertEqual(len(chain.rules), 8)
-
-        chain.insert_rule(rules[1], 1)
-
-        chain.truncate_rules(3)
-
-        # Verify that the rules are as expected.
-        self.assertEqual(len(chain.rules), 3)
-        self.assertEqual(rules, chain.rules)
-
-        # Now test apply.
-        with mock.patch('calico.felix.futils.multi_call') as mock_call:
-            state.apply()
-        self.assertEqual(mock_call.call_count, 1)
-
-        ops = []
-        op = ["iptables", "--wait", "--table", "filter", "--insert", "FORWARD", "2"]
-        op.extend(rules[1].generate_fields())
-        ops.append(op)
-
-        for loop in range(0,6):
-            ops.append(["iptables",
-                        "--wait",
-                        "--table",
-                        "filter",
-                        "--delete",
-                        "FORWARD",
-                        "4"])
-
-        self.assertEqual(mock_call.call_count, 1)
-        mock_call.assert_called_with(ops)
-
-        # Apply again - this is a noop, as states match.
-        with mock.patch('calico.felix.futils.multi_call') as mock_call:
-            state.apply()
-        self.assertEqual(mock_call.call_count, 0)
-
-    def test_negative_fields(self):
+    def test_required_deleted_chain_gets_stubbed(self):
         """
-        Test negative fields
+        Test that deleting a chain that is still required results in it
+        being stubbed out.
         """
-        lines = [ "-N felix-from-blah",
-                  "-A felix-from-blah ! -d 1.2.3.4/32 -j DROP",
-                  "-A felix-from-blah ! -d 1.2.3.4/32 -p tcp -j DROP",
-                  "-A felix-from-blah ! -d 1.2.3.4/32 ! -p udp -j DROP",
-                  "-A felix-from-blah -m mark ! --mark 0x1 -j DROP"]
+        self.txn.store_delete("felix-b")
+        self.assertEqual(self.txn.affected_chains, set(["felix-b"]))
+        self.assertEqual(self.txn.chains_to_stub_out, set(["felix-b"]))
+        self.assertEqual(self.txn.chains_to_delete, set())
+        self.assertEqual(self.txn.referenced_chains,
+                         set(["felix-b", "felix-stub"]))
+        self.assertEqual(self.txn.expl_prog_chains,
+                         set(["felix-a", "felix-c"]))
+        self.assertEqual(self.txn.required_chns,
+                         {"felix-a": set(["felix-b", "felix-stub"])})
+        self.assertEqual(self.txn.requiring_chns,
+                         {"felix-b": set(["felix-a"]),
+                          "felix-stub": set(["felix-a"])})
 
-        data = "\n".join(lines)
+    def test_cache_invalidation(self):
+        self.assert_cache_dropped()
+        self.assert_properties_cached()
+        self.txn.store_delete("felix-a")
+        self.assert_cache_dropped()
 
-        state = fiptables.TableState()
-        state.read_table = mock.Mock(return_value = data)
-        table = state.load_table(IPV4, "filter")
-        chain = table.chains["felix-from-blah"]
+    def test_cache_invalidation_2(self):
+        self.assert_cache_dropped()
+        self.assert_properties_cached()
+        self.txn.store_rewrite_chain("felix-a", [], {})
+        self.assert_cache_dropped()
 
-        # Check that lot got parsed as expected.
-        self.assertTrue(len(chain.rules), 4)
+    def assert_properties_cached(self):
+        self.assertEqual(self.txn.affected_chains, set())
+        self.assertEqual(self.txn.chains_to_stub_out, set())
+        self.assertEqual(self.txn.chains_to_delete, set())
+        self.assertEqual(self.txn._affected_chains, set())
+        self.assertEqual(self.txn._chains_to_stub, set())
+        self.assertEqual(self.txn._chains_to_delete, set())
 
-        rule = fiptables.Rule(IPV4)
-        rule.dst = "!1.2.3.4/32"
-        rule.target = "DROP"
-        self.assertEqual(chain.rules[0], rule)
-
-        rule.protocol = "tcp"
-        self.assertEqual(chain.rules[1], rule)
-
-        rule.protocol = "!udp"
-        self.assertEqual(chain.rules[2], rule)
-
-        rule = fiptables.Rule(IPV4)
-        rule.match = "mark"
-        rule.parameters["mark"] = "!0x1"
-        rule.target = "DROP"
-        self.assertEqual(chain.rules[3], rule)
-
-        # Now convert back again, and compare. Lines are different here in that
-        # we have (a) removed the chain specification; and (b) reordered
-        # fields.
-        lines = [ "! -d 1.2.3.4/32 -j DROP",
-                  "! -d 1.2.3.4/32 -p tcp -j DROP",
-                  "! -d 1.2.3.4/32 ! -p udp -j DROP",
-                  "-m mark -j DROP ! --mark 0x1"]
-
-        for loop in range(0,4):
-            actual = " ".join(chain.rules[loop].generate_fields())
-            self.assertEqual(actual, lines[loop])
-
-    def test_insert_rule(self):
-        """
-        Test insert_rule
-        """
-        data = "\n".join(["-N blah",
-                          "-A blah -j original"])
-
-        state = fiptables.TableState()
-        state.read_table = mock.Mock(return_value = data)
-        table = state.get_table(IPV4, "filter")
-        chain = table.get_chain("blah")
-        self.assertTrue(len(chain.rules), 1)
-
-        # Set up a handy list of arguments
-        base_args = ["iptables", "--wait", "--table", "filter"]
-
-        # Put a new rule at the start
-        rule = fiptables.Rule(IPV4, "rule1")
-        chain.insert_rule(rule)
-        self.assertTrue(len(chain.rules), 2)
-        self.assertTrue(chain.rules[0].target, "rule1")
-        self.assertTrue(chain.rules[1].target, "original")
-        args = copy(base_args)
-        args.extend(["--insert", "blah", "1", "-j", "rule1"])
-        self.assertEqual(len(table.ops), 1)
-        self.assertEqual(table.ops[0], args)
-
-        # Put in a copy of the original rule, forcing position.
-        rule = fiptables.Rule(IPV4, "original")
-        chain.insert_rule(rule)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        args = copy(base_args)
-        args.extend(["--insert", "blah", "1", "-j", "original"])
-        self.assertEqual(len(table.ops), 2)
-        self.assertEqual(table.ops[1], args)
-
-        # Now add another copy. Does not get added, as already there.
-        rule = fiptables.Rule(IPV4, "original")
-        chain.insert_rule(rule)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertEqual(len(table.ops), 2)
-
-        # Add rule1 again - doesn't get added as not forcing position.
-        rule = fiptables.Rule(IPV4, "rule1")
-        chain.insert_rule(rule, 0, False)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertEqual(len(table.ops), 2)
-
-        chain.insert_rule(rule, 1, False)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertEqual(len(table.ops), 2)
-
-        chain.insert_rule(rule, 2, False)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertEqual(len(table.ops), 2)
-
-        chain.insert_rule(rule, fiptables.RULE_POSN_LAST, False)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertEqual(len(table.ops), 2)
-
-        # Now use POSN_LAST but forcing position
-        rule = fiptables.Rule(IPV4, "original")
-        chain.insert_rule(rule, fiptables.RULE_POSN_LAST)
-        self.assertTrue(len(chain.rules), 3)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertEqual(len(table.ops), 2)
-
-        rule = fiptables.Rule(IPV4, "rule1")
-        chain.insert_rule(rule, fiptables.RULE_POSN_LAST)
-        self.assertTrue(len(chain.rules), 4)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertTrue(chain.rules[3].target, "rule1")
-        args = copy(base_args)
-        args.extend(["--append", "blah", "-j", "rule1"])
-        self.assertEqual(len(table.ops), 3)
-        self.assertEqual(table.ops[2], args)
-
-        rule = fiptables.Rule(IPV4, "rule1")
-        chain.insert_rule(rule, fiptables.RULE_POSN_LAST, True)
-        self.assertTrue(len(chain.rules), 4)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertTrue(chain.rules[3].target, "rule1")
-        self.assertEqual(len(table.ops), 3)
-
-        rule = fiptables.Rule(IPV4, "new")
-        chain.insert_rule(rule, fiptables.RULE_POSN_LAST, False)
-        self.assertTrue(len(chain.rules), 5)
-        self.assertTrue(chain.rules[0].target, "original")
-        self.assertTrue(chain.rules[1].target, "rule1")
-        self.assertTrue(chain.rules[2].target, "original")
-        self.assertTrue(chain.rules[3].target, "rule1")
-        self.assertTrue(chain.rules[4].target, "original")
-        args = copy(base_args)
-        args.extend(["--append", "blah", "-j", "new"])
-        self.assertEqual(len(table.ops), 4)
-        self.assertEqual(table.ops[3], args)
-
-    def test_rule_match(self):
-        """
-        Test every possible rule match.
-        """
-        rule1 = fiptables.Rule(IPV4)
-        rule2 = fiptables.Rule(IPV6)
-        self.assertNotEqual(rule1, rule2)
-
-        rule1 = fiptables.Rule(IPV4)
-        rule2 = fiptables.Rule(IPV4)
-        self.assertEqual(rule1, rule2)
-
-        rule1.target = "blah"
-        self.assertNotEqual(rule1, rule2)
-        rule2.target = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.target = "blah"
-        self.assertEqual(rule1, rule2)
-
-        rule1.dst = "dst"
-        self.assertNotEqual(rule1, rule2)
-        rule2.dst = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.dst = "dst"
-        self.assertEqual(rule1, rule2)
-
-        rule1.src = "src"
-        self.assertNotEqual(rule1, rule2)
-        rule2.src = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.src = "src"
-        self.assertEqual(rule1, rule2)
-
-        rule1.match = "match"
-        self.assertNotEqual(rule1, rule2)
-        rule2.match = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.match = "match"
-        self.assertEqual(rule1, rule2)
-
-        rule1.protocol = "protocol"
-        self.assertNotEqual(rule1, rule2)
-        rule2.protocol = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.protocol = "protocol"
-        self.assertEqual(rule1, rule2)
-
-        rule1.in_interface = "in_interface"
-        self.assertNotEqual(rule1, rule2)
-        rule2.in_interface = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.in_interface = "in_interface"
-        self.assertEqual(rule1, rule2)
-
-        rule1.out_interface = "out_interface"
-        self.assertNotEqual(rule1, rule2)
-        rule2.out_interface = "x"
-        self.assertNotEqual(rule1, rule2)
-        rule2.out_interface = "out_interface"
-        self.assertEqual(rule1, rule2)
-
-        rule1.parameters = { "x": "blah", "y": "other" }
-        self.assertNotEqual(rule1, rule2)
-        rule2.parameters = { "x": "blah" }
-        self.assertNotEqual(rule1, rule2)
-        rule2.parameters["y"] = "other"
-        self.assertEqual(rule1, rule2)
+    def assert_cache_dropped(self):
+        self.assertEqual(self.txn._affected_chains, None)
+        self.assertEqual(self.txn._chains_to_stub, None)
+        self.assertEqual(self.txn._chains_to_delete, None)

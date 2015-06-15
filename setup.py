@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2014 Metaswitch Networks
+# Copyright (c) 2014, 2015 Metaswitch Networks
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -71,11 +71,10 @@ def collect_requirements():
 
 setuptools.setup(
     name = "calico",
-    version = "0.12.1",
+    version = "0.23",
     packages = setuptools.find_packages(),
     entry_points = {
         'console_scripts': [
-            'calico-acl-manager = calico.acl_manager.acl_manager:main',
             'calico-felix = calico.felix.felix:main',
         ],
         'neutron.ml2.mechanism_drivers': [

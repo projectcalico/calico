@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2014 Metaswitch Networks
+# Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,6 @@ Test utilities.
 """
 import logging
 import random
-
-from collections import namedtuple
-CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
 
 # Logger
 log = logging.getLogger(__name__)
@@ -54,4 +51,3 @@ def get_mac():
 # Exception raised when tests reach the end.
 class TestOverException(Exception):
     pass
-
