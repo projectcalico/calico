@@ -424,8 +424,8 @@ def checksystem(fix=False, quit_if_error=False):
                 print >> sys.stderr, "ERROR: Could not enable ip6_tables."
                 system_ok = False
         else:
-            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables module. Load with " \
-                             "`modprobe ip6_tables`"
+            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables " \
+                                 "module. Load with `modprobe ip6_tables`"
             system_ok = False
 
     if not module_loaded("xt_set"):
@@ -436,8 +436,8 @@ def checksystem(fix=False, quit_if_error=False):
                 print >> sys.stderr, "ERROR: Could not enable xt_set."
                 system_ok = False
         else:
-            print >> sys.stderr, "WARNING: Unable to detect the xt_set module. Load with " \
-                             "`modprobe xt_set`"
+            print >> sys.stderr, "WARNING: Unable to detect the xt_set " \
+                                 "module. Load with `modprobe xt_set`"
             system_ok = False
 
     # Enable IP forwarding since all compute hosts are vRouters.
@@ -924,8 +924,10 @@ def container_ip_add(container_name, ip, version, interface):
     # Check that the container is already networked
     try:
         endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
-        endpoint = client.get_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint_id)
-
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=container_id,
+                                       endpoint_id=endpoint_id)
     except KeyError:
         print "Failed to add IP address to container.\n"
         print_container_not_in_calico_msg(container_name)
@@ -996,7 +998,10 @@ def container_ip_remove(container_name, ip, version, interface):
     # Check that the container is already networked
     try:
         endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
-        endpoint = client.get_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint_id)
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=container_id,
+                                       endpoint_id=endpoint_id)
         if address.version == 4:
             nets = endpoint.ipv4_nets
         else:
@@ -1152,8 +1157,9 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
         print_paragraph("Profile %s is already in endpoint "
                         "profile list" % e.profile_name)
     except MultipleEndpointsMatch:
-        print "More than 1 endpoint matches the provided criteria. " \
-              "Please provide additional parameters to refine the search."
+        print_paragraph("More than 1 endpoint matches the provided criteria.  "
+                        "Please provide additional parameters to refine the "
+                        "search.")
         sys.exit(1)
 
 
@@ -1312,7 +1318,8 @@ def validate_arguments():
 
     if not profile_ok:
         print_paragraph("Profile names must be < 40 character long and can "
-                        "only contain numbers, letters, dots, dashes and underscores.")
+                        "only contain numbers, letters, dots, dashes and "
+                        "underscores.")
     if not tag_ok:
         print_paragraph("Tags names can only contain numbers, letters, dots, "
                         "dashes and underscores.")
@@ -1491,7 +1498,8 @@ if __name__ == '__main__':
             node_show(arguments["--detailed"])
         elif arguments["pool"]:
             if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"], ip_version, arguments["--ipip"])
+                ip_pool_add(arguments["<CIDR>"], ip_version,
+                            arguments["--ipip"])
             elif arguments["remove"]:
                 ip_pool_remove(arguments["<CIDR>"], ip_version)
             elif arguments["show"]:
