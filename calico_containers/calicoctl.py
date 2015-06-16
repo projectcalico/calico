@@ -70,7 +70,8 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
                                DataStoreError,
                                ProfileNotInEndpoint,
                                ProfileAlreadyInEndpoint,
-                               MultipleEndpointsMatch)
+                               MultipleEndpointsMatch,
+                               Vividict)
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
@@ -963,7 +964,7 @@ def container_ip_add(container_name, ip, version, interface):
         client.unassign_address(pool, ip)
         sys.exit(1)
 
-    print "IP %s added to %s" % (ip, workload_id)
+    print "IP %s added to %s" % (ip, container_id)
 
 
 def container_ip_remove(container_name, ip, version, interface):
@@ -1078,17 +1079,38 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
                     "NumEndpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        #@RLB This needs a complete rework
+        """ To caluclate the number of unique endpoints, and unique workloads
+         on each host, we first create a dictionary in the following format:
+        {
+        host1: {
+            workload1: num_workload1_endpoints,
+            workload2: num_workload2_endpoints,
+            ...
+            },
+        host2: {
+            workload3: num_workload3_endpoints,
+            workload4: num_workload4_endpoints,
+            ...
+        }
+        """
+        # Use a vividict so the host key is automatically set
+        table_dict = Vividict()
         for endpoint in endpoints:
-            # TODO: remove duplicates rows
-            workloads = [other_endpoint for other_endpoint in endpoints if
-                         other_endpoint.workload_id == endpoint.workload_id]
-            num_workloads = len(workloads)
+            if endpoint.workload_id not in table_dict[endpoint.hostname]:
+                table_dict[endpoint.hostname][endpoint.workload_id] = 0
+            table_dict[endpoint.hostname][endpoint.workload_id] += 1
 
-            endpoints = [other_endpoint for other_endpoint in endpoints if
-                         other_endpoint.endpoint_id == endpoint.endpoint_id]
-            num_endpoints = len(endpoints)
+        # This table has one entry for each host. So loop through the hosts
+        for host in table_dict:
+            # Check how many workloads belong to each host
+            num_workloads = len(table_dict[host])
 
+            # Add up how many endpoints each workload on this host has
+            num_endpoints = 0
+            for workload, endpoints in iter(table_dict[host].items()):
+                num_endpoints += endpoints
+
+            # Add the results to this table
             new_row = [endpoint.hostname,
                        endpoint.orchestrator_id,
                        num_workloads,
