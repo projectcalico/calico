@@ -68,7 +68,7 @@ class TestPlugin(unittest.TestCase):
   "GatewayIPv6": "fe80::202:b3ff:fe1e:8329",
   "InterfaceNames": [
     {
-      "DstName": "cali",
+      "DstPrefix": "cali",
       "SrcName": "tmpTEST_ID"
     }
   ],
