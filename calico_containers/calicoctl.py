@@ -42,7 +42,7 @@ Usage:
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl default-node-as [<AS_NUM>]
   calicoctl bgppeer add <PEER_IP> as <AS_NUM>
-  calicoctl bgppeer remove <PEER_IP> as <AS_NUM>
+  calicoctl bgppeer remove <PEER_IP>
   calicoctl bgppeer show [--ipv4 | --ipv6]
   calicoctl bgp-node-mesh [on|off]
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]

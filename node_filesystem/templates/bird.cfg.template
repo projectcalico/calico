@@ -67,13 +67,13 @@ template bgp bgp_template {
 {{/* ------------- Node-to-node mesh ------------- */}}
 {{$mesh := true}}{{if exists "/config/bgp_node_mesh"}}{{$mesh := (json (getv "/config/bgp_node_mesh")).enabled}}{{end}}
 {{if $mesh}}# Peering with all neighbours (mesh).
-{{range gets "/host/*}}{{$onode_as_key := printf "%s/bgp_as" .Value}}{{$onode_ip_key := printf "%s/bird_ip" .Value}}{{$onode_ip = getv $onode_ip_key}}
+{{range gets "/host/*"}}{{$onode_as_key := printf "%s/bgp_as" .Value}}{{$onode_ip_key := printf "%s/bird_ip" .Value}}{{$onode_ip := getv $onode_ip_key}}
 {{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
 {{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
 {{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}{{end}}{{else}}# Node-to-node mesh disabled{{end}}
+}{{end}}{{end}}{{else}}# Node-to-node mesh disabled{{end}}
 
 {{/* ------------- Global peers ------------- */}}
 {{if ls "/config/bgp_peer_v4"}}

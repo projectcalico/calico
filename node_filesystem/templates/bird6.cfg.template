@@ -58,13 +58,13 @@ template bgp bgp_template {
 {{/* ------------- Node-to-node mesh ------------- */}}
 {{$mesh := true}}{{if exists "/config/bgp_node_mesh"}}{{$mesh := (json (getv "/config/bgp_node_mesh")).enabled}}{{end}}
 {{if $mesh}}# Peering with all neighbours (mesh).
-{{range gets "/host/*}}{{$onode_as_key := printf "%s/bgp_as" .Value}}{{$onode_ip_key := printf "%s/bird6_ip" .Value}}
-{{if exists $onode_ip_key}}{{$onode_ip = getv $onode_ip_key}}{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
+{{range gets "/host/*"}}{{$onode_as_key := printf "%s/bgp_as" .Value}}{{$onode_ip_key := printf "%s/bird6_ip" .Value}}
+{{if exists $onode_ip_key}}{{$onode_ip := getv $onode_ip_key}}{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
 {{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
 {{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}{{end}}{{end}}{{else}}# Node-to-node mesh disabled{{end}}
+}{{end}}{{end}}{{end}}{{else}}# Node-to-node mesh disabled{{end}}
 
 {{/* ------------- Global peers ------------- */}}
 {{if ls "/config/bgp_peer_v6"}}
@@ -89,26 +89,4 @@ protocol bgp bgp_{{$id}} from bgp_template {
 {{end}}
 {{else}}# No node-specific peers configured.{{end}}
 
-
-
-
-{{if ls "/config/bgp_peer_rr_v6"}}
-# Peering with configured neighbors.
-{{range gets "/config/bgp_peer_rr_v6/*"}}{{$nums := split .Value ":"}}{{$id := join $nums "_"}}
-# For peer {{.Value}}
-protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}
 {{end}}
-{{else if ls "/host"}}   {{/* Check that there are entries */}}
-# Peering with all neighbours (mesh).
-{{range gets "/host/*/bird6_ip"}}{{$nums := split .Value ":"}}{{$id := join $nums "_"}}
-# For peer {{.Key}}
-{{if eq .Value (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
-{{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}
-{{end}}{{end}}{{end}}
-{{end}}
-
-
