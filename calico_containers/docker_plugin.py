@@ -201,7 +201,7 @@ def join():
     ret_json = {
         "InterfaceNames": [{
             "SrcName": ep.temp_interface_name(),
-            "DstName": IF_PREFIX
+            "DstPrefix": IF_PREFIX
         }],
         "Gateway": str(ep.ipv4_gateway),
         "StaticRoutes": [{
