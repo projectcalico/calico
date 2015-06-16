@@ -198,6 +198,7 @@ def set_up_endpoint(ip, hostname, orchestrator_id, cpid, next_hop_ips,
                   endpoint_id=ep_id,
                   state="active",
                   mac=mac)
+    ep.if_name = veth_name
     if network.version == 4:
         ep.ipv4_nets.add(network)
         ep.ipv4_gateway = next_hop
@@ -229,7 +230,7 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
                                    next_hop_ips=next_hop_ips,
                                    veth_name=if_name,
                                    proc_alias=proc_alias,
-                                   ep_id=old_endpoint.ep_id,
+                                   ep_id=old_endpoint.endpoint_id,
                                    mac=old_endpoint.mac)
     for net in nets:
         add_ip_to_interface(cpid, net.ip, if_name, proc_alias=proc_alias)

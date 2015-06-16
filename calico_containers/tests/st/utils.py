@@ -7,7 +7,7 @@ from time import sleep
 LOCAL_IP_ENV = "MY_IP"
 
 def get_ip():
-    """Return a string of the IP of the hosts eth0 interface."""
+    """Return a string of the IP of the hosts interface."""
     try:
         ip = os.environ[LOCAL_IP_ENV]
     except KeyError:
