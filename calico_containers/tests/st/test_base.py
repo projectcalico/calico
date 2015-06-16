@@ -2,6 +2,7 @@ import requests
 from sh import docker
 from subprocess import CalledProcessError
 from unittest import TestCase
+import subprocess
 
 from utils import get_ip, retry_until_success
 from functools import partial
@@ -13,55 +14,19 @@ class TestBase(TestCase):
     """
     def setUp(self):
         """
-        Clean up host containers before every test.
+        Clean up before every test.
         """
-        # containers = docker.ps("-qa").split()
-        # for container in containers:
-        #     delete_container(container)
-
         self.ip = get_ip()
-        self.start_etcd()
+        # Assert that /calico doesn't exist
+        subprocess.check_output(
+            "curl -sL http://%s:2379/v2/keys/calico?recursive=true -XDELETE"
+            % self.ip, shell=True)
 
     def tearDown(self):
         """
-        Clean up host containers after every test.
+        Clean up after every test.
         """
-        # containers = docker.ps("-qa").split()
-        # for container in containers:
-        #     delete_container(container)
-        # import sh
-        self.stop_etcd()
-
-    def start_etcd(self):
-        """
-        Starts the single-node etcd cluster.
-
-        The etcd process runs within its own container, outside the host
-        containers. It uses port mapping and the base machine's IP to communicate.
-        """
-        docker.rm("-f", "etcd", _ok_code=[0, 1])
-        docker.run(
-            "--detach",
-            "--publish", "2379:2379",
-            "--publish", "2380:2380",
-            "--name", "etcd", "quay.io/coreos/etcd:v2.0.11",
-            name="calico",
-            advertise_client_urls="http://%s:2379" % self.ip,
-            listen_client_urls="http://0.0.0.0:2379",
-            initial_advertise_peer_urls="http://%s:2380" % self.ip,
-            listen_peer_urls="http://0.0.0.0:2380",
-            initial_cluster_token="etcd-cluster-2",
-            initial_cluster="calico=http://%s:2380" % self.ip,
-            initial_cluster_state="new",
-        )
-
-        # TODO - talking to etcd fails until a request is made from outside
-        # the dind to etcd. Not sure why yet...
-        get = partial(requests.get, "http://%s:2379/version" % self.ip)
-        retry_until_success(get)
-
-    def stop_etcd(self):
-        docker.rm("-f", "etcd", _ok_code=[0, 1])
+        # Remove interfaces? containers?
 
     def assert_connectivity(self, pass_list, fail_list=[]):
         """

@@ -1,9 +1,10 @@
 from test_base import TestBase
 from docker_host import DockerHost
 import json
-
+from nose.plugins.attrib import attr
 
 class TestProfileCommands(TestBase):
+    @attr('slow')
     def test_profile_commands(self):
         """
         Test that the profile rule update command successfully updates.

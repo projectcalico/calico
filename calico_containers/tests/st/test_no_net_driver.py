@@ -9,7 +9,7 @@ class TestNoNetDriver(TestBase):
         """
         Test mainline functionality without using the docker network driver.
         """
-        with DockerHost('host') as host:
+        with DockerHost('host', dind=False) as host:
 
             host.calicoctl("profile add TEST_GROUP")
 
@@ -31,10 +31,6 @@ class TestNoNetDriver(TestBase):
             # Now add the profiles.
             host.calicoctl("profile TEST_GROUP member add %s" % node1)
             host.calicoctl("profile TEST_GROUP member add %s" % node2)
-
-            # Inspect the nodes
-            host.execute("docker inspect %s" % node1)
-            host.execute("docker inspect %s" % node2)
 
             # Check it works
             node1.assert_can_ping("192.168.1.2", retries=10)

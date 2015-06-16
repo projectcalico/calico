@@ -2,15 +2,15 @@ from subprocess import CalledProcessError
 
 from test_base import TestBase
 from docker_host import DockerHost
-
+from nose.plugins.attrib import attr
 
 class TestArgParsing(TestBase):
+    @attr('slow')
     def test_arg_parsing(self):
         """
         Test that calicoctl correctly accepts or rejects given argument.
         """
-        with DockerHost('host', start_calico=False) as host:
-
+        with DockerHost('host', start_calico=False, dind=False) as host:
             # Run various commands with invalid IPs.
             cases = [("node --ip=127.a.0.1", 1),
                      ("node --ip=aa:bb::cc", 1),

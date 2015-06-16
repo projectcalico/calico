@@ -34,6 +34,10 @@ class Workload(object):
         """
         self.host = host
         self.name = name
+        try:
+            host.execute('docker rm -f %s' % name)
+        except CalledProcessError:
+            pass
 
         args = [
             "docker", "run",
@@ -44,9 +48,8 @@ class Workload(object):
         ]
         assert ip is None, "Static IP assignment not supported by libnetwork."
         if network:
-            assert isinstance(network, DockerNetwork)
-            # Using @squaremo's Docker UI patch, --net accepts
-            # <driver name>:<network name> as an option.
+            if network is not "none":
+                assert isinstance(network, DockerNetwork)
             args.append("--net=%s" % network)
         args.append(image)
         command = ' '.join(args)

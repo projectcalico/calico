@@ -1,3 +1,4 @@
+import os
 import sh
 from sh import docker
 from functools import partial
@@ -26,8 +27,8 @@ class DockerHost(object):
 
         if dind:
             docker.rm("-f", self.name, _ok_code=[0, 1])
-            pwd = sh.pwd().stdout.rstrip()
-            docker.run("--privileged", "-v", pwd+":/code", "--name", self.name,
+            docker.run("--privileged", "-v", os.getcwd()+":/code", "--name",
+                       self.name,
                        "-tid", "calico/dind")
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
@@ -88,8 +89,12 @@ class DockerHost(object):
         calicoctl node command.
         """
         args = ['node', '--ip=%s' % self.ip]
-        if self.ip6:
+        try:
             args.append('--ip6=%s' % self.ip6)
+        except AttributeError:
+            # No ip6 configured
+            pass
+
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 
@@ -109,18 +114,24 @@ class DockerHost(object):
         Useful for test shut down to ensure the host is cleaned up.
         :return: None
         """
-        # TODO: only remove ST created containers for non-dind.
-        cmd = "docker rm -f $(docker ps -qa) ; docker rmi $(docker images -qa)"
-        ok_codes = [0,
-                    1,  # docker: "rm" requires a minimum of 1 argument.
-                    127,  # '"docker": no command found'
-                    255,  # '"bash": executable file not found in $PATH'
-                    ]
+        cmd = "docker rm -f $(docker ps -qa)"
         try:
             self.execute(cmd)
-        except CalledProcessError as err:
-            if err.returncode not in ok_codes:
-                raise
+        except CalledProcessError:
+            pass
+
+    def remove_images(self):
+        """
+        Remove all images running on this host.
+
+        Useful for test shut down to ensure the host is cleaned up.
+        :return: None
+        """
+        cmd = "docker rmi $(docker images -qa)"
+        try:
+            self.execute(cmd)
+        except CalledProcessError:
+            pass
 
     def __enter__(self):
         return self
@@ -139,8 +150,11 @@ class DockerHost(object):
         volumes.
         :return:
         """
-        self.remove_containers()
         if self.dind:
+            # TODO: only remove ST created containers for non-dind.
+            self.remove_containers()
+            # For docker in docker, we need to remove images too.
+            self.remove_images()
             # For docker in docker we also need to remove the outer container.
             docker.rm("-f", self.name, _ok_code=[0, 1])
         self._cleaned = True
