@@ -18,6 +18,7 @@ from nose.tools import *
 import unittest
 
 TEST_HOST = "TEST_HOST"
+TEST_ORCH_ID = "docker"
 TEST_PROFILE = "TEST"
 TEST_CONT_ID = "1234"
 TEST_ENDPOINT_ID = "1234567890ab"
@@ -618,8 +619,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.create_profile("TEST")
         rules = Rules(id="TEST",
                       inbound_rules=[Rule(action="allow",
-                                          src_tag="TEST"),
-                                     Rule(action="deny")],
+                                          src_tag="TEST")],
                       outbound_rules=[Rule(action="allow")])
         expected_calls = [call(TEST_PROFILE_PATH + "tags", '["TEST"]'),
                           call(TEST_PROFILE_PATH + "rules", rules.to_json())]
@@ -730,12 +730,13 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_endpoint() for an endpoint that exists.
         """
-        ep = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, TEST_ENDPOINT_ID,
+        ep = Endpoint(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID, TEST_ENDPOINT_ID,
                       "active", "11-22-33-44-55-66")
         self.etcd_client.read.side_effect = mock_read_for_endpoint(ep)
-        ep2 = self.datastore.get_endpoint(TEST_HOST,
-                                          TEST_CONT_ID,
-                                          TEST_ENDPOINT_ID)
+        ep2 = self.datastore.get_endpoint(hostname=TEST_HOST,
+                                          orchestrator_id=TEST_ORCH_ID,
+                                          workload_id=TEST_CONT_ID,
+                                          endpoint_id=TEST_ENDPOINT_ID)
         assert_equal(ep.to_json(), ep2.to_json())
         assert_equal(ep.endpoint_id, ep2.endpoint_id)
 
@@ -743,13 +744,15 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_endpoint() for an endpoint that doesn't exist.
         """
-        def mock_read(path):
+        def mock_read(path, recursive=None):
+            assert_true(recursive)
             assert_equal(path, TEST_ENDPOINT_PATH)
             raise EtcdKeyNotFound()
         self.etcd_client.read.side_effect = mock_read
         assert_raises(KeyError,
                       self.datastore.get_endpoint,
-                      TEST_HOST, TEST_CONT_ID, TEST_ENDPOINT_ID)
+                      hostname=TEST_HOST, orchestrator_id=TEST_ORCH_ID,
+                      workload_id=TEST_CONT_ID, endpoint_id=TEST_ENDPOINT_ID)
 
     def test_set_endpoint(self):
         """
@@ -811,7 +814,9 @@ class TestDatastoreClient(unittest.TestCase):
         Test get_endpoints() for a container that exists.
         """
         self.etcd_client.read.side_effect = mock_read_2_ep_for_cont
-        eps = self.datastore.get_endpoints(TEST_HOST, TEST_CONT_ID)
+        eps = self.datastore.get_endpoints(hostname=TEST_HOST,
+                                           orchestrator_id=TEST_ORCH_ID,
+                                           workload_id=TEST_CONT_ID)
         assert_equal(len(eps), 2)
         assert_equal(eps[0].to_json(), EP_12.to_json())
         assert_equal(eps[0].endpoint_id, EP_12.endpoint_id)
@@ -822,13 +827,15 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test get_endpoints() for a container that doesn't exist.
         """
-        def mock_read(path):
+        def mock_read(path, recursive=None):
+            assert_true(recursive)
             assert_equal(path, TEST_CONT_ENDPOINT_PATH)
             raise EtcdKeyNotFound()
         self.etcd_client.read.side_effect = mock_read
-        assert_raises(KeyError,
-                      self.datastore.get_endpoints,
-                      TEST_HOST, TEST_CONT_ID)
+        eps = self.datastore.get_endpoints(hostname=TEST_HOST,
+                                           orchestrator_id=TEST_ORCH_ID,
+                                           workload_id=TEST_CONT_ID)
+        assert_equal(eps, [])
 
     def test_get_hosts(self):
         """
@@ -1153,15 +1160,20 @@ def mock_read_endpoints_key_error(path, recursive):
 
 
 def mock_read_for_endpoint(ep):
-    def mock_read_get_endpoint(path):
+    def mock_read_get_endpoint(path, recursive=None):
+        assert recursive
         assert path == TEST_ENDPOINT_PATH
+        leaf = Mock(spec=EtcdResult)
+        leaf.key = TEST_ENDPOINT_PATH
+        leaf.value = ep.to_json()
         result = Mock(spec=EtcdResult)
-        result.value = ep.to_json()
+        result.leaves = iter([leaf])
         return result
     return mock_read_get_endpoint
 
 
-def mock_read_2_ep_for_cont(path):
+def mock_read_2_ep_for_cont(path, recursive=None):
+    assert recursive or recursive is None
     assert path == TEST_CONT_ENDPOINT_PATH
     leaves = []
 

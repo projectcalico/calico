@@ -27,10 +27,12 @@ IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool"
 IP_POOL_KEY = IP_POOL_PATH + "/%(pool)s"
 BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_%(version)s/"
 
-# New paths to maintain backwards compatability for "docker" hardcoding
-ORCHESTRATOR_PATH = HOST_PATH + "workload/%(orchestrator_id)s/"
-WORKLOAD_PATH_OID = ORCHESTRATOR_PATH + "%(workload_id)s/"
-ENDPOINT_PATH_OID = WORKLOAD_PATH_OID + "endpoint/%(endpoint_id)s"
+# Paths used in endpoint enumeration depending on available parameters.
+ALL_ENDP_PATH = HOSTS_PATH
+HOST_ENDP_PATH = HOST_PATH
+ORCHESTRATOR_ENDP_PATH = HOST_ENDP_PATH + "workload/%(orchestrator_id)s/"
+WORKLOAD_ENDP_PATH = ORCHESTRATOR_ENDP_PATH + "%(workload_id)s/endpoint/"
+ENDPOINT_ENDP_PATH = WORKLOAD_ENDP_PATH + "%(endpoint_id)s"
 
 IF_PREFIX = "cali"
 """
@@ -875,27 +877,25 @@ class DatastoreClient(object):
         # with known constants e.g. we add '/workload' after the hostname
         # variable.
         if not hostname:
-            ep_path = HOSTS_PATH
+            ep_path = ALL_ENDP_PATH
         elif not orchestrator_id:
-            ep_path = HOST_PATH % {"hostname": hostname}
+            ep_path = HOST_ENDP_PATH % {"hostname": hostname}
         elif not workload_id:
-            ep_path = ORCHESTRATOR_PATH % {"hostname": hostname,
-                                           "orchestrator_id": orchestrator_id}
+            ep_path = ORCHESTRATOR_ENDP_PATH % {"hostname": hostname,
+                                            "orchestrator_id": orchestrator_id}
         elif not endpoint_id:
-            ep_path = WORKLOAD_PATH_OID % {"hostname": hostname,
+            ep_path = WORKLOAD_ENDP_PATH % {"hostname": hostname,
                                            "orchestrator_id": orchestrator_id,
                                            "workload_id": workload_id}
         else:
-            ep_path = ENDPOINT_PATH_OID % {"hostname": hostname,
-                                           "orchestrator_id": orchestrator_id,
-                                           "workload_id": workload_id,
-                                           "endpoint_id": endpoint_id}
+            ep_path = ENDPOINT_ENDP_PATH % {"hostname": hostname,
+                                            "orchestrator_id": orchestrator_id,
+                                            "workload_id": workload_id,
+                                            "endpoint_id": endpoint_id}
         try:
             # Search etcd
             leaves = self.etcd_client.read(ep_path, recursive=True).leaves
         except EtcdKeyNotFound:
-            # Path doesn't exist, which is fine, as they may have just queried
-            # an endpoint which does not exist.
             return []
 
         # Filter through result
