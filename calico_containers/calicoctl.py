@@ -693,16 +693,24 @@ def profile_rule_update(name):
 def profile_rule_add_remove(
         operation,
         name, position, action, direction,
-        protocol,
+        protocol=None,
         icmp_type=None, icmp_code=None,
         src_net=None, src_tag=None, src_ports=None,
         dst_net=None, dst_tag=None, dst_ports=None):
-    try:
-        profile = client.get_profile(name)
-    except KeyError:
-        print "Profile %s not found." % name
-        sys.exit(1)
+    """
+    Add or remove a rule from a profile.
 
+    Arguments not documented below are passed through to the rule.
+
+    :param operation: "add" or "remove".
+    :param name: Name of the profile.
+    :param position: Position to insert/remove rule or None for the default.
+    :param action: Rule action: "allow" or "deny".
+    :param direction: "inbound" or "outbound".
+
+    :return:
+    """
+    # Convert the input into a Rule.
     rule_dict = {k: v for (k, v) in locals().iteritems()
                  if k in Rule.ALLOWED_KEYS and v is not None}
     rule_dict["action"] = action
@@ -711,6 +719,13 @@ def profile_rule_add_remove(
         print "Ports are not valid with protocol %r" % protocol
         sys.exit(1)
     rule = Rule(**rule_dict)
+
+    # Get the profile.
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
 
     if direction == "inbound":
         rules = profile.rules.inbound_rules
@@ -1189,7 +1204,7 @@ def print_paragraph(msg):
 
 def parse_ports(ports_str):
     """
-    Parse a a string representing a port list into a list of ports and
+    Parse a string representing a port list into a list of ports and
     port ranges.
 
     Returns None if the input is None.
@@ -1213,9 +1228,20 @@ def parse_ports(ports_str):
         m = re.match(r'^(\d+)[:-](\d+)$', split)
         if m:
             # Got a range, canonicalise it.
-            parsed_ports.append("%s:%s" % (m.group(1), m.group(2)))
+            min = int(m.group(1))
+            max = int(m.group(2))
+            if min > max:
+                print "Port range minimum (%s) > maximum (%s)." % (min, max)
+                sys.exit(1)
+            if not (0 <= min <= 65535):
+                print "Port minimum (%s) out-of-range." % min
+                sys.exit(1)
+            if not (0 <= max <= 65535):
+                print "Port maximum (%s) out-of-range." % max
+                sys.exit(1)
+            parsed_ports.append("%s:%s" % (min, max))
         else:
-            # Shuold be a lone port, convert to int.
+            # Should be a lone port, convert to int.
             parsed_ports.append(int(split))
     return parsed_ports
 

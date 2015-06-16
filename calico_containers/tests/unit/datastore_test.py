@@ -144,7 +144,7 @@ class TestRule(unittest.TestCase):
                      dst_tag="TEST",
                      dst_ports=[300, 400],
                      protocol="udp")
-        assert_equal("allow udp to tag TEST ports 300,400",
+        assert_equal("allow udp to ports 300,400 tag TEST",
                      rule2.pprint())
 
         rule3 = Rule(action="deny",
@@ -152,7 +152,7 @@ class TestRule(unittest.TestCase):
                      dst_ports=[80],
                      dst_net=IPNetwork("fd80::23:0/112"))
         assert_equal(
-            "deny from fd80::4:0/112 to fd80::23:0/112 ports 80",
+            "deny from fd80::4:0/112 to ports 80 fd80::23:0/112",
             rule3.pprint())
 
         rule4 = Rule(action="allow",
