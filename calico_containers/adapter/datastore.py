@@ -1,10 +1,12 @@
 from collections import namedtuple
+import copy
 import json
+import os
+import re
+
 import etcd
 from etcd import EtcdKeyNotFound, EtcdException
 from netaddr import IPNetwork, IPAddress, AddrFormatError
-import os
-import copy
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
@@ -33,6 +35,12 @@ HOST_ENDP_PATH = HOST_PATH
 ORCHESTRATOR_ENDP_PATH = HOST_ENDP_PATH + "workload/%(orchestrator_id)s/"
 WORKLOAD_ENDP_PATH = ORCHESTRATOR_ENDP_PATH + "%(workload_id)s/endpoint/"
 ENDPOINT_ENDP_PATH = WORKLOAD_ENDP_PATH + "%(endpoint_id)s"
+
+# Endpoint path match regex
+ENDPOINT_KEY_MATCH = re.compile("/calico/v1/host/(?P<hostname>[^/]*)/"
+                                "workload/(?P<orchestrator_id>[^/]*)/"
+                                "(?P<workload_id>[^/]*)/"
+                                "endpoint/(?P<endpoint_id>[^/]*)")
 
 IF_PREFIX = "cali"
 """
@@ -235,14 +243,14 @@ class Endpoint(object):
         :return: An Endpoint object, or None if the endpoint_key does not
         represent and Endpoint.
         """
-        # Extract the IDs from the key
-        packed = endpoint_key.split("/")
-        if len(packed) != 10:
+        match = ENDPOINT_KEY_MATCH.match(endpoint_key)
+        if not match:
             return None
 
-        # TODO Should really check key format here.
-        (_, _, _, _, hostname, _,
-         orchestrator_id, workload_id, _, endpoint_id) = packed
+        hostname = match.group("hostname")
+        orchestrator_id = match.group("orchestrator_id")
+        workload_id = match.group("workload_id")
+        endpoint_id = match.group("endpoint_id")
 
         json_dict = json.loads(json_str)
         ep = cls(hostname, orchestrator_id, workload_id, endpoint_id,
