@@ -57,7 +57,7 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl pool (add|remove) <CIDR>
+  calicoctl pool (add|remove) <CIDR> [--ipip]
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl bgppeer rr (add|remove) <IP>
   calicoctl bgppeer rr show [--ipv4 | --ipv6]
@@ -77,7 +77,7 @@ Options:
  --ip6=<IP6>              The local IPv6 management address to use.
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
-                          [default: calico/node:latest]
+                          [default: calico/node:v0.4.5]
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
 

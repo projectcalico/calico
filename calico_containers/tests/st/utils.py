@@ -1,3 +1,6 @@
+import os
+import sh
+from sh import docker
 import socket
 from time import sleep
 import os
@@ -6,7 +9,6 @@ LOCAL_IP_ENV = "MY_IP"
 
 def get_ip():
     """Return a string of the IP of the hosts eth0 interface."""
-
     # Try to get the local IP from the environment variables.  This allows
     # testers to specify the IP address in cases where there is more than one
     # configured IP address for the test system.

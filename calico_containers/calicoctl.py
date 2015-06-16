@@ -19,7 +19,7 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl pool (add|remove) <CIDR>
+  calicoctl pool (add|remove) <CIDR> [--ipip]
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl bgppeer rr (add|remove) <IP>
   calicoctl bgppeer rr show [--ipv4 | --ipv6]
@@ -81,7 +81,7 @@ try:
     sysctl = sh.Command._create("sysctl")
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
-    
+
 DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 POWERSTRIP_PORT = "2377"
@@ -700,16 +700,21 @@ def save_diags(log_dir, upload):
     print("Collecting diags")
     diags.save_diags(log_dir, upload)
 
-def ip_pool_add(cidr_pool, version):
+def ip_pool_add(cidr_pool, version, ipip):
     """
     Add the the given CIDR range to the IP address allocation pool.
 
     :param cidr_pool: The pool to set in CIDR format, e.g. 192.168.0.0/16
     :param version: v4 or v6
+    :param ipip: Use IP in IP for this pool.
     :return: None
     """
+    if version == "v6" and ipip:
+        print "IP in IP not supported for IPv6 pools"
+        sys.exit(1)
+
     pool = check_ip_version(cidr_pool, version, IPNetwork)
-    client.add_ip_pool(version, pool)
+    client.add_ip_pool(version, pool, ipip)
 
 
 def ip_pool_remove(cidr_pool, version):
@@ -733,12 +738,21 @@ def ip_pool_show(version):
     :return: None
     """
     assert version in ("v4", "v6")
-    heading = "IP%s CIDR" % version
+    headings = ["IP%s CIDR" % version]
+    if version == "v4":
+        headings.append("IP-IP")
     pools = client.get_ip_pools(version)
-    x = PrettyTable([heading])
+    x = PrettyTable(headings)
     for pool in pools:
-        x.add_row([pool])
-    print x.get_string(sortby=heading)
+        row = [pool]
+        if version == "v4":
+            cfg = client.get_ip_pool_config(version, pool)
+            if "ipip" in cfg:
+                row.append("Enabled")
+            else:
+                row.append("Disabled")
+        x.add_row(row)
+    print x.get_string(sortby=headings[0])
 
 
 def bgppeer_add(ip, version):
@@ -814,7 +828,7 @@ def container_ip_add(container_name, ip, version, interface):
     :param ip: The IP to add
     :param version: The IP version ("v4" or "v6")
     :param interface: The name of the interface in the container.
-    
+
     :return: None
     """
     address = check_ip_version(ip, version, IPAddress)
@@ -952,10 +966,13 @@ def validate_arguments():
     Validate common argument values.
     """
     # profile_ok = (arguments["<PROFILE>"] is None or
-    #               re.match("^\w{1,30}$", arguments["<PROFILE>"]))
+    #               re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
     profile_ok = True
+    # List of valid characters that Felix permits
+    valid_chars = '[a-zA-Z0-9_\.\-]'
+
     tag_ok = (arguments["<TAG>"] is None or
-              re.match("^\w+$", arguments["<TAG>"]))
+              re.match("^%s+$" % valid_chars, arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
     ip6_ok = arguments["--ip6"] is None or \
              netaddr.valid_ipv6(arguments["--ip6"])
@@ -972,10 +989,11 @@ def validate_arguments():
             cidr_ok = False
 
     if not profile_ok:
-        print_paragraph("Profile names must be <30 character long and can "
-                        "only contain numbers, letters and underscores.")
+        print_paragraph("Profile names must be < 40 character long and can "
+                        "only contain numbers, letters, dots, dashes and underscores.")
     if not tag_ok:
-        print "Tags names can only container numbers, letters and underscores."
+        print_paragraph("Tags names can only contain numbers, letters, dots, "
+                        "dashes and underscores.")
     if not ip_ok:
         print "Invalid IPv4 address specified with --ip argument."
     if not ip6_ok:
@@ -1117,7 +1135,7 @@ if __name__ == '__main__':
             node_show(arguments["--detailed"])
         elif arguments["pool"]:
             if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"], ip_version)
+                ip_pool_add(arguments["<CIDR>"], ip_version, arguments["--ipip"])
             elif arguments["remove"]:
                 ip_pool_remove(arguments["<CIDR>"], ip_version)
             elif arguments["show"]:

@@ -20,8 +20,8 @@ TEST_CONT_ID = "1234"
 TEST_ENDPOINT_ID = "1234567890ab"
 TEST_ENDPOINT_ID2 = "90abcdef1234"
 TEST_HOST_PATH = CALICO_V_PATH + "/host/TEST_HOST"
-IPV4_POOLS_PATH = CALICO_V_PATH + "/ipam/v4/pool/"
-IPV6_POOLS_PATH = CALICO_V_PATH + "/ipam/v6/pool/"
+IPV4_POOLS_PATH = CALICO_V_PATH + "/ipam/v4/pool"
+IPV6_POOLS_PATH = CALICO_V_PATH + "/ipam/v6/pool"
 BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_v4/"
 TEST_PROFILE_PATH = CALICO_V_PATH + "/policy/profile/TEST/"
 ALL_PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
@@ -554,9 +554,8 @@ class TestDatastoreClient(unittest.TestCase):
 
         pool = IPNetwork("192.168.100.5/24")
         self.datastore.add_ip_pool("v4", pool)
-        self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH,
-                                                       "192.168.100.0/24",
-                                                       append=True)
+        self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.100.0-24",
+                                                       "{\"cidr\": \"192.168.100.0/24\"}")
 
     def test_add_ip_pool_exists(self):
         """
@@ -568,7 +567,8 @@ class TestDatastoreClient(unittest.TestCase):
 
         pool = IPNetwork("192.168.3.5/24")
         self.datastore.add_ip_pool("v4", pool)
-        assert_false(self.etcd_client.write.called)
+        self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.3.0-24",
+                                                       "{\"cidr\": \"192.168.3.0/24\"}")
 
     def test_del_ip_pool_exists(self):
         """
@@ -578,8 +578,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_2_pools
         pool = IPNetwork("192.168.3.1/24")
         self.datastore.remove_ip_pool("v4", pool)
-        # 192.168.3.0/24 has a key .../v4/pool/0 in the ordered list.
-        self.etcd_client.delete.assert_called_once_with(IPV4_POOLS_PATH + "0")
+        self.etcd_client.delete.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.3.0-24")
 
     def test_del_ip_pool_doesnt_exist(self):
         """
@@ -588,8 +587,9 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
         pool = IPNetwork("192.168.100.1/24")
-        assert_raises(KeyError, self.datastore.remove_ip_pool, "v4", pool)
-        assert_false(self.etcd_client.delete.called)
+        self.datastore.remove_ip_pool("v4", pool)
+        # delete is called for the key, but doesn't throw an exception.
+        self.etcd_client.delete.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.100.0-24")
 
     def test_profile_exists_true(self):
         """
@@ -1089,10 +1089,10 @@ def mock_read_2_pools(path):
     result = Mock(spec=EtcdResult)
     assert path == IPV4_POOLS_PATH
     children = []
-    for i, net in enumerate(["192.168.3.0/24", "192.168.5.0/24"]):
+    for net in ["192.168.3.0/24", "192.168.5.0/24"]:
         node = Mock(spec=EtcdResult)
-        node.value = net
-        node.key = IPV4_POOLS_PATH + str(i)
+        node.value = "{\"cidr\": \"%s\"}" % net
+        node.key = IPV4_POOLS_PATH + "/" + net.replace("/", "-")
         children.append(node)
     result.children = iter(children)
     return result

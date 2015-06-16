@@ -13,6 +13,8 @@ dpkg -l | grep ^ii | sed 's_  _\t_g' | cut -f 2 >/tmp/base.txt
 $minimal_apt_get_install apt-transport-https ca-certificates
 ## Install add-apt-repository
 $minimal_apt_get_install software-properties-common
+## Install curl, needed below for manual BIRD install.
+$minimal_apt_get_install curl
 
 grep -Fxvf  /tmp/base.txt <(dpkg -l | grep ^ii | sed 's_  _\t_g' | cut \
 -f 2) >/tmp/add-apt.txt
@@ -27,3 +29,7 @@ apt-get install -qy \
         calico-felix \
         bird \
         bird6
+
+# Copy patched BIRD daemon with tunnel support.
+curl -L https://www.dropbox.com/s/ymbvyi6388h92qg/bird?dl=1 -o /usr/sbin/bird && \
+    chmod +x /usr/sbin/bird

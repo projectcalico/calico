@@ -34,3 +34,4 @@ RUN /build/base.sh && \
 COPY node_filesystem /
 COPY calico_containers/pycalico /calico_containers/pycalico
 COPY calico_containers/docker_plugin.py /calico_containers/
+

@@ -1,5 +1,6 @@
 [global]
 MetadataAddr = None
+IpInIpEnabled = True
 LogFilePath = None
 LogSeverityFile   = None
 LogSeverityScreen = DEBUG
