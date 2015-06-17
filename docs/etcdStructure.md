@@ -40,7 +40,7 @@ The following illustrates the directory structure calico uses in etcd.
 	             `--<CIDR>  # One per pool
 	                `--<address>  # One per assigned address in the pool
 
-# JSON endpoint config
+## JSON endpoint config
 
 The endpoint configuration stored at 
 
@@ -72,7 +72,7 @@ is a JSON blob in this form:
 	}
 
 
-# JSON rules config
+## JSON rules config
 
 The rules leaf at 
 
@@ -108,7 +108,7 @@ where each entry in the inbound/outbound list is a rule object:
 	  "action": "deny|allow",
 	} 
 
-JSON IP pool config
+## JSON IP pool config
 
 The IP pool configuration stored at
 
@@ -120,6 +120,9 @@ is a JSON blob in this form:
         {
           "cidr": "<CIDR of pool - eg. 192.168.0.0/16 or fd80:24e2:f998:72d6::/64>",
           "ipip": "<IPIP device name if IPIP configured for the pool - usually tunl0>",
+          "masquerade": true|false
         }
 
-The ipip field is only included if IPIP is enabled for this pool.  IPIP is only supported on IPv4 pools.
+The ipip field is only included if IPIP is enabled for this pool.  IPIP is only supported on IPv4 pools.  
+
+The masquerade field enables NAT for outbound traffic.  If omitted, masquerade defaults to false.
