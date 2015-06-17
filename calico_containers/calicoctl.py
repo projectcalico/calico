@@ -9,7 +9,6 @@ Usage:
   calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
-  calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
   calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show
@@ -710,41 +709,6 @@ def profile_rule_update(name):
     profile.rules = rules
     client.profile_update_rules(profile)
     print "Successfully updated rules on profile %s" % name
-
-
-def node_show(detailed):
-    hosts = client.get_hosts()
-
-    if detailed:
-        x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID",
-                         "Addresses", "MAC", "State"])
-        for host, container_types in hosts.iteritems():
-            if not container_types:
-                x.add_row([host, "None", "None", "None",
-                           "None", "None", "None"])
-                continue
-            for container_type, workloads in container_types.iteritems():
-                for workload, endpoints in workloads.iteritems():
-                    for endpoint_id, endpoint in endpoints.iteritems():
-                        x.add_row([host,
-                                   container_type,
-                                   # Truncate ID to 12 chars like Docker
-                                   workload[:12],
-                                   endpoint_id,
-                                   "\n".join([str(net) for net in
-                                             endpoint.ipv4_nets |
-                                             endpoint.ipv6_nets]),
-                                   endpoint.mac,
-                                   endpoint.state])
-    else:
-        x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
-        for host, container_types in hosts.iteritems():
-            if not container_types:
-                x.add_row([host, "N/A", "0"])
-                continue
-            for container_type, workloads in container_types.iteritems():
-                x.add_row([host, container_type, len(workloads)])
-    print x.get_string(sortby="Host")
 
 
 def save_diags(upload):
@@ -1520,8 +1484,6 @@ if __name__ == '__main__':
                 profile_show(arguments["--detailed"])
         elif arguments["diags"]:
             save_diags(arguments["--upload"])
-        elif arguments["shownodes"]:
-            node_show(arguments["--detailed"])
         elif arguments["pool"]:
             if arguments["add"]:
                 ip_pool_add(arguments["<CIDR>"], ip_version,
