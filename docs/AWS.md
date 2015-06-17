@@ -15,6 +15,7 @@ For more information, see Amazon's [Installing the AWS Command Line Interface](h
 Configure the AWS CLI with your User keys:
 ```
 aws configure
+
   AWS Access Key ID: <User Access Key>
   AWS Secret Access Key: <User Secret Access Key>
   Default region name: us-west-2
@@ -32,9 +33,19 @@ chmod 400 calicokey.pem
 A Security Group is required on the instances to control allowed traffic.  Create a Security Group and allow any machine to SSH, but restrict all other traffic that is not within the Security Group.
 ```
 # Create Security Group to allow certain incoming traffic to the Calico nodes
-aws ec2 create-security-group --group-name CalicoSG --description CalicoSecurityGroup
-aws ec2 authorize-security-group-ingress --group-name CalicoSG --protocol tcp --port 22 --source-group 0.0.0.0/0
-aws ec2 authorize-security-group-ingress --group-name CalicoSG --protocol all --port all --source-group CalicoSG
+aws ec2 create-security-group \
+  --group-name CalicoSG \
+  --description CalicoSecurityGroup
+aws ec2 authorize-security-group-ingress \
+  --group-name CalicoSG \
+  --protocol tcp \
+  --port 22 \
+  --source-group 0.0.0.0/0
+aws ec2 authorize-security-group-ingress \
+  --group-name CalicoSG \
+  --protocol all \
+  --port all \
+  --source-group CalicoSG
 ```
 
 ## Spinning up the VMs
@@ -76,11 +87,10 @@ aws ec2 run-instances \
 ```
 
 ## Installing calicoctl on each node
-Get the public IP addresses of the new instances:
+Get the public IP addresses of the new instances from the AWS Web Console or by running:
 ```
 aws ec2 describe-instances --filter "Name=key-name,Values=calicokey" | grep PublicIpAddress
 ```
-Note: You can also get these IP addresses from the AWS Web Console.
 
 SSH into each node and run these commands to set up Calico:
 ```
