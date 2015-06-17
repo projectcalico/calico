@@ -406,7 +406,6 @@ class DatastoreClient(object):
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
-        self.etcd_client.write(host_path + "bgp_as", as_num)
         self.etcd_client.write(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
@@ -414,6 +413,16 @@ class DatastoreClient(object):
         except EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(workload_dir, None, dir=True)
+
+        # Set or delete the node specific BGP AS number as required.
+        if as_num is None:
+            try:
+                self.etcd_client.delete(host_path + "bgp_as")
+            except EtcdKeyNotFound:
+                pass
+        else:
+            self.etcd_client.write(host_path + "bgp_as", as_num)
+
         return
 
     @handle_errors
