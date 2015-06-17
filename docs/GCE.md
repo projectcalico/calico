@@ -77,8 +77,9 @@ export private_ip=$(curl "$metadata_url/instance/network-interfaces/0/ip" -H "Me
 # Start the calico node service:
 sudo ./calicoctl node --ip=$private_ip
 
-# Work-around a [BIRD routing issue](http://marc.info/?l=bird-users&m=139809577125938&w=2):
-sudo ip addr add 10.240.10.1 peer 10.240.0.1 dev ens4v1
+# Work-around a [BIRD routing issue](http://marc.info/?l=bird-users&m=139809577125938&w=2)
+# This tells BIRD that it's directly connected to the upstream GCE router.
+sudo ip addr add $private_ip peer 10.240.0.1 dev ens4v1
 ```
 Then, on any one of the hosts, run this command to enable IP-in-IP on the default IP pool:
 ```
