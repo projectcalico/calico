@@ -477,23 +477,19 @@ def checksystem(fix=False, quit_if_error=False):
             print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
             system_ok = False
 
-    # Check docker comparability
+    # Check docker version compatability
     try:
         info = docker_client.version()
     except docker.errors.APIError:
-        print >> sys.stderr, "ERROR: Docker server must support Docker Remote API v1.16 or greater."
+        print >> sys.stderr, "ERROR: Docker server must support " \
+                             "Docker Remote API v%s or greater." % DOCKER_VERSION
         system_ok = False
     else:
         api_version = normalize_version(info['ApiVersion'])
-        # Check that API Version is at least 1.16
-        if cmp(api_version, normalize_version("1.16")) < 0:
+        # Check that API Version is above the minimum supported version
+        if cmp(api_version, normalize_version(DOCKER_VERSION)) < 0:
             print >> sys.stderr, "ERROR: Docker server must support Docker " \
-                                 "Remote API v1.16 or greater."
-            system_ok = False
-
-        # Check that if Remote API Version is 1.20, they are using the experimental docker build
-        if cmp(api_version, normalize_version("1.20")) == 0 and not info.get('Experimental'):
-            print >> sys.stderr, "ERROR: Docker server 1.20 must be the experimental build"
+                                 "Remote API v%s or greater." % DOCKER_VERSION
             system_ok = False
 
     if quit_if_error and not system_ok:
