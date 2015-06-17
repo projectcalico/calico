@@ -1235,28 +1235,6 @@ class DatastoreClient(object):
 
         return as_num
 
-    def _get_path_with_keys(self, path):
-        """
-        Retrieve all the keys in a path and create a reverse dict
-        values -> keys
-
-        :param path: The path to get the keys from.
-        :return: dict of {<values>: <etcd key>}
-        """
-
-        try:
-            nodes = self.etcd_client.read(path).children
-        except EtcdKeyNotFound:
-            # Path doesn't exist.
-            return {}
-        else:
-            values = {}
-            for child in nodes:
-                value = child.value
-                if value:
-                    values[value] = child.key
-            return values
-
 
 class NoEndpointForContainer(Exception):
     """
