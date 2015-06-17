@@ -23,11 +23,13 @@ class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by calico.
     """
-    def __init__(self, name, start_calico=True):
+    def __init__(self, name, start_calico=True, as_num=None):
         """
-        Create a container using an image made for docker-in-docker. Load saved images into it.
+        Create a container using an image made for docker-in-docker. Load saved
+        images into it.
         """
         self.name = name
+        self.as_num = None
 
         pwd = sh.pwd().stdout.rstrip()
         docker.run("--privileged", "-v", pwd+":/code", "--name", self.name, "-tid", "jpetazzo/dind")
@@ -96,6 +98,8 @@ class DockerHost(object):
         args = ['node', '--ip=%s' % self.ip]
         if self.ip6:
             args.append('--ip6=%s' % self.ip6)
+        if self.as_num:
+            args.append('--as=%s' % self.as_num)
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 

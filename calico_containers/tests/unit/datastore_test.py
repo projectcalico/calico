@@ -20,7 +20,9 @@ from calico_containers.adapter.datastore import (DatastoreClient,
                                                  Endpoint,
                                                  NoEndpointForContainer,
                                                  CALICO_V_PATH,
-                                                 DataStoreError)
+                                                 DataStoreError,
+                                                 BGP_NODE_MESH_PATH,
+                                                 BGP_NODE_DEF_AS_PATH)
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 from netaddr import IPNetwork, IPAddress
@@ -37,11 +39,12 @@ TEST_ENDPOINT_ID2 = "90abcdef1234"
 TEST_HOST_PATH = CALICO_V_PATH + "/host/TEST_HOST"
 IPV4_POOLS_PATH = CALICO_V_PATH + "/ipam/v4/pool"
 IPV6_POOLS_PATH = CALICO_V_PATH + "/ipam/v6/pool"
-BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_rr_v4/"
+BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_v4/"
 TEST_PROFILE_PATH = CALICO_V_PATH + "/policy/profile/TEST/"
 ALL_PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 ALL_ENDPOINTS_PATH = CALICO_V_PATH + "/host/"
 ALL_HOSTS_PATH = CALICO_V_PATH + "/host/"
+TEST_NODE_BGP_PEERS_PATH = TEST_HOST_PATH + "/bgp_peer_v4/"
 TEST_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/" \
                                      "endpoint/1234567890ab"
 TEST_CONT_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/" \
@@ -476,7 +479,7 @@ class TestDatastoreClient(unittest.TestCase):
                                 "created")]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        assert_equal(self.etcd_client.write.call_count, 3)
+        assert_equal(self.etcd_client.write.call_count, 4)
 
     def test_create_host_mainline(self):
         """
@@ -498,7 +501,6 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip, bgp_as)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
-                           call(TEST_HOST_PATH + "/bgp_as", bgp_as),
                            call(TEST_HOST_PATH + "/config/marker",
                                 "created"),
                            call(TEST_HOST_PATH + "/workload",
@@ -985,8 +987,11 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_peers
         peers = self.datastore.get_bgp_peers("v4")
-        assert_set_equal({IPAddress("192.168.3.1"),
-                          IPAddress("192.168.5.1")}, set(peers))
+        assert_equal(len(peers), 2)
+        assert_dict_equal(peers[0], {"ip": IPAddress("192.168.3.1"),
+                                     "as_num": 32245})
+        assert_dict_equal(peers[1], {"ip": IPAddress("192.168.5.1"),
+                                     "as_num": 32245})
 
     def test_get_bgp_peer_no_key(self):
         """
@@ -1016,46 +1021,190 @@ class TestDatastoreClient(unittest.TestCase):
         Test adding an IP peer when the directory exists, but peer doesn't.
         :return: None
         """
-        self.etcd_client.read.side_effect = mock_read_2_peers
+        data = {"write": False}
+        def mock_write(key, value):
+            assert_equal(key, BGP_PEERS_PATH + "192.168.100.5")
+            value = json.loads(value)
+            assert_dict_equal(value,
+                              {"as_num": 32245, "ip": "192.168.100.5"})
+            data["write"] = True
 
+        self.etcd_client.write.side_effect = mock_write
         peer = IPAddress("192.168.100.5")
-        self.datastore.add_bgp_peer("v4", peer)
-        self.etcd_client.write.assert_called_once_with(BGP_PEERS_PATH,
-                                                       "192.168.100.5",
-                                                       append=True)
-
-    def test_add_bgp_peer_exists(self):
-        """
-        Test adding an IP peer when the peer already exists.
-        :return: None
-        """
-
-        self.etcd_client.read.side_effect = mock_read_2_peers
-
-        peer = IPAddress("192.168.3.1")
-        self.datastore.add_bgp_peer("v4", peer)
-        assert_false(self.etcd_client.write.called)
+        self.datastore.add_bgp_peer("v4", peer, 32245)
+        assert_true(data["write"])
 
     def test_del_bgp_peer_exists(self):
         """
         Test del_bgp_peer() when the peer does exist.
         :return: None
         """
-        self.etcd_client.read.side_effect = mock_read_2_peers
+        self.etcd_client.delete = Mock()
         peer = IPAddress("192.168.3.1")
         self.datastore.remove_bgp_peer("v4", peer)
         # 192.168.3.1 has a key ...v4/0 in the ordered list.
-        self.etcd_client.delete.assert_called_once_with(BGP_PEERS_PATH + "0")
+        self.etcd_client.delete.assert_called_once_with(
+                                                BGP_PEERS_PATH + "192.168.3.1")
 
     def test_del_bgp_peer_doesnt_exist(self):
         """
         Test del_bgp_peer() when the peer does not exist.
         :return: None
         """
-        self.etcd_client.read.side_effect = mock_read_2_peers
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound()
         peer = IPAddress("192.168.100.1")
         assert_raises(KeyError, self.datastore.remove_bgp_peer, "v4", peer)
-        assert_false(self.etcd_client.delete.called)
+
+    def test_get_node_bgp_peer(self):
+        """
+        Test getting IP peers from the datastore when there are some peers.
+        :return: None
+        """
+        self.etcd_client.read.side_effect = mock_read_2_node_peers
+        peers = self.datastore.get_node_bgp_peers("TEST_HOST", "v4")
+        assert_equal(len(peers), 2)
+        assert_dict_equal(peers[0], {"ip": IPAddress("192.169.3.1"),
+                                     "as_num": 32245})
+        assert_dict_equal(peers[1], {"ip": IPAddress("192.169.5.1"),
+                                     "as_num": 32245})
+
+    def test_get_node_bgp_peer_no_key(self):
+        """
+        Test getting IP peers from the datastore when the key doesn't exist.
+        :return: None
+        """
+        self.etcd_client.read.side_effect = mock_read_2_node_peers
+        peers = self.datastore.get_node_bgp_peers("BLAH", "v4")
+        assert_list_equal([], peers)
+
+    def test_get_node_bgp_peer_no_peers(self):
+        """
+        Test getting BGP peers from the datastore when the key is there but has
+        no children.
+        :return: None
+        """
+        self.etcd_client.read.side_effect = mock_read_no_bgppeers
+        peers = self.datastore.get_bgp_peers("v4")
+        assert_list_equal([], peers)
+
+    def test_add_node_bgp_peer(self):
+        """
+        Test adding an IP peer when the directory exists, but peer doesn't.
+        :return: None
+        """
+        data = {"write": False}
+        def mock_write(key, value):
+            assert_equal(key, TEST_NODE_BGP_PEERS_PATH + "192.169.100.5")
+            value = json.loads(value)
+            assert_dict_equal(value,
+                              {"as_num": 32245, "ip": "192.169.100.5"})
+            data["write"] = True
+
+        self.etcd_client.write.side_effect = mock_write
+
+        peer = IPAddress("192.169.100.5")
+        self.datastore.add_node_bgp_peer("TEST_HOST", "v4", peer, 32245)
+        assert_true(data["write"])
+
+    def test_del_node_bgp_peer_exists(self):
+        """
+        Test del_bgp_peer() when the peer does exist.
+        :return: None
+        """
+        self.etcd_client.delete = Mock()
+        peer = IPAddress("192.168.3.1")
+        self.datastore.remove_node_bgp_peer("TEST_HOST", "v4", peer)
+        # 192.168.3.1 has a key ...v4/0 in the ordered list.
+        self.etcd_client.delete.assert_called_once_with(
+                                      TEST_NODE_BGP_PEERS_PATH + "192.168.3.1")
+
+    def test_del_node_bgp_peer_doesnt_exist(self):
+        """
+        Test del_bgp_peer() when the peer does not exist.
+        :return: None
+        """
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound()
+        peer = IPAddress("192.168.100.1")
+        assert_raises(KeyError, self.datastore.remove_node_bgp_peer,
+                      "BLAH", "v4", peer)
+
+    def test_set_bgp_node_mesh(self):
+        """
+        Set whether the BGP node mesh is enabled or not.
+
+        :param enable: Whether the mesh is enabled or not.
+        :return: None.
+        """
+        self.datastore.set_bgp_node_mesh(True)
+        self.datastore.set_bgp_node_mesh(False)
+        self.etcd_client.write.assert_has_calls([
+                       call(BGP_NODE_MESH_PATH, json.dumps({"enabled": True})),
+                       call(BGP_NODE_MESH_PATH, json.dumps({"enabled": False}))
+                     ])
+
+    def test_get_bgp_node_mesh(self):
+        """
+        Determine whether the BGP node mesh is enabled or not.
+
+        :param enable: Whether the mesh is enabled or not.  A value of None
+        leaves the configuration unchanged.
+        :return: Whether the BGP node mesh is enabled.
+        """
+        def mock_read(path):
+            assert_equal(path, BGP_NODE_MESH_PATH)
+            result = Mock(spec=EtcdResult)
+            result.value = "{\"enabled\": true}"
+            return result
+        self.etcd_client.read = mock_read
+
+        assert_true(self.datastore.get_bgp_node_mesh())
+
+    def test_get_bgp_node_mesh_no_config(self):
+        """
+        Determine whether the BGP node mesh is enabled or not.
+
+        :param enable: Whether the mesh is enabled or not.  A value of None
+        leaves the configuration unchanged.
+        :return: Whether the BGP node mesh is enabled.
+        """
+        self.etcd_client.read.side_effect = EtcdKeyNotFound()
+
+        assert_true(self.datastore.get_bgp_node_mesh())
+
+    def test_set_default_node_as(self):
+        """
+        Return the default node BGP AS Number
+
+        :return: The default node BGP AS Number.
+        """
+        self.datastore.set_default_node_as(12345)
+        self.etcd_client.write.assert_called_once_with(BGP_NODE_DEF_AS_PATH,
+                                                       12345)
+
+    def test_get_default_node_as(self):
+        """
+        Return the default node BGP AS Number
+
+        :return: The default node BGP AS Number.
+        """
+        def mock_read(path):
+            assert_equal(path, BGP_NODE_DEF_AS_PATH)
+            result = Mock(spec=EtcdResult)
+            result.value = 24245
+            return result
+        self.etcd_client.read = mock_read
+
+        assert_equal(self.datastore.get_default_node_as(), 24245)
+
+    def test_get_default_node_as_no_config(self):
+        """
+        Return the default node BGP AS Number
+
+        :return: The default node BGP AS Number.
+        """
+        self.etcd_client.read.side_effect = EtcdKeyNotFound()
+
+        assert_equal(self.datastore.get_default_node_as(), 64511)
 
 
 def mock_read_2_peers(path):
@@ -1063,22 +1212,41 @@ def mock_read_2_peers(path):
     EtcdClient mock side effect for read with 2 IPv4 peers.
     """
     result = Mock(spec=EtcdResult)
-    assert path == BGP_PEERS_PATH
+    assert_equal(path, BGP_PEERS_PATH)
     children = []
-    for i, net in enumerate(["192.168.3.1", "192.168.5.1"]):
+    for ip in ["192.168.3.1", "192.168.5.1"]:
         node = Mock(spec=EtcdResult)
-        node.value = net
-        node.key = BGP_PEERS_PATH + str(i)
+        node.value = "{\"ip\": \"%s\", \"as_num\": 32245}" % ip
+        node.key = BGP_PEERS_PATH + str(ip)
         children.append(node)
     result.children = iter(children)
     return result
+
+
+def mock_read_2_node_peers(path):
+    """
+    EtcdClient mock side effect for read with 2 IPv4 peers.  Assumes host is
+    "TEST_HOST" otherwise raises EtcdKeyNotFound.
+    """
+    result = Mock(spec=EtcdResult)
+    if path != TEST_NODE_BGP_PEERS_PATH:
+        raise EtcdKeyNotFound()
+    children = []
+    for ip in ["192.169.3.1", "192.169.5.1"]:
+        node = Mock(spec=EtcdResult)
+        node.value = "{\"ip\": \"%s\", \"as_num\": 32245}" % ip
+        node.key = TEST_NODE_BGP_PEERS_PATH + str(ip)
+        children.append(node)
+    result.children = iter(children)
+    return result
+
 
 def mock_read_2_pools(path):
     """
     EtcdClient mock side effect for read with 2 IPv4 pools.
     """
     result = Mock(spec=EtcdResult)
-    assert path == IPV4_POOLS_PATH
+    assert_equal(path, IPV4_POOLS_PATH)
     children = []
     for net in ["192.168.3.0/24", "192.168.5.0/24"]:
         node = Mock(spec=EtcdResult)

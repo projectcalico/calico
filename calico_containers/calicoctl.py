@@ -1565,7 +1565,6 @@ def validate_arguments():
                 arguments[arg] = str(IPNetwork(arguments[arg]))
             except AddrFormatError:
                 cidr_ok = False
-
     icmp_ok = True
     for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
         if arguments[arg] is not None:
@@ -1575,6 +1574,13 @@ def validate_arguments():
                     raise ValueError("Invalid %s: %s" % (arg, value))
             except ValueError:
                 icmp_ok = False
+    asnum_ok = True
+    if arguments["<AS_NUM>"]:
+        try:
+            asnum = int(arguments["<AS_NUM>"])
+            asnum_ok = 0 <= asnum <= 4294967295
+        except ValueError:
+            asnum_ok = False
 
     if not profile_ok:
         print_paragraph("Profile names must be < 40 character long and can "
@@ -1593,9 +1599,11 @@ def validate_arguments():
         print "Invalid CIDR specified."
     if not icmp_ok:
         print "Invalid ICMP type or code specified."
+    if not asnum_ok:
+        print "Invalid AS Number specified."
 
     if not (profile_ok and ip_ok and ip6_ok and tag_ok and
-                container_ip_ok and cidr_ok and icmp_ok):
+                container_ip_ok and cidr_ok and icmp_ok and asnum_ok):
         sys.exit(1)
 
 
