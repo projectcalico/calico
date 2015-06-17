@@ -65,7 +65,9 @@ __doc__ = __doc__ % {"rule_spec": """    (allow|deny) [(
                 [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
            [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
+           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
+      [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
     )]"""}
 import json
 import os
