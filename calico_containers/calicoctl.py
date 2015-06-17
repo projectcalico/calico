@@ -28,6 +28,10 @@ Usage:
   calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show
   calicoctl profile <PROFILE> tag (add|remove) <TAG>
+  calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
+%(rule_spec)s
+  calicoctl profile <PROFILE> rule remove (inbound|outbound) (--at=<POSITION>|
+%(rule_spec)s)
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
@@ -56,6 +60,13 @@ Options:
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
 """
+__doc__ = __doc__ % {"rule_spec": """    (allow|deny) [(
+      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
+                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+           [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
+           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
+    )]"""}
 import json
 import os
 import re
@@ -77,6 +88,7 @@ from prettytable import PrettyTable
 
 from adapter.datastore import (ETCD_AUTHORITY_ENV,
                                ETCD_AUTHORITY_DEFAULT,
+                               Rule,
                                Rules,
                                DataStoreError)
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
@@ -86,6 +98,7 @@ from adapter import diags
 
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
+
 
 hostname = socket.gethostname()
 client = IPAMClient()
@@ -691,6 +704,77 @@ def profile_rule_update(name):
     print "Successfully updated rules on profile %s" % name
 
 
+def profile_rule_add_remove(
+        operation,
+        name, position, action, direction,
+        protocol=None,
+        icmp_type=None, icmp_code=None,
+        src_net=None, src_tag=None, src_ports=None,
+        dst_net=None, dst_tag=None, dst_ports=None):
+    """
+    Add or remove a rule from a profile.
+
+    Arguments not documented below are passed through to the rule.
+
+    :param operation: "add" or "remove".
+    :param name: Name of the profile.
+    :param position: Position to insert/remove rule or None for the default.
+    :param action: Rule action: "allow" or "deny".
+    :param direction: "inbound" or "outbound".
+
+    :return:
+    """
+    # Convert the input into a Rule.
+    rule_dict = {k: v for (k, v) in locals().iteritems()
+                 if k in Rule.ALLOWED_KEYS and v is not None}
+    rule_dict["action"] = action
+    if (protocol not in ("tcp", "udp")) and (src_ports is not None or
+                                             dst_ports is not None):
+        print "Ports are not valid with protocol %r" % protocol
+        sys.exit(1)
+    rule = Rule(**rule_dict)
+
+    # Get the profile.
+    try:
+        profile = client.get_profile(name)
+    except KeyError:
+        print "Profile %s not found." % name
+        sys.exit(1)
+
+    if direction == "inbound":
+        rules = profile.rules.inbound_rules
+    else:
+        rules = profile.rules.outbound_rules
+
+    if operation == "add":
+        if position is None:
+            # Default to append.
+            position = len(rules) + 1
+        if not 0 < position <= len(rules) + 1:
+            print "Position %s is out-of-range." % position
+        if rule in rules:
+            print "Rule already present, skipping."
+            return
+        rules.insert(position - 1, rule)  # Accepts 0 and len(rules).
+    else:
+        # Remove.
+        if position is not None:
+            # Position can only be used on its own so no need to examine the
+            # rule.
+            if 0 < position <= len(rules):  # 1-indexed
+                rules.pop(position - 1)
+            else:
+                print "Rule position out-of-range."
+        else:
+            # Attempt to match the rule.
+            try:
+                rules.remove(rule)
+            except ValueError:
+                print "Rule not found."
+                sys.exit(1)
+    client.profile_update_rules(profile)
+
+
 def node_show(detailed):
     hosts = client.get_hosts()
 
@@ -1036,11 +1120,22 @@ def validate_arguments():
                       netaddr.valid_ipv4(arguments["<IP>"]) or \
                       netaddr.valid_ipv6(arguments["<IP>"])
     cidr_ok = True
-    if arguments["<CIDR>"]:
-        try:
-            IPNetwork(arguments["<CIDR>"])
-        except AddrFormatError:
-            cidr_ok = False
+    for arg in ["<CIDR>", "<SRCCIDR>", "<DSTCIDR>"]:
+        if arguments[arg]:
+            try:
+                arguments[arg] = str(IPNetwork(arguments[arg]))
+            except AddrFormatError:
+                cidr_ok = False
+
+    icmp_ok = True
+    for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
+        if arguments[arg] is not None:
+            try:
+                value = int(arguments[arg])
+                if not (0 <= value < 255):  # Felix doesn't support 255
+                    raise ValueError("Invalid %s: %s" % (arg, value))
+            except ValueError:
+                icmp_ok = False
 
     if not profile_ok:
         print_paragraph("Profile names must be < 40 character long and can "
@@ -1056,9 +1151,11 @@ def validate_arguments():
         print "Invalid IP address specified."
     if not cidr_ok:
         print "Invalid CIDR specified."
+    if not icmp_ok:
+        print "Invalid ICMP type or code specified."
 
     if not (profile_ok and ip_ok and ip6_ok and tag_ok and
-                container_ip_ok and cidr_ok):
+                container_ip_ok and cidr_ok and icmp_ok):
         sys.exit(1)
 
 
@@ -1133,6 +1230,54 @@ def print_paragraph(msg):
     print
 
 
+def parse_ports(ports_str):
+    """
+    Parse a string representing a port list into a list of ports and
+    port ranges.
+
+    Returns None if the input is None.
+
+    :param StringTypes|NoneType ports_str: string representing a port list.
+        Examples: "1" "1,2,3" "1:3" "1,2,3:4"
+    :return list[StringTypes|int]|NoneType: list of ports or None.
+    """
+    if ports_str is None:
+        return None
+    # We allow ranges with : or - but convert to :, which is what the data
+    # model uses.
+    if not re.match(r'^(\d+([:-]\d+)?)(,\d+([:-]\d+)?)*$',
+                    ports_str):
+        print_paragraph("Ports: %r are invalid; expecting a comma-separated "
+                        "list of ports and port ranges." % ports_str)
+        sys.exit(1)
+    splits = ports_str.split(",")
+    parsed_ports = []
+    for split in splits:
+        m = re.match(r'^(\d+)[:-](\d+)$', split)
+        if m:
+            # Got a range, canonicalise it.
+            min = int(m.group(1))
+            max = int(m.group(2))
+            if min > max:
+                print "Port range minimum (%s) > maximum (%s)." % (min, max)
+                sys.exit(1)
+            if not (0 <= min <= 65535):
+                print "Port minimum (%s) out-of-range." % min
+                sys.exit(1)
+            if not (0 <= max <= 65535):
+                print "Port maximum (%s) out-of-range." % max
+                sys.exit(1)
+            parsed_ports.append("%s:%s" % (min, max))
+        else:
+            # Should be a lone port, convert to int.
+            port = int(split)
+            if not (0 <= port <= 65535):
+                print "Port (%s) out-of-range." % min
+                sys.exit(1)
+            parsed_ports.append(port)
+    return parsed_ports
+
+
 if __name__ == '__main__':
     arguments = docopt(__doc__)
     validate_arguments()
@@ -1159,7 +1304,7 @@ if __name__ == '__main__':
         elif arguments["reset"]:
             reset()
         elif arguments["profile"]:
-            if arguments["tag"]:
+            if arguments["tag"] and not arguments["rule"]:
                 if arguments["show"]:
                     profile_tag_show(arguments["<PROFILE>"])
                 elif arguments["add"]:
@@ -1180,6 +1325,43 @@ if __name__ == '__main__':
                                       human_readable=False)
                 elif arguments["update"]:
                     profile_rule_update(arguments["<PROFILE>"])
+                elif arguments["add"] or arguments["remove"]:
+                    operation = "add" if arguments["add"] else "remove"
+                    action = "allow" if arguments.get("allow") else "deny"
+                    direction = ("inbound" if arguments["inbound"]
+                                 else "outbound")
+                    if arguments["tcp"]:
+                        protocol = "tcp"
+                    elif arguments["udp"]:
+                        protocol = "udp"
+                    elif arguments["icmp"]:
+                        protocol = "icmp"
+                    else:
+                        protocol = None
+                    src_ports = parse_ports(arguments["<SRCPORTS>"])
+                    dst_ports = parse_ports(arguments["<DSTPORTS>"])
+                    position = arguments.get("--at")
+                    if position is not None:
+                        try:
+                            position = int(position)
+                        except ValueError:
+                            sys.exit(1)
+                    profile_rule_add_remove(
+                        operation,
+                        arguments["<PROFILE>"],
+                        position,
+                        action,
+                        direction,
+                        protocol=protocol,
+                        icmp_type=arguments["<ICMPTYPE>"],
+                        icmp_code=arguments["<ICMPCODE>"],
+                        src_net=arguments["<SRCCIDR>"],
+                        src_tag=arguments["<SRCTAG>"],
+                        src_ports=src_ports,
+                        dst_net=arguments["<DSTCIDR>"],
+                        dst_tag=arguments["<DSTTAG>"],
+                        dst_ports=dst_ports,
+                    )
             elif arguments["add"]:
                 profile_add(arguments["<PROFILE>"])
             elif arguments["remove"]:
