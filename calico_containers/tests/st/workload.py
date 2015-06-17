@@ -46,7 +46,9 @@ class Workload(object):
         args.append(image)
         command = ' '.join(args)
 
-        host.execute(command, use_powerstrip=use_powerstrip)
+        # Capture the container_id returned by the start command
+        results = host.execute(command, use_powerstrip=use_powerstrip)
+        self.container_id = results.stdout.strip()
 
         # There is an unofficial ip=auto option in addition to ip=None.
         if ip is None or ip == 'auto':
@@ -107,6 +109,16 @@ class Workload(object):
 
         ping = partial(self.execute, command)
         return retry_until_success(ping, retries=retries, ex_class=ErrorReturnCode_1)
+
+    def assert_cant_ping(self, ip, retries=0):
+        for retry in range(retries + 1):
+            try:
+                self.assert_can_ping(ip)
+            except ErrorReturnCode_1:
+                return
+            else:
+                if retry >= retries:
+                    raise Exception("Workload can unexpectedly ping %s" % ip)
 
     def __str__(self):
         return self.name
