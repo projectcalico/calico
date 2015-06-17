@@ -92,15 +92,12 @@ IP-in-IP alows Calico to route traffic between containers.  NAT allows the conta
 On one host, run:
 ```
 export DOCKER_HOST=localhost:2377
-docker run -e CALICO_IP=192.168.1.1 --name container-1 -tid busybox
-./calicoctl profile add TEST
-./calicoctl profile TEST member add container-1
+docker run -e CALICO_IP=192.168.1.1 -e CALICO_PROFILE=test --name container-1 -tid busybox
 ```
 On another host, run:
 ```
 export DOCKER_HOST=localhost:2377
-docker run -e CALICO_IP=192.168.1.2 --name container-2 -tid busybox
-./calicoctl profile TEST member add container-2
+docker run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=test --name container-2 -tid busybox
 ```
 Then, the two containers should be able to ping each other:
 ```
