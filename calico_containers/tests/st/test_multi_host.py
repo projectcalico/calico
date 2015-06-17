@@ -19,14 +19,17 @@ from docker_host import DockerHost
 
 
 class MultiHostMainline(TestBase):
-    def test_multi_host(self):
+    def run_multi_host(self, default_as=None, per_node_as=None):
         """
         Run a mainline multi-host test.
 
         Almost identical in function to the vagrant coreOS demo.
         """
-        host1 = DockerHost('host1')
-        host2 = DockerHost('host2')
+        host1 = DockerHost('host1', as_num=per_node_as)
+        host2 = DockerHost('host2', as_num=per_node_as)
+
+        if default_as:
+            host1.calicoctl("default-node-as 12345")
 
         ip1 = "192.168.1.1"
         ip2 = "192.168.1.2"
@@ -60,3 +63,15 @@ class MultiHostMainline(TestBase):
 
         self.assert_connectivity(pass_list=[workload4],
                                  fail_list=[workload1, workload2, workload3, workload5])
+
+    def test_multi_host(self):
+        self.run_multi_host()
+
+    def test_multi_host_default_as(self):
+        self.run_multi_host(default_as=64512)
+
+    def test_multi_host_per_node_as(self):
+        self.run_multi_host(per_node_as=64513)
+
+    def test_multi_host_default_and_per_node_as(self):
+        self.run_multi_host(default_as=64514, per_node_as=64515)

@@ -99,13 +99,6 @@ class TestArgParsing(TestBase):
         self.assertEquals("on",
                           host.calicoctl("bgp-node-mesh").stdout.strip())
 
-        with self.assertRaises(ErrorReturnCode_1):
-            host.calicoctl("node bgppeer show")
-        with self.assertRaises(ErrorReturnCode_1):
-            host.calicoctl("node bgppeer add 1.2.3.4 as 64454")
-        with self.assertRaises(ErrorReturnCode_1):
-            host.calicoctl("node bgppeer remove 1.2.3.4 as 64454")
-
         # Spin up calicoctl specifying an AS number.
         host2 = DockerHost('host2', as_num=64512)
 
@@ -116,11 +109,11 @@ class TestArgParsing(TestBase):
         ]
         for [peer, version] in examples:
             host2.calicoctl("node bgppeer add %s as 12345" % peer)
-            self.assertIn(peer, host.calicoctl("node bgppeer show").stdout.rstrip())
-            self.assertIn(peer, host.calicoctl("node bgppeer show --ipv%s" % version).stdout.rstrip())
-            self.assertNotIn(peer, host.calicoctl("node bgppeer show --ipv%s" % self.ip_not(version)).stdout.rstrip())
+            self.assertIn(peer, host2.calicoctl("node bgppeer show").stdout.rstrip())
+            self.assertIn(peer, host2.calicoctl("node bgppeer show --ipv%s" % version).stdout.rstrip())
+            self.assertNotIn(peer, host2.calicoctl("node bgppeer show --ipv%s" % self.ip_not(version)).stdout.rstrip())
             host2.calicoctl("node bgppeer remove %s" % peer)
-            self.assertNotIn(peer, host.calicoctl("node bgppeer show").stdout.rstrip())
+            self.assertNotIn(peer, host2.calicoctl("node bgppeer show").stdout.rstrip())
             with self.assertRaises(ErrorReturnCode_1):
                 host2.calicoctl("node bgppeer remove %s" % peer)
 

@@ -571,9 +571,14 @@ class DatastoreClient(object):
 
         peers = []
         for node in nodes:
-            data = json.loads(node.value)
-            data["ip"] = IPAddress(data["ip"])
-            peers.append(data)
+            if node.value is None:
+                continue
+            try:
+                data = json.loads(node.value)
+                data["ip"] = IPAddress(data["ip"])
+                peers.append(data)
+            except BaseException:
+                pass
         return peers
 
     @handle_errors
@@ -640,9 +645,14 @@ class DatastoreClient(object):
 
         peers = []
         for node in nodes:
-            data = json.loads(node.value)
-            data["ip"] = IPAddress(data["ip"])
-            peers.append(data)
+            if node.value is None:
+                continue
+            try:
+                data = json.loads(node.value)
+                data["ip"] = IPAddress(data["ip"])
+                peers.append(data)
+            except BaseException:
+                pass
         return peers
 
     @handle_errors

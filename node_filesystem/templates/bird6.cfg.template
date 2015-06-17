@@ -36,6 +36,18 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
+{{/* ------------ Template definitions ----------------- */}}
+{{define "MESH6"}}
+# Peering with all neighbours (mesh).
+{{range $host := lsdir "/host"}}{{$onode_as_key := printf "/host/%s/bgp_as" .}}{{$onode_ip_key := printf "/host/%s/bird6_ip" .}}{{$onode_ip := getv $onode_ip_key}}{{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
+# For peer {{$onode_ip_key}}
+{{if eq $onode_ip (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
+{{else if eq "" $onode_ip}}# No IPv6 address configured for this node
+{{else}}protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+}{{end}}{{end}}
+{{end}}
+
 {{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
 {{else}}{{$node_as_key := printf "/host/%s/bgp_as" (getenv "HOSTNAME")}}
 # Template for all BGP clients
@@ -56,22 +68,11 @@ template bgp bgp_template {
 }
 
 {{/* ------------- Node-to-node mesh ------------- */}}
-{{define "MESH"}}
-# Peering with all neighbours (mesh).
-{{range $host := lsdir "/host"}}{{$onode_as_key := printf "/host/%s/bgp_as" .}}{{$onode_ip_key := printf "/host/%s/bird6_ip" .}}{{$onode_ip := getv $onode_ip_key}}{{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
-# For peer {{$onode_ip_key}}
-{{if eq $onode_ip (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
-{{else if eq "" $onode_ip}}# No IPv6 address configured for this node
-{{else}}protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}{{end}}{{end}}
-{{end}}
-
 {{if lsdir "/host"}}
 {{if not (exists "/config/bgp_node_mesh")}}
-{{template "MESH"}}
+{{template "MESH6"}}
 {{else if (json (getv "/config/bgp_node_mesh")).enabled}}
-{{template "MESH"}}
+{{template "MESH6"}}
 # Node-to-node mesh disabled
 {{end}}
 {{end}}

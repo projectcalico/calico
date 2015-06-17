@@ -1027,9 +1027,11 @@ def bgppeer_remove(ip, version):
         client.remove_bgp_peer(version, address)
     except KeyError:
         print "%s is not a globally configured peer." % address
+        sys.exit(1)
+    else:
+        print "BGP peer removed from global configuration"
 
-
-def bgppeer_show(version, as_num):
+def bgppeer_show(version):
     """
     Print a list of the global BGP Peers.
     """
@@ -1072,9 +1074,12 @@ def node_bgppeer_remove(ip, version):
         client.remove_node_bgp_peer(hostname, version, address)
     except KeyError:
         print "%s is not a configured peer for this node." % address
+        sys.exit(1)
+    else:
+        print "BGP peer removed from node configuration"
 
 
-def node_bgppeer_show(version, as_num):
+def node_bgppeer_show(version):
     """
     Print a list of the BGP Peers for this node.
     """
@@ -1558,6 +1563,9 @@ def validate_arguments():
     container_ip_ok = arguments["<IP>"] is None or \
                       netaddr.valid_ipv4(arguments["<IP>"]) or \
                       netaddr.valid_ipv6(arguments["<IP>"])
+    peer_ip_ok = arguments["<PEER_IP>"] is None or \
+                 netaddr.valid_ipv4(arguments["<PEER_IP>"]) or \
+                 netaddr.valid_ipv6(arguments["<PEER_IP>"])
     cidr_ok = True
     for arg in ["<CIDR>", "<SRCCIDR>", "<DSTCIDR>"]:
         if arguments[arg]:
@@ -1593,7 +1601,7 @@ def validate_arguments():
         print "Invalid IPv4 address specified with --ip argument."
     if not ip6_ok:
         print "Invalid IPv6 address specified with --ip6 argument."
-    if not container_ip_ok:
+    if not container_ip_ok or not peer_ip_ok:
         print "Invalid IP address specified."
     if not cidr_ok:
         print "Invalid CIDR specified."
@@ -1602,7 +1610,7 @@ def validate_arguments():
     if not asnum_ok:
         print "Invalid AS Number specified."
 
-    if not (profile_ok and ip_ok and ip6_ok and tag_ok and
+    if not (profile_ok and ip_ok and ip6_ok and tag_ok and peer_ip_ok and
                 container_ip_ok and cidr_ok and icmp_ok and asnum_ok):
         sys.exit(1)
 
