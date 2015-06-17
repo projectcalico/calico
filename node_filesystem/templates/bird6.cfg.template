@@ -56,17 +56,26 @@ template bgp bgp_template {
 }
 
 {{/* ------------- Node-to-node mesh ------------- */}}
-{{$mesh := true}}{{if exists "/config/bgp_node_mesh"}}{{$mesh := (json (getv "/config/bgp_node_mesh")).enabled}}{{end}}
-{{if $mesh}}# Peering with all neighbours (mesh).
-{{if ls "/host/*"}}{{range gets "/host/*"}}{{$onode_as_key := printf "%s/bgp_as" .Value}}{{$onode_ip_key := printf "%s/bird6_ip" .Value}}
-{{if exists $onode_ip_key}}{{$onode_ip := getv $onode_ip_key}}{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
+{{define "MESH"}}
+# Peering with all neighbours (mesh).
+{{range $host := lsdir "/host"}}{{$onode_as_key := printf "/host/%s/bgp_as" .}}{{$onode_ip_key := printf "/host/%s/bird6_ip" .}}{{$onode_ip := getv $onode_ip_key}}{{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
-{{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
-{{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
+{{if eq $onode_ip (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
+{{else if eq "" $onode_ip}}# No IPv6 address configured for this node
+{{else}}protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}{{end}}{{end}}{{end}}
-{{else}}# No nodes are configured in etcd{{end}}
-{{else}}# Node-to-node mesh disabled{{end}}
+}{{end}}{{end}}
+{{end}}
+
+{{if lsdir "/host"}}
+{{if not (exists "/config/bgp_node_mesh")}}
+{{template "MESH"}}
+{{else if (json (getv "/config/bgp_node_mesh")).enabled}}
+{{template "MESH"}}
+# Node-to-node mesh disabled
+{{end}}
+{{end}}
+
 
 {{/* ------------- Global peers ------------- */}}
 {{if ls "/config/bgp_peer_v6"}}
@@ -79,6 +88,7 @@ protocol bgp bgp_{{$id}} from bgp_template {
 {{end}}
 {{else}}# No global peers configured.{{end}}
 
+
 {{/* ------------- Node-specific peers ------------- */}}
 {{$node_peers_key := printf "/host/%s/bgp_peer_v6" (getenv "HOSTNAME")}}
 {{if ls $node_peers_key}}
@@ -90,5 +100,4 @@ protocol bgp bgp_{{$id}} from bgp_template {
 }
 {{end}}
 {{else}}# No node-specific peers configured.{{end}}
-
 {{end}}
