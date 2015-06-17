@@ -18,7 +18,7 @@ Usage:
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl pool (add|remove) <CIDR> [--ipip]
+  calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl bgppeer rr (add|remove) <IP>
   calicoctl bgppeer rr show [--ipv4 | --ipv6]
@@ -722,7 +722,7 @@ def save_diags(upload):
     print("Collecting diags")
     diags.save_diags(upload)
 
-def ip_pool_add(cidr_pool, version, ipip):
+def ip_pool_add(cidr_pool, version, ipip, masquerade):
     """
     Add the the given CIDR range to the IP address allocation pool.
 
@@ -736,7 +736,7 @@ def ip_pool_add(cidr_pool, version, ipip):
         sys.exit(1)
 
     pool = check_ip_version(cidr_pool, version, IPNetwork)
-    client.add_ip_pool(version, pool, ipip)
+    client.add_ip_pool(version, pool, ipip, masquerade)
 
 
 def ip_pool_remove(cidr_pool, version):
@@ -1178,7 +1178,10 @@ if __name__ == '__main__':
             node_show(arguments["--detailed"])
         elif arguments["pool"]:
             if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"], ip_version, arguments["--ipip"])
+                ip_pool_add(arguments["<CIDR>"],
+                            ip_version,
+                            arguments["--ipip"],
+                            arguments["--nat-outgoing"])
             elif arguments["remove"]:
                 ip_pool_remove(arguments["<CIDR>"], ip_version)
             elif arguments["show"]:

@@ -1,7 +1,7 @@
 __author__ = 'spike@projectcalico.org'
 
 
-from mock import patch, Mock, call
+from mock import patch, Mock, call, ANY
 from calico_containers.adapter.datastore import (DatastoreClient,
                                                  Rule,
                                                  Profile,
@@ -556,9 +556,13 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_2_pools
 
         pool = IPNetwork("192.168.100.5/24")
-        self.datastore.add_ip_pool("v4", pool)
+        self.datastore.add_ip_pool("v4", pool, masquerade=True)
         self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.100.0-24",
-                                                       "{\"cidr\": \"192.168.100.0/24\"}")
+                                                       ANY)
+        raw_data = self.etcd_client.write.call_args[0][1]
+        data = json.loads(raw_data)
+        self.assertEqual(data, {'cidr': '192.168.100.0/24',
+                                'masquerade': True})
 
     def test_add_ip_pool_exists(self):
         """

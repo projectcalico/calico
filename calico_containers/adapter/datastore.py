@@ -388,7 +388,7 @@ class DatastoreClient(object):
         return data
 
     @handle_errors
-    def add_ip_pool(self, version, pool, ipip=False):
+    def add_ip_pool(self, version, pool, ipip=False, masquerade=False):
         """
         Add the given pool to the list of IP allocation pools.  If the pool
         already exists, this method completes silently without modifying the
@@ -411,6 +411,8 @@ class DatastoreClient(object):
         data = {"cidr" : str(pool)}
         if ipip:
             data["ipip"] = "tunl0"
+        if masquerade:
+            data["masquerade"] = True
 
         self.etcd_client.write(key, json.dumps(data))
 
