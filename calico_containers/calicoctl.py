@@ -735,13 +735,13 @@ def profile_rule_add_remove(
     if operation == "add":
         if position is None:
             # Default to append.
-            position = len(rules)
-        if not 0 <= position <= len(rules):
+            position = len(rules) + 1
+        if not 0 < position <= len(rules) + 1:
             print "Position %s is out-of-range." % position
         if rule in rules:
             print "Rule already present, skipping."
             return
-        rules.insert(position, rule)  # Accepts 0 and len(rules).
+        rules.insert(position - 1, rule)  # Accepts 0 and len(rules).
     else:
         # Remove.
         if position is not None:
@@ -1242,7 +1242,11 @@ def parse_ports(ports_str):
             parsed_ports.append("%s:%s" % (min, max))
         else:
             # Should be a lone port, convert to int.
-            parsed_ports.append(int(split))
+            port = int(split)
+            if not (0 <= port <= 65535):
+                print "Port (%s) out-of-range." % min
+                sys.exit(1)
+            parsed_ports.append(port)
     return parsed_ports
 
 
