@@ -25,9 +25,7 @@ For more information on configuration and keys, see Amazon's [Configuring the AW
 ## Setting up AWS networking
 The AWS machines will require a login by default.  Create a Key Pair instead to use when SSHing into the instances.  
 ```
-# Create Key Pair and save locally as calicokey.pem
 aws ec2 create-key-pair --key-name calicokey --output text > calicokey.pem
-
 chmod 400 calicokey.pem
 ```
 
@@ -79,8 +77,17 @@ aws ec2 run-instances \
 
 ## Installing calicoctl on each node
 ##### NEED TO SPECIFY HOW TO GET IP
-On each node, run these commands to set up Calico:
+Get the public IP addresses of the new instances:
 ```
+aws ec2 describe-instances --filter "Name=key-name,Values=calicokey" | grep PublicIpAddress
+```
+Note: You can also get these IP addresses from the AWS Web Console.
+
+SSH into each node and run these commands to set up Calico:
+```
+# SSH into a node with the calicokey.pem and username core
+ssh -i calicokey.pem core@<instance IP>
+
 # Download calicoctl and make it executable:
 wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
 chmod +x ./calicoctl
@@ -91,10 +98,6 @@ export private_ip=$(curl "$metadata_url/instance/network-interfaces/0/ip" -H "Me
 
 # Start the calico node service:
 sudo ./calicoctl node --ip=$private_ip
-
-# Work-around a [BIRD routing issue](http://marc.info/?l=bird-users&m=139809577125938&w=2)
-# This tells BIRD that it's directly connected to the upstream GCE router.
-sudo ip addr add $private_ip peer 10.240.0.1 dev ens4v1
 ```
 Then, on any one of the hosts, run this command to create an IP pool with IP-in-IP and NAT enabled:
 ```
@@ -121,7 +124,7 @@ docker exec container-2 ping -c 4 192.168.1.1
 Now, you may wish to follow the [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
 
 ## (Optional) Enabling traffic from the internet to containers
-Services running on containers in GCE can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following command to add the port mapping:
+Services running on containers in AWS can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following commands to add the port mapping:
 
 ```
 iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 8000 -j DNAT  --to 172.168.7.4:80
