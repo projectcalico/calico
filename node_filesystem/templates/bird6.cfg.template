@@ -73,8 +73,11 @@ template bgp bgp_template {
 {{template "MESH6"}}
 {{else if (json (getv "/config/bgp_node_mesh")).enabled}}
 {{template "MESH6"}}
+{{else}}
 # Node-to-node mesh disabled
 {{end}}
+{{else}}
+# No hosts configured in etcd
 {{end}}
 
 

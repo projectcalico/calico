@@ -1758,7 +1758,7 @@ if __name__ == '__main__':
                         node_bgppeer_show("v6")
                     else:
                         node_bgppeer_show(ip_version)
-            if arguments["stop"]:
+            elif arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
                 node(arguments["--ip"],
