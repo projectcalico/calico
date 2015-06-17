@@ -405,6 +405,7 @@ class DatastoreClient(object):
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
+
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
