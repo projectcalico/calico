@@ -18,7 +18,7 @@ And set a default zone
 gcloud config set compute/zone us-central1-a
 ```
 ## Setting up GCE networking
-GCE blocks traffic between hosts by default, which prevents Calico traffic from flowing.  Run the following command to allow traffic to flow between containers:
+GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between containers on different hosts:
 ```
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
 ```
@@ -39,7 +39,7 @@ Create a file `cloud-config.yaml` with the following contents; **replace `<disco
 #cloud-config
 coreos:
   update:
-    reboot-strategy: etcd-lock
+    reboot-strategy: off
   etcd2:
     name: $private_ipv4
     discovery: <discovery URL>
@@ -58,7 +58,8 @@ Then create the cluster with the following command ("calico-1 calico-2 calico-3"
 ```
 gcloud compute instances create \
   calico-1 calico-2 calico-3 \
-  --image https://www.googleapis.com/compute/v1/projects/coreos-cloud/global/images/coreos-alpha-709-0-0-v20150611 \
+  --image-project coreos-cloud \
+  --image coreos-alpha-709-0-0-v20150611 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config.yaml
 ```
