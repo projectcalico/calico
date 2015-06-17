@@ -2,13 +2,15 @@
 Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on GCE (and allow GCE to be used for testing).
 
 ## Getting started
-These instructions assume a total of three GCE hosts running CoreOS. Documentation on running CoreOS on GCE is [here](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/)
+These instructions describe how to set up three CoreOS hosts on GCE.  For more general background, see [the CoreOS on GCE documentation](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/).
 
-Download and install GCE and login to your account. Full documentation on how to install gcloud are given [here](https://cloud.google.com/compute/docs/gcloud-compute/).
+Download and install GCE and login to your account: 
 ```
 curl https://sdk.cloud.google.com | bash
 gcloud auth login
 ```
+For more information, see Google's [gcloud install instructions](https://cloud.google.com/compute/docs/gcloud-compute/).
+
 Also, create a project through the GCE console and set that as the default for gcloud.
 ```
 gcloud config set project PROJECT
