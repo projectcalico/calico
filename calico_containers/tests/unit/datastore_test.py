@@ -51,6 +51,8 @@ TEST_CONT_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/" \
                                           "1234/endpoint/"
 TEST_CONT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
+BGP_NODE_DEF_AS_PATH = CALICO_V_PATH + "/config/bgp_as"
+BGP_NODE_MESH_PATH = CALICO_V_PATH + "/config/bgp_node_mesh"
 
 # 4 endpoints, with 2 TEST profile and 2 UNIT profile.
 EP_56 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "567890abcdef",
@@ -1035,9 +1037,9 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.add_bgp_peer("v4", peer, 32245)
         assert_true(data["write"])
 
-    def test_del_bgp_peer_exists(self):
+    def test_remove_bgp_peer_exists(self):
         """
-        Test del_bgp_peer() when the peer does exist.
+        Test remove_bgp_peer() when the peer does exist.
         :return: None
         """
         self.etcd_client.delete = Mock()
@@ -1047,9 +1049,9 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.assert_called_once_with(
                                                 BGP_PEERS_PATH + "192.168.3.1")
 
-    def test_del_bgp_peer_doesnt_exist(self):
+    def test_remove_bgp_peer_doesnt_exist(self):
         """
-        Test del_bgp_peer() when the peer does not exist.
+        Test remove_bgp_peer() when the peer does not exist.
         :return: None
         """
         self.etcd_client.delete.side_effect = EtcdKeyNotFound()
@@ -1107,9 +1109,9 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.add_node_bgp_peer("TEST_HOST", "v4", peer, 32245)
         assert_true(data["write"])
 
-    def test_del_node_bgp_peer_exists(self):
+    def test_remove_node_bgp_peer_exists(self):
         """
-        Test del_bgp_peer() when the peer does exist.
+        Test remove_node_bgp_peer() when the peer does exist.
         :return: None
         """
         self.etcd_client.delete = Mock()
@@ -1119,9 +1121,9 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.assert_called_once_with(
                                       TEST_NODE_BGP_PEERS_PATH + "192.168.3.1")
 
-    def test_del_node_bgp_peer_doesnt_exist(self):
+    def test_remove_node_bgp_peer_doesnt_exist(self):
         """
-        Test del_bgp_peer() when the peer does not exist.
+        Test remove_node_bgp_peer() when the peer does not exist.
         :return: None
         """
         self.etcd_client.delete.side_effect = EtcdKeyNotFound()
@@ -1131,9 +1133,8 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_set_bgp_node_mesh(self):
         """
-        Set whether the BGP node mesh is enabled or not.
-
-        :param enable: Whether the mesh is enabled or not.
+        Test set_bgp_node_mesh() stores the correct JSON when disabled and
+        enabled.
         :return: None.
         """
         self.datastore.set_bgp_node_mesh(True)
@@ -1145,11 +1146,9 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_get_bgp_node_mesh(self):
         """
-        Determine whether the BGP node mesh is enabled or not.
-
-        :param enable: Whether the mesh is enabled or not.  A value of None
-        leaves the configuration unchanged.
-        :return: Whether the BGP node mesh is enabled.
+        Test get_bgp_node_mesh() returns the correct value based on the
+        stored JSON.
+        :return: None.
         """
         def mock_read(path):
             assert_equal(path, BGP_NODE_MESH_PATH)
@@ -1162,11 +1161,9 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_get_bgp_node_mesh_no_config(self):
         """
-        Determine whether the BGP node mesh is enabled or not.
-
-        :param enable: Whether the mesh is enabled or not.  A value of None
-        leaves the configuration unchanged.
-        :return: Whether the BGP node mesh is enabled.
+        Test get_bgp_node_mesh() returns the correct value when there is no
+        mesh config.
+        :return: None.
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound()
 
@@ -1174,9 +1171,8 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_set_default_node_as(self):
         """
-        Return the default node BGP AS Number
-
-        :return: The default node BGP AS Number.
+        Test set_default_node_as() stores the correct value.
+        :return: None.
         """
         self.datastore.set_default_node_as(12345)
         self.etcd_client.write.assert_called_once_with(BGP_NODE_DEF_AS_PATH,
@@ -1184,9 +1180,9 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_get_default_node_as(self):
         """
-        Return the default node BGP AS Number
-
-        :return: The default node BGP AS Number.
+        Test get_default_node_as() returns the correct value based on the
+        stored value.
+        :return: None.
         """
         def mock_read(path):
             assert_equal(path, BGP_NODE_DEF_AS_PATH)
@@ -1199,9 +1195,9 @@ class TestDatastoreClient(unittest.TestCase):
 
     def test_get_default_node_as_no_config(self):
         """
-        Return the default node BGP AS Number
-
-        :return: The default node BGP AS Number.
+        Test get_default_node_as() returns the correct value when there is no
+        default AS config.
+        :return: None.
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound()
 

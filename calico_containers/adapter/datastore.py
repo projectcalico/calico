@@ -402,6 +402,8 @@ class DatastoreClient(object):
         :param hostname: The name of the host to create.
         :param bird_ip: The IP address BIRD should listen on.
         :param bird6_ip: The IP address BIRD6 should listen on.
+        :param as_num: Optional AS Number to use for this host.  If not
+        specified, the configured global or default global value is used.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
@@ -417,7 +419,10 @@ class DatastoreClient(object):
             # Didn't exist, create it now.
             self.etcd_client.write(workload_dir, None, dir=True)
 
-        # Set or delete the node specific BGP AS number as required.
+        # Set or delete the node specific BGP AS number as required.  If the
+        # value is missing from the etcd datastore, the BIRD templates will
+        # inherit the configured global default value (and then the
+        # hardcoded default value).
         if as_num is None:
             try:
                 self.etcd_client.delete(host_path + "bgp_as")
@@ -571,6 +576,8 @@ class DatastoreClient(object):
 
         peers = []
         for node in nodes:
+            # If there are no children etcd returns a single value with the
+            # parent key and no value.
             if node.value is None:
                 continue
             data = json.loads(node.value)
@@ -583,7 +590,7 @@ class DatastoreClient(object):
         """
         Add a global BGP Peer.
 
-        If the peer already exists then do nothing.
+        If the peer exists this will update the peer to use the new AS number.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param ip: The IP address to add. (an IPAddress)
@@ -618,7 +625,7 @@ class DatastoreClient(object):
     @handle_errors
     def get_node_bgp_peers(self, hostname, version):
         """
-        Get the configured BGP Peers
+        Get the configured node-specific BGP Peers
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :return: List of dictionaries:
@@ -642,6 +649,8 @@ class DatastoreClient(object):
 
         peers = []
         for node in nodes:
+            # If there are no children etcd returns a single value with the
+            # parent key and no value.
             if node.value is None:
                 continue
             data = json.loads(node.value)
@@ -652,9 +661,9 @@ class DatastoreClient(object):
     @handle_errors
     def add_node_bgp_peer(self, hostname, version, ip, as_num):
         """
-        Add a BGP Peer.
+        Add a node-specific BGP Peer.
 
-        If the peer already exists then do nothing.
+        If the peer exists this will update the peer to use the new AS number.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param ip: The IP address to add. (an IPAddress)
@@ -671,7 +680,7 @@ class DatastoreClient(object):
     @handle_errors
     def remove_node_bgp_peer(self, hostname, version, ip):
         """
-        Delete a BGP Peer
+        Delete a node-specific BGP Peer
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param ip: The IP address to delete. (an IPAddress)
@@ -1182,7 +1191,7 @@ class DatastoreClient(object):
         """
         Set whether the BGP node mesh is enabled or not.
 
-        :param enable: Whether the mesh is enabled or not.
+        :param enable: (Boolean) Whether the mesh is enabled or not.
         :return: None.
         """
         node_mesh = {"enabled": enable}
@@ -1193,9 +1202,7 @@ class DatastoreClient(object):
         """
         Determine whether the BGP node mesh is enabled or not.
 
-        :param enable: Whether the mesh is enabled or not.  A value of None
-        leaves the configuration unchanged.
-        :return: Whether the BGP node mesh is enabled.
+        :return: (Boolean) Whether the BGP node mesh is enabled.
         """
         try:
             node_mesh = json.loads(

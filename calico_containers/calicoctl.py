@@ -140,12 +140,6 @@ DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
 POWERSTRIP_PORT = "2377"
 
-# Tri-state map, mapping (bool(off), bool(on)) to a tri-state value, where
-# None represents not assigned.
-TRI_STATE_ON_OFF_MAP = {(True, False): False,
-                        (False, True): True,
-                        (False, False): None}
-
 class ConfigError(Exception):
     pass
 
@@ -343,6 +337,17 @@ def module_loaded(module):
 
 
 def node(ip, node_image, ip6="", as_num=None):
+    """
+    Create the calico-node container and establish Calico networking on this
+    host.
+
+    :param ip:  The IPv4 address of the host.
+    :param node_image:  The calico-node image to use.
+    :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param as_num:  The BGP AS Number to use for this node.  If not specified
+    the global default value will be used.
+    :return:  None.
+    """
     # Print warnings for any known system issues before continuing
     checksystem(fix=False, quit_if_error=False)
 
@@ -971,18 +976,25 @@ def restart_docker_without_alternative_unix_socket():
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
-def bgp_node_mesh(enable):
+def set_bgp_node_mesh(enable):
     """
-    Set or display the BGP node mesh setting.
+    Set the BGP node mesh setting.
 
-    :param enable:  True(enable), False(disable), None(display current value)
+    :param enable:  (Boolean) Whether to enable or disable the node-to-node
+    mesh.
     :return: None.
     """
-    if enable is None:
-        value = client.get_bgp_node_mesh()
-        print "on" if value else "off"
-    else:
-        client.set_bgp_node_mesh(enable)
+    client.set_bgp_node_mesh(enable)
+
+
+def show_bgp_node_mesh():
+    """
+    Display the BGP node mesh setting.
+
+    :return: None.
+    """
+    value = client.get_bgp_node_mesh()
+    print "on" if value else "off"
 
 
 def default_node_as(as_num):
@@ -1925,9 +1937,10 @@ if __name__ == '__main__':
                 if arguments["remove"]:
                     container_remove(arguments["<CONTAINER>"])
         elif arguments["bgp-node-mesh"]:
-            enable = arguments["on"]
-            bgp_node_mesh(TRI_STATE_ON_OFF_MAP[(bool(arguments["off"]),
-                                                bool(arguments["on"]))])
+            if arguments["on"] or arguments["off"]:
+                set_bgp_node_mesh(arguments["on"])
+            else:
+                show_bgp_node_mesh()
         elif arguments["default-node-as"]:
             default_node_as(arguments["<AS_NUM>"])
     except SystemExit:

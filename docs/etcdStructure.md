@@ -8,7 +8,7 @@ The following illustrates the directory structure calico uses in etcd.
  	   |--config
  	   |  |--InterfacePrefix # the prefix for Calico interface names
  	   |  |--LogSeverityFile # Log severity level for writing to file e.g. "DEBUG"
- 	   |  |--bgp_as # the default BGP AS number for the node-to-node mesh
+ 	   |  |--bgp_as # the default BGP AS number for the nodes
  	   |  |--bgp_node_mesh # JSON node-to-node mesh configuration (see below)
 	   |  |--bgp_peer_v4  # Global IPv4 BGP peers (all nodes peer with)
 	   |  |  `--<BGP peer IPv4 address>  # JSON BGP peer configuration (see below)
