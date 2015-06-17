@@ -122,7 +122,7 @@ so that traffic for that IP is brought to the appropriate compute host. If
 you can't do this and your host already has a public facing IP, then you 
 can use port mapping to get the traffic into the container.
 
-You will need to run the following commands on the host that the container
+You will need to run the following command on the host that the container
 is running on.
 
 ```
@@ -131,7 +131,7 @@ iptables -A PREROUTING -t nat -i eth0 -p tcp --dport <EXPOSED_PORT> -j DNAT  --t
 
 For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4
 to, and you have NGINX running on port 8000 inside the container. If you 
-want to expose this on port 80, then you could run the following two commands:
+want to expose this on port 80, then you could run the following command:
 
 ```
 iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.4:8000
