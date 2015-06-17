@@ -76,7 +76,6 @@ aws ec2 run-instances \
 ```
 
 ## Installing calicoctl on each node
-##### NEED TO SPECIFY HOW TO GET IP
 Get the public IP addresses of the new instances:
 ```
 aws ec2 describe-instances --filter "Name=key-name,Values=calicokey" | grep PublicIpAddress
