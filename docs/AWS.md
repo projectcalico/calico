@@ -1,30 +1,42 @@
-# Running calico-docker on GCE
-Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on GCE (and allow GCE to be used for testing).
+# Running calico-docker on AWS
+Calico runs on the Amazon Web Services (AWS), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on AWS (and allow AWS to be used for testing).
 
 ## Getting started
-These instructions assume a total of three GCE hosts running CoreOS. Documentation on running CoreOS on GCE is [here](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/)
+These instructions describe how to set up three CoreOS hosts on AWS.  For more general background, see [the CoreOS on AWS documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
 
-Download and install GCE and login to your account. Full documentation on how to install gcloud are given [here](https://cloud.google.com/compute/docs/gcloud-compute/).
+Download and install AWS Command Line Interface: 
 ```
-curl https://sdk.cloud.google.com | bash
-gcloud auth login
+curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
+unzip awscli-bundle.zip
+sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 ```
-Also, create a project through the GCE console and set that as the default for gcloud.
+For more information, see Amazon's [Installing the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os).
+
+Configure the AWS CLI with your User keys:
 ```
-gcloud config set project PROJECT
+aws configure
+  AWS Access Key ID: <User Access Key>
+  AWS Secret Access Key: <User Secret Access Key>
+  Default region name: us-west-2
+  Default output format: <json, text, or table>
 ```
-And set a default zone
+For more information on configuration and keys, see Amazon's [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).
+
+## Setting up AWS networking
+The AWS machines will require a login by default.  Create a Key Pair instead to use when SSHing into the instances.  
 ```
-gcloud config set compute/zone us-central1-a
+# Create Key Pair and save locally as calicokey.pem
+aws ec2 create-key-pair --key-name calicokey --output text > calicokey.pem
+
+chmod 400 calicokey.pem
 ```
-## Setting up GCE networking
-GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between containers on different hosts:
+
+A Security Group is required on the instances to control allowed traffic.  Create a Security Group and allow any machine to SSH, but restrict all other traffic that is not within the Security Group.
 ```
-gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
-```
-You can verify the rule with this command:
-```
-gcloud compute firewall-rules list
+# Create Security Group to allow certain incoming traffic to the Calico nodes
+aws ec2 create-security-group --group-name CalicoSG --description CalicoSecurityGroup
+aws ec2 authorize-security-group-ingress --group-name CalicoSG --protocol tcp --port 22 --source-group 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-name CalicoSG --protocol all --port all --source-group CalicoSG
 ```
 
 ## Spinning up the VMs
@@ -54,17 +66,19 @@ coreos:
 ```
 Note: we disable automated reboots for this demo to avoid interrupting the instructions.
 
-Then create the cluster with the following command ("calico-1 calico-2 calico-3" is the list of nodes to create):
+Then create the cluster with the following command:
 ```
-gcloud compute instances create \
-  calico-1 calico-2 calico-3 \
-  --image-project coreos-cloud \
-  --image coreos-alpha-709-0-0-v20150611 \
-  --machine-type n1-standard-1 \
-  --metadata-from-file user-data=cloud-config.yaml
+aws ec2 run-instances \
+  --count 3 \
+  --image-id ami-29734819 \
+  --instance-type t1.micro \
+  --key-name calicokey \
+  --security-groups CalicoSG \
+  --user-data file://cloud-config.yaml
 ```
 
 ## Installing calicoctl on each node
+##### NEED TO SPECIFY HOW TO GET IP
 On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
@@ -82,40 +96,29 @@ sudo ./calicoctl node --ip=$private_ip
 # This tells BIRD that it's directly connected to the upstream GCE router.
 sudo ip addr add $private_ip peer 10.240.0.1 dev ens4v1
 ```
-Then, on any one of the hosts, run this command to enable IP-in-IP on the default IP pool:
+Then, on any one of the hosts, run this command to create an IP pool with IP-in-IP and NAT enabled:
 ```
-./calicoctl pool add 192.168.0.0/16 --ipip
+./calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
+IP-in-IP alows Calico to route traffic between containers.  NAT allows the containers to make outgoing connections to the internet.
 
 ## Create a couple of containers and check connectivity
 On one host, run:
 ```
 export DOCKER_HOST=localhost:2377
-docker run -e CALICO_IP=192.168.1.1 --name container-1 -tid busybox
-./calicoctl profile add TEST
-./calicoctl profile TEST member add container-1
+docker run -e CALICO_IP=192.168.1.1 -e CALICO_PROFILE=test --name container-1 -tid busybox
 ```
 On another host, run:
 ```
 export DOCKER_HOST=localhost:2377
-docker run -e CALICO_IP=192.168.1.2 --name container-2 -tid busybox
-./calicoctl profile TEST member add container-2
+docker run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=test --name container-2 -tid busybox
 ```
 Then, the two containers should be able to ping each other:
 ```
 docker exec container-2 ping -c 4 192.168.1.1
 ```
-## Running containers
-Now, follow the standard [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
-
-Note that etcd should already be running on the master, core1 and core2 nodes, with data stored on the master node, and core1 and core2 run etcd in proxy mode, so no clustering is required.  Check this by running ```etcdctl ls /``` on each node.  If it is not running, then restart it by running ```docker start etcd```.
-
-## (Optional) Enabling traffic from containers to the internet
-The test endpoints will be unable to access the internet - that is because the internal range we are using is not routable. Hence to get external connectivity, SNAT is called for using the following `iptables` rule (on both hosts).
-
-```
-iptables -t nat -A POSTROUTING -s 192.168.0.0/16 ! -d 192.168.0.0/16 -j MASQUERADE
-```
+## Next steps
+Now, you may wish to follow the [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
 
 ## (Optional) Enabling traffic from the internet to containers
 Services running on containers in GCE can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following command to add the port mapping:
