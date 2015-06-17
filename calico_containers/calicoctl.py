@@ -44,6 +44,10 @@ Options:
                           [default: calico/node:latest]
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
+ --host=<HOSTNAME>        Filters endpoints on a specific host.
+ --orchestrator=<ORCHESTRATOR_ID>    Filters endpoints created on a specific orchestrator.
+ --workload=<WORKLOAD_ID> Filters endpoints on a specific workload.
+ --endpoint=<ENDPOINT_ID> Filters endpoints with a specific endpoint ID.
 """
 import json
 import os
@@ -239,7 +243,6 @@ def container_remove(container_name):
     then it is removed.
 
     :param container_name: The name or ID of the container.
-    :param orchestrator_id: If the orchestrator ID for the
     """
     # The netns manipulations must be done as root.
     enforce_root()
@@ -1130,15 +1133,22 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
     """
     Append a list of profiles to the container endpoint profile list.
 
-    The list may not contain duplicate entries, invalid profile names, or
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
+    parameters used to determine which endpoint is being targeted.
+    The more parameters used, the faster the endpoint query will be. The
+    query must be specific enough to match a single endpoint or it will fail.
+
+    The profile list may not contain duplicate entries, invalid profile names, or
     profiles that are already in the containers list.
 
-    :param endpoint_id: The endpoint ID.
-    :param profile_names: The list of profiles to append.
-
+    :param hostname: The host that the targeted endpoint resides on.
+    :param orchestrator_id: The orchestrator that created the targeted endpoint.
+    :param workload_id: The ID of workload which created the targeted endpoint.
+    :param endpoint_id: The endpoint ID of the targeted endpoint.
+    :param profile_names: The list of profile names to add to the targeted
+                        endpoint.
     :return: None
     """
-    # TODO: Make sure this doesn't error when profile_names == None
     # Validate the profile list.
     validate_profile_list(profile_names)
     try:
@@ -1168,10 +1178,18 @@ def endpoint_profile_set(hostname, orchestrator_id, workload_id,
     """
     Set the complete list of profiles for the container endpoint profile list.
 
-    The list may not contain duplicate entries or invalid profile names.
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
+    parameters used to determine which endpoint is being targeted.
+    The more parameters used, the faster the endpoint query will be. The
+    query must be specific enough to match a single endpoint or it will fail.
 
-    :param endpoint_id: The endpoint ID.
-    :param profile_names: The list of profiles to append.
+    The profile list may not contain duplicate entries or invalid profile names.
+
+    :param hostname: The host that the targeted endpoint resides on.
+    :param orchestrator_id: The orchestrator that created the targeted endpoint.
+    :param workload_id: The ID of workload which created the targeted endpoint.
+    :param endpoint_id: The endpoint ID of the targeted endpoint.
+    :param profile_names: The list of profile names to set on the targeted endpoint.
 
     :return: None
     """
@@ -1197,12 +1215,20 @@ def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
     """
     Remove a list of profiles from the endpoint profile list.
 
-    The list may not contain duplicate entries, invalid profile names, or
-    profiles that are not in the containers list.
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
+    parameters used to determine which endpoint is being targeted.
+    The more parameters used, the faster the endpoint query will be. The
+    query must be specific enough to match a single endpoint or it will fail.
 
-    :param endpoint_id: The endpoint ID.
-    :param profile_names: The list of profiles to append.
+    The profile list may not contain duplicate entries, invalid profile names,
+    or profiles that are not already in the containers list.
 
+    :param hostname: The host that the targeted endpoint resides on.
+    :param orchestrator_id: The orchestrator that created the targeted endpoint.
+    :param workload_id: The ID of workload which created the targeted endpoint.
+    :param endpoint_id: The endpoint ID of the targeted endpoint.
+    :param profile_names: The list of profile names to remove from the targeted
+                          endpoint.
     :return: None
     """
     # Validate the profile list.

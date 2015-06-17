@@ -12,7 +12,9 @@ ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # etcd paths for Calico
-# TODO: modify string constants to accept orchestrator_id, replacing "docker" hardcoding
+# TODO: modify string constants to accept orchestrator_id, replacing "docker" hardcoding.
+# Any method that uses CONTAINER_PATH, LOCAL_ENDPOINTS_PATH, or ENDPOINT_PATH
+# will need to be refactored to include orchestrator_id as a passed in parameters.
 CALICO_V_PATH = "/calico/v1"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 HOSTS_PATH = CALICO_V_PATH + "/host/"
