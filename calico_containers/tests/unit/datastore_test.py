@@ -494,6 +494,7 @@ class TestDatastoreClient(unittest.TestCase):
                 assert False
 
         self.etcd_client.read.side_effect = mock_read
+        self.etcd_client.delete.side_effect = EtcdKeyNotFound()
 
         bird_ip = "192.168.2.4"
         bird6_ip = "fd80::4"
@@ -980,7 +981,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.side_effect = EtcdKeyNotFound
         self.datastore.remove_container(TEST_HOST, TEST_CONT_ID)
 
-    def test_get_bgp_peer(self):
+    def test_get_bgp_peers(self):
         """
         Test getting IP peers from the datastore when there are some peers.
         :return: None
@@ -993,7 +994,7 @@ class TestDatastoreClient(unittest.TestCase):
         assert_dict_equal(peers[1], {"ip": IPAddress("192.168.5.1"),
                                      "as_num": 32245})
 
-    def test_get_bgp_peer_no_key(self):
+    def test_get_bgp_peers_no_key(self):
         """
         Test getting IP peers from the datastore when the key doesn't exist.
         :return: None
@@ -1006,7 +1007,7 @@ class TestDatastoreClient(unittest.TestCase):
         peers = self.datastore.get_bgp_peers("v4")
         assert_list_equal([], peers)
 
-    def test_get_bgp_peer_no_peers(self):
+    def test_get_bgp_peers_no_peers(self):
         """
         Test getting BGP peers from the datastore when the key is there but has
         no children.
@@ -1083,8 +1084,8 @@ class TestDatastoreClient(unittest.TestCase):
         no children.
         :return: None
         """
-        self.etcd_client.read.side_effect = mock_read_no_bgppeers
-        peers = self.datastore.get_bgp_peers("v4")
+        self.etcd_client.read.side_effect = mock_read_no_node_bgppeers
+        peers = self.datastore.get_node_bgp_peers("TEST_HOST", "v4")
         assert_list_equal([], peers)
 
     def test_add_node_bgp_peer(self):
@@ -1272,7 +1273,29 @@ def mock_read_no_bgppeers(path):
     """
     result = Mock(spec=EtcdResult)
     assert path == BGP_PEERS_PATH
-    result.children = iter([])
+
+    # Bug in etcd seems to return the parent when enumerating children if there
+    # are no children.  We handle this in the datastore.
+    node = Mock(spec=EtcdResult)
+    node.value = None
+    node.key = BGP_PEERS_PATH
+    result.children = iter([node])
+    return result
+
+
+def mock_read_no_node_bgppeers(path):
+    """
+    EtcdClient mock side effect for read with no IPv4 BGP Peers
+    """
+    result = Mock(spec=EtcdResult)
+    assert path == TEST_NODE_BGP_PEERS_PATH
+
+    # Bug in etcd seems to return the parent when enumerating children if there
+    # are no children.  We handle this in the datastore.
+    node = Mock(spec=EtcdResult)
+    node.value = None
+    node.key = TEST_NODE_BGP_PEERS_PATH
+    result.children = iter([node])
     return result
 
 
