@@ -2,8 +2,7 @@
 Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on GCE (and allow GCE to be used for testing).
 
 ## Getting started
-These instructions assume a total of three GCE hosts running CoreOS. One to run an etcd "cluster", and then two compute nodes.
-Documentation on running CoreOS on GCE is [here](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/)
+These instructions assume a total of three GCE hosts running CoreOS. Documentation on running CoreOS on GCE is [here](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/)
 
 Download and install GCE and login to your account. Full documentation on how to install gcloud are given [here](https://cloud.google.com/compute/docs/gcloud-compute/).
 ```
@@ -19,7 +18,7 @@ And set a default zone
 gcloud config set compute/zone us-central1-a
 ```
 ## Setting up GCE networking
-GCE blocks traffic between hosts by default, which prevents calico traffic from flowing.  Run the following command to allow traffic to flow between containers:
+GCE blocks traffic between hosts by default, which prevents Calico traffic from flowing.  Run the following command to allow traffic to flow between containers:
 ```
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
 ```
@@ -29,10 +28,12 @@ gcloud compute firewall-rules list
 ```
 
 ## Spinning up the VMs
-etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  Choose an etcd cluster size that is equal to or less than the number of calico nodes (an odd number in the range 3-9 works well).  We'll use 3 for the size of the etcd cluster and the calico nodes in the instructions below.  Use `curl` to get a fresh discovery URL (replace size=3 with your cluster size if desired):
+etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  Choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  We'll use 3 for the size of the etcd cluster and the Calico nodes in the instructions below.  Use `curl` to get a fresh discovery URL (replace size=3 with your cluster size if desired):
 ```
 curl https://discovery.etcd.io/new?size=3
 ```
+You need to grab a fresh URL each time you bootstrap a cluster.
+
 Create a file `cloud-config.yaml` with the following contents; **replace `<discovery URL>` with the URL retrieved above**:
 ```
 #cloud-config
@@ -55,13 +56,13 @@ Then create the cluster with the following command ("calico-1 calico-2 calico-3"
 ```
 gcloud compute instances create \
   calico-1 calico-2 calico-3 \
-  --image https://www.googleapis.com/compute/v1/projects/coreos-cloud/global/images/coreos-alpha-709-0-0-v20150611 \
+  --image coreos \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config.yaml
 ```
 
 ## Installing calicoctl on each node
-On each node, run these commands to set up calico:
+On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
 wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
@@ -76,12 +77,31 @@ sudo ./calicoctl node --ip=$private_ip
 
 # Work-around a [BIRD routing issue](http://marc.info/?l=bird-users&m=139809577125938&w=2):
 sudo ip addr add 10.240.10.1 peer 10.240.0.1 dev ens4v1
-
-# Enable IP-in-IP on the default pool.
+```
+Then, on any one of the hosts, run this command to enable IP-in-IP on the default IP pool:
+```
 ./calicoctl pool add 192.168.0.0/16 --ipip
 ```
 
-## Starting calico and running containers
+## Create a couple of containers and check connectivity
+On one host, run:
+```
+export DOCKER_HOST=localhost:2377
+docker run -e CALICO_IP=192.168.1.1 --name container-1 -tid busybox
+./calicoctl profile add TEST
+./calicoctl profile TEST member add container-1
+```
+On another host, run:
+```
+export DOCKER_HOST=localhost:2377
+docker run -e CALICO_IP=192.168.1.2 --name container-2 -tid busybox
+./calicoctl profile TEST member add container-2
+```
+Then, the two containers should be able to ping each other:
+```
+docker exec container-2 ping -c 4 192.168.1.1
+```
+## Running containers
 Now, follow the standard [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
 
 Note that etcd should already be running on the master, core1 and core2 nodes, with data stored on the master node, and core1 and core2 run etcd in proxy mode, so no clustering is required.  Check this by running ```etcdctl ls /``` on each node.  If it is not running, then restart it by running ```docker start etcd```.
