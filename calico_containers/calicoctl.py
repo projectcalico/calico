@@ -282,7 +282,7 @@ def container_remove(container_name):
 
 
 def node_stop(force):
-    if force or len(client.get_hosts()[hostname]["docker"]) == 0:
+    if force or len(client.get_endpoints(hostname=hostname, orchestrator_id=ORCHESTRATOR_ID)) == 0:
         client.remove_host(hostname)
         try:
             docker_client.stop("calico-node")
