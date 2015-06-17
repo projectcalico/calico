@@ -22,6 +22,7 @@ Usage:
   calicoctl bgppeer rr (add|remove) <IP>
   calicoctl bgppeer rr show [--ipv4 | --ipv6]
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
+  calicoctl container <CONTAINER> endpoint-id show
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
@@ -861,6 +862,15 @@ def bgppeer_show(version):
     else:
         print "No IP%s BGP Peers defined.\n" % version
 
+def container_endpoint_id_show(container_name):
+    workload_id = get_container_id(container_name)
+    try:
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=workload_id)
+        print endpoint.endpoint_id
+    except KeyError:
+        print "No endpoint was found for %s" % container_name
 
 def container_ip_add(container_name, ip, version, interface):
     """
@@ -1508,7 +1518,9 @@ if __name__ == '__main__':
                 else:
                     bgppeer_show(ip_version)
         elif arguments["container"]:
-            if arguments["ip"]:
+            if arguments["endpoint-id"]:
+                container_endpoint_id_show(arguments["<CONTAINER>"])
+            elif arguments["ip"]:
                 if arguments["add"]:
                     container_ip_add(arguments["<CONTAINER>"],
                                      arguments["<IP>"],
