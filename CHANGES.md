@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.25-dev
+
+- Improve security between endpoint and host and simplify INPUT chain logic.
+
 ## 0.24
 
 - Add Felix statistics logging on USR1 signal.
