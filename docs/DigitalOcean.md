@@ -49,7 +49,7 @@ In the form that appears, give the machine a hostname, select a desired size (th
 ![alt tag](digitalocean/Create_Droplet_1.png)
 
 
-Next, select CoreOS alpha version as the image type.  Note that some regions may not have this image as an option so you may have to choose a region that supports CoreOS alpha version.
+Next, select CoreOS alpha version as the image type.  Note that some regions may not have this image as an option so you may have to reselect a region that supports CoreOS alpha version.
 Check the Private Networking box and the User Data box under Available Settings.  Add your SSH public key to be able to log in to the instance without credentials.
 
 You should now see something similar to the following:
