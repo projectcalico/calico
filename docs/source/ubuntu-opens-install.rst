@@ -236,15 +236,6 @@ perform the following steps:
 
         sudo service neutron-server restart
 
-6. Find all the currently running OpenStack Neutron agents and stop them.
-   First, run the following command to find them all::
-
-       neutron agent-list
-
-   Then, for each agent, delete them with the following command, replacing
-   ``<agent-id>`` with the ID of one of the agents::
-
-       neutron agent-delete <agent-id>
 
 Compute Node Install
 --------------------
@@ -312,6 +303,16 @@ perform the following steps:
            sudo sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
            sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
            sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
+
+   Then, on your control node, run the following command to find the agents
+   that you just stopped::
+
+       neutron agent-list
+
+   For each agent, delete them with the following command on your control node,
+   replacing ``<agent-id>`` with the ID of the agent::
+
+       neutron agent-delete <agent-id>
 
 4. Install some extra packages:
 
