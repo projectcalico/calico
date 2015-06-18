@@ -20,8 +20,11 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--as=<AS_NUM>]
   calicoctl node stop [--force]
+  calicoctl node bgppeer add <PEER_IP> as <AS_NUM>
+  calicoctl node bgppeer remove <PEER_IP>
+  calicoctl node bgppeer show [--ipv4 | --ipv6]
   calicoctl status
   calicoctl profile show [--detailed]
   calicoctl profile (add|remove) <PROFILE>
@@ -37,8 +40,11 @@ Usage:
   calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
-  calicoctl bgppeer rr (add|remove) <IP>
-  calicoctl bgppeer rr show [--ipv4 | --ipv6]
+  calicoctl default-node-as [<AS_NUM>]
+  calicoctl bgppeer add <PEER_IP> as <AS_NUM>
+  calicoctl bgppeer remove <PEER_IP>
+  calicoctl bgppeer show [--ipv4 | --ipv6]
+  calicoctl bgp-node-mesh [on|off]
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
   calicoctl container <CONTAINER> endpoint-id show
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
@@ -66,6 +72,7 @@ Options:
  --orchestrator=<ORCHESTRATOR_ID>    Filters endpoints created on a specific orchestrator.
  --workload=<WORKLOAD_ID> Filters endpoints on a specific workload.
  --endpoint=<ENDPOINT_ID> Filters endpoints with a specific endpoint ID.
+ --as=<AS_NUM>            The AS number to assign to the node.
 """
 __doc__ = __doc__ % {"rule_spec": """    (allow|deny) [(
       (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
@@ -104,7 +111,8 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
                                ProfileNotInEndpoint,
                                ProfileAlreadyInEndpoint,
                                MultipleEndpointsMatch,
-                               Vividict)
+                               Vividict,
+                               BGPPeer)
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
@@ -329,7 +337,18 @@ def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
 
-def node(ip, node_image, ip6=""):
+def node(ip, node_image, ip6="", as_num=None):
+    """
+    Create the calico-node container and establish Calico networking on this
+    host.
+
+    :param ip:  The IPv4 address of the host.
+    :param node_image:  The calico-node image to use.
+    :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param as_num:  The BGP AS Number to use for this node.  If not specified
+    the global default value will be used.
+    :return:  None.
+    """
     # Print warnings for any known system issues before continuing
     checksystem(fix=False, quit_if_error=False)
 
@@ -344,7 +363,7 @@ def node(ip, node_image, ip6=""):
         client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
     client.ensure_global_config()
-    client.create_host(hostname, ip, ip6)
+    client.create_host(hostname, ip, ip6, as_num)
 
     if docker_restarter.is_using_alternative_socket():
         # At this point, docker is listening on a new port but powerstrip
@@ -366,6 +385,7 @@ def node(ip, node_image, ip6=""):
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
 
     environment = [
+        "HOSTNAME=%s" % hostname,
         "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
         "IP=%s" % ip,
         "IP6=%s" % (ip6 or ""),
@@ -957,16 +977,143 @@ def restart_docker_without_alternative_unix_socket():
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
-def bgppeer_add(ip, version):
+def set_bgp_node_mesh(enable):
     """
-    Add the the given IP to the list of BGP Peers
+    Set the BGP node mesh setting.
+
+    :param enable:  (Boolean) Whether to enable or disable the node-to-node
+    mesh.
+    :return: None.
+    """
+    client.set_bgp_node_mesh(enable)
+
+
+def show_bgp_node_mesh():
+    """
+    Display the BGP node mesh setting.
+
+    :return: None.
+    """
+    value = client.get_bgp_node_mesh()
+    print "on" if value else "off"
+
+
+def set_default_node_as(as_num):
+    """
+    Set the default node BGP AS Number.
+
+    :param as_num:  The default AS number
+    :return: None.
+    """
+    client.set_default_node_as(as_num)
+
+
+def show_default_node_as():
+    """
+    Display the default node BGP AS Number.
+
+    :return: None.
+    """
+    value = client.get_default_node_as()
+    print value
+
+
+def bgppeer_add(ip, version, as_num):
+    """
+    Add a new global BGP peer with the supplied IP address and AS Number.  All
+    nodes will peer with this.
 
     :param ip: The address to add
+    :param version: v4 or v6
+    :param as_num: The peer AS Number.
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+    peer = BGPPeer(address, as_num)
+    client.add_bgp_peer(version, peer)
+
+
+def bgppeer_remove(ip, version):
+    """
+    Remove a global BGP peer.
+
+    :param ip: The address to use.
     :param version: v4 or v6
     :return: None
     """
     address = check_ip_version(ip, version, IPAddress)
-    client.add_bgp_peer(version, address)
+    try:
+        client.remove_bgp_peer(version, address)
+    except KeyError:
+        print "%s is not a globally configured peer." % address
+        sys.exit(1)
+    else:
+        print "BGP peer removed from global configuration"
+
+def bgppeer_show(version):
+    """
+    Print a list of the global BGP Peers.
+    """
+    assert version in ("v4", "v6")
+    peers = client.get_bgp_peers(version)
+    if peers:
+        heading = "Global IP%s BGP Peer" % version
+        x = PrettyTable([heading, "AS Num"], sortby=heading)
+        for peer in peers:
+            x.add_row([peer.ip, peer.as_num])
+        x.align = "l"
+        print x.get_string(sortby=heading)
+    else:
+        print "No global IP%s BGP Peers defined.\n" % version
+
+
+def node_bgppeer_add(ip, version, as_num):
+    """
+    Add a new BGP peer with the supplied IP address and AS Number to this node.
+
+    :param ip: The address to add
+    :param version: v4 or v6
+    :param as_num: The peer AS Number.
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+    peer = BGPPeer(address, as_num)
+    client.add_bgp_peer(version, peer, hostname=hostname)
+
+
+def node_bgppeer_remove(ip, version):
+    """
+    Remove a global BGP peer from this node.
+
+    :param ip: The address to use.
+    :param version: v4 or v6
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+    try:
+        client.remove_bgp_peer(version, address, hostname=hostname)
+    except KeyError:
+        print "%s is not a configured peer for this node." % address
+        sys.exit(1)
+    else:
+        print "BGP peer removed from node configuration"
+
+
+def node_bgppeer_show(version):
+    """
+    Print a list of the BGP Peers for this node.
+    """
+    assert version in ("v4", "v6")
+    peers = client.get_bgp_peers(version, hostname=hostname)
+    if peers:
+        heading = "Node specific IP%s BGP Peer" % version
+        x = PrettyTable([heading, "AS Num"], sortby=heading)
+        for peer in peers:
+            x.add_row([peer.ip, peer.as_num])
+        x.align = "l"
+        print x.get_string(sortby=heading)
+    else:
+        print "No IP%s BGP Peers defined for this node.\n" % version
 
 
 def check_ip_version(ip, version, cls):
@@ -988,38 +1135,6 @@ def check_ip_version(ip, version, cls):
               (parsed, parsed.version, version)
         sys.exit(1)
     return parsed
-
-
-def bgppeer_remove(ip, version):
-    """
-    Add the the given BGP Peer.
-
-    :param ip: The address to use.
-    :param version: v4 or v6
-    :return: None
-    """
-    address = check_ip_version(ip, version, IPAddress)
-    try:
-        client.remove_bgp_peer(version, address)
-    except KeyError:
-        print "%s is not a configured peer." % address
-
-
-def bgppeer_show(version):
-    """
-    Print a list BGP Peers
-    """
-    assert version in ("v4", "v6")
-    peers = client.get_bgp_peers(version)
-    if peers:
-        heading = "IP%s BGP Peer" % version
-        x = PrettyTable([heading], sortby=heading)
-        for peer in peers:
-            x.add_row([peer])
-        x.align = "l"
-        print x.get_string(sortby=heading)
-    else:
-        print "No IP%s BGP Peers defined.\n" % version
 
 def container_endpoint_id_show(container_name):
     workload_id = get_container_id(container_name)
@@ -1468,6 +1583,9 @@ def validate_arguments():
     container_ip_ok = arguments["<IP>"] is None or \
                       netaddr.valid_ipv4(arguments["<IP>"]) or \
                       netaddr.valid_ipv6(arguments["<IP>"])
+    peer_ip_ok = arguments["<PEER_IP>"] is None or \
+                 netaddr.valid_ipv4(arguments["<PEER_IP>"]) or \
+                 netaddr.valid_ipv6(arguments["<PEER_IP>"])
     cidr_ok = True
     for arg in ["<CIDR>", "<SRCCIDR>", "<DSTCIDR>"]:
         if arguments[arg]:
@@ -1475,7 +1593,6 @@ def validate_arguments():
                 arguments[arg] = str(IPNetwork(arguments[arg]))
             except AddrFormatError:
                 cidr_ok = False
-
     icmp_ok = True
     for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
         if arguments[arg] is not None:
@@ -1485,6 +1602,13 @@ def validate_arguments():
                     raise ValueError("Invalid %s: %s" % (arg, value))
             except ValueError:
                 icmp_ok = False
+    asnum_ok = True
+    if arguments["<AS_NUM>"]:
+        try:
+            asnum = int(arguments["<AS_NUM>"])
+            asnum_ok = 0 <= asnum <= 4294967295
+        except ValueError:
+            asnum_ok = False
 
     if not profile_ok:
         print_paragraph("Profile names must be < 40 character long and can "
@@ -1497,15 +1621,17 @@ def validate_arguments():
         print "Invalid IPv4 address specified with --ip argument."
     if not ip6_ok:
         print "Invalid IPv6 address specified with --ip6 argument."
-    if not container_ip_ok:
+    if not container_ip_ok or not peer_ip_ok:
         print "Invalid IP address specified."
     if not cidr_ok:
         print "Invalid CIDR specified."
     if not icmp_ok:
         print "Invalid ICMP type or code specified."
+    if not asnum_ok:
+        print "Invalid AS Number specified."
 
-    if not (profile_ok and ip_ok and ip6_ok and tag_ok and
-                container_ip_ok and cidr_ok and icmp_ok):
+    if not (profile_ok and ip_ok and ip6_ok and tag_ok and peer_ip_ok and
+                container_ip_ok and cidr_ok and icmp_ok and asnum_ok):
         sys.exit(1)
 
 
@@ -1521,6 +1647,8 @@ def get_container_ipv_from_arguments():
         version = "v6"
     elif arguments["<IP>"]:
         version = "v%s" % IPAddress(arguments["<IP>"]).version
+    elif arguments["<PEER_IP>"]:
+        version = "v%s" % IPAddress(arguments["<PEER_IP>"]).version
     elif arguments["<CIDR>"]:
         version = "v%s" % IPNetwork(arguments["<CIDR>"]).version
     return version
@@ -1638,14 +1766,25 @@ if __name__ == '__main__':
         elif arguments["restart-docker-without-alternative-unix-socket"]:
             restart_docker_without_alternative_unix_socket()
         elif arguments["node"]:
-            if arguments["stop"]:
+            if arguments["bgppeer"]:
+                if arguments["add"]:
+                    node_bgppeer_add(arguments["<PEER_IP>"], ip_version,
+                                     arguments["<AS_NUM>"])
+                elif arguments["remove"]:
+                    node_bgppeer_remove(arguments["<PEER_IP>"], ip_version)
+                elif arguments["show"]:
+                    if not ip_version:
+                        node_bgppeer_show("v4")
+                        node_bgppeer_show("v6")
+                    else:
+                        node_bgppeer_show(ip_version)
+            elif arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
-                node_image = arguments['--node-image']
-                ip6 = arguments["--ip6"]
                 node(arguments["--ip"],
-                     node_image=node_image,
-                     ip6=ip6)
+                     arguments['--node-image'],
+                     ip6=arguments["--ip6"],
+                     as_num=arguments["<AS_NUM>"])
         elif arguments["status"]:
             status()
         elif arguments["checksystem"]:
@@ -1765,11 +1904,12 @@ if __name__ == '__main__':
                     ip_pool_show("v6")
                 else:
                     ip_pool_show(ip_version)
-        elif arguments["bgppeer"] and arguments["rr"]:
+        elif arguments["bgppeer"]:
             if arguments["add"]:
-                bgppeer_add(arguments["<IP>"], ip_version)
+                bgppeer_add(arguments["<PEER_IP>"], ip_version,
+                            arguments["<AS_NUM>"])
             elif arguments["remove"]:
-                bgppeer_remove(arguments["<IP>"], ip_version)
+                bgppeer_remove(arguments["<PEER_IP>"], ip_version)
             elif arguments["show"]:
                 if not ip_version:
                     bgppeer_show("v4")
@@ -1804,6 +1944,16 @@ if __name__ == '__main__':
                                   arguments["--interface"])
                 if arguments["remove"]:
                     container_remove(arguments["<CONTAINER>"])
+        elif arguments["bgp-node-mesh"]:
+            if arguments["on"] or arguments["off"]:
+                set_bgp_node_mesh(arguments["on"])
+            else:
+                show_bgp_node_mesh()
+        elif arguments["default-node-as"]:
+            if arguments["<AS_NUM>"]:
+                set_default_node_as(arguments["<AS_NUM>"])
+            else:
+                show_default_node_as()
     except SystemExit:
         raise
     except ConnectionError as e:
