@@ -84,6 +84,7 @@ from docopt import docopt
 import sh
 import docker
 import docker.utils
+import docker.errors
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
@@ -404,6 +405,15 @@ def node(ip, node_image, ip6=""):
     print "Calico node is running with id: %s" % cid
 
 
+def normalize_version(version):
+    """
+    This function convers a string representation of a version into
+    a list of integer values.
+    e.g.:   "1.5.10" => [1, 5, 10]
+    http://stackoverflow.com/questions/1714027/version-number-comparison
+    """
+    return [int(x) for x in re.sub(r'(\.0+)*$','', version).split(".")]
+
 def checksystem(fix=False, quit_if_error=False):
     """
     Checks that the system is setup correctly. fix==True, this command
@@ -465,6 +475,21 @@ def checksystem(fix=False, quit_if_error=False):
                 system_ok = False
         else:
             print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
+            system_ok = False
+
+    # Check docker version compatability
+    try:
+        info = docker_client.version()
+    except docker.errors.APIError:
+        print >> sys.stderr, "ERROR: Docker server must support " \
+                             "Docker Remote API v%s or greater." % DOCKER_VERSION
+        system_ok = False
+    else:
+        api_version = normalize_version(info['ApiVersion'])
+        # Check that API Version is above the minimum supported version
+        if cmp(api_version, normalize_version(DOCKER_VERSION)) < 0:
+            print >> sys.stderr, "ERROR: Docker server must support Docker " \
+                                 "Remote API v%s or greater." % DOCKER_VERSION
             system_ok = False
 
     if quit_if_error and not system_ok:
