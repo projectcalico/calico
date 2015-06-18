@@ -493,14 +493,6 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
                       "--ctstate RELATED,ESTABLISHED --jump RETURN" %
                       from_chain_name)
 
-    if ip_version == 4:
-        from_chain.append("--append %s --protocol udp --sport 68 --dport 67 "
-                          "--jump RETURN" % from_chain_name)
-    else:
-        assert ip_version == 6
-        from_chain.append("--append %s --protocol udp --sport 546 --dport 547 "
-                          "--jump RETURN" % from_chain_name)
-
     # Combined anti-spoofing and jump to profile rules.  The only way to
     # get to a profile chain is to have the correct IP and MAC address.
     from_deps = set()

@@ -161,20 +161,6 @@ class DispatchChains(Actor):
         root_to_deps = dependencies[CHAIN_TO_ENDPOINT]
         root_from_deps = dependencies[CHAIN_FROM_ENDPOINT]
 
-        # Special case: allow the metadata IP through from all interfaces.
-        if self.config.METADATA_IP is not None and self.ip_version == 4:
-            # Need to allow outgoing Metadata requests.
-            root_from_upds.append("--append %s "
-                                  "--protocol tcp "
-                                  "--in-interface %s+ "
-                                  "--destination %s "
-                                  "--dport %s "
-                                  "--jump RETURN" %
-                                  (CHAIN_FROM_ENDPOINT,
-                                   self.config.IFACE_PREFIX,
-                                   self.config.METADATA_IP,
-                                   self.config.METADATA_PORT))
-
         # Separate the interface names by their prefixes so we can count them
         # and decide whether to program a leaf chain or not.
         interfaces_by_prefix = defaultdict(set)

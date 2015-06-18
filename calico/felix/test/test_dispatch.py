@@ -85,8 +85,6 @@ class TestDispatchChains(BaseTestCase):
         self.step_actor(d)
 
         from_updates = [
-            '--append felix-FROM-ENDPOINT --protocol tcp --in-interface tap+ '
-            '--destination 127.0.0.1 --dport 8775 --jump RETURN',
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
@@ -104,7 +102,8 @@ class TestDispatchChains(BaseTestCase):
         self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args, to_updates, from_updates, to_chain_names,
+            from_chain_names
         )
 
     def test_tree_building(self):
@@ -197,7 +196,11 @@ class TestDispatchChains(BaseTestCase):
         self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_applying_snapshot_dirty(self):
@@ -233,7 +236,11 @@ class TestDispatchChains(BaseTestCase):
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_applying_empty_snapshot(self):
@@ -263,7 +270,11 @@ class TestDispatchChains(BaseTestCase):
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_on_endpoint_added_simple(self):
@@ -298,7 +309,11 @@ class TestDispatchChains(BaseTestCase):
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_on_endpoint_added_idempotent(self):
@@ -349,7 +364,11 @@ class TestDispatchChains(BaseTestCase):
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
-            args, to_updates, from_updates, to_chain_names, from_chain_names
+            args,
+            to_updates,
+            from_updates,
+            to_chain_names,
+            from_chain_names
         )
 
     def test_on_endpoint_removed_idempotent(self):
