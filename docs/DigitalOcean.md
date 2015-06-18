@@ -11,7 +11,7 @@ From the DigitalOcean Web Console, select the "Create Droplet" button in the top
 
 In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this demo), and choose a region.  You should see something similar to the following:
 
-![alt tag](digitalocean/Create_Droplet_1_small.png)
+![alt tag](digitalocean/Create_Droplet_1.png)
 
 
 Next, select CoreOS alpha version as the image type.  Note that some regions may not have this image as an option so you may have to choose a region that supports CoreOS alpha version.
@@ -19,7 +19,7 @@ Check the Private Networking box and the User Data box under Available Settings.
 
 You should now see something similar to the following:
 
-![alt tag](digitalocean/Create_Droplet_2_small.png)
+![alt tag](digitalocean/Create_Droplet_2.png)
 
 
 Before selecting "Create Droplet", you will need to specify the User Data.  Copy the following contents into the User Data text box; **replace `<discovery URL>` with the URL retrieved below**:
