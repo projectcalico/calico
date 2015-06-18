@@ -111,13 +111,13 @@ please get in touch with us and we'll be happy to help you through the process.
 
    - Download, unpack, and install the binary::
 
-.. warning:: We've seen certificate errors downloading etcd - you may need to
-             add --insecure to the `curl` command to ignore this.
-
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
         tar xvf etcd-v2.0.11-linux-amd64.tar.gz
         cd etcd-v2.0.11-linux-amd64
         mv etcd* /usr/local/bin/
+
+     .. warning:: We've seen certificate errors downloading etcd - you may need
+                  to add ``--insecure`` to the `curl` command to ignore this.
 
    - Create an etcd user::
 
