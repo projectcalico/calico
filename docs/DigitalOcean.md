@@ -62,7 +62,11 @@ Before selecting "Create Droplet", you will need to specify the User Data.  Past
 Repeat the instance creation steps until you have 3 Calico hosts (or however many hosts you chose as the etcd size in Getting Started).  Use the same cloud-config as the User Data for each host.
 
 ## Installing calicoctl on each node
-SSH into each Calico host you created using the IP addresses found in the Droplets section of the Web Console.  On each node, there should be a script file called "install_calico" in the home directory.  Run the script on each node to set up Calico:
+SSH into each Calico host you created using the IP addresses found in the Droplets section of the Web Console:
+```
+ssh core@<ip>
+```
+On each node, there should be a script file called "install_calico" in the home directory.  Run the script on each node to set up Calico:
 ```
 ./install_calico
 ```
