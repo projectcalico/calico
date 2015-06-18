@@ -2,7 +2,7 @@ import unittest
 import uuid
 
 from test_base import TestBase
-from docker_host import DockerHost
+from calico_containers.tests.st.utils.docker_host import DockerHost
 
 
 class TestMainline(TestBase):
@@ -10,10 +10,13 @@ class TestMainline(TestBase):
         """
         Setup two endpoints on one host and check connectivity.
         """
-        with DockerHost('host') as host:
+        with DockerHost('host', dind=False) as host:
             network = host.create_network(str(uuid.uuid4()))
             node1 = host.create_workload("node1", network=network)
             node2 = host.create_workload("node2", network=network)
+
+            # Allow network to converge
+            node1.assert_can_ping(node2.ip, retries=5)
 
             # Check connectivity.
             self.assert_connectivity([node1, node2])

@@ -1,9 +1,13 @@
-from test_base import TestBase
-from docker_host import DockerHost
 import json
+
+from nose.plugins.attrib import attr
+
+from test_base import TestBase
+from calico_containers.tests.st.utils.docker_host import DockerHost
 
 
 class TestProfileCommands(TestBase):
+    @attr('slow')
     def test_profile_commands(self):
         """
         Test that the profile rule update command successfully updates.

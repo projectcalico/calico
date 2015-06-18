@@ -5,7 +5,13 @@ mock==1.0.1
 PyInstaller==2.1
 six==1.9.0
 nose==1.3.1
+nose-timer
 docker-py==1.2.1
-
+sh==1.11
 # Only used inside calicoctl
 prettytable==0.7.2
+
+flask
+gunicorn
+subprocess32
+
