@@ -583,6 +583,9 @@ def validate_ipam_pool(pool_id, pool, ip_version):
 
     Modifies the dict in-place.
     """
+    if not isinstance(pool, dict):
+        raise ValidationFailed("Pool should be a dict")
+
     # Remove any keys that we're not expecting.  Stops unvalidated data from
     # slipping through.  We ignore other keys since this structure is used
     # by calicoctl for its own purposes too.

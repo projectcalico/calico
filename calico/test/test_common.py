@@ -707,6 +707,8 @@ class TestCommon(unittest.TestCase):
         self.assert_ipam_pool_invalid({}, 6)
         self.assert_ipam_pool_invalid({"cidr": "10.0.0.0/16",
                                        "masquerade": "foo"}, 4)
+        self.assert_ipam_pool_invalid(None, 4)
+        self.assert_ipam_pool_invalid([], 4)
 
     def assert_ipam_pool_valid(self, pool, expected, version,
                                pool_id="1234-5"):
