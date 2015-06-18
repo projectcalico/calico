@@ -15,6 +15,9 @@ class TestMainline(TestBase):
             node1 = host.create_workload("node1", network=network)
             node2 = host.create_workload("node2", network=network)
 
+            # Allow network to converge
+            node1.assert_can_ping(node2.ip, retries=5)
+
             # Check connectivity.
             self.assert_connectivity([node1, node2])
 
