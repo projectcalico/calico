@@ -378,6 +378,10 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     Returns a list of rules that should be applied to the INPUT chain.
     """
     chain = []
+    chain.append("--append %s --match conntrack --ctstate INVALID "
+                 "--jump DROP" % CHAIN_INPUT)
+    chain.append("--append %s --match conntrack --ctstate RELATED,ESTABLISHED "
+                 "--jump ACCEPT" % CHAIN_INPUT)
 
     if metadata_addr is not None:
         chain.append(
@@ -395,7 +399,7 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     chain.append(
         "--append %s --in-interface %s --jump DROP" %
         (CHAIN_INPUT, iface_match)
-     )
+    )
 
     return chain
 
