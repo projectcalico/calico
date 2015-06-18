@@ -12,26 +12,25 @@ sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 ```
 For more information, see Amazon's [Installing the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os).
 
-Configure the AWS CLI with your User keys.
+Run the AWS configure command, which will prompt you to set your User keys.
 ```
 aws configure
-
-  AWS Access Key ID: <User Access Key>
-  AWS Secret Access Key: <User Secret Access Key>
-  Default region name: us-west-2
-  Default output format: <json, text, or table>
+>  AWS Access Key ID: <User Access Key>
+>  AWS Secret Access Key: <User Secret Access Key>
+>  Default region name: us-west-2
+>  Default output format: <json, text, or table>
 ```
-Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 commands.  This can be set in the user configuration page of the web console.
+Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 commands.  This can be set in the IAM User configuration page of the web console.
 For more information on configuration and keys, see Amazon's [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).
 
 ## Setting up AWS networking
-The AWS machines will require a login by default.  Create a Key Pair instead to use when SSHing into the instances.  
+Create a Key Pair to use for ssh access to the instances.
 ```
 aws ec2 create-key-pair --key-name calicokey --output text > calicokey.pem
 chmod 400 calicokey.pem
 ```
 
-A Security Group is required on the instances to control allowed traffic.  Create a Security Group and allow any machine to SSH, but restrict all other traffic that is not within the Security Group.
+A Security Group is required on the instances to control allowed traffic.  Create a security group that allows all traffic between instances within the group but only SSH access from the internet.
 ```
 # Create Security Group to allow certain incoming traffic to the Calico nodes
 aws ec2 create-security-group \
