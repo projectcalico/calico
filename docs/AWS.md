@@ -138,3 +138,10 @@ Services running on containers in AWS can be exposed to the internet using Calic
 ```
 iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 8000 -j DNAT  --to 172.168.7.4:80
 ```
+Be sure to also update the Security Group for any ports you want to expose:
+```
+aws ec2 authorize-security-group-ingress \
+  --group-name CalicoSG \
+  --protocol tcp \
+  --port 8000
+```
