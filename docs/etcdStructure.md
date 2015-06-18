@@ -1,5 +1,3 @@
-
-
 # etcd Directory Structure
 
 The following illustrates the directory structure calico uses in etcd.
@@ -50,7 +48,7 @@ The following illustrates the directory structure calico uses in etcd.
 	             `--<CIDR>  # One per pool
 	                `--<address>  # One per assigned address in the pool
 
-# JSON endpoint config
+## JSON endpoint configuration
 
 The endpoint configuration stored at 
 
@@ -81,7 +79,7 @@ is a JSON blob in this form:
 	  "ipv6_gateway": "<IP address>"
 	}
 
-# JSON rules config
+## JSON rules configuration
 
 The rules leaf at 
 
@@ -117,7 +115,7 @@ where each entry in the inbound/outbound list is a rule object:
 	  "action": "deny|allow"
 	} 
 
-# JSON IP pool config
+## JSON IP pool configuration
 
 The IP pool configuration stored at
 
@@ -128,12 +126,15 @@ is a JSON blob in this form:
 
         {
           "cidr": "<CIDR of pool - eg. 192.168.0.0/16 or fd80:24e2:f998:72d6::/64>",
-          "ipip": "<IPIP device name if IPIP configured for the pool - usually tunl0>"
+          "ipip": "<IPIP device name if IPIP configured for the pool - usually tunl0>",
+          "masquerade": true|false
         }
 
-The ipip field is only included if IPIP is enabled for this pool.  IPIP is only supported on IPv4 pools.
+The ipip field is only included if IPIP is enabled for this pool.  IPIP is only supported on IPv4 pools.  
 
-# JSON node-to-node mesh config
+The masquerade field enables NAT for outbound traffic.  If omitted, masquerade defaults to false.
+
+## JSON node-to-node mesh configuration
 
 The configuration controlling whether a full node-to-node BGP mesh is set up
 automatically.
@@ -150,7 +151,7 @@ is a JSON blob in this form:
 
 If the key is missing from etcd, the node-to-node mesh is enabled by default.
 
-# JSON BGP Peer configuration
+## JSON BGP Peer configuration
 
 Explicit BGP peers are configurable globally (all hosts peer with these), or
 for a specific host.
