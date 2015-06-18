@@ -48,7 +48,6 @@ Usage:
   calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
   calicoctl node stop [--force]
   calicoctl status
-  calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
   calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show

@@ -36,23 +36,11 @@ class TestEndpointCommands(TestBase):
         host1.calicoctl("profile add PROF_2")
         host1.calicoctl("profile add PROF_4")
 
-        # Parse the shownodes command for each workload's endpoint_id
-        results = host1.calicoctl("shownodes --detailed")
-        nodes = results.stdout.split("\n")
-        # Ignore the first 3 and last 2 rows, as they are header info
-        for node in nodes[3:-2]:
-            endpoint_id = node.strip("|").split("|")[3].strip()
-            # Use shownodes to match the first 12 characters of the container_id
-            if workload_a.container_id[0:12] in node:
-                workload_a_endpoint_id = endpoint_id
-            elif workload_b.container_id[0:12] in node:
-                workload_b_endpoint_id = endpoint_id
-            elif workload_c.container_id[0:12] in node:
-                workload_c_endpoint_id = endpoint_id
-            elif workload_d.container_id[0:12] in node:
-                workload_d_endpoint_id = endpoint_id
-            elif workload_e.container_id[0:12] in node:
-                workload_e_endpoint_id = endpoint_id
+        workload_a_endpoint_id = host1.calicoctl("container workload_a endpoint-id show").strip()
+        workload_b_endpoint_id = host1.calicoctl("container workload_b endpoint-id show").strip()
+        workload_c_endpoint_id = host1.calicoctl("container workload_c endpoint-id show").strip()
+        workload_d_endpoint_id = host2.calicoctl("container workload_d endpoint-id show").strip()
+        workload_e_endpoint_id = host2.calicoctl("container workload_e endpoint-id show").strip()
 
         host1.calicoctl("endpoint %s profile set PROF_1_3_5" % workload_a_endpoint_id)
         host1.calicoctl("endpoint %s profile set PROF_2" % workload_b_endpoint_id)
@@ -86,26 +74,15 @@ class TestEndpointCommands(TestBase):
         ip_c = "192.168.1.4"
 
         workload_main = host1.create_workload("workload_main", ip_main)
-        workload_a = host2.create_workload("workload_a", ip_a)
-        workload_b = host2.create_workload("workload_b", ip_b)
-        workload_c = host2.create_workload("workload_c", ip_c)
+        host2.create_workload("workload_a", ip_a)
+        host2.create_workload("workload_b", ip_b)
+        host2.create_workload("workload_c", ip_c)
 
 
-        # Parse the shownodes command for this workload's first endpoint_id
-        results = host1.calicoctl("shownodes --detailed")
-        nodes = results.stdout.split("\n")
-        # Ignore the first 3 and last 2 rows, as they are header info
-        for node in nodes[3:-2]:
-            # Use Shownodes to match the first 12 characters of the container_id
-            endpoint_id = node.strip("|").split("|")[3].strip()
-            if workload_main.container_id[0:12] in node:
-                workload_main_endpoint_id = endpoint_id
-            elif workload_a.container_id[0:12] in node:
-                workload_a_endpoint_id = endpoint_id
-            elif workload_b.container_id[0:12] in node:
-                workload_b_endpoint_id = endpoint_id
-            elif workload_c.container_id[0:12] in node:
-                workload_c_endpoint_id = endpoint_id
+        workload_main_endpoint_id = host1.calicoctl("container workload_main endpoint-id show").strip()
+        workload_a_endpoint_id = host2.calicoctl("container workload_a endpoint-id show").strip()
+        workload_b_endpoint_id = host2.calicoctl("container workload_b endpoint-id show").strip()
+        workload_c_endpoint_id = host2.calicoctl("container workload_c endpoint-id show").strip()
 
         host1.calicoctl("profile add PROF_A")
         host1.calicoctl("profile add PROF_B")
