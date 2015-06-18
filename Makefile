@@ -8,8 +8,9 @@ BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 NODE_FILESYSTEM=$(shell find node_filesystem/ -type f)
 NODE_FILES=Dockerfile $(wildcard image/*) $(NODE_FILESYSTEM)
 
-# This variable can be overridden by setting an environment variable.
+# These varibales can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+ST_TO_RUN?=calico_containers/tests/st/
 
 default: all
 all: test
@@ -73,10 +74,10 @@ calico_containers/calico-node.tar: caliconode.created
 
 st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd
 	dist/calicoctl checksystem --fix
-	nosetests calico_containers/tests/st/ -sv --nologcapture --with-timer
+	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
 fast-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd
-	nosetests calico_containers/tests/st/ -sv --nologcapture --with-timer -a '!slow'
+	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer -a '!slow'
 
 run-etcd:
 	-docker rm -f calico-etcd
