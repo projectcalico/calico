@@ -41,7 +41,7 @@ coreos:
     reboot-strategy: off
   etcd2:
     name: $private_ipv4
-    discovery: **<discovery URL>**
+    discovery: <discovery URL>
     advertise-client-urls: http://$private_ipv4:2379
     initial-advertise-peer-urls: http://$private_ipv4:2380
     listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
