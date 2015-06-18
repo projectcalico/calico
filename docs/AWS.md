@@ -12,7 +12,7 @@ sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 ```
 For more information, see Amazon's [Installing the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os).
 
-Configure the AWS CLI with your User keys:
+Configure the AWS CLI with your User keys.
 ```
 aws configure
 
@@ -21,6 +21,7 @@ aws configure
   Default region name: us-west-2
   Default output format: <json, text, or table>
 ```
+Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 commands.  This can be set in the user configuration page of the web console.
 For more information on configuration and keys, see Amazon's [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).
 
 ## Setting up AWS networking
