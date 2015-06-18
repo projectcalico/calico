@@ -14,8 +14,19 @@
 from sh import docker, ErrorReturnCode_1
 from functools import partial
 from unittest import TestCase
+import os
 
 from utils import get_ip, delete_container, retry_until_success
+
+TEARDOWN_ENV = "CALICO_TEARDOWN"
+
+def do_teardown():
+    """Returns whether we should build the node and calicoctl binaries."""
+    try:
+        teardown = os.environ[TEARDOWN_ENV]
+        return teardown.lower() not in ["no", "n", "f", "false"]
+    except KeyError:
+        return True
 
 
 class TestBase(TestCase):
@@ -37,9 +48,10 @@ class TestBase(TestCase):
         """
         Clean up host containers after every test.
         """
-        containers = docker.ps("-qa").split()
-        for container in containers:
-            delete_container(container)
+        if do_teardown():
+            containers = docker.ps("-qa").split()
+            for container in containers:
+                delete_container(container)
 
     def start_etcd(self):
         """
