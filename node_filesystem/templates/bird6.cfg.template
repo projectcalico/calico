@@ -38,8 +38,10 @@ protocol direct {
 
 {{/* ------------ Template definitions ----------------- */}}
 {{define "MESH6"}}
-# Peering with all neighbours (mesh).
-{{range $host := lsdir "/host"}}{{$onode_as_key := printf "/host/%s/bgp_as" .}}{{$onode_ip_key := printf "/host/%s/bird6_ip" .}}{{$onode_ip := getv $onode_ip_key}}{{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
+{{range $host := lsdir "/host"}}
+{{$onode_as_key := printf "/host/%s/bgp_as" .}}
+{{$onode_ip_key := printf "/host/%s/bird6_ip" .}}{{$onode_ip := getv $onode_ip_key}}
+{{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
 {{if eq $onode_ip (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
 {{else if eq "" $onode_ip}}# No IPv6 address configured for this node
@@ -67,8 +69,7 @@ template bgp bgp_template {
   graceful restart;  # See comment in kernel section about graceful restart.
 }
 
-{{/* ------------- Node-to-node mesh ------------- */}}
-{{if lsdir "/host"}}
+# ------------- Node-to-node mesh -------------
 {{if not (exists "/config/bgp_node_mesh")}}
 {{template "MESH6"}}
 {{else if (json (getv "/config/bgp_node_mesh")).enabled}}
@@ -76,15 +77,12 @@ template bgp bgp_template {
 {{else}}
 # Node-to-node mesh disabled
 {{end}}
-{{else}}
-# No hosts configured in etcd
-{{end}}
 
 
-{{/* ------------- Global peers ------------- */}}
+# ------------- Global peers -------------
 {{if ls "/config/bgp_peer_v6"}}
-# Peering with globally configured neighbors.
-{{range gets "/config/bgp_peer_v6/*"}}{{$data := json .Value}}{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+{{range gets "/config/bgp_peer_v6/*"}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
 protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
@@ -93,11 +91,11 @@ protocol bgp bgp_{{$id}} from bgp_template {
 {{else}}# No global peers configured.{{end}}
 
 
-{{/* ------------- Node-specific peers ------------- */}}
+# ------------- Node-specific peers -------------
 {{$node_peers_key := printf "/host/%s/bgp_peer_v6" (getenv "HOSTNAME")}}
 {{if ls $node_peers_key}}
-# Peering with node-specific neighbors.
-{{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+{{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
 protocol bgp bgp_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};

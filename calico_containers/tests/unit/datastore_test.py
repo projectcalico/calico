@@ -21,9 +21,7 @@ from calico_containers.adapter.datastore import (DatastoreClient,
                                                  Endpoint,
                                                  NoEndpointForContainer,
                                                  CALICO_V_PATH,
-                                                 DataStoreError,
-                                                 BGP_NODE_MESH_PATH,
-                                                 BGP_NODE_DEF_AS_PATH)
+                                                 DataStoreError)
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 from netaddr import IPNetwork, IPAddress
