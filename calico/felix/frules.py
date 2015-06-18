@@ -160,8 +160,8 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             {
                 CHAIN_FORWARD: set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT]),
                 CHAIN_INPUT: set(),
-            }
-        )
+            },
+            async=False)
 
         iptables_updater.ensure_rule_inserted(
             "INPUT --jump %s" % CHAIN_INPUT,
