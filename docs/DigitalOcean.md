@@ -1,10 +1,7 @@
 # Running calico-docker on DigitalOcean
 Calico runs on the DigitalOcean virtualization platform.  The following instructions show the full power of the Calico routing and security model on DigitalOcean (and allow DigitalOcean to be used for testing).
 
-## Getting started
-These instructions assume a total of three DigitalOcean hosts running CoreOS. One to run an etcd "cluster", and then two compute nodes.
-
-Documentation on running CoreOS on DigitalOcean is [here](https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/)
+These instructions assume a total of three DigitalOcean hosts running CoreOS. For more general background, see the [CoreOS on DigitalOcean documentation](https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/).
 
 ## Spinning up the VMs
 From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
