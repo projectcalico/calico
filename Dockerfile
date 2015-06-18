@@ -73,5 +73,5 @@ COPY calico_containers/adapter /calico_containers/adapter
 COPY calico_containers/__init__.py /calico_containers/
 
 # Copy patched BIRD daemon with tunnel support.
-RUN curl -L https://www.dropbox.com/s/ymbvyi6388h92qg/bird?dl=1 -o /usr/sbin/bird && \
+RUN curl -L https://www.dropbox.com/s/xjhfckzse25x554/bird-6af4e30d3fccb0c6bd184e9168294c807e1e6d68?dl=1 -o /usr/sbin/bird && \
     chmod +x /usr/sbin/bird
