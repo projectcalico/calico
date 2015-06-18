@@ -51,9 +51,10 @@ test: ut st
 
 ut: calicobuild.created
 	docker run --rm -v `pwd`/calico_containers:/code/calico_containers \
+	-v `pwd`/nose.cfg:/code/nose.cfg \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	nosetests calico_containers/tests/unit --with-timer -c nose.cfg'
+	nosetests calico_containers/tests/unit -c nose.cfg'
 
 ut-circle: calicobuild.created
 	# Can't use --rm on circle
@@ -63,7 +64,7 @@ ut-circle: calicobuild.created
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests calico_containers/tests/unit -c nose.cfg \
-	--cover-html-dir=dist --with-xunit --xunit-file=/circle_output/output.xml'
+	--cover-html-dir=dist --cover-html --with-xunit --xunit-file=/circle_output/output.xml'
 
 calico_containers/busybox.tar:
 	docker pull busybox:latest
