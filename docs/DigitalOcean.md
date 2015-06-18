@@ -1,25 +1,17 @@
 # Running calico-docker on DigitalOcean
 Calico runs on the DigitalOcean virtualization platform.  The following instructions show the full power of the Calico routing and security model on DigitalOcean (and allow DigitalOcean to be used for testing).
 
+## Getting Started
 These instructions assume a total of three DigitalOcean hosts running CoreOS. For more general background, see the [CoreOS on DigitalOcean documentation](https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/).
 
-## Spinning up the VMs
-From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
+etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  Choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  We'll use 3 for the size of the etcd cluster and the Calico nodes in the instructions below.  
+Use `curl` in your local machine's terminal to get a fresh discovery URL (replace size=3 with your cluster size if desired):
+```
+curl https://discovery.etcd.io/new?size=3
+```
+You need to grab a fresh URL each time you bootstrap a cluster.
 
-In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this demo), and choose a region.  You should see something similar to the following:
-
-![alt tag](digitalocean/Create_Droplet_1.png)
-
-
-Next, select CoreOS alpha version as the image type.  Note that some regions may not have this image as an option so you may have to choose a region that supports CoreOS alpha version.
-Check the Private Networking box and the User Data box under Available Settings.  Add your SSH public key to be able to log in to the instance without credentials.
-
-You should now see something similar to the following:
-
-![alt tag](digitalocean/Create_Droplet_2.png)
-
-
-Before selecting "Create Droplet", you will need to specify the User Data.  Copy the following contents into the User Data text box; **replace `<discovery URL>` with the URL retrieved below**:
+Copy the following **cloud-config** contents into some local file or buffer to be used later. **Replace `<discovery URL>` with the URL retrieved above**:
 ```
 #cloud-config
 write_files:
@@ -47,14 +39,27 @@ coreos:
     - name: etcd2.service
       command: start
 ```
+Keep this config handy, it will be used when creating the hosts.
 
-etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  Choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  We'll use 3 for the size of the etcd cluster and the Calico nodes in the instructions below.  Use `curl` to get a fresh discovery URL (replace size=3 with your cluster size if desired):
-```
-curl https://discovery.etcd.io/new?size=3
-```
-You need to grab a fresh URL each time you bootstrap a cluster.  Replace <dicsovery URL> above with the value returned from this command.
+## Spinning up the VMs
+From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
 
-Repeat these steps until you have 3 Calico hosts (or however many hosts you chose as the size).  For each VM, you must use the **same discovery URL** that you received in the above step.
+In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this demo), and choose a region.  You should see something similar to the following:
+
+![alt tag](digitalocean/Create_Droplet_1.png)
+
+
+Next, select CoreOS alpha version as the image type.  Note that some regions may not have this image as an option so you may have to choose a region that supports CoreOS alpha version.
+Check the Private Networking box and the User Data box under Available Settings.  Add your SSH public key to be able to log in to the instance without credentials.
+
+You should now see something similar to the following:
+
+![alt tag](digitalocean/Create_Droplet_2.png)
+
+
+Before selecting "Create Droplet", you will need to specify the User Data.  Paste the **cloud-config** from the Getting Started section into the text field that appears after selecting the User Data checkbox.
+
+Repeat the instance creation steps until you have 3 Calico hosts (or however many hosts you chose as the size).  Use the same cloud-config as the User Data for each VM.
 
 ## Installing calicoctl on each node
 On each node, there should be a script file called "install_calico" in the home directory.  Run the script on each node to set up Calico:
