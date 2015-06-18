@@ -1,7 +1,18 @@
-__author__ = 'spike@projectcalico.org'
+# Copyright 2015 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-
-from mock import patch, Mock, call
+from mock import patch, Mock, call, ANY
 from calico_containers.adapter.datastore import (DatastoreClient,
                                                  Rule,
                                                  Profile,
@@ -144,15 +155,15 @@ class TestRule(unittest.TestCase):
         """
         rule1 = Rule(action="allow",
                      src_tag="TEST",
-                     src_ports=[300, 400])
-        assert_equal("allow from tag TEST ports [300, 400]",
+                     src_ports=[300, 400, "100:200"])
+        assert_equal("allow from ports 300,400,100:200 tag TEST",
                      rule1.pprint())
 
         rule2 = Rule(action="allow",
                      dst_tag="TEST",
                      dst_ports=[300, 400],
                      protocol="udp")
-        assert_equal("allow udp to tag TEST ports [300, 400]",
+        assert_equal("allow udp to ports 300,400 tag TEST",
                      rule2.pprint())
 
         rule3 = Rule(action="deny",
@@ -160,7 +171,7 @@ class TestRule(unittest.TestCase):
                      dst_ports=[80],
                      dst_net=IPNetwork("fd80::23:0/112"))
         assert_equal(
-            "deny from fd80::4:0/112 to fd80::23:0/112 ports [80]",
+            "deny from fd80::4:0/112 to ports 80 fd80::23:0/112",
             rule3.pprint())
 
         rule4 = Rule(action="allow",
@@ -552,9 +563,13 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read_2_pools
 
         pool = IPNetwork("192.168.100.5/24")
-        self.datastore.add_ip_pool("v4", pool)
+        self.datastore.add_ip_pool("v4", pool, masquerade=True)
         self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.100.0-24",
-                                                       "{\"cidr\": \"192.168.100.0/24\"}")
+                                                       ANY)
+        raw_data = self.etcd_client.write.call_args[0][1]
+        data = json.loads(raw_data)
+        self.assertEqual(data, {'cidr': '192.168.100.0/24',
+                                'masquerade': True})
 
     def test_add_ip_pool_exists(self):
         """

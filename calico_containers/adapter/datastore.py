@@ -1,3 +1,17 @@
+# Copyright 2015 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from collections import namedtuple
 import copy
 import json
@@ -136,21 +150,23 @@ class Rule(dict):
 
         if "src_tag" in self or "src_ports" in self or "src_net" in self:
             out.append("from")
+        if "src_ports" in self:
+            ports = ",".join(str(p) for p in self["src_ports"])
+            out.extend(["ports", ports])
         if "src_tag" in self:
             out.extend(["tag", self["src_tag"]])
-        elif "src_net" in self:
+        if "src_net" in self:
             out.append(str(self["src_net"]))
-        if "src_ports" in self:
-            out.extend(["ports", str(self["src_ports"])])
 
         if "dst_tag" in self or "dst_ports" in self or "dst_net" in self:
             out.append("to")
+        if "dst_ports" in self:
+            ports = ",".join(str(p) for p in self["dst_ports"])
+            out.extend(["ports", ports])
         if "dst_tag" in self:
             out.extend(["tag", self["dst_tag"]])
-        elif "dst_net" in self:
+        if "dst_net" in self:
             out.append(str(self["dst_net"]))
-        if "dst_ports" in self:
-            out.extend(["ports", str(self["dst_ports"])])
 
         return " ".join(out)
 
@@ -458,7 +474,7 @@ class DatastoreClient(object):
         return data
 
     @handle_errors
-    def add_ip_pool(self, version, pool, ipip=False):
+    def add_ip_pool(self, version, pool, ipip=False, masquerade=False):
         """
         Add the given pool to the list of IP allocation pools.  If the pool
         already exists, this method completes silently without modifying the
@@ -481,6 +497,8 @@ class DatastoreClient(object):
         data = {"cidr" : str(pool)}
         if ipip:
             data["ipip"] = "tunl0"
+        if masquerade:
+            data["masquerade"] = True
 
         self.etcd_client.write(key, json.dumps(data))
 
