@@ -20,10 +20,12 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--as=<AS_NUM>]
   calicoctl node stop [--force]
+  calicoctl node bgppeer add <PEER_IP> as <AS_NUM>
+  calicoctl node bgppeer remove <PEER_IP>
+  calicoctl node bgppeer show [--ipv4 | --ipv6]
   calicoctl status
-  calicoctl shownodes [--detailed]
   calicoctl profile show [--detailed]
   calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show
@@ -38,11 +40,18 @@ Usage:
   calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
-  calicoctl bgppeer rr (add|remove) <IP>
-  calicoctl bgppeer rr show [--ipv4 | --ipv6]
+  calicoctl default-node-as [<AS_NUM>]
+  calicoctl bgppeer add <PEER_IP> as <AS_NUM>
+  calicoctl bgppeer remove <PEER_IP>
+  calicoctl bgppeer show [--ipv4 | --ipv6]
+  calicoctl bgp-node-mesh [on|off]
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
+  calicoctl container <CONTAINER> endpoint-id show
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
+  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [--detailed] [<PROFILES>...]
+  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
   calicoctl reset
   calicoctl diags [--upload]
   calicoctl checksystem [--fix]
@@ -59,6 +68,11 @@ Options:
                           [default: calico/node:latest]
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
+ --host=<HOSTNAME>        Filters endpoints on a specific host.
+ --orchestrator=<ORCHESTRATOR_ID>    Filters endpoints created on a specific orchestrator.
+ --workload=<WORKLOAD_ID> Filters endpoints on a specific workload.
+ --endpoint=<ENDPOINT_ID> Filters endpoints with a specific endpoint ID.
+ --as=<AS_NUM>            The AS number to assign to the node.
 """
 __doc__ = __doc__ % {"rule_spec": """    (allow|deny) [(
       (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
@@ -84,6 +98,7 @@ from docopt import docopt
 import sh
 import docker
 import docker.utils
+import docker.errors
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 from prettytable import PrettyTable
@@ -92,7 +107,12 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
                                ETCD_AUTHORITY_DEFAULT,
                                Rule,
                                Rules,
-                               DataStoreError)
+                               DataStoreError,
+                               ProfileNotInEndpoint,
+                               ProfileAlreadyInEndpoint,
+                               MultipleEndpointsMatch,
+                               Vividict,
+                               BGPPeer)
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
@@ -109,6 +129,8 @@ docker_client = docker.Client(version=DOCKER_VERSION,
                               base_url=os.getenv("DOCKER_HOST",
                                                  "unix://var/run/docker.sock"))
 docker_restarter = docker_restart.create_restarter()
+
+ORCHESTRATOR_ID = "docker"
 
 try:
     sysctl = sh.Command._create("sysctl")
@@ -196,7 +218,7 @@ def container_add(container_name, ip, interface):
 
     # Check if the container already exists
     try:
-        _ = client.get_ep_id_from_cont(hostname, container_id)
+        _ = client.get_endpoint_id_from_cont(hostname, container_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
@@ -235,7 +257,11 @@ def container_add(container_name, ip, interface):
     # Actually configure the netns. Defaults to eth1 since eth0 could
     # already be in use (e.g. by the Docker bridge)
     pid = info["State"]["Pid"]
-    endpoint = netns.set_up_endpoint(ip, pid, next_hops,
+    endpoint = netns.set_up_endpoint(ip=ip,
+                                     hostname=hostname,
+                                     orchestrator_id=ORCHESTRATOR_ID,
+                                     cpid=pid,
+                                     next_hop_ips=next_hops,
                                      veth_name=interface,
                                      proc_alias="/proc")
 
@@ -259,17 +285,20 @@ def container_remove(container_name):
     enforce_root()
 
     # Resolve the name to ID.
-    container_id = get_container_id(container_name)
+    workload_id = get_container_id(container_name)
 
     # Find the endpoint ID. We need this to find any ACL rules
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, workload_id)
     except KeyError:
         print "Container %s doesn't contain any endpoints" % container_name
         sys.exit(1)
 
     # Remove any IP address assignments that this endpoint has
-    endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+    endpoint = client.get_endpoint(hostname=hostname,
+                                   orchestrator_id=ORCHESTRATOR_ID,
+                                   workload_id=workload_id,
+                                   endpoint_id=endpoint_id)
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
         assert(net.size == 1)
         ip = net.ip
@@ -284,13 +313,13 @@ def container_remove(container_name):
     netns.remove_endpoint(endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(hostname, container_id)
+    client.remove_container(hostname, workload_id)
 
     print "Removed Calico interface from %s" % container_name
 
 
 def node_stop(force):
-    if force or len(client.get_hosts()[hostname]["docker"]) == 0:
+    if force or len(client.get_endpoints(hostname=hostname, orchestrator_id=ORCHESTRATOR_ID)) == 0:
         client.remove_host(hostname)
         try:
             docker_client.stop("calico-node")
@@ -308,7 +337,18 @@ def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
 
-def node(ip, node_image, ip6=""):
+def node(ip, node_image, ip6="", as_num=None):
+    """
+    Create the calico-node container and establish Calico networking on this
+    host.
+
+    :param ip:  The IPv4 address of the host.
+    :param node_image:  The calico-node image to use.
+    :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param as_num:  The BGP AS Number to use for this node.  If not specified
+    the global default value will be used.
+    :return:  None.
+    """
     # Print warnings for any known system issues before continuing
     checksystem(fix=False, quit_if_error=False)
 
@@ -323,7 +363,7 @@ def node(ip, node_image, ip6=""):
         client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
 
     client.ensure_global_config()
-    client.create_host(hostname, ip, ip6)
+    client.create_host(hostname, ip, ip6, as_num)
 
     if docker_restarter.is_using_alternative_socket():
         # At this point, docker is listening on a new port but powerstrip
@@ -345,6 +385,7 @@ def node(ip, node_image, ip6=""):
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
 
     environment = [
+        "HOSTNAME=%s" % hostname,
         "POWERSTRIP_UNIX_SOCKET=%s" % enable_socket,
         "IP=%s" % ip,
         "IP6=%s" % (ip6 or ""),
@@ -404,16 +445,29 @@ def node(ip, node_image, ip6=""):
     print "Calico node is running with id: %s" % cid
 
 
+def normalize_version(version):
+    """
+    This function convers a string representation of a version into
+    a list of integer values.
+    e.g.:   "1.5.10" => [1, 5, 10]
+    http://stackoverflow.com/questions/1714027/version-number-comparison
+    """
+    return [int(x) for x in re.sub(r'(\.0+)*$','', version).split(".")]
+
 def checksystem(fix=False, quit_if_error=False):
     """
-    Checks that the system is setup correctly. fix==True, this command
-    will attempt to fix any issues it encounters. If any fixes fail, it will exit(1). Fix will automatically
-    be set to True if the user specifies --fix at the command line.
+    Checks that the system is setup correctly. fix==True, this command will
+    attempt to fix any issues it encounters. If any fixes fail, it will
+    exit(1). Fix will automatically be set to True if the user specifies --fix
+    at the command line.
 
-    :param fix: if True, try to fix any system dependency issues that are detected.
-    :param quit_if_error: if True, quit with error code 1 if any issues are detected, or if any fixes are unsuccesful.
-    :return: True if all system dependencies are in the proper state, False if they are not. This function
-             will sys.exit(1) instead of returning false if quit_if_error == True
+    :param fix: if True, try to fix any system dependency issues that are
+    detected.
+    :param quit_if_error: if True, quit with error code 1 if any issues are
+    detected, or if any fixes are unsuccesful.
+    :return: True if all system dependencies are in the proper state, False if
+    they are not. This function will sys.exit(1) instead of returning false if
+    quit_if_error == True
     """
     # modprobe and sysctl require root privileges.
     enforce_root()
@@ -431,8 +485,8 @@ def checksystem(fix=False, quit_if_error=False):
                 print >> sys.stderr, "ERROR: Could not enable ip6_tables."
                 system_ok = False
         else:
-            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables module. Load with " \
-                             "`modprobe ip6_tables`"
+            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables " \
+                                 "module. Load with `modprobe ip6_tables`"
             system_ok = False
 
     if not module_loaded("xt_set"):
@@ -443,8 +497,8 @@ def checksystem(fix=False, quit_if_error=False):
                 print >> sys.stderr, "ERROR: Could not enable xt_set."
                 system_ok = False
         else:
-            print >> sys.stderr, "WARNING: Unable to detect the xt_set module. Load with " \
-                             "`modprobe xt_set`"
+            print >> sys.stderr, "WARNING: Unable to detect the xt_set " \
+                                 "module. Load with `modprobe xt_set`"
             system_ok = False
 
     # Enable IP forwarding since all compute hosts are vRouters.
@@ -465,6 +519,21 @@ def checksystem(fix=False, quit_if_error=False):
                 system_ok = False
         else:
             print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
+            system_ok = False
+
+    # Check docker version compatability
+    try:
+        info = docker_client.version()
+    except docker.errors.APIError:
+        print >> sys.stderr, "ERROR: Docker server must support " \
+                             "Docker Remote API v%s or greater." % DOCKER_VERSION
+        system_ok = False
+    else:
+        api_version = normalize_version(info['ApiVersion'])
+        # Check that API Version is above the minimum supported version
+        if cmp(api_version, normalize_version(DOCKER_VERSION)) < 0:
+            print >> sys.stderr, "ERROR: Docker server must support Docker " \
+                                 "Remote API v%s or greater." % DOCKER_VERSION
             system_ok = False
 
     if quit_if_error and not system_ok:
@@ -547,27 +616,37 @@ def profile_add(profile_name):
 
 def profile_add_container(container_name, profile_name):
     """
-    Add a container (on this host) to the profile with the given name.  This adds
-    the first endpoint on the container to the profile.
+    Add a container (on this host) to the profile with the given name.  This
+    adds the first endpoint on the container to the profile.
+
+    This method is deprecated and may be removed in future versions of
+    calicoctl.
 
     :param container_name: The Docker container name or ID.
     :param profile_name:  The Calico policy profile name.
     :return: None.
     """
-    # Resolve the name to ID.
-    container_id = get_container_id(container_name)
+    info = get_container_info_or_exit(container_name)
+    container_id = info["Id"]
 
-    if not client.profile_exists(profile_name):
-        print "Profile with name %s was not found." % profile_name
+    # Check the container is actually running.
+    if not info["State"]["Running"]:
+        print "%s is not currently running." % container_name
         sys.exit(1)
 
+    # Check that the container is already networked
     try:
-        client.add_workload_to_profile(hostname, profile_name, container_id)
-        print "Added %s to %s" % (container_name, profile_name)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
     except KeyError:
         print "Failed to add container to profile.\n"
         print_container_not_in_calico_msg(container_name)
         sys.exit(1)
+
+    assert not isinstance(profile_name, list), "Expecting single profile"
+
+    # Call through to the container profile set method to add the profile.
+    endpoint_profile_set(hostname, ORCHESTRATOR_ID, container_id, endpoint_id,
+                         [profile_name])
 
 
 def profile_remove(profile_name):
@@ -595,13 +674,13 @@ def profile_show(detailed):
             for host, ctypes in members.iteritems():
                 for ctype, workloads in ctypes.iteritems():
                     for workload, endpoints in workloads.iteritems():
-                        for ep_id, endpoint in endpoints.iteritems():
+                        for endpoint_id, endpoint in endpoints.iteritems():
                             x.add_row([name,
                                        host,
                                        ctype,
                                        # Truncate ID to 12 chars like Docker
                                        workload[:12],
-                                       ep_id,
+                                       endpoint_id,
                                        endpoint.state])
     else:
         x = PrettyTable(["Name"])
@@ -898,16 +977,143 @@ def restart_docker_without_alternative_unix_socket():
     docker_restarter.restart_docker_without_alternative_unix_socket()
 
 
-def bgppeer_add(ip, version):
+def set_bgp_node_mesh(enable):
     """
-    Add the the given IP to the list of BGP Peers
+    Set the BGP node mesh setting.
+
+    :param enable:  (Boolean) Whether to enable or disable the node-to-node
+    mesh.
+    :return: None.
+    """
+    client.set_bgp_node_mesh(enable)
+
+
+def show_bgp_node_mesh():
+    """
+    Display the BGP node mesh setting.
+
+    :return: None.
+    """
+    value = client.get_bgp_node_mesh()
+    print "on" if value else "off"
+
+
+def set_default_node_as(as_num):
+    """
+    Set the default node BGP AS Number.
+
+    :param as_num:  The default AS number
+    :return: None.
+    """
+    client.set_default_node_as(as_num)
+
+
+def show_default_node_as():
+    """
+    Display the default node BGP AS Number.
+
+    :return: None.
+    """
+    value = client.get_default_node_as()
+    print value
+
+
+def bgppeer_add(ip, version, as_num):
+    """
+    Add a new global BGP peer with the supplied IP address and AS Number.  All
+    nodes will peer with this.
 
     :param ip: The address to add
+    :param version: v4 or v6
+    :param as_num: The peer AS Number.
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+    peer = BGPPeer(address, as_num)
+    client.add_bgp_peer(version, peer)
+
+
+def bgppeer_remove(ip, version):
+    """
+    Remove a global BGP peer.
+
+    :param ip: The address to use.
     :param version: v4 or v6
     :return: None
     """
     address = check_ip_version(ip, version, IPAddress)
-    client.add_bgp_peer(version, address)
+    try:
+        client.remove_bgp_peer(version, address)
+    except KeyError:
+        print "%s is not a globally configured peer." % address
+        sys.exit(1)
+    else:
+        print "BGP peer removed from global configuration"
+
+def bgppeer_show(version):
+    """
+    Print a list of the global BGP Peers.
+    """
+    assert version in ("v4", "v6")
+    peers = client.get_bgp_peers(version)
+    if peers:
+        heading = "Global IP%s BGP Peer" % version
+        x = PrettyTable([heading, "AS Num"], sortby=heading)
+        for peer in peers:
+            x.add_row([peer.ip, peer.as_num])
+        x.align = "l"
+        print x.get_string(sortby=heading)
+    else:
+        print "No global IP%s BGP Peers defined.\n" % version
+
+
+def node_bgppeer_add(ip, version, as_num):
+    """
+    Add a new BGP peer with the supplied IP address and AS Number to this node.
+
+    :param ip: The address to add
+    :param version: v4 or v6
+    :param as_num: The peer AS Number.
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+    peer = BGPPeer(address, as_num)
+    client.add_bgp_peer(version, peer, hostname=hostname)
+
+
+def node_bgppeer_remove(ip, version):
+    """
+    Remove a global BGP peer from this node.
+
+    :param ip: The address to use.
+    :param version: v4 or v6
+    :return: None
+    """
+    address = check_ip_version(ip, version, IPAddress)
+    try:
+        client.remove_bgp_peer(version, address, hostname=hostname)
+    except KeyError:
+        print "%s is not a configured peer for this node." % address
+        sys.exit(1)
+    else:
+        print "BGP peer removed from node configuration"
+
+
+def node_bgppeer_show(version):
+    """
+    Print a list of the BGP Peers for this node.
+    """
+    assert version in ("v4", "v6")
+    peers = client.get_bgp_peers(version, hostname=hostname)
+    if peers:
+        heading = "Node specific IP%s BGP Peer" % version
+        x = PrettyTable([heading, "AS Num"], sortby=heading)
+        for peer in peers:
+            x.add_row([peer.ip, peer.as_num])
+        x.align = "l"
+        print x.get_string(sortby=heading)
+    else:
+        print "No IP%s BGP Peers defined for this node.\n" % version
 
 
 def check_ip_version(ip, version, cls):
@@ -930,38 +1136,15 @@ def check_ip_version(ip, version, cls):
         sys.exit(1)
     return parsed
 
-
-def bgppeer_remove(ip, version):
-    """
-    Add the the given BGP Peer.
-
-    :param ip: The address to use.
-    :param version: v4 or v6
-    :return: None
-    """
-    address = check_ip_version(ip, version, IPAddress)
+def container_endpoint_id_show(container_name):
+    workload_id = get_container_id(container_name)
     try:
-        client.remove_bgp_peer(version, address)
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=workload_id)
+        print endpoint.endpoint_id
     except KeyError:
-        print "%s is not a configured peer." % address
-
-
-def bgppeer_show(version):
-    """
-    Print a list BGP Peers
-    """
-    assert version in ("v4", "v6")
-    peers = client.get_bgp_peers(version)
-    if peers:
-        heading = "IP%s BGP Peer" % version
-        x = PrettyTable([heading], sortby=heading)
-        for peer in peers:
-            x.add_row([peer])
-        x.align = "l"
-        print x.get_string(sortby=heading)
-    else:
-        print "No IP%s BGP Peers defined.\n" % version
-
+        print "No endpoint was found for %s" % container_name
 
 def container_ip_add(container_name, ip, version, interface):
     """
@@ -991,8 +1174,11 @@ def container_ip_add(container_name, ip, version, interface):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
-        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=container_id,
+                                       endpoint_id=endpoint_id)
     except KeyError:
         print "Failed to add IP address to container.\n"
         print_container_not_in_calico_msg(container_name)
@@ -1005,12 +1191,11 @@ def container_ip_add(container_name, ip, version, interface):
         sys.exit(1)
 
     try:
-        old_endpoint = endpoint.copy()
         if address.version == 4:
             endpoint.ipv4_nets.add(IPNetwork(address))
         else:
             endpoint.ipv6_nets.add(IPNetwork(address))
-        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+        client.update_endpoint(endpoint)
     except (KeyError, ValueError):
         client.unassign_address(pool, ip)
         print "Error updating datastore. Aborting."
@@ -1022,19 +1207,17 @@ def container_ip_add(container_name, ip, version, interface):
                                   address,
                                   interface,
                                   proc_alias="/proc")
-
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
-        old_endpoint = endpoint.copy()
         if address.version == 4:
             endpoint.ipv4_nets.remove(IPNetwork(address))
         else:
             endpoint.ipv6_nets.remove(IPNetwork(address))
-        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+        client.update_endpoint(endpoint)
         client.unassign_address(pool, ip)
         sys.exit(1)
 
-    print "IP %s added to %s" % (ip, container_name)
+    print "IP %s added to %s" % (ip, container_id)
 
 
 def container_ip_remove(container_name, ip, version, interface):
@@ -1065,8 +1248,11 @@ def container_ip_remove(container_name, ip, version, interface):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_ep_id_from_cont(hostname, container_id)
-        endpoint = client.get_endpoint(hostname, container_id, endpoint_id)
+        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=container_id,
+                                       endpoint_id=endpoint_id)
         if address.version == 4:
             nets = endpoint.ipv4_nets
         else:
@@ -1081,9 +1267,8 @@ def container_ip_remove(container_name, ip, version, interface):
         sys.exit(1)
 
     try:
-        old_endpoint = endpoint.copy()
         nets.remove(IPNetwork(address))
-        client.update_endpoint(hostname, container_id, old_endpoint, endpoint)
+        client.update_endpoint(endpoint)
     except (KeyError, ValueError):
         print "Error updating datastore. Aborting."
         sys.exit(1)
@@ -1104,15 +1289,292 @@ def container_ip_remove(container_name, ip, version, interface):
     print "IP %s removed from %s" % (ip, container_name)
 
 
+def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
+                  detailed):
+    """
+    List the profiles for a given endpoint. All parameters will be used to
+    filter down which endpoints should be shown.
+
+    :param endpoint_id: The endpoint ID.
+    :param workload_id: The workload ID.
+    :param orchestrator_id: The orchestrator ID.
+    :param hostname: The hostname.
+    :param detailed: Optional flag, when set to True, will provide more
+    information in the shown table
+    :return: Nothing
+    """
+    endpoints = client.get_endpoints(hostname=hostname,
+                                     orchestrator_id=orchestrator_id,
+                                     workload_id=workload_id,
+                                     endpoint_id=endpoint_id)
+
+    if detailed:
+        headings = ["Hostname",
+                    "Orchestrator ID",
+                    "Workload ID",
+                    "Endpoint ID",
+                    "Addresses",
+                    "MAC",
+                    "Profiles",
+                    "State"]
+        x = PrettyTable(headings, sortby="Hostname")
+
+        for endpoint in endpoints:
+            x.add_row([endpoint.hostname,
+                       endpoint.orchestrator_id,
+                       endpoint.workload_id,
+                       endpoint.endpoint_id,
+                       "\n".join([str(net) for net in endpoint.ipv4_nets | endpoint.ipv6_nets]),
+                       endpoint.mac,
+                       ','.join(endpoint.profile_ids),
+                       endpoint.state])
+    else:
+        headings = ["Hostname",
+                    "Orchestrator ID",
+                    "NumWorkloads",
+                    "NumEndpoints"]
+        x = PrettyTable(headings, sortby="Hostname")
+
+        """ To caluclate the number of unique endpoints, and unique workloads
+         on each host, we first create a dictionary in the following format:
+        {
+        host1: {
+            workload1: num_workload1_endpoints,
+            workload2: num_workload2_endpoints,
+            ...
+            },
+        host2: {
+            workload3: num_workload3_endpoints,
+            workload4: num_workload4_endpoints,
+            ...
+        }
+        """
+        # Use a vividict so the host key is automatically set
+        table_dict = Vividict()
+        for endpoint in endpoints:
+            if endpoint.workload_id not in table_dict[endpoint.hostname]:
+                table_dict[endpoint.hostname][endpoint.workload_id] = 0
+            table_dict[endpoint.hostname][endpoint.workload_id] += 1
+
+        # This table has one entry for each host. So loop through the hosts
+        for host in table_dict:
+            # Check how many workloads belong to each host
+            num_workloads = len(table_dict[host])
+
+            # Add up how many endpoints each workload on this host has
+            num_endpoints = 0
+            for workload, endpoints in iter(table_dict[host].items()):
+                num_endpoints += endpoints
+
+            # Add the results to this table
+            new_row = [endpoint.hostname,
+                       endpoint.orchestrator_id,
+                       num_workloads,
+                       num_endpoints]
+
+            x.add_row(new_row)
+    print str(x) + "\n"
+
+
+def endpoint_profile_append(hostname, orchestrator_id, workload_id,
+                            endpoint_id, profile_names):
+    """
+    Append a list of profiles to the container endpoint profile list.
+
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
+    parameters used to determine which endpoint is being targeted.
+    The more parameters used, the faster the endpoint query will be. The
+    query must be specific enough to match a single endpoint or it will fail.
+
+    The profile list may not contain duplicate entries, invalid profile names, or
+    profiles that are already in the containers list.
+
+    :param hostname: The host that the targeted endpoint resides on.
+    :param orchestrator_id: The orchestrator that created the targeted endpoint.
+    :param workload_id: The ID of workload which created the targeted endpoint.
+    :param endpoint_id: The endpoint ID of the targeted endpoint.
+    :param profile_names: The list of profile names to add to the targeted
+                        endpoint.
+    :return: None
+    """
+    # Validate the profile list.
+    validate_profile_list(profile_names)
+    try:
+        client.append_profiles_to_endpoint(profile_names,
+                                           hostname=hostname,
+                                           orchestrator_id=orchestrator_id,
+                                           workload_id=workload_id,
+                                           endpoint_id=endpoint_id)
+        print_paragraph("Profiles %s appended to %s." %
+                          (", ".join(profile_names), endpoint_id))
+    except KeyError:
+        print "Failed to append profiles to endpoint.\n"
+        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+        sys.exit(1)
+    except ProfileAlreadyInEndpoint, e:
+        print_paragraph("Profile %s is already in endpoint "
+                        "profile list" % e.profile_name)
+    except MultipleEndpointsMatch:
+        print_paragraph("More than 1 endpoint matches the provided criteria.  "
+                        "Please provide additional parameters to refine the "
+                        "search.")
+        sys.exit(1)
+
+
+def endpoint_profile_set(hostname, orchestrator_id, workload_id,
+                         endpoint_id, profile_names):
+    """
+    Set the complete list of profiles for the container endpoint profile list.
+
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
+    parameters used to determine which endpoint is being targeted.
+    The more parameters used, the faster the endpoint query will be. The
+    query must be specific enough to match a single endpoint or it will fail.
+
+    The profile list may not contain duplicate entries or invalid profile names.
+
+    :param hostname: The host that the targeted endpoint resides on.
+    :param orchestrator_id: The orchestrator that created the targeted endpoint.
+    :param workload_id: The ID of workload which created the targeted endpoint.
+    :param endpoint_id: The endpoint ID of the targeted endpoint.
+    :param profile_names: The list of profile names to set on the targeted endpoint.
+
+    :return: None
+    """
+    # Validate the profile list.
+    validate_profile_list(profile_names)
+
+    try:
+        client.set_profiles_on_endpoint(profile_names,
+                                        hostname=hostname,
+                                        orchestrator_id=orchestrator_id,
+                                        workload_id=workload_id,
+                                        endpoint_id=endpoint_id)
+        print_paragraph("Profiles %s set for %s." %
+                          (", ".join(profile_names), endpoint_id))
+    except KeyError:
+        print "Failed to set profiles for endpoint.\n"
+        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+        sys.exit(1)
+
+
+def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
+                            endpoint_id, profile_names):
+    """
+    Remove a list of profiles from the endpoint profile list.
+
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
+    parameters used to determine which endpoint is being targeted.
+    The more parameters used, the faster the endpoint query will be. The
+    query must be specific enough to match a single endpoint or it will fail.
+
+    The profile list may not contain duplicate entries, invalid profile names,
+    or profiles that are not already in the containers list.
+
+    :param hostname: The host that the targeted endpoint resides on.
+    :param orchestrator_id: The orchestrator that created the targeted endpoint.
+    :param workload_id: The ID of workload which created the targeted endpoint.
+    :param endpoint_id: The endpoint ID of the targeted endpoint.
+    :param profile_names: The list of profile names to remove from the targeted
+                          endpoint.
+    :return: None
+    """
+    # Validate the profile list.
+    validate_profile_list(profile_names)
+
+    try:
+        client.remove_profiles_from_endpoint(profile_names,
+                                             hostname=hostname,
+                                             orchestrator_id=orchestrator_id,
+                                             workload_id=workload_id,
+                                             endpoint_id=endpoint_id)
+        print_paragraph("Profiles %s removed from %s." %
+                          (",".join(profile_names), endpoint_id))
+    except KeyError:
+        print "Failed to remove profiles from endpoint.\n"
+        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+        sys.exit(1)
+    except ProfileNotInEndpoint, e:
+        print_paragraph("Profile %s is not in endpoint profile " \
+                        "list." % e.profile_name)
+    except MultipleEndpointsMatch:
+        print "More than 1 endpoint matches the provided criteria. " \
+              "Please provide additional parameters to refine the search."
+        sys.exit(1)
+
+
+def endpoint_profile_show(hostname, orchestrator_id, workload_id, endpoint_id):
+    """
+    List the profiles assigned to a particular endpoint.
+
+    :param hostname: The hostname.
+    :param orchestrator_id: The orchestrator ID.
+    :param workload_id: The workload ID.
+    :param endpoint_id: The endpoint ID.
+
+    :return: None
+    """
+    try:
+        endpoint = client.get_endpoints(hostname=hostname,
+                                        orchestrator_id=orchestrator_id,
+                                        workload_id=workload_id,
+                                        endpoint_id=endpoint_id)
+    except MultipleEndpointsMatch:
+        print "Failed to list profiles in endpoint.\n"
+        print_paragraph("More than 1 endpoint matches the provided "
+                        "criteria.  Please provide additional parameters to "
+                        "refine the search.")
+        sys.exit(1)
+    except KeyError:
+        print "Failed to list profiles in endpoint.\n"
+        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+        sys.exit(1)
+
+    if endpoint.profile_ids:
+        x = PrettyTable(["Name"], sortby="Name")
+        for name in endpoint.profile_ids:
+            x.add_row([name])
+        print str(x) + "\n"
+    else:
+        print "Endpoint has no profiles associated with it."
+
+
+def validate_profile_list(profile_names):
+    """
+    Validate a list of profiles.  This checks that each profile name is
+    valid and specified only once in the list.
+
+    This method traces and exits upon failure.
+
+    :param profile_names: The list of profiles to check.
+    :return: None
+    """
+    compiled = set()
+    for profile_name in profile_names:
+        if not client.profile_exists(profile_name):
+            print "Profile with name %s was not found." % profile_name
+            sys.exit(1)
+        if profile_name in compiled:
+            print "Profile with name %s was specified more than " \
+                  "once." % profile_name
+            sys.exit(1)
+        compiled.add(profile_name)
+
+
 def validate_arguments():
     """
     Validate common argument values.
     """
     # List of valid characters that Felix permits
     valid_chars = '[a-zA-Z0-9_\.\-]'
+    profile_ok = True
+    if arguments["<PROFILES>"] or arguments["<PROFILE>"]:
+        profiles = arguments["<PROFILES>"] or [arguments["<PROFILE>"]]
+        for profile in profiles:
+            if not re.match("^%s{1,40}$" % valid_chars, profile):
+                profile_ok = False
+                break
 
-    profile_ok = (arguments["<PROFILE>"] is None or
-                  re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
     tag_ok = (arguments["<TAG>"] is None or
               re.match("^%s+$" % valid_chars, arguments["<TAG>"]))
     ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
@@ -1121,6 +1583,9 @@ def validate_arguments():
     container_ip_ok = arguments["<IP>"] is None or \
                       netaddr.valid_ipv4(arguments["<IP>"]) or \
                       netaddr.valid_ipv6(arguments["<IP>"])
+    peer_ip_ok = arguments["<PEER_IP>"] is None or \
+                 netaddr.valid_ipv4(arguments["<PEER_IP>"]) or \
+                 netaddr.valid_ipv6(arguments["<PEER_IP>"])
     cidr_ok = True
     for arg in ["<CIDR>", "<SRCCIDR>", "<DSTCIDR>"]:
         if arguments[arg]:
@@ -1128,7 +1593,6 @@ def validate_arguments():
                 arguments[arg] = str(IPNetwork(arguments[arg]))
             except AddrFormatError:
                 cidr_ok = False
-
     icmp_ok = True
     for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
         if arguments[arg] is not None:
@@ -1138,10 +1602,18 @@ def validate_arguments():
                     raise ValueError("Invalid %s: %s" % (arg, value))
             except ValueError:
                 icmp_ok = False
+    asnum_ok = True
+    if arguments["<AS_NUM>"]:
+        try:
+            asnum = int(arguments["<AS_NUM>"])
+            asnum_ok = 0 <= asnum <= 4294967295
+        except ValueError:
+            asnum_ok = False
 
     if not profile_ok:
         print_paragraph("Profile names must be < 40 character long and can "
-                        "only contain numbers, letters, dots, dashes and underscores.")
+                        "only contain numbers, letters, dots, dashes and "
+                        "underscores.")
     if not tag_ok:
         print_paragraph("Tags names can only contain numbers, letters, dots, "
                         "dashes and underscores.")
@@ -1149,15 +1621,17 @@ def validate_arguments():
         print "Invalid IPv4 address specified with --ip argument."
     if not ip6_ok:
         print "Invalid IPv6 address specified with --ip6 argument."
-    if not container_ip_ok:
+    if not container_ip_ok or not peer_ip_ok:
         print "Invalid IP address specified."
     if not cidr_ok:
         print "Invalid CIDR specified."
     if not icmp_ok:
         print "Invalid ICMP type or code specified."
+    if not asnum_ok:
+        print "Invalid AS Number specified."
 
-    if not (profile_ok and ip_ok and ip6_ok and tag_ok and
-                container_ip_ok and cidr_ok and icmp_ok):
+    if not (profile_ok and ip_ok and ip6_ok and tag_ok and peer_ip_ok and
+                container_ip_ok and cidr_ok and icmp_ok and asnum_ok):
         sys.exit(1)
 
 
@@ -1173,6 +1647,8 @@ def get_container_ipv_from_arguments():
         version = "v6"
     elif arguments["<IP>"]:
         version = "v%s" % IPAddress(arguments["<IP>"]).version
+    elif arguments["<PEER_IP>"]:
+        version = "v%s" % IPAddress(arguments["<PEER_IP>"]).version
     elif arguments["<CIDR>"]:
         version = "v%s" % IPNetwork(arguments["<CIDR>"]).version
     return version
@@ -1284,27 +1760,69 @@ if __name__ == '__main__':
     arguments = docopt(__doc__)
     validate_arguments()
     ip_version = get_container_ipv_from_arguments()
-
     try:
         if arguments["restart-docker-with-alternative-unix-socket"]:
             restart_docker_with_alternative_unix_socket()
         elif arguments["restart-docker-without-alternative-unix-socket"]:
             restart_docker_without_alternative_unix_socket()
         elif arguments["node"]:
-            if arguments["stop"]:
+            if arguments["bgppeer"]:
+                if arguments["add"]:
+                    node_bgppeer_add(arguments["<PEER_IP>"], ip_version,
+                                     arguments["<AS_NUM>"])
+                elif arguments["remove"]:
+                    node_bgppeer_remove(arguments["<PEER_IP>"], ip_version)
+                elif arguments["show"]:
+                    if not ip_version:
+                        node_bgppeer_show("v4")
+                        node_bgppeer_show("v6")
+                    else:
+                        node_bgppeer_show(ip_version)
+            elif arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
-                node_image = arguments['--node-image']
-                ip6 = arguments["--ip6"]
                 node(arguments["--ip"],
-                     node_image=node_image,
-                     ip6=ip6)
+                     arguments['--node-image'],
+                     ip6=arguments["--ip6"],
+                     as_num=arguments["<AS_NUM>"])
         elif arguments["status"]:
             status()
         elif arguments["checksystem"]:
             checksystem(arguments["--fix"], quit_if_error=True)
         elif arguments["reset"]:
             reset()
+        elif arguments["endpoint"]:
+            if arguments["profile"]:
+                if arguments["append"]:
+                    endpoint_profile_append(arguments["--host"],
+                                            arguments["--orchestrator"],
+                                            arguments["--workload"],
+                                            arguments["<ENDPOINT_ID>"],
+                                            arguments['<PROFILES>'])
+                elif arguments["remove"]:
+                    endpoint_profile_remove(arguments["--host"],
+                                            arguments["--orchestrator"],
+                                            arguments["--workload"],
+                                            arguments["<ENDPOINT_ID>"],
+                                            arguments['<PROFILES>'])
+                elif arguments["set"]:
+                    endpoint_profile_set(arguments["--host"],
+                                         arguments["--orchestrator"],
+                                         arguments["--workload"],
+                                         arguments["<ENDPOINT_ID>"],
+                                         arguments['<PROFILES>'])
+                elif arguments["show"]:
+                    endpoint_profile_show(arguments["--host"],
+                                          arguments["--orchestrator"],
+                                          arguments["--workload"],
+                                          arguments["<ENDPOINT_ID>"])
+            else:
+                # calicoctl endpoint show
+                endpoint_show(arguments["--host"],
+                              arguments["--orchestrator"],
+                              arguments["--workload"],
+                              arguments["--endpoint"],
+                              arguments["--detailed"])
         elif arguments["profile"]:
             if arguments["tag"] and not arguments["rule"]:
                 if arguments["show"]:
@@ -1372,8 +1890,6 @@ if __name__ == '__main__':
                 profile_show(arguments["--detailed"])
         elif arguments["diags"]:
             save_diags(arguments["--upload"])
-        elif arguments["shownodes"]:
-            node_show(arguments["--detailed"])
         elif arguments["pool"]:
             if arguments["add"]:
                 ip_pool_add(arguments["<CIDR>"],
@@ -1388,11 +1904,12 @@ if __name__ == '__main__':
                     ip_pool_show("v6")
                 else:
                     ip_pool_show(ip_version)
-        elif arguments["bgppeer"] and arguments["rr"]:
+        elif arguments["bgppeer"]:
             if arguments["add"]:
-                bgppeer_add(arguments["<IP>"], ip_version)
+                bgppeer_add(arguments["<PEER_IP>"], ip_version,
+                            arguments["<AS_NUM>"])
             elif arguments["remove"]:
-                bgppeer_remove(arguments["<IP>"], ip_version)
+                bgppeer_remove(arguments["<PEER_IP>"], ip_version)
             elif arguments["show"]:
                 if not ip_version:
                     bgppeer_show("v4")
@@ -1400,7 +1917,9 @@ if __name__ == '__main__':
                 else:
                     bgppeer_show(ip_version)
         elif arguments["container"]:
-            if arguments["ip"]:
+            if arguments["endpoint-id"]:
+                container_endpoint_id_show(arguments["<CONTAINER>"])
+            elif arguments["ip"]:
                 if arguments["add"]:
                     container_ip_add(arguments["<CONTAINER>"],
                                      arguments["<IP>"],
@@ -1411,13 +1930,30 @@ if __name__ == '__main__':
                                         arguments["<IP>"],
                                         ip_version,
                                         arguments["--interface"])
-            elif arguments["container"]:
+                else:
+                    if arguments["add"]:
+                        container_add(arguments["<CONTAINER>"],
+                                      arguments["<IP>"],
+                                      arguments["--interface"])
+                    if arguments["remove"]:
+                        container_remove(arguments["<CONTAINER>"])
+            else:
                 if arguments["add"]:
                     container_add(arguments["<CONTAINER>"],
                                   arguments["<IP>"],
                                   arguments["--interface"])
                 if arguments["remove"]:
                     container_remove(arguments["<CONTAINER>"])
+        elif arguments["bgp-node-mesh"]:
+            if arguments["on"] or arguments["off"]:
+                set_bgp_node_mesh(arguments["on"])
+            else:
+                show_bgp_node_mesh()
+        elif arguments["default-node-as"]:
+            if arguments["<AS_NUM>"]:
+                set_default_node_as(arguments["<AS_NUM>"])
+            else:
+                show_default_node_as()
     except SystemExit:
         raise
     except ConnectionError as e:
