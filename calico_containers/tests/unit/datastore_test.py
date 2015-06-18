@@ -298,6 +298,21 @@ class TestEndpoint(unittest.TestCase):
         assert_false(endpoint1 == "this is not an endpoint")
 
 
+class TestBGPPeer(unittest.TestCase):
+    def test_operator(self):
+        """
+        Test BGPPeer equality operator.
+        """
+        peer1 = BGPPeer("1.2.3.4", "22222")
+        peer2 = BGPPeer(IPAddress("1.2.3.4"), 22222)
+        peer3 = BGPPeer("1.2.3.5", 22222)
+        peer4 = BGPPeer("1.2.3.4", 22226)
+        assert_equal(peer1, peer2)
+        assert_false(peer1 == peer3)
+        assert_false(peer1 == peer4)
+        assert_false(peer1 == "This is not a BGPPeer")
+
+
 class TestDatastoreClient(unittest.TestCase):
 
     @patch("calico_containers.adapter.datastore.os.getenv", autospec=True)
