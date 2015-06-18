@@ -219,6 +219,45 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
         return rules
 
 
+class BGPPeer(object):
+    """
+    Class encapsulating a BGPPeer.
+    """
+
+    def __init__(self, ip, as_num):
+        """
+        Constructor.
+        :param ip: The BGPPeer IP address (string or IPAddress)
+        :param as_num: The AS Number (string or int)
+        """
+        self.ip = IPAddress(ip)
+        self.as_num = int(as_num)
+
+    def to_json(self):
+        """
+        Convert the BGPPeer to a JSON string.
+        :return: A JSON string.
+        """
+        json_dict = {"ip": str(self.ip), "as_num": self.as_num}
+        return json.dumps(json_dict)
+
+    @classmethod
+    def from_json(cls, json_str):
+        """
+        Convert the json string into a BGPPeer object.
+        :param json_str: The JSON string representing a BGPPeer.
+        :return: A BGPPeer object.
+        """
+        json_dict = json.loads(json_str)
+        return cls(json_dict["ip"], json_dict["as_num"])
+
+    def __eq__(self, other):
+        if not isinstance(other, BGPPeer):
+            return NotImplemented
+        return (self.ip == other.ip and
+                self.as_num == other.as_num)
+
+
 class Endpoint(object):
     """
     Class encapsulating an Endpoint.
@@ -551,22 +590,22 @@ class DatastoreClient(object):
             raise KeyError("%s is not a configured IP pool." % pool)
 
     @handle_errors
-    def get_bgp_peers(self, version):
+    def get_bgp_peers(self, version, hostname=None):
         """
-        Get the configured BGP Peers
+        Get the configured BGP Peers.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :return: List of dictionaries:
-                    [
-                      {
-                        "ip": <peer ip address>,
-                        "as_num": <peer as num>
-                      },
-                      ...
-                    ]
+        :param hostname: Optional hostname.  If supplied, this returns the
+        node-specific BGP peers.  If None, this returns the globally configured
+        BGP peers.
+        :return: List of BGPPeer.
         """
         assert version in ("v4", "v6")
-        bgp_peers_path = BGP_PEERS_PATH % {"version": version}
+        if hostname is None:
+            bgp_peers_path = BGP_PEERS_PATH % {"version": version}
+        else:
+            bgp_peers_path = HOST_BGP_PEERS_PATH % {"hostname": hostname,
+                                                    "version": version}
 
         try:
             nodes = self.etcd_client.read(bgp_peers_path).children
@@ -574,124 +613,59 @@ class DatastoreClient(object):
             # Path doesn't exist.
             return []
 
-        peers = []
-        for node in nodes:
-            # If there are no children etcd returns a single value with the
-            # parent key and no value.
-            if node.value is None:
-                continue
-            data = json.loads(node.value)
-            data["ip"] = IPAddress(data["ip"])
-            peers.append(data)
+        # If there are no children etcd returns a single value with the parent
+        # key and no value (so skip empty values).
+        peers = [BGPPeer.from_json(node.value) for node in nodes if node.value]
         return peers
 
     @handle_errors
-    def add_bgp_peer(self, version, ip, as_num):
+    def add_bgp_peer(self, version, bgp_peer, hostname=None):
         """
-        Add a global BGP Peer.
+        Add a BGP Peer.
 
-        If the peer exists this will update the peer to use the new AS number.
+        If a peer exists with the peer IP address, this will update the peer .
+        configuration.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :param ip: The IP address to add. (an IPAddress)
+        :param bgp_peer: The BGPPeer to add or update.
+        :param hostname: Optional hostname.  If supplied, this stores the BGP
+         peer in the node specific configuration.  If None, this stores the BGP
+         peer as a globally configured peer.
+        :return: Nothing
+        """
+        assert version in ("v4", "v6")
+        if hostname is None:
+            bgp_peer_path = BGP_PEER_PATH % {"version": version,
+                                             "peer_ip": str(bgp_peer.ip)}
+        else:
+            bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+                                                  "version": version,
+                                                  "peer_ip": str(bgp_peer.ip)}
+        self.etcd_client.write(bgp_peer_path, bgp_peer.to_json())
+
+    @handle_errors
+    def remove_bgp_peer(self, version, ip, hostname=None):
+        """
+        Delete a BGP Peer with the specified IP address.
+
+        Raises KeyError if the Peer does not exist.
+
+        :param version: "v4" for IPv4, "v6" for IPv6
+        :param ip: The IP address of the BGP peer to delete. (an IPAddress)
+        :param hostname: Optional hostname.  If supplied, this stores the BGP
+         peer in the node specific configuration.  If None, this stores the BGP
+         peer as a globally configured peer.
         :return: Nothing
         """
         assert version in ("v4", "v6")
         assert isinstance(ip, IPAddress)
-        bgp_peer_path = BGP_PEER_PATH % {"version": version,
-                                         "peer_ip": str(ip)}
-        data = {"as_num": as_num, "ip": str(ip)}
-        self.etcd_client.write(bgp_peer_path, json.dumps(data))
-
-    @handle_errors
-    def remove_bgp_peer(self, version, ip):
-        """
-        Delete a global BGP Peer.
-
-        :param version: "v4" for IPv4, "v6" for IPv6
-        :param ip: The IP address to delete. (an IPAddress)
-        :return: Nothing
-        """
-        assert version in ("v4", "v6")
-        assert isinstance(ip, IPAddress)
-        bgp_peer_path = BGP_PEER_PATH % {"version": version,
-                                         "peer_ip": str(ip)}
-        try:
-            self.etcd_client.delete(bgp_peer_path)
-        except EtcdKeyNotFound:
-            # Re-raise with a better error message.
-            raise KeyError("%s is not a configured peer." % ip)
-
-    @handle_errors
-    def get_node_bgp_peers(self, hostname, version):
-        """
-        Get the configured node-specific BGP Peers
-
-        :param version: "v4" for IPv4, "v6" for IPv6
-        :return: List of dictionaries:
-                    [
-                      {
-                        "ip": <peer ip address>,
-                        "as_num": <peer as num>
-                      },
-                      ...
-                    ]
-        """
-        assert version in ("v4", "v6")
-        bgp_peers_path = HOST_BGP_PEERS_PATH % {"hostname": hostname,
-                                                "version": version}
-
-        try:
-            nodes = self.etcd_client.read(bgp_peers_path).children
-        except EtcdKeyNotFound:
-            # Path doesn't exist.
-            return []
-
-        peers = []
-        for node in nodes:
-            # If there are no children etcd returns a single value with the
-            # parent key and no value.
-            if node.value is None:
-                continue
-            data = json.loads(node.value)
-            data["ip"] = IPAddress(data["ip"])
-            peers.append(data)
-        return peers
-
-    @handle_errors
-    def add_node_bgp_peer(self, hostname, version, ip, as_num):
-        """
-        Add a node-specific BGP Peer.
-
-        If the peer exists this will update the peer to use the new AS number.
-
-        :param version: "v4" for IPv4, "v6" for IPv6
-        :param ip: The IP address to add. (an IPAddress)
-        :return: Nothing
-        """
-        assert version in ("v4", "v6")
-        assert isinstance(ip, IPAddress)
-        bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
-                                              "version": version,
-                                              "peer_ip": str(ip)}
-        data = {"as_num": as_num, "ip": str(ip)}
-        self.etcd_client.write(bgp_peer_path, json.dumps(data))
-
-    @handle_errors
-    def remove_node_bgp_peer(self, hostname, version, ip):
-        """
-        Delete a node-specific BGP Peer
-
-        :param version: "v4" for IPv4, "v6" for IPv6
-        :param ip: The IP address to delete. (an IPAddress)
-        :return: Nothing
-        """
-        assert version in ("v4", "v6")
-        assert isinstance(ip, IPAddress)
-        bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
-                                              "version": version,
-                                              "peer_ip": str(ip)}
-
+        if hostname is None:
+            bgp_peer_path = BGP_PEER_PATH % {"version": version,
+                                             "peer_ip": str(ip)}
+        else:
+            bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+                                                  "version": version,
+                                                  "peer_ip": str(ip)}
         try:
             self.etcd_client.delete(bgp_peer_path)
         except EtcdKeyNotFound:

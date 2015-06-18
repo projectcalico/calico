@@ -111,7 +111,8 @@ from adapter.datastore import (ETCD_AUTHORITY_ENV,
                                ProfileNotInEndpoint,
                                ProfileAlreadyInEndpoint,
                                MultipleEndpointsMatch,
-                               Vividict)
+                               Vividict,
+                               BGPPeer)
 from adapter.docker_restart import REAL_SOCK, POWERSTRIP_SOCK
 from adapter.ipam import IPAMClient
 from adapter import netns, docker_restart
@@ -997,19 +998,24 @@ def show_bgp_node_mesh():
     print "on" if value else "off"
 
 
-def default_node_as(as_num):
+def set_default_node_as(as_num):
     """
-    Set or display the default node BGP AS Number.
+    Set the default node BGP AS Number.
 
-    :param as_num:  The default AS number, or None to display the current
-     value.
+    :param as_num:  The default AS number
     :return: None.
     """
-    if as_num is None:
-        value = client.get_default_node_as()
-        print value
-    else:
-        client.set_default_node_as(as_num)
+    client.set_default_node_as(as_num)
+
+
+def show_default_node_as():
+    """
+    Display the default node BGP AS Number.
+
+    :return: None.
+    """
+    value = client.get_default_node_as()
+    print value
 
 
 def bgppeer_add(ip, version, as_num):
@@ -1023,7 +1029,8 @@ def bgppeer_add(ip, version, as_num):
     :return: None
     """
     address = check_ip_version(ip, version, IPAddress)
-    client.add_bgp_peer(version, address, as_num)
+    peer = BGPPeer(address, as_num)
+    client.add_bgp_peer(version, peer)
 
 
 def bgppeer_remove(ip, version):
@@ -1050,10 +1057,10 @@ def bgppeer_show(version):
     assert version in ("v4", "v6")
     peers = client.get_bgp_peers(version)
     if peers:
-        heading = "IP%s BGP Peer" % version
+        heading = "Global IP%s BGP Peer" % version
         x = PrettyTable([heading, "AS Num"], sortby=heading)
         for peer in peers:
-            x.add_row([peer["ip"], peer["as_num"]])
+            x.add_row([peer.ip, peer.as_num])
         x.align = "l"
         print x.get_string(sortby=heading)
     else:
@@ -1070,7 +1077,8 @@ def node_bgppeer_add(ip, version, as_num):
     :return: None
     """
     address = check_ip_version(ip, version, IPAddress)
-    client.add_node_bgp_peer(hostname, version, address, as_num)
+    peer = BGPPeer(address, as_num)
+    client.add_bgp_peer(version, peer, hostname=hostname)
 
 
 def node_bgppeer_remove(ip, version):
@@ -1083,7 +1091,7 @@ def node_bgppeer_remove(ip, version):
     """
     address = check_ip_version(ip, version, IPAddress)
     try:
-        client.remove_node_bgp_peer(hostname, version, address)
+        client.remove_bgp_peer(version, address, hostname=hostname)
     except KeyError:
         print "%s is not a configured peer for this node." % address
         sys.exit(1)
@@ -1096,12 +1104,12 @@ def node_bgppeer_show(version):
     Print a list of the BGP Peers for this node.
     """
     assert version in ("v4", "v6")
-    peers = client.get_node_bgp_peers(hostname, version)
+    peers = client.get_bgp_peers(version, hostname=hostname)
     if peers:
-        heading = "IP%s BGP Peer" % version
+        heading = "Node specific IP%s BGP Peer" % version
         x = PrettyTable([heading, "AS Num"], sortby=heading)
         for peer in peers:
-            x.add_row([peer["ip"], peer["as_num"]])
+            x.add_row([peer.ip, peer.as_num])
         x.align = "l"
         print x.get_string(sortby=heading)
     else:
@@ -1942,7 +1950,10 @@ if __name__ == '__main__':
             else:
                 show_bgp_node_mesh()
         elif arguments["default-node-as"]:
-            default_node_as(arguments["<AS_NUM>"])
+            if arguments["<AS_NUM>"]:
+                set_default_node_as(arguments["<AS_NUM>"])
+            else:
+                show_default_node_as()
     except SystemExit:
         raise
     except ConnectionError as e:
