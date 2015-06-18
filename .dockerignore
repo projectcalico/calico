@@ -4,3 +4,4 @@ build
 calico_containers/busybox.tar
 calico_containers/calico-node.tar
 default.etcd
+.semaphore-cache
