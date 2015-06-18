@@ -10,16 +10,13 @@ Documentation on running CoreOS on DigitalOcean is [here](https://coreos.com/doc
 From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
 
 In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this demo), and choose a region.  You should see something similar to the following:
-![alt tag](digitalocean/Create_Droplet_1.png)
+![alt tag](digitalocean/Create_Droplet_1_small.png)
 
 Next, select CoreOS alpha version as the image type.  Note that some regions may not have this image as an option so you may have to choose a region that supports CoreOS alpha version.
-
-Check the Private Networking box and the User Data box under Available Settings.  
-
-Add your SSH public key to be able to log in to the instance without credentials.
+Check the Private Networking box and the User Data box under Available Settings.  Add your SSH public key to be able to log in to the instance without credentials.
 
 You should now see something similar to the following:
-![alt tag](digitalocean/Create_Droplet_2.png)
+![alt tag](digitalocean/Create_Droplet_2_small.png)
 
 Before selecting "Create Droplet", you will need to specify the User Data.  Copy the following contents into the User Data text box; **replace `<discovery URL>` with the URL retrieved below**:
 ```
@@ -58,7 +55,6 @@ You need to grab a fresh URL each time you bootstrap a cluster.
 
 Repeat these steps until you have 3 Calico hosts (or however many hosts you chose as the size).  For each VM, you must use the same discovery URL that you received in the above step.
 
-..............................
 ## Installing calicoctl on each node
 On each node, there should be a script file called "install_calico" in the home directory.  Run the script on each node to set up Calico:
 ```
