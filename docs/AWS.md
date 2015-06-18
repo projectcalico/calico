@@ -102,8 +102,8 @@ wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calico
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
-export metadata_url="http://metadata.google.internal/computeMetadata/v1/"
-export private_ip=$(curl "$metadata_url/instance/network-interfaces/0/ip" -H "Metadata-Flavor: Google")
+export metadata_url="http://169.254.169.254/latest/meta-data"
+export private_ip=$(curl "$metadata_url/local-ipv4")
 
 # Start the calico node service:
 sudo ./calicoctl node --ip=$private_ip
