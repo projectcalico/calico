@@ -436,8 +436,11 @@ On each compute node, perform the following steps:
         service openstack-nova-metadata-api restart
         chkconfig openstack-nova-metadata-api on
 
-9. Install the BIRD BGP client from EPEL:
-    ``yum install -y bird bird6``
+9.  Install the BIRD BGP client from EPEL:
+
+    ::
+
+        yum install -y bird bird6
 
 10. Install the ``calico-compute`` package:
 
