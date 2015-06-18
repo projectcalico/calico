@@ -117,20 +117,22 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                                         # FIXME support IP-in-IP for IPv6.
                                         (v6_filter_updater, None)]:
         if iptables_updater is v4_filter_updater:
-            input_chain = _build_input_chain(
+            input_chain, input_deps = _build_input_chain(
                 iface_match=iface_match,
                 metadata_addr=config.METADATA_IP,
                 metadata_port=config.METADATA_PORT,
                 dhcp_src_port=68,
-                dhcp_dst_port=67
+                dhcp_dst_port=67,
+                default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
             )
         else:
-            input_chain = _build_input_chain(
+            input_chain, input_deps = _build_input_chain(
                 iface_match=iface_match,
                 metadata_addr=None,
                 metadata_port=None,
                 dhcp_src_port=546,
-                dhcp_dst_port=547
+                dhcp_dst_port=547,
+                default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
             )
 
         forward_chain = [
@@ -159,7 +161,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             },
             {
                 CHAIN_FORWARD: set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT]),
-                CHAIN_INPUT: set(),
+                CHAIN_INPUT: input_deps,
             },
             async=False)
 
@@ -373,11 +375,12 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
 
 
 def _build_input_chain(iface_match, metadata_addr, metadata_port,
-                       dhcp_src_port, dhcp_dst_port):
+                       dhcp_src_port, dhcp_dst_port, default_action="DROP"):
     """
     Returns a list of rules that should be applied to the INPUT chain.
     """
     chain = []
+    deps = set()
     chain.append("--append %s --match conntrack --ctstate INVALID "
                  "--jump DROP" % CHAIN_INPUT)
     chain.append("--append %s --match conntrack --ctstate RELATED,ESTABLISHED "
@@ -390,6 +393,7 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
             (CHAIN_INPUT, iface_match, metadata_addr, metadata_port)
         )
 
+    # Special-case: allow DHCP.
     chain.append(
         "--append %s --protocol udp --in-interface %s --sport %d "
         "--dport %s --jump ACCEPT" %
@@ -397,11 +401,11 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     )
 
     chain.append(
-        "--append %s --in-interface %s --jump DROP" %
-        (CHAIN_INPUT, iface_match)
+        "--append %s --in-interface %s --jump %s" %
+        (CHAIN_INPUT, iface_match, default_action)
     )
 
-    return chain
+    return chain, deps
 
 
 def interface_to_suffix(config, iface_name):
