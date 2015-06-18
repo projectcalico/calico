@@ -1,10 +1,12 @@
-from netaddr import IPAddress
 from functools import partial
 from subprocess import CalledProcessError
 
-from utils import retry_until_success
-from network import DockerNetwork
+from netaddr import IPAddress
 
+from utils import retry_until_success
+from calico_containers.tests.st.utils.network import DockerNetwork
+
+NET_NONE = "none"
 
 class Workload(object):
     """
@@ -34,10 +36,6 @@ class Workload(object):
         """
         self.host = host
         self.name = name
-        try:
-            host.execute('docker rm -f %s' % name)
-        except CalledProcessError:
-            pass
 
         args = [
             "docker", "run",
@@ -48,7 +46,7 @@ class Workload(object):
         ]
         assert ip is None, "Static IP assignment not supported by libnetwork."
         if network:
-            if network is not "none":
+            if network is not NET_NONE:
                 assert isinstance(network, DockerNetwork)
             args.append("--net=%s" % network)
         args.append(image)
@@ -81,6 +79,10 @@ class Workload(object):
         """
         Execute arbitrary commands on this workload.
         """
+        # Make sure we've been created in the context of a host. Done here
+        # instead of in __init__ as we can't exist in the host until we're
+        # created.
+        assert self in self.host.workloads
         return self.host.execute("docker exec %s %s" % (self.name, command))
 
     def assert_can_ping(self, ip, retries=0):

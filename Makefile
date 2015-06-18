@@ -7,10 +7,10 @@ BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 # There are subdirectories so use shell rather than wildcard
 NODE_FILESYSTEM=$(shell find node_filesystem/ -type f)
 NODE_FILES=Dockerfile $(wildcard image/*) $(NODE_FILESYSTEM)
-GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
-IP_ADDRESS=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
-$(info Local IP address is ${IP_ADDRESS})
-#$(info $$PYCALICO is [${PYCALICO}])
+
+# This variable can be overridden by setting an environment variable.
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+
 default: all
 all: test
 binary: dist/calicoctl
@@ -81,10 +81,10 @@ fast-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar 
 run-etcd:
 	-docker rm -f calico-etcd
 	docker run --detach \
-	--publish 2379:2379 \
+	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
-	--advertise-client-urls http://$(IP_ADDRESS):2379 \
-	--listen-client-urls http://0.0.0.0:2379
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +

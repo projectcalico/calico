@@ -1,10 +1,8 @@
-from subprocess import CalledProcessError
-from functools import partial
 import unittest
 import uuid
 
 from test_base import TestBase
-from docker_host import DockerHost
+from calico_containers.tests.st.utils.docker_host import DockerHost
 
 
 class TestIpv6(TestBase):

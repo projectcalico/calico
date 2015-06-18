@@ -1,11 +1,7 @@
-import requests
-from sh import docker
 from subprocess import CalledProcessError
 from unittest import TestCase
 import subprocess
-
-from utils import get_ip, retry_until_success
-from functools import partial
+from calico_containers.tests.st.utils.utils import get_ip
 
 
 class TestBase(TestCase):
@@ -17,16 +13,11 @@ class TestBase(TestCase):
         Clean up before every test.
         """
         self.ip = get_ip()
-        # Assert that /calico doesn't exist
+        # Delete /calico if it exists. This ensures each test has an empty data
+        # store at start of day.
         subprocess.check_output(
             "curl -sL http://%s:2379/v2/keys/calico?recursive=true -XDELETE"
             % self.ip, shell=True)
-
-    def tearDown(self):
-        """
-        Clean up after every test.
-        """
-        # Remove interfaces? containers?
 
     def assert_connectivity(self, pass_list, fail_list=[]):
         """

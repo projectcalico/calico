@@ -1,9 +1,10 @@
 from subprocess import CalledProcessError
 from functools import partial
 
+from calico_containers.tests.st.utils.utils import retry_until_success
+from calico_containers.tests.st.utils.workload import NET_NONE
 from test_base import TestBase
-from docker_host import DockerHost
-from utils import retry_until_success
+from calico_containers.tests.st.utils.docker_host import DockerHost
 
 
 class TestAddContainer(TestBase):
@@ -14,7 +15,7 @@ class TestAddContainer(TestBase):
         with DockerHost('host', dind=False) as host:
             # Create a container with --net=none, add a calico interface to
             # it then check felix programs a route.
-            node = host.create_workload("node", network="none")
+            node = host.create_workload("node", network=NET_NONE)
 
             host.calicoctl("container add %s 192.168.1.1" % node.name)
 

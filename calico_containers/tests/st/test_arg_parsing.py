@@ -1,8 +1,9 @@
 from subprocess import CalledProcessError
 
-from test_base import TestBase
-from docker_host import DockerHost
 from nose.plugins.attrib import attr
+
+from test_base import TestBase
+from calico_containers.tests.st.utils.docker_host import DockerHost
 
 class TestArgParsing(TestBase):
     @attr('slow')
