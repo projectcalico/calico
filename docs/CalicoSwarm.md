@@ -20,15 +20,16 @@ docker pull swarm
 docker run --rm swarm create
 ``` 
 
-The second command will print a unique cluster ID token which we must use to configure our Swarm.  We'll reference this value in the tutorial as ```<swarm_token>```. Your token should look something like this: d435dc114a3dd89af2fae239257338ce
+The second command will print a unique cluster ID token which we must use to configure our Swarm.  We'll reference this value in the tutorial as ```<swarm_token>```. 
+Your token should look something like this: d435dc114a3dd89af2fae239257338ce
 
 Now that we've got a token, we can begin to configure our Swarm.  First, let's join each of our two Swarm nodes to the
-cluster.  Run the following commands on each node, replacing <swarm_token> with the token from above, and <node_ip> with the IP address of this node. 
+cluster.  Run the following commands on each node, replacing ```<swarm_token>``` with the token from above, and ```<node_ip>``` with the IP address of this node. 
 ```
 docker run -d swarm join --addr=<node_ip>:2377 token://<swarm_token>
 ```
 
-Let's now configure the Swarm manager on the manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon.
+Let's now configure the Swarm manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon.
 ```
 docker run -d -p <swarm_port>:2375 swarm manage token://<swarm_token>
 ```
@@ -89,13 +90,10 @@ chmod +x ./calicoctl
 
 # Point this node at the etcd cluster
 ETCD_AUTHORITY=<manager_ip>:4001
-
-# Configure local Docker requests to be routed through Powerstrip.
-export DOCKER_HOST=localhost:2377
 ```
 
 ## Create containers and check connectivity.
-At this point, we should have a fully configured, Calico networked Swarm cluster.  However, there are no workloads running on our cluster.  Let's create a few containers and check their connectivity.  We can run the following commands on the client node against the Swarm Manager using the -H flag.
+At this point we should have a fully configured Calico networked Swarm cluster.  However, there are no workloads running on our cluster.  Let's create a few containers and check their connectivity.  We can run the following commands on the client node against the Swarm Manager using the -H flag.
 
 First, create profiles using calicoctl.  These profiles will allow our containers to communicate. Run the following commands on your client node.
 ```
@@ -104,7 +102,7 @@ First, create profiles using calicoctl.  These profiles will allow our container
 ./calicoctl profile add PROF_E
 ```
 
-Now, lets create some containers on our cluster.
+Now, lets create some containers on our cluster. Run the following commands on your client node.
 ```
 docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.1 CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
 docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.2 CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
