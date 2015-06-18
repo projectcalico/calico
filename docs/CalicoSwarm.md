@@ -64,36 +64,52 @@ etcd -name etcd0  -advertise-client-urls http://$MANAGER_IP:2379,http://$MANAGER
 ```
 
 ## Installing calicoctl on each Swarm node
-Now that etcd is running, we can install calico.  On each node, run these commands, replacing ```<manager_ip>``` with the IP address of your Swarm manager node, and ```<node_ip>``` with the IP address of the node.
+Now that etcd is running, we can install calico.  Run the following set of commands on each Swarm node. 
+
+To make things simpler, let's store a couple of commonly used values in environment variables.
+```
+export MANAGER_IP=<Manager Node's IP Address>
+export NODE_IP=<This Node's IP Address>
+```
+
+These commands download and start Calico on the node.
 ```
 # Download calicoctl and make it executable:
 wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
 chmod +x ./calicoctl
 
 # Point this node at the etcd cluster
-export ETCD_AUTHORITY=<manager_ip>:4001
+export ETCD_AUTHORITY=$MANAGER_IP:4001
 
 # Configure local Docker requests to be routed through Powerstrip.
 export DOCKER_HOST=localhost:2377
 
 # Start the calico node service.  We must specify the ETCD_AUTHORITY variable since sudo uses its own environment.
-sudo ETCD_AUTHORITY=<manager_ip>:4001 ./calicoctl node --ip=<node_ip>
+sudo ETCD_AUTHORITY=$MANAGER_IP:4001 ./calicoctl node --ip=$NODE_IP
 ```
 
 We want to install calicoctl on our client node as well, so that we can direct calico commands at the Swarm cluster. However, we don't need to start a Calico node on the client, since we won't be running any containers on it.
 
 Run the following on your client node:
 ```
+# Set the IP of the Swarm manager node
+export MANAGER_IP=<Manager Node's IP Address>
+
 # Download calicoctl and make it executable:
 wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
 chmod +x ./calicoctl
 
 # Point this node at the etcd cluster
-ETCD_AUTHORITY=<manager_ip>:4001
+ETCD_AUTHORITY=$MANAGER_IP:4001
 ```
 
 ## Create containers and check connectivity.
 At this point we should have a fully configured Calico networked Swarm cluster.  However, there are no workloads running on our cluster.  Let's create a few containers and check their connectivity.  We can run the following commands on the client node against the Swarm Manager using the -H flag.
+
+Set the SWARM_PORT environment variable on the client node to the value chosen when configuring the Swarm manager.
+```
+export SWARM_PORT=<swarm_port>
+```
 
 First, create profiles using calicoctl.  These profiles will allow our containers to communicate. Run the following commands on your client node.
 ```
@@ -102,18 +118,18 @@ First, create profiles using calicoctl.  These profiles will allow our container
 ./calicoctl profile add PROF_E
 ```
 
-Now, lets create some containers on our cluster. Run the following commands on your client node.
+Now, let's create some containers on our cluster. Run the following commands on your client node.
 ```
-docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.1 CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
-docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.2 CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
-docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.3 CALICO_PROFILE=PROF_A_B_C --name workload-C -tid busybox
-docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.4 CALICO_PROFILE=PROF_D --name workload-D -tid busybox
-docker -H <manager_ip>:<swarm_port> run -e CALICO_IP=192.168.1.5 CALICO_PROFILE=PROF_E --name workload-E -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.1 CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.2 CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.3 CALICO_PROFILE=PROF_A_B_C --name workload-C -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.4 CALICO_PROFILE=PROF_D --name workload-D -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.5 CALICO_PROFILE=PROF_E --name workload-E -tid busybox
 ```
 
 We can run ```ps``` against the Swarm manager to check that the containers haveb been created. 
 ```
-docker -H <manager_ip>:<swarm_port> ps
+docker -H $MANAGER_IP:$SWARM_PORT ps
 ```
 
 You should see output which looks similar to this - notice that the containers have been distributed across our two Swarm nodes.
@@ -131,6 +147,6 @@ CONTAINER ID        IMAGE                COMMAND             CREATED            
 Container workload-A should be able to ping workload-B and workload-C, since they belong to the same profile.  We can
 verify this by running the following commands on our client node.
 ```
-docker -H <manager_ip>:<swarm_port> exec workload-A ping -c 4 192.168.1.2 
-docker -H <manager_ip>:<swarm_port> exec workload-A ping -c 4 192.168.1.3 
+docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 192.168.1.2 
+docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 192.168.1.3 
 ```
