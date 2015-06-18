@@ -400,6 +400,19 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
         (CHAIN_INPUT, iface_match, dhcp_src_port, dhcp_dst_port)
     )
 
+    if default_action != "DROP":
+        # Optimisation: the from-ENDPOINT chain signals acceptance of a packet
+        # by RETURNing.  If we're going to drop the packet anyway, don't
+        # bother applying the from-ENDPOINT chain.
+        _log.info("Default endpoint->host action set to %s, felix will apply"
+                  "per-endpoint policy to packets in the INPUT chain.",
+                  default_action)
+        chain.append(
+            "--append %s --jump %s --in-interface %s" %
+            (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match)
+        )
+        deps.add(CHAIN_FROM_ENDPOINT)
+
     chain.append(
         "--append %s --in-interface %s --jump %s" %
         (CHAIN_INPUT, iface_match, default_action)
