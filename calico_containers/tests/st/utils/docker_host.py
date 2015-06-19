@@ -8,7 +8,7 @@ from workload import Workload
 from network import DockerNetwork
 
 
-CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
+CALICO_DRIVER_SOCK = "/run/docker/plugins/calico.sock"
 
 class DockerHost(object):
     """
