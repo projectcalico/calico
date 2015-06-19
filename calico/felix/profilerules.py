@@ -20,10 +20,10 @@ ProfileRules actor, handles local profile chains.
 """
 
 import logging
-from subprocess import CalledProcessError
 from calico.felix.actor import actor_message
 from calico.felix.frules import (profile_to_chain_name,
                                  rules_to_chain_rewrite_lines)
+from calico.felix.futils import FailedSystemCall
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 
 _log = logging.getLogger(__name__)
@@ -160,10 +160,7 @@ class ProfileRules(RefCountedActor):
             if not self._cleaned_up:
                 try:
                     _log.info("%s unreferenced, removing our chains", self)
-                    chains = set(self.chain_names.values())
-                    # Need to block here: have to wait for chains to be deleted
-                    # before we can decref our ipsets.
-                    self._iptables_updater.delete_chains(chains, async=False)
+                    self._delete_chains()
                     self._ipset_refs.discard_all()
                     self._ipset_refs = None # Break ref cycle.
                     self._profile = None
@@ -187,24 +184,48 @@ class ProfileRules(RefCountedActor):
                 self._dirty = True
                 self._profile = self._pending_profile
 
-            if self._dirty and self._ipset_refs.ready:
+            if (self._dirty and
+                    self._ipset_refs.ready and
+                    self._pending_profile is not None):
                 _log.info("Ready to program rules for %s", self.id)
                 try:
                     self._update_chains()
-                except CalledProcessError as e:
+                except FailedSystemCall as e:
                     _log.error("Failed to program profile chain %s; error: %r",
                                self, e)
                 else:
                     self._dirty = False
             elif not self._dirty:
                 _log.debug("No changes to program.")
+            elif self._pending_profile is None:
+                _log.info("Profile is None, removing our chains")
+                try:
+                    self._delete_chains()
+                except FailedSystemCall:
+                    _log.exception("Failed to delete chains for profile %s",
+                                   self.id)
+                else:
+                    self._dirty = False
             elif not self._ipset_refs.ready:
                 _log.info("Can't program rules %s yet, waiting on ipsets",
                           self.id)
 
+    def _delete_chains(self):
+        """
+        Removes our chains from the dataplane, blocks until complete.
+        """
+        chains = set(self.chain_names.values())
+        # Need to block here: have to wait for chains to be deleted
+        # before we can decref our ipsets.
+        self._iptables_updater.delete_chains(chains, async=False)
+
     def _update_chains(self):
         """
         Updates the chains in the dataplane.
+
+        Blocks until the update is complete.
+
+        :raises FailedSystemCall: if the update fails.
         """
         _log.info("%s Programming iptables with our chains.", self)
         updates = {}
@@ -213,9 +234,8 @@ class ProfileRules(RefCountedActor):
             _log.info("Updating %s chain %r for profile %s",
                       direction, chain_name, self.id)
             _log.debug("Profile %s: %s", self.id, self._profile)
-            new_profile = self._pending_profile or {}
             rules_key = "%s_rules" % direction
-            new_rules = new_profile.get(rules_key, [])
+            new_rules = self._pending_profile.get(rules_key, [])
             tag_to_ip_set_name = {}
             for tag, ipset in self._ipset_refs.iteritems():
                 tag_to_ip_set_name[tag] = ipset.ipset_name

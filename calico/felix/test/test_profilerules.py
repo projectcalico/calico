@@ -20,9 +20,9 @@ Tests for the profilerules module.
 """
 
 import logging
-from subprocess import CalledProcessError
 from mock import Mock, call
 from calico.felix.fiptables import IptablesUpdater
+from calico.felix.futils import FailedSystemCall
 from calico.felix.ipsets import IpsetManager, TagIpset
 from calico.felix.profilerules import ProfileRules, RulesManager
 
@@ -154,28 +154,55 @@ class TestProfileRules(BaseTestCase):
         Test that the dirty flag is left set if the update fails.  Future
         updates that would normally be squashed trigger a reprogram.
         """
-        self.m_ipt_updater.rewrite_chains.side_effect = CalledProcessError(1, ["foo"])
+        # First update fails.
+        self.m_ipt_updater.rewrite_chains.side_effect = \
+            FailedSystemCall("fail", ["foo"], 1, "", "")
         self.rules.on_profile_update(RULES_1, async=True)
         self.step_actor(self.rules)
-        self._process_ipset_refs(set(["src-tag", "dst-tag"])) # Steps the actor.
-
-        # Second tag update will trigger single attempt to program.
+        self._process_ipset_refs(set(["src-tag", "dst-tag"])) # Steps actor.
         self.m_ipt_updater.rewrite_chains.assert_called_once_with(
             RULES_1_CHAINS, {}, async=False)
-        self.m_ipt_updater.reset_mock()
         # Failure should leave ProfileRules dirty.
         self.assertTrue(self.rules._dirty)
 
-        # Update should trigger retry even though there w
-        # qas no change of data.
+        # Second update should trigger retry.
+        self.m_ipt_updater.reset_mock()
         self.m_ipt_updater.rewrite_chains.side_effect = None
         self.rules.on_profile_update(RULES_1, async=True)
         self.step_actor(self.rules)
         self._process_ipset_refs(set([]))
         self.m_ipt_updater.rewrite_chains.assert_called_once_with(
             RULES_1_CHAINS, {}, async=False)
+        # Success clears dirty flag.
         self.assertFalse(self.rules._dirty)
 
+    def test_delete_transient_ipt_error(self):
+        """
+        Test that the dirty flag is left set if a delete fails.  Future
+        deletes that would normally be squashed trigger a retry.
+        """
+        # First delete fails.
+        self.m_ipt_updater.delete_chains.side_effect = \
+            FailedSystemCall("fail", ["foo"], 1, "", "")
+        self.rules.on_profile_update(None, async=True)
+        self.step_actor(self.rules)
+        self._process_ipset_refs(set([]))
+        self.m_ipt_updater.delete_chains.assert_called_once_with(
+            set(RULES_1_CHAINS.keys()), async=False)
+        # Failure should leave ProfileRules dirty.
+        self.assertTrue(self.rules._dirty)
+
+        # Update should trigger retry even though there was no change
+        # of data.
+        self.m_ipt_updater.reset_mock()
+        self.m_ipt_updater.delete_chains.side_effect = None
+        self.rules.on_profile_update(None, async=True)
+        self.step_actor(self.rules)
+        self._process_ipset_refs(set([]))
+        self.m_ipt_updater.delete_chains.assert_called_once_with(
+            set(RULES_1_CHAINS.keys()), async=False)
+        # Successful delete leaves profile clean.
+        self.assertFalse(self.rules._dirty)
 
     def test_update(self):
         """
