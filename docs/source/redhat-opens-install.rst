@@ -213,6 +213,9 @@ running the etcd database itself (both control and compute nodes).
         cd etcd-v2.0.11-linux-amd64
         mv etcd* /usr/local/bin/
 
+     .. warning:: We've seen certificate errors downloading etcd - you may need
+                  to add ``--insecure`` to the `curl` command to ignore this.
+
     - Create an etcd user::
 
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
