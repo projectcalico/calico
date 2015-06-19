@@ -73,20 +73,28 @@ calico_containers/busybox.tar:
 calico_containers/calico-node.tar: caliconode.created
 	docker save --output calico_containers/calico-node.tar calico/node
 
-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd
+st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
 	dist/calicoctl checksystem --fix
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
-fast-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd
+fast-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer -a '!slow'
 
 run-etcd:
-	-docker rm -f calico-etcd
+	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+run-consul:
+	@-docker rm -f calico-consul
+	docker run --detach \
+	--net=host \
+	--name calico-consul progrium/consul \
+	-server -bootstrap-expect 1 -client $(LOCAL_IP_ENV)
+
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +

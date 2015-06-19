@@ -3,6 +3,7 @@ import sh
 from sh import docker
 from functools import partial
 from subprocess import check_output, CalledProcessError, STDOUT
+from calico_containers.tests.st.utils import utils
 from calico_containers.tests.st.utils.utils import retry_until_success, get_ip
 from workload import Workload
 from network import DockerNetwork
@@ -28,6 +29,8 @@ class DockerHost(object):
             docker.rm("-f", self.name, _ok_code=[0, 1])
             docker.run("--privileged", "-v", os.getcwd()+":/code", "--name",
                        self.name,
+                       "-e", "DOCKER_DAEMON_ARGS="
+                       "--kv-store=consul:%s:8500" % utils.get_ip(),
                        "-tid", "calico/dind")
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
@@ -89,7 +92,8 @@ class DockerHost(object):
         """
         args = ['node', '--ip=%s' % self.ip]
         try:
-            args.append('--ip6=%s' % self.ip6)
+            if self.ip6:
+                args.append('--ip6=%s' % self.ip6)
         except AttributeError:
             # No ip6 configured
             pass
