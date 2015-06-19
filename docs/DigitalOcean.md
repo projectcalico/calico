@@ -1,5 +1,5 @@
 # Running calico-docker on DigitalOcean
-Calico runs on the DigitalOcean virtualization platform.  The following instructions show the full power of the Calico routing and security model on DigitalOcean (and allow DigitalOcean to be used for testing).
+Calico runs on the DigitalOcean virtualization platform.  The following instructions show how to network containers using Calico routing and the Calico security model on DigitalOcean.
 
 ## Getting Started
 These instructions assume a total of three DigitalOcean hosts running CoreOS. For more general background, see the [CoreOS on DigitalOcean documentation](https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/).
@@ -21,7 +21,7 @@ write_files:
     content: |
       #!/bin/bash
       # Download calicoctl and make it executable:
-      wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
+      wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
       chmod +x ./calicoctl
       # Start the calico node service:
       sudo ./calicoctl node --ip=$private_ipv4
@@ -40,6 +40,7 @@ coreos:
       command: start
 ```
 Keep this config handy, it will be used when creating the hosts.
+Note: we disable CoreOS updates for this demo to avoid interrupting the instructions.
 
 ## Spinning up the VMs
 From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
@@ -70,11 +71,10 @@ On each node, there should be a script file called "install_calico" in the home 
 ```
 ./install_calico
 ```
-Then, on any one of the hosts, run this command to create an IP pool with IP-in-IP and NAT enabled:
+Then, on any one of the hosts, create the IP pool Calico will use for your containers:
 ```
 ./calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
-IP-in-IP alows Calico to route traffic between containers.  NAT allows the containers to make outgoing connections to the internet.
 
 ## Create a couple of containers and check connectivity
 On one host, run:
@@ -95,8 +95,30 @@ docker exec container-2 ping -c 4 192.168.1.1
 Now, you may wish to follow the [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
 
 ## (Optional) Enabling traffic from the internet to containers
-Services running on containers in DigitalOcean can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following command to add the port mapping:
+Services running on a Calico host's containers in AWS can be exposed to the internet.  Since the containers have IP add\
+resses in the private IP range, traffic to the container must be routed using a NAT and an appropriate Calico security \
+profile.
 
+The instructions [here](https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md) will wal\
+k you through configuring a Calico security profile named WEB from within a Calico docker node.  The WEB profile will a\
+llow incoming traffic for ICMP over port 8 and TCP over ports 80 and 443.  Note: adding the APP profile is not necessar\
+y for continuing with this demo.
+
+After creating the WEB profile, run the following command on one of your AWS Calico hosts to create a Calico container \
+running a basic NGINX http server:
 ```
-iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 8000 -j DNAT  --to 172.168.7.4:80
+docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx1 -P -d nginx
+```
+This container has 192.168.2.1 as its IP address and follows the WEB security profile, so TCP ports 80 and 443 are expo\
+sed on the container.
+
+On the same host, create a NAT that forwards port 80 traffic to the new container.
+```
+iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
+```
+
+You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by using\
+ a browser to visit http://<host public ip> or running:
+```
+curl http://<host public ip>:80
 ```
