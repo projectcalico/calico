@@ -9,7 +9,7 @@ To complete this demo, make sure you have the following prerequisites.
 - Four Linux servers (VMs or bare-metal) with Docker 1.4 or later installed.  The servers should have IP connectivity to each other.
 
 ## Installing Swarm on your cluster
-Our Docker Swarm will consist four nodes with the following roles: 
+Our Docker Swarm will consist of four nodes with the following roles: 
   - 1 Swarm client (to control the Swarm)
   - 1 Swarm manager (to manage the Swarm nodes)
   - 2 Swarm nodes (to host our containers)
@@ -25,9 +25,17 @@ The second command will print a unique cluster ID token which we must use to con
 Your token should look something like this: d435dc114a3dd89af2fae239257338ce
 
 Now that we've got a token, we can begin to configure our Swarm.  First, let's join each of our two Swarm nodes to the
-cluster.  Run the following commands on each node, replacing ```<swarm_token>``` with the token from above, and ```<node_ip>``` with the IP address of this node. 
+cluster.  
+
+To make things simpler, let's store a couple of commonly used values in environment variables.  Do this on each node - we'll reference these variables throughout this tutorial.
 ```
-docker run -d swarm join --addr=<node_ip>:2377 token://<swarm_token>
+export MANAGER_IP=<Manager Node's IP Address>
+export NODE_IP=<This Node's IP Address>
+```
+
+Run the following commands on each node, replacing ```<swarm_token>``` with the token from above.
+```
+docker run -d swarm join --addr=$NODE_IP:2377 token://<swarm_token>
 ```
 
 Let's now configure the Swarm manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon. 
@@ -52,8 +60,7 @@ sudo cp etcd /usr/local/bin
 sudo cp etcdctl /usr/local/bin
 ```
 
-Now that etcd is installed, let's run our single node cluster. We need to start etcd with the IP address of the manager
-node, so store it in an environment variable for easy access.
+Now that etcd is installed, let's run our single node cluster. We need to start etcd with the IP address of the manager node, so store it in an environment variable for easy access.
 ```
 export MANAGER_IP=<Manager's IP address>
 ```
@@ -66,12 +73,6 @@ etcd -name etcd0  -advertise-client-urls http://$MANAGER_IP:2379,http://$MANAGER
 
 ## Installing calicoctl on each Swarm node
 Now that etcd is running, we can install calico.  Run the following set of commands on each Swarm node. 
-
-To make things simpler, let's store a couple of commonly used values in environment variables.
-```
-export MANAGER_IP=<Manager Node's IP Address>
-export NODE_IP=<This Node's IP Address>
-```
 
 These commands download and start Calico on the node.
 ```
