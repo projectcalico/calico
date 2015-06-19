@@ -380,6 +380,7 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     Returns a list of rules that should be applied to the INPUT chain.
     """
     chain = []
+    dns_dst_port = 53
 
     #  In ipv6 only, there are 6 rules that need to be created first.
     #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 130
@@ -409,10 +410,18 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
             (CHAIN_INPUT, iface_match, metadata_addr, metadata_port)
         )
 
+    # Add DHCP
     chain.append(
         "--append %s --protocol udp --in-interface %s --sport %d "
         "--dport %s --jump ACCEPT" %
         (CHAIN_INPUT, iface_match, dhcp_src_port, dhcp_dst_port)
+    )
+
+    # Add DNS
+    chain.append(
+        "--append %s --protocol udp --in-interface %s "
+        "--dport %s --jump ACCEPT" %
+        (CHAIN_INPUT, iface_match, dns_dst_port)
     )
 
     chain.append(
