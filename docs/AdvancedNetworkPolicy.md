@@ -30,7 +30,7 @@ Notice that profiles define policy for inbound packets and outbound packets sepa
 
 Let's modify this profile to make it more appropriate for a public webserver. First, let's remove the default rule that allows traffic between nodes in the same profile:
 ```
-./calicoctl profile WEB rule remove --at=1
+./calicoctl profile WEB rule remove inbound --at=1
 ```
 
 Then, let's allow TCP traffic on ports 80 and 443 and also allow ICMP ping traffic (which is type 8).
