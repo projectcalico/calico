@@ -806,23 +806,9 @@ def profile_rule_add_remove(
     :return:
     """
     if icmp_type is not None:
-        try:
-            icmp_type = int(icmp_type)
-        except ValueError:
-            print "ICMP type should be an integer"
-            sys.exit(1)
-        if not (0 <= icmp_type < 255):  # Felix doesn't support 255.
-            print "ICMP type out of range"
-            sys.exit(1)
+        icmp_type = int(icmp_type)
     if icmp_code is not None:
-        try:
-            icmp_code = int(icmp_code)
-        except ValueError:
-            print "ICMP code should be an integer"
-            sys.exit(1)
-        if not (0 <= icmp_code < 255):  # Felix doesn't support 255.
-            print "ICMP code out of range"
-            sys.exit(1)
+        icmp_code = int(icmp_code)
 
     # Convert the input into a Rule.
     rule_dict = {k: v for (k, v) in locals().iteritems()
