@@ -107,6 +107,7 @@ class Rule(dict):
                     "dst_ports",
                     "dst_net",
                     "icmp_type",
+                    "icmp_code",
                     "action"]
 
     def __init__(self, **kwargs):
