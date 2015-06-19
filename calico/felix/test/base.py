@@ -3,6 +3,7 @@
 import logging
 import sys
 import gevent
+import gc
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
@@ -22,6 +23,7 @@ class BaseTestCase(unittest.TestCase):
         self._m_exit = self._exit_patch.start()
 
     def tearDown(self):
+        gc.collect()
         self.assertFalse(self._m_exit.called)
         self._exit_patch.stop()
 
