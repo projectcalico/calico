@@ -916,19 +916,19 @@ def ip_pool_show(version):
     :return: None
     """
     assert version in ("v4", "v6")
-    headings = ["IP%s CIDR" % version]
-    if version == "v4":
-        headings.append("IP-IP")
+    headings = ["IP%s CIDR" % version, "Options"]
     pools = client.get_ip_pools(version)
     x = PrettyTable(headings)
     for pool in pools:
-        row = [pool]
+        enabled_options = []
         if version == "v4":
             cfg = client.get_ip_pool_config(version, pool)
             if "ipip" in cfg:
-                row.append("Enabled")
-            else:
-                row.append("Disabled")
+                enabled_options.append("ipip")
+            if "masquerade" in cfg:
+                enabled_options.append("nat-outgoing")
+        # convert option array to string
+        row = [pool, ','.join(enabled_options)]
         x.add_row(row)
     print x.get_string(sortby=headings[0])
 
