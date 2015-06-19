@@ -330,7 +330,7 @@ class CalicoTransportEtcd(object):
         if tag_indices or rules_indices:
             LOG.warning(
                 "Imbalanced profile tags and rules! "
-                "Extra tags %s, extra rules %s" % tag_indices, rules_indices
+                "Extra tags %s, extra rules %s", tag_indices, rules_indices
             )
 
     @_handling_etcd_exceptions
