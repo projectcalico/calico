@@ -115,56 +115,120 @@ class TestDevices(unittest.TestCase):
             devices.del_route(type, ip, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "del", ip, "dev", tap])
 
-    def test_set_routes(self):
+    def test_set_routes_mac_required(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         interface = "tapabcdef"
         mac = stub_utils.get_mac()
         with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ips is not empty"):
+                                     "mac must be supplied if ips is not "
+                                     "empty"):
             devices.set_routes(type, ips, interface)
+
+    def test_set_routes_arp_ipv4_only(self):
+        type = futils.IPV4
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
         with self.assertRaisesRegexp(ValueError,
-                                     "reset_arp may only be supplied for IPv4"):
+                                     "reset_arp may only be supplied for "
+                                     "IPv4"):
             devices.set_routes(futils.IPV6, ips, interface, mac=mac,
                                reset_arp=True)
 
-        retcode = futils.CommandOutput("", "")
-        current_ips = set()
+    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
+    def test_set_routes_mainline(self, m_remove_conntrack):
+        type = futils.IPV4
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
         calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
                  mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
                  mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
                  mock.call(["ip", "route", "replace", "2.3.4.5", "dev", interface])]
 
-        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=futils.CommandOutput("", "")):
             with mock.patch('calico.felix.devices.list_interface_ips',
-                            return_value=current_ips):
+                            return_value=set()):
                 devices.set_routes(type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
+                m_remove_conntrack.assert_called_once_with(set(), 4)
+
+    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
+    def test_set_routes_nothing_to_do(self, m_remove_conntrack):
+        type = futils.IPV4
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        retcode = futils.CommandOutput("", "")
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=retcode):
+            with mock.patch('calico.felix.devices.list_interface_ips',
+                            return_value=ips):
+                devices.set_routes(type, ips, interface, mac)
+                self.assertEqual(futils.check_call.call_count, 0)
+                m_remove_conntrack.assert_called_once_with(set(), 4)
+
+    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
+    def test_set_routes_changed_ips(self, m_remove_conntrack):
+        ip_type = futils.IPV4
+        current_ips = set(["2.3.4.5", "3.4.5.6"])
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
+        retcode = futils.CommandOutput("", "")
+        calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
+                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev",
+                            interface]),
+                 mock.call(['arp', '-d', "3.4.5.6", '-i', interface]),
+                 mock.call(["ip", "route", "del", "3.4.5.6", "dev",
+                            interface])]
 
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             with mock.patch('calico.felix.devices.list_interface_ips',
-                            return_value=ips):
-                self.assertEqual(futils.check_call.call_count, 0)
+                            return_value=current_ips):
+                devices.set_routes(ip_type, ips, interface, mac)
+                self.assertEqual(futils.check_call.call_count, len(calls))
+                futils.check_call.assert_has_calls(calls, any_order=True)
+                m_remove_conntrack.assert_called_once_with(set(["3.4.5.6"]), 4)
 
+    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
+    def test_set_routes_changed_ips_reset_arp(self, m_remove_conntrack):
+        type = futils.IPV4
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
+        retcode = futils.CommandOutput("", "")
         current_ips = set(["2.3.4.5", "3.4.5.6"])
         calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
                  mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
+                 mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
                  mock.call(['arp', '-d', "3.4.5.6", '-i', interface]),
                  mock.call(["ip", "route", "del", "3.4.5.6", "dev", interface])]
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             with mock.patch('calico.felix.devices.list_interface_ips',
                             return_value=current_ips):
-                devices.set_routes(type, ips, interface, mac)
+                devices.set_routes(type, ips, interface, mac, reset_arp=True)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
+                m_remove_conntrack.assert_called_once_with(set(["3.4.5.6"]), 4)
 
+    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
+    def test_set_routes_add_ips(self, m_remove_conntrack):
+        type = futils.IPV4
+        ips = set(["1.2.3.4", "2.3.4.5"])
+        interface = "tapabcdef"
+        mac = stub_utils.get_mac()
         retcode = futils.CommandOutput("", "")
         current_ips = set()
         calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
-                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
+                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev",
+                            interface]),
                  mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
-                 mock.call(["ip", "route", "replace", "2.3.4.5", "dev", interface])]
+                 mock.call(["ip", "route", "replace", "2.3.4.5", "dev",
+                            interface])]
 
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
             with mock.patch('calico.felix.devices.list_interface_ips',
@@ -172,25 +236,7 @@ class TestDevices(unittest.TestCase):
                 devices.set_routes(type, ips, interface, mac, reset_arp=True)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
-
-        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            with mock.patch('calico.felix.devices.list_interface_ips',
-                            return_value=ips):
-                self.assertEqual(futils.check_call.call_count, 0)
-
-        current_ips = set(["2.3.4.5", "3.4.5.6"])
-        calls = [mock.call(['arp', '-s', "1.2.3.4", mac, '-i', interface]),
-                 mock.call(["ip", "route", "replace", "1.2.3.4", "dev", interface]),
-                 mock.call(['arp', '-s', "2.3.4.5", mac, '-i', interface]),
-                 mock.call(['arp', '-d', "3.4.5.6", '-i', interface]),
-                 mock.call(["ip", "route", "del", "3.4.5.6", "dev", interface])]
-        with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            with mock.patch('calico.felix.devices.list_interface_ips',
-                            return_value=current_ips):
-                devices.set_routes(type, ips, interface, mac, reset_arp=True)
-                self.assertEqual(futils.check_call.call_count, len(calls))
-                futils.check_call.assert_has_calls(calls, any_order=True)
-
+                m_remove_conntrack.assert_called_once_with(set(), 4)
 
     def test_list_interface_ips(self):
         type = futils.IPV4
@@ -312,3 +358,73 @@ class TestDevices(unittest.TestCase):
             )
             self.assertTrue(file_handle.read.called)
             self.assertFalse(is_up)
+
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_remove_conntrack(self, m_check_call):
+        devices.remove_conntrack_flows(set(["10.0.0.1"]), 4)
+        self.assertEqual(m_check_call.mock_calls, [
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--orig-src", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--orig-dst", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--reply-src", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--reply-dst", "10.0.0.1"]),
+        ])
+
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_remove_conntrack_v6(self, m_check_call):
+        devices.remove_conntrack_flows(set(["1234::1"]), 6)
+        self.assertEqual(m_check_call.mock_calls, [
+            mock.call(["conntrack", "--family", "ipv6", "--delete",
+                       "--orig-src", "1234::1"]),
+            mock.call(["conntrack", "--family", "ipv6", "--delete",
+                       "--orig-dst", "1234::1"]),
+            mock.call(["conntrack", "--family", "ipv6", "--delete",
+                       "--reply-src", "1234::1"]),
+            mock.call(["conntrack", "--family", "ipv6", "--delete",
+                       "--reply-dst", "1234::1"]),
+        ])
+
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_remove_conntrack_missing(self, m_check_call):
+        m_check_call.side_effect = futils.FailedSystemCall(
+            "message",
+            [],
+            1,
+            "",
+            "0 flow entries"
+        )
+        devices.remove_conntrack_flows(set(["10.0.0.1"]), 4)
+        self.assertEqual(m_check_call.mock_calls, [
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--orig-src", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--orig-dst", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--reply-src", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--reply-dst", "10.0.0.1"]),
+        ])
+
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_remove_conntrack_error(self, m_check_call):
+        m_check_call.side_effect = futils.FailedSystemCall(
+            "message",
+            [],
+            1,
+            "",
+            "unexpected error"
+        )
+        devices.remove_conntrack_flows(set(["10.0.0.1"]), 4)
+        self.assertEqual(m_check_call.mock_calls, [
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--orig-src", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--orig-dst", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--reply-src", "10.0.0.1"]),
+            mock.call(["conntrack", "--family", "ipv4", "--delete",
+                       "--reply-dst", "10.0.0.1"]),
+        ])

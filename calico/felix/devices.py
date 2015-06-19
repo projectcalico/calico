@@ -253,12 +253,12 @@ def remove_conntrack_flows(ip_addresses, ip_version):
                     # Expected if there are no flows.
                     _log.debug("No conntrack entries found for %s/%s.",
                                ip, direction)
-                    continue
-                # Suppress the exception, conntrack entries will timeout and
-                # it's hard to think of an example where killing and
-                # restarting felix would help.
-                _log.exception("Failed to remove conntrack flows for %s. "
-                               "Ignoring.", ip)
+                else:
+                    # Suppress the exception, conntrack entries will timeout
+                    # and it's hard to think of an example where killing and
+                    # restarting felix would help.
+                    _log.exception("Failed to remove conntrack flows for %s. "
+                                   "Ignoring.", ip)
 
 
 # These constants map to constants in the Linux kernel. This is a bit poor, but
