@@ -323,7 +323,7 @@ def node(ip, node_image, log_dir, ip6=""):
                 "bind": "/var/log/calico",
                 "ro": False
             },
-        "/usr/share/docker/plugins":
+        "/run/docker/plugins/":
             {
                 "bind": "/usr/share/docker/plugins",
                 "ro": False
