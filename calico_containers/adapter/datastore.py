@@ -156,6 +156,8 @@ class Rule(dict):
             out.append(self["protocol"])
         if "icmp_type" in self:
             out.extend(["type", str(self["icmp_type"])])
+        if "icmp_code" in self:
+            out.extend(["code", str(self["icmp_code"])])
 
         if "src_tag" in self or "src_ports" in self or "src_net" in self:
             out.append("from")
