@@ -26,23 +26,31 @@ For more information on configuration and keys, see Amazon's [Configuring the AW
 ## Setting up AWS networking
 Before you can use Calico to network your containers, you first need to configure AWS to allow your hosts to talk to each other.
 
-Create a Key Pair to use for ssh access to the instances.
+Create a Key Pair to use for ssh access to the instances. The following command will generate a key for you.
 ```
-aws ec2 create-key-pair --key-name mykey --output text > mykey.pem
+aws ec2 create-key-pair --key-name mykey --output text
+```
+
+Copy the output into a new file called mykey.pem.  The file should include ```-----BEGIN RSA PRIVATE KEY-----```, ```-----END RSA PRIVATE KEY-----```, and everything inbetween.  Then, set appropriate permissions for your key file.
+```
 chmod 400 mykey.pem
 ```
 
 A Security Group is required on the instances to control allowed traffic.  Create a security group that allows all traffic between instances within the group but only SSH access from the internet.
 ```
-# Create Security Group to allow certain incoming traffic to the AWS hosts
+# Create Security Group 
 aws ec2 create-security-group \
   --group-name MySG \
   --description MySecurityGroup
+
+# Allow SSH traffic to hosts in the securty group 
 aws ec2 authorize-security-group-ingress \
   --group-name MySG \
   --protocol tcp \
   --port 22 \
   --cidr 0.0.0.0/0
+
+# Allow hosts in the security group to communicate with each other
 aws ec2 authorize-security-group-ingress \
   --group-name MySG \
   --protocol all \
@@ -189,7 +197,7 @@ aws ec2 authorize-security-group-ingress \
   --port 80
 ```
 
-You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by visiting http://<host public ip>:80 or running:
+You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by visiting http://`<host public ip>`:80 or running:
 ```
 curl http://<host public ip>:80
 ```
