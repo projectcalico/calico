@@ -52,7 +52,6 @@ Usage:
   calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
   calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
   calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
-  calicoctl reset
   calicoctl diags [--upload]
   calicoctl checksystem [--fix]
   calicoctl restart-docker-with-alternative-unix-socket
@@ -592,11 +591,6 @@ def status():
                                      "birdc6 -s "
                                      "/etc/service/bird6/bird6.ctl"])
         print docker_client.exec_start(bird6_cmd)
-
-
-def reset():
-    print "Removing all data from data store"
-    client.remove_all_data()
 
 
 def profile_add(profile_name):
@@ -1808,8 +1802,6 @@ if __name__ == '__main__':
             status()
         elif arguments["checksystem"]:
             checksystem(arguments["--fix"], quit_if_error=True)
-        elif arguments["reset"]:
-            reset()
         elif arguments["endpoint"]:
             if arguments["profile"]:
                 if arguments["append"]:
