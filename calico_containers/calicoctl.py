@@ -50,7 +50,7 @@ Usage:
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [--detailed] [<PROFILES>...]
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
   calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
   calicoctl reset
   calicoctl diags [--upload]
@@ -1515,7 +1515,7 @@ def endpoint_profile_show(hostname, orchestrator_id, workload_id, endpoint_id):
     :return: None
     """
     try:
-        endpoint = client.get_endpoints(hostname=hostname,
+        endpoint = client.get_endpoint(hostname=hostname,
                                         orchestrator_id=orchestrator_id,
                                         workload_id=workload_id,
                                         endpoint_id=endpoint_id)
