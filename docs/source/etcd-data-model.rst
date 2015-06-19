@@ -54,7 +54,7 @@ Endpoints
 Each endpoint object is stored in an etcd key that matches the following
 pattern::
 
-    /calico/host/<hostname>/workload/<orchestrator_id>/<workload_id>/endpoint/<endpoint_id>
+    /calico/v1/host/<hostname>/workload/<orchestrator_id>/<workload_id>/endpoint/<endpoint_id>
 
 where the properties have the following meanings:
 
@@ -147,8 +147,8 @@ rather than by membership.
 For each profile, the rules objects and tag objects are stored in different
 keys, of the form::
 
-    /calico/policy/profile/<profile_id>/rules
-    /calico/policy/profile/<profile_id>/tags
+    /calico/v1/policy/profile/<profile_id>/rules
+    /calico/v1/policy/profile/<profile_id>/tags
 
 Rules
 ^^^^^
