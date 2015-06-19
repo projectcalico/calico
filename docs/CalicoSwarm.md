@@ -7,14 +7,15 @@ The following instructions configure a Docker Swarm cluster networked using Cali
 ## Prerequisites
 To complete this demo, make sure you have the following prerequisites.
 - Four Linux servers (VMs or bare-metal) with Docker 1.4 or later installed.  The servers should have IP connectivity to each other.
-  - 1 client (to control the Swarm)
+
+## Installing Swarm on your cluster
+Our Docker Swarm will consist four nodes with the following roles: 
+  - 1 Swarm client (to control the Swarm)
   - 1 Swarm manager (to manage the Swarm nodes)
   - 2 Swarm nodes (to host our containers)
 
-## Installing Swarm on your cluster
-Our Docker Swarm will consist of 2 nodes and a Swarm manager.  We will use the fourth server as the client to control our Swarm.  We'll use the token-based discovery backend to configure our Swarm.
 
-First, let us create the token which will identify our swarm.  To do this, run the following on your client node:
+We'll use the token based discovery backend, so let's first create the token which will identify our swarm.  To do this, run the following on your client node.  Note that docker commands may need to be run with root privaliges depending on your docker installation.
 ```
 docker pull swarm
 docker run --rm swarm create
@@ -29,7 +30,7 @@ cluster.  Run the following commands on each node, replacing ```<swarm_token>```
 docker run -d swarm join --addr=<node_ip>:2377 token://<swarm_token>
 ```
 
-Let's now configure the Swarm manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon.
+Let's now configure the Swarm manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon. 
 ```
 docker run -d -p <swarm_port>:2375 swarm manage token://<swarm_token>
 ```
@@ -84,6 +85,9 @@ export ETCD_AUTHORITY=$MANAGER_IP:4001
 # Configure local Docker requests to be routed through Powerstrip.
 export DOCKER_HOST=localhost:2377
 
+# Check that all required dependencies are installed.
+./calicoctl checksystem --fix
+
 # Start the calico node service.  We must specify the ETCD_AUTHORITY variable since sudo uses its own environment.
 sudo ETCD_AUTHORITY=$MANAGER_IP:4001 ./calicoctl node --ip=$NODE_IP
 ```
@@ -100,7 +104,7 @@ wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calico
 chmod +x ./calicoctl
 
 # Point this node at the etcd cluster
-ETCD_AUTHORITY=$MANAGER_IP:4001
+export ETCD_AUTHORITY=$MANAGER_IP:4001
 ```
 
 ## Create containers and check connectivity.
@@ -127,7 +131,7 @@ docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.4 CALICO_PROFILE=PR
 docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.5 CALICO_PROFILE=PROF_E --name workload-E -tid busybox
 ```
 
-We can run ```ps``` against the Swarm manager to check that the containers haveb been created. 
+We can run ```ps``` against the Swarm manager to check that the containers have been created. 
 ```
 docker -H $MANAGER_IP:$SWARM_PORT ps
 ```
