@@ -5,8 +5,8 @@ import logging
 from etcd import EtcdResult
 from mock import Mock, call
 from calico.datamodel_v1 import EndpointId
-from calico.felix.fetcd import EtcdWatcher, ResyncRequired
 from calico.felix.ipsets import IpsetActor
+from calico.felix.fetcd import _EtcdWatcher, ResyncRequired
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase
 
@@ -44,7 +44,7 @@ class TestExcdWatcher(BaseTestCase):
         self.m_config = Mock()
         self.m_config.IFACE_PREFIX = "tap"
         self.m_hosts_ipset = Mock(spec=IpsetActor)
-        self.watcher = EtcdWatcher(self.m_config, self.m_hosts_ipset)
+        self.watcher = _EtcdWatcher(self.m_config, self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
 
@@ -199,7 +199,7 @@ class TestExcdWatcher(BaseTestCase):
         self.m_splitter.on_tags_update.assert_called_once_with("profA", None,
                                                                async=True)
         self.m_splitter.on_rules_update.assert_called_once_with("profA", None,
-                                                               async=True)
+                                                                async=True)
 
     def test_tags_del(self):
         """
@@ -216,7 +216,7 @@ class TestExcdWatcher(BaseTestCase):
         """
         self.dispatch("/calico/v1/policy/profile/profA/rules", action="delete")
         self.m_splitter.on_rules_update.assert_called_once_with("profA", None,
-                                                               async=True)
+                                                                async=True)
         self.assertFalse(self.m_splitter.on_tags_update.called)
 
     def test_endpoint_del(self):

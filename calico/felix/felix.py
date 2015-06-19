@@ -43,9 +43,9 @@ from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.devices import InterfaceWatcher
 from calico.felix.endpoint import EndpointManager
-from calico.felix.fetcd import EtcdWatcher
 from calico.felix.ipsets import IpsetManager, IpsetActor, HOSTS_IPSET_V4
 from calico.felix.masq import MasqueradeManager
+from calico.felix.fetcd import EtcdAPI
 
 _log = logging.getLogger(__name__)
 
@@ -59,11 +59,12 @@ def _main_greenlet(config):
         _log.info("Connecting to etcd to get our configuration.")
         hosts_ipset_v4 = IpsetActor(HOSTS_IPSET_V4)
 
-        etcd_watcher = EtcdWatcher(config, hosts_ipset_v4)
-        etcd_watcher.start()
-        # Ask the EtcdWatcher to fill in the global config object before we
+        etcd_api = EtcdAPI(config, hosts_ipset_v4)
+        etcd_api.start()
+        # Ask the EtcdAPI to fill in the global config object before we
         # proceed.  We don't yet support config updates.
-        etcd_watcher.load_config(async=False)
+        config_loaded = etcd_api.load_config(async=False)
+        config_loaded.wait()
 
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
@@ -138,8 +139,9 @@ def _main_greenlet(config):
             v6_ep_manager,
 
             iface_watcher,
-            etcd_watcher,
+            etcd_api,
         ]
+
         monitored_items = [actor.greenlet for actor in top_level_actors]
 
         # Install the global rules before we start polling for updates.
@@ -152,8 +154,7 @@ def _main_greenlet(config):
         _log.info("Starting polling for interface and etcd updates.")
         f = iface_watcher.watch_interfaces(async=True)
         monitored_items.append(f)
-        f = etcd_watcher.watch_etcd(update_splitter, async=True)
-        monitored_items.append(f)
+        etcd_api.start_etcd_watch(update_splitter, async=True)
 
         # Register a SIG_USR handler to trigger a diags dump.
         def dump_top_level_actors(log):
