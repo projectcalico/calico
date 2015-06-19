@@ -1,8 +1,8 @@
 # Running calico-docker on AWS
-Calico runs on the Amazon Web Services (AWS), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on AWS (and allow AWS to be used for testing).
+Calico runs on the Amazon Web Services (AWS), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show how to network containers using Calico routing and the Calico security model on AWS.
 
 ## Getting started
-These instructions describe how to set up three CoreOS hosts on AWS.  For more general background, see [the CoreOS on AWS documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
+These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see [the CoreOS on AWS documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
 
 Download and install AWS Command Line Interface: 
 ```
@@ -20,38 +20,41 @@ aws configure
 >  Default region name: us-west-2
 >  Default output format: <json, text, or table>
 ```
-Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 commands.  This can be set in the IAM User configuration page of the web console.
+Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 commands.  This can be set in the Services>IAM>Users User configuration page of the web console.
 For more information on configuration and keys, see Amazon's [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).
 
 ## Setting up AWS networking
+Before you can use Calico to network your containers, you first need to configure AWS to allow your hosts to talk to each other.
+
 Create a Key Pair to use for ssh access to the instances.
 ```
-aws ec2 create-key-pair --key-name calicokey --output text > calicokey.pem
-chmod 400 calicokey.pem
+aws ec2 create-key-pair --key-name mykey --output text > mykey.pem
+chmod 400 mykey.pem
 ```
 
 A Security Group is required on the instances to control allowed traffic.  Create a security group that allows all traffic between instances within the group but only SSH access from the internet.
 ```
-# Create Security Group to allow certain incoming traffic to the Calico nodes
+# Create Security Group to allow certain incoming traffic to the AWS hosts
 aws ec2 create-security-group \
-  --group-name CalicoSG \
-  --description CalicoSecurityGroup
+  --group-name MySG \
+  --description MySecurityGroup
 aws ec2 authorize-security-group-ingress \
-  --group-name CalicoSG \
+  --group-name MySG \
   --protocol tcp \
   --port 22 \
-  --source-group 0.0.0.0/0
+  --cidr 0.0.0.0/0
 aws ec2 authorize-security-group-ingress \
-  --group-name CalicoSG \
+  --group-name MySG \
   --protocol all \
   --port all \
-  --source-group CalicoSG
+  --source-group MySG
 ```
 
 ## Spinning up the VMs
-etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  Choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  We'll use 3 for the size of the etcd cluster and the Calico nodes in the instructions below.  Use `curl` to get a fresh discovery URL (replace size=3 with your cluster size if desired):
+etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  We'll use a cluster size of 1 for this demo.  For an actual deployment, choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  For more details on etcd clusters, see the [CoreOS Cluster Discovery Documentation](https://coreos.com/docs/cluster-management/setup/cluster-discovery/).
+Use `curl` to get a fresh discovery URL:
 ```
-curl https://discovery.etcd.io/new?size=3
+curl https://discovery.etcd.io/new?size=1
 ```
 You need to grab a fresh URL each time you bootstrap a cluster.
 
@@ -73,32 +76,34 @@ coreos:
       command: start
 
 ```
-Note: we disable automated reboots for this demo to avoid interrupting the instructions.
+Note: we disable CoreOS updates for this demo to avoid interrupting the instructions.
 
-Then create the cluster with the following command:
+Next, you will create the 2 Calico Docker hosts:
 ```
 aws ec2 run-instances \
-  --count 3 \
+  --count 2 \
   --image-id ami-29734819 \
   --instance-type t1.micro \
-  --key-name calicokey \
-  --security-groups CalicoSG \
+  --key-name mykey \
+  --security-groups MySG \
   --user-data file://cloud-config.yaml
 ```
+The "ami-########" represents the CoreOS alpha image type.
+Note: it may take a couple of minutes for AWS to boot the machines after creating them.
 
 ## Installing calicoctl on each node
 Get the public IP addresses of the new instances from the AWS Web Console or by running:
 ```
-aws ec2 describe-instances --filter "Name=key-name,Values=calicokey" | grep PublicIpAddress
+aws ec2 describe-instances --filter "Name=key-name,Values=mykey" | grep PublicIpAddress
 ```
 
-SSH into each node and run these commands to set up Calico:
+Run the following commands to SSH into each node and set up Calico:
 ```
-# SSH into a node with the calicokey.pem and username core
-ssh -i calicokey.pem core@<instance IP>
+# SSH into a node with the mykey.pem and username core
+ssh -i mykey.pem core@<instance IP>
 
 # Download calicoctl and make it executable:
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
@@ -108,24 +113,23 @@ export private_ip=$(curl "$metadata_url/local-ipv4")
 # Start the calico node service:
 sudo ./calicoctl node --ip=$private_ip
 ```
-Then, on any one of the hosts, run this command to create an IP pool with IP-in-IP and NAT enabled:
+Then on either of the hosts, create the IP pool Calico will use for your containers:
 ```
 ./calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
-IP-in-IP alows Calico to route traffic between containers.  NAT allows the containers to make outgoing connections to the internet.
 
 ## Create a couple of containers and check connectivity
-On one host, run:
+On the first host, run:
 ```
 export DOCKER_HOST=localhost:2377
 docker run -e CALICO_IP=192.168.1.1 -e CALICO_PROFILE=test --name container-1 -tid busybox
 ```
-On another host, run:
+On the second host, run:
 ```
 export DOCKER_HOST=localhost:2377
 docker run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=test --name container-2 -tid busybox
 ```
-Then, the two containers should be able to ping each other:
+Then, run the following on the second host to see the that two containers are be able to ping each other:
 ```
 docker exec container-2 ping -c 4 192.168.1.1
 ```
@@ -133,15 +137,60 @@ docker exec container-2 ping -c 4 192.168.1.1
 Now, you may wish to follow the [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
 
 ## (Optional) Enabling traffic from the internet to containers
-Services running on containers in AWS can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following commands to add the port mapping:
+Services running on a Calico host's containers in AWS can be exposed to the internet.  Since the containers have IP addresses in the private IP range, traffic to the container must be routed using a NAT and an appropriate Calico security profile.
 
+Let's create a new security profile and look at the default rules.
 ```
-iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 8000 -j DNAT  --to 172.168.7.4:80
+./calicoctl profile add WEB
+./calicoctl profile WEB rule show
 ```
-Be sure to also update the Security Group for any ports you want to expose:
+You should see the following output.
+```
+Inbound rules:
+   1 allow from tag WEB 
+Outbound rules:
+   1 allow
+```
+
+Let's modify this profile to make it more appropriate for a public webserver by allowing TCP traffic on ports 80 and 443:
+```
+./calicoctl profile WEB rule add inbound allow tcp to ports 80,443
+./calicoctl profile WEB rule add inbound allow icmp type 8
+```
+
+Now, we can list the rules again and see the changes:
+```
+./calicoctl profile WEB rule show
+```
+should print
+```
+Inbound rules:
+   1 allow from tag WEB 
+   2 allow tcp to ports 80,443
+Outbound rules:
+   1 allow
+```
+
+After creating the WEB profile, run the following command on one of your AWS Calico hosts to create a Calico container running a basic NGINX http server:
+```
+docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx -P -d nginx
+```
+This container has 192.168.2.1 as its IP address and follows the WEB security profile, so TCP ports 80 and 443 are exposed on the container.
+
+On the same host, create a NAT that forwards port 80 traffic to the new container.
+```
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT --to 192.168.2.1:80
+```
+
+Lastly, the AWS host's security group must be updated for any ports you want to expose.  Run this command from your aws CLI machine to allow incoming traffic to port 80:
 ```
 aws ec2 authorize-security-group-ingress \
-  --group-name CalicoSG \
+  --group-name MySG \
   --protocol tcp \
-  --port 8000
+  --port 80
+```
+
+You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by using a browser to visit http://<host public ip> or running:
+```
+curl http://<host public ip>:80
 ```
