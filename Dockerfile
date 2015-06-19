@@ -1,3 +1,17 @@
+# Copyright 2015 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # For details and docs - see https://github.com/phusion/baseimage-docker#getting_started
 FROM phusion/baseimage:0.9.16
 
@@ -59,5 +73,5 @@ COPY calico_containers/adapter /calico_containers/adapter
 COPY calico_containers/__init__.py /calico_containers/
 
 # Copy patched BIRD daemon with tunnel support.
-RUN curl -L https://www.dropbox.com/s/ymbvyi6388h92qg/bird?dl=1 -o /usr/sbin/bird && \
+RUN curl -L https://www.dropbox.com/s/xjhfckzse25x554/bird-6af4e30d3fccb0c6bd184e9168294c807e1e6d68?dl=1 -o /usr/sbin/bird && \
     chmod +x /usr/sbin/bird

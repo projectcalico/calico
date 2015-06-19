@@ -1,8 +1,32 @@
+# Copyright 2015 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 from sh import docker, ErrorReturnCode_1
 from functools import partial
 from unittest import TestCase
+import os
 
 from utils import get_ip, delete_container, retry_until_success
+
+TEARDOWN_ENV = "CALICO_TEARDOWN"
+
+def do_teardown():
+    """Returns whether we should build the node and calicoctl binaries."""
+    try:
+        teardown = os.environ[TEARDOWN_ENV]
+        return teardown.lower() not in ["no", "n", "f", "false"]
+    except KeyError:
+        return True
 
 
 class TestBase(TestCase):
@@ -24,9 +48,10 @@ class TestBase(TestCase):
         """
         Clean up host containers after every test.
         """
-        containers = docker.ps("-qa").split()
-        for container in containers:
-            delete_container(container)
+        if do_teardown():
+            containers = docker.ps("-qa").split()
+            for container in containers:
+                delete_container(container)
 
     def start_etcd(self):
         """

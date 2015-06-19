@@ -23,78 +23,41 @@ You should see the following output.
 
     Inbound rules:
        1 allow from tag WEB 
-       2 deny
     Outbound rules:
        1 allow
 
-Notice that profiles define policy for inbound packets and outbound packets separately.  This profile allows inbound traffic from other endpoints with the tag `WEB`, and denies inbound traffic from all other addresses.  It allows all outbound traffic regardless of destination.
+Notice that profiles define policy for inbound packets and outbound packets separately.  This profile allows inbound traffic from other endpoints with the tag `WEB`, and (implicitly) denies inbound traffic from all other addresses.  It allows all outbound traffic regardless of destination.
 
-Let's modify this profile to make it appropriate for an actual public webserver.  To modify rules, calicoctl uses a JSON format.  We can use calicoctl to output the current rules in JSON format so we have a place to start modifying.
+Let's modify this profile to make it more appropriate for a public webserver. First, let's remove the default rule that allows traffic between nodes in the same profile:
+```
+./calicoctl profile WEB rule remove --at=1
+```
 
-    ./calicoctl profile WEB rule json > web-rules.json
+Then, let's allow TCP traffic on ports 80 and 443 and also allow ICMP ping traffic (which is type 8).
 
-This saves the current rules to the file `web-rules.json`.  Load up this file in a text editor.  It should look like this.
+```
+./calicoctl profile WEB rule add inbound allow tcp to ports 80,443
+./calicoctl profile WEB rule add inbound allow icmp type 8
+```
+(By default, the add command appends to the list, but it also supports the `--at` parameter to trigger an insert.)
 
-    {
-      "id": "WEB", 
-      "inbound_rules": [
-        {
-          "action": "allow", 
-          "src_tag": "WEB"
-        }, 
-        {
-          "action": "deny"
-        }
-      ], 
-      "outbound_rules": [
-        {
-          "action": "allow"
-        }
-      ]
-    }
+Now, we can list the rules again and see the changes:
 
-Modify the inbound rules as follows, leaving outbound rules as is.
+```
+./calicoctl profile WEB rule show
+```
 
-    {
-      "id": "WEB", 
-      "inbound_rules": [
-        {
-          "action": "allow", 
-          "protocol": "tcp",
-          "dst_ports": [80, 443]
-        }, 
-        {
-          "action": "allow", 
-          "protocol": "icmp"
-        }, 
-        {
-          "action": "deny"
-        }
-      ], 
-      "outbound_rules": [
-        {
-          "action": "allow"
-        }
-      ]
-    }
+should print
 
-This will allow inbound traffic on ports 80 (http) and 443 (https), as well as allow the Internet Control and Management Protocol (ICMP) which is used for (among other things) the `ping` command.
+```
+Inbound rules:
+   1 allow tcp to ports 80,443
+   2 allow icmp type 8
+Outbound rules:
+   1 allow
+```
 
-Save the file and apply it to the profile with
-
-    ./calicoctl profile WEB rule update < web-rules.json
-
-If you show the rules you should see they have been applied.
-
-    $ ./calicoctl profile WEB rule show
-    Inbound rules:
-       1 allow to ports [80, 443]
-       2 allow icmp
-       3 deny
-    Outbound rules:
-       1 allow
-
-Let's say your WEB containers will need access to some backend services.  Create a profile called APP for these services.
+calicoctl also supports importing rules in JSON format.  Let's say your WEB containers will need access to some backend services.  Create a profile called APP for these services.
 
     ./calicoctl profile add APP
 
@@ -113,10 +76,8 @@ Create a file `APP-rules.json` with the following contents.
         }, 
         {
           "action": "allow", 
-          "protocol": "icmp"
-        }, 
-        {
-          "action": "deny"
+          "protocol": "icmp",
+          "icmp_type": 8
         }
       ], 
       "outbound_rules": [
