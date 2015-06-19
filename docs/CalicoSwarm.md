@@ -86,7 +86,7 @@ export ETCD_AUTHORITY=$MANAGER_IP:4001
 export DOCKER_HOST=localhost:2377
 
 # Check that all required dependencies are installed.
-./calicoctl checksystem --fix
+sudo ./calicoctl checksystem --fix
 
 # Start the calico node service.  We must specify the ETCD_AUTHORITY variable since sudo uses its own environment.
 sudo ETCD_AUTHORITY=$MANAGER_IP:4001 ./calicoctl node --ip=$NODE_IP
@@ -124,11 +124,11 @@ First, create profiles using calicoctl.  These profiles will allow our container
 
 Now, let's create some containers on our cluster. Run the following commands on your client node.
 ```
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.1 CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.2 CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.3 CALICO_PROFILE=PROF_A_B_C --name workload-C -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.4 CALICO_PROFILE=PROF_D --name workload-D -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.5 CALICO_PROFILE=PROF_E --name workload-E -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.1 -e CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.3 -e CALICO_PROFILE=PROF_A_B_C --name workload-C -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.4 -e CALICO_PROFILE=PROF_D --name workload-D -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.5 -e CALICO_PROFILE=PROF_E --name workload-E -tid busybox
 ```
 
 We can run ```ps``` against the Swarm manager to check that the containers have been created. 
