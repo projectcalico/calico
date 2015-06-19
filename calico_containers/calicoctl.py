@@ -37,7 +37,6 @@ Usage:
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
-  calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl default-node-as [<AS_NUM>]
@@ -606,41 +605,6 @@ def profile_add(profile_name):
         # Create the profile.
         client.create_profile(profile_name)
         print "Created profile %s" % profile_name
-
-
-def profile_add_container(container_name, profile_name):
-    """
-    Add a container (on this host) to the profile with the given name.  This
-    adds the first endpoint on the container to the profile.
-
-    This method is deprecated and may be removed in future versions of
-    calicoctl.
-
-    :param container_name: The Docker container name or ID.
-    :param profile_name:  The Calico policy profile name.
-    :return: None.
-    """
-    info = get_container_info_or_exit(container_name)
-    container_id = info["Id"]
-
-    # Check the container is actually running.
-    if not info["State"]["Running"]:
-        print "%s is not currently running." % container_name
-        sys.exit(1)
-
-    # Check that the container is already networked
-    try:
-        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
-    except KeyError:
-        print "Failed to add container to profile.\n"
-        print_container_not_in_calico_msg(container_name)
-        sys.exit(1)
-
-    assert not isinstance(profile_name, list), "Expecting single profile"
-
-    # Call through to the container profile set method to add the profile.
-    endpoint_profile_set(hostname, ORCHESTRATOR_ID, container_id, endpoint_id,
-                         [profile_name])
 
 
 def profile_remove(profile_name):
@@ -1844,9 +1808,6 @@ if __name__ == '__main__':
                 elif arguments["remove"]:
                     profile_tag_remove(arguments["<PROFILE>"],
                                        arguments["<TAG>"])
-            elif arguments["member"]:
-                profile_add_container(arguments["<CONTAINER>"],
-                                      arguments["<PROFILE>"])
             elif arguments["rule"]:
                 if arguments["show"]:
                     profile_rule_show(arguments["<PROFILE>"],
