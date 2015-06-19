@@ -70,7 +70,7 @@ gcloud compute instances create \
 On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
