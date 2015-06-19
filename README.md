@@ -12,19 +12,13 @@ We welcome questions/comment/feedback (and pull requests).
 
 ## Getting started
 
-If this is your first time trying out Calico, the best way to get started is with the [Getting Started Guide](docs/GettingStarted.md).  This guide sets up two CoreOS servers and runs Calico to provide networking between guest containers.
+The best way to get started with Calico for the first time is by following the [Getting Started Guide](docs/GettingStarted.md).  This guide sets up two CoreOS servers and runs Calico to provide networking between guest containers.
 
-Another great way to get hands-on with Calico is by following one of the following tutorials.
+Another great way to get hands-on with Calico is by following one of our tutorials.
 - [Calico on Amazon](docs/AWS.md)
-  - Run Calico-networked containers on AWS, and expose a simple web service.
 - [Calico on Google Compute Engine](docs/GCE.md)
-  - Run Calico-networked containers on GCE, and expose a simple web service.
 - [Calico on Digital Ocean]
-  - Run Calico-networked containers on DO, and expose a simple web service.
 - [Calico and Docker Swarm](docs/CalicoSwarm.md)
-  - Run Calico-networked containers on a Docker Swarm cluster.
-
-To build your own binaries, read [Building Binaries](docs/Building.md).
 
 ## How does it work?
 
@@ -32,12 +26,12 @@ Calico connects datacenter workloads (containers, VMs, or bare metal) via IP no 
 
 Project Calico uses [etcd](https://github.com/coreos/etcd) to distribute information about workloads, endpoints, and policy to each Docker host.
 
-The `calico-node` service is a worker that configures the network endpoints for containers, handles IP routing, and installs policy rules.  It comprises
+The `calico-node` service is a worker that configures the network endpoints for containers, handles IP routing, and installs policy rules.  It runs in its own Docker container, and comprises
 + Felix, the Calico worker process
 + BIRD, the routing process
 + a [Powerstrip](https://github.com/clusterhq/powerstrip) adapter to set up networking when Docker containers are created.
 
 We provide a command line tool, `calicoctl`, which makes it easy to configure and start the Calico services listed above, and allows you to interact with the etcd datastore to define and apply network and security policy to the containers you create. Using `calicoctl`, you can provision Calico nodes, endpoints, and define and manage a rich set of security policy. 
 
-## More Information
+## FAQ 
 For more information on what you can do with Calico, please visit the [frequently asked questions](docs/FAQ.md) page. 
