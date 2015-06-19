@@ -1,8 +1,10 @@
+import unittest
 from calico_containers.tests.st.utils.docker_host import DockerHost
 from test_base import TestBase
 
 
 class TestEndpointCommands(TestBase):
+    @unittest.skip("Libnetwork doesn't support multi-host yet.")
     def test_endpoint_commands_mainline(self):
         """
         Run a mainline multi-host test using endpoint commands.
@@ -57,6 +59,7 @@ class TestEndpointCommands(TestBase):
         self.assert_connectivity(pass_list=[workload_d],
                                  fail_list=[workload_a, workload_b, workload_c, workload_e])
 
+    @unittest.skip("Libnetwork doesn't support multi-host yet.")
     def test_endpoint_commands(self):
         """
         Run a mainline multi-host test using endpoint commands

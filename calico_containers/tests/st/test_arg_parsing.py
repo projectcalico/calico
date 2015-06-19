@@ -30,8 +30,6 @@ class TestArgParsing(TestBase):
                      ("node --ip=aa:bb::cc", 1),
                      ("node --ip=127.0.0.1 --ip6=127.0.0.1", 1),
                      ("node --ip=127.0.0.1 --ip6=aa:bb::zz", 1),
-                     ("bgppeer rr add 127.a.0.1", 1),
-                     ("bgppeer rr add aa:bb::zz", 1),
                      ("pool add 127.a.0.1", 1),
                      ("pool add aa:bb::zz", 1),
                      ("container node1 ip add 127.a.0.1", 1),
@@ -45,23 +43,6 @@ class TestArgParsing(TestBase):
                                  "calicoctl %s returned code %s "
                                  "but we expected %s" %
                                  (cmd, cm.exception.returncode, rc))
-
-            # Add some pools and BGP peers and check the show commands
-            examples = [
-                ["1.2.3.4", 4],
-                ["aa:bb::ff", 6],
-            ]
-            for [peer, version] in examples:
-                host.calicoctl("bgppeer rr add %s" % peer)
-                self.assertIn(peer, host.calicoctl("bgppeer rr show"))
-                self.assertIn(peer,
-                              host.calicoctl("bgppeer rr show --ipv%s" %
-                                             version))
-                self.assertNotIn(peer,
-                                 host.calicoctl("bgppeer rr show --ipv%s" %
-                                                self.ip_not(version)))
-                host.calicoctl("bgppeer rr remove %s" % peer)
-                self.assertNotIn(peer, host.calicoctl("bgppeer rr show"))
 
             examples = [
                 ["1.2.3.4", "1.2.3.4/32", 4],

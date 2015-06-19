@@ -61,7 +61,7 @@ class Workload(object):
         if network:
             if network is not NET_NONE:
                 assert isinstance(network, DockerNetwork)
-            args.append("--net=%s" % network)
+            args.append("--publish-service=%s.%s" % (name, network))
         args.append(image)
         command = ' '.join(args)
 
@@ -108,7 +108,7 @@ class Workload(object):
         assert version in [4, 6]
         if version == 4:
             ping = "ping"
-        elif version == 6:
+        else:  # if version == 6:
             ping = "ping6"
 
         args = [

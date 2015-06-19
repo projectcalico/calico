@@ -97,9 +97,8 @@ def create_endpoint():
 
     # Create a calico endpoint object which we can populate and return to
     # libnetwork at the end of this method.
-    ep = Endpoint(ep_id=ep_id,
-                  state="active",
-                  mac=FIXED_MAC)
+    ep = Endpoint(hostname, "docker", CONTAINER_NAME, ep_id, "active",
+                  FIXED_MAC)
     ep.profile_id = net_id
 
     # This method is split into three phases that have side effects.
