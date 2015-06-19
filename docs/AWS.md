@@ -129,7 +129,7 @@ On the second host, run:
 export DOCKER_HOST=localhost:2377
 docker run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=test --name container-2 -tid busybox
 ```
-Then, run the following on the second host to see the that two containers are be able to ping each other:
+Then, run the following on the second host to see the that two containers are able to ping each other:
 ```
 docker exec container-2 ping -c 4 192.168.1.1
 ```
@@ -171,11 +171,10 @@ Outbound rules:
    1 allow
 ```
 
-After creating the WEB profile, run the following command on one of your AWS Calico hosts to create a Calico container running a basic NGINX http server:
+After creating the WEB profile, run the following command on one of your AWS Calico hosts to create a Calico container under this profile, running a basic NGINX http server:
 ```
 docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx -P -d nginx
 ```
-This container has 192.168.2.1 as its IP address and follows the WEB security profile, so TCP ports 80 and 443 are exposed on the container.
 
 On the same host, create a NAT that forwards port 80 traffic to the new container.
 ```
@@ -190,7 +189,7 @@ aws ec2 authorize-security-group-ingress \
   --port 80
 ```
 
-You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by using a browser to visit http://<host public ip> or running:
+You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by visiting http://<host public ip>:80 or running:
 ```
 curl http://<host public ip>:80
 ```
