@@ -123,6 +123,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                 metadata_port=config.METADATA_PORT,
                 dhcp_src_port=68,
                 dhcp_dst_port=67,
+                ipv6=False,
                 default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
             )
         else:
@@ -132,6 +133,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                 metadata_port=None,
                 dhcp_src_port=546,
                 dhcp_dst_port=547,
+                ipv6=True,
                 default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
             )
 
@@ -375,12 +377,31 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
 
 
 def _build_input_chain(iface_match, metadata_addr, metadata_port,
-                       dhcp_src_port, dhcp_dst_port, default_action="DROP"):
+                       dhcp_src_port, dhcp_dst_port, ipv6=False,
+                       default_action="DROP"):
     """
     Returns a list of rules that should be applied to the INPUT chain.
     """
     chain = []
     deps = set()
+    dns_dst_port = 53
+
+    #  In ipv6 only, there are 6 rules that need to be created first.
+    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 130
+    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 131
+    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 132
+    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmp router-advertisement
+    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmp neighbour-solicitation
+    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmp neighbour-advertisement
+    #
+    #  These rules are ICMP types 130, 131, 132, 134, 135 and 136.
+    if ipv6:
+        for icmp_type in ["130", "131", "132", "134", "135", "136"]:
+            chain.append("--append %s --jump ACCEPT "
+                         "--in-interface %s --protocol ipv6-icmp "
+                         "--icmpv6-type %s" %
+                         (CHAIN_INPUT, iface_match, icmp_type))
+
     chain.append("--append %s --match conntrack --ctstate INVALID "
                  "--jump DROP" % CHAIN_INPUT)
     chain.append("--append %s --match conntrack --ctstate RELATED,ESTABLISHED "
@@ -398,6 +419,13 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
         "--append %s --protocol udp --in-interface %s --sport %d "
         "--dport %s --jump ACCEPT" %
         (CHAIN_INPUT, iface_match, dhcp_src_port, dhcp_dst_port)
+    )
+
+    # Special-case: allow DNS.
+    chain.append(
+        "--append %s --protocol udp --in-interface %s "
+        "--dport %s --jump ACCEPT" %
+        (CHAIN_INPUT, iface_match, dns_dst_port)
     )
 
     if default_action != "DROP":
