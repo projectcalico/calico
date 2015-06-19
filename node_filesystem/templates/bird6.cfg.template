@@ -35,12 +35,27 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
+{{/* ------------ Template definitions ----------------- */}}
+{{define "MESH6"}}
+{{range $host := lsdir "/host"}}
+{{$onode_as_key := printf "/host/%s/bgp_as" .}}
+{{$onode_ip_key := printf "/host/%s/bird6_ip" .}}{{$onode_ip := getv $onode_ip_key}}
+{{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
+# For peer {{$onode_ip_key}}
+{{if eq $onode_ip (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
+{{else if eq "" $onode_ip}}# No IPv6 address configured for this node
+{{else}}protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+}{{end}}{{end}}
+{{end}}
+
 {{if eq "" (getenv "IP6")}}# IPv6 disabled on this node.
-{{else}}# Template for all BGP clients
+{{else}}{{$node_as_key := printf "/host/%s/bgp_as" (getenv "HOSTNAME")}}
+# Template for all BGP clients
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
-  local as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+  local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
@@ -53,23 +68,37 @@ template bgp bgp_template {
   graceful restart;  # See comment in kernel section about graceful restart.
 }
 
-{{if ls "/config/bgp_peer_rr_v6"}}
-# Peering with configured neighbors.
-{{range gets "/config/bgp_peer_rr_v6/*"}}{{$nums := split .Value ":"}}{{$id := join $nums "_"}}
-# For peer {{.Value}}
-protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}
+# ------------- Node-to-node mesh -------------
+{{if not (exists "/config/bgp_node_mesh")}}
+{{template "MESH6"}}
+{{else if (json (getv "/config/bgp_node_mesh")).enabled}}
+{{template "MESH6"}}
+{{else}}
+# Node-to-node mesh disabled
 {{end}}
-{{else if ls "/host"}}   {{/* Check that there are entries */}}
-# Peering with all neighbours (mesh).
-{{range gets "/host/*/bird6_ip"}}{{$nums := split .Value ":"}}{{$id := join $nums "_"}}
+
+
+# ------------- Global peers -------------
+{{if ls "/config/bgp_peer_v6"}}
+{{range gets "/config/bgp_peer_v6/*"}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
-{{if eq .Value (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
-{{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$data.ip}} as {{$data.as_num}};
 }
-{{end}}{{end}}{{end}}
 {{end}}
+{{else}}# No global peers configured.{{end}}
 
 
+# ------------- Node-specific peers -------------
+{{$node_peers_key := printf "/host/%s/bgp_peer_v6" (getenv "HOSTNAME")}}
+{{if ls $node_peers_key}}
+{{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+# For peer {{.Key}}
+protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$data.ip}} as {{$data.as_num}};
+}
+{{end}}
+{{else}}# No node-specific peers configured.{{end}}
+{{end}}

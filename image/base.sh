@@ -31,5 +31,5 @@ apt-get install -qy \
         bird6
 
 # Copy patched BIRD daemon with tunnel support.
-curl -L https://www.dropbox.com/s/ymbvyi6388h92qg/bird?dl=1 -o /usr/sbin/bird && \
+curl -L https://www.dropbox.com/s/xjhfckzse25x554/bird-6af4e30d3fccb0c6bd184e9168294c807e1e6d68?dl=1 -o /usr/sbin/bird && \
     chmod +x /usr/sbin/bird

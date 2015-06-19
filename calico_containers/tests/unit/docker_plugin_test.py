@@ -50,7 +50,12 @@ class TestPlugin(unittest.TestCase):
 
     def test_join(self):
         endpoint_mock = Mock()
-        endpoint = Endpoint(TEST_ID, "active", "mac", "eth0")
+        endpoint = Endpoint("hostname",
+                            "docker",
+                            "undefined",
+                            TEST_ID,
+                            "active",
+                            "mac")
         endpoint.ipv4_gateway = IPAddress("1.2.3.4")
         endpoint.ipv6_gateway = IPAddress("FE80::0202:B3FF:FE1E:8329")
         endpoint.ipv4_nets.add(IPNetwork("1.2.3.4/24"))

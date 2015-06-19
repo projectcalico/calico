@@ -45,11 +45,25 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
+{{/* ------------ Template definitions ----------------- */}}
+{{define "MESH4"}}
+{{range $host := lsdir "/host"}}
+{{$onode_as_key := printf "/host/%s/bgp_as" .}}
+{{$onode_ip_key := printf "/host/%s/bird_ip" .}}{{$onode_ip := getv $onode_ip_key}}
+{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
+# For peer {{$onode_ip_key}}
+{{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
+{{else if ne "" $onode_ip}}protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+}{{end}}{{end}}
+{{end}}
+
+{{$node_as_key := printf "/host/%s/bgp_as" (getenv "HOSTNAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
-  local as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+  local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
@@ -62,20 +76,36 @@ template bgp bgp_template {
   graceful restart;  # See comment in kernel section about graceful restart.
 }
 
-{{if ls "/config/bgp_peer_rr_v4"}}
-# Peering with configured neighbors.
-{{range gets "/config/bgp_peer_rr_v4/*"}}{{$nums := split .Value "."}}{{$id := join $nums "_"}}
-# For peer {{.Value}}
+# ------------- Node-to-node mesh -------------
+{{if not (exists "/config/bgp_node_mesh")}}
+{{template "MESH4"}}
+{{else if (json (getv "/config/bgp_node_mesh")).enabled}}
+{{template "MESH4"}}
+{{else}}
+# Node-to-node mesh disabled
+{{end}}
+
+
+# ------------- Global peers -------------
+{{if ls "/config/bgp_peer_v4"}}
+{{range gets "/config/bgp_peer_v4/*"}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+# For peer {{.Key}}
 protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+  neighbor {{$data.ip}} as {{$data.as_num}};
 }
 {{end}}
-{{else if ls "/host"}}   {{/* Check that there are entries */}}
-# Peering with all neighbours (mesh).
-{{range gets "/host/*/bird_ip"}}{{$nums := split .Value "."}}{{$id := join $nums "_"}}
+{{else}}# No global peers configured.{{end}}
+
+
+# ------------- Node-specific peers -------------
+{{$node_peers_key := printf "/host/%s/bgp_peer_v4" (getenv "HOSTNAME")}}
+{{if ls $node_peers_key}}
+{{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
-{{if eq .Value (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
-{{else if ne "" .Value}}protocol bgp bgp_{{$id}} from bgp_template {
-  neighbor {{.Value}} as {{if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+protocol bgp bgp_{{$id}} from bgp_template {
+  neighbor {{$data.ip}} as {{$data.as_num}};
 }
-{{end}}{{end}}{{end}}
+{{end}}
+{{else}}# No node-specific peers configured.{{end}}

@@ -13,7 +13,7 @@ from pycalico.ipam import SequentialAssignment, IPAMClient
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"
 
-CONTAINER_NAME = "undefined"
+CONTAINER_NAME = "libnetwork"
 
 # How long to wait (seconds) for IP commands to complete.
 IP_CMD_TIMEOUT = 5

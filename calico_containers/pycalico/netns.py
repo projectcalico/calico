@@ -110,7 +110,7 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
                       shell=True)
 
 
-def set_up_endpoint(ip, cpid, next_hop_ips,
+def set_up_endpoint(ip, hostname, orchestrator_id, cpid, next_hop_ips,
                     veth_name=VETH_NAME,
                     proc_alias=PROC_ALIAS,
                     mac=None):
@@ -189,7 +189,13 @@ def set_up_endpoint(ip, cpid, next_hop_ips,
 
     # Return an Endpoint.
     network = IPNetwork(IPAddress(ip))
-    ep = Endpoint(ep_id=ep_id, state="active", mac=mac, if_name=veth_name)
+    ep = Endpoint(hostname=hostname,
+                  orchestrator_id=orchestrator_id,
+                  workload_id=cpid,
+                  endpoint_id=ep_id,
+                  state="active",
+                  mac=mac)
+    ep.if_name = veth_name
     if network.version == 4:
         ep.ipv4_nets.add(network)
         ep.ipv4_gateway = next_hop
@@ -203,6 +209,7 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
                        proc_alias=PROC_ALIAS):
     """
     Re-instate and endpoint that has been removed.
+    :param hostname: The hostname this endpoint resides in
     :param cpid: The PID of the namespace to operate in.
     :param old_endpoint: The old endpoint that is being re-instated.
     :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
@@ -214,11 +221,13 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
     if_name = old_endpoint.if_name
     net = nets.pop()
     new_endpoint = set_up_endpoint(ip=net.ip,
+                                   hostname=old_endpoint.hostname,
+                                   orchestrator_id=old_endpoint.orchestrator_id,
                                    cpid=cpid,
                                    next_hop_ips=next_hop_ips,
                                    veth_name=if_name,
                                    proc_alias=proc_alias,
-                                   ep_id=old_endpoint.ep_id,
+                                   ep_id=old_endpoint.endpoint_id,
                                    mac=old_endpoint.mac)
     for net in nets:
         add_ip_to_interface(cpid, net.ip, if_name, proc_alias=proc_alias)
