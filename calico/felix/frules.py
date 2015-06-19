@@ -393,8 +393,9 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     if ipv6:
         for icmp_type in ["130", "131", "132", "134", "135", "136"]:
             chain.append("--append %s --jump ACCEPT "
-                         "--protocol ipv6-icmp "
-                         "--icmpv6-type %s" % (CHAIN_INPUT, icmp_type))
+                         "--in-interface %s --protocol ipv6-icmp "
+                         "--icmpv6-type %s" %
+                         (CHAIN_INPUT, iface_match, icmp_type))
 
     chain.append("--append %s --match conntrack --ctstate INVALID "
                  "--jump DROP" % CHAIN_INPUT)
