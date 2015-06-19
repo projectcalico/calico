@@ -51,7 +51,7 @@ Usage:
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [--detailed] [<PROFILES>...]
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
   calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
   calicoctl reset
   calicoctl diags [--log-dir=<LOG_DIR>] [--upload]
@@ -781,6 +781,25 @@ def profile_rule_add_remove(
 
     :return:
     """
+    if icmp_type is not None:
+        try:
+            icmp_type = int(icmp_type)
+        except ValueError:
+            print "ICMP type should be an integer"
+            sys.exit(1)
+        if not (0 <= icmp_type < 255):  # Felix doesn't support 255.
+            print "ICMP type out of range"
+            sys.exit(1)
+    if icmp_code is not None:
+        try:
+            icmp_code = int(icmp_code)
+        except ValueError:
+            print "ICMP code should be an integer"
+            sys.exit(1)
+        if not (0 <= icmp_code < 255):  # Felix doesn't support 255.
+            print "ICMP code out of range"
+            sys.exit(1)
+
     # Convert the input into a Rule.
     rule_dict = {k: v for (k, v) in locals().iteritems()
                  if k in Rule.ALLOWED_KEYS and v is not None}
@@ -1469,7 +1488,7 @@ def endpoint_profile_show(hostname, orchestrator_id, workload_id, endpoint_id):
     :return: None
     """
     try:
-        endpoint = client.get_endpoints(hostname=hostname,
+        endpoint = client.get_endpoint(hostname=hostname,
                                         orchestrator_id=orchestrator_id,
                                         workload_id=workload_id,
                                         endpoint_id=endpoint_id)

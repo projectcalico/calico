@@ -45,26 +45,53 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>] [--as=<AS_NUM>]
   calicoctl node stop [--force]
+  calicoctl node bgppeer add <PEER_IP> as <AS_NUM>
+  calicoctl node bgppeer remove <PEER_IP>
+  calicoctl node bgppeer show [--ipv4 | --ipv6]
   calicoctl status
   calicoctl profile show [--detailed]
   calicoctl profile (add|remove) <PROFILE>
   calicoctl profile <PROFILE> tag show
   calicoctl profile <PROFILE> tag (add|remove) <TAG>
+  calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
+    (allow|deny) [(
+      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
+                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+           [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
+           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
+      [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
+    )]
+  calicoctl profile <PROFILE> rule remove (inbound|outbound) (--at=<POSITION>|
+    (allow|deny) [(
+      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
+                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+           [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
+           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
+      [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
+    )])
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
   calicoctl profile <PROFILE> member add <CONTAINER>
-  calicoctl pool (add|remove) <CIDR> [--ipip]
+  calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
-  calicoctl bgppeer rr (add|remove) <IP>
-  calicoctl bgppeer rr show [--ipv4 | --ipv6]
+  calicoctl default-node-as [<AS_NUM>]
+  calicoctl bgppeer add <PEER_IP> as <AS_NUM>
+  calicoctl bgppeer remove <PEER_IP>
+  calicoctl bgppeer show [--ipv4 | --ipv6]
+  calicoctl bgp-node-mesh [on|off]
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
+  calicoctl container <CONTAINER> endpoint-id show
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER> [--force]
   calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [--detailed] [<PROFILES>...]
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [<PROFILES>...]
   calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
   calicoctl reset
   calicoctl diags [--upload]
@@ -79,10 +106,14 @@ Options:
  --ip6=<IP6>              The local IPv6 management address to use.
  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
                           Calico's per-node container
-                          [default: calico/node:v0.4.5]
+                          [default: calico/node:latest]
  --ipv4                   Show IPv4 information only.
  --ipv6                   Show IPv6 information only.
-
+ --host=<HOSTNAME>        Filters endpoints on a specific host.
+ --orchestrator=<ORCHESTRATOR_ID>    Filters endpoints created on a specific orchestrator.
+ --workload=<WORKLOAD_ID> Filters endpoints on a specific workload.
+ --endpoint=<ENDPOINT_ID> Filters endpoints with a specific endpoint ID.
+ --as=<AS_NUM>            The AS number to assign to the node.
 
 
 ```
