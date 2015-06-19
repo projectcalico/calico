@@ -117,22 +117,24 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                                         # FIXME support IP-in-IP for IPv6.
                                         (v6_filter_updater, None)]:
         if iptables_updater is v4_filter_updater:
-            input_chain = _build_input_chain(
+            input_chain, input_deps = _build_input_chain(
                 iface_match=iface_match,
                 metadata_addr=config.METADATA_IP,
                 metadata_port=config.METADATA_PORT,
                 dhcp_src_port=68,
                 dhcp_dst_port=67,
-                ipv6=False
+                ipv6=False,
+                default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
             )
         else:
-            input_chain = _build_input_chain(
+            input_chain, input_deps = _build_input_chain(
                 iface_match=iface_match,
                 metadata_addr=None,
                 metadata_port=None,
                 dhcp_src_port=546,
                 dhcp_dst_port=547,
-                ipv6=True
+                ipv6=True,
+                default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
             )
 
         forward_chain = [
@@ -161,7 +163,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             },
             {
                 CHAIN_FORWARD: set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT]),
-                CHAIN_INPUT: set(),
+                CHAIN_INPUT: input_deps,
             },
             async=False)
 
@@ -375,11 +377,13 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
 
 
 def _build_input_chain(iface_match, metadata_addr, metadata_port,
-                       dhcp_src_port, dhcp_dst_port, ipv6=False):
+                       dhcp_src_port, dhcp_dst_port, ipv6=False,
+                       default_action="DROP"):
     """
     Returns a list of rules that should be applied to the INPUT chain.
     """
     chain = []
+    deps = set()
     dns_dst_port = 53
 
     #  In ipv6 only, there are 6 rules that need to be created first.
@@ -410,26 +414,39 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
             (CHAIN_INPUT, iface_match, metadata_addr, metadata_port)
         )
 
-    # Add DHCP
+    # Special-case: allow DHCP.
     chain.append(
         "--append %s --protocol udp --in-interface %s --sport %d "
         "--dport %s --jump ACCEPT" %
         (CHAIN_INPUT, iface_match, dhcp_src_port, dhcp_dst_port)
     )
 
-    # Add DNS
+    # Special-case: allow DNS.
     chain.append(
         "--append %s --protocol udp --in-interface %s "
         "--dport %s --jump ACCEPT" %
         (CHAIN_INPUT, iface_match, dns_dst_port)
     )
 
+    if default_action != "DROP":
+        # Optimisation: the from-ENDPOINT chain signals acceptance of a packet
+        # by RETURNing.  If we're going to drop the packet anyway, don't
+        # bother applying the from-ENDPOINT chain.
+        _log.info("Default endpoint->host action set to %s, felix will apply"
+                  "per-endpoint policy to packets in the INPUT chain.",
+                  default_action)
+        chain.append(
+            "--append %s --jump %s --in-interface %s" %
+            (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match)
+        )
+        deps.add(CHAIN_FROM_ENDPOINT)
+
     chain.append(
-        "--append %s --in-interface %s --jump DROP" %
-        (CHAIN_INPUT, iface_match)
+        "--append %s --in-interface %s --jump %s" %
+        (CHAIN_INPUT, iface_match, default_action)
     )
 
-    return chain
+    return chain, deps
 
 
 def interface_to_suffix(config, iface_name):

@@ -173,6 +173,9 @@ class Config(object):
         self.add_parameter("MetadataPort", "Metadata Port",
                            8775, value_is_int=True)
         self.add_parameter("InterfacePrefix", "Interface name prefix", None)
+        self.add_parameter("DefaultEndpointToHostAction",
+                           "Action to take for packets that arrive from"
+                           "an endpoint to the host.", "DROP")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("LogSeverityFile",
@@ -224,6 +227,8 @@ class Config(object):
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
+        self.DEFAULT_INPUT_CHAIN_ACTION = \
+            self.parameters["DefaultEndpointToHostAction"].value
         self.LOGFILE = self.parameters["LogFilePath"].value
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
@@ -359,6 +364,12 @@ class Config(object):
                 raise ConfigException("Invalid field value",
                                       self.parameters["MetadataPort"])
 
+        if self.DEFAULT_INPUT_CHAIN_ACTION not in ("DROP", "RETURN", "ACCEPT"):
+            raise ConfigException(
+                "Invalid field value",
+                self.parameters["DefaultEndpointToHostAction"]
+            )
+
         if not final:
             # Do not check that unset parameters are defaulted; we have more
             # config to read.
@@ -375,7 +386,6 @@ class Config(object):
         for lKey in cfg_dict:
             log.warning("Got unexpected config item %s=%s",
                         lKey, cfg_dict[lKey])
-
 
     def _validate_addr(self, name, addr):
         """

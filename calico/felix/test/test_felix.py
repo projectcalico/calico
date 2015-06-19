@@ -73,6 +73,7 @@ class TestBasic(BaseTestCase):
         m_config.METADATA_IP = "10.0.0.1"
         m_config.METADATA_PORT = 1234
         m_config.IP_IN_IP_ENABLED = True
+        m_config.DEFAULT_INPUT_CHAIN_ACTION = "RETURN"
         with gevent.Timeout(5):
             self.assertRaises(TestException,
                               felix._main_greenlet, m_config)
