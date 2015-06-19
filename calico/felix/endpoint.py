@@ -263,7 +263,6 @@ class LocalEndpoint(RefCountedActor):
         old_endpoint = self.endpoint or {}
         old_ip_nets = set(old_endpoint.get(self.nets_key, []))
         removed_nets = old_ip_nets - new_ip_nets
-        remove_conntrack_flows([futils.net_to_ip(n) for n in removed_nets])
 
         # Store off the endpoint we were passed.
         self.endpoint = endpoint

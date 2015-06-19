@@ -196,8 +196,10 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
 
     current_ips = list_interface_ips(ip_type, interface)
 
-    for ip in (current_ips - ips):
+    removed_ips = (current_ips - ips)
+    for ip in removed_ips:
         del_route(ip_type, ip, interface)
+    remove_conntrack_flows(removed_ips, 4 if ip_type == futils.IPV4 else 6)
     for ip in (ips - current_ips):
         add_route(ip_type, ip, interface, mac)
     if reset_arp:
@@ -232,17 +234,20 @@ def interface_up(if_name):
     return bool(int(flags, 16) & 1)
 
 
-def remove_conntrack_flows(ip_addresses):
+def remove_conntrack_flows(ip_addresses, ip_version):
     """
     Removes any conntrack entries that use any of the given IP
     addresses in their source/destination.
     """
+    assert ip_version in (4, 6)
     for ip in ip_addresses:
         _log.debug("Removing conntrack rules for %s", ip)
         for direction in ["--orig-src", "--orig-dst",
                           "--reply-src", "--reply-dst"]:
             try:
-                futils.check_call(["conntrack", "--delete", direction, ip])
+                futils.check_call(["conntrack", "--family",
+                                   "ipv%s" % ip_version, "--delete",
+                                   direction, ip])
             except FailedSystemCall as e:
                 if e.retcode == 1 and "0 flow entries" in e.stderr:
                     # Expected if there are no flows.
