@@ -1,49 +1,17 @@
 # Running calico-docker networking on a Docker Swarm.
 The following instructions configure a Docker Swarm cluster networked using Calico.  In this tutorial, we will do the following.
-- Configure Docker Swarm on a VM cluster.
-- Configure etcd and Calico on our cluster.
+- Configure etcd and Calico on a cluster.
+- Configure Docker Swarm on our VM cluster.
 - Provision workloads on the Swarm, and check they can communicate.
 
 ## Prerequisites
 To complete this demo, make sure you have the following prerequisites.
 - Four Linux servers (VMs or bare-metal) with Docker 1.4 or later installed.  The servers should have IP connectivity to each other.
 
-## Installing Swarm on your cluster
 Our Docker Swarm will consist of four nodes with the following roles: 
   - 1 Swarm client (to control the Swarm)
   - 1 Swarm manager (to manage the Swarm nodes)
   - 2 Swarm nodes (to host our containers)
-
-
-We'll use the token based discovery backend, so let's first create the token which will identify our swarm.  To do this, run the following on your client node.  Note that docker commands may need to be run with root privaliges depending on your docker installation.
-```
-docker pull swarm
-docker run --rm swarm create
-``` 
-
-The second command will print a unique cluster ID token which we must use to configure our Swarm.  We'll reference this value in the tutorial as ```<swarm_token>```. 
-Your token should look something like this: d435dc114a3dd89af2fae239257338ce
-
-Now that we've got a token, we can begin to configure our Swarm.  First, let's join each of our two Swarm nodes to the
-cluster.  
-
-To make things simpler, let's store a couple of commonly used values in environment variables.  Do this on each node - we'll reference these variables throughout this tutorial.
-```
-export MANAGER_IP=<Manager Node's IP Address>
-export NODE_IP=<This Node's IP Address>
-```
-
-Run the following commands on each node, replacing ```<swarm_token>``` with the token from above.
-```
-docker run -d swarm join --addr=$NODE_IP:2377 token://<swarm_token>
-```
-
-Let's now configure the Swarm manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon. 
-```
-docker run -d -p <swarm_port>:2375 swarm manage token://<swarm_token>
-```
-
-At this point, the Swarm agents are running on our cluster.  However, the cluster won't be complete until Calico is installed and running on the Swarm nodes.
 
 ## Installing etcd
 Calico requires etcd, so let's install it on our cluster.  For this example, we'll only configure a single node etcd cluster.  However, in a production environment, a minimum of a three node etcd cluster is recommended.
@@ -72,9 +40,15 @@ etcd -name etcd0  -advertise-client-urls http://$MANAGER_IP:2379,http://$MANAGER
 ```
 
 ## Installing calicoctl on each Swarm node
-Now that etcd is running, we can install calico.  Run the following set of commands on each Swarm node. 
+Now that etcd is running, we can install calico.  
 
-These commands download and start Calico on the node.
+To make things simpler, let's store a couple of commonly used values in environment variables.  Do this on each node - we'll reference these variables throughout this tutorial.
+```
+export MANAGER_IP=<Manager Node's IP Address>
+export NODE_IP=<This Node's IP Address>
+```
+
+Run the following set of commands on each container host (node) to download and start Calico.
 ```
 # Download calicoctl and make it executable:
 wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.5/calicoctl
@@ -107,6 +81,33 @@ chmod +x ./calicoctl
 # Point this node at the etcd cluster
 export ETCD_AUTHORITY=$MANAGER_IP:4001
 ```
+
+## Installing Swarm on your cluster
+Now that Calico networking is configured on our cluster, lets join our nodes into a Docker Swarm cluster.
+
+We'll use the token based discovery backend, so let's first create the token which will identify our swarm.  To do this, run the following on your client node.  Note that docker commands may need to be run with root privaliges depending on your docker installation.
+```
+docker pull swarm
+docker run --rm swarm create
+``` 
+
+The second command will print a unique cluster ID token which we must use to configure our Swarm.  We'll reference this value in the tutorial as ```<swarm_token>```. 
+Your token should look something like this: d435dc104abdd89af24ae2392c7338ce
+
+Now that we've got a token, we can begin to configure our Swarm.  First, let's join each of our two Swarm nodes to the
+cluster.  
+
+Run the following commands on each node, replacing ```<swarm_token>``` with the token from above.
+```
+docker run -d swarm join --addr=$NODE_IP:2377 token://<swarm_token>
+```
+
+Let's now configure the Swarm manager node.  To do this, run the following on your Swarm manager node.  Note that ```<swarm_port>``` in the following command can be any unused TCP port on the manager server.  This is the port the client will use to communicate with the Swarm manager daemon. 
+```
+docker run -d -p <swarm_port>:2375 swarm manage token://<swarm_token>
+```
+
+We're now ready to provision containers on our Swarm. 
 
 ## Create containers and check connectivity.
 At this point we should have a fully configured Calico networked Swarm cluster.  However, there are no workloads running on our cluster.  Let's create a few containers and check their connectivity.  We can run the following commands on the client node against the Swarm Manager using the -H flag.
