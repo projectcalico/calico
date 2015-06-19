@@ -19,10 +19,7 @@ felix.devices
 Utility functions for managing devices in Felix.
 """
 import logging
-import collections
 from calico.felix.actor import Actor, actor_message
-import gevent
-from gevent import subprocess
 import os
 import socket
 import struct
@@ -48,7 +45,7 @@ def interface_exists(interface):
     of being deleted, so we use ip link list instead.
     """
     try:
-        data = futils.check_call(["ip", "link", "list", interface])
+        futils.check_call(["ip", "link", "list", interface])
         return True
     except futils.FailedSystemCall as fsc:
         if fsc.stderr.count("does not exist") != 0:
@@ -56,6 +53,7 @@ def interface_exists(interface):
         else:
             # An error other than does not exist; just pass on up
             raise
+
 
 def list_interface_ips(ip_type, interface):
     """
@@ -78,11 +76,8 @@ def list_interface_ips(ip_type, interface):
     _log.debug("Existing routes to %s : %s" % (interface, ",".join(lines)))
 
     for line in lines:
-        #*********************************************************************#
-        #* Example of the lines we care about is (having specified the       *#
-        #* device above) :                                                   *#
-        #* 10.11.2.66 proto static scope link                                *#
-        #*********************************************************************#
+        # Example of the lines we care about is (having specified the
+        # device above):  "10.11.2.66 proto static scope link"
         words = line.split()
 
         if len(words) > 1:
@@ -108,7 +103,8 @@ def configure_interface_ipv4(if_name):
     :param if_name: The name of the interface to configure.
     :returns: None
     """
-    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % if_name, 'wb') as f:
+    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % if_name,
+              'wb') as f:
         f.write('1')
 
     with open("/proc/sys/net/ipv4/conf/%s/proxy_arp" % if_name, 'wb') as f:
@@ -160,7 +156,8 @@ def add_route(ip_type, ip, interface, mac):
         futils.check_call(['arp', '-s', ip, mac, '-i', interface])
         futils.check_call(["ip", "route", "replace", ip, "dev", interface])
     else:
-        futils.check_call(["ip", "-6", "route", "replace", ip, "dev", interface])
+        futils.check_call(["ip", "-6", "route", "replace", ip, "dev",
+                           interface])
 
 
 def del_route(ip_type, ip, interface):
@@ -267,7 +264,9 @@ class InterfaceWatcher(Actor):
         :returns: Never returns.
         """
         # Create the netlink socket and bind to RTMGRP_LINK,
-        s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
+        s = socket.socket(socket.AF_NETLINK,
+                          socket.SOCK_RAW,
+                          socket.NETLINK_ROUTE)
         s.bind((os.getpid(), RTMGRP_LINK))
 
         while True:
