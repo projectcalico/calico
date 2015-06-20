@@ -1,22 +1,22 @@
 # Running calico-docker networking on a Docker Swarm.
-The following instructions configure a Docker Swarm cluster networked using Calico.  In this tutorial, we will do the following.
+The following instructions configure a Docker Swarm cluster networked using Calico.  In this tutorial, we will do the following. 
 - Configure etcd and Calico on a cluster.
 - Configure Docker Swarm on our VM cluster.
 - Provision workloads on the Swarm, and check they can communicate.
 
 ## Prerequisites
 To complete this demo, make sure you have the following prerequisites.
-- Four Linux servers (VMs or bare-metal) with Docker 1.4 or later installed.  The servers should have IP connectivity to each other.
+- Four Linux servers (VMs or bare-metal) with [Docker 1.4](https://docs.docker.com/installation/) or later installed.  The servers should have IP connectivity to each other.
 
 Our Docker Swarm will consist of four nodes with the following roles: 
-  - 1 Swarm client (to control the Swarm)
   - 1 Swarm manager (to manage the Swarm nodes)
+  - 1 Swarm client (to control the Swarm)
   - 2 Swarm nodes (to host our containers)
 
 ## Installing etcd
-Calico requires etcd, so let's install it on our cluster.  For this example, we'll only configure a single node etcd cluster.  However, in a production environment, a minimum of a three node etcd cluster is recommended.
+Calico requires etcd, so let's install it on our cluster.  For this example, we'll only configure a single node etcd cluster.  However, in a production environment, a minimum size of three nodes is recommended.
 
-Let's install etcd on our manager node.  Run the following to download the etcd binaries.
+Run the following on the **manager node** to download the etcd binaries:
 ```
 # Download etcd for Linux 
 curl -L https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
@@ -28,21 +28,26 @@ sudo cp etcd /usr/local/bin
 sudo cp etcdctl /usr/local/bin
 ```
 
-Now that etcd is installed, let's run our single node cluster. We need to start etcd with the IP address of the manager node, so store it in an environment variable for easy access.
+Now that etcd is installed, let's run our single node cluster. We need to start etcd with the IP address of the manager node, so store the manager node's IP as environment variable for easy access.
 ```
 export MANAGER_IP=<Manager's IP address>
 ```
 
-Use the following command to start etcd:
+Then, start etcd:
 ```
-etcd -name etcd0  -advertise-client-urls http://$MANAGER_IP:2379,http://$MANAGER_IP:4001  -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001  -initial-advertise-peer-urls http://$MANAGER_IP:2380  -listen-peer-urls http://0.0.0.0:2380  -initial-cluster-token etcd-cluster-1  -initial-cluster etcd0=http://$MANAGER_IP:2380 -initial-cluster-state new &
-
+etcd -name etcd0  -advertise-client-urls http://$MANAGER_IP:2379,http://$MANAGER_IP:4001 \
+  -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001 \
+  -initial-advertise-peer-urls http://$MANAGER_IP:2380 \
+  -listen-peer-urls http://0.0.0.0:2380  \
+  -initial-cluster-token etcd-cluster-1 \
+  -initial-cluster etcd0=http://$MANAGER_IP:2380 \
+  -initial-cluster-state new &
 ```
 
 ## Installing calicoctl on each Swarm node
 Now that etcd is running, we can install calico.  
 
-To make things simpler, let's store a couple of commonly used values in environment variables.  Do this on each node - we'll reference these variables throughout this tutorial.
+To make things simpler, let's store a couple of commonly used values in environment variable on each **Swarm node** to be used later:
 ```
 export MANAGER_IP=<Manager Node's IP Address>
 export NODE_IP=<This Node's IP Address>
@@ -63,7 +68,8 @@ export DOCKER_HOST=localhost:2377
 # Check that all required dependencies are installed.
 sudo ./calicoctl checksystem --fix
 
-# Start the calico node service.  We must specify the ETCD_AUTHORITY variable since sudo uses its own environment.
+# Start the calico node service.  We must specify the ETCD_AUTHORITY variable since 
+# sudo uses its own environment.
 sudo ETCD_AUTHORITY=$MANAGER_IP:4001 ./calicoctl node --ip=$NODE_IP
 ```
 
@@ -126,14 +132,19 @@ First, create profiles using calicoctl.  These profiles will allow our container
 
 Now, let's create some containers on our cluster. Run the following commands on your client node.
 ```
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.1 -e CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.3 -e CALICO_PROFILE=PROF_A_B_C --name workload-C -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.4 -e CALICO_PROFILE=PROF_D --name workload-D -tid busybox
-docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.5 -e CALICO_PROFILE=PROF_E --name workload-E -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.1 \
+      -e CALICO_PROFILE=PROF_A_B_C --name workload-A -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.2 \
+      -e CALICO_PROFILE=PROF_A_B_C --name workload-B -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.3 \
+      -e CALICO_PROFILE=PROF_A_B_C --name workload-C -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.4 \
+      -e CALICO_PROFILE=PROF_D --name workload-D -tid busybox
+docker -H $MANAGER_IP:$SWARM_PORT run -e CALICO_IP=192.168.1.5 \
+      -e CALICO_PROFILE=PROF_E --name workload-E -tid busybox
 ```
 
-We can run ```ps``` against the Swarm manager to check that the containers have been created. 
+We can run ```ps``` on the **client** against the Swarm manager to check that the containers have been created. 
 ```
 docker -H $MANAGER_IP:$SWARM_PORT ps
 ```
@@ -150,8 +161,7 @@ CONTAINER ID        IMAGE                COMMAND             CREATED            
 3dff7c3d76c6        calico/node:v0.4.5   "/sbin/my_init"     About an hour ago   Up 59 minutes                     swarm-node2/calico-node
 ```
 
-Container workload-A should be able to ping workload-B and workload-C, since they belong to the same profile.  We can
-verify this by running the following commands on our client node.
+Container workload-A should be able to ping workload-B and workload-C, since they belong to the same profile.  Verify this by running the following commands on our client node:
 ```
 docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 192.168.1.2 
 docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 192.168.1.3 
