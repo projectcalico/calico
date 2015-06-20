@@ -41,11 +41,20 @@ class TestDuplicateIps(TestBase):
         host1.calicoctl("profile add TEST_PROFILE")
 
         # Add everyone to the same profile
-        host1.calicoctl("profile TEST_PROFILE member add %s" % workload1)
-        host1.calicoctl("profile TEST_PROFILE member add %s" % dup1)
-        host2.calicoctl("profile TEST_PROFILE member add %s" % workload2)
-        host2.calicoctl("profile TEST_PROFILE member add %s" % dup2)
-        host3.calicoctl("profile TEST_PROFILE member add %s" % workload3)
+        workload1_epid = host1.calicoctl("container %s endpoint-id show" % workload1).strip()
+        host1.calicoctl("endpoint %s profile append TEST_PROFILE" % workload1_epid)
+
+        dup1_epid = host1.calicoctl("container %s endpoint-id show" % dup1).strip()
+        host1.calicoctl("endpoint %s profile append TEST_PROFILE" % dup1_epid)
+
+        workload2_epid = host2.calicoctl("container %s endpoint-id show" % workload2).strip()
+        host2.calicoctl("endpoint %s profile append TEST_PROFILE" % workload2_epid)
+
+        dup2_epid = host2.calicoctl("container %s endpoint-id show" % dup2).strip()
+        host2.calicoctl("endpoint %s profile append TEST_PROFILE" % dup2_epid)
+
+        workload3_dpid = host3.calicoctl("container %s endpoint-id show" % workload3).strip()
+        host3.calicoctl("endpoint %s profile append TEST_PROFILE" % workload3_dpid)
 
         # Check for standard connectivity
         workload1.assert_can_ping(dup_ip, retries=3)
