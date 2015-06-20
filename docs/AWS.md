@@ -185,7 +185,7 @@ docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx -P -d n
 
 On the same host, create a NAT that forwards port 80 traffic to the new container.
 ```
-iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT --to 192.168.2.1:80
+sudo iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT --to 192.168.2.1:80
 ```
 
 Lastly, the AWS host's security group must be updated for any ports you want to expose.  Run this command from your aws CLI machine to allow incoming traffic to port 80:

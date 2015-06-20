@@ -137,7 +137,7 @@ docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx1 -P -d 
 
 On the same host, create a NAT that forwards port 80 traffic to the new container.
 ```
-iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
+sudo iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
 ```
 
 You should now be able to access the NGINX http server using the public ip address of your DigitalOcean host on port 80 by visiting http://<host public ip>:80 or running:

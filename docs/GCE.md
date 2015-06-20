@@ -155,7 +155,7 @@ docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx1 -P -d 
 
 On the same host, create a NAT that forwards port 80 traffic to the new container.
 ```
-iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
+sudo iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
 ```
 
 Lastly, the GCE's firewall rules must be updated for any ports you want to expose. Run this gcloud command to allow incoming traffic to port 80:
