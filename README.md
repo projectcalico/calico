@@ -17,7 +17,7 @@ The best way to get started with Calico for the first time is by following the [
 Another great way to get hands-on with Calico is by following one of our tutorials.
 - [Calico on Amazon](docs/AWS.md)
 - [Calico on Google Compute Engine](docs/GCE.md)
-- [Calico on Digital Ocean](docs/DigitalOcean.md)
+- [Calico on DigitalOcean](docs/DigitalOcean.md)
 - [Calico and Docker Swarm](docs/CalicoSwarm.md)
 
 ## How does it work?
