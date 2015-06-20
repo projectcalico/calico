@@ -158,6 +158,12 @@ On the same host, create a NAT that forwards port 80 traffic to the new containe
 iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
 ```
 
+Lastly, the GCE's firewall rules must be updated for any ports you want to expose. Run this gcloud command to allow incoming traffic to port 80:
+```
+gcloud compute firewall-rules create allow-http \
+  --description "Incoming http allowed." --allow tcp:80
+```
+
 You should now be able to access the NGINX http server using the public ip address of your GCE host on port 80 by visiting http://<host public ip>:80 or running:
 ```
 curl http://<host public ip>:80
