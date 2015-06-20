@@ -243,7 +243,7 @@ class AdapterResource(resource.Resource):
                 _log.info("Autocreating profile %s", profile)
                 self.datastore.create_profile(profile)
             _log.info("Adding container %s to profile %s", cid, profile)
-            endpoint.profile_id = profile
+            endpoint.profile_ids = [profile]
             _log.info("Finished adding container %s to profile %s",
                       cid, profile)
 
