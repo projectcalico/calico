@@ -21,7 +21,7 @@ write_files:
     content: |
       #!/bin/bash
       # Download calicoctl and make it executable:
-      wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
+      wget http://projectcalico.org/latest/calicoctl
       chmod +x ./calicoctl
       # Start the calico node service:
       sudo ./calicoctl node --ip=$private_ipv4
@@ -115,7 +115,6 @@ Notice that profiles define policy for inbound packets and outbound packets sepa
 Let's modify this profile to make it more appropriate for a public webserver by allowing TCP traffic on ports 80 and 443:
 ```
 ./calicoctl profile WEB rule add inbound allow tcp to ports 80,443
-./calicoctl profile WEB rule add inbound allow icmp type 8
 ```
 
 Now, we can list the rules again and see the changes:

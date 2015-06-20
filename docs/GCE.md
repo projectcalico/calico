@@ -71,7 +71,7 @@ gcloud compute instances create \
 On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
+wget http://projectcalico.org/latest/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
@@ -123,7 +123,6 @@ Outbound rules:
 Let's modify this profile to make it more appropriate for a public webserver by allowing TCP traffic on ports 80 and 443:
 ```
 ./calicoctl profile WEB rule add inbound allow tcp to ports 80,443
-./calicoctl profile WEB rule add inbound allow icmp type 8
 ```
 
 Now, we can list the rules again and see the changes:
@@ -146,7 +145,7 @@ docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx1 -P -d 
 
 On the same host, create a NAT that forwards port 80 traffic to the new container.
 ```
-iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
+iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
 ```
 
 You should now be able to access the NGINX http server using the public ip address of your GCE host on port 80 by visiting http://<host public ip>:80 or running:
