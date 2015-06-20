@@ -122,10 +122,6 @@ Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
 
 By default, profiles are configured so that their members can communicate with one another, but workloads in other profiles cannot reach them.  B and D are in their own profiles so shouldn't be able to ping anyone else.
 
-Finally, to clean everything up (without doing a `vagrant destroy`), you can run
-
-    sudo ./calicoctl reset
-
 
 ## IPv6
 To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
