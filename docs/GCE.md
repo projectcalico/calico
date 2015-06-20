@@ -4,16 +4,21 @@ Calico runs on the Google Compute Engine (GCE), but there are a few tweaks requi
 ## Getting started
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see [the CoreOS on GCE documentation](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/).
 
-Download and install GCE and login to your account: 
+Download and install GCE, then restart your terminal: 
 ```
 curl https://sdk.cloud.google.com | bash
-gcloud auth login
 ```
 For more information, see Google's [gcloud install instructions](https://cloud.google.com/compute/docs/gcloud-compute/).
 
-Also, create a project through the GCE console and set that as the default for gcloud.
+Log into your account:
 ```
-gcloud config set project PROJECT
+gcloud auth login
+```
+
+In the GCE web console, create a project and enable the Compute Engine API.  
+Set the project as the default for gcloud:
+```
+gcloud config set project PROJECT_ID
 ```
 And set a default zone
 ```
@@ -57,7 +62,7 @@ coreos:
 ```
 Note: we disable CoreOS updates for this demo to avoid interrupting the instructions.
 
-Then create the cluster with the following command ("calico-1 calico-2" is the list of nodes to create):
+Then create the cluster with the following command, where calico-1 and calico-2 are the names for the two nodes to create:
 ```
 gcloud compute instances create \
   calico-1 calico-2 \
@@ -68,10 +73,15 @@ gcloud compute instances create \
 ```
 
 ## Installing calicoctl on each node
+SSH into each node using gcloud (names are calico-1 and calico-2):
+```
+gcloud compute ssh <instance name>
+```
+
 On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
-wget http://projectcalico.org/latest/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
