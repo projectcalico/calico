@@ -193,7 +193,8 @@ Lastly, the AWS host's security group must be updated for any ports you want to 
 aws ec2 authorize-security-group-ingress \
   --group-name MySG \
   --protocol tcp \
-  --port 80
+  --port 80 \
+  --cidr 0.0.0.0/0
 ```
 
 You should now be able to access the NGINX http server using the public ip address of your AWS host on port 80 by visiting http://`<host public ip>`:80 or running:
