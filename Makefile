@@ -17,7 +17,7 @@ all: test
 binary: dist/calicoctl
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
-	docker build -t calico/node .
+	docker build -t calico/node:libnetwork .
 	touch caliconode.created
 
 calicobuild.created: $(BUILD_FILES)
