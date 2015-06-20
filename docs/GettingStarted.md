@@ -94,18 +94,18 @@ On core-01:
     ./calicoctl container workload-A endpoint-id show
     ./calicoctl endpoint <workload-A's Endpoint-ID> profile append PROF_A_C_E
 
-    ./calicoctl endpoint workload-B endpoint-id show
+    ./calicoctl container workload-B endpoint-id show
     ./calicoctl endpoint <workload-B's Endpoint-ID> profile append PROF_B
 
-    ./calicoctl endpoint workload-C endpoint-id show
+    ./calicoctl container workload-C endpoint-id show
     ./calicoctl endpoint <workload-C's Endpoint-ID> profile append PROF_A_C_E
 
 On core-02:
 
-    ./calicoctl endpoint workload-D endpoint-id show
+    ./calicoctl container workload-D endpoint-id show
     ./calicoctl endpoint <workload-D's Endpoint-ID> profile append PROF_D
 
-    ./calicoctl endpoint workload-E endpoint-id show
+    ./calicoctl container workload-E endpoint-id show
     ./calicoctl endpoint <workload-E's Endpoint-ID> profile append PROF_A_C_E
 
 *Note that creating a new profile with `calicoctl profile add` will work on any Calico node, but assigning an endpoint a profile with `calicoctl endpoint <ENDPOINT_ID> profile append` will only work on the Calico node where the container is hosted.*
