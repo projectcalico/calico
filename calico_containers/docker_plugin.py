@@ -282,7 +282,7 @@ def ipv4_and_gateway(ep):
 
     if not ip:
         app.logger.error("Failed to allocate IPv4 for endpoint %s",
-                         ep.ep_id)
+                         ep.endpoint_id)
         abort(500)
 
     ip = IPNetwork(ip)
@@ -296,7 +296,7 @@ def ipv6_and_gateway(ep):
     except KeyError:
         app.logger.info("Couldn't find IPv6 gateway for endpoint %s. "
                         "Skipping IPv6 assignment.",
-                        ep.ep_id)
+                        ep.endpoint_id)
     else:
         ip6 = assign_ip("v6")
         if ip6:
@@ -305,7 +305,7 @@ def ipv6_and_gateway(ep):
             ep.ipv6_nets.add(ip6)
         else:
             app.logger.info("Failed to allocate IPv6 address for endpoint %s",
-                            ep.ep_id)
+                            ep.endpoint_id)
 
 
 def backout_ip_assignments(ep):
