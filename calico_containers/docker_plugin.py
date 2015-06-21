@@ -159,6 +159,7 @@ def delete_endpoint():
 
     # Remove the endpoint from the datastore, the IPs that were assigned to
     # it and the veth. Even if one fails, try to do the others.
+    ep = None
     try:
         ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
         backout_ip_assignments(ep)
@@ -175,7 +176,8 @@ def delete_endpoint():
 
     # libnetwork expects us to delete the veth pair.  (Note that we only need
     # to delete one end).
-    remove_veth(ep)
+    if ep:
+        remove_veth(ep)
 
     return jsonify({})
 
