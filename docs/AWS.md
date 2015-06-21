@@ -1,5 +1,5 @@
 # Running calico-docker on AWS
-Calico runs on the Amazon Web Services (AWS), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show how to network containers using Calico routing and the Calico security model on AWS.
+Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you can also run Calico within a public cloud such as Amazon Web Services (AWS).  The following instructions show how to network containers using Calico routing and the Calico security model on AWS.
 
 ## Getting started
 These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see [the CoreOS on AWS documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
