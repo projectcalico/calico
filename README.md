@@ -1,6 +1,6 @@
 [![Circle CI](https://circleci.com/gh/Metaswitch/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/Metaswitch/calico-docker/tree/master)
 # Calico on Docker
-Calico can provide networking in a Docker environment. Each container gets its own IP, there is no encapsulation and it can support massive scale. For more information on Project Calico see http://www.projectcalico.org/learn/
+As well as providing networking for OpenStack VMs, Calico can provide networking for containers in a Docker environment.  Each container gets its own IP and fine grain security policy.  In addition Calico can be deployed without encapsulation or overlays to provide high performance at massive scales.  For more information on Project Calico see http://www.projectcalico.org/learn/.
 
 Development is very active at the moment so please Star this project and check back often.
 
@@ -12,13 +12,20 @@ We welcome questions/comment/feedback (and pull requests).
 
 ## Getting started
 
-The best way to get started with Calico for the first time is by following the [Getting Started Guide](docs/GettingStarted.md).  This guide sets up two CoreOS servers and runs Calico to provide networking between guest containers.
+The recommended way to get started with Calico for the first time is to follow the [Getting Started Guide](docs/GettingStarted.md).  You can be up and running within a matter of minutes.  The guide includes step by step instructions covering
+- setting up a 2 node Linux cluster either
+  - using Vagrant (on Virtual Box or VMware) for easy setup on your laptop or other virtual environment
+  - by manually setting up your own cluster
+- setting up Calico on the cluster
+- creating containers using Calico networking.
 
-Another great way to get hands-on with Calico is by following one of our tutorials.
+In addition to the [Getting Started Guide](docs/GettingStarted.md) we also have tutorials for:
 - [Calico on Amazon](docs/AWS.md)
 - [Calico on Google Compute Engine](docs/GCE.md)
 - [Calico on DigitalOcean](docs/DigitalOcean.md)
 - [Calico and Docker Swarm](docs/CalicoSwarm.md)
+
+Finally, if you want to try out networking containers using Calico with Docker's new [libnetwork network driver support](https://github.com/docker/libnetwork) then you can try out our [Ubuntu Vagrant libnetwork example](https://github.com/Metaswitch/calico-ubuntu-vagrant).
 
 ## How does it work?
 
