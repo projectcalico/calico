@@ -1,5 +1,5 @@
 # Running calico-docker on GCE
-Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show how to network containers using Calico routing and the Calico security model on GCE.
+Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you can also run Calico within a public cloud such as Google Compute Engine (GCE). The following instructions show how to network containers using Calico routing and the Calico security model on GCE.
 
 ## Getting started
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see [the CoreOS on GCE documentation](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/).
