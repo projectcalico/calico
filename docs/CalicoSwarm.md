@@ -157,8 +157,8 @@ CONTAINER ID        IMAGE                COMMAND             CREATED            
 6971bed91ea7        busybox              "/bin/sh"           43 minutes ago      Up 43 minutes                     swarm-node2/workload-C
 4ad182b5cfbd        busybox              "/bin/sh"           43 minutes ago      Up 43 minutes                     swarm-node1/workload-B
 58736abaf698        busybox              "/bin/sh"           44 minutes ago      Up 44 minutes                     swarm-node2/workload-A
-9c22e2e3b393        calico/node:v0.4.5   "/sbin/my_init"     56 minutes ago      Up 55 minutes                     swarm-node1/calico-node
-3dff7c3d76c6        calico/node:v0.4.5   "/sbin/my_init"     About an hour ago   Up 59 minutes                     swarm-node2/calico-node
+9c22e2e3b393        calico/node:v0.4.8   "/sbin/my_init"     56 minutes ago      Up 55 minutes                     swarm-node1/calico-node
+3dff7c3d76c6        calico/node:v0.4.8   "/sbin/my_init"     About an hour ago   Up 59 minutes                     swarm-node2/calico-node
 ```
 
 Container workload-A should be able to ping workload-B and workload-C, since they belong to the same profile.  Verify this by running the following commands on our **client**:
