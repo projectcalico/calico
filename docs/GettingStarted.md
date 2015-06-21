@@ -1,10 +1,8 @@
 # Getting started with Calico on Docker
 
-Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host).
-
 *In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
-* Set this up yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md)
-* Use [Calico CoreOS Vagrant][calico-coreos-vagrant] to start a cluster in VMs on your laptop or workstation.
+* Use Vagrant to set up a virtual cluster on your laptop or workstation, following these instructions: [Calico CoreOS Vagrant][calico-coreos-vagrant].
+* Set up a cluster manually yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md).
 
 If you want to get started quickly and easily then we recommend just using Vagrant.
 
@@ -44,7 +42,9 @@ You should see output like this on each node
 
 ## Routing via Powerstrip
 
-To allow Calico to set up networking automatically during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
+>*Note that Calico's use of powerstrip support will shortly be replaced by Docker's new [libnetwork network driver support](https://github.com/docker/libnetwork) available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release.  However, Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so for now we are continuing to support powerstrip in parallel with libnetwork.*
+
+To allow Calico to set up networking automatically during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.  
 
 On both hosts run
 
@@ -122,6 +122,14 @@ Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
 
 By default, profiles are configured so that their members can communicate with one another, but workloads in other profiles cannot reach them.  B and D are in their own profiles so shouldn't be able to ping anyone else.
 
+## Streamlining Container Creation
+
+In addition to the step by step approach above you can have Calico assign IP addresses automatically using `CALICO_IP=auto` and specify the profile at creation time using `CALICO_PROFILE=<profile name>`.  (The profile will be created autoatically if it does not already exists.)
+
+On core-01
+
+    docker run -e CALICO_IP=auto -e CALICO_PROFILE=PROF_A_C_E --name workload-F -tid busybox
+    docker exec workload-A ping -c 4 192.168.1.6
 
 ## IPv6
 To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
