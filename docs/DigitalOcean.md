@@ -1,5 +1,5 @@
 # Running calico-docker on DigitalOcean
-Calico runs on the DigitalOcean virtualization platform.  The following instructions show how to network containers using Calico routing and the Calico security model on DigitalOcean.
+Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you can also run Calico within a public cloud such as DigitalOcean.  The following instructions show how to network containers using Calico routing and the Calico security model on DigitalOcean.
 
 ## Getting Started
 These instructions assume a total of two DigitalOcean hosts running CoreOS. For more general background, see the [CoreOS on DigitalOcean documentation](https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/).
