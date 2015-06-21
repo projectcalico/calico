@@ -1,6 +1,6 @@
 # Manual Cluster Setup
 
-This document describes requirements and best practices for setting up a cluster for trying the Calico Docker Prototype.
+This document describes requirements and best practices for setting up a cluster to network containers using Calico Docker.
 
 ## Requirements
 
