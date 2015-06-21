@@ -1667,11 +1667,7 @@ def print_container_not_in_calico_msg(container_name):
     :param container_name: The container name.
     :return: None.
     """
-    print_paragraph("Container %s is unknown to Calico.  This can occur if "
-                    "the container was created without setting the powerstrip "
-                    "port (%s) either in the DOCKER_HOST environment variable "
-                    "or using the -H flag on the `docker` command." %
-                    (container_name, POWERSTRIP_PORT))
+    print_paragraph("Container %s is unknown to Calico." % container_name)
     print_paragraph("Use `calicoctl container add` to add the container "
                     "to the Calico network.")
 

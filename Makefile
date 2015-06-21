@@ -97,6 +97,7 @@ run-consul:
 
 
 clean:
+	#TODO .created files
 	find . -name '*.pyc' -exec rm -f {} +
 	-rm -r dist
 	-rm calico_containers/busybox.tar
