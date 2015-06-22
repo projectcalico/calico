@@ -25,8 +25,8 @@ class TestMainline(TestBase):
         """
         with DockerHost('host', dind=False) as host:
             network = host.create_network(str(uuid.uuid4()))
-            node1 = host.create_workload("node1", network=network)
-            node2 = host.create_workload("node2", network=network)
+            node1 = host.create_workload(str(uuid.uuid4()), network=network)
+            node2 = host.create_workload(str(uuid.uuid4()), network=network)
 
             # Allow network to converge
             node1.assert_can_ping(node2.ip, retries=5)
@@ -36,10 +36,10 @@ class TestMainline(TestBase):
 
             # Test calicoctl teardown commands.
             # TODO - move this to a different test.
-            host.execute("docker rm -f %s" % node1)
-            host.execute("docker rm -f %s" % node2)
-            host.calicoctl("pool remove 192.168.0.0/16")
-            host.calicoctl("node stop")
+            # host.execute("docker rm -f %s" % node1)
+            # host.execute("docker rm -f %s" % node2)
+            # host.calicoctl("pool remove 192.168.0.0/16")
+            # host.calicoctl("node stop")
 
     def test_auto(self):
         """

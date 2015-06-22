@@ -13,6 +13,7 @@
 # limitations under the License.
 from functools import partial
 from subprocess import CalledProcessError
+import uuid
 
 from netaddr import IPAddress
 
@@ -61,7 +62,11 @@ class Workload(object):
         if network:
             if network is not NET_NONE:
                 assert isinstance(network, DockerNetwork)
-            args.append("--publish-service=%s.%s" % (name, network))
+            # We don't yet care about service names and they are buggy.
+            # Currently they aren't deleted properly, so to ensure no
+            # clashes between tests, just use a uuid
+            args.append("--publish-service=%s.%s" % (str(uuid.uuid4()),
+                                                     network))
         args.append(image)
         command = ' '.join(args)
 
