@@ -61,13 +61,17 @@ class TestFutils(unittest.TestCase):
         pass
 
     def test_good_check_call(self):
-        # Test a command. Result must include "calico" given where it is run from.
-        args = ["ls"]
-        result = futils.check_call(args)
-        self.assertNotEqual(result.stdout, None)
-        self.assertNotEqual(result.stderr, None)
-        self.assertTrue("calico" in result.stdout)
-        self.assertEqual(result.stderr, "")
+        with mock.patch("calico.felix.futils._call_semaphore",
+                        wraps=futils._call_semaphore) as m_sem:
+            # Test a command. Result must include "calico" given where it is
+            # run from.
+            args = ["ls"]
+            result = futils.check_call(args)
+            self.assertNotEqual(result.stdout, None)
+            self.assertNotEqual(result.stderr, None)
+            self.assertTrue("calico" in result.stdout)
+            self.assertEqual(result.stderr, "")
+            self.assertTrue(m_sem.__enter__.called)
 
     def test_bad_check_call(self):
         # Test an invalid command - must parse but not return anything.

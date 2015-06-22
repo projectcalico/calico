@@ -27,11 +27,13 @@ import hashlib
 import logging
 import os
 from types import StringTypes
+import gevent.lock
 from gevent import subprocess
 import tempfile
 import time
 
 from collections import namedtuple
+
 CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
 
 # Logger
@@ -46,6 +48,11 @@ IP_VERSIONS = [4, 6]
 IP_TYPE_TO_VERSION = {IPV4: 4, IPV6: 6}
 
 SHORTENED_PREFIX = "_"
+
+# Semaphore used to limit the number of concurrent shell-outs.  Prevents us
+# from using an unbounded number of file handles for stdin/out/err handling.
+MAX_CONCURRENT_CALLS = 50
+_call_semaphore = gevent.lock.Semaphore(MAX_CONCURRENT_CALLS)
 
 
 class FailedSystemCall(Exception):
@@ -94,14 +101,20 @@ def check_call(args, input_str=None):
     :raises FailedSystemCall: if the return code of the subprocess is non-zero.
     :raises OSError: if, for example, there is a read error on stdout/err.
     """
-    log.debug("Calling out to system : %s" % args)
+    log.debug("Calling out to system : %s.  %s/%s concurrent calls",
+              args,
+              MAX_CONCURRENT_CALLS - _call_semaphore.counter,
+              MAX_CONCURRENT_CALLS)
 
     stdin = subprocess.PIPE if input_str is not None else None
-    proc = subprocess.Popen(args,
-                            stdin=stdin,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    stdout, stderr = proc.communicate(input=input_str)
+
+    with _call_semaphore:
+        proc = subprocess.Popen(args,
+                                stdin=stdin,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate(input=input_str)
+
     retcode = proc.returncode
     if retcode:
         raise FailedSystemCall("Failed system call",
