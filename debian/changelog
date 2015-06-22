@@ -1,3 +1,11 @@
+calico (0.25) trusty; urgency=medium
+
+  * Remove stale conntrack entries when an endpoint's IP is removed.
+  * Fix bug where profile chain was left empty instead of being stubbed out.
+  * Improve security between endpoint and host and simplify INPUT chain logic.
+
+ -- Cory Benfield <cory@projectcalico.org>  Mon, 22 Jun 2015 14:07:48 +0100
+
 calico (0.24) trusty; urgency=medium
 
   * Add Felix statistics logging on USR1 signal.

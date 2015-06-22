@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.25-dev
+## 0.25
 
 - Remove stale conntrack entries when an endpoint's IP is removed.
 - #672: Fix bug where profile chain was left empty instead of being

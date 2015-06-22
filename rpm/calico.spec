@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.24
+Version:        0.25
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -204,6 +204,12 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Jun 22 2015 Cory Benfield <cory@projectcalico.org> 0.25
+  - Remove stale conntrack entries when an endpoint's IP is removed.
+  - #672: Fix bug where profile chain was left empty instead of being
+    stubbed out.
+  - Improve security between endpoint and host and simplify INPUT chain logic.
+
 * Mon Jun 15 2015 Cory Benfield <cory@projectcalico.org> 0.24
   - Add Felix statistics logging on USR1 signal.
   - Add support for routing over IP-in-IP interfaces in order to make it
