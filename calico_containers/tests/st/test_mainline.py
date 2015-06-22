@@ -35,6 +35,7 @@ class TestMainline(TestBase):
             self.assert_connectivity([node1, node2])
 
             # Test calicoctl teardown commands.
+            # TODO - move this to a different test.
             host.execute("docker rm -f %s" % node1)
             host.execute("docker rm -f %s" % node2)
             host.calicoctl("pool remove 192.168.0.0/16")
