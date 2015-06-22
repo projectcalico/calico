@@ -212,6 +212,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if segment[api.NETWORK_TYPE] in ['local', 'flat']:
             return True
         else:
+            LOG.warning(
+                "Calico does not support network type %s, on network %s",
+                segment[api.NETWORK_TYPE],
+                segment[api.ID],
+            )
             return False
 
     def get_allowed_network_types(self, agent=None):
