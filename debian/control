@@ -68,6 +68,7 @@ Package: calico-felix
 Architecture: all
 Depends:
  calico-common (= ${binary:Version}),
+ conntrack,
  ipset,
  net-tools,
  python-netaddr,

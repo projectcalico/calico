@@ -2,6 +2,7 @@
 
 ## 0.25-dev
 
+- Remove stale conntrack entries when an endpoint's IP is removed.
 - Improve security between endpoint and host and simplify INPUT chain logic.
 
 ## 0.24

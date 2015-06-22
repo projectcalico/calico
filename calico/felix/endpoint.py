@@ -23,6 +23,7 @@ import logging
 from subprocess import CalledProcessError
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
+from calico.felix.devices import remove_conntrack_flows
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
@@ -189,6 +190,10 @@ class LocalEndpoint(RefCountedActor):
         self.config = config
         self.ip_type = ip_type
         self.ip_version = futils.IP_TYPE_TO_VERSION[ip_type]
+        if self.ip_type == IPV4:
+            self.nets_key = "ipv4_nets"
+        else:
+            self.nets_key = "ipv6_nets"
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
@@ -240,8 +245,10 @@ class LocalEndpoint(RefCountedActor):
         # longer need).
         if endpoint:
             new_profile_ids = set(endpoint["profile_ids"])
+            new_ip_nets = set(endpoint.get(self.nets_key, []))
         else:
             new_profile_ids = set()
+            new_ip_nets = set()
         # Note: we don't actually need to wait for the activation to finish
         # due to the dependency management in the iptables layer.
         self.rules_ref_helper.replace_all(new_profile_ids)
@@ -374,16 +381,14 @@ class LocalEndpoint(RefCountedActor):
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)
-                nets_key = "ipv4_nets"
                 reset_arp = mac_changed
             else:
                 ipv6_gw = self.endpoint.get("ipv6_gateway", None)
                 devices.configure_interface_ipv6(self._iface_name, ipv6_gw)
-                nets_key = "ipv6_nets"
                 reset_arp = False
 
             ips = set()
-            for ip in self.endpoint.get(nets_key, []):
+            for ip in self.endpoint.get(self.nets_key, []):
                 ips.add(futils.net_to_ip(ip))
             devices.set_routes(self.ip_type, ips,
                                self._iface_name,
