@@ -1,19 +1,24 @@
 # Running calico-docker on GCE
-Calico runs on the Google Compute Engine (GCE), but there are a few tweaks required to the main Getting Started instructions.  The following instructions show the full power of the Calico routing and security model on GCE (and allow GCE to be used for testing).
+Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you can also run Calico within a public cloud such as Google Compute Engine (GCE). The following instructions show how to network containers using Calico routing and the Calico security model on GCE.
 
 ## Getting started
-These instructions describe how to set up three CoreOS hosts on GCE.  For more general background, see [the CoreOS on GCE documentation](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/).
+These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see [the CoreOS on GCE documentation](https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/).
 
-Download and install GCE and login to your account: 
+Download and install GCE, then restart your terminal: 
 ```
 curl https://sdk.cloud.google.com | bash
-gcloud auth login
 ```
 For more information, see Google's [gcloud install instructions](https://cloud.google.com/compute/docs/gcloud-compute/).
 
-Also, create a project through the GCE console and set that as the default for gcloud.
+Log into your account:
 ```
-gcloud config set project PROJECT
+gcloud auth login
+```
+
+In the GCE web console, create a project and enable the Compute Engine API.  
+Set the project as the default for gcloud:
+```
+gcloud config set project PROJECT_ID
 ```
 And set a default zone
 ```
@@ -30,9 +35,10 @@ gcloud compute firewall-rules list
 ```
 
 ## Spinning up the VMs
-etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  Choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  We'll use 3 for the size of the etcd cluster and the Calico nodes in the instructions below.  Use `curl` to get a fresh discovery URL (replace size=3 with your cluster size if desired):
+etcd needs to be running on the Calico hosts.  The easiest way to bootstrap etcd is with a discovery URL.  We'll use a cluster size of 1 for this demo.  For an actual deployment, choose an etcd cluster size that is equal to or less than the number of Calico nodes (an odd number in the range 3-9 works well).  For more details on etcd clusters, see the [CoreOS Cluster Discovery Documentation](https://coreos.com/docs/cluster-management/setup/cluster-discovery/).
+Use `curl` to get a fresh discovery URL:
 ```
-curl https://discovery.etcd.io/new?size=3
+curl https://discovery.etcd.io/new?size=1
 ```
 You need to grab a fresh URL each time you bootstrap a cluster.
 
@@ -54,12 +60,12 @@ coreos:
       command: start
 
 ```
-Note: we disable automated reboots for this demo to avoid interrupting the instructions.
+Note: we disable CoreOS updates for this demo to avoid interrupting the instructions.
 
-Then create the cluster with the following command ("calico-1 calico-2 calico-3" is the list of nodes to create):
+Then create the cluster with the following command, where calico-1 and calico-2 are the names for the two nodes to create:
 ```
 gcloud compute instances create \
-  calico-1 calico-2 calico-3 \
+  calico-1 calico-2 \
   --image-project coreos-cloud \
   --image coreos-alpha-709-0-0-v20150611 \
   --machine-type n1-standard-1 \
@@ -67,10 +73,15 @@ gcloud compute instances create \
 ```
 
 ## Installing calicoctl on each node
+SSH into each node using gcloud (names are calico-1 and calico-2):
+```
+gcloud compute ssh <instance name>
+```
+
 On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.6/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.7/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
@@ -80,24 +91,23 @@ export private_ip=$(curl "$metadata_url/instance/network-interfaces/0/ip" -H "Me
 # Start the calico node service:
 sudo ./calicoctl node --ip=$private_ip
 ```
-Then, on any one of the hosts, run this command to create an IP pool with IP-in-IP and NAT enabled:
+Then, on any one of the hosts, create the IP pool Calico will use for your containers:
 ```
 ./calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
-IP-in-IP alows Calico to route traffic between containers.  NAT allows the containers to make outgoing connections to the internet.
 
 ## Create a couple of containers and check connectivity
-On one host, run:
+On the first host, run:
 ```
 export DOCKER_HOST=localhost:2377
 docker run -e CALICO_IP=192.168.1.1 -e CALICO_PROFILE=test --name container-1 -tid busybox
 ```
-On another host, run:
+On the second host, run:
 ```
 export DOCKER_HOST=localhost:2377
 docker run -e CALICO_IP=192.168.1.2 -e CALICO_PROFILE=test --name container-2 -tid busybox
 ```
-Then, the two containers should be able to ping each other:
+Then, run the following on the second host to see the that two containers are able to ping each other:
 ```
 docker exec container-2 ping -c 4 192.168.1.1
 ```
@@ -105,8 +115,56 @@ docker exec container-2 ping -c 4 192.168.1.1
 Now, you may wish to follow the [getting started instructions for creating workloads](https://github.com/Metaswitch/calico-docker/blob/master/docs/GettingStarted.md#creating-networked-endpoints).
 
 ## (Optional) Enabling traffic from the internet to containers
-Services running on containers in GCE can be exposed to the internet using Calico using port mapping iptables NAT rules and an appropriate Calico security profile.  For example, you have a container that you've assigned the CALICO_IP of 192.168.7.4 to, and you have NGINX running on port 80 inside the container. If you want to expose this on port 8000, then you should follow the instructions at https://github.com/Metaswitch/calico-docker/blob/master/docs/AdvancedNetworkPolicy.md to expose port 80 on the container and then run the following command to add the port mapping:
+Services running on a Calico host's containers in GCE can be exposed to the internet.  Since the containers have IP addresses in the private IP range, traffic to the container must be routed using a NAT and an appropriate Calico security profile.
 
+Let's create a new security profile and look at the default rules.
 ```
-iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 8000 -j DNAT  --to 172.168.7.4:80
+./calicoctl profile add WEB
+./calicoctl profile WEB rule show
+```
+You should see the following output.
+```
+Inbound rules:
+   1 allow from tag WEB 
+Outbound rules:
+   1 allow
+```
+
+Let's modify this profile to make it more appropriate for a public webserver by allowing TCP traffic on ports 80 and 443:
+```
+./calicoctl profile WEB rule add inbound allow tcp to ports 80,443
+```
+
+Now, we can list the rules again and see the changes:
+```
+./calicoctl profile WEB rule show
+```
+should print
+```
+Inbound rules:
+   1 allow from tag WEB 
+   2 allow tcp to ports 80,443
+Outbound rules:
+   1 allow
+```
+
+After creating the WEB profile, run the following command on one of your GCE Calico hosts to create a Calico container under this profile, running a basic NGINX http server:
+```
+docker run -e CALICO_IP=192.168.2.1 -e CALICO_PROFILE=WEB --name mynginx1 -P -d nginx
+```
+
+On the same host, create a NAT that forwards port 80 traffic to the new container.
+```
+sudo iptables -A PREROUTING -t nat -i ens4v1 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
+```
+
+Lastly, the GCE's firewall rules must be updated for any ports you want to expose. Run this gcloud command to allow incoming traffic to port 80:
+```
+gcloud compute firewall-rules create allow-http \
+  --description "Incoming http allowed." --allow tcp:80
+```
+
+You should now be able to access the NGINX http server using the public ip address of your GCE host on port 80 by visiting http://<host public ip>:80 or running:
+```
+curl http://<host public ip>:80
 ```

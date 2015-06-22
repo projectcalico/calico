@@ -236,7 +236,7 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
     # unchanged.
     new_endpoint.ipv4_nets = set(old_endpoint.ipv4_nets)
     new_endpoint.ipv6_nets = set(old_endpoint.ipv6_nets)
-    new_endpoint.profile_id = old_endpoint.profile_id
+    new_endpoint.profile_ids = old_endpoint.profile_ids
 
     return new_endpoint
 

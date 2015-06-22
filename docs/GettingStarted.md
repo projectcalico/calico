@@ -1,10 +1,8 @@
 # Getting started with Calico on Docker
 
-Calico provides IP connectivity between Docker containers on different hosts (as well as on the same host).
-
 *In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
-* Set this up yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md)
-* Use [Calico CoreOS Vagrant][calico-coreos-vagrant] to start a cluster in VMs on your laptop or workstation.
+* Use Vagrant to set up a virtual cluster on your laptop or workstation, following these instructions: [Calico CoreOS Vagrant][calico-coreos-vagrant].
+* Set up a cluster manually yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md).
 
 If you want to get started quickly and easily then we recommend just using Vagrant.
 
@@ -40,11 +38,13 @@ You should see output like this on each node
 
     core@core-01 ~ $ docker ps
     CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:v0.4.6     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+    077ceae44fe3        calico/node:v0.4.8     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
 
 ## Routing via Powerstrip
 
-To allow Calico to set up networking automatically during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.
+>*Note that Calico's use of powerstrip support will shortly be replaced by Docker's new [libnetwork network driver support](https://github.com/docker/libnetwork) available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release.  However, Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so for now we are continuing to support powerstrip in parallel with libnetwork.*
+
+To allow Calico to set up networking automatically during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.  
 
 On both hosts run
 
@@ -87,18 +87,28 @@ Create some profiles (this can be done on either host)
     ./calicoctl profile add PROF_B
     ./calicoctl profile add PROF_D
 
-Now add the containers to the profile (note that `profile add` works from any Calico node, but `profile <PROFILE> member add` only works from the Calico node where the container is hosted).
+When each container is added to calico, an "endpoint" is registered for each container's interface. Containers are only allowed to communicate with one another when both of their endpoints are assigned the same profile. To assign a profile to an endpoint, we will first get the endpoint's ID with `calicoctl container <CONTAINER> endpoint-id show`, then paste it into the `calicoctl endpoint <ENDPOINT_ID> profile append [<PROFILES>]`  command.
 
 On core-01:
 
-    ./calicoctl profile PROF_A_C_E member add workload-A
-    ./calicoctl profile PROF_B member add workload-B
-    ./calicoctl profile PROF_A_C_E member add workload-C
+    ./calicoctl container workload-A endpoint-id show
+    ./calicoctl endpoint <workload-A's Endpoint-ID> profile append PROF_A_C_E
+
+    ./calicoctl container workload-B endpoint-id show
+    ./calicoctl endpoint <workload-B's Endpoint-ID> profile append PROF_B
+
+    ./calicoctl container workload-C endpoint-id show
+    ./calicoctl endpoint <workload-C's Endpoint-ID> profile append PROF_A_C_E
 
 On core-02:
 
-    ./calicoctl profile PROF_D member add workload-D
-    ./calicoctl profile PROF_A_C_E member add workload-E
+    ./calicoctl container workload-D endpoint-id show
+    ./calicoctl endpoint <workload-D's Endpoint-ID> profile append PROF_D
+
+    ./calicoctl container workload-E endpoint-id show
+    ./calicoctl endpoint <workload-E's Endpoint-ID> profile append PROF_A_C_E
+
+*Note that creating a new profile with `calicoctl profile add` will work on any Calico node, but assigning an endpoint a profile with `calicoctl endpoint <ENDPOINT_ID> profile append` will only work on the Calico node where the container is hosted.*
 
 Now, check that A can ping C (192.168.1.3) and E (192.168.1.5):
 
@@ -112,10 +122,14 @@ Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
 
 By default, profiles are configured so that their members can communicate with one another, but workloads in other profiles cannot reach them.  B and D are in their own profiles so shouldn't be able to ping anyone else.
 
-Finally, to clean everything up (without doing a `vagrant destroy`), you can run
+## Streamlining Container Creation
 
-    sudo ./calicoctl reset
+In addition to the step by step approach above you can have Calico assign IP addresses automatically using `CALICO_IP=auto` and specify the profile at creation time using `CALICO_PROFILE=<profile name>`.  (The profile will be created automatically if it does not already exist.)
 
+On core-01
+
+    docker run -e CALICO_IP=auto -e CALICO_PROFILE=PROF_A_C_E --name workload-F -tid busybox
+    docker exec workload-A ping -c 4 192.168.1.6
 
 ## IPv6
 To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
@@ -150,14 +164,16 @@ On core-01
 
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
     ./calicoctl profile add PROF_F_G
-    ./calicoctl profile PROF_F_G member add workload-F
+    ./calicoctl container workload-F endpoint-id show
+    ./calicoctl endpoint <workload-F's Endpoint-ID>  profile append PROF_F_G
 
 Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
 
 One core-02
 
     docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
-    ./calicoctl profile PROF_F_G member add workload-G
+    ./calicoctl container workload-G endpoint-id show
+    ./calicoctl endpoint <workload-G's Endpoint-ID> profile append PROF_F_G
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
 
 [calico-coreos-vagrant]: https://github.com/Metaswitch/calico-coreos-vagrant-example
