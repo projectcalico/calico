@@ -582,14 +582,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """
         # Simulate ML2 asking the driver if it can handle a port.
         self.assertTrue(self.driver.check_segment_for_agent(
-            {mech_calico.api.NETWORK_TYPE: 'flat'},
+            {mech_calico.api.NETWORK_TYPE: 'flat',
+             mech_calico.api.ID: 'shiny'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
 
         # Simulate ML2 asking the driver if it can handle a port that
         # it can't handle.
         self.assertFalse(self.driver.check_segment_for_agent(
-            {mech_calico.api.NETWORK_TYPE: 'vlan'},
+            {mech_calico.api.NETWORK_TYPE: 'vlan',
+             mech_calico.api.ID: 'not-shiny'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
 
