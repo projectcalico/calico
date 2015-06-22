@@ -186,7 +186,7 @@ class IptablesUpdater(Actor):
         :param dependent_chains: map from chain name to a set of chains
                that that chain requires to exist. They will be created
                (with a default drop) if they don't exist.
-        :returns CalledProcessError if a problem occurred.
+        :raises FailedSystemCall if a problem occurred.
         """
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
@@ -270,6 +270,11 @@ class IptablesUpdater(Actor):
 
     @actor_message()
     def delete_chains(self, chain_names, callback=None):
+        """
+        Deletes the named chains.
+
+        :raises FailedSystemCall if a problem occurred.
+        """
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
         _log.info("Deleting chains %s", chain_names)
