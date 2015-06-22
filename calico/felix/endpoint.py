@@ -256,14 +256,6 @@ class LocalEndpoint(RefCountedActor):
         if endpoint != self.endpoint:
             self._dirty = True
 
-        # When an IP address is removed, squash any old conntrack entries for
-        # that IP address.  This prevents the table from becoming full under
-        # high VM churn and it also prevents a new endpoint that happens to
-        # get a reused IP from spoofing old streams.
-        old_endpoint = self.endpoint or {}
-        old_ip_nets = set(old_endpoint.get(self.nets_key, []))
-        removed_nets = old_ip_nets - new_ip_nets
-
         # Store off the endpoint we were passed.
         self.endpoint = endpoint
 
