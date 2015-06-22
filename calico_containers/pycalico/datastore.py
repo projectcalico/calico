@@ -1032,7 +1032,12 @@ class DatastoreClient(object):
                                  workload_id=workload_id,
                                  endpoint_id=endpoint_id)
         if not eps:
-            raise KeyError("No endpoint found matching specified criteria")
+            raise KeyError("No endpoint found matching specified criteria."
+                           "hostname=%s"
+                           "orchestrator_id=%s"
+                           "workload_id=%s"
+                           "endpoint_id=%s" % (hostname, orchestrator_id,
+                                               workload_id, endpoint_id))
         elif len(eps) > 1:
             raise MultipleEndpointsMatch()
         else:

@@ -161,14 +161,16 @@ def delete_endpoint():
     # it and the veth. Even if one fails, try to do the others.
     ep = None
     try:
-        ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
+        ep = client.get_endpoint(hostname, "docker", CONTAINER_NAME, ep_id)
         backout_ip_assignments(ep)
     except (KeyError, DataStoreError) as e:
         app.logger.exception(e)
         app.logger.warning("Failed to unassign IPs for endpoint %s", ep_id)
 
     try:
-        client.remove_endpoint(hostname, CONTAINER_NAME, ep_id)
+        # TODO - Fix
+        # client.remove_endpoint(hostname, "docker", CONTAINER_NAME, ep_id)
+        pass
     except DataStoreError as e:
         app.logger.exception(e)
         app.logger.warning("Failed to remove endpoint %s from datastore",
@@ -198,7 +200,7 @@ def join():
     ep_id = json_data["EndpointID"]
     app.logger.info("Joining endpoint %s", ep_id)
 
-    ep = client.get_endpoint(hostname, CONTAINER_NAME, ep_id)
+    ep = client.get_endpoint(hostname, "docker", CONTAINER_NAME, ep_id)
     ret_json = {
         "InterfaceNames": [{
             "SrcName": ep.temp_interface_name(),
