@@ -47,7 +47,7 @@ If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
 `Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html>`__ /
-`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ / 
+`Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ /
 `Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__.
 
 
@@ -233,6 +233,7 @@ perform the following steps:
 
         sudo service neutron-server restart
 
+
 Compute Node Install
 --------------------
 
@@ -299,6 +300,16 @@ perform the following steps:
            sudo sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
            sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
            sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
+
+   Then, on your control node, run the following command to find the agents
+   that you just stopped::
+
+       neutron agent-list
+
+   For each agent, delete them with the following command on your control node,
+   replacing ``<agent-id>`` with the ID of the agent::
+
+       neutron agent-delete <agent-id>
 
 4. Install some extra packages:
 

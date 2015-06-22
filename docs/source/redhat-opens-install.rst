@@ -320,6 +320,7 @@ On each control node, perform the following steps:
 
        service neutron-server restart
 
+
 Compute Node Install
 --------------------
 
@@ -396,6 +397,16 @@ On each compute node, perform the following steps:
 
            chkconfig openvswitch off
            chkconfig neutron-openvswitch-agent off
+
+   Then, on your control node, run the following command to find the agents
+   that you just stopped::
+
+       neutron agent-list
+
+   For each agent, delete them with the following command on your control node,
+   replacing ``<agent-id>`` with the ID of the agent::
+
+       neutron agent-delete <agent-id>
 
 4. Run ``yum update``. This will bring in Calico-specific updates to the
    OpenStack packages and to ``dnsmasq``.
