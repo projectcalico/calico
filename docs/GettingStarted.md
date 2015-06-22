@@ -124,7 +124,7 @@ By default, profiles are configured so that their members can communicate with o
 
 ## Streamlining Container Creation
 
-In addition to the step by step approach above you can have Calico assign IP addresses automatically using `CALICO_IP=auto` and specify the profile at creation time using `CALICO_PROFILE=<profile name>`.  (The profile will be created autoatically if it does not already exists.)
+In addition to the step by step approach above you can have Calico assign IP addresses automatically using `CALICO_IP=auto` and specify the profile at creation time using `CALICO_PROFILE=<profile name>`.  (The profile will be created automatically if it does not already exist.)
 
 On core-01
 
