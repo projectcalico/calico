@@ -31,7 +31,7 @@ Create a Key Pair to use for ssh access to the instances. The following command 
 aws ec2 create-key-pair --key-name mykey --output text
 ```
 
-Copy the output into a new file called mykey.pem.  The file should include ```-----BEGIN RSA PRIVATE KEY-----```, ```-----END RSA PRIVATE KEY-----```, and everything inbetween.  Then, set appropriate permissions for your key file.
+Copy the output into a new file called mykey.pem.  The file should include ```-----BEGIN RSA PRIVATE KEY-----```, ```-----END RSA PRIVATE KEY-----```, and everything in between.  Then, set appropriate permissions for your key file.
 ```
 chmod 400 mykey.pem
 ```
@@ -43,7 +43,7 @@ aws ec2 create-security-group \
   --group-name MySG \
   --description MySecurityGroup
 
-# Allow SSH traffic to hosts in the securty group 
+# Allow SSH traffic to hosts in the security group 
 aws ec2 authorize-security-group-ingress \
   --group-name MySG \
   --protocol tcp \

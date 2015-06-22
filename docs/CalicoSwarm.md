@@ -91,7 +91,7 @@ export ETCD_AUTHORITY=$MANAGER_IP:4001
 ## Installing Swarm on your cluster
 Now that Calico networking is configured on our cluster, lets join our nodes into a Docker Swarm cluster.
 
-We'll use the token based discovery backend, so let's first create the token which will identify our swarm.  To do this, run the following on your **client**.  Note that docker commands may need to be run with root privaliges depending on your docker installation.
+We'll use the token based discovery backend, so let's first create the token which will identify our swarm.  To do this, run the following on your **client**.  Note that docker commands may need to be run with root privileges depending on your docker installation.
 ```
 docker pull swarm
 docker run --rm swarm create
