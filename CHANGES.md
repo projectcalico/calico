@@ -4,6 +4,7 @@
 
 - Provide warning log when attempting to use Neutron networks that are not of
   type 'local' or 'flat' with Calico.
+- Handle invalid JSON in IPAM key in etcd.
 
 ## 0.25
 
