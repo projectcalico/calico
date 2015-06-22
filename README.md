@@ -1,10 +1,10 @@
 [![Circle CI](https://circleci.com/gh/Metaswitch/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/Metaswitch/calico-docker/tree/master)
 # Calico on Docker
-As well as providing networking for OpenStack VMs, Calico can provide networking for containers in a Docker environment.  Each container gets its own IP and fine grain security policy.  In addition Calico can be deployed without encapsulation or overlays to provide high performance at massive scales.  For more information on Project Calico see http://www.projectcalico.org/learn/.
+As well as providing networking for OpenStack VMs, Calico can provide networking for containers in a Docker environment.  Each container gets its own IP and fine grain security policy.  In addition, Calico can be deployed without encapsulation or overlays to provide high performance at massive scales.  For more information on Project Calico see http://www.projectcalico.org/learn/.
 
 Development is very active at the moment so please Star this project and check back often.
 
-We welcome questions/comment/feedback (and pull requests).
+We welcome questions/comments/feedback (and pull requests).
 
 * Mailing List - http://lists.projectcalico.org/listinfo/calico
 * IRC - [#calico](http://webchat.freenode.net?randomnick=1&channels=%23calico&uio=d4)
