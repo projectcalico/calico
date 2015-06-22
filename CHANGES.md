@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.26-dev
+
+- Provide warning log when attempting to use Neutron networks that are not of
+  type 'local' or 'flat' with Calico.
+
 ## 0.25
 
 - Remove stale conntrack entries when an endpoint's IP is removed.
