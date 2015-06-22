@@ -391,8 +391,9 @@ def node(ip, node_image, log_dir, ip6="", as_num=None):
                 "bind": "/var/log/calico",
                 "ro": False
             },
-        "/usr/share/docker/plugins/": #TODO make this an optional node
+        # "/usr/share/docker/plugins/": #TODO make this an optional node
         # parameter like log_dir
+        "/run/docker/plugins/":
             {
                 "bind": "/usr/share/docker/plugins",
                 "ro": False
