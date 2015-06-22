@@ -281,6 +281,14 @@ class TestProfileRules(BaseTestCase):
             set(['felix-p-prof1-i', 'felix-p-prof1-o']), async=False
         )
 
+    def test_update_chains_no_pending(self):
+        """
+        _update_chains requires _pending_profile not to be None.
+        """
+        with self.assertRaisesRegexp(AssertionError,
+                                     "called with no _pending_profile"):
+            self.rules._update_chains()
+
     def _process_ipset_refs(self, expected_tags):
         """
         Issues callbacks for all the mock calls to the mock ipset manager's

@@ -98,9 +98,9 @@ class ProfileRules(RefCountedActor):
         self._iptables_updater = iptables_updater
         self._ipset_refs = RefHelper(self, ipset_mgr, self._on_ipsets_acquired)
 
-        # Latest profile update.
+        # Latest profile update - a profile dictionary.
         self._pending_profile = None
-        # Currently-programmed profile.
+        # Currently-programmed profile dictionary.
         self._profile = None
 
         # State flags.
@@ -121,6 +121,9 @@ class ProfileRules(RefCountedActor):
         """
         Update the programmed iptables configuration with the new
         profile.
+
+        :param dict[str]|NoneType profile: Dictionary of all profile data or
+            None if profile is to be deleted.
         """
         _log.debug("%s: Profile update: %s", self, profile)
         assert not self._dead, "Shouldn't receive updates after we're dead."
@@ -225,9 +228,13 @@ class ProfileRules(RefCountedActor):
 
         Blocks until the update is complete.
 
+        On entry, self._pending_profile must not be None.
+
         :raises FailedSystemCall: if the update fails.
         """
         _log.info("%s Programming iptables with our chains.", self)
+        assert self._pending_profile is not None, \
+               "_update_chains called with no _pending_profile"
         updates = {}
         for direction in ("inbound", "outbound"):
             chain_name = self.chain_names[direction]
