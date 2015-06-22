@@ -99,7 +99,7 @@ def create_endpoint():
     # libnetwork at the end of this method.
     ep = Endpoint(hostname, "docker", CONTAINER_NAME, ep_id, "active",
                   FIXED_MAC)
-    ep.profile_id = net_id
+    ep.profile_ids.append(net_id)
 
     # This method is split into three phases that have side effects.
     # 1) Assigning IP addresses
