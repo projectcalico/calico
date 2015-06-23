@@ -38,7 +38,6 @@ Usage:
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json
   calicoctl profile <PROFILE> rule update
-  calicoctl profile <PROFILE> member add <CONTAINER>
   calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
   calicoctl default-node-as [<AS_NUM>]
@@ -53,7 +52,6 @@ Usage:
   calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
   calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
   calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
-  calicoctl reset
   calicoctl diags [--log-dir=<LOG_DIR>] [--upload]
   calicoctl checksystem [--fix]
 
@@ -572,11 +570,6 @@ def status():
         print docker_client.exec_start(bird6_cmd)
 
 
-def reset():
-    print "Removing all data from data store"
-    client.remove_all_data()
-
-
 def profile_add(profile_name):
     """
     Create a policy profile with the given name.
@@ -590,41 +583,6 @@ def profile_add(profile_name):
         # Create the profile.
         client.create_profile(profile_name)
         print "Created profile %s" % profile_name
-
-
-def profile_add_container(container_name, profile_name):
-    """
-    Add a container (on this host) to the profile with the given name.  This
-    adds the first endpoint on the container to the profile.
-
-    This method is deprecated and may be removed in future versions of
-    calicoctl.
-
-    :param container_name: The Docker container name or ID.
-    :param profile_name:  The Calico policy profile name.
-    :return: None.
-    """
-    info = get_container_info_or_exit(container_name)
-    container_id = info["Id"]
-
-    # Check the container is actually running.
-    if not info["State"]["Running"]:
-        print "%s is not currently running." % container_name
-        sys.exit(1)
-
-    # Check that the container is already networked
-    try:
-        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
-    except KeyError:
-        print "Failed to add container to profile.\n"
-        print_container_not_in_calico_msg(container_name)
-        sys.exit(1)
-
-    assert not isinstance(profile_name, list), "Expecting single profile"
-
-    # Call through to the container profile set method to add the profile.
-    endpoint_profile_set(hostname, ORCHESTRATOR_ID, container_id, endpoint_id,
-                         [profile_name])
 
 
 def profile_remove(profile_name):
@@ -936,19 +894,19 @@ def ip_pool_show(version):
     :return: None
     """
     assert version in ("v4", "v6")
-    headings = ["IP%s CIDR" % version]
-    if version == "v4":
-        headings.append("IP-IP")
+    headings = ["IP%s CIDR" % version, "Options"]
     pools = client.get_ip_pools(version)
     x = PrettyTable(headings)
     for pool in pools:
-        row = [pool]
+        enabled_options = []
         if version == "v4":
             cfg = client.get_ip_pool_config(version, pool)
             if "ipip" in cfg:
-                row.append("Enabled")
-            else:
-                row.append("Disabled")
+                enabled_options.append("ipip")
+            if "masquerade" in cfg:
+                enabled_options.append("nat-outgoing")
+        # convert option array to string
+        row = [pool, ','.join(enabled_options)]
         x.add_row(row)
     print x.get_string(sortby=headings[0])
 
@@ -1762,8 +1720,6 @@ if __name__ == '__main__':
             status()
         elif arguments["checksystem"]:
             checksystem(arguments["--fix"], quit_if_error=True)
-        elif arguments["reset"]:
-            reset()
         elif arguments["endpoint"]:
             if arguments["profile"]:
                 if arguments["append"]:
@@ -1806,9 +1762,6 @@ if __name__ == '__main__':
                 elif arguments["remove"]:
                     profile_tag_remove(arguments["<PROFILE>"],
                                        arguments["<TAG>"])
-            elif arguments["member"]:
-                profile_add_container(arguments["<CONTAINER>"],
-                                      arguments["<PROFILE>"])
             elif arguments["rule"]:
                 if arguments["show"]:
                     profile_rule_show(arguments["<PROFILE>"],

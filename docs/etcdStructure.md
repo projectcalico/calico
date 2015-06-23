@@ -167,7 +167,7 @@ and
 	/calico/v1/config/bgp_peer_v6/<BGP peer IPv6 address>
 
 
-The configuration for the host node specific BGP peers is stopred at
+The configuration for the host node specific BGP peers is stored at
 
 	/calico/v1/host/<hostname>/bgp_peer_v4/<BGP peer IPv4 address>
 and
