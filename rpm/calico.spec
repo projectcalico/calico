@@ -7,6 +7,7 @@ Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
+Source1:        calico-felix.logrotate
 Source35:	calico-felix.conf
 Source45:	calico-felix.service
 BuildArch:	noarch
@@ -168,6 +169,9 @@ install -d %{buildroot}%{_bindir}
 install -m 755 etc/*.sh %{buildroot}%{_bindir}
 install -m 755 utils/diags.sh %{buildroot}%{_bindir}/calico-diags
 
+install -d -m 755 %{buildroot}/%{_sysconfdir}/logrotate.d
+install    -m 644 %_sourcedir/calico-felix.logrotate    %{buildroot}/%{_sysconfdir}/logrotate.d/calico-felix
+
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -199,6 +203,7 @@ rm -rf $RPM_BUILD_ROOT
 %else
     %{_sysconfdir}/init/calico-felix.conf
 %endif
+%{_sysconfdir}/logrotate.d/calico-felix
 %doc
 
 
