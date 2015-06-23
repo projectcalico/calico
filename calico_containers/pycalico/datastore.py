@@ -263,6 +263,55 @@ class BGPPeer(object):
                 self.as_num == other.as_num)
 
 
+class IPPool(object):
+    """
+    Class encapsulating an IPPool.
+    """
+
+    def __init__(self, cidr, ipip=False, masquerade=False):
+        """
+        Constructor.
+        :param cidr: IPNetwork object (or CIDR string) representing the pool
+        :param ipip: Use IP-IP for this pool.
+        :param masquerade: Enable masquerade (outgoing NAT) for this pool.
+        """
+        # Normalize the CIDR (e.g. 1.2.3.4/16 -> 1.2.0.0/16)
+        self.cidr = IPNetwork(cidr).cidr
+        self.ipip = bool(ipip)
+        self.masquerade = bool(masquerade)
+
+    def to_json(self):
+        """
+        Convert the IPPool to a JSON string.
+        :return: A JSON string.
+        """
+        json_dict = {"cidr" : str(self.cidr)}
+        if self.ipip:
+            json_dict["ipip"] = "tunl0"
+        if self.masquerade:
+            json_dict["masquerade"] = True
+        return json.dumps(json_dict)
+
+    @classmethod
+    def from_json(cls, json_str):
+        """
+        Convert the json string into a IPPool object.
+        :param json_str: The JSON string representing an IPPool.
+        :return: An IPPool object.
+        """
+        json_dict = json.loads(json_str)
+        return cls(json_dict["cidr"],
+                   ipip=json_dict.get("ipip"),
+                   masquerade=json_dict.get("masquerade"))
+
+    def __eq__(self, other):
+        if not isinstance(other, IPPool):
+            return NotImplemented
+        return (self.cidr == other.cidr and
+                self.ipip == other.ipip and
+                self.masquerade == other.masquerade)
+
+
 class Endpoint(object):
     """
     Class encapsulating an Endpoint.
@@ -496,98 +545,83 @@ class DatastoreClient(object):
         assert version in ("v4", "v6")
         pool_path = IP_POOL_PATH % {"version": version}
         try:
-            keys = self.etcd_client.read(pool_path).children
+            leaves = self.etcd_client.read(pool_path, recursive=True).leaves
         except EtcdKeyNotFound:
             # Path doesn't exist.
             pools = []
         else:
-            # Path exists so convert directory names to CIDRs.  Note that
-            # the children function is bugged when the directory is entry as
-            # it contains a single entry equal to the directory path, so we
-            # must filter this out.
-            pools = [x.key.split("/")[-1].replace("-", "/")
-                       for x in keys if x.key != pool_path]
+            # Path exists so convert directory names to CIDRs.
+            pools = [IPPool.from_json(leaf.value) for leaf in leaves]
 
-        return map(IPNetwork, pools)
+        return pools
 
     @handle_errors
-    def get_ip_pool_config(self, version, pool):
+    def get_ip_pool_config(self, version, cidr):
         """
         Get the configuration for the given pool.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
-        :return: Dictionary of pool configuration
+        :return: An IPPool object.
         """
         assert version in ("v4", "v6")
-        assert isinstance(pool, IPNetwork)
+        assert isinstance(cidr, IPNetwork)
 
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
-        pool = pool.cidr
+        cidr = cidr.cidr
 
         key = IP_POOL_KEY % {"version": version,
-                             "pool": str(pool).replace("/", "-")}
+                             "pool": str(cidr).replace("/", "-")}
 
         try:
-            data = json.loads(self.etcd_client.read(key).value)
-        except (KeyError, EtcdKeyNotFound):
+            data = self.etcd_client.read(key).value
+        except EtcdKeyNotFound:
             # Re-raise with a better error message.
-            raise KeyError("%s is not a configured IP pool." % pool)
+            raise KeyError("%s is not a configured IP pool." % cidr)
 
-        return data
+        return IPPool.from_json(data)
 
     @handle_errors
-    def add_ip_pool(self, version, pool, ipip=False, masquerade=False):
+    def add_ip_pool(self, version, pool):
         """
         Add the given pool to the list of IP allocation pools.  If the pool
         already exists, this method completes silently without modifying the
         list of pools, other than possibly updating the ipip config.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :param pool: IPNetwork object representing the pool
-        :param ipip: Use IP-IP for pool
+        :param pool: IPPool object
         :return: None
         """
         assert version in ("v4", "v6")
-        assert isinstance(pool, IPNetwork)
-
-        # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
-        pool = pool.cidr
+        assert isinstance(pool, IPPool)
 
         key = IP_POOL_KEY % {"version": version,
-                             "pool": str(pool).replace("/", "-")}
-
-        data = {"cidr" : str(pool)}
-        if ipip:
-            data["ipip"] = "tunl0"
-        if masquerade:
-            data["masquerade"] = True
-
-        self.etcd_client.write(key, json.dumps(data))
+                             "pool": str(pool.cidr).replace("/", "-")}
+        self.etcd_client.write(key, pool.to_json())
 
     @handle_errors
-    def remove_ip_pool(self, version, pool):
+    def remove_ip_pool(self, version, cidr):
         """
         Delete the given CIDR range from the list of pools.  If the pool does
         not exist, raise a KeyError.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :param pool: IPNetwork object representing the pool
+        :param cidr: IPNetwork object representing the pool
         :return: None
         """
         assert version in ("v4", "v6")
-        assert isinstance(pool, IPNetwork)
+        assert isinstance(cidr, IPNetwork)
 
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
-        pool = pool.cidr
+        cidr = cidr.cidr
 
         key = IP_POOL_KEY % {"version": version,
-                             "pool": str(pool).replace("/", "-")}
+                             "pool": str(cidr).replace("/", "-")}
         try:
             self.etcd_client.delete(key)
-        except (KeyError, EtcdKeyNotFound):
+        except EtcdKeyNotFound:
             # Re-raise with a better error message.
-            raise KeyError("%s is not a configured IP pool." % pool)
+            raise KeyError("%s is not a configured IP pool." % cidr)
 
     @handle_errors
     def get_bgp_peers(self, version, hostname=None):

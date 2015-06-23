@@ -28,6 +28,7 @@ from calico_containers.pycalico.datastore import (DatastoreClient,
                                                   Profile,
                                                   Rules,
                                                   Endpoint,
+                                                  IPPool,
                                                   NoEndpointForContainer,
                                                   CALICO_V_PATH,
                                                   DataStoreError,
@@ -347,6 +348,23 @@ class TestBGPPeer(unittest.TestCase):
         assert_false(peer1 == peer3)
         assert_false(peer1 == peer4)
         assert_false(peer1 == "This is not a BGPPeer")
+
+
+class TestIPPool(unittest.TestCase):
+    def test_operator(self):
+        """
+        Test IPPool equality operator.
+        """
+        ippool1 = IPPool("1.2.3.4/24", ipip=True, masquerade=True)
+        ippool2 = IPPool(IPNetwork("1.2.3.8/24"), ipip=True, masquerade=True)
+        ippool3 = IPPool("1.2.3.4/24", ipip=True)
+        ippool4 = IPPool("1.2.3.4/24", masquerade=True)
+        ippool5 = IPPool("1.2.3.4/24")
+        assert_equal(ippool1, ippool2)
+        assert_false(ippool1 == ippool3)
+        assert_false(ippool1 == ippool4)
+        assert_false(ippool1 == ippool5)
+        assert_false(ippool1 == "This is not an IPPool")
 
 
 class TestDatastoreClient(unittest.TestCase):
@@ -705,16 +723,17 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
         pools = self.datastore.get_ip_pools("v4")
-        assert_set_equal({IPNetwork("192.168.3.0/24"),
-                          IPNetwork("192.168.5.0/24")}, set(pools))
+        assert_list_equal([IPPool("192.168.3.0/24"), IPPool("192.168.5.0/24")],
+                          pools)
 
     def test_get_ip_pools_no_key(self):
         """
         Test getting IP pools from the datastore when the key doesn't exist.
         :return: None
         """
-        def mock_read(path):
+        def mock_read(path, recursive=False):
             assert_equal(path, IPV4_POOLS_PATH)
+            assert_true(recursive)
             raise EtcdKeyNotFound()
 
         self.etcd_client.read.side_effect = mock_read
@@ -747,10 +766,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read
         config = self.datastore.get_ip_pool_config("v4",
                                                    IPNetwork("1.2.3.4/16"))
-        assert_dict_equal(config,
-                          {"cidr": "1.2.0.0/16",
-                           "ipip": "tunl0",
-                           "masquerade": True})
+        assert_equal(config,
+                     IPPool("1.2.0.0/16", ipip=True, masquerade=True))
 
     def test_get_ip_pool_config_doesnt_exist(self):
         """
@@ -766,10 +783,8 @@ class TestDatastoreClient(unittest.TestCase):
         Test adding an IP pool when the directory exists, but pool doesn't.
         :return: None
         """
-        self.etcd_client.read.side_effect = mock_read_2_pools
-
-        pool = IPNetwork("192.168.100.5/24")
-        self.datastore.add_ip_pool("v4", pool, ipip=True, masquerade=True)
+        pool = IPPool("192.168.100.5/24", ipip=True, masquerade=True)
+        self.datastore.add_ip_pool("v4", pool)
         self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.100.0-24",
                                                        ANY)
         raw_data = self.etcd_client.write.call_args[0][1]
@@ -777,27 +792,25 @@ class TestDatastoreClient(unittest.TestCase):
         self.assertEqual(data, {'cidr': '192.168.100.0/24',
                                 "ipip": "tunl0",
                                 'masquerade': True})
+        self.assertEqual(pool, IPPool.from_json(raw_data))
 
-    def test_add_ip_pool_exists(self):
-        """
-        Test adding an IP pool when the pool already exists.
-        :return: None
-        """
-
-        self.etcd_client.read.side_effect = mock_read_2_pools
-
-        pool = IPNetwork("192.168.3.5/24")
+        self.etcd_client.write.reset_mock()
+        pool = IPPool("192.168.100.5/24")
         self.datastore.add_ip_pool("v4", pool)
-        self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.3.0-24",
-                                                       "{\"cidr\": \"192.168.3.0/24\"}")
+        self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.100.0-24",
+                                                       ANY)
+        raw_data = self.etcd_client.write.call_args[0][1]
+        data = json.loads(raw_data)
+        self.assertEqual(data, {'cidr': '192.168.100.0/24'})
+        self.assertEqual(pool, IPPool.from_json(raw_data))
 
     def test_del_ip_pool_exists(self):
         """
         Test remove_ip_pool() when the pool does exist.
         :return: None
         """
-        pool = IPNetwork("192.168.3.1/24")
-        self.datastore.remove_ip_pool("v4", pool)
+        cidr = IPNetwork("192.168.3.1/24")
+        self.datastore.remove_ip_pool("v4", cidr)
         self.etcd_client.delete.assert_called_once_with(IPV4_POOLS_PATH + "/192.168.3.0-24")
 
     def test_del_ip_pool_doesnt_exist(self):
@@ -806,9 +819,9 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.delete.side_effect = EtcdKeyNotFound
-        pool = IPNetwork("192.168.100.1/24")
+        cidr = IPNetwork("192.168.100.1/24")
         self.assertRaises(KeyError,
-                          self.datastore.remove_ip_pool, "v4", pool)
+                          self.datastore.remove_ip_pool, "v4", cidr)
 
     def test_profile_exists_true(self):
         """
@@ -1394,29 +1407,31 @@ def mock_read_2_node_peers(path):
     return result
 
 
-def mock_read_2_pools(path):
+def mock_read_2_pools(path, recursive=False):
     """
     EtcdClient mock side effect for read with 2 IPv4 pools.
     """
     result = Mock(spec=EtcdResult)
     assert_equal(path, IPV4_POOLS_PATH)
+    assert_true(recursive)
     children = []
     for net in ["192.168.3.0/24", "192.168.5.0/24"]:
         node = Mock(spec=EtcdResult)
         node.value = "{\"cidr\": \"%s\"}" % net
         node.key = IPV4_POOLS_PATH + "/" + net.replace("/", "-")
         children.append(node)
-    result.children = iter(children)
+    result.leaves = iter(children)
     return result
 
 
-def mock_read_no_pools(path):
+def mock_read_no_pools(path, recursive=False):
     """
     EtcdClient mock side effect for read with no IPv4 pools.
     """
     result = Mock(spec=EtcdResult)
     assert path == IPV4_POOLS_PATH
-    result.children = []
+    assert_true(recursive)
+    result.leaves = []
     return result
 
 def mock_read_no_bgppeers(path):
