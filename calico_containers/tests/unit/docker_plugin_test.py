@@ -65,9 +65,11 @@ class TestPlugin(unittest.TestCase):
 
         rv = self.app.post('/NetworkDriver.Join',
                            data='{"EndpointID": "%s"}' % TEST_ID)
-        endpoint_mock.assert_called_once_with(ANY,
-                                              ANY,
-                                              TEST_ID)
+        endpoint_mock.assert_called_once_with(hostname=ANY,
+                                              orchestrator_id="docker",
+                                              workload_id="libnetwork",
+                                              endpoint_id=TEST_ID)
+
         expected_response = """{
   "Gateway": "1.2.3.4",
   "GatewayIPv6": "fe80::202:b3ff:fe1e:8329",
