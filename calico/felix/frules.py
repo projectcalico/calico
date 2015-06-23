@@ -138,6 +138,16 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             )
 
         forward_chain = [
+            "--append %s --in-interface %s --match conntrack "
+            "--ctstate INVALID --jump DROP" % (CHAIN_FORWARD, iface_match),
+            "--append %s --out-interface %s --match conntrack "
+            "--ctstate INVALID --jump DROP" % (CHAIN_FORWARD, iface_match),
+            "--append %s --in-interface %s --match conntrack "
+            "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+            (CHAIN_FORWARD, iface_match),
+            "--append %s --out-interface %s --match conntrack "
+            "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+            (CHAIN_FORWARD, iface_match),
             "--append %s --jump %s --in-interface %s" %
             (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, iface_match),
             "--append %s --jump %s --out-interface %s" %

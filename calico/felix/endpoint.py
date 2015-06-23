@@ -438,27 +438,8 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
     to_chain_name, from_chain_name = chain_names(suffix)
 
     # First build the chain that manages packets to the interface.
-    # Common chain prefixes.  Allow IPv6 ICMP and conntrack rules.
-    to_chain = ["--flush %s" % to_chain_name]
-    if ip_version == 6:
-        #  In ipv6 only, there are 6 rules that need to be created first.
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 130
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 131
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 132
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp router-advertisement
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-solicitation
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-advertisement
-        #
-        #  These rules are ICMP types 130, 131, 132, 134, 135 and 136.
-        for icmp_type in ["130", "131", "132", "134", "135", "136"]:
-            to_chain.append("--append %s --jump RETURN "
-                            "--protocol ipv6-icmp "
-                            "--icmpv6-type %s" % (to_chain_name, icmp_type))
-    to_chain.append("--append %s --match conntrack --ctstate INVALID "
-                    "--jump DROP" % to_chain_name)
-    to_chain.append("--append %s --match conntrack "
-                    "--ctstate RELATED,ESTABLISHED --jump RETURN" %
-                    to_chain_name)
+    # Common chain prefixes.
+    to_chain = []
 
     # Jump to each profile in turn.  The profile will do one of the
     # following:
@@ -484,18 +465,7 @@ def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
                                             "Endpoint %s:" % endpoint_id))
 
     # Now the chain that manages packets from the interface...
-    from_chain = ["--flush %s" % from_chain_name]
-    if ip_version == 6:
-        # In ipv6 only, allow all ICMP traffic from this endpoint to anywhere.
-        from_chain.append("--append %s --protocol ipv6-icmp --jump RETURN" %
-                          from_chain_name)
-
-    # Conntrack rules.
-    from_chain.append("--append %s --match conntrack --ctstate INVALID "
-                      "--jump DROP" % from_chain_name)
-    from_chain.append("--append %s --match conntrack "
-                      "--ctstate RELATED,ESTABLISHED --jump RETURN" %
-                      from_chain_name)
+    from_chain = []
 
     # Combined anti-spoofing and jump to profile rules.  The only way to
     # get to a profile chain is to have the correct IP and MAC address.
