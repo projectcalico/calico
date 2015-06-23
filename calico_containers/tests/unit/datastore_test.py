@@ -886,31 +886,13 @@ class TestDatastoreClient(unittest.TestCase):
         self.maxDiff = 1000
         self.etcd_client.read.side_effect = mock_read_4_endpoints
         members = self.datastore.get_profile_members("TEST")
-        assert_dict_equal({"TEST_HOST":
-                            {"docker":
-                              {"1234":
-                                {"567890abcdef": EP_56}}},
-                           "TEST_HOST2":
-                            {"docker":
-                              {"1234":
-                                {"7890abcdef12": EP_78}}}
-                          },
-                          members)
+        assert_list_equal(members, [EP_56, EP_78])
 
         members = self.datastore.get_profile_members("UNIT")
-        assert_dict_equal({"TEST_HOST":
-                            {"docker":
-                              {"5678":
-                                {"90abcdef1234": EP_90}}},
-                           "TEST_HOST2":
-                            {"docker":
-                              {"5678":
-                                {"1234567890ab": EP_12}}}
-                          },
-                          members)
+        assert_list_equal(members, [EP_90, EP_12])
 
         members = self.datastore.get_profile_members("UNIT_TEST")
-        assert_dict_equal({}, members)
+        assert_list_equal(members, [])
 
     def test_get_profile_members_no_key(self):
         """
@@ -919,7 +901,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = mock_read_endpoints_key_error
         members = self.datastore.get_profile_members("UNIT_TEST")
-        assert_dict_equal({}, members)
+        assert_list_equal(members, [])
 
     def test_get_endpoint_exists(self):
         """

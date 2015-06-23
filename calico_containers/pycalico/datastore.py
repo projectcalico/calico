@@ -405,13 +405,6 @@ class Profile(object):
         self.rules = Rules(name, [], [])
 
 
-class Vividict(dict):
-    # From http://stackoverflow.com/a/19829714
-    def __missing__(self, key):
-        value = self[key] = type(self)()
-        return value
-
-
 class DatastoreClient(object):
     """
     An datastore client that exposes high level Calico operations needed by the
@@ -797,25 +790,18 @@ class DatastoreClient(object):
         Get the all of the endpoint members of a profile.
 
         :param profile_name: Unique string name of the profile.
-        :return: a dict of hostname => {
-                               type => {
-                                   container_id => {
-                                       endpoint_id => Endpoint
-                                   }
-                               }
-                           }
+        :return: a list of Endpoint objects.
         """
-        eps = Vividict()
+        eps = []
         try:
             endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
                                               recursive=True).leaves
             for child in endpoints:
                 ep = Endpoint.from_json(child.key, child.value)
                 if ep and profile_name in ep.profile_ids:
-                    eps[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.endpoint_id] = ep
+                    eps.append(ep)
         except EtcdKeyNotFound:
             pass
-
         return eps
 
     @handle_errors
@@ -1186,8 +1172,8 @@ class DataStoreError(Exception):
 
 class ProfileNotInEndpoint(Exception):
     """
-    Attempting to remove a profile is not in the container endpoint profile
-    list.
+    Attempting to remove a profile that is not in the container endpoint
+    profile list.
     """
     def __init__(self, profile_name):
         self.profile_name = profile_name

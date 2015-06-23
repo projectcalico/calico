@@ -599,7 +599,7 @@ def profile_show(detailed):
     profiles = client.get_profile_names()
 
     if detailed:
-        x = PrettyTable(["Name", "Host", "Workload Type", "Workload ID",
+        x = PrettyTable(["Name", "Host", "Orchestrator ID", "Workload ID",
                          "Endpoint ID", "State"])
         for name in profiles:
             members = client.get_profile_members(name)
@@ -607,17 +607,13 @@ def profile_show(detailed):
                 x.add_row([name, "None", "None", "None", "None", "None"])
                 continue
 
-            for host, ctypes in members.iteritems():
-                for ctype, workloads in ctypes.iteritems():
-                    for workload, endpoints in workloads.iteritems():
-                        for endpoint_id, endpoint in endpoints.iteritems():
-                            x.add_row([name,
-                                       host,
-                                       ctype,
-                                       # Truncate ID to 12 chars like Docker
-                                       workload[:12],
-                                       endpoint_id,
-                                       endpoint.state])
+            for endpoint in members:
+                x.add_row([name,
+                           endpoint.hostname,
+                           endpoint.orchestrator_id,
+                           endpoint.workload_id,
+                           endpoint.endpoint_id,
+                           endpoint.state])
     else:
         x = PrettyTable(["Name"])
         for name in profiles:
