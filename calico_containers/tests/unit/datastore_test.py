@@ -879,31 +879,6 @@ class TestDatastoreClient(unittest.TestCase):
         profiles = self.datastore.get_profile_names()
         assert_set_equal(profiles, set())
 
-    def test_get_profile_members_endpoint_ids(self):
-        """
-        Test get_profile_members_endpoint_ids() when there are endpoints.
-        """
-        self.etcd_client.read.side_effect = mock_read_4_endpoints
-        members = self.datastore.get_profile_members_endpoint_ids("TEST")
-        assert_set_equal({"567890abcdef", "7890abcdef12"},
-                         set(members))
-
-        members = self.datastore.get_profile_members_endpoint_ids("UNIT")
-        assert_set_equal({"90abcdef1234", TEST_ENDPOINT_ID},
-                         set(members))
-
-        members = self.datastore.get_profile_members_endpoint_ids("UNIT_TEST")
-        assert_set_equal(set(), set(members))
-
-    def test_get_profile_members_endpoint_ids_no_key(self):
-        """
-        Test get_profile_members_endpoint_ids() when the endpoints path has not been
-        set up.
-        """
-        self.etcd_client.read.side_effect = mock_read_endpoints_key_error
-        members = self.datastore.get_profile_members_endpoint_ids("UNIT_TEST")
-        assert_set_equal(set(), set(members))
-
     def test_get_profile_members(self):
         """
         Test get_profile_members() when there are endpoints.

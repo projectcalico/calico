@@ -792,29 +792,6 @@ class DatastoreClient(object):
         return profile
 
     @handle_errors
-    def get_profile_members_endpoint_ids(self, name):
-        """
-        Get all endpoint IDs that are members of named profile.
-
-        :param name: Unique string name of the profile.
-        :return: a list of members
-        """
-        members = []
-        try:
-            endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
-                                              recursive=True)
-        except EtcdKeyNotFound:
-            # Means the ALL_ENDPOINTS_PATH was not set up.  So, profile has no
-            # members because there are no endpoints.
-            return members
-
-        for child in endpoints.leaves:
-            ep = Endpoint.from_json(child.key, child.value)
-            if ep and name in ep.profile_ids:
-                members.append(ep.endpoint_id)
-        return members
-
-    @handle_errors
     def get_profile_members(self, profile_name):
         """
         Get the all of the endpoint members of a profile.
