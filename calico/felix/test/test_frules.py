@@ -153,6 +153,26 @@ class TestRules(BaseTestCase):
         ])
         self.assertEqual(deps, set())
 
+    def test_build_input_chain_ipip(self):
+        chain, deps = frules._build_input_chain("tap+",
+                                                "123.0.0.1",
+                                                1234,
+                                                546, 547,
+                                                False,
+                                                "DROP",
+                                                "felix-hosts")
+        self.assertEqual(chain, [
+            '--append felix-INPUT --protocol ipencap --match set ! --match-set felix-hosts src --jump DROP',
+            '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
+            '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
+            '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+            '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --sport 546 --dport 547 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
+            '--append felix-INPUT --jump DROP',
+        ])
+        self.assertEqual(deps, set())
+
     def test_build_input_chain_return(self):
         chain, deps = frules._build_input_chain("tap+",
                                                 None,
