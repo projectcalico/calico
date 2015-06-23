@@ -1110,50 +1110,6 @@ class TestDatastoreClient(unittest.TestCase):
                                            workload_id=TEST_CONT_ID)
         assert_equal(eps, [])
 
-    def test_get_hosts(self):
-        """
-        Test get_hosts with two hosts, each with two containers, each with
-        one endpoint.
-        """
-        # Reuse etcd read from test_get_profile_members_* since it's the same
-        # query.
-        self.etcd_client.read.side_effect = mock_read_4_endpoints
-        hosts = self.datastore.get_hosts()
-        assert_equal(len(hosts), 2)
-        assert_true(TEST_HOST in hosts)
-        assert_true("TEST_HOST2" in hosts)
-        test_host = hosts[TEST_HOST]
-        assert_equal(len(test_host), 1)
-        assert_true("docker" in test_host)
-        test_host_workloads = test_host["docker"]
-        assert_equal(len(test_host_workloads), 2)
-        assert_true(TEST_CONT_ID in test_host_workloads)
-        assert_true("5678" in test_host_workloads)
-        assert_true(EP_56.endpoint_id in test_host_workloads[TEST_CONT_ID])
-        assert_equal(len(test_host_workloads[TEST_CONT_ID]), 1)
-        assert_true(EP_90.endpoint_id in test_host_workloads["5678"])
-        assert_equal(len(test_host_workloads["5678"]), 1)
-
-        test_host2 = hosts["TEST_HOST2"]
-        assert_equal(len(test_host2), 1)
-        assert_true("docker" in test_host2)
-        test_host2_workloads = test_host2["docker"]
-        assert_equal(len(test_host2_workloads), 2)
-        assert_true(TEST_CONT_ID in test_host2_workloads)
-        assert_true("5678" in test_host2_workloads)
-        assert_true(EP_78.endpoint_id in test_host2_workloads[TEST_CONT_ID])
-        assert_equal(len(test_host2_workloads[TEST_CONT_ID]), 1)
-        assert_true(EP_12.endpoint_id in test_host2_workloads["5678"])
-        assert_equal(len(test_host2_workloads["5678"]), 1)
-
-    def test_get_hosts_key_error(self):
-        """
-        Test get_hosts() when the read returns a KeyError.
-        """
-        self.etcd_client.read.side_effect = EtcdKeyNotFound
-        hosts = self.datastore.get_hosts()
-        assert_dict_equal({}, hosts)
-
     def test_get_default_next_hops(self):
         """
         Test get_default_next_hops when both are present.

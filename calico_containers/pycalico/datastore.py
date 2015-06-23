@@ -1081,37 +1081,6 @@ class DatastoreClient(object):
         endpoint._original_json = new_json
 
     @handle_errors
-    def get_hosts(self):
-        """
-        Get the all configured hosts
-        :return: a dict of hostname => {
-                               type => {
-                                   container_id => {
-                                       endpoint_id => Endpoint
-                                   }
-                               }
-                           }
-        """
-        hosts = Vividict()
-        try:
-            etcd_hosts = self.etcd_client.read(HOSTS_PATH,
-                                               recursive=True).leaves
-            for child in etcd_hosts:
-                ep = Endpoint.from_json(child.key, child.value)
-                if ep:
-                    hosts[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.endpoint_id] = ep
-                else:
-                    packed = child.key.split("/")
-                    if 10 > len(packed) > 5:
-                        (_, _, _, _, host, _) = packed[0:6]
-                        if not hosts[host]:
-                            hosts[host] = Vividict()
-        except EtcdKeyNotFound:
-            pass
-
-        return hosts
-
-    @handle_errors
     def get_default_next_hops(self, hostname):
         """
         Get the next hop IP addresses for default routes on the given host.

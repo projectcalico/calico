@@ -811,41 +811,6 @@ def profile_rule_add_remove(
     client.profile_update_rules(profile)
 
 
-def node_show(detailed):
-    hosts = client.get_hosts()
-
-    if detailed:
-        x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID",
-                         "Addresses", "MAC", "State"])
-        for host, container_types in hosts.iteritems():
-            if not container_types:
-                x.add_row([host, "None", "None", "None",
-                           "None", "None", "None"])
-                continue
-            for container_type, workloads in container_types.iteritems():
-                for workload, endpoints in workloads.iteritems():
-                    for ep_id, endpoint in endpoints.iteritems():
-                        x.add_row([host,
-                                   container_type,
-                                   # Truncate ID to 12 chars like Docker
-                                   workload[:12],
-                                   ep_id,
-                                   "\n".join([str(net) for net in
-                                             endpoint.ipv4_nets |
-                                             endpoint.ipv6_nets]),
-                                   endpoint.mac,
-                                   endpoint.state])
-    else:
-        x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
-        for host, container_types in hosts.iteritems():
-            if not container_types:
-                x.add_row([host, "N/A", "0"])
-                continue
-            for container_type, workloads in container_types.iteritems():
-                x.add_row([host, container_type, len(workloads)])
-    print x.get_string(sortby="Host")
-
-
 def save_diags(log_dir, upload):
     """
     Gather Calico diagnostics for bug reporting.
