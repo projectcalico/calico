@@ -386,17 +386,19 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     deps = set()
     dns_dst_port = 53
 
-    #  In ipv6 only, there are 6 rules that need to be created first.
-    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 130
-    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 131
-    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 132
-    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmp router-advertisement
-    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmp neighbour-solicitation
-    #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmp neighbour-advertisement
+    # To act as a router for IPv6, we have to accept various types of ICMPv6
+    # messages, as follows:
     #
-    #  These rules are ICMP types 130, 131, 132, 134, 135 and 136.
+    # - 130: multicast listener query.
+    # - 131: multicast listener report.
+    # - 132: multicast listener done.
+    # - 133: router solicitation, which an endpoint uses to request
+    #        configuration information rather than waiting for an unsolicited
+    #        router advertisement.
+    # - 135: neighbor solicitation.
+    # - 136: neighbor advertisement.
     if ipv6:
-        for icmp_type in ["130", "131", "132", "134", "135", "136"]:
+        for icmp_type in ["130", "131", "132", "133", "135", "136"]:
             chain.append("--append %s --jump ACCEPT "
                          "--in-interface %s --protocol ipv6-icmp "
                          "--icmpv6-type %s" %
