@@ -56,7 +56,7 @@ class TestBasic(BaseTestCase):
                 return_value=False, autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
     @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
-    @mock.patch("calico.felix.fetcd.EtcdWatcher.load_config", autospec=True)
+    @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
     @mock.patch("calico.felix.felix.MasqueradeManager", autospec=True)
@@ -77,6 +77,6 @@ class TestBasic(BaseTestCase):
         with gevent.Timeout(5):
             self.assertRaises(TestException,
                               felix._main_greenlet, m_config)
-        m_load.assert_called_once_with(mock.ANY, async=False)
+        m_load.assert_called_once_with(async=False)
         m_iface_exists.assert_called_once_with("tunl0")
         m_iface_up.assert_called_once_with("tunl0")

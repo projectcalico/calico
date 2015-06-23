@@ -20,6 +20,7 @@ Etcd polling functions.
 """
 from collections import defaultdict
 import functools
+import random
 from socket import timeout as SocketTimeout
 import httplib
 import json
@@ -29,6 +30,8 @@ from etcd import (EtcdException, EtcdClusterIdChanged, EtcdKeyNotFound,
                   EtcdEventIndexCleared)
 import etcd
 import gevent
+import sys
+from gevent.event import Event
 from urllib3 import Timeout
 import urllib3.exceptions
 from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
@@ -42,7 +45,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE)
 from calico.etcdutils import PathDispatcher
 from calico.felix.actor import Actor, actor_message
-from calico.felix.futils import intern_dict, intern_list
+from calico.felix.futils import intern_dict, intern_list, logging_exceptions
 
 _log = logging.getLogger(__name__)
 
@@ -79,15 +82,100 @@ RESYNC_KEYS = [
 ]
 
 
-class EtcdWatcher(Actor):
+class EtcdAPI(Actor):
+    """
+    Our API to etcd.
+
+    Since the python-etcd API is blocking, we defer API watches to
+    a worker greenlet and communicate with it via Events.
+
+    As and when we add status reporting, to avoid needing to interrupt
+    in-progress polls, I expect we'll want a second  worker greenlet that
+    manages an "upstream" connection to etcd.
+    """
+
     def __init__(self, config, hosts_ipset):
-        super(EtcdWatcher, self).__init__()
+        super(EtcdAPI, self).__init__()
+        self._config = config
+
+        # Start up the main etcd-watching greenlet.  It will wait for an
+        # event from us before doing anything.
+        self._watcher = _EtcdWatcher(config, hosts_ipset)
+        self._watcher.link(self._on_worker_died)
+        self._watcher.start()
+
+    @actor_message()
+    def load_config(self):
+        """
+        Loads our config from etcd, should only be called once.
+
+        :return: an event which is triggered when the config has been loaded.
+        """
+        self._watcher.load_config.set()
+        return self._watcher.configured
+
+    @actor_message()
+    def start_etcd_watch(self, splitter):
+        """
+        Starts watching etcd for changes.  Implicitly loads the config
+        if it hasn't been loaded yet.
+        """
+        self._watcher.load_config.set()
+        self._watcher.splitter = splitter
+        self._watcher.begin_polling.set()
+
+    @actor_message()
+    def force_resync(self, reason="unknown"):
+        """
+        Force a resync from etcd after the current poll completes.
+
+        :param str reason: Optional reason to log out.
+        """
+        _log.info("Forcing a resync from etcd.  Reason: %s.", reason)
+        self._watcher.resync_after_current_poll = True
+
+    def _on_worker_died(self, watch_greenlet):
+        """
+        Greenlet: spawned by the gevent Hub if the etcd watch loop ever
+        stops, kills the process.
+        """
+        _log.critical("Worker greenlet died: %s; exiting.", watch_greenlet)
+        sys.exit(1)
+
+
+class _EtcdWatcher(gevent.Greenlet):
+    """
+    Greenlet that watches the etcd data model for changes.
+
+    Loads the initial dump from etcd and applies it as a snapshot.
+    Then, watches etcd for changes and sends them to the update
+    splitter for processing.
+
+    This greenlet is expected to be managed by the EtcdAPI Actor.
+    """
+
+    def __init__(self, config, hosts_ipset):
+        super(_EtcdWatcher, self).__init__()
         self.config = config
         self.hosts_ipset = hosts_ipset
+
+        # Events triggered by the EtcdAPI Actor to tell us to load the config
+        # and start polling.  These are one-way flags.
+        self.load_config = Event()
+        self.begin_polling = Event()
+
+        # Flag used to trigger a resync.  this is modified from other
+        # greenlets, which is safe in Python.
+        self.resync_after_current_poll = False
+
+        # Event that we trigger once the config is loaded.
+        self.configured = Event()
+
+        # Etcd client, initialised lazily.
         self.client = None
         self.my_config_dir = dir_for_per_host_config(self.config.HOSTNAME)
 
-        # Initialized at poll start time.
+        # Polling state initialized at poll start time.
         self.splitter = None
         self.next_etcd_index = None
 
@@ -128,38 +216,59 @@ class EtcdWatcher(Actor):
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
 
-    @actor_message()
-    def load_config(self):
-        _log.info("Waiting for etcd to be ready and for config to be present.")
-        configured = False
-        while not configured:
-            self._reconnect()
-            self.wait_for_ready()
+    @logging_exceptions
+    def _run(self):
+        """
+        Greenlet main loop: loads the initial dump from etcd and then
+        monitors for changes and feeds them to the splitter.
+        """
+        self.load_config.wait()
+        while True:
+            _log.info("Reconnecting and loading snapshot from etcd...")
+            self._reconnect(copy_cluster_id=False)
+            self._wait_for_ready()
+
+            while not self.configured.is_set():
+                self._load_config()
+                # Unblock anyone who's waiting on the config.
+                self.configured.set()
+
+            if not self.begin_polling.is_set():
+                _log.info("etcd worker about to wait for begin_polling event")
+            self.begin_polling.wait()
+
             try:
-                global_cfg = self.client.read(CONFIG_DIR)
-                global_dict = _build_config_dict(global_cfg)
+                # Load initial dump from etcd.  First just get all the
+                # endpoints and profiles by id.  The response contains a
+                # generation ID allowing us to then start polling for updates
+                # without missing any.
+                self._load_initial_dump()
+                while True:
+                    # Wait for something to change.
+                    response = self._wait_for_etcd_event()
+                    self.dispatcher.handle_event(response)
+            except ResyncRequired:
+                _log.info("Polling aborted, doing resync.")
 
-                try:
-                    host_cfg = self.client.read(self.my_config_dir)
-                    host_dict = _build_config_dict(host_cfg)
-                except EtcdKeyNotFound:
-                    # It is not an error for there to be no per-host config;
-                    # default to empty.
-                    _log.info("No configuration overrides for this node")
-                    host_dict = {}
-            except (EtcdKeyNotFound, EtcdException) as e:
-                # Note: we don't log the stack trace because it's too spammy
-                # and adds little.
-                _log.error("Failed to read config. etcd may be down or the"
-                           "data model may not be ready: %r. Will retry.", e)
-                gevent.sleep(RETRY_DELAY)
-                continue
+    def _reconnect(self, copy_cluster_id=True):
+        etcd_addr = self.config.ETCD_ADDR
+        if ":" in etcd_addr:
+            host, port = etcd_addr.split(":")
+            port = int(port)
+        else:
+            host = etcd_addr
+            port = 4001
+        if self.client and copy_cluster_id:
+            old_cluster_id = self.client.expected_cluster_id
+            _log.info("(Re)connecting to etcd. Old etcd cluster ID was %s.",
+                      old_cluster_id)
+        else:
+            _log.info("(Re)connecting to etcd. No previous cluster ID.")
+            old_cluster_id = None
+        self.client = etcd.Client(host=host, port=port,
+                                  expected_cluster_id=old_cluster_id)
 
-            self.config.report_etcd_config(host_dict, global_dict)
-            configured = True
-
-    @actor_message()
-    def wait_for_ready(self):
+    def _wait_for_ready(self):
         _log.info("Waiting for etcd to be ready...")
         ready = False
         while not ready:
@@ -185,52 +294,36 @@ class EtcdWatcher(Actor):
                 gevent.sleep(RETRY_DELAY)
                 continue
 
-    def _reconnect(self, copy_cluster_id=True):
-        etcd_addr = self.config.ETCD_ADDR
-        if ":" in etcd_addr:
-            host, port = etcd_addr.split(":")
-            port = int(port)
-        else:
-            host = etcd_addr
-            port = 4001
-        if self.client and copy_cluster_id:
-            old_cluster_id = self.client.expected_cluster_id
-            _log.info("(Re)connecting to etcd. Old etcd cluster ID was %s.",
-                      old_cluster_id)
-        else:
-            _log.info("(Re)connecting to etcd. No previous cluster ID.")
-            old_cluster_id = None
-        self.client = etcd.Client(host=host, port=port,
-                                  expected_cluster_id=old_cluster_id)
-
-    @actor_message()
-    def watch_etcd(self, update_splitter):
+    def _load_config(self):
         """
-        Loads the snapshot from etcd and then monitors etcd for changes.
-        Posts events to the UpdateSplitter.
-
-        :returns: Does not return.
+        Loads our start-of-day configuration from etcd.  Does not return
+        until the config is successfully loaded.
         """
-        self.splitter = update_splitter
         while True:
-            _log.info("Reconnecting and loading snapshot from etcd...")
-            self._reconnect(copy_cluster_id=False)
-            self.wait_for_ready()
-
             try:
-                # Load initial dump from etcd.  First just get all the
-                # endpoints and profiles by id.  The response contains a
-                # generation ID allowing us to then start polling for updates
-                # without missing any.
-                self.load_initial_dump()
-                while True:
-                    # Wait for something to change.
-                    response = self._wait_for_etcd_event()
-                    self.dispatcher.handle_event(response)
-            except ResyncRequired:
-                _log.info("Polling aborted, doing resync.")
+                global_cfg = self.client.read(CONFIG_DIR)
+                global_dict = _build_config_dict(global_cfg)
 
-    def load_initial_dump(self):
+                try:
+                    host_cfg = self.client.read(self.my_config_dir)
+                    host_dict = _build_config_dict(host_cfg)
+                except EtcdKeyNotFound:
+                    # It is not an error for there to be no per-host
+                    # config; default to empty.
+                    _log.info("No configuration overrides for this node")
+                    host_dict = {}
+            except (EtcdKeyNotFound, EtcdException) as e:
+                # Note: we don't log the stack trace because it's too
+                # spammy and adds little.
+                _log.error("Failed to read config. etcd may be down or "
+                           "the data model may not be ready: %r. Will "
+                           "retry.", e)
+                gevent.sleep(RETRY_DELAY)
+            else:
+                self.config.report_etcd_config(host_dict, global_dict)
+                return
+
+    def _load_initial_dump(self):
         """
         Loads a snapshot from etcd and passes it to the update splitter.
 
@@ -317,6 +410,11 @@ class EtcdWatcher(Actor):
         """
         response = None
         while not response:
+            if self.resync_after_current_poll:
+                _log.debug("Told to resync, aborting poll.")
+                self.resync_after_current_poll = False
+                raise ResyncRequired()
+
             try:
                 _log.debug("About to wait for etcd update %s",
                            self.next_etcd_index)
