@@ -397,7 +397,13 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     chain = ["--append %s ! --in-interface %s --jump RETURN" % (CHAIN_INPUT,
                                                                 iface_match,)]
     deps = set()
-    dns_dst_port = 53
+
+    # Allow established connections via the conntrack table.
+    chain.append("--append %s --match conntrack "
+                 "--ctstate INVALID --jump DROP" % (CHAIN_INPUT,))
+    chain.append("--append %s --match conntrack "
+                 "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
+                 (CHAIN_INPUT,))
 
     #  In ipv6 only, there are 6 rules that need to be created first.
     #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 130
@@ -415,12 +421,6 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
                          "--icmpv6-type %s" %
                          (CHAIN_INPUT, icmp_type))
 
-    chain.append("--append %s --match conntrack "
-                 "--ctstate INVALID --jump DROP" % (CHAIN_INPUT,))
-    chain.append("--append %s --match conntrack "
-                 "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                 (CHAIN_INPUT,))
-
     if metadata_addr is not None:
         chain.append(
             "--append %s --protocol tcp "
@@ -436,6 +436,7 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     )
 
     # Special-case: allow DNS.
+    dns_dst_port = 53
     chain.append(
         "--append %s --protocol udp --dport %s --jump ACCEPT" %
         (CHAIN_INPUT, dns_dst_port)
