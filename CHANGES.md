@@ -5,6 +5,8 @@
 - Provide warning log when attempting to use Neutron networks that are not of
   type 'local' or 'flat' with Calico.
 - Handle invalid JSON in IPAM key in etcd.
+- Move all log rotation into logrotate and out of Felix, to prevent conflicts.
+- Change log rotation strategy for logrotate to not rotate small log files.
 
 ## 0.25
 
