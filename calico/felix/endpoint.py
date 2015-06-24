@@ -22,7 +22,6 @@ Endpoint management.
 import logging
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
-from calico.felix.devices import remove_conntrack_flows
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
@@ -95,7 +94,8 @@ class EndpointManager(ReferenceManager):
         # deleted.
         missing_endpoints = set(self.endpoints_by_id.keys())
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            self.on_endpoint_update(endpoint_id, endpoint)
+            self.on_endpoint_update(endpoint_id, endpoint,
+                                    force_reprogram=True)
             missing_endpoints.discard(endpoint_id)
             self._maybe_yield()
         for endpoint_id in missing_endpoints:
@@ -103,7 +103,7 @@ class EndpointManager(ReferenceManager):
             self._maybe_yield()
 
     @actor_message()
-    def on_endpoint_update(self, endpoint_id, endpoint):
+    def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
         """
         Event to indicate that an endpoint has been updated (including
         creation or deletion).
@@ -119,8 +119,8 @@ class EndpointManager(ReferenceManager):
         if self._is_starting_or_live(endpoint_id):
             # Local endpoint thread is running; tell it of the change.
             _log.info("Update for live endpoint %s", endpoint_id)
-            self.objects_by_id[endpoint_id].on_endpoint_update(endpoint,
-                                                               async=True)
+            self.objects_by_id[endpoint_id].on_endpoint_update(
+                endpoint, force_reprogram=force_reprogram, async=True)
 
         old_ep = self.endpoints_by_id.pop(endpoint_id, {})
         # Interface name shouldn't change but popping it now is correct for
@@ -213,7 +213,7 @@ class LocalEndpoint(RefCountedActor):
         self._dirty = False
 
     @actor_message()
-    def on_endpoint_update(self, endpoint):
+    def on_endpoint_update(self, endpoint, force_reprogram=False):
         """
         Called when this endpoint has received an update.
         :param dict[str] endpoint: endpoint parameter dictionary.
@@ -244,15 +244,13 @@ class LocalEndpoint(RefCountedActor):
         # longer need).
         if endpoint:
             new_profile_ids = set(endpoint["profile_ids"])
-            new_ip_nets = set(endpoint.get(self.nets_key, []))
         else:
             new_profile_ids = set()
-            new_ip_nets = set()
         # Note: we don't actually need to wait for the activation to finish
         # due to the dependency management in the iptables layer.
         self.rules_ref_helper.replace_all(new_profile_ids)
 
-        if endpoint != self.endpoint:
+        if endpoint != self.endpoint or force_reprogram:
             self._dirty = True
 
         # Store off the endpoint we were passed.

@@ -63,14 +63,15 @@ class RulesManager(ReferenceManager):
                   len(rules_by_profile_id))
         missing_ids = set(self.rules_by_profile_id.keys())
         for profile_id, profile in rules_by_profile_id.iteritems():
-            self.on_rules_update(profile_id, profile)  # Skips queue
+            self.on_rules_update(profile_id, profile,
+                                 force_reprogram=True)  # Skips queue
             missing_ids.discard(profile_id)
             self._maybe_yield()
         for dead_profile_id in missing_ids:
             self.on_rules_update(dead_profile_id, None)
 
     @actor_message()
-    def on_rules_update(self, profile_id, profile):
+    def on_rules_update(self, profile_id, profile, force_reprogram=False):
         if profile is not None:
             _log.info("Rules for profile %s updated.", profile_id)
             self.rules_by_profile_id[profile_id] = profile
@@ -81,7 +82,8 @@ class RulesManager(ReferenceManager):
             _log.info("Profile %s is active, kicking the ProfileRules.",
                       profile_id)
             ap = self.objects_by_id[profile_id]
-            ap.on_profile_update(profile, async=True)
+            ap.on_profile_update(profile, force_reprogram=force_reprogram,
+                                 async=True)
 
 
 class ProfileRules(RefCountedActor):
@@ -117,7 +119,7 @@ class ProfileRules(RefCountedActor):
                   profile_id, self.chain_names)
 
     @actor_message()
-    def on_profile_update(self, profile):
+    def on_profile_update(self, profile, force_reprogram=False):
         """
         Update the programmed iptables configuration with the new
         profile.
@@ -128,6 +130,7 @@ class ProfileRules(RefCountedActor):
         _log.debug("%s: Profile update: %s", self, profile)
         assert not self._dead, "Shouldn't receive updates after we're dead."
         self._pending_profile = profile
+        self._dirty |= force_reprogram
 
     @actor_message()
     def on_unreferenced(self):

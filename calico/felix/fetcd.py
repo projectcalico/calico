@@ -111,9 +111,7 @@ class EtcdAPI(Actor):
     @logging_exceptions
     def _periodically_resync(self):
         """
-        Greenlet: periodically triggers a resync from etcd.
-
-        :return: Does not return.
+        Greenlet: if enabled, periodically triggers a resync from etcd.
         """
         _log.info("Started periodic resync thread, waiting for config.")
         self._watcher.configured.wait()
