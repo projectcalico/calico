@@ -1,10 +1,27 @@
 general:
   artifacts:
     - "dist"
+checkout:
+  post:
+# After checking out the code, fixup the timestamps on all the files.
+# See this page for more details - http://tschottdorf.github.io/cockroach-docker-circleci-continuous-integration/
+    - find . -exec touch -t 201401010000 {} \;
+    - for x in $(git ls-tree --full-tree --name-only -r HEAD); do touch -t $(date -d "$(git log -1 --format=%ci "${x}")" +%y%m%d%H%M.%S) "${x}"; done
 machine:
   services:
     - docker
+
+dependencies:
+  cache_directories:
+    - "~/docker"
+  override:
+    - mkdir -p ~/docker
+# If the build.tar exists, then load it into docker to take advantage of any cached layers.
+    - if [[ -e ~/docker/build.tar ]]; then docker load -i ~/docker/build.tar; fi
+# Build the build image. Docker will use cached layers where it can.
+    - make calicobuild.created 
+    - docker save --output ~/docker/build.tar calico/build
+
 test:
   override:
-    - make binary 
     - make ut-circle
