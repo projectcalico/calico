@@ -45,7 +45,7 @@ Common Steps
 ------------
 
 Some steps need to be taken on all machines being installed with Calico.
-These steps are detailed here.
+These steps are detailed in this section.
 
 Install OpenStack
 ~~~~~~~~~~~~~~~~~
