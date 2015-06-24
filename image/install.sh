@@ -3,7 +3,7 @@
 dpkg -l | grep ^ii | sed 's_  _\t_g' | cut -f 2 >/tmp/required.txt
 
 apt-get install -qy \
-        python-pip \
+        python-pip=1.5.4-1 \
         python-dev \
         curl
 

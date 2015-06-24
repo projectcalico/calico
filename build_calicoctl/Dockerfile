@@ -33,7 +33,7 @@ RUN curl -L  https://www.github.com/coreos/etcd/releases/download/v2.0.10/etcd-v
 RUN tar -zxvf /tmp/etcd.tar.gz -C /tmp --strip-components=1
 
 # Install the python packages needed for running UTs and building calicoctl.
-RUN apt-get install -qy python-dev python-pip
+RUN apt-get install -qy python-dev python-pip=1.5.4-1
 ADD requirements.txt /code/
 RUN pip install -r requirements.txt
 
