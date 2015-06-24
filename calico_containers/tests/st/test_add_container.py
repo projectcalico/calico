@@ -29,12 +29,13 @@ class TestAddContainer(TestBase):
             # Create a container with --net=none, add a calico interface to
             # it then check felix programs a route.
             node = host.create_workload("node", network=NET_NONE)
+            host.calicoctl("container add %s 192.168.1.1" % node)
 
-            host.calicoctl("container add %s 192.168.1.1" % node.name)
-
-            # Add the container to a profile so felix will pick it up.
+            # Create the profile, get the endpoint IDs for the containers and
+            # add the profile to the endpoint so felix will pick it up.
             host.calicoctl("profile add TEST_GROUP")
-            host.calicoctl("profile TEST_GROUP member add %s" % node.name)
+            ep = host.calicoctl("container %s endpoint-id show" % node).strip()
+            host.calicoctl("endpoint %s profile set TEST_GROUP" % ep)
 
             # Wait for felix to program down the route.
             check_route = partial(host.execute,
