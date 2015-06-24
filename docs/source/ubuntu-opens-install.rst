@@ -98,7 +98,7 @@ Once that's done, update your package manager on each machine:
 Etcd Install
 ------------
 
-Calico requires an etcd database to operate - this may be installed on a single
+Calico requires an etcd database to operate -- this may be installed on a single
 machine or as a cluster.
 
 These instructions cover installing a single node etcd database.  You may wish
@@ -182,12 +182,12 @@ running the etcd database itself (both control and compute nodes).
    - Find the line which begins ``exec /usr/bin/etcd`` and edit it,
      substituting for ``<etcd_fqdn>`` and ``<etcd_ip>`` appropriately:
 
-   ::
+     ::
 
-       exec /usr/bin/etcd --proxy on                                             \
-                          --initial-cluster "<etcd_fqdn>=http://<etcd_ip>:2380"  \
+         exec /usr/bin/etcd --proxy on                                             \
+                            --initial-cluster "<etcd_fqdn>=http://<etcd_ip>:2380"  \
 
-5. Start etcd service
+5. Start the etcd service:
 
    ::
 
@@ -244,7 +244,7 @@ perform the following steps:
    to allow VM interfaces with ``type='ethernet'``.
 
    Disable SELinux if it's running. SELinux isn't installed by default
-   on Ubuntu - you can check its status by running ``sestatus``. If this
+   on Ubuntu -- you can check its status by running ``sestatus``. If this
    is installed and the current mode is ``enforcing``, then disable it
    by running ``setenforce permissive`` and setting
    ``SELINUX=permissive`` in ``/etc/selinux/config``.
@@ -323,17 +323,17 @@ perform the following steps:
    will bring in Calico-specific updates to the OpenStack packages and
    to ``dnsmasq``.
 
-.. warning:: Check the version of libvirt-bin that is installed using
-             ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
-             should be at least ``1.2.12-0ubuntu13``.   This will become part
-             of the standard Ubuntu Kilo repository, but at the time of writing
-             needs to be installed as follows:
+   .. warning:: Check the version of libvirt-bin that is installed using
+                ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
+                should be at least ``1.2.12-0ubuntu13``. This will become part
+                of the standard Ubuntu Kilo repository, but at the time of
+                writing needs to be installed as follows:
 
-             ::
+                ::
 
-                 sudo add-apt-repository cloud-archive:kilo-proposed
-                 sudo apt-get update
-                 sudo apt-get upgrade
+                    sudo add-apt-repository cloud-archive:kilo-proposed
+                    sudo apt-get update
+                    sudo apt-get upgrade
 
 7. Install the ``calico-compute`` package:
 
@@ -342,7 +342,7 @@ perform the following steps:
        sudo apt-get install calico-compute
 
    This step may prompt you to save your IPTables rules to make them
-   persistent on restart – hit yes.
+   persistent on restart -- hit yes.
 
 8. Configure BIRD. By default Calico assumes that you'll be deploying a
    route reflector to avoid the need for a full BGP mesh. To this end,
