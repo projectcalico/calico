@@ -97,14 +97,14 @@ run-consul:
 
 
 clean:
-	#TODO .created files
+	-rm *.created
 	find . -name '*.pyc' -exec rm -f {} +
 	-rm -r dist
 	-rm calico_containers/busybox.tar
-	docker rm -f calico-build
-	docker rm -f calico-node
-	docker rmi calico/node
-	docker rmi calico/build
+	-docker rm -f calico-build
+	-docker rm -f calico-node
+	-docker rmi calico/node
+	-docker rmi calico/build
 
 setup-env:
 	virtualenv venv
