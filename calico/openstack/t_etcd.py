@@ -265,8 +265,10 @@ class CalicoTransportEtcd(object):
     @_handling_etcd_exceptions
     def atomic_delete_endpoint(self, endpoint):
         """
-        Atomically delete a given endpoint. This method allows exceptions from
-        etcd to bubble up.
+        Atomically delete a given endpoint.
+
+        This method tolerates attempting to delete keys that are already
+        missing, otherwise allows exceptions from etcd to bubble up.
 
         This also attempts to clean up the containing directory, but doesn't
         worry too much if it fails.
@@ -347,6 +349,8 @@ class CalicoTransportEtcd(object):
         Atomically delete a profile. This occurs in two stages: first the tag,
         then the rules. Abort if the first stage fails, as we can assume that
         someone else is trying to replace the profile.
+
+        Tolerates attempting to delete keys that are already deleted.
 
         This will also attempt to clean up the directory, but isn't overly
         bothered if that fails.
