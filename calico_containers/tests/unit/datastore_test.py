@@ -995,35 +995,6 @@ class TestDatastoreClient(unittest.TestCase):
         assert_not_equal(ep._original_json, original_json)
         assert_equals(ep._original_json, ep.to_json())
 
-    def test_get_endpoint_id_from_cont(self):
-        """
-        Test get_endpoint_id_from_cont() when container and endpoint exist.
-        """
-        self.etcd_client.read.side_effect = \
-            get_mock_read_2_ep_for_cont(TEST_CONT_ENDPOINTS_PATH, None)
-        endpoint_id = self.datastore.get_endpoint_id_from_cont(TEST_HOST,
-                                                               TEST_CONT_ID)
-        assert_equal(endpoint_id, EP_12.endpoint_id)
-
-    def test_get_endpoint_id_from_cont_no_ep(self):
-        """
-        Test get_endpoint_id_from_cont() when the container exists, but there are
-        no endpoints.
-        """
-        self.etcd_client.read.side_effect = mock_read_0_ep_for_cont
-        assert_raises(NoEndpointForContainer,
-                      self.datastore.get_endpoint_id_from_cont,
-                      TEST_HOST, TEST_CONT_ID)
-
-    def test_get_endpoint_id_from_cont_no_cont(self):
-        """
-        Test get_endpoint_id_from_cont() when the container doesn't exist.
-        """
-        self.etcd_client.read.side_effect = EtcdKeyNotFound
-        assert_raises(KeyError,
-                      self.datastore.get_endpoint_id_from_cont,
-                      TEST_HOST, TEST_CONT_ID)
-
     def test_get_endpoints_exists(self):
         """
         Test get_endpoints() passing in various numbers of parameters, with

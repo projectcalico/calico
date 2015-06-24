@@ -945,33 +945,6 @@ class DatastoreClient(object):
         self.update_endpoint(ep)
 
     @handle_errors
-    def get_endpoint_id_from_cont(self, hostname, container_id):
-        """
-        Get a single endpoint ID from a container ID.
-
-        :param hostname: The host the container is on.
-        :param container_id: The Docker container ID.
-        :return: Endpoint ID as a string.
-        """
-        ep_path = LOCAL_ENDPOINTS_PATH % {"hostname": hostname,
-                                          "container_id": container_id}
-        try:
-            endpoints = self.etcd_client.read(ep_path).leaves
-        except EtcdKeyNotFound:
-            # Re-raise with better message
-            raise KeyError("Container with ID %s was not found." %
-                           container_id)
-
-        # Get the first endpoint & ID
-        try:
-            endpoint = endpoints.next()
-            (_, _, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 9)
-            return endpoint_id
-        except StopIteration:
-            raise NoEndpointForContainer(
-                "Container with ID %s has no endpoints." % container_id)
-
-    @handle_errors
     def get_endpoints(self, hostname=None, orchestrator_id=None,
                       workload_id=None, endpoint_id=None):
         """
