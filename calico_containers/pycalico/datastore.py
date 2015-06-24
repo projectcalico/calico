@@ -43,8 +43,8 @@ PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
-IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool"
-IP_POOL_KEY = IP_POOL_PATH + "/%(pool)s"
+IP_POOLS_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool/"
+IP_POOL_KEY = IP_POOLS_PATH + "%(pool)s"
 BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/"
 BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/%(peer_ip)s"
 BGP_NODE_DEF_AS_PATH = CONFIG_PATH + "bgp_as"
@@ -553,18 +553,21 @@ class DatastoreClient(object):
         Get the configured IP pools.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :return: List of netaddr.IPNetwork IP pools.
+        :return: List of IPPool.
         """
         assert version in ("v4", "v6")
-        pool_path = IP_POOL_PATH % {"version": version}
+        pool_path = IP_POOLS_PATH % {"version": version}
         try:
             leaves = self.etcd_client.read(pool_path, recursive=True).leaves
         except EtcdKeyNotFound:
             # Path doesn't exist.
             pools = []
         else:
-            # Path exists so convert directory names to CIDRs.
-            pools = [IPPool.from_json(leaf.value) for leaf in leaves]
+            # Convert the leaf values to IPPools.  We need to handle an empty
+            # leaf value because when no pools are configured the recursive
+            # read returns the parent directory.
+            pools = [IPPool.from_json(leaf.value) for leaf in leaves
+                                                  if leaf.value]
 
         return pools
 
@@ -843,12 +846,13 @@ class DatastoreClient(object):
         try:
             endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
                                               recursive=True).leaves
+        except EtcdKeyNotFound:
+            pass
+        else:
             for child in endpoints:
                 ep = Endpoint.from_json(child.key, child.value)
                 if ep and profile_name in ep.profile_ids:
                     eps.append(ep)
-        except EtcdKeyNotFound:
-            pass
         return eps
 
     @handle_errors

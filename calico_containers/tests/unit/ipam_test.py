@@ -14,8 +14,10 @@
 from netaddr import IPNetwork, IPAddress
 from nose.tools import assert_equal, assert_true, assert_false
 from calico_containers.pycalico.ipam import SequentialAssignment, IPAMClient
+from calico_containers.pycalico.datastore import IPPool
 
-pool = IPNetwork("192.168.0.0/16")
+network = IPNetwork("192.168.0.0/16")
+pool = IPPool(network)
 client = IPAMClient()
 
 class TestIPAMClient:
@@ -51,7 +53,11 @@ class TestIPAMClient:
         assert_false(client.unassign_address(pool, address))
         assert_equal(client.get_assigned_addresses(pool), {})
 
-    def test_sequential_assignment(self):
+    def test_sequential_assignment_network(self):
+        assigner = SequentialAssignment()
+        assert_equal("192.168.0.1", assigner.allocate(network))
+
+    def test_sequential_assignment_pool(self):
         assigner = SequentialAssignment()
         assert_equal("192.168.0.1", assigner.allocate(pool))
 

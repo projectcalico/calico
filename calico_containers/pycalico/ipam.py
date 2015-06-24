@@ -34,11 +34,15 @@ class SequentialAssignment(object):
         """
         Attempt to allocate an IP address from the provided pool.
 
-        :param IPNetwork pool: The pool to allocate from
+        :param IPPool or IPNetwork pool: The pool to allocate from
         :return: An IP address which has been allocated or None
         if allocation failed.
         :rtype str:
         """
+        if isinstance(pool, IPPool):
+            pool = pool.cidr
+        assert isinstance(pool, IPNetwork)
+
         while True:
             assigned_addresses = self.etcd.get_assigned_addresses(pool)
 
@@ -60,6 +64,7 @@ class SequentialAssignment(object):
         :return: the next IP address to try (a string), or None if the pool
                  is full.
         """
+        assert isinstance(pool, IPNetwork)
         for addr in pool.iter_hosts():
             addr_string = str(addr)
             if addr_string not in assigned:
