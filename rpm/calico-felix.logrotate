@@ -3,5 +3,5 @@
     missingok
     compress
     delaycompress
-    notifempty
+    minsize 1M
 }
