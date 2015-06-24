@@ -2,15 +2,17 @@
 
 ## 0.26-dev
 
-- Streamline conntrack rules, move them to top-level chains to avoid 
+- Streamline conntrack rules, move them to top-level chains to avoid
   duplication.
-- Narrow focus of input iptables chain so that it only applies to 
+- Narrow focus of input iptables chain so that it only applies to
   Calico-handled traffic.
 - Provide warning log when attempting to use Neutron networks that are not of
   type 'local' or 'flat' with Calico.
 - Handle invalid JSON in IPAM key in etcd.
 - Move all log rotation into logrotate and out of Felix, to prevent conflicts.
 - Change log rotation strategy for logrotate to not rotate small log files.
+- Delay starting the Neutron resynchronization thread until after all the
+  necessary state has been configured, to avoid race conditions.
 
 ## 0.25
 

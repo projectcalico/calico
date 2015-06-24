@@ -177,13 +177,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("PID changed; unexpected fork after initialisation.  "
                         "Reinitialising Calico driver.")
 
-        # Start our resynchronization process.  Just in case we ever get two
-        # threads running, use an epoch counter to tell the old thread to die.
-        # This is defensive: our greenlets don't actually seem to get forked
-        # with the process.
-        self._epoch += 1
-        eventlet.spawn(self.periodic_resync_thread, self._epoch)
-
         # (Re)init the DB.
         self.db = None
         self._get_db()
@@ -197,6 +190,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.transport = CalicoTransportEtcd(self)
 
         self._my_pid = current_pid
+
+        # Start our resynchronization process.  Just in case we ever get two
+        # threads running, use an epoch counter to tell the old thread to die.
+        # This is defensive: our greenlets don't actually seem to get forked
+        # with the process.
+        # We deliberately do this last, to ensure that all of the setup above
+        # is complete before we start running.
+        self._epoch += 1
+        eventlet.spawn(self.periodic_resync_thread, self._epoch)
 
     def _get_db(self):
         if not self.db:
