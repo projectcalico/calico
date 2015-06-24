@@ -263,7 +263,7 @@ def complete_logging(logfile=None,
                 root_logger.removeHandler(handler)
             else:
                 handler.setLevel(stream_level)
-        elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+        elif isinstance(handler, logging.handlers.WatchedFileHandler):
             file_handler = handler
             if file_level is None:
                 root_logger.removeHandler(handler)
@@ -275,9 +275,7 @@ def complete_logging(logfile=None,
         if not file_handler:
             mkdir_p(os.path.dirname(logfile))
             formatter = logging.Formatter(FORMAT_STRING)
-            file_handler = logging.handlers.TimedRotatingFileHandler(
-                logfile, when="D", backupCount=10
-            )
+            file_handler = logging.handlers.WatchedFileHandler(logfile)
             file_handler.addFilter(GreenletFilter())
             file_handler.setLevel(file_level)
             file_handler.setFormatter(formatter)
