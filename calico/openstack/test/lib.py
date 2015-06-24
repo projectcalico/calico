@@ -38,7 +38,6 @@ sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['neutron.plugins.ml2.rpc'] = m_neutron.plugins.ml2.rpc
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
-sys.modules['time'] = m_time = mock.Mock()
 
 port1 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
@@ -231,7 +230,8 @@ class Lib(object):
         self.current_time = 0
 
         # Make time.time() return current_time.
-        m_time.time.side_effect = lambda: self.current_time
+        self.old_time = sys.modules['time'].time
+        sys.modules['time'].time = lambda: self.current_time
 
         # Reset the dict of current sleepers.  In each dict entry, the key is
         # an eventlet.Queue object and the value is the time at which the sleep
@@ -321,6 +321,9 @@ class Lib(object):
         eventlet.sleep = self.real_eventlet_sleep
         eventlet.spawn = self.real_eventlet_spawn
         eventlet.spawn_after = self.real_eventlet_spawn_after
+
+        # Repair time.time()
+        sys.modules['time'].time = self.old_time
 
     # Method for the test code to call when it wants to advance the simulated
     # time.
