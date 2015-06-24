@@ -31,6 +31,13 @@ class UpdateSplitter(Actor):
     """
     Actor that takes the role of message broker, farming updates out to IPv4
     and IPv6-specific actors.
+
+    Users of the API should follow this contract:
+
+    (1) send an apply_snapshot message containing a complete and consistent
+        snapshot of the data model.
+    (2) send in-order updates via the on_xyz_update messages.
+    (3) at any point, repeat from (1)
     """
     def __init__(self, config, ipsets_mgrs, rules_managers, endpoint_managers,
                  iptables_updaters, ipv4_masq_manager):

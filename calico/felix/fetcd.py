@@ -115,7 +115,7 @@ class EtcdAPI(Actor):
         return self._watcher.configured
 
     @actor_message()
-    def start_etcd_watch(self, splitter):
+    def start_watch(self, splitter):
         """
         Starts watching etcd for changes.  Implicitly loads the config
         if it hasn't been loaded yet.
@@ -147,9 +147,16 @@ class _EtcdWatcher(gevent.Greenlet):
     """
     Greenlet that watches the etcd data model for changes.
 
-    Loads the initial dump from etcd and applies it as a snapshot.
-    Then, watches etcd for changes and sends them to the update
-    splitter for processing.
+    (1) Waits for the load_config event to be triggered.
+    (2) Connects to etcd and waits for the Ready flag to be set,
+        indicating the data model is consistent.
+    (3) Loads the config from etcd and passes it to the config object.
+    (4) Waits for the begin_polling Event to be triggered.
+    (5) Loads a complete snapshot from etcd and passes it to the
+        UpdateSplitter.
+    (6) Watches etcd for changes, sending them incrementally to the
+        UpdateSplitter.
+    (On etcd error) starts again from step (5)
 
     This greenlet is expected to be managed by the EtcdAPI Actor.
     """
