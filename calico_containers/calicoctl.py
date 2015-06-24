@@ -113,7 +113,6 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                ProfileNotInEndpoint,
                                ProfileAlreadyInEndpoint,
                                MultipleEndpointsMatch,
-                               Vividict,
                                BGPPeer,
                                IPPool)
 from pycalico.ipam import IPAMClient
@@ -137,6 +136,13 @@ DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
 class ConfigError(Exception):
     pass
+
+
+class Vividict(dict):
+    # From http://stackoverflow.com/a/19829714
+    def __missing__(self, key):
+        value = self[key] = type(self)()
+        return value
 
 
 def get_container_info_or_exit(container_name):
@@ -1230,7 +1236,7 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
                     "NumEndpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        """ To caluclate the number of unique endpoints, and unique workloads
+        """ To calculate the number of unique endpoints, and unique workloads
          on each host, we first create a dictionary in the following format:
         {
         host1: {
@@ -1276,13 +1282,13 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
     """
     Append a list of profiles to the container endpoint profile list.
 
-    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
-    parameters used to determine which endpoint is being targeted.
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all
+    optional parameters used to determine which endpoint is being targeted.
     The more parameters used, the faster the endpoint query will be. The
     query must be specific enough to match a single endpoint or it will fail.
 
-    The profile list may not contain duplicate entries, invalid profile names, or
-    profiles that are already in the containers list.
+    The profile list may not contain duplicate entries, invalid profile names,
+    or profiles that are already in the containers list.
 
     :param hostname: The host that the targeted endpoint resides on.
     :param orchestrator_id: The orchestrator that created the targeted endpoint.
