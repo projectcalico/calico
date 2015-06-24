@@ -276,9 +276,17 @@ class CalicoTransportEtcd(object):
             endpoint.id,
             endpoint.modified_index
         )
-        self.client.delete(
-            endpoint.key, prevIndex=endpoint.modified_index, timeout=5
-        )
+
+        try:
+            self.client.delete(
+                endpoint.key, prevIndex=endpoint.modified_index, timeout=5
+            )
+        except etcd.EtcdKeyNotFound:
+            # Trying to delete stuff that doesn't exist is ok, but log it.
+            LOG.info(
+                "Key %s was already deleted, nothing to do.",
+                endpoint.key
+            )
 
         self._cleanup_workload_tree(endpoint.key)
 
@@ -349,16 +357,30 @@ class CalicoTransportEtcd(object):
             profile.tags_modified_index,
             profile.rules_modified_index
         )
-        self.client.delete(
-            key_for_profile_tags(profile.id),
-            prevIndex=profile.tags_modified_index,
-            timeout=5
-        )
-        self.client.delete(
-            key_for_profile_rules(profile.id),
-            prevIndex=profile.rules_modified_index,
-            timeout=5
-        )
+
+        # Try to delete tags and rules. We don't care if we can't, but we
+        # should log in case it's symptomatic of a wider problem.
+        try:
+            self.client.delete(
+                key_for_profile_tags(profile.id),
+                prevIndex=profile.tags_modified_index,
+                timeout=5
+            )
+        except etcd.EtcdKeyNotFound:
+            LOG.info(
+                "Profile %s tags already deleted, nothing to do.", profile.id
+            )
+
+        try:
+            self.client.delete(
+                key_for_profile_rules(profile.id),
+                prevIndex=profile.rules_modified_index,
+                timeout=5
+            )
+        except etcd.EtcdKeyNotFound:
+            LOG.info(
+                "Profile %s rules already deleted, nothing to do.", profile.id
+            )
 
         # Strip the endpoint specific part of the key.
         profile_key = key_for_profile(profile.id)
