@@ -9,7 +9,7 @@ from workload import Workload
 from network import DockerNetwork
 
 
-CALICO_DRIVER_SOCK = "/run/docker/plugins/calico.sock"
+CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
 
 class DockerHost(object):
     """
@@ -106,9 +106,9 @@ class DockerHost(object):
         Check that Calico Docker Driver is up by checking the existence of
         the unix socket.
         """
-        # sock_exists = partial(self.execute,
-        #                       "[ -e %s ]" % CALICO_DRIVER_SOCK)
-        # retry_until_success(sock_exists, ex_class=CalledProcessError)
+        sock_exists = partial(self.execute,
+                              "[ -e %s ]" % CALICO_DRIVER_SOCK)
+        retry_until_success(sock_exists, ex_class=CalledProcessError)
         pass
     def remove_workloads(self):
         """
