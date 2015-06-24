@@ -29,8 +29,8 @@ class TestNoNetDriver(TestBase):
             host.calicoctl("container add %s 192.168.1.2" % node2)
 
             # Get the endpoint IDs for the containers
-            ep1 = host.calicoctl("container %s endpoint-id show" % node1).strip()
-            ep2 = host.calicoctl("container %s endpoint-id show" % node2).strip()
+            ep1 = host.calicoctl("container %s endpoint-id show" % node1)
+            ep2 = host.calicoctl("container %s endpoint-id show" % node2)
 
             # Now add the profiles.
             host.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)

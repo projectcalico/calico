@@ -34,7 +34,7 @@ class TestAddContainer(TestBase):
             # Create the profile, get the endpoint IDs for the containers and
             # add the profile to the endpoint so felix will pick it up.
             host.calicoctl("profile add TEST_GROUP")
-            ep = host.calicoctl("container %s endpoint-id show" % node).strip()
+            ep = host.calicoctl("container %s endpoint-id show" % node)
             host.calicoctl("endpoint %s profile set TEST_GROUP" % ep)
 
             # Wait for felix to program down the route.

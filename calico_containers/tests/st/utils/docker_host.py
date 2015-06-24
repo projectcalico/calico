@@ -52,9 +52,16 @@ class DockerHost(object):
             self.start_calico_node()
             self.assert_driver_up()
 
-    def execute(self, command, **kwargs):
+    def execute(self, command):
         """
         Pass a command into a host container.
+
+        Raises a DockerHostExecError() if the command returns a non-zero
+        return code.
+
+        :param command:  The command to execute.
+        :return: The output from the command with leading and trailing
+        whitespace removed.
         """
         etcd_auth = "ETCD_AUTHORITY=%s:2379" % get_ip()
         # Export the environment, in case the command has multiple parts, e.g.
@@ -72,18 +79,25 @@ class DockerHost(object):
             # message (including command output).
             raise DockerHostExecError(e)
         else:
-            return output
+            return output.strip()
 
-    def calicoctl(self, command, **kwargs):
+    def calicoctl(self, command):
         """
         Convenience function for abstracting away calling the calicoctl
         command.
+
+        Raises a DockerHostExecError() if the command returns a non-zero
+        return code.
+
+        :param command:  The command to execute.
+        :return: The output from the command with leading and trailing
+        whitespace removed.
         """
         if self.dind:
             calicoctl = "/code/dist/calicoctl %s"
         else:
             calicoctl = "dist/calicoctl %s"
-        return self.execute(calicoctl % command, **kwargs)
+        return self.execute(calicoctl % command)
 
     def start_calico_node(self):
         """
