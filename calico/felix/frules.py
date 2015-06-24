@@ -371,8 +371,6 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     Returns a list of rules that should be applied to the felix-INPUT chain.
     :returns Tuple: list of rules and set of deps.
     """
-    # Optimisation: return immediately if the traffic is not from one of the
-    # interfaces we're managing.
     chain = []
 
     if hosts_set_name:
@@ -384,6 +382,9 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
             "--match set ! --match-set %s src --jump DROP" %
             (CHAIN_INPUT, hosts_set_name)
         )
+
+    # Optimisation: return immediately if the traffic is not from one of the
+    # interfaces we're managing.
     chain.append("--append %s ! --in-interface %s --jump RETURN" %
                  (CHAIN_INPUT, iface_match,))
     deps = set()
