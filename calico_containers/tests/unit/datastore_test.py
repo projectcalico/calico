@@ -351,7 +351,7 @@ class TestBGPPeer(unittest.TestCase):
 
 
 class TestIPPool(unittest.TestCase):
-    def test_operator(self):
+    def test_eq(self):
         """
         Test IPPool equality operator.
         """
@@ -365,6 +365,20 @@ class TestIPPool(unittest.TestCase):
         assert_false(ippool1 == ippool4)
         assert_false(ippool1 == ippool5)
         assert_false(ippool1 == "This is not an IPPool")
+
+    def test_contains(self):
+        """
+        Test IPPool "__contains__"operator.
+        """
+        assert_true(IPAddress("1.2.3.4") in IPPool("1.2.3.0/24"))
+        assert_true("1.2.3.4" in IPPool("1.2.3.0/24"))
+
+    def test_str(self):
+        """
+        Test __str__ returns just the CIDR.
+        """
+        assert_equals("1.2.3.0/24",
+                      str(IPPool("1.2.3.4/24", ipip=True, masquerade=True)))
 
 
 class TestDatastoreClient(unittest.TestCase):

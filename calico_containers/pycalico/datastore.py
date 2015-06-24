@@ -311,6 +311,19 @@ class IPPool(object):
                 self.ipip == other.ipip and
                 self.masquerade == other.masquerade)
 
+    def __contains__(self, item):
+        """
+        Override __contains__ so that you can check if an IP address is in this
+        pool.
+
+        e.g. IPAddress("1.2.3.4) in IPPool("1.2.3.0/24") is True.
+        """
+        return IPAddress(item) in self.cidr
+
+    def __str__(self):
+        """Return the CIDR of this pool."""
+        return str(self.cidr)
+
 
 class Endpoint(object):
     """

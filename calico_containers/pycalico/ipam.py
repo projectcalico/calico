@@ -14,7 +14,7 @@
 
 from etcd import EtcdKeyNotFound, EtcdAlreadyExist
 from netaddr import IPAddress, IPNetwork
-from datastore import DatastoreClient
+from datastore import DatastoreClient, IPPool
 from datastore import CALICO_V_PATH
 
 IP_ASSIGNMENT_PATH = CALICO_V_PATH + "/ipam/%(version)s/assignment/%(pool)s"
@@ -74,13 +74,18 @@ class IPAMClient(DatastoreClient):
         Fails if the address is already assigned.
         The directory for storing assignments in this pool must already exist.
 
-        :param IPNetwork pool: The pool that the assignment is from.
+        :param IPPool or IPNetwork pool: The pool that the assignment is from.
         :param IPAddress address: The address to assign.
 
         :return: True if the allocation succeeds, false otherwise. An
         exception is thrown for any error conditions.
         :rtype: bool
         """
+        if isinstance(pool, IPPool):
+            pool = pool.cidr
+        assert isinstance(pool, IPNetwork)
+        assert isinstance(address, IPAddress)
+
         key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
                                    "pool": str(pool).replace("/", "-"),
                                    "address": address}
@@ -95,15 +100,18 @@ class IPAMClient(DatastoreClient):
         """
         Unassign an IP from a pool.
 
-        :param IPNetwork pool: The pool that the assignment is from.
+        :param IPPool or IPNetwork pool: The pool that the assignment is from.
         :param IPAddress address: The address to unassign.
 
         :return: True if the address was unassigned, false otherwise. An
         exception is thrown for any error conditions.
         :rtype: bool
         """
+        if isinstance(pool, IPPool):
+            pool = pool.cidr
         assert isinstance(pool, IPNetwork)
         assert isinstance(address, IPAddress)
+
         key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
                                    "pool": str(pool).replace("/", "-"),
                                    "address": address}
@@ -116,10 +124,14 @@ class IPAMClient(DatastoreClient):
 
     def get_assigned_addresses(self, pool):
         """
-        :param IPNetwork pool: The pool to get assignments for.
+        :param IPPool or IPNetwork pool: The pool to get assignments for.
         :return: The assigned addresses from the pool
         :rtype dict of [str, str]
         """
+        if isinstance(pool, IPPool):
+            pool = pool.cidr
+        assert isinstance(pool, IPNetwork)
+
         directory = IP_ASSIGNMENT_PATH % {"version": "v%s" % pool.version,
                                           "pool": str(pool).replace("/", "-")}
         try:

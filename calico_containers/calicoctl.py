@@ -194,7 +194,7 @@ def get_pool_or_exit(ip):
     pools = client.get_ip_pools("v%s" % ip.version)
     pool = None
     for candidate_pool in pools:
-        if ip in candidate_pool.cidr:
+        if ip in candidate_pool:
             pool = candidate_pool
             break
     if pool is None:
@@ -239,7 +239,7 @@ def container_add(container_name, ip, interface):
     # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
     # it.
     ip = IPAddress(ip)
-    cidr = get_pool_or_exit(ip).cidr
+    pool = get_pool_or_exit(ip)
 
     # The next hop IPs for this host are stored in etcd.
     next_hops = client.get_default_next_hops(hostname)
@@ -250,8 +250,8 @@ def container_add(container_name, ip, interface):
         sys.exit(1)
 
     # Assign the IP
-    if not client.assign_address(cidr, ip):
-        print "IP address is already assigned in pool %s " % cidr
+    if not client.assign_address(pool, ip):
+        print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
     # Actually configure the netns. Defaults to eth1 since eth0 could
@@ -304,10 +304,10 @@ def container_remove(container_name):
         ip = net.ip
         pools = client.get_ip_pools("v%s" % ip.version)
         for pool in pools:
-            if ip in pool.cidr:
+            if ip in pool:
                 # Ignore failure to unassign address, since we're not
                 # enforcing assignments strictly in datastore.py.
-                client.unassign_address(pool.cidr, ip)
+                client.unassign_address(pool, ip)
 
     # Remove the endpoint
     netns.remove_endpoint(endpoint_id)
@@ -874,7 +874,7 @@ def ip_pool_show(version):
             if pool.masquerade:
                 enabled_options.append("nat-outgoing")
         # convert option array to string
-        row = [pool.cidr, ','.join(enabled_options)]
+        row = [str(pool.cidr), ','.join(enabled_options)]
         x.add_row(row)
     print x.get_string(sortby=headings[0])
 
@@ -1063,7 +1063,7 @@ def container_ip_add(container_name, ip, version, interface):
     # The netns manipulations must be done as root.
     enforce_root()
 
-    cidr = get_pool_or_exit(address).cidr
+    pool = get_pool_or_exit(address)
 
     info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
@@ -1087,8 +1087,8 @@ def container_ip_add(container_name, ip, version, interface):
 
     # From here, this method starts having side effects. If something
     # fails then at least try to leave the system in a clean state.
-    if not client.assign_address(cidr, ip):
-        print "IP address is already assigned in pool %s " % cidr
+    if not client.assign_address(pool, ip):
+        print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
     try:
@@ -1098,7 +1098,7 @@ def container_ip_add(container_name, ip, version, interface):
             endpoint.ipv6_nets.add(IPNetwork(address))
         client.update_endpoint(endpoint)
     except (KeyError, ValueError):
-        client.unassign_address(cidr, ip)
+        client.unassign_address(pool, ip)
         print "Error updating datastore. Aborting."
         sys.exit(1)
 
@@ -1115,7 +1115,7 @@ def container_ip_add(container_name, ip, version, interface):
         else:
             endpoint.ipv6_nets.remove(IPNetwork(address))
         client.update_endpoint(endpoint)
-        client.unassign_address(cidr, ip)
+        client.unassign_address(pool, ip)
         sys.exit(1)
 
     print "IP %s added to %s" % (ip, container_id)
@@ -1137,7 +1137,7 @@ def container_ip_remove(container_name, ip, version, interface):
     # The netns manipulations must be done as root.
     enforce_root()
 
-    cidr = get_pool_or_exit(address).cidr
+    pool = get_pool_or_exit(address)
 
     info = get_container_info_or_exit(container_name)
     container_id = info["Id"]
@@ -1185,7 +1185,7 @@ def container_ip_remove(container_name, ip, version, interface):
         print "Error updating networking in container. Aborting."
         sys.exit(1)
 
-    client.unassign_address(cidr, ip)
+    client.unassign_address(pool, ip)
 
     print "IP %s removed from %s" % (ip, container_name)
 
