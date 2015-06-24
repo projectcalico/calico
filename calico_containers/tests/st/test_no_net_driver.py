@@ -28,9 +28,13 @@ class TestNoNetDriver(TestBase):
             host.calicoctl("container add %s 192.168.1.1" % node1)
             host.calicoctl("container add %s 192.168.1.2" % node2)
 
+            # Get the endpoint IDs for the containers
+            ep1 = host.calicoctl("container %s endpoint-id show" % node1)
+            ep2 = host.calicoctl("container %s endpoint-id show" % node2)
+
             # Now add the profiles.
-            host.calicoctl("profile TEST_GROUP member add %s" % node1)
-            host.calicoctl("profile TEST_GROUP member add %s" % node2)
+            host.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
+            host.calicoctl("endpoint %s profile set TEST_GROUP" % ep2)
 
             # Check it works
             node1.assert_can_ping("192.168.1.2", retries=10)
