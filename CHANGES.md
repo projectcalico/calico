@@ -2,6 +2,10 @@
 
 ## 0.26-dev
 
+- Streamline conntrack rules, move them to top-level chains to avoid 
+  duplication.
+- Narrow focus of input iptables chain so that it only applies to 
+  Calico-handled traffic.
 - Provide warning log when attempting to use Neutron networks that are not of
   type 'local' or 'flat' with Calico.
 - Handle invalid JSON in IPAM key in etcd.

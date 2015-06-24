@@ -116,6 +116,10 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     for iptables_updater, hosts_set in [(v4_filter_updater, HOSTS_IPSET_V4),
                                         # FIXME support IP-in-IP for IPv6.
                                         (v6_filter_updater, None)]:
+        if hosts_set and config.IP_IN_IP_ENABLED:
+            hosts_set_name = hosts_set.set_name
+        else:
+            hosts_set_name = None
         if iptables_updater is v4_filter_updater:
             input_chain, input_deps = _build_input_chain(
                 iface_match=iface_match,
@@ -125,6 +129,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                 dhcp_dst_port=67,
                 ipv6=False,
                 default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
+                hosts_set_name=hosts_set_name,
             )
         else:
             input_chain, input_deps = _build_input_chain(
@@ -135,34 +140,17 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                 dhcp_dst_port=547,
                 ipv6=True,
                 default_action=config.DEFAULT_INPUT_CHAIN_ACTION,
+                hosts_set_name=hosts_set_name,
             )
+        forward_chain, forward_deps = _build_forward_chain(iface_match)
 
-        forward_chain = [
-            "--append %s --jump %s --in-interface %s" %
-            (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, iface_match),
-            "--append %s --jump %s --out-interface %s" %
-            (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, iface_match),
-            "--append %s --jump ACCEPT --in-interface %s" %
-            (CHAIN_FORWARD, iface_match),
-            "--append %s --jump ACCEPT --out-interface %s" %
-            (CHAIN_FORWARD, iface_match),
-        ]
-        if hosts_set and config.IP_IN_IP_ENABLED:
-            # Can't program a rule referencing an ipset before it exists.
-            hosts_set.ensure_exists()
-            input_chain.insert(
-                0,
-                "--append %s --protocol ipencap "
-                "--match set ! --match-set %s src --jump DROP" %
-                (CHAIN_INPUT, hosts_set.set_name)
-            )
         iptables_updater.rewrite_chains(
             {
                 CHAIN_FORWARD: forward_chain,
                 CHAIN_INPUT: input_chain
             },
             {
-                CHAIN_FORWARD: set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT]),
+                CHAIN_FORWARD: forward_deps,
                 CHAIN_INPUT: input_deps,
             },
             async=False)
@@ -378,13 +366,35 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
 
 def _build_input_chain(iface_match, metadata_addr, metadata_port,
                        dhcp_src_port, dhcp_dst_port, ipv6=False,
-                       default_action="DROP"):
+                       default_action="DROP", hosts_set_name=None):
     """
-    Returns a list of rules that should be applied to the INPUT chain.
+    Returns a list of rules that should be applied to the felix-INPUT chain.
+    :returns Tuple: list of rules and set of deps.
     """
     chain = []
+
+    if hosts_set_name:
+        # IP-in-IP enabled, drop any IP-in-IP packets that are not from other
+        # Calico hosts.
+        _log.info("IPIP enabled, dropping IPIP packets from non-Calico hosts.")
+        chain.append(
+            "--append %s --protocol ipencap "
+            "--match set ! --match-set %s src --jump DROP" %
+            (CHAIN_INPUT, hosts_set_name)
+        )
+
+    # Optimisation: return immediately if the traffic is not from one of the
+    # interfaces we're managing.
+    chain.append("--append %s ! --in-interface %s --jump RETURN" %
+                 (CHAIN_INPUT, iface_match,))
     deps = set()
-    dns_dst_port = 53
+
+    # Allow established connections via the conntrack table.
+    chain.append("--append %s --match conntrack "
+                 "--ctstate INVALID --jump DROP" % (CHAIN_INPUT,))
+    chain.append("--append %s --match conntrack "
+                 "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
+                 (CHAIN_INPUT,))
 
     #  In ipv6 only, there are 6 rules that need to be created first.
     #  ACCEPT ipv6-icmp anywhere anywhere ipv6-icmptype 130
@@ -398,34 +408,30 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
     if ipv6:
         for icmp_type in ["130", "131", "132", "134", "135", "136"]:
             chain.append("--append %s --jump ACCEPT "
-                         "--in-interface %s --protocol ipv6-icmp "
+                         "--protocol ipv6-icmp "
                          "--icmpv6-type %s" %
-                         (CHAIN_INPUT, iface_match, icmp_type))
-
-    chain.append("--append %s --match conntrack --ctstate INVALID "
-                 "--jump DROP" % CHAIN_INPUT)
-    chain.append("--append %s --match conntrack --ctstate RELATED,ESTABLISHED "
-                 "--jump ACCEPT" % CHAIN_INPUT)
+                         (CHAIN_INPUT, icmp_type))
 
     if metadata_addr is not None:
+        _log.info("Metadata address specified, whitelisting metadata service")
         chain.append(
-            "--append %s --protocol tcp --in-interface %s "
+            "--append %s --protocol tcp "
             "--destination %s --dport %s --jump ACCEPT" %
-            (CHAIN_INPUT, iface_match, metadata_addr, metadata_port)
+            (CHAIN_INPUT, metadata_addr, metadata_port)
         )
 
     # Special-case: allow DHCP.
     chain.append(
-        "--append %s --protocol udp --in-interface %s --sport %d "
+        "--append %s --protocol udp --sport %d "
         "--dport %s --jump ACCEPT" %
-        (CHAIN_INPUT, iface_match, dhcp_src_port, dhcp_dst_port)
+        (CHAIN_INPUT, dhcp_src_port, dhcp_dst_port)
     )
 
     # Special-case: allow DNS.
+    dns_dst_port = 53
     chain.append(
-        "--append %s --protocol udp --in-interface %s "
-        "--dport %s --jump ACCEPT" %
-        (CHAIN_INPUT, iface_match, dns_dst_port)
+        "--append %s --protocol udp --dport %s --jump ACCEPT" %
+        (CHAIN_INPUT, dns_dst_port)
     )
 
     if default_action != "DROP":
@@ -436,17 +442,48 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
                   "per-endpoint policy to packets in the INPUT chain.",
                   default_action)
         chain.append(
-            "--append %s --jump %s --in-interface %s" %
-            (CHAIN_INPUT, CHAIN_FROM_ENDPOINT, iface_match)
+            "--append %s --jump %s" %
+            (CHAIN_INPUT, CHAIN_FROM_ENDPOINT)
         )
         deps.add(CHAIN_FROM_ENDPOINT)
 
-    chain.append(
-        "--append %s --in-interface %s --jump %s" %
-        (CHAIN_INPUT, iface_match, default_action)
-    )
+    if default_action != "RETURN":
+        # Optimisation: RETURN is the default if the packet reaches the end of
+        # the chain so no need to program it.
+        chain.append(
+            "--append %s --jump %s" % (CHAIN_INPUT, default_action)
+        )
 
     return chain, deps
+
+
+def _build_forward_chain(iface_match):
+    """
+    Builds a list of rules that should be applied to the felix-FORWARD
+    chain.
+    :returns Tuple: list of rules and set of deps.
+    """
+    forward_chain = [
+        "--append %s --in-interface %s --match conntrack "
+        "--ctstate INVALID --jump DROP" % (CHAIN_FORWARD, iface_match),
+        "--append %s --out-interface %s --match conntrack "
+        "--ctstate INVALID --jump DROP" % (CHAIN_FORWARD, iface_match),
+        "--append %s --in-interface %s --match conntrack "
+        "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+        (CHAIN_FORWARD, iface_match),
+        "--append %s --out-interface %s --match conntrack "
+        "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+        (CHAIN_FORWARD, iface_match),
+        "--append %s --jump %s --in-interface %s" %
+        (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, iface_match),
+        "--append %s --jump %s --out-interface %s" %
+        (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, iface_match),
+        "--append %s --jump ACCEPT --in-interface %s" %
+        (CHAIN_FORWARD, iface_match),
+        "--append %s --jump ACCEPT --out-interface %s" %
+        (CHAIN_FORWARD, iface_match),
+    ]
+    return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT])
 
 
 def interface_to_suffix(config, iface_name):

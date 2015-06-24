@@ -134,3 +134,64 @@ class TestRules(BaseTestCase):
         with self.assertRaises(AssertionError):
             _rule_to_iptables_fragment("foo", {"protocol": "10",
                                                "src_ports": [1]}, 4, {})
+
+    def test_build_input_chain(self):
+        chain, deps = frules._build_input_chain("tap+",
+                                                "123.0.0.1",
+                                                1234,
+                                                546, 547,
+                                                False,
+                                                "DROP")
+        self.assertEqual(chain, [
+            '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
+            '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
+            '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+            '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --sport 546 --dport 547 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
+            '--append felix-INPUT --jump DROP',
+        ])
+        self.assertEqual(deps, set())
+
+    def test_build_input_chain_ipip(self):
+        chain, deps = frules._build_input_chain("tap+",
+                                                "123.0.0.1",
+                                                1234,
+                                                546, 547,
+                                                False,
+                                                "DROP",
+                                                "felix-hosts")
+        self.assertEqual(chain, [
+            '--append felix-INPUT --protocol ipencap --match set ! --match-set felix-hosts src --jump DROP',
+            '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
+            '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
+            '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+            '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --sport 546 --dport 547 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
+            '--append felix-INPUT --jump DROP',
+        ])
+        self.assertEqual(deps, set())
+
+    def test_build_input_chain_return(self):
+        chain, deps = frules._build_input_chain("tap+",
+                                                None,
+                                                None,
+                                                546, 547,
+                                                True,
+                                                "RETURN")
+        self.assertEqual(chain, [
+            '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
+            '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
+            '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 130',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 131',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 132',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 134',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 135',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 136',
+            '--append felix-INPUT --protocol udp --sport 546 --dport 547 --jump ACCEPT',
+            '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
+            '--append felix-INPUT --jump felix-FROM-ENDPOINT',
+        ])
+        self.assertEqual(deps, set(["felix-FROM-ENDPOINT"]))
