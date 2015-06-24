@@ -28,6 +28,9 @@ options.
 
    configuration
 
+If you're going to run Calico in production, you should also review the
+guide to securing Calico:
+
 .. toctree::
    :maxdepth: 2
 

@@ -20,8 +20,7 @@ What Calico does and does not provide
 
 Currently, Calico implements security policy that ensures that:
 
-- (assuming its host is not compromised) an endpoint cannot spoof its source
-  address
+- an endpoint cannot spoof its source address
 - all traffic going to an endpoint must be accepted by the inbound policy
   attached to that endpoint
 - all traffic leaving an endpoint must be accepted by the outbound policy
@@ -39,14 +38,14 @@ Calico does not:
 
 Since the outbound policy is typically controlled by the application developer
 who owns the endpoint (at least when Calico is used with OpenStack), it's a
-managment challenge to use that to enforce *network* policy.
+management challenge to use that to enforce *network* policy.
 
 How Calico uses iptables
 ------------------------
 
 Calico needs to add its security policy rules to the "INPUT" and "FORWARD"
 chains of the iptables "filter" table.  To minimise the impact on the
-top-level chains, calico inserts a single rule at the start of each of the
+top-level chains, Calico inserts a single rule at the start of each of the
 kernel chains, which jumps to Calico's own chain.
 
 The INPUT chain is traversed by packets which are destined for the host itself.
@@ -55,8 +54,8 @@ endpoints; other packets are passed through to the remainder of the INPUT
 chain.
 
 In the INPUT chain, Calico whitelists some essential bootstrapping traffic,
-such as DHCP, DNS and the OpenStack metadata IP address.  Other traffic from
-local endpoints passes through the outbound ruls for the endpoint.  Then,
+such as DHCP, DNS and the OpenStack metadata traffic.  Other traffic from
+local endpoints passes through the outbound rules for the endpoint.  Then,
 it hits a configurable rule that either drops the traffic or allows it to
 continue to the remainder of the INPUT chain.
 
@@ -76,7 +75,7 @@ Securing etcd
 -------------
 
 Calico uses etcd to store and forward the configuration of the network from
-plugin to the Falic agent.  By default, etcd is writable by anyone with
+plugin to the Felix agent.  By default, etcd is writable by anyone with
 access to its REST interface.  We plan to use the RBAC feature of an upcoming
 etcd release to improve this dramatically.  However, until that work is done,
 we recommend blocking access to etcd from all but the IP range(s) used by the

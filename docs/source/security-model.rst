@@ -48,7 +48,7 @@ Policy is encoded as two lists of rules:
 In the lists, each rule consists of a set of match criteria and an action.
 The match criteria include:
 
-- protocol
+- protocol,
 - source/dest CIDR,
 - source/dest tag (see below),
 - source/dest port,
