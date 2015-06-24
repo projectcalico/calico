@@ -89,7 +89,7 @@ class DockerHost(object):
         Raises a DockerHostExecError() if the command returns a non-zero
         return code.
 
-        :param command:  The command to execute.
+        :param command:  The calicoctl command line parms as a single string.
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
@@ -124,6 +124,7 @@ class DockerHost(object):
                               "[ -e %s ]" % CALICO_DRIVER_SOCK)
         retry_until_success(sock_exists, ex_class=CalledProcessError)
         pass
+
     def remove_workloads(self):
         """
         Remove all containers running on this host.
