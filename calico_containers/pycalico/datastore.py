@@ -54,8 +54,8 @@ HOST_BGP_PEER_PATH = HOST_PATH + "bgp_peer_%(version)s/%(peer_ip)s"
 
 # Paths used in endpoint enumeration depending on available parameters.
 ALL_ENDP_PATH = HOSTS_PATH
-HOST_ENDP_PATH = HOST_PATH
-ORCHESTRATOR_ENDP_PATH = HOST_ENDP_PATH + "workload/%(orchestrator_id)s/"
+HOST_ENDP_PATH = HOST_PATH + "workload/"
+ORCHESTRATOR_ENDP_PATH = HOST_ENDP_PATH + "%(orchestrator_id)s/"
 WORKLOAD_ENDP_PATH = ORCHESTRATOR_ENDP_PATH + "%(workload_id)s/endpoint/"
 ENDPOINT_ENDP_PATH = WORKLOAD_ENDP_PATH + "%(endpoint_id)s"
 
