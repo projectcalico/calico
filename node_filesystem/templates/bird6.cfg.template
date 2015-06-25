@@ -44,7 +44,7 @@ protocol direct {
 # For peer {{$onode_ip_key}}
 {{if eq $onode_ip (getenv "IP6") }}# Skipping ourselves ({{getenv "IP6"}})
 {{else if eq "" $onode_ip}}# No IPv6 address configured for this node
-{{else}}protocol bgp bgp_{{$id}} from bgp_template {
+{{else}}protocol bgp Mesh_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
 }{{end}}{{end}}
 {{end}}
@@ -83,7 +83,7 @@ template bgp bgp_template {
 {{range gets "/config/bgp_peer_v6/*"}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
-protocol bgp bgp_{{$id}} from bgp_template {
+protocol bgp Global_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
 }
 {{end}}
@@ -96,7 +96,7 @@ protocol bgp bgp_{{$id}} from bgp_template {
 {{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
-protocol bgp bgp_{{$id}} from bgp_template {
+protocol bgp Node_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
 }
 {{end}}
