@@ -187,7 +187,7 @@ class TestRules(BaseTestCase):
             '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 130',
             '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 131',
             '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 132',
-            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 134',
+            '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 133',
             '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 135',
             '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 136',
             '--append felix-INPUT --protocol udp --sport 546 --dport 547 --jump ACCEPT',
