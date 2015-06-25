@@ -29,6 +29,7 @@ FIXED_MAC = "EE:EE:EE:EE:EE:EE"
 
 CONTAINER_NAME = "libnetwork"
 
+ORCHESTRATOR_ID = "docker"
 # How long to wait (seconds) for IP commands to complete.
 IP_CMD_TIMEOUT = 5
 
@@ -143,7 +144,7 @@ def create_endpoint():
 
     # Finally, write the endpoint to the datastore.
     try:
-        client.set_endpoint(hostname, CONTAINER_NAME, ep)
+        client.set_endpoint(hostname, ORCHESTRATOR_ID, CONTAINER_NAME, ep)
     except DataStoreError as e:
         # We've failed to write the endpoint to the datastore.
         # Back out the IP assignments and the veth creation.

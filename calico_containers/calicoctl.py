@@ -268,7 +268,7 @@ def container_add(container_name, ip, interface):
                                      proc_alias="/proc")
 
     # Register the endpoint
-    client.set_endpoint(hostname, container_id, endpoint)
+    client.set_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint)
 
     print "IP %s added to %s" % (ip, container_name)
 
@@ -310,10 +310,10 @@ def container_remove(container_name):
                 client.unassign_address(pool, ip)
 
     # Remove the endpoint
-    netns.remove_endpoint(endpoint_id)
+    netns.remove_endpoint(endpoint.endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(hostname, workload_id)
+    client.remove_container(hostname, ORCHESTRATOR_ID, workload_id)
 
     print "Removed Calico interface from %s" % container_name
 
