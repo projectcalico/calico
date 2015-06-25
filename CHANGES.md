@@ -2,6 +2,7 @@
 
 ## 0.26-dev
 
+- Update and improve security model documentation.
 - Streamline conntrack rules, move them to top-level chains to avoid
   duplication.
 - Narrow focus of input iptables chain so that it only applies to

@@ -28,6 +28,14 @@ options.
 
    configuration
 
+If you're going to run Calico in production, you should also review the
+guide to securing Calico:
+
+.. toctree::
+   :maxdepth: 2
+
+   securing-calico
+
 Before you can use your new Calico install, you'll need to configure the
 IP address ranges your VMs will use. This following article explains how
 to do this (in particular :ref:`opens-external-conn-setup`).

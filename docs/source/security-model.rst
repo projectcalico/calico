@@ -15,45 +15,81 @@
 Security Policy Model
 =====================
 
-Calico's current security policy model is syntactically the same as that of
-security groups in OpenStack.
+Calico applies security policy to **endpoints**.  Calico policy is defined in
+terms of **security profiles**, which contain lists of **rules** to apply
+as well as sets of **tags**.
 
-.. note:: We have work in progress to replace this model with something more
-          flexible, so watch this space, and please let us know if you have
-          specific requirements in this area.
+Endpoints
+---------
 
-Security Groups
----------------
+Endpoints are the TAPs, veths or other interfaces, which are attached to
+virtual machines or containers.
 
-An endpoint is configured, when it is created, to belong to one or more
-security groups.  (It is possible for an endpoint to belong to no security
-groups, but then it would have no connectivity at all - so probably not very
-useful.)  The security groups that an endpoint belongs to can also be updated
-later on.
+Calico applies one or more security profiles to each endpoint.
 
-A security group is a collection of rules that may be applied to an endpoint
-(i.e. to data coming from or travelling to a particular workload vNIC).  The
-default (for both in- and outbound) is always to DENY traffic, so rules specify
-exceptions that allow traffic through.  These exceptions carry the following
-information::
+Calico always tries to fail safe: if the configuration for an endpoint is
+missing, or no profiles are configured, Calico will drop traffic to/from that
+endpoint.  There is always an implicit default deny rule at the end of the
+list of profiles.
 
-    allow IPv4|IPv6 [<protocol> [<port range>]] traffic from/to <cidr>|<group>
+Security profiles: rules
+------------------------
 
-where `<cidr>` is an IPv4 or IPv6 prefix, and `<group>` specifies either this
-or another security group, and means all of the remote endpoints that belong to
-that group.
+Endpoints are configured to belong to one or more security profiles.  Profiles
+encode the policy (i.e. which packets to allow or deny) to apply to an
+endpoint.
 
-If a workload has multiple vNICs - aka endpoints - each of those vNICs may
-belong to a different set of security groups.
+Policy is encoded as two lists of rules:
+
+- an **inbound** list, which is traversed for packets that are going *to* the
+  endpoint
+- an **outbound** list, for packets coming *from* the endpoint
+
+In the lists, each rule consists of a set of match criteria and an action.
+The match criteria include:
+
+- protocol,
+- source/dest CIDR,
+- source/dest tag (see below),
+- source/dest port,
+- ICMP type and code.
+
+Calico supports actions, "allow" and "deny", which immediately
+accept or reject the packet.  Once a packet is accepted or rejected further
+rules are not processed.
+
+If a packet does not match any of the rules in any of the profiles attached to
+an endpoint then the default is to deny traffic.
+
+If a workload (such as a virtual machine) has multiple endpoints (for example,
+multiple vNICs) then each of those endpoints may belong to a different set of
+security profiles.
+
+Security profiles: tags
+-----------------------
+
+Each profile also has a set of (opaque) tags attached to it.  An endpoint is
+considered a **member** of a tag if one of its profiles contains that tag.
+
+Profile rules may reference tags in the source and destination match criteria.
+Calico calculates the tag memberships dynamically, updating them as endpoints
+come and go and as profiles are updated.  This allows for very fine-grained
+but also maintainable policy.
+
+For example, an operator could add the "db-user" tag to all endpoints that are
+to use the database.  Then, they can use a single "allow" rule in the
+database's inbound chain to allow connections from all current members of the
+"db-user" tag.
 
 Differences from OpenStack
 --------------------------
 
-Although the structure and syntax of the security group information is the
-same, there are practical differences between how Calico and OpenStack
-interpret this information.
+Calico represents OpenStack security groups as profiles (with a single
+tag containing the name of the security group).  While this is a simple 1-to-1
+mapping at the rule level, there are some differences between Calico and
+OpenStack's security models to consider:
 
-Effective security in OpenStack is actually a product of the interaction
+Effective security in OpenStack is a product of the interaction
 between three kinds of objects: networks, routers and security groups.  Calico,
 on the other hand, **only** uses security groups for security configuration;
 and networks and routers have no impact.  The following subsections go into
@@ -75,17 +111,11 @@ allows ingress from and egress to the same security group.
 Architecture
 ------------
 
-.. note:: Following the change to use etcd instead of message queues to
-          communicate between components, this document may now contain out of
-          date information. We will remedy this in the near future.
-
 At present, the flow of security information proceeds as follows::
 
-    [Configuration in OpenStack or other orchestrator] -(Plugin)-> [Calico network API] -(ACL Manager)-> [Calico ACL API] -(Felix)-> [Programmed IPTables rules]
+    [Configuration in OpenStack or other orchestrator] -(Plugin)-> [etcd] -(Felix)-> [Programmed iptables rules]
 
 When a security group is configured, the Calico orchestrator plugin discovers
-the new configuration. This configuration is passed over the Calico Network
-API to the ACL manager. This component transforms the ACLs if necessary and
-then passes them over the Calico ACL API to the relevant Felix agent. That
-Felix agent then programs the rules into the kernel using ``iptables`` and
-``ipsets`` commands.
+the new configuration.  This configuration is translated into the Calico
+data model and written to etcd.  The Felix agent watches etcd for changes and
+applies the policy using the kernel's iptables and ipsets.
