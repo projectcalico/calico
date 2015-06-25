@@ -403,6 +403,11 @@ class Endpoint(object):
         A less strict 'equals' function, which compares provided parameters to
         the current endpoint object.
 
+        :param hostname: The hostname to compare to
+        :param orchestrator_id: The orchestrator ID to compare to.
+        :param workload_id: The workload ID to compare to
+        :param endpoint_id: The endpoint ID to compare to
+
         :return: True if the provided parameters match the Endpoint's
         parameters, False if any of the provided parameters are different from
         the Endpoint's parameters.
@@ -990,6 +995,12 @@ class DatastoreClient(object):
         Raises a MultipleEndpointsMatch exception if more than one endpoint
         matches.
 
+        :param hostname: The hostname that the endpoint lives on.
+        :param orchestrator_id: The workload (or container) that the endpoint
+        belongs to.
+        :param workload_id: The workload (or container) that the endpoint
+        belongs to.
+        :param endpoint_id: The ID of the endpoint
         :return: An Endpoint Object
         """
         eps = self.get_endpoints(hostname=hostname,
@@ -1014,6 +1025,8 @@ class DatastoreClient(object):
         Write a single endpoint object to the datastore.
 
         :param hostname: The hostname for the Docker hosting this container.
+        :param orchestrator_id: The orchestrator the the workload (or container)
+        belongs to.
         :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
         """
@@ -1097,6 +1110,8 @@ class DatastoreClient(object):
         """
         Remove a container from the datastore.
         :param hostname: The name of the host the container is on.
+        :param orchestrator_id: The orchestrator the workload (or container)
+        belongs to.
         :param container_id: The Docker container ID.
         :return: None.
         """
