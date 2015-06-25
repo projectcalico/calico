@@ -113,8 +113,8 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                ProfileNotInEndpoint,
                                ProfileAlreadyInEndpoint,
                                MultipleEndpointsMatch,
-                               Vividict,
-                               BGPPeer)
+                               BGPPeer,
+                               IPPool)
 from pycalico.ipam import IPAMClient
 
 hostname = socket.gethostname()
@@ -131,11 +131,18 @@ try:
 except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
 
-DEFAULT_IPV4_POOL = IPNetwork("192.168.0.0/16")
-DEFAULT_IPV6_POOL = IPNetwork("fd80:24e2:f998:72d6::/64")
+DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
+DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
 class ConfigError(Exception):
     pass
+
+
+class Vividict(dict):
+    # From http://stackoverflow.com/a/19829714
+    def __missing__(self, key):
+        value = self[key] = type(self)()
+        return value
 
 
 def get_container_info_or_exit(container_name):
@@ -599,7 +606,7 @@ def profile_show(detailed):
     profiles = client.get_profile_names()
 
     if detailed:
-        x = PrettyTable(["Name", "Host", "Workload Type", "Workload ID",
+        x = PrettyTable(["Name", "Host", "Orchestrator ID", "Workload ID",
                          "Endpoint ID", "State"])
         for name in profiles:
             members = client.get_profile_members(name)
@@ -607,17 +614,13 @@ def profile_show(detailed):
                 x.add_row([name, "None", "None", "None", "None", "None"])
                 continue
 
-            for host, ctypes in members.iteritems():
-                for ctype, workloads in ctypes.iteritems():
-                    for workload, endpoints in workloads.iteritems():
-                        for endpoint_id, endpoint in endpoints.iteritems():
-                            x.add_row([name,
-                                       host,
-                                       ctype,
-                                       # Truncate ID to 12 chars like Docker
-                                       workload[:12],
-                                       endpoint_id,
-                                       endpoint.state])
+            for endpoint in members:
+                x.add_row([name,
+                           endpoint.hostname,
+                           endpoint.orchestrator_id,
+                           endpoint.workload_id,
+                           endpoint.endpoint_id,
+                           endpoint.state])
     else:
         x = PrettyTable(["Name"])
         for name in profiles:
@@ -811,41 +814,6 @@ def profile_rule_add_remove(
     client.profile_update_rules(profile)
 
 
-def node_show(detailed):
-    hosts = client.get_hosts()
-
-    if detailed:
-        x = PrettyTable(["Host", "Workload Type", "Workload ID", "Endpoint ID",
-                         "Addresses", "MAC", "State"])
-        for host, container_types in hosts.iteritems():
-            if not container_types:
-                x.add_row([host, "None", "None", "None",
-                           "None", "None", "None"])
-                continue
-            for container_type, workloads in container_types.iteritems():
-                for workload, endpoints in workloads.iteritems():
-                    for ep_id, endpoint in endpoints.iteritems():
-                        x.add_row([host,
-                                   container_type,
-                                   # Truncate ID to 12 chars like Docker
-                                   workload[:12],
-                                   ep_id,
-                                   "\n".join([str(net) for net in
-                                             endpoint.ipv4_nets |
-                                             endpoint.ipv6_nets]),
-                                   endpoint.mac,
-                                   endpoint.state])
-    else:
-        x = PrettyTable(["Host", "Workload Type", "Number of workloads"])
-        for host, container_types in hosts.iteritems():
-            if not container_types:
-                x.add_row([host, "N/A", "0"])
-                continue
-            for container_type, workloads in container_types.iteritems():
-                x.add_row([host, container_type, len(workloads)])
-    print x.get_string(sortby="Host")
-
-
 def save_diags(log_dir, upload):
     """
     Gather Calico diagnostics for bug reporting.
@@ -869,8 +837,9 @@ def ip_pool_add(cidr_pool, version, ipip, masquerade):
         print "IP in IP not supported for IPv6 pools"
         sys.exit(1)
 
-    pool = check_ip_version(cidr_pool, version, IPNetwork)
-    client.add_ip_pool(version, pool, ipip, masquerade)
+    cidr = check_ip_version(cidr_pool, version, IPNetwork)
+    pool = IPPool(cidr, ipip=ipip, masquerade=masquerade)
+    client.add_ip_pool(version, pool)
 
 
 def ip_pool_remove(cidr_pool, version):
@@ -881,9 +850,9 @@ def ip_pool_remove(cidr_pool, version):
     :param version: v4 or v6
     :return: None
     """
-    pool = check_ip_version(cidr_pool, version, IPNetwork)
+    cidr = check_ip_version(cidr_pool, version, IPNetwork)
     try:
-        client.remove_ip_pool(version, pool)
+        client.remove_ip_pool(version, cidr)
     except KeyError:
         print "%s is not a configured pool." % cidr_pool
 
@@ -900,13 +869,12 @@ def ip_pool_show(version):
     for pool in pools:
         enabled_options = []
         if version == "v4":
-            cfg = client.get_ip_pool_config(version, pool)
-            if "ipip" in cfg:
+            if pool.ipip:
                 enabled_options.append("ipip")
-            if "masquerade" in cfg:
+            if pool.masquerade:
                 enabled_options.append("nat-outgoing")
         # convert option array to string
-        row = [pool, ','.join(enabled_options)]
+        row = [str(pool.cidr), ','.join(enabled_options)]
         x.add_row(row)
     print x.get_string(sortby=headings[0])
 
@@ -1268,7 +1236,7 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
                     "NumEndpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        """ To caluclate the number of unique endpoints, and unique workloads
+        """ To calculate the number of unique endpoints, and unique workloads
          on each host, we first create a dictionary in the following format:
         {
         host1: {
@@ -1314,13 +1282,13 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
     """
     Append a list of profiles to the container endpoint profile list.
 
-    The hostname, orchestrator_id, workload_id, and endpoint_id are all optional
-    parameters used to determine which endpoint is being targeted.
+    The hostname, orchestrator_id, workload_id, and endpoint_id are all
+    optional parameters used to determine which endpoint is being targeted.
     The more parameters used, the faster the endpoint query will be. The
     query must be specific enough to match a single endpoint or it will fail.
 
-    The profile list may not contain duplicate entries, invalid profile names, or
-    profiles that are already in the containers list.
+    The profile list may not contain duplicate entries, invalid profile names,
+    or profiles that are already in the containers list.
 
     :param hostname: The host that the targeted endpoint resides on.
     :param orchestrator_id: The orchestrator that created the targeted endpoint.

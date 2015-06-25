@@ -43,8 +43,8 @@ PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
-IP_POOL_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool"
-IP_POOL_KEY = IP_POOL_PATH + "/%(pool)s"
+IP_POOLS_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool/"
+IP_POOL_KEY = IP_POOLS_PATH + "%(pool)s"
 BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/"
 BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/%(peer_ip)s"
 BGP_NODE_DEF_AS_PATH = CONFIG_PATH + "bgp_as"
@@ -263,6 +263,68 @@ class BGPPeer(object):
                 self.as_num == other.as_num)
 
 
+class IPPool(object):
+    """
+    Class encapsulating an IPPool.
+    """
+
+    def __init__(self, cidr, ipip=False, masquerade=False):
+        """
+        Constructor.
+        :param cidr: IPNetwork object (or CIDR string) representing the pool
+        :param ipip: Use IP-IP for this pool.
+        :param masquerade: Enable masquerade (outgoing NAT) for this pool.
+        """
+        # Normalize the CIDR (e.g. 1.2.3.4/16 -> 1.2.0.0/16)
+        self.cidr = IPNetwork(cidr).cidr
+        self.ipip = bool(ipip)
+        self.masquerade = bool(masquerade)
+
+    def to_json(self):
+        """
+        Convert the IPPool to a JSON string.
+        :return: A JSON string.
+        """
+        json_dict = {"cidr" : str(self.cidr)}
+        if self.ipip:
+            json_dict["ipip"] = "tunl0"
+        if self.masquerade:
+            json_dict["masquerade"] = True
+        return json.dumps(json_dict)
+
+    @classmethod
+    def from_json(cls, json_str):
+        """
+        Convert the json string into a IPPool object.
+        :param json_str: The JSON string representing an IPPool.
+        :return: An IPPool object.
+        """
+        json_dict = json.loads(json_str)
+        return cls(json_dict["cidr"],
+                   ipip=json_dict.get("ipip"),
+                   masquerade=json_dict.get("masquerade"))
+
+    def __eq__(self, other):
+        if not isinstance(other, IPPool):
+            return NotImplemented
+        return (self.cidr == other.cidr and
+                self.ipip == other.ipip and
+                self.masquerade == other.masquerade)
+
+    def __contains__(self, item):
+        """
+        Override __contains__ so that you can check if an IP address is in this
+        pool.
+
+        e.g. IPAddress("1.2.3.4) in IPPool("1.2.3.0/24") is True.
+        """
+        return IPAddress(item) in self.cidr
+
+    def __str__(self):
+        """Return the CIDR of this pool."""
+        return str(self.cidr)
+
+
 class Endpoint(object):
     """
     Class encapsulating an Endpoint.
@@ -405,13 +467,6 @@ class Profile(object):
         self.rules = Rules(name, [], [])
 
 
-class Vividict(dict):
-    # From http://stackoverflow.com/a/19829714
-    def __missing__(self, key):
-        value = self[key] = type(self)()
-        return value
-
-
 class DatastoreClient(object):
     """
     An datastore client that exposes high level Calico operations needed by the
@@ -498,103 +553,91 @@ class DatastoreClient(object):
         Get the configured IP pools.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :return: List of netaddr.IPNetwork IP pools.
+        :return: List of IPPool.
         """
         assert version in ("v4", "v6")
-        pool_path = IP_POOL_PATH % {"version": version}
+        pool_path = IP_POOLS_PATH % {"version": version}
         try:
-            keys = self.etcd_client.read(pool_path).children
+            leaves = self.etcd_client.read(pool_path, recursive=True).leaves
         except EtcdKeyNotFound:
             # Path doesn't exist.
             pools = []
         else:
-            # Path exists so convert directory names to CIDRs.  Note that
-            # the children function is bugged when the directory is entry as
-            # it contains a single entry equal to the directory path, so we
-            # must filter this out.
-            pools = [x.key.split("/")[-1].replace("-", "/")
-                       for x in keys if x.key != pool_path]
+            # Convert the leaf values to IPPools.  We need to handle an empty
+            # leaf value because when no pools are configured the recursive
+            # read returns the parent directory.
+            pools = [IPPool.from_json(leaf.value) for leaf in leaves
+                                                  if leaf.value]
 
-        return map(IPNetwork, pools)
+        return pools
 
     @handle_errors
-    def get_ip_pool_config(self, version, pool):
+    def get_ip_pool_config(self, version, cidr):
         """
         Get the configuration for the given pool.
 
         :param version: "v4" for IPv4, "v6" for IPv6
         :param pool: IPNetwork object representing the pool
-        :return: Dictionary of pool configuration
+        :return: An IPPool object.
         """
         assert version in ("v4", "v6")
-        assert isinstance(pool, IPNetwork)
+        assert isinstance(cidr, IPNetwork)
 
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
-        pool = pool.cidr
+        cidr = cidr.cidr
 
         key = IP_POOL_KEY % {"version": version,
-                             "pool": str(pool).replace("/", "-")}
+                             "pool": str(cidr).replace("/", "-")}
 
         try:
-            data = json.loads(self.etcd_client.read(key).value)
-        except (KeyError, EtcdKeyNotFound):
+            data = self.etcd_client.read(key).value
+        except EtcdKeyNotFound:
             # Re-raise with a better error message.
-            raise KeyError("%s is not a configured IP pool." % pool)
+            raise KeyError("%s is not a configured IP pool." % cidr)
 
-        return data
+        return IPPool.from_json(data)
 
     @handle_errors
-    def add_ip_pool(self, version, pool, ipip=False, masquerade=False):
+    def add_ip_pool(self, version, pool):
         """
         Add the given pool to the list of IP allocation pools.  If the pool
         already exists, this method completes silently without modifying the
         list of pools, other than possibly updating the ipip config.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :param pool: IPNetwork object representing the pool
-        :param ipip: Use IP-IP for pool
+        :param pool: IPPool object
         :return: None
         """
         assert version in ("v4", "v6")
-        assert isinstance(pool, IPNetwork)
-
-        # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
-        pool = pool.cidr
+        assert isinstance(pool, IPPool)
 
         key = IP_POOL_KEY % {"version": version,
-                             "pool": str(pool).replace("/", "-")}
-
-        data = {"cidr" : str(pool)}
-        if ipip:
-            data["ipip"] = "tunl0"
-        if masquerade:
-            data["masquerade"] = True
-
-        self.etcd_client.write(key, json.dumps(data))
+                             "pool": str(pool.cidr).replace("/", "-")}
+        self.etcd_client.write(key, pool.to_json())
 
     @handle_errors
-    def remove_ip_pool(self, version, pool):
+    def remove_ip_pool(self, version, cidr):
         """
         Delete the given CIDR range from the list of pools.  If the pool does
         not exist, raise a KeyError.
 
         :param version: "v4" for IPv4, "v6" for IPv6
-        :param pool: IPNetwork object representing the pool
+        :param cidr: IPNetwork object representing the pool
         :return: None
         """
         assert version in ("v4", "v6")
-        assert isinstance(pool, IPNetwork)
+        assert isinstance(cidr, IPNetwork)
 
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
-        pool = pool.cidr
+        cidr = cidr.cidr
 
         key = IP_POOL_KEY % {"version": version,
-                             "pool": str(pool).replace("/", "-")}
+                             "pool": str(cidr).replace("/", "-")}
         try:
             self.etcd_client.delete(key)
-        except (KeyError, EtcdKeyNotFound):
+        except EtcdKeyNotFound:
             # Re-raise with a better error message.
-            raise KeyError("%s is not a configured IP pool." % pool)
+            raise KeyError("%s is not a configured IP pool." % cidr)
 
     @handle_errors
     def get_bgp_peers(self, version, hostname=None):
@@ -792,53 +835,24 @@ class DatastoreClient(object):
         return profile
 
     @handle_errors
-    def get_profile_members_endpoint_ids(self, name):
-        """
-        Get all endpoint IDs that are members of named profile.
-
-        :param name: Unique string name of the profile.
-        :return: a list of members
-        """
-        members = []
-        try:
-            endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
-                                              recursive=True)
-        except EtcdKeyNotFound:
-            # Means the ALL_ENDPOINTS_PATH was not set up.  So, profile has no
-            # members because there are no endpoints.
-            return members
-
-        for child in endpoints.leaves:
-            ep = Endpoint.from_json(child.key, child.value)
-            if ep and name in ep.profile_ids:
-                members.append(ep.endpoint_id)
-        return members
-
-    @handle_errors
     def get_profile_members(self, profile_name):
         """
         Get the all of the endpoint members of a profile.
 
         :param profile_name: Unique string name of the profile.
-        :return: a dict of hostname => {
-                               type => {
-                                   container_id => {
-                                       endpoint_id => Endpoint
-                                   }
-                               }
-                           }
+        :return: a list of Endpoint objects.
         """
-        eps = Vividict()
+        eps = []
         try:
             endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
                                               recursive=True).leaves
+        except EtcdKeyNotFound:
+            pass
+        else:
             for child in endpoints:
                 ep = Endpoint.from_json(child.key, child.value)
                 if ep and profile_name in ep.profile_ids:
-                    eps[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.endpoint_id] = ep
-        except EtcdKeyNotFound:
-            pass
-
+                    eps.append(ep)
         return eps
 
     @handle_errors
@@ -1081,37 +1095,6 @@ class DatastoreClient(object):
         endpoint._original_json = new_json
 
     @handle_errors
-    def get_hosts(self):
-        """
-        Get the all configured hosts
-        :return: a dict of hostname => {
-                               type => {
-                                   container_id => {
-                                       endpoint_id => Endpoint
-                                   }
-                               }
-                           }
-        """
-        hosts = Vividict()
-        try:
-            etcd_hosts = self.etcd_client.read(HOSTS_PATH,
-                                               recursive=True).leaves
-            for child in etcd_hosts:
-                ep = Endpoint.from_json(child.key, child.value)
-                if ep:
-                    hosts[ep.hostname][ep.orchestrator_id][ep.workload_id][ep.endpoint_id] = ep
-                else:
-                    packed = child.key.split("/")
-                    if 10 > len(packed) > 5:
-                        (_, _, _, _, host, _) = packed[0:6]
-                        if not hosts[host]:
-                            hosts[host] = Vividict()
-        except EtcdKeyNotFound:
-            pass
-
-        return hosts
-
-    @handle_errors
     def get_default_next_hops(self, hostname):
         """
         Get the next hop IP addresses for default routes on the given host.
@@ -1240,8 +1223,8 @@ class DataStoreError(Exception):
 
 class ProfileNotInEndpoint(Exception):
     """
-    Attempting to remove a profile is not in the container endpoint profile
-    list.
+    Attempting to remove a profile that is not in the container endpoint
+    profile list.
     """
     def __init__(self, profile_name):
         self.profile_name = profile_name
