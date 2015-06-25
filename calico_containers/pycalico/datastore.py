@@ -830,18 +830,8 @@ class DatastoreClient(object):
         :param profile_name: Unique string name of the profile.
         :return: a list of Endpoint objects.
         """
-        eps = []
-        try:
-            endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
-                                              recursive=True).leaves
-        except EtcdKeyNotFound:
-            pass
-        else:
-            for child in endpoints:
-                ep = Endpoint.from_json(child.key, child.value)
-                if ep and profile_name in ep.profile_ids:
-                    eps.append(ep)
-        return eps
+        return [endpoint for endpoint in self.get_endpoints()
+                if profile_name in endpoint.profile_ids]
 
     @handle_errors
     def profile_update_tags(self, profile):
