@@ -218,7 +218,9 @@ def container_add(container_name, ip, interface):
 
     # Check if the container already exists
     try:
-        _ = client.get_endpoint_id_from_cont(hostname, container_id)
+        _ = client.get_endpoint(hostname=hostname,
+                                orchestrator_id=ORCHESTRATOR_ID,
+                                workload_id=container_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
@@ -266,7 +268,7 @@ def container_add(container_name, ip, interface):
                                      proc_alias="/proc")
 
     # Register the endpoint
-    client.set_endpoint(hostname, container_id, endpoint)
+    client.set_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint)
 
     print "IP %s added to %s" % (ip, container_name)
 
@@ -289,16 +291,14 @@ def container_remove(container_name):
 
     # Find the endpoint ID. We need this to find any ACL rules
     try:
-        endpoint_id = client.get_endpoint_id_from_cont(hostname, workload_id)
+        endpoint = client.get_endpoint(hostname=hostname,
+                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       workload_id=workload_id)
     except KeyError:
         print "Container %s doesn't contain any endpoints" % container_name
         sys.exit(1)
 
     # Remove any IP address assignments that this endpoint has
-    endpoint = client.get_endpoint(hostname=hostname,
-                                   orchestrator_id=ORCHESTRATOR_ID,
-                                   workload_id=workload_id,
-                                   endpoint_id=endpoint_id)
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
         assert(net.size == 1)
         ip = net.ip
@@ -310,10 +310,10 @@ def container_remove(container_name):
                 client.unassign_address(pool, ip)
 
     # Remove the endpoint
-    netns.remove_endpoint(endpoint_id)
+    netns.remove_endpoint(endpoint.endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(hostname, workload_id)
+    client.remove_container(hostname, ORCHESTRATOR_ID, workload_id)
 
     print "Removed Calico interface from %s" % container_name
 
@@ -1075,11 +1075,9 @@ def container_ip_add(container_name, ip, version, interface):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
         endpoint = client.get_endpoint(hostname=hostname,
                                        orchestrator_id=ORCHESTRATOR_ID,
-                                       workload_id=container_id,
-                                       endpoint_id=endpoint_id)
+                                       workload_id=container_id)
     except KeyError:
         print "Failed to add IP address to container.\n"
         print_container_not_in_calico_msg(container_name)
@@ -1149,11 +1147,9 @@ def container_ip_remove(container_name, ip, version, interface):
 
     # Check that the container is already networked
     try:
-        endpoint_id = client.get_endpoint_id_from_cont(hostname, container_id)
         endpoint = client.get_endpoint(hostname=hostname,
                                        orchestrator_id=ORCHESTRATOR_ID,
-                                       workload_id=container_id,
-                                       endpoint_id=endpoint_id)
+                                       workload_id=container_id)
         if address.version == 4:
             nets = endpoint.ipv4_nets
         else:

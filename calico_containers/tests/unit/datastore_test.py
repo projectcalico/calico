@@ -51,12 +51,12 @@ ALL_PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 ALL_ENDPOINTS_PATH = CALICO_V_PATH + "/host/"
 ALL_HOSTS_PATH = CALICO_V_PATH + "/host/"
 TEST_NODE_BGP_PEERS_PATH = TEST_HOST_PATH + "/bgp_peer_v4/"
-TEST_ORCHESTRATORS_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/"
+TEST_ORCHESTRATORS_PATH = CALICO_V_PATH + "/host/TEST_HOST/"
 TEST_WORKLOADS_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/"
 TEST_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/" \
                                      "endpoint/1234567890ab"
 TEST_CONT_ENDPOINTS_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/" \
-                                          "1234/endpoint/"
+                                          "1234/"
 TEST_CONT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 BGP_NODE_DEF_AS_PATH = CALICO_V_PATH + "/config/bgp_as"
@@ -972,7 +972,7 @@ class TestDatastoreClient(unittest.TestCase):
         Test set_endpoint().
         """
         EP_12._original_json = ""
-        self.datastore.set_endpoint(TEST_HOST, TEST_CONT_ID, EP_12)
+        self.datastore.set_endpoint(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID, EP_12)
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        EP_12.to_json())
         assert_equal(EP_12._original_json, EP_12.to_json())
@@ -994,35 +994,6 @@ class TestDatastoreClient(unittest.TestCase):
                                                      prevValue=original_json)
         assert_not_equal(ep._original_json, original_json)
         assert_equals(ep._original_json, ep.to_json())
-
-    def test_get_endpoint_id_from_cont(self):
-        """
-        Test get_endpoint_id_from_cont() when container and endpoint exist.
-        """
-        self.etcd_client.read.side_effect = \
-            get_mock_read_2_ep_for_cont(TEST_CONT_ENDPOINTS_PATH, None)
-        endpoint_id = self.datastore.get_endpoint_id_from_cont(TEST_HOST,
-                                                               TEST_CONT_ID)
-        assert_equal(endpoint_id, EP_12.endpoint_id)
-
-    def test_get_endpoint_id_from_cont_no_ep(self):
-        """
-        Test get_endpoint_id_from_cont() when the container exists, but there are
-        no endpoints.
-        """
-        self.etcd_client.read.side_effect = mock_read_0_ep_for_cont
-        assert_raises(NoEndpointForContainer,
-                      self.datastore.get_endpoint_id_from_cont,
-                      TEST_HOST, TEST_CONT_ID)
-
-    def test_get_endpoint_id_from_cont_no_cont(self):
-        """
-        Test get_endpoint_id_from_cont() when the container doesn't exist.
-        """
-        self.etcd_client.read.side_effect = EtcdKeyNotFound
-        assert_raises(KeyError,
-                      self.datastore.get_endpoint_id_from_cont,
-                      TEST_HOST, TEST_CONT_ID)
 
     def test_get_endpoints_exists(self):
         """
@@ -1158,7 +1129,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test remove_container()
         """
-        self.datastore.remove_container(TEST_HOST, TEST_CONT_ID)
+        self.datastore.remove_container(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID)
         self.etcd_client.delete.assert_called_once_with(TEST_CONT_PATH,
                                                         recursive=True,
                                                         dir=True)
@@ -1170,7 +1141,7 @@ class TestDatastoreClient(unittest.TestCase):
         exist.
         """
         self.etcd_client.delete.side_effect = EtcdKeyNotFound
-        self.datastore.remove_container(TEST_HOST, TEST_CONT_ID)
+        self.datastore.remove_container(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID)
 
     def test_get_bgp_peers(self):
         """

@@ -26,18 +26,13 @@ ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # etcd paths for Calico
-# TODO: modify string constants to accept orchestrator_id, replacing "docker"
-# hardcoding.
-# Any method that uses CONTAINER_PATH, LOCAL_ENDPOINTS_PATH, or ENDPOINT_PATH
-# will need to be refactored to include orchestrator_id as a passed in
-# parameters.
 CALICO_V_PATH = "/calico/v1"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 HOSTS_PATH = CALICO_V_PATH + "/host/"
 HOST_PATH = HOSTS_PATH + "%(hostname)s/"
-CONTAINER_PATH = HOST_PATH + "workload/docker/%(container_id)s/"
-LOCAL_ENDPOINTS_PATH = HOST_PATH + "workload/docker/%(container_id)s/endpoint/"
-ALL_ENDPOINTS_PATH = HOSTS_PATH  # Read all hosts
+ORCHESTRATOR_PATH = HOST_PATH + "workload/%(orchestrator_id)s/"
+WORKLOAD_PATH = ORCHESTRATOR_PATH + "%(workload_id)s/"
+LOCAL_ENDPOINTS_PATH = WORKLOAD_PATH + "endpoint/"
 ENDPOINT_PATH = LOCAL_ENDPOINTS_PATH + "%(endpoint_id)s"
 PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
@@ -51,13 +46,6 @@ BGP_NODE_DEF_AS_PATH = CONFIG_PATH + "bgp_as"
 BGP_NODE_MESH_PATH = CONFIG_PATH + "bgp_node_mesh"
 HOST_BGP_PEERS_PATH = HOST_PATH + "bgp_peer_%(version)s/"
 HOST_BGP_PEER_PATH = HOST_PATH + "bgp_peer_%(version)s/%(peer_ip)s"
-
-# Paths used in endpoint enumeration depending on available parameters.
-ALL_ENDP_PATH = HOSTS_PATH
-HOST_ENDP_PATH = HOST_PATH + "workload/"
-ORCHESTRATOR_ENDP_PATH = HOST_ENDP_PATH + "%(orchestrator_id)s/"
-WORKLOAD_ENDP_PATH = ORCHESTRATOR_ENDP_PATH + "%(workload_id)s/endpoint/"
-ENDPOINT_ENDP_PATH = WORKLOAD_ENDP_PATH + "%(endpoint_id)s"
 
 # Endpoint path match regex
 ENDPOINT_KEY_MATCH = re.compile("/calico/v1/host/(?P<hostname>[^/]*)/"
@@ -414,6 +402,11 @@ class Endpoint(object):
         """
         A less strict 'equals' function, which compares provided parameters to
         the current endpoint object.
+
+        :param hostname: The hostname to compare to
+        :param orchestrator_id: The orchestrator ID to compare to.
+        :param workload_id: The workload ID to compare to
+        :param endpoint_id: The endpoint ID to compare to
 
         :return: True if the provided parameters match the Endpoint's
         parameters, False if any of the provided parameters are different from
@@ -842,18 +835,8 @@ class DatastoreClient(object):
         :param profile_name: Unique string name of the profile.
         :return: a list of Endpoint objects.
         """
-        eps = []
-        try:
-            endpoints = self.etcd_client.read(ALL_ENDPOINTS_PATH,
-                                              recursive=True).leaves
-        except EtcdKeyNotFound:
-            pass
-        else:
-            for child in endpoints:
-                ep = Endpoint.from_json(child.key, child.value)
-                if ep and profile_name in ep.profile_ids:
-                    eps.append(ep)
-        return eps
+        return [endpoint for endpoint in self.get_endpoints()
+                if profile_name in endpoint.profile_ids]
 
     @handle_errors
     def profile_update_tags(self, profile):
@@ -945,33 +928,6 @@ class DatastoreClient(object):
         self.update_endpoint(ep)
 
     @handle_errors
-    def get_endpoint_id_from_cont(self, hostname, container_id):
-        """
-        Get a single endpoint ID from a container ID.
-
-        :param hostname: The host the container is on.
-        :param container_id: The Docker container ID.
-        :return: Endpoint ID as a string.
-        """
-        ep_path = LOCAL_ENDPOINTS_PATH % {"hostname": hostname,
-                                          "container_id": container_id}
-        try:
-            endpoints = self.etcd_client.read(ep_path).leaves
-        except EtcdKeyNotFound:
-            # Re-raise with better message
-            raise KeyError("Container with ID %s was not found." %
-                           container_id)
-
-        # Get the first endpoint & ID
-        try:
-            endpoint = endpoints.next()
-            (_, _, _, _, _, _, _, _, _, endpoint_id) = endpoint.key.split("/", 9)
-            return endpoint_id
-        except StopIteration:
-            raise NoEndpointForContainer(
-                "Container with ID %s has no endpoints." % container_id)
-
-    @handle_errors
     def get_endpoints(self, hostname=None, orchestrator_id=None,
                       workload_id=None, endpoint_id=None):
         """
@@ -996,21 +952,21 @@ class DatastoreClient(object):
         # with known constants e.g. we add '/workload' after the hostname
         # variable.
         if not hostname:
-            ep_path = ALL_ENDP_PATH
+            ep_path = HOSTS_PATH
         elif not orchestrator_id:
-            ep_path = HOST_ENDP_PATH % {"hostname": hostname}
+            ep_path = HOST_PATH % {"hostname": hostname}
         elif not workload_id:
-            ep_path = ORCHESTRATOR_ENDP_PATH % {"hostname": hostname,
-                                            "orchestrator_id": orchestrator_id}
+            ep_path = ORCHESTRATOR_PATH % {"hostname": hostname,
+                                           "orchestrator_id": orchestrator_id}
         elif not endpoint_id:
-            ep_path = WORKLOAD_ENDP_PATH % {"hostname": hostname,
-                                           "orchestrator_id": orchestrator_id,
-                                           "workload_id": workload_id}
+            ep_path = WORKLOAD_PATH % {"hostname": hostname,
+                                       "orchestrator_id": orchestrator_id,
+                                       "workload_id": workload_id}
         else:
-            ep_path = ENDPOINT_ENDP_PATH % {"hostname": hostname,
-                                            "orchestrator_id": orchestrator_id,
-                                            "workload_id": workload_id,
-                                            "endpoint_id": endpoint_id}
+            ep_path = ENDPOINT_PATH % {"hostname": hostname,
+                                       "orchestrator_id": orchestrator_id,
+                                       "workload_id": workload_id,
+                                       "endpoint_id": endpoint_id}
         try:
             # Search etcd
             leaves = self.etcd_client.read(ep_path, recursive=True).leaves
@@ -1039,6 +995,12 @@ class DatastoreClient(object):
         Raises a MultipleEndpointsMatch exception if more than one endpoint
         matches.
 
+        :param hostname: The hostname that the endpoint lives on.
+        :param orchestrator_id: The workload (or container) that the endpoint
+        belongs to.
+        :param workload_id: The workload (or container) that the endpoint
+        belongs to.
+        :param endpoint_id: The ID of the endpoint
         :return: An Endpoint Object
         """
         eps = self.get_endpoints(hostname=hostname,
@@ -1058,16 +1020,19 @@ class DatastoreClient(object):
             return eps.pop()
 
     @handle_errors
-    def set_endpoint(self, hostname, container_id, endpoint):
+    def set_endpoint(self, hostname, orchestrator_id, container_id, endpoint):
         """
         Write a single endpoint object to the datastore.
 
         :param hostname: The hostname for the Docker hosting this container.
+        :param orchestrator_id: The orchestrator the the workload (or container)
+        belongs to.
         :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
         """
         ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                   "container_id": container_id,
+                                   "orchestrator_id": orchestrator_id,
+                                   "workload_id": container_id,
                                    "endpoint_id": endpoint.endpoint_id}
         new_json = endpoint.to_json()
         self.etcd_client.write(ep_path, new_json)
@@ -1086,7 +1051,8 @@ class DatastoreClient(object):
         :param endpoint: The Endpoint to add to the container.
         """
         ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
-                                   "container_id": endpoint.workload_id,
+                                   "orchestrator_id": endpoint.orchestrator_id,
+                                   "workload_id": endpoint.workload_id,
                                    "endpoint_id": endpoint.endpoint_id}
         new_json = endpoint.to_json()
         self.etcd_client.write(ep_path,
@@ -1140,19 +1106,22 @@ class DatastoreClient(object):
             pass
 
     @handle_errors
-    def remove_container(self, hostname, container_id):
+    def remove_container(self, hostname, orchestrator_id, container_id):
         """
         Remove a container from the datastore.
         :param hostname: The name of the host the container is on.
+        :param orchestrator_id: The orchestrator the workload (or container)
+        belongs to.
         :param container_id: The Docker container ID.
         :return: None.
         """
-        container_path = CONTAINER_PATH % {"hostname": hostname,
-                                           "container_id": container_id}
+        workload_path = WORKLOAD_PATH % {"hostname": hostname,
+                                         "orchestrator_id": orchestrator_id,
+                                         "workload_id": container_id}
         try:
-            self.etcd_client.delete(container_path, recursive=True, dir=True)
+            self.etcd_client.delete(workload_path, recursive=True, dir=True)
         except EtcdKeyNotFound:
-            raise KeyError("%s is not a configured container on host %s" %
+            raise KeyError("%s is not a configured workload on host %s" %
                            (container_id, hostname))
 
     @handle_errors
