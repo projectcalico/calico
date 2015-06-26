@@ -120,7 +120,9 @@ install-completion: /etc/bash_completion.d/calicoctl.sh
 	cp dist/calicoctl.sh /etc/bash_completion.d
 
 .PHONY: kubernetes	
-kubernetes:
+kubernetes: /dist/calico_kubernetes
+
+/dist/calico_kubernetes:
 	# Build docker container
 	cd build_calicoctl; docker build -t calico-build .
 	mkdir -p dist
