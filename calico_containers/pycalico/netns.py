@@ -110,7 +110,7 @@ def remove_ip_from_interface(container_pid, ip, interface_name,
                       shell=True)
 
 
-def set_up_endpoint(ip, hostname, orchestrator_id, cpid, next_hop_ips,
+def set_up_endpoint(ip, hostname, orchestrator_id, workload_id, cpid, next_hop_ips,
                     veth_name=VETH_NAME,
                     proc_alias=PROC_ALIAS,
                     mac=None):
@@ -119,6 +119,9 @@ def set_up_endpoint(ip, hostname, orchestrator_id, cpid, next_hop_ips,
 
     :param ip: The IP address to assign to the endpoint (veth) as Netaddr
     IPAddress.
+    :param hostname: The host that this endpoint's workload resides on.
+    :param orchestrator_id: The orchestrator_id that this endpoint was created on.
+    :param workload_id: The workload_id that this endpoint resides on.
     :param cpid: The PID of a process currently running in the namespace.
     :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
     default routes namespace, as opposed to the root namespace.  If so, this
@@ -191,7 +194,7 @@ def set_up_endpoint(ip, hostname, orchestrator_id, cpid, next_hop_ips,
     network = IPNetwork(IPAddress(ip))
     ep = Endpoint(hostname=hostname,
                   orchestrator_id=orchestrator_id,
-                  workload_id=cpid,
+                  workload_id=workload_id,
                   endpoint_id=ep_id,
                   state="active",
                   mac=mac)
@@ -223,6 +226,7 @@ def reinstate_endpoint(cpid, old_endpoint, next_hop_ips,
     new_endpoint = set_up_endpoint(ip=net.ip,
                                    hostname=old_endpoint.hostname,
                                    orchestrator_id=old_endpoint.orchestrator_id,
+                                   workload_id=old_endpoint.workload_id,
                                    cpid=cpid,
                                    next_hop_ips=next_hop_ips,
                                    veth_name=if_name,
