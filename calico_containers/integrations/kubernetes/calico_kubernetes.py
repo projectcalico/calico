@@ -2,6 +2,7 @@
 from collections import namedtuple
 import json
 import os
+import socket
 import sys
 from subprocess import check_output, CalledProcessError
 import requests
@@ -51,14 +52,22 @@ class NetworkPlugin(object):
 
     def _configure_interface(self):
         """Configure the Calico interface for a pod."""
-        ip = self._read_docker_ip()
+        container_ip = self._read_docker_ip()
         self._delete_docker_interface()
         print('Configuring Calico networking.')
-        print(calicoctl('container', 'add', self.docker_id, ip))
+        print(calicoctl('container', 'add', self.docker_id, container_ip))
         print('Finished configuring network interface')
 
+    def _get_node_ip(self):
+        """Get the IP for the host node from the k8s API."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+
     def _read_docker_ip(self):
-        """Get the ID for the pod's infra container."""
+        """Get the IP for the pod's infra container."""
         ip = check_output([
             'docker', 'inspect', '-format', '{{ .NetworkSettings.IPAddress }}',
             self.docker_id
@@ -130,7 +139,8 @@ class NetworkPlugin(object):
         return ports
 
     def _get_pod_config(self):
-        pods = self._get_pods()
+        pods = self._get_api_path('pods')
+        print('Got pods %s' % pods)
 
         for pod in pods:
             print('Processing pod %s' % pod)
@@ -142,25 +152,28 @@ class NetworkPlugin(object):
         print('Got pod data %s' % this_pod)
         return this_pod
 
-    def _get_pods(self):
+    def _get_api_path(self, path):
         """
         Get the list of pods from the Kube API server.
 
-        :return list pods: A list of Pod JSON API objects
+        e.g.
+        _get_api_path('pods')
+
+        :param path: The relative path to an API endpoint.
+        :return: A list of JSON API objects
+        :rtype list
         """
         bearer_token = self._get_api_token()
         session = requests.Session()
         session.headers.update({'Authorization': 'Bearer ' + bearer_token})
         response = session.get(
-            'https://kubernetes-master:6443/api/v1beta3/pods',
+            'https://kubernetes-master:6443/api/v1beta3/' + path,
             verify=False,
         )
         response_body = response.text
         # The response body contains some metadata, and the pods themselves
         # under the 'items' key.
-        pods = json.loads(response_body)['items']
-        print('Got pods %s' % pods)
-        return pods
+        return json.loads(response_body)['items']
 
     def _get_api_token(self):
         """
