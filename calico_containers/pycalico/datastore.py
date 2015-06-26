@@ -28,6 +28,7 @@ ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 # etcd paths for Calico
 CALICO_V_PATH = "/calico/v1"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
+CONFIG_IF_PREF_PATH = CONFIG_PATH + "InterfacePrefix"
 HOSTS_PATH = CALICO_V_PATH + "/host/"
 HOST_PATH = HOSTS_PATH + "%(hostname)s/"
 ORCHESTRATOR_PATH = HOST_PATH + "workload/%(orchestrator_id)s/"
@@ -478,14 +479,13 @@ class DatastoreClient(object):
         defaults if they don't.
         :return: None.
         """
-        config_dir = CONFIG_PATH
         try:
-            self.etcd_client.read(config_dir)
+            self.etcd_client.read(CONFIG_IF_PREF_PATH)
         except EtcdKeyNotFound:
             # Didn't exist, create it now.
-            self.etcd_client.write(config_dir + "InterfacePrefix", IF_PREFIX)
+            self.etcd_client.write(CONFIG_IF_PREF_PATH, IF_PREFIX)
 
-        # We are always ready
+        # We are always ready.
         self.etcd_client.write(CALICO_V_PATH + "/Ready", "true")
 
     @handle_errors
@@ -505,7 +505,6 @@ class DatastoreClient(object):
         # Set up the host
         self.etcd_client.write(host_path + "bird_ip", bird_ip)
         self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
-        self.etcd_client.write(host_path + "config/marker", "created")
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
@@ -524,6 +523,9 @@ class DatastoreClient(object):
                 pass
         else:
             self.etcd_client.write(host_path + "bgp_as", as_num)
+
+        # Flag to Felix that the host is created.
+        self.etcd_client.write(host_path + "config/marker", "created")
 
         return
 

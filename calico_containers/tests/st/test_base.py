@@ -48,5 +48,4 @@ class TestBase(TestCase):
             for dest in pass_list:
                 source.assert_can_ping(dest.ip)
             for dest in fail_list:
-                with self.assertRaises(CalledProcessError):
-                    source.assert_can_ping(dest.ip)
+                source.assert_cant_ping(dest.ip)

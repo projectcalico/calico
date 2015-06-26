@@ -398,17 +398,17 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound 
         self.datastore.ensure_global_config()
-        expected_writes = [call(CALICO_V_PATH + "/Ready", "true"),
-                           call(CONFIG_PATH + "InterfacePrefix", "cali")]
-        self.etcd_client.write.assert_has_calls(expected_writes,
-                                                any_order=True)
+        expected_writes = [call(CONFIG_PATH + "InterfacePrefix", "cali"),
+                           call(CALICO_V_PATH + "/Ready", "true")]
+        self.etcd_client.write.assert_has_calls(expected_writes)
 
     def test_ensure_global_config_exists(self):
         """
         Test ensure_global_config() when it already exists.
         """
         self.datastore.ensure_global_config()
-        self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
+        self.etcd_client.read.assert_called_once_with(
+                                               CONFIG_PATH + "InterfacePrefix")
 
     def test_ensure_global_config_exists_etcd_exc(self):
         """
@@ -416,7 +416,8 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = EtcdException
         self.assertRaises(DataStoreError, self.datastore.ensure_global_config)
-        self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
+        self.etcd_client.read.assert_called_once_with(
+                                               CONFIG_PATH + "InterfacePrefix")
 
     def test_get_profile(self):
         """
