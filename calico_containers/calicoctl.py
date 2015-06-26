@@ -20,7 +20,7 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
                            [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
   calicoctl node stop [--force]
   calicoctl node bgppeer add <PEER_IP> as <AS_NUM>
@@ -334,7 +334,7 @@ def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
 
-def node(ip, node_image, log_dir, ip6="", as_num=None):
+def node(node_image, log_dir, ip="", ip6="", as_num=None):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -352,6 +352,39 @@ def node(ip, node_image, log_dir, ip6="", as_num=None):
 
     # Print warnings for any known system issues before continuing
     checksystem(fix=False, quit_if_error=False)
+
+    # Get IP address of host, if none was specified
+    if not ip:
+        ip = get_first_ip()
+        if ip:
+            print "No IP provided. Using detected IP: %s" % ip
+        else:
+            print "Couldn't autodetect a management IP address. Please rerun" \
+                  "command with the --ip=<IP_ADDRESS> flag."
+            sys.exit(1)
+
+    # Warn if this hostname is already in use.
+    # If there's already a calico-node container on this host, they're probably
+    # just re-running node to do an update, so only issue a warning
+    if len(docker_client.containers(filters={'name': 'calico-node'})) == 0:
+        # Otherwise, check if another host with the same hostname
+        # is already configured
+        try:
+            current_ipv4, current_ipv6 = client.get_host_ips(hostname)
+        except KeyError:
+            # No other machine has registered configuration under this hostname.
+            # This must be a new host with a unique hostname, which is the
+            # expected behavior.
+            pass
+        else:
+            if current_ipv4 != "" and current_ipv4 != ip:
+                # User is either reconfiguring this node to use another IP,
+                # or another host may share the same hostname.
+                print "WARNING: Hostname %s is already in use with IP address " \
+                      "%s. Calico requires each compute host to have a " \
+                      "unique hostname. If this is your first time running" \
+                      "'calicoctl node' on this host, check to make sure" \
+                      "another host is not already using the same hostname"  % (hostname, ip)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -433,6 +466,23 @@ def normalize_version(version):
     http://stackoverflow.com/questions/1714027/version-number-comparison
     """
     return [int(x) for x in re.sub(r'(\.0+)*$','', version).split(".")]
+
+
+def get_first_ip():
+    """
+    Searches for the first IP address (that isn't the docker0 veth).
+    Since already has a dependency on 'ip' binary, we'll use that to
+    find the address.
+    """
+    ip = sh.Command._create("ip")
+    route_output = ip("route").stdout
+    pattern = "^.*(?=docker0).*src ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})"
+    ips = re.findall(pattern, route_output, re.MULTILINE)
+    if ips:
+        return ips.pop()
+    else:
+        return None
+
 
 def checksystem(fix=False, quit_if_error=False):
     """
@@ -1669,7 +1719,7 @@ if __name__ == '__main__':
             elif arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
-                node(arguments["--ip"],
+                node(ip=arguments["--ip"],
                      node_image=arguments['--node-image'],
                      log_dir=arguments["--log-dir"],
                      ip6=arguments["--ip6"],
