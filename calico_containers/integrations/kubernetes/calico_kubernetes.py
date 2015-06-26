@@ -4,12 +4,16 @@ import json
 import os
 import socket
 import sys
-from subprocess import check_output, CalledProcessError
+from subprocess import check_output, CalledProcessError, check_call
 import requests
 import sh
 
 # Append to existing env, to avoid losing PATH etc.
 # TODO-PAT: This shouldn't be hardcoded
+from calico_containers.calicoctl import container_add
+from calico_containers.pycalico.datastore import IF_PREFIX
+from calico_containers.pycalico.util import generate_cali_interface_name
+
 env = os.environ.copy()
 env['ETCD_AUTHORITY'] = 'kubernetes-master:6666'
 calicoctl = sh.Command('/home/vagrant/calicoctl').bake(_env=env)
@@ -55,7 +59,10 @@ class NetworkPlugin(object):
         container_ip = self._read_docker_ip()
         self._delete_docker_interface()
         print('Configuring Calico networking.')
-        print(calicoctl('container', 'add', self.docker_id, container_ip))
+        ep = container_add(self.docker_id, container_ip, 'eth0')
+        interface_name = generate_cali_interface_name(IF_PREFIX, ep.endpoint_id)
+        node_ip = self._get_node_ip()
+        check_call("ip addr add %s/32 dev %s" % (node_ip, interface_name))
         print('Finished configuring network interface')
 
     def _get_node_ip(self):

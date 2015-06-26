@@ -269,6 +269,9 @@ def container_add(container_name, ip, interface):
 
     print "IP %s added to %s" % (ip, container_name)
 
+    # In case the caller needs to know what was created.
+    return endpoint
+
 
 def container_remove(container_name):
     """
