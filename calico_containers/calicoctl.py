@@ -262,6 +262,7 @@ def container_add(container_name, ip, interface):
     endpoint = netns.set_up_endpoint(ip=ip,
                                      hostname=hostname,
                                      orchestrator_id=ORCHESTRATOR_ID,
+                                     workload_id=container_id,
                                      cpid=pid,
                                      next_hop_ips=next_hops,
                                      veth_name=interface,
