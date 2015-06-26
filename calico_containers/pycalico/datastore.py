@@ -1020,19 +1020,15 @@ class DatastoreClient(object):
             return eps.pop()
 
     @handle_errors
-    def set_endpoint(self, hostname, orchestrator_id, container_id, endpoint):
+    def set_endpoint(self, endpoint):
         """
         Write a single endpoint object to the datastore.
 
-        :param hostname: The hostname for the Docker hosting this container.
-        :param orchestrator_id: The orchestrator the the workload (or container)
-        belongs to.
-        :param container_id: The Docker container ID.
         :param endpoint: The Endpoint to add to the container.
         """
-        ep_path = ENDPOINT_PATH % {"hostname": hostname,
-                                   "orchestrator_id": orchestrator_id,
-                                   "workload_id": container_id,
+        ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
+                                   "orchestrator_id": endpoint.orchestrator_id,
+                                   "workload_id": endpoint.workload_id,
                                    "endpoint_id": endpoint.endpoint_id}
         new_json = endpoint.to_json()
         self.etcd_client.write(ep_path, new_json)

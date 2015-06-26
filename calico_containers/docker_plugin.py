@@ -144,7 +144,7 @@ def create_endpoint():
 
     # Finally, write the endpoint to the datastore.
     try:
-        client.set_endpoint(hostname, ORCHESTRATOR_ID, CONTAINER_NAME, ep)
+        client.set_endpoint(ep)
     except DataStoreError as e:
         # We've failed to write the endpoint to the datastore.
         # Back out the IP assignments and the veth creation.

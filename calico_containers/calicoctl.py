@@ -269,7 +269,7 @@ def container_add(container_name, ip, interface):
                                      proc_alias="/proc")
 
     # Register the endpoint
-    client.set_endpoint(hostname, ORCHESTRATOR_ID, container_id, endpoint)
+    client.set_endpoint(endpoint)
 
     print "IP %s added to %s" % (ip, container_name)
 

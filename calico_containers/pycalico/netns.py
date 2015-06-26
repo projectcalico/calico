@@ -119,6 +119,9 @@ def set_up_endpoint(ip, hostname, orchestrator_id, workload_id, cpid, next_hop_i
 
     :param ip: The IP address to assign to the endpoint (veth) as Netaddr
     IPAddress.
+    :param hostname: The host that this endpoint's workload resides on.
+    :param orchestrator_id: The orchestrator_id that this endpoint was created on.
+    :param workload_id: The workload_id that this endpoint resides on.
     :param cpid: The PID of a process currently running in the namespace.
     :param next_hop_ips: Dict of {version: IPAddress} for the next hops of the
     default routes namespace, as opposed to the root namespace.  If so, this

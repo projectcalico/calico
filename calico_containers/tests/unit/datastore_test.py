@@ -972,7 +972,7 @@ class TestDatastoreClient(unittest.TestCase):
         Test set_endpoint().
         """
         EP_12._original_json = ""
-        self.datastore.set_endpoint(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID, EP_12)
+        self.datastore.set_endpoint(EP_12)
         self.etcd_client.write.assert_called_once_with(TEST_ENDPOINT_PATH,
                                                        EP_12.to_json())
         assert_equal(EP_12._original_json, EP_12.to_json())
