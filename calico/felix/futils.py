@@ -175,7 +175,7 @@ class StatCounter(object):
         register_diags(name, self._dump)
 
     def increment(self, stat, by=1):
-        self.stats[stat] += 1
+        self.stats[stat] += by
 
     def _dump(self, log):
         stats_copy = self.stats.items()
