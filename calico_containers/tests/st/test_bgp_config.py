@@ -136,8 +136,7 @@ class TestBGPConfig(TestBase):
         with DockerHost('host1', start_calico=False) as host1, \
              DockerHost('host2', start_calico=False) as host2:
 
-            # Start host1 using the inherited AS, and host2 using a specified
-            # AS (same as default), and host3 with a completely different AS.
+            # Start both hosts using specific AS numbers.
             host1.start_calico_node(as_num="64513")
             host1.assert_driver_up()
             host2.start_calico_node(as_num="64513")
@@ -168,7 +167,8 @@ class TestBGPConfig(TestBase):
             self.assert_connectivity(pass_list=[workload_host1,
                                                 workload_host2])
 
-            # Check the BGP status on each host.
+            # Check the BGP status on each host.  Connections from a node to
+            # itself will be idle since this is invalid BGP configuration.
             self._check_status(host1, [("Global", host1.ip, "Idle"),
                                        ("Global", host2.ip, "Established")])
             self._check_status(host2, [("Global", host1.ip, "Established"),
