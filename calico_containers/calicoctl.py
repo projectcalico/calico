@@ -1463,10 +1463,6 @@ def validate_arguments():
     """
     Validate common argument values.
     """
-    #TODO - validate profiles.
-    # profile_ok = (arguments["<PROFILE>"] is None or
-    #               re.match("^%s{1,40}$" % valid_chars, arguments["<PROFILE>"]))
-    profile_ok = True
     # List of valid characters that Felix permits
     valid_chars = '[a-zA-Z0-9_\.\-]'
     profile_ok = True
