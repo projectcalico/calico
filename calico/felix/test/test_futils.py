@@ -60,10 +60,6 @@ class TestFutils(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_time_ms(self):
-        # Bit feeble, but validate that we can call it and get back something.
-        time_ms = futils.time_ms()
-
     def test_good_check_call(self):
         # Test a command. Result must include "calico" given where it is run from.
         args = ["ls"]
