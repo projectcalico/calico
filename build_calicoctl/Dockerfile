@@ -37,6 +37,9 @@ RUN apt-get install -qy python-dev python-pip=1.5.4-1
 ADD requirements.txt /code/
 RUN pip install -r requirements.txt
 
+# Add git for so the right branch can be included if uploading coverage
+RUN apt-get install -qy git
+
 # Can't run pyinstaller as root so add a user - https://github.com/pyinstaller/pyinstaller/issues/1081
 RUN useradd -d /home/user -m -s /bin/bash user
 RUN chown -R user:user /code/
