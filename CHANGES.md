@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.26-dev
+## 0.26
 
 - Update and improve security model documentation.
 - Streamline conntrack rules, move them to top-level chains to avoid
@@ -14,6 +14,7 @@
 - Change log rotation strategy for logrotate to not rotate small log files.
 - Delay starting the Neutron resynchronization thread until after all the
   necessary state has been configured, to avoid race conditions.
+- Prevent systemd restarting Felix when it is killed by administrators.
 
 ## 0.25
 

@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.25
+Version:        0.26
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -209,6 +209,21 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Jun 29 2015 Cory Benfield <cory@projectcalico.org> 0.26
+  - Update and improve security model documentation.
+  - Streamline conntrack rules, move them to top-level chains to avoid
+    duplication.
+  - Narrow focus of input iptables chain so that it only applies to
+    Calico-handled traffic.
+  - Provide warning log when attempting to use Neutron networks that are not of
+    type 'local' or 'flat' with Calico.
+  - Handle invalid JSON in IPAM key in etcd.
+  - Move all log rotation into logrotate and out of Felix, to prevent conflicts.
+  - Change log rotation strategy for logrotate to not rotate small log files.
+  - Delay starting the Neutron resynchronization thread until after all the
+    necessary state has been configured, to avoid race conditions.
+  - Prevent systemd restarting Felix when it is killed by administrators.
+
 * Mon Jun 22 2015 Cory Benfield <cory@projectcalico.org> 0.25
   - Remove stale conntrack entries when an endpoint's IP is removed.
   - #672: Fix bug where profile chain was left empty instead of being
