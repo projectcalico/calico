@@ -396,9 +396,17 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test ensure_global_config when it doesn't already exist.
         """
-        self.etcd_client.read.side_effect = EtcdKeyNotFound 
+        int_prefix_path = CONFIG_PATH + "InterfacePrefix"
+        self.etcd_client.read.side_effect = EtcdKeyNotFound
+
+        # We only write the interface prefix if there is no entry in the
+        # etcd database.  Note it is not sufficient to just check for the
+        # existence of the config directory to determine whether we write
+        # the interface prefix since the config directory may contain other
+        # global configuration.
         self.datastore.ensure_global_config()
-        expected_writes = [call(CONFIG_PATH + "InterfacePrefix", "cali"),
+        self.etcd_client.read.assert_called_once_with(int_prefix_path)
+        expected_writes = [call(int_prefix_path, "cali"),
                            call(CALICO_V_PATH + "/Ready", "true")]
         self.etcd_client.write.assert_has_calls(expected_writes)
 

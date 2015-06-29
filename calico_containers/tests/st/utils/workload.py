@@ -133,22 +133,29 @@ class Workload(object):
     def assert_can_ping(self, ip, retries=0):
         """
         Execute a ping from this workload to the ip. Assert than a workload
-        can ping an IP. Use retries to compensate for network uncertainty and
-        convergence.
+        can ping an IP. Use retries to allow for convergence.
+
+        Use of this method assumes the network will be transitioning from a
+        state where the destination is currently unreachable.
 
         :param ip:  The IP address (str or IPAddress) to ping.
         :param retries: The number of retries.
         :return: None.
         """
-        return retry_until_success(self._get_ping_function(ip),
-                                   retries=retries,
-                                   ex_class=CommandExecError)
+        try:
+            retry_until_success(self._get_ping_function(ip),
+                                retries=retries,
+                                ex_class=CommandExecError)
+        except CommandExecError:
+            raise AssertionError("%s cannot ping %s" % (self, ip))
 
     def assert_cant_ping(self, ip, retries=0):
         """
         Execute a ping from this workload to the ip.  Assert that the workload
-        cannot ping an IP.  Use retries to compensate for network uncertainty
-        and convergence.
+        cannot ping an IP.  Use retries to allow for convergence.
+
+        Use of this method assumes the network will be transitioning from a
+        state where the destination is currently reachable.
 
         :param ip:  The IP address (str or IPAddress) to ping.
         :param retries: The number of retries.
@@ -161,11 +168,18 @@ class Workload(object):
             except CommandExecError:
                 pass
             else:
-                raise Exception("%s can ping %s" % (self, ip))
+                raise _PingError()
 
-        return retry_until_success(cant_ping,
-                                   retries=retries,
-                                   ex_class=Exception)
+        try:
+            retry_until_success(cant_ping,
+                                retries=retries,
+                                ex_class=_PingError)
+        except _PingError:
+            raise AssertionError("%s can ping %s" % (self, ip))
 
     def __str__(self):
         return self.name
+
+
+def _PingError(Exception):
+    pass
