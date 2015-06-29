@@ -355,36 +355,27 @@ def node(node_image, log_dir, ip="", ip6="", as_num=None):
 
     # Get IP address of host, if none was specified
     if not ip:
-        ip = get_first_ip()
-        if ip:
-            print "No IP provided. Using detected IP: %s" % ip
-        else:
-            print "Couldn't autodetect a management IP address. Please rerun" \
-                  "command with the --ip=<IP_ADDRESS> flag."
-            sys.exit(1)
-
-    # Warn if this hostname is already in use.
-    # If there's already a calico-node container on this host, they're probably
-    # just re-running node to do an update, so only issue a warning
-    if len(docker_client.containers(filters={'name': 'calico-node'})) == 0:
-        # Otherwise, check if another host with the same hostname
-        # is already configured
+        ips = get_host_ips()
         try:
-            current_ipv4, current_ipv6 = client.get_host_ips(hostname)
-        except KeyError:
-            # No other machine has registered configuration under this hostname.
-            # This must be a new host with a unique hostname, which is the
-            # expected behavior.
-            pass
+            ip = ips.pop()
+        except IndexError:
+            print "Couldn't autodetect a management IP address. Please provide" \
+                  "an IP by rerunning the command with the --ip=<IP_ADDRESS> flag."
+            sys.exit(1)
         else:
-            if current_ipv4 != "" and current_ipv4 != ip:
-                # User is either reconfiguring this node to use another IP,
-                # or another host may share the same hostname.
-                print "WARNING: Hostname %s is already in use with IP address " \
-                      "%s. Calico requires each compute host to have a " \
-                      "unique hostname. If this is your first time running" \
-                      "'calicoctl node' on this host, check to make sure" \
-                      "another host is not already using the same hostname"  % (hostname, ip)
+            print "No IP provided. Using detected IP: %s" % ip
+
+    # Verify that the chosen IP exists on the current host
+    if ip not in get_host_ips():
+        print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
+              "to this host."
+
+    if ip6 and ip6 not in get_host_ip6s():
+        print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
+              "to this host."
+
+    # Warn if this hostname conflicts with an existing host
+    warn_if_hostname_conflict(ip)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -468,7 +459,7 @@ def normalize_version(version):
     return [int(x) for x in re.sub(r'(\.0+)*$','', version).split(".")]
 
 
-def get_first_ip():
+def get_host_ips():
     """
     Searches for the first IP address (that isn't the docker0 veth).
     Since already has a dependency on 'ip' binary, we'll use that to
@@ -476,13 +467,54 @@ def get_first_ip():
     """
     ip = sh.Command._create("ip")
     route_output = ip("route").stdout
-    pattern = "^.*(?=docker0).*src ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})"
+    # Search for "src IPADDR" and extract the IP for any interface
+    pattern = "src ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})"
     ips = re.findall(pattern, route_output, re.MULTILINE)
-    if ips:
-        return ips.pop()
-    else:
-        return None
+    return ips
 
+def get_host_ip6s():
+    """
+    Searches for the first IP address (that isn't the docker0 veth).
+    """
+    # Use the IP command since calico-docker has it as a dependency
+    ip = sh.Command._create("ip")
+    route_output = ip("-6", "route").stdout.strip()
+    routes = route_output.split("\n")
+    ip_6_addrs = []
+    for route in routes:
+        if "docker0" not in route:
+            ip_6_addr = route.split()[0]
+            ip_6_addrs.append(ip_6_addr)
+    return ip_6_addrs
+
+def warn_if_hostname_conflict(ip):
+    """
+    Prints a warning message if it seems like an existing host is already running
+    calico using this hostname.
+
+    :param ip: User-provided IP address to start this node with.
+    :return: Nothing
+    """
+    # If there's already a calico-node container on this host, they're probably
+    # just re-running node to update one of the ip addresses, so skip..
+    if len(docker_client.containers(filters={'name': 'calico-node'})) == 0:
+        # Otherwise, check if another host with the same hostname
+        # is already configured
+        try:
+            current_ipv4, current_ipv6 = client.get_host_ips(hostname)
+        except KeyError:
+            # No other machine has registered configuration under this hostname.
+            # This must be a new host with a unique hostname, which is the
+            # expected behavior.
+            pass
+        else:
+            if current_ipv4 != "" and current_ipv4 != ip:
+                print "WARNING: Hostname %s is already in use with IP address " \
+                      "%s. Calico requires each compute host to have a " \
+                      "unique hostname. If this is your first time running" \
+                      "'calicoctl node' on this host, check to make sure" \
+                      "another host is not already using the " \
+                      "same hostname."  % (hostname, ip)
 
 def checksystem(fix=False, quit_if_error=False):
     """

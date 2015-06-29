@@ -108,7 +108,6 @@ class DatastoreClient(object):
     def create_host(self, hostname, bird_ip, bird6_ip, as_num):
         """
         Create a new Calico host configuration in etcd.
-        This does not start a host container.
 
         :param hostname: The name of the host to create.
         :param bird_ip: The IP address BIRD should listen on.
