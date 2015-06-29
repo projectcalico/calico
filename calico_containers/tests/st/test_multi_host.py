@@ -43,7 +43,6 @@ class MultiHostMainline(TestBase):
                                                 workload_host2])
 
 
-
     def test_multi_host(self):
         self.run_multi_host()
 

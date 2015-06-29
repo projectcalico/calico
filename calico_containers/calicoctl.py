@@ -1503,9 +1503,9 @@ def validate_arguments():
             except ValueError:
                 icmp_ok = False
     asnum_ok = True
-    if arguments["<AS_NUM>"]:
+    if arguments["<AS_NUM>"] or arguments["--as"]:
         try:
-            asnum = int(arguments["<AS_NUM>"])
+            asnum = int(arguments["<AS_NUM>"] or arguments["--as"])
             asnum_ok = 0 <= asnum <= 4294967295
         except ValueError:
             asnum_ok = False
@@ -1677,7 +1677,7 @@ if __name__ == '__main__':
                      node_image=arguments['--node-image'],
                      log_dir=arguments["--log-dir"],
                      ip6=arguments["--ip6"],
-                     as_num=arguments["<AS_NUM>"])
+                     as_num=arguments["--as"])
         elif arguments["status"]:
             status()
         elif arguments["checksystem"]:

@@ -3,6 +3,7 @@ import sh
 from sh import docker
 from functools import partial
 from subprocess import check_output, CalledProcessError, STDOUT
+from calico_containers.tests.st.utils.exceptions import CommandExecError
 from calico_containers.tests.st.utils import utils
 from calico_containers.tests.st.utils.utils import retry_until_success, get_ip
 from workload import Workload
@@ -56,7 +57,7 @@ class DockerHost(object):
         """
         Pass a command into a host container.
 
-        Raises a DockerHostExecError() if the command returns a non-zero
+        Raises a CommandExecError() if the command returns a non-zero
         return code.
 
         :param command:  The command to execute.
@@ -77,7 +78,7 @@ class DockerHost(object):
         except CalledProcessError as e:
             # Wrap the original exception with one that gives a better error
             # message (including command output).
-            raise DockerHostExecError(e)
+            raise CommandExecError(e)
         else:
             return output.strip()
 
@@ -86,7 +87,7 @@ class DockerHost(object):
         Convenience function for abstracting away calling the calicoctl
         command.
 
-        Raises a DockerHostExecError() if the command returns a non-zero
+        Raises a CommandExecError() if the command returns a non-zero
         return code.
 
         :param command:  The calicoctl command line parms as a single string.
@@ -99,10 +100,13 @@ class DockerHost(object):
             calicoctl = "dist/calicoctl %s"
         return self.execute(calicoctl % command)
 
-    def start_calico_node(self):
+    def start_calico_node(self, as_num=None):
         """
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
+
+        :param as_num: The AS Number for this node.  A value of None uses the
+        inherited default value.
         """
         args = ['node', '--ip=%s' % self.ip]
         try:
@@ -111,6 +115,8 @@ class DockerHost(object):
         except AttributeError:
             # No ip6 configured
             pass
+        if as_num:
+            args.append('--as=%s' % as_num)
 
         cmd = ' '.join(args)
         self.calicoctl(cmd)
@@ -123,7 +129,6 @@ class DockerHost(object):
         sock_exists = partial(self.execute,
                               "[ -e %s ]" % CALICO_DRIVER_SOCK)
         retry_until_success(sock_exists, ex_class=CalledProcessError)
-        pass
 
     def remove_workloads(self):
         """
@@ -234,32 +239,3 @@ class DockerHost(object):
         :return: The escaped string
         """
         return command.replace('\'', '\'"\'"\'')
-
-
-class DockerHostExecError(CalledProcessError):
-    """
-    Wrapper for CalledProcessError with an Exception message that gives the
-    output captured from the failed command.
-    """
-
-    def __init__(self, called_process_error):
-        self.called_process_error = called_process_error
-
-    @property
-    def returncode(self):
-        return self.called_process_error.returncode
-
-    @property
-    def output(self):
-        return self.called_process_error.output
-
-    @property
-    def cmd(self):
-        return self.called_process_error.cmd
-
-    def __str__(self):
-        return "Command %s failed with RC %s and output:\n%s" % \
-               (self.called_process_error.cmd,
-                self.called_process_error.returncode,
-                self.called_process_error.output)
-

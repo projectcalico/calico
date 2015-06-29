@@ -396,19 +396,27 @@ class TestDatastoreClient(unittest.TestCase):
         """
         Test ensure_global_config when it doesn't already exist.
         """
-        self.etcd_client.read.side_effect = EtcdKeyNotFound 
+        int_prefix_path = CONFIG_PATH + "InterfacePrefix"
+        self.etcd_client.read.side_effect = EtcdKeyNotFound
+
+        # We only write the interface prefix if there is no entry in the
+        # etcd database.  Note it is not sufficient to just check for the
+        # existence of the config directory to determine whether we write
+        # the interface prefix since the config directory may contain other
+        # global configuration.
         self.datastore.ensure_global_config()
-        expected_writes = [call(CALICO_V_PATH + "/Ready", "true"),
-                           call(CONFIG_PATH + "InterfacePrefix", "cali")]
-        self.etcd_client.write.assert_has_calls(expected_writes,
-                                                any_order=True)
+        self.etcd_client.read.assert_called_once_with(int_prefix_path)
+        expected_writes = [call(int_prefix_path, "cali"),
+                           call(CALICO_V_PATH + "/Ready", "true")]
+        self.etcd_client.write.assert_has_calls(expected_writes)
 
     def test_ensure_global_config_exists(self):
         """
         Test ensure_global_config() when it already exists.
         """
         self.datastore.ensure_global_config()
-        self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
+        self.etcd_client.read.assert_called_once_with(
+                                               CONFIG_PATH + "InterfacePrefix")
 
     def test_ensure_global_config_exists_etcd_exc(self):
         """
@@ -416,7 +424,8 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.read.side_effect = EtcdException
         self.assertRaises(DataStoreError, self.datastore.ensure_global_config)
-        self.etcd_client.read.assert_called_once_with(CONFIG_PATH)
+        self.etcd_client.read.assert_called_once_with(
+                                               CONFIG_PATH + "InterfacePrefix")
 
     def test_get_profile(self):
         """
