@@ -360,19 +360,13 @@ def node(node_image, log_dir, ip="", ip6="", as_num=None):
             ip = ips.pop()
         except IndexError:
             print "Couldn't autodetect a management IP address. Please provide" \
-                  "an IP by rerunning the command with the --ip=<IP_ADDRESS> flag."
+                  " an IP by rerunning the command with the --ip=<IP_ADDRESS> flag."
             sys.exit(1)
         else:
             print "No IP provided. Using detected IP: %s" % ip
 
     # Verify that the chosen IP exists on the current host
-    if ip not in get_host_ips():
-        print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
-              "to this host."
-
-    if ip6 and ip6 not in get_host_ip6s():
-        print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
-              "to this host."
+    warn_if_unknown_ip(ip, ip6)
 
     # Warn if this hostname conflicts with an existing host
     warn_if_hostname_conflict(ip)
@@ -461,31 +455,71 @@ def normalize_version(version):
 
 def get_host_ips():
     """
-    Searches for the first IP address (that isn't the docker0 veth).
-    Since already has a dependency on 'ip' binary, we'll use that to
-    find the address.
+    Gets all IPv4 addresses assigned to this host.
+
+    :return: List of string representations of IP Addresses.
     """
     ip = sh.Command._create("ip")
-    route_output = ip("route").stdout
-    # Search for "src IPADDR" and extract the IP for any interface
-    pattern = "src ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})"
-    ips = re.findall(pattern, route_output, re.MULTILINE)
-    return ips
+    route_output = ip("-o", "-4", "addr").stdout.strip()
+    routes = route_output.split("\n")
+    ip_addrs = []
+    for route in routes:
+        values = route.split()
+        # Ignore the loopback interface
+        if 'lo' not in values:
+            # Third index is the ip address (with subnet mask)
+            ip_addr = values[3]
+            try:
+                # Make sure it is a valid IP address
+                ip_addr = str(netaddr.IPNetwork(ip_addr).ip)
+            except netaddr.AddrFormatError:
+                pass
+            else:
+                ip_addrs.append(ip_addr)
+    return ip_addrs
 
 def get_host_ip6s():
     """
-    Searches for the first IP address (that isn't the docker0 veth).
+    Gets all IPv6 addresses assigned to this host.
+
+    :return: List of string representations of IPv6 Addresses.
     """
     # Use the IP command since calico-docker has it as a dependency
     ip = sh.Command._create("ip")
-    route_output = ip("-6", "route").stdout.strip()
+    route_output = ip("-o", "-6", "addr").stdout.strip()
     routes = route_output.split("\n")
-    ip_6_addrs = []
+    ip_addrs = []
     for route in routes:
-        if "docker0" not in route:
-            ip_6_addr = route.split()[0]
-            ip_6_addrs.append(ip_6_addr)
-    return ip_6_addrs
+        values = route.split()
+        # Ignore the loopback interface
+        if 'lo' not in values:
+            # Third index is the ip address (with subnet mask)
+            ip_addr = values[3]
+            try:
+                # Make sure it is a valid IP address
+                ip_addr = str(netaddr.IPNetwork(ip_addr).ip)
+            except netaddr.AddrFormatError:
+                pass
+            else:
+                ip_addrs.append(ip_addr)
+    return ip_addrs
+
+def warn_if_unknown_ip(ip, ip6):
+    """
+    Prints a warning message if the IP addresses are not assigned to interfaces
+    on the current host.
+
+    :param ip: IPv4 address which should be present on the host.
+    :param ip6: IPv6 address which should be present on the host.
+    :return: None
+    """
+    if ip not in get_host_ips():
+        print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
+              " to this host."
+
+    if ip6 and ip6 not in get_host_ip6s():
+        print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
+              " to this host."
 
 def warn_if_hostname_conflict(ip):
     """
