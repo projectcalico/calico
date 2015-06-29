@@ -43,7 +43,7 @@ IPV4 = "IPv4"
 IPV6 = "IPv6"
 IP_TYPES = [IPV4, IPV6]
 IP_VERSIONS = [4, 6]
-IP_TYPE_TO_VERSION = { IPV4: 4, IPV6: 6 }
+IP_TYPE_TO_VERSION = {IPV4: 4, IPV6: 6}
 
 SHORTENED_PREFIX = "_"
 
@@ -134,7 +134,7 @@ def hex(string):
     """
     Convert a string to hex.
     """
-    return "".join(x.encode('hex') for x in string)
+    return string.encode('hex')
 
 
 def net_to_ip(net_or_ip):
@@ -244,7 +244,7 @@ def intern_list(l):
     """
     Returns a new list with interned versions of the input list's contents.
 
-    Non-strings are copied to the new list verbatim.  returned strings are e
+    Non-strings are copied to the new list verbatim.  Returned strings are
     encoded using .encode("utf8").
     """
     out = []
