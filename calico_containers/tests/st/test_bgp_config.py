@@ -46,6 +46,7 @@ class TestBGPConfig(TestBase):
             host.calicoctl("bgp-node-mesh on")
             self.assertEquals(host.calicoctl("bgp-node-mesh"), "on")
 
+    @attr('slow')
     def test_as_num(self):
         """
         Test using different AS number for the node-to-node mesh.
@@ -56,11 +57,11 @@ class TestBGPConfig(TestBase):
              DockerHost('host2', start_calico=False) as host2:
 
             # Set the default AS number.
-            #host1.calicoctl("default-node-as 64512")
+            host1.calicoctl("default-node-as 64512")
 
             # Start host1 using the inherited AS, and host2 using a specified
-            # AS (same as default), and host3 with a completely different AS.
-            host1.start_calico_node(as_num="64512")
+            # AS (same as default).
+            host1.start_calico_node()
             host1.assert_driver_up()
             host2.start_calico_node(as_num="64512")
             host2.assert_driver_up()
@@ -83,16 +84,16 @@ class TestBGPConfig(TestBase):
             self._check_status(host1, [("Mesh", host2.ip, "Established")])
             self._check_status(host2, [("Mesh", host1.ip, "Established")])
 
+    @attr('slow')
     def test_node_peers(self):
         """
         Test per-node BGP peer configuration by turning off the mesh and
-        configuring the per node peers explicitly.
+        configuring the mesh as a set of per node peers.
         """
         with DockerHost('host1', start_calico=False) as host1, \
              DockerHost('host2', start_calico=False) as host2:
 
-            # Start host1 using the inherited AS, and host2 using a specified
-            # AS (same as default), and host3 with a completely different AS.
+            # Start both hosts using specific AS numbers.
             host1.start_calico_node(as_num="64513")
             host1.assert_driver_up()
             host2.start_calico_node(as_num="64513")
@@ -126,10 +127,11 @@ class TestBGPConfig(TestBase):
             self._check_status(host1, [("Node", host2.ip, "Established")])
             self._check_status(host2, [("Node", host1.ip, "Established")])
 
+    @attr('slow')
     def test_global_peers(self):
         """
         Test global BGP peer configuration by turning off the mesh and
-        configuring the per node peers explicitly.
+        configuring the mesh as a set of global peers.
         """
         with DockerHost('host1', start_calico=False) as host1, \
              DockerHost('host2', start_calico=False) as host2:
