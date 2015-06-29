@@ -140,11 +140,13 @@ class TestStats(unittest.TestCase):
         self.assertEqual(self.sc.stats["bar"], 1)
         self.sc.increment("bar")
         self.assertEqual(self.sc.stats["bar"], 2)
+        self.sc.increment("baz", by=2)
+        self.assertEqual(self.sc.stats["baz"], 3)
         m_log = mock.Mock(spec=logging.Logger)
         self.sc._dump(m_log)
         m_log.assert_has_calls([
             mock.call.info("%s: %s", "bar", 2),
-            mock.call.info("%s: %s", "baz", 1),
+            mock.call.info("%s: %s", "baz", 3),
         ])
 
     def test_dump_diags(self):
