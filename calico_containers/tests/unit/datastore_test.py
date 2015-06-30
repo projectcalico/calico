@@ -15,6 +15,7 @@
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 import json
+import unittest
 
 from mock import ANY
 from netaddr import IPNetwork, IPAddress
