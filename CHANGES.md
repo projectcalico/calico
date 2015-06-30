@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.27-dev
+
+- Stop restarting Felix on Ubuntu if it fails more than 5 times in 10 seconds.
+
 ## 0.26
 
 - Update and improve security model documentation.
