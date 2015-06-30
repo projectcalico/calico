@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from nose.plugins.attrib import attr
+
 from test_base import TestBase
 from calico_containers.tests.st.utils.docker_host import DockerHost
 

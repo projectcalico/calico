@@ -14,13 +14,12 @@
 
 import json
 import os
-import re
 import etcd
 from etcd import EtcdKeyNotFound, EtcdException
 
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 
-from calico_containers.pycalico.datastore_data import Rules, BGPPeer, IPPool, \
+from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
     Endpoint, Profile, Rule
 from calico_containers.pycalico.datastore_errors import DataStoreError, \
     ProfileNotInEndpoint, ProfileAlreadyInEndpoint, MultipleEndpointsMatch

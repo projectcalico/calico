@@ -14,8 +14,9 @@
 from subprocess import CalledProcessError
 import subprocess
 from unittest import TestCase
-from calico_containers.tests.st.utils.utils import get_ip
 import logging
+
+from calico_containers.tests.st.utils.utils import get_ip
 
 logging.getLogger('sh').setLevel('INFO')
 

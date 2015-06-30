@@ -16,15 +16,15 @@ from flask import Flask, jsonify, abort, request
 import os
 import socket
 import logging
+import sys
+
 from subprocess32 import check_call, CalledProcessError, call
 from werkzeug.exceptions import HTTPException, default_exceptions
-
 from netaddr import IPAddress, IPNetwork
-import sys
 
 from pycalico.datastore import IF_PREFIX
 from calico_containers.pycalico.datastore_errors import DataStoreError
-from calico_containers.pycalico.datastore_data import Endpoint
+from calico_containers.pycalico.datastore_datatypes import Endpoint
 from pycalico.ipam import SequentialAssignment, IPAMClient
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"

@@ -15,28 +15,17 @@
 from etcd import Client as EtcdClient
 from etcd import EtcdKeyNotFound, EtcdResult, EtcdException
 import json
-import unittest
 
 from mock import ANY
 from netaddr import IPNetwork, IPAddress
 from nose.tools import *
 from mock import patch, Mock, call
 
-from calico_containers.pycalico.datastore import (BGPPeer)
 from calico_containers.pycalico.datastore import (DatastoreClient,
-                                                  Rule,
-                                                  Profile,
-                                                  Endpoint,
-                                                  IPPool,
-                                                  CALICO_V_PATH,
-                                                  DataStoreError,
-                                                  ProfileAlreadyInEndpoint,
-                                                  ProfileNotInEndpoint,
-                                                  MultipleEndpointsMatch)
-from calico_containers.pycalico.datastore_errors import NoEndpointForContainer, \
-    DataStoreError, ProfileNotInEndpoint, ProfileAlreadyInEndpoint, \
+                                                  CALICO_V_PATH)
+from calico_containers.pycalico.datastore_errors import DataStoreError, ProfileNotInEndpoint, ProfileAlreadyInEndpoint, \
     MultipleEndpointsMatch
-from calico_containers.pycalico.datastore_data import Rules, BGPPeer, IPPool, \
+from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
     Endpoint, Profile, Rule
 
 TEST_HOST = "TEST_HOST"
