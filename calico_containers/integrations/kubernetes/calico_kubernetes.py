@@ -9,14 +9,15 @@ import requests
 import sh
 
 # Append to existing env, to avoid losing PATH etc.
+# Need to edit the path here since calicoctl loads client on import.
 # TODO-PAT: This shouldn't be hardcoded
-from calico_containers.calicoctl import container_add
-from calico_containers.pycalico.datastore import IF_PREFIX
-from calico_containers.pycalico.util import generate_cali_interface_name
+os.environ['ETCD_AUTHORITY'] = 'kubernetes-master:6666'
 
-env = os.environ.copy()
-env['ETCD_AUTHORITY'] = 'kubernetes-master:6666'
-calicoctl = sh.Command('/home/vagrant/calicoctl').bake(_env=env)
+from calicoctl import container_add
+from pycalico.datastore import IF_PREFIX
+from pycalico.util import generate_cali_interface_name
+
+calicoctl = sh.Command('/home/vagrant/calicoctl').bake(_env=os.environ)
 
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 PROFILE_LABEL = 'CALICO_PROFILE'
@@ -38,8 +39,8 @@ class NetworkPlugin(object):
         print('Configuring docker container %s' % self.docker_id)
 
         try:
-            self._configure_interface()
-            self._configure_profile()
+            endpoint = self._configure_interface()
+            self._configure_profile(endpoint)
         except CalledProcessError as e:
             print('Error code %d creating pod networking: %s\n%s' % (
                 e.returncode, e.output, e))
@@ -62,8 +63,11 @@ class NetworkPlugin(object):
         ep = container_add(self.docker_id, container_ip, 'eth0')
         interface_name = generate_cali_interface_name(IF_PREFIX, ep.endpoint_id)
         node_ip = self._get_node_ip()
-        check_call("ip addr add %s/32 dev %s" % (node_ip, interface_name))
+        print('Adding IP %s to interface %s' % (node_ip, interface_name))
+        check_call(['ip', 'addr', 'add', node_ip + '/32',
+                    'dev', interface_name])
         print('Finished configuring network interface')
+        return ep
 
     def _get_node_ip(self):
         """Get the IP for the host node from the k8s API."""
@@ -111,7 +115,7 @@ class NetworkPlugin(object):
         # Clean up after ourselves (don't want to leak netns files)
         print(check_output(['rm', netns_file]))
 
-    def _configure_profile(self):
+    def _configure_profile(self, endpoint):
         """
         Configure the calico profile for a pod.
 
@@ -126,7 +130,8 @@ class NetworkPlugin(object):
         self._apply_tags(profile_name, pod)
 
         # Also add the workload to the profile.
-        calicoctl('profile', profile_name, 'member', 'add', self.docker_id)
+        calicoctl('endpoint', endpoint.endpoint_id,
+                  'profile', 'set', profile_name)
         print('Finished configuring profile.')
 
     def _get_pod_ports(self, pod):
