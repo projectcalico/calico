@@ -108,13 +108,15 @@ from pycalico import diags
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                ETCD_AUTHORITY_DEFAULT,
                                Rule,
-                               Rules,
-                               DataStoreError,
-                               ProfileNotInEndpoint,
+                                ProfileNotInEndpoint,
                                ProfileAlreadyInEndpoint,
                                MultipleEndpointsMatch,
                                BGPPeer,
                                IPPool)
+from calico_containers.pycalico.datastore_errors import DataStoreError, \
+    ProfileNotInEndpoint, ProfileAlreadyInEndpoint, MultipleEndpointsMatch
+from calico_containers.pycalico.datastore_data import Rules, BGPPeer, IPPool, \
+    Rule
 from pycalico.ipam import IPAMClient
 
 hostname = socket.gethostname()

@@ -22,7 +22,9 @@ from werkzeug.exceptions import HTTPException, default_exceptions
 from netaddr import IPAddress, IPNetwork
 import sys
 
-from pycalico.datastore import IF_PREFIX, Endpoint, DataStoreError
+from pycalico.datastore import IF_PREFIX
+from calico_containers.pycalico.datastore_errors import DataStoreError
+from calico_containers.pycalico.datastore_data import Endpoint
 from pycalico.ipam import SequentialAssignment, IPAMClient
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"

@@ -14,7 +14,7 @@
 from netaddr import IPNetwork, IPAddress
 from nose.tools import assert_equal, assert_true, assert_false
 from calico_containers.pycalico.ipam import SequentialAssignment, IPAMClient
-from calico_containers.pycalico.datastore import IPPool
+from calico_containers.pycalico.datastore_data import IPPool
 
 network = IPNetwork("192.168.0.0/16")
 pool = IPPool(network)
