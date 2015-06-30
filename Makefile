@@ -128,5 +128,8 @@ kubernetes: /dist/calico_kubernetes
 	mkdir -p dist
 	chmod 777 `pwd`/dist
 	# Build the rkt plugin
-	docker run -u user -v `pwd`/calico_containers/integrations/kubernetes:/calico -v `pwd`/dist:/code/dist calico-build pyinstaller /calico/calico_kubernetes.py -a -F -s --clean
+	docker run -u user -v `pwd`/calico_containers:/code/calico_containers \
+	-v `pwd`/dist:/code/dist \
+	-e PYTHONPATH=/code/calico_containers \
+	calico-build pyinstaller calico_containers/integrations/kubernetes/calico_kubernetes.py -a -F -s --clean
 
