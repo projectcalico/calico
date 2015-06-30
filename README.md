@@ -1,11 +1,11 @@
 # Project Calico
 
 Project Calico represents a new approach to virtual networking, based on the
-same scalable IP networking principles as the Internet.
-
-Calico’s pure L3 approach to data center networking integrates seamlessly with
-cloud orchestration systems (such as OpenStack) to enable secure IP
-communication between virtual machines, containers, or bare metal workloads.
+same scalable IP networking principles as the Internet.  Unlike other virtual
+networking approaches, Calico does not use overlays, instead providing a pure
+Layer 3 approach to data center networking.  Calico is simple to deploy and
+diagnose, provides a rich security policy, supports both IPv4 and IPv6 and can
+be used across a combination of bare-metal, VM and container workloads.
 
 Calico implements a highly efficient vRouter in each compute node that
 leverages the existing Linux kernel forwarding engine without the need for
