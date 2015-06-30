@@ -1,35 +1,27 @@
 # Project Calico
 
-Calico represents a new approach to virtual networking, based on the same
-scalable IP networking principles as the Internet.
+Project Calico represents a new approach to virtual networking, based on the
+same scalable IP networking principles as the Internet.
 
-First established in enterprise data centers, virtual networking provides the
-logical fabric that enables workloads in virtual machines to communicate
-securely, ultimately over a shared physical fabric. Initially this was achieved
-by using VLANs; as that approach quickly hit well-known scalability limits,
-other techniques such as VXLAN, GRE-based tunnels and SDN controlled flows were
-taken. All of these approaches introduced greater complexity and ultimately hit
-scalability and performance limits inherent in extending an enterprise-class
-layer 2 network over large numbers of servers and wide area links.
+Calico’s pure L3 approach to data center networking integrates seamlessly with
+cloud orchestration systems (such as OpenStack) to enable secure IP
+communication between virtual machines, containers, or bare metal workloads.
 
-A new approach is required. One that recognizes that the vast majority of
-today’s workloads are based on IP, and that leverages everything we already
-know about how to build high-performance, large-scale networks.
+Calico implements a highly efficient vRouter in each compute node that
+leverages the existing Linux kernel forwarding engine without the need for
+vSwitches. Each vRouter propagates workload reachability information (routes)
+to the rest of the data center using BGP – either directly in small scale
+deployments or via BGP route reflectors to reach Internet level scales in large
+deployments.
 
-Enter Project Calico. With Calico, we went back to the drawing board and
-redesigned how virtual networks should be built, based on an intimate
-understanding of the requirements of modern workloads and virtualization
-environments.
+Calico peers directly with the data center’s physical fabric (whether L2 or L3)
+without the need for on/off ramps, NAT, tunnels, or overlays.
 
-## What does Calico do?
+Calico supports rich and flexible network policy which it enforces using
+bookended ACLs on each compute node to provide tenant isolation, security
+groups, and external reachability constraints.
 
-Calico integrates seamlessly with the cloud orchestration system (such as
-OpenStack) to enable secure IP communication between virtual machines or
-containers. As VMs or containers are created or destroyed, their IP addresses
-are advertised to the rest of the network and they are able to send/receive
-data over IP just as they would with the native networking implementation – but
-with higher
-[security, scalability and performance](http://www.projectcalico.org/learn/).
+For more information see [the Project Calico website](http://www.projectcalico.org/learn/).
 
 ## How do I get started with Project Calico?
 
