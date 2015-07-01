@@ -51,7 +51,9 @@ SHORTENED_PREFIX = "_"
 
 # Semaphore used to limit the number of concurrent shell-outs.  Prevents us
 # from using an unbounded number of file handles for stdin/out/err handling.
-MAX_CONCURRENT_CALLS = 50
+# Tuning: <10 seemed noticeably worse 20-200 hovered around the same.  Chose
+# a value at low end of that range to limit our impact on the system.
+MAX_CONCURRENT_CALLS = 32
 _call_semaphore = gevent.lock.Semaphore(MAX_CONCURRENT_CALLS)
 
 
