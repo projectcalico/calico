@@ -20,7 +20,7 @@ from netaddr import IPAddress, IPNetwork
 from nose.tools import assert_equal, assert_dict_equal
 
 from calico_containers import docker_plugin
-from calico_containers.pycalico.datastore import Endpoint
+from calico_containers.pycalico.datastore_datatypes import Endpoint
 
 TEST_ID = "TEST_ID"
 

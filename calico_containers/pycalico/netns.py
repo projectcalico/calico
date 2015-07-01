@@ -22,7 +22,9 @@ import sys
 import uuid
 
 from netaddr import IPNetwork, IPAddress
-from datastore import Endpoint, IF_PREFIX, VETH_NAME
+
+from datastore import IF_PREFIX
+from calico_containers.pycalico.datastore_datatypes import Endpoint, VETH_NAME
 
 _log = logging.getLogger(__name__)
 

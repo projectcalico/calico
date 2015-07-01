@@ -1,9 +1,9 @@
 #!/bin/sh
 exec 2>&1
 GUNICORN=/usr/local/bin/gunicorn
-ROOT=/calico_containers
+ROOT=/
 PID=/var/run/gunicorn.pid
-APP=docker_plugin:app
+APP=calico_containers.docker_plugin:app
 
 if [ -f $PID ]; then rm $PID; fi
 

@@ -14,14 +14,17 @@
 
 import os
 from datetime import datetime
-import sh
 import tarfile
 import socket
 import tempfile
 import subprocess
-from datastore import DatastoreClient
 from etcd import EtcdException
 from shutil import copytree
+
+import sh
+
+from datastore import DatastoreClient
+
 
 def save_diags(log_dir, upload=False):
     # Create temp directory

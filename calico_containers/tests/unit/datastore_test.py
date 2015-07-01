@@ -22,19 +22,12 @@ from netaddr import IPNetwork, IPAddress
 from nose.tools import *
 from mock import patch, Mock, call
 
-from calico_containers.pycalico.datastore import (BGPPeer)
 from calico_containers.pycalico.datastore import (DatastoreClient,
-                                                  Rule,
-                                                  Profile,
-                                                  Rules,
-                                                  Endpoint,
-                                                  IPPool,
-                                                  NoEndpointForContainer,
-                                                  CALICO_V_PATH,
-                                                  DataStoreError,
-                                                  ProfileAlreadyInEndpoint,
-                                                  ProfileNotInEndpoint,
-                                                  MultipleEndpointsMatch)
+                                                  CALICO_V_PATH)
+from calico_containers.pycalico.datastore_errors import DataStoreError, ProfileNotInEndpoint, ProfileAlreadyInEndpoint, \
+    MultipleEndpointsMatch
+from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
+    Endpoint, Profile, Rule
 
 TEST_HOST = "TEST_HOST"
 TEST_ORCH_ID = "docker"

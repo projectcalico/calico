@@ -13,8 +13,11 @@
 # limitations under the License.
 
 from etcd import EtcdKeyNotFound, EtcdAlreadyExist
+
 from netaddr import IPAddress, IPNetwork
-from datastore import DatastoreClient, IPPool
+
+from datastore import DatastoreClient
+from calico_containers.pycalico.datastore_datatypes import IPPool
 from datastore import CALICO_V_PATH
 
 IP_ASSIGNMENT_PATH = CALICO_V_PATH + "/ipam/%(version)s/assignment/%(pool)s"
