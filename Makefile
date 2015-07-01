@@ -98,6 +98,14 @@ run-consul:
 	--name calico-consul progrium/consul \
 	-server -bootstrap-expect 1 -client $(LOCAL_IP_ENV)
 
+create-dind:
+	@echo "You may want to load calico-node with"
+	@echo "docker load --input /code/calico_containers/calico-node.tar"
+	@ID=$$(docker run --privileged -v `pwd`:/code \
+	-e DOCKER_DAEMON_ARGS=--kv-store=consul:$(LOCAL_IP_ENV):8500 \
+	-tid calico/dind) ;\
+	docker exec -ti $$ID bash;\
+	docker rm -f $$ID
 
 clean:
 	-rm *.created
