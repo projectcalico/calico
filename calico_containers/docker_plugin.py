@@ -187,14 +187,13 @@ def delete_endpoint():
         app.logger.exception(e)
         app.logger.warning("Failed to unassign IPs for endpoint %s", ep_id)
 
-    try:
-        # TODO - Fix
-        # client.remove_endpoint(hostname, "docker", CONTAINER_NAME, ep_id)
-        pass
-    except DataStoreError as e:
-        app.logger.exception(e)
-        app.logger.warning("Failed to remove endpoint %s from datastore",
-                           ep_id)
+    if ep:
+        try:
+            client.remove_endpoint(ep)
+        except DataStoreError as e:
+            app.logger.exception(e)
+            app.logger.warning("Failed to remove endpoint %s from datastore",
+                               ep_id)
 
     # libnetwork expects us to delete the veth pair.  (Note that we only need
     # to delete one end).

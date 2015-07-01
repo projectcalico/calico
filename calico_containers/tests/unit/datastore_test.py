@@ -979,6 +979,15 @@ class TestDatastoreClient(unittest.TestCase):
                                                        EP_12.to_json())
         assert_equal(EP_12._original_json, EP_12.to_json())
 
+    def test_remove_endpoint(self):
+        """
+        Test remove_endpoint().
+        """
+        self.datastore.remove_endpoint(EP_12)
+        self.etcd_client.delete.assert_called_once_with(TEST_ENDPOINT_PATH,
+                                                        recursive=True,
+                                                        dir=True)
+
     def test_update_endpoint(self):
         """
         Test update_endpoint().
