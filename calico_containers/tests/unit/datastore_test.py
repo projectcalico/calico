@@ -1136,23 +1136,23 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.side_effect = EtcdKeyNotFound
         self.datastore.remove_all_data()  # should not throw exception.
 
-    def test_remove_container(self):
+    def test_remove_workload(self):
         """
-        Test remove_container()
+        Test remove_workload()
         """
-        self.datastore.remove_container(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID)
+        self.datastore.remove_workload(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID)
         self.etcd_client.delete.assert_called_once_with(TEST_CONT_PATH,
                                                         recursive=True,
                                                         dir=True)
 
     @raises(KeyError)
-    def test_remove_container_missing(self):
+    def test_remove_workload_missing(self):
         """
-        Test remove_container() raises a KeyError if the container does not
+        Test remove_workload() raises a KeyError if the container does not
         exist.
         """
         self.etcd_client.delete.side_effect = EtcdKeyNotFound
-        self.datastore.remove_container(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID)
+        self.datastore.remove_workload(TEST_HOST, TEST_ORCH_ID, TEST_CONT_ID)
 
     def test_get_bgp_peers(self):
         """

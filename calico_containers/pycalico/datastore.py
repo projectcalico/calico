@@ -352,8 +352,8 @@ class DatastoreClient(object):
     @handle_errors
     def create_profile(self, name):
         """
-        Create a policy profile.  By default, containers in a profile
-        accept traffic only from other containers in that profile, but can send
+        Create a policy profile.  By default, endpoints in a profile
+        accept traffic only from other endpoints in that profile, but can send
         traffic anywhere.
 
         Note this will clobber any existing profile with this name.
@@ -368,7 +368,7 @@ class DatastoreClient(object):
         # Note: We do not need to add a default_deny to outbound packet traffic
         # since Felix implements a default drop at the end if no profile has
         # accepted. Dropping the packet will kill it before it can potentially
-        # be accepted by another profile on the container.
+        # be accepted by another profile on the endpoint.
         accept_self = Rule(action="allow", src_tag=name)
         default_allow = Rule(action="allow")
         rules = Rules(id=name,
@@ -482,7 +482,7 @@ class DatastoreClient(object):
     def append_profiles_to_endpoint(self, profile_names, **kwargs):
         """
         Append a list of profiles to the endpoint.  This assumes there is a
-        single endpoint per container.
+        single endpoint per workload.
 
         Raises ProfileAlreadyInEndpoint if any of the profiles are already
         configured in the endpoint profile list.
@@ -506,7 +506,7 @@ class DatastoreClient(object):
     def set_profiles_on_endpoint(self, profile_names, **kwargs):
         """
         Set a list of profiles on the endpoint.  This assumes there is a single
-        endpoint per container.
+        endpoint per workload.
 
         :param hostname: The host the workload is on.
         :param profile_names: The profiles to set for the endpoint profile
@@ -523,14 +523,14 @@ class DatastoreClient(object):
     def remove_profiles_from_endpoint(self, profile_names, **kwargs):
         """
         Remove a profiles from the endpoint profile list.  This assumes there
-        is a single endpoint per container.
+        is a single endpoint per workload.
 
         Raises ProfileNotInEndpoint if any of the profiles are not configured
         in the endpoint profile list.
 
         Raises MultipleEndpointsMatch if the spe
 
-        :param hostname: The name of the host the container is on.
+        :param hostname: The name of the host the workload is on.
         :param profile_names: The profiles to remove from the endpoint profile
         list.
         :param kwargs: See get_endpoint for additional keyword args.
@@ -558,10 +558,8 @@ class DatastoreClient(object):
 
         :param endpoint_id: The ID of the endpoint
         :param hostname: The hostname that the endpoint lives on.
-        :param workload_id: The workload (or container) that the endpoint
-        belongs to.
-        :param orchestrator_id: The workload (or container) that the endpoint
-        belongs to.
+        :param workload_id: The workload that the endpoint belongs to.
+        :param orchestrator_id: The workload that the endpoint belongs to.
         :return: A list of Endpoint Objects which match the criteria, or an
         empty list if none match
         """
@@ -614,10 +612,8 @@ class DatastoreClient(object):
         matches.
 
         :param hostname: The hostname that the endpoint lives on.
-        :param orchestrator_id: The workload (or container) that the endpoint
-        belongs to.
-        :param workload_id: The workload (or container) that the endpoint
-        belongs to.
+        :param orchestrator_id: The workload that the endpoint belongs to.
+        :param workload_id: The workload that the endpoint belongs to.
         :param endpoint_id: The ID of the endpoint
         :return: An Endpoint Object
         """
@@ -642,7 +638,7 @@ class DatastoreClient(object):
         """
         Write a single endpoint object to the datastore.
 
-        :param endpoint: The Endpoint to add to the container.
+        :param endpoint: The Endpoint to add to the workload.
         """
         ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
                                    "orchestrator_id": endpoint.orchestrator_id,
@@ -662,7 +658,7 @@ class DatastoreClient(object):
             # modify new endpoint fields
             datastore.update_endpoint(endpoint)
 
-        :param endpoint: The Endpoint to add to the container.
+        :param endpoint: The Endpoint to add to the workload.
         """
         ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
                                    "orchestrator_id": endpoint.orchestrator_id,
@@ -733,23 +729,22 @@ class DatastoreClient(object):
             pass
 
     @handle_errors
-    def remove_container(self, hostname, orchestrator_id, container_id):
+    def remove_workload(self, hostname, orchestrator_id, workload_id):
         """
-        Remove a container from the datastore.
-        :param hostname: The name of the host the container is on.
-        :param orchestrator_id: The orchestrator the workload (or container)
-        belongs to.
-        :param container_id: The Docker container ID.
+        Remove a workload from the datastore.
+        :param hostname: The name of the host the workload is on.
+        :param orchestrator_id: The orchestrator the workload belongs to.
+        :param workload_id: The workload ID.
         :return: None.
         """
         workload_path = WORKLOAD_PATH % {"hostname": hostname,
                                          "orchestrator_id": orchestrator_id,
-                                         "workload_id": container_id}
+                                         "workload_id": workload_id}
         try:
             self.etcd_client.delete(workload_path, recursive=True, dir=True)
         except EtcdKeyNotFound:
             raise KeyError("%s is not a configured workload on host %s" %
-                           (container_id, hostname))
+                           (workload_id, hostname))
 
     @handle_errors
     def set_bgp_node_mesh(self, enable):
