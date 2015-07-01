@@ -386,6 +386,49 @@ class TestIpsetManager(BaseTestCase):
                              call(["ipset", "destroy", "felix-v4-baz"]),
                          ]))
 
+    def test_apply_snapshot_mainline(self):
+        self.mgr.apply_snapshot(
+            {"prof1": ["A"], "prof2": ["B"], "prof3": ["B"]},
+            {EP_ID_1_1: EP_1_1,
+             EP_ID_2_1: EP_2_1},
+            async=True,
+        )
+        self.step_mgr()
+        self.mgr.apply_snapshot(
+            {"prof1": ["tag1", "tag2"]},
+            {EP_ID_1_1: EP_1_1},
+            async=True,
+        )
+        self.step_mgr()
+        self.assertEqual(self.mgr.tags_by_prof_id,
+                         {"prof1": ["tag1", "tag2"]})
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id,
+                         {EP_ID_1_1: EP_DATA_1_1})
+
+    def test_apply_snapshot_forces_reprogram(self):
+        # Apply a snapshot but mock the finish call so that we can check that
+        # apply_snapshot set the flag...
+        self.mgr.apply_snapshot(
+            {"prof1": ["A"], "prof2": ["B"]},
+            {EP_ID_1_1: EP_1_1,
+             EP_ID_2_1: EP_2_1},
+            async=True,
+        )
+        # noinspection PyUnresolvedReferences
+        with patch.object(self.mgr, "_finish_msg_batch"):
+            self.step_actor(self.mgr)
+        self.assertTrue(self.mgr._force_reprogram)
+
+    def test_finish_msg_batch_clears_reprogram_flag(self):
+        # Apply a snapshot and step the actor for real, should clear the flag.
+        self.mgr.apply_snapshot(
+            {"prof1": ["A"]},
+            {EP_ID_1_1: EP_1_1},
+            async=True,
+        )
+        self.step_mgr()
+        self.assertFalse(self.mgr._force_reprogram)
+
     def _notify_ready(self, tags):
         for tag in tags:
             self.mgr.on_object_startup_complete(tag, self.created_refs[tag][0],
