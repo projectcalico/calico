@@ -118,6 +118,7 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
                                         (v6_filter_updater, None)]:
         if hosts_set and config.IP_IN_IP_ENABLED:
             hosts_set_name = hosts_set.set_name
+            hosts_set.ensure_exists()
         else:
             hosts_set_name = None
         if iptables_updater is v4_filter_updater:
