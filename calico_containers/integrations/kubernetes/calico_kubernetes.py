@@ -17,7 +17,8 @@ from calicoctl import container_add
 from pycalico.datastore import IF_PREFIX
 from pycalico.util import generate_cali_interface_name
 
-calicoctl = sh.Command('/home/vagrant/calicoctl').bake(_env=os.environ)
+CALICOCTL_PATH = os.environ.get('CALICOCTL_PATH', '/home/vagrant/calicoctl')
+calicoctl = sh.Command(CALICOCTL_PATH).bake(_env=os.environ)
 
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 PROFILE_LABEL = 'CALICO_PROFILE'
