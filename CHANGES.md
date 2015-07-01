@@ -4,6 +4,7 @@
 
 - Limit number of concurrent shell-outs in felix to prevent file descriptor
   exhaustion.
+- Have felix periodically resync from etcd and force-refresh the dataplane.
 - Stop restarting Felix on Ubuntu if it fails more than 5 times in 10 seconds.
 
 ## 0.26
