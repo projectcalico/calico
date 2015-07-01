@@ -310,7 +310,7 @@ def container_remove(container_name):
     netns.remove_endpoint(endpoint.endpoint_id)
 
     # Remove the container from the datastore.
-    client.remove_container(hostname, ORCHESTRATOR_ID, workload_id)
+    client.remove_workload(hostname, ORCHESTRATOR_ID, workload_id)
 
     print "Removed Calico interface from %s" % container_name
 
