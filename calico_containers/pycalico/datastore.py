@@ -675,6 +675,19 @@ class DatastoreClient(object):
         endpoint._original_json = new_json
 
     @handle_errors
+    def remove_endpoint(self, endpoint):
+        """
+        Remove a single endpoint object from the datastore.
+
+        :param endpoint: The Endpoint to remove.
+        """
+        ep_path = ENDPOINT_PATH % {"hostname": endpoint.hostname,
+                                   "orchestrator_id": endpoint.orchestrator_id,
+                                   "workload_id": endpoint.workload_id,
+                                   "endpoint_id": endpoint.endpoint_id}
+        self.etcd_client.delete(ep_path, dir=True, recursive=True)
+
+    @handle_errors
     def get_default_next_hops(self, hostname):
         """
         Get the next hop IP addresses for default routes on the given host.
