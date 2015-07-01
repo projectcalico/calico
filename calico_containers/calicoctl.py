@@ -1465,7 +1465,7 @@ def validate_arguments():
     if arguments["<PROFILES>"] or arguments["<PROFILE>"]:
         profiles = arguments["<PROFILES>"] or [arguments["<PROFILE>"]]
         for profile in profiles:
-            if not re.match("^%s{1,40}$" % valid_chars, profile):
+            if not re.match("^%s+$" % valid_chars, profile):
                 profile_ok = False
                 break
 
