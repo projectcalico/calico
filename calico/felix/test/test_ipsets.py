@@ -31,7 +31,7 @@ from calico.felix.test.base import BaseTestCase
 
 
 # Logger
-log = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 
 
 EP_ID_1_1 = EndpointId("host1", "orch", "wl1_1", "ep1_1")
@@ -78,6 +78,7 @@ class TestIpsetManager(BaseTestCase):
         self.mgr._create = self.m_create
 
     def m_create(self, tag_id):
+        _log.info("Creating ipset %s", tag_id)
         ipset = Mock(spec=TagIpset)
 
         ipset._manager = None
@@ -388,11 +389,18 @@ class TestIpsetManager(BaseTestCase):
 
     def test_apply_snapshot_mainline(self):
         self.mgr.apply_snapshot(
-            {"prof1": ["A"], "prof2": ["B"], "prof3": ["B"]},
+            {"prof1": ["tag1"], "prof2": ["B"], "prof3": ["B"]},
             {EP_ID_1_1: EP_1_1,
              EP_ID_2_1: EP_2_1},
             async=True,
         )
+        self.mgr.get_and_incref("tag1",
+                                callback=self.on_ref_acquired,
+                                async=True)
+        self.step_mgr()
+        self.mgr.on_object_startup_complete("tag1",
+                                            self.created_refs["tag1"][0],
+                                            async=True)
         self.step_mgr()
         self.mgr.apply_snapshot(
             {"prof1": ["tag1", "tag2"]},
@@ -404,6 +412,14 @@ class TestIpsetManager(BaseTestCase):
                          {"prof1": ["tag1", "tag2"]})
         self.assertEqual(self.mgr.endpoint_data_by_ep_id,
                          {EP_ID_1_1: EP_DATA_1_1})
+        ipset = self.acquired_refs["tag1"]
+        self.assertEqual(
+            ipset.replace_members.mock_calls,
+            [
+                call(set(['10.0.0.1']), force_reprogram=True, async=True),
+                call(set(['10.0.0.1']), force_reprogram=True, async=True),
+            ]
+        )
 
     def test_apply_snapshot_forces_reprogram(self):
         # Apply a snapshot but mock the finish call so that we can check that

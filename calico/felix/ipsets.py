@@ -110,7 +110,6 @@ class IpsetManager(ReferenceManager):
                 self._update_active_ipset(tag_id)
             self._maybe_yield()
         self._dirty_tags.clear()
-        self._force_reprogram = False
 
     @property
     def nets_key(self):
