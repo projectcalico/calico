@@ -21,12 +21,10 @@ grep -Fxvf  /tmp/base.txt <(dpkg -l | grep ^ii | sed 's_  _\t_g' | cut \
 
 # Add new repos and update again
 LC_ALL=C.UTF-8 LANG=C.UTF-8 add-apt-repository -y ppa:cz.nic-labs/bird
-add-apt-repository -y ppa:project-calico/icehouse
 apt-get update
 
 # Install felix and bird
 apt-get install -qy \
-        calico-felix \
         bird \
         bird6
 

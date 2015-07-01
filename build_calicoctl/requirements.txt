@@ -9,9 +9,8 @@ nose-timer
 docker-py==1.2.1
 sh==1.11
 coveralls
-# Only used inside calicoctl
 prettytable==0.7.2
-
+netaddr==0.7.15
 flask
 gunicorn
 subprocess32

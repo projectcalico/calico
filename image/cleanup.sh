@@ -1,4 +1,7 @@
 #!/bin/bash
+#set -e
+#set -x
+
 echo "Removing extra packages"
 grep -Fxvf  /tmp/required.txt <(dpkg -l | grep ^ii | sed 's_  _\t_g' | cut -f 2) | xargs apt-get autoremove -qy
 cat /tmp/add-apt.txt | xargs apt-get autoremove -qy
