@@ -66,8 +66,8 @@ ut-circle: calicobuild.created
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests calico_containers/tests/unit -c nose.cfg \
-	--with-xunit --xunit-file=/circle_output/output.xml; \
-	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls'
+	--with-xunit --xunit-file=/circle_output/output.xml; RC=$?;\
+	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $RC'
 
 calico_containers/busybox.tar:
 	docker pull busybox:latest
