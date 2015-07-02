@@ -90,7 +90,8 @@ class ReferenceManager(Actor):
         """
         _log.debug("Object startup complete for %s", object_id)
         if self.objects_by_id.get(object_id) is not obj:
-            _log.info("Ignoring on_object_startup_complete for old instance")
+            _log.info("Ignoring on_object_startup_complete for old instance:"
+                      "%r is not %r", self.objects_by_id.get(object_id), obj)
             return
         if obj.ref_mgmt_state != STARTING:
             # We can hit this case if the object was starting and we asked it

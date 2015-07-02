@@ -3,10 +3,12 @@ import json
 
 import logging
 from etcd import EtcdResult
-from mock import Mock, call
+from gevent.event import Event
+from mock import Mock, call, patch, ANY
 from calico.datamodel_v1 import EndpointId
+from calico.felix.config import Config
 from calico.felix.ipsets import IpsetActor
-from calico.felix.fetcd import _EtcdWatcher, ResyncRequired
+from calico.felix.fetcd import _EtcdWatcher, ResyncRequired, EtcdAPI
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase
 
@@ -37,6 +39,70 @@ TAGS = ["a", "b"]
 TAGS_STR = json.dumps(TAGS)
 
 
+class TestEtcdAPI(BaseTestCase):
+
+    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("gevent.spawn", autospec=True)
+    def test_create(self, m_spawn, m_etcd_watcher):
+        m_config = Mock(spec=Config)
+        m_hosts_ipset = Mock(spec=IpsetActor)
+        api = EtcdAPI(m_config, m_hosts_ipset)
+        m_etcd_watcher.assert_has_calls([
+            call(m_config, m_hosts_ipset).link(api._on_worker_died),
+            call(m_config, m_hosts_ipset).start(),
+        ])
+        m_spawn.assert_has_calls([
+            call(api._periodically_resync),
+            call(api._periodically_resync).link_exception(api._on_worker_died)
+        ])
+
+    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("gevent.spawn", autospec=True)
+    @patch("gevent.sleep", autospec=True)
+    def test_periodic_resync_mainline(self, m_sleep, m_spawn, m_etcd_watcher):
+        m_configured = Mock(spec=Event)
+        m_etcd_watcher.return_value.configured = m_configured
+        m_config = Mock(spec=Config)
+        m_hosts_ipset = Mock(spec=IpsetActor)
+        api = EtcdAPI(m_config, m_hosts_ipset)
+        m_config.RESYNC_INTERVAL = 10
+        with patch.object(api, "force_resync") as m_force_resync:
+            m_force_resync.side_effect = ExpectedException()
+            self.assertRaises(ExpectedException, api._periodically_resync)
+        m_configured.wait.assert_called_once_with()
+        m_sleep.assert_called_once_with(ANY)
+        sleep_time = m_sleep.call_args[0][0]
+        self.assertTrue(sleep_time >= 10)
+        self.assertTrue(sleep_time <= 12)
+
+    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("gevent.spawn", autospec=True)
+    @patch("gevent.sleep", autospec=True)
+    def test_periodic_resync_disabled(self, m_sleep, m_spawn, m_etcd_watcher):
+        m_etcd_watcher.return_value.configured = Mock(spec=Event)
+        m_config = Mock(spec=Config)
+        m_hosts_ipset = Mock(spec=IpsetActor)
+        api = EtcdAPI(m_config, m_hosts_ipset)
+        m_config.RESYNC_INTERVAL = 0
+        with patch.object(api, "force_resync") as m_force_resync:
+            m_force_resync.side_effect = Exception()
+            api._periodically_resync()
+
+    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("gevent.spawn", autospec=True)
+    def test_force_resync(self, m_spawn, m_etcd_watcher):
+        m_config = Mock(spec=Config)
+        m_hosts_ipset = Mock(spec=IpsetActor)
+        api = EtcdAPI(m_config, m_hosts_ipset)
+        api.force_resync(async=True)
+        self.step_actor(api)
+        self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
+
+
+class ExpectedException(Exception):
+    pass
+
+
 class TestExcdWatcher(BaseTestCase):
 
     def setUp(self):
@@ -47,6 +113,11 @@ class TestExcdWatcher(BaseTestCase):
         self.watcher = _EtcdWatcher(self.m_config, self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
+
+    def test_resync_flag(self):
+        self.watcher.resync_after_current_poll = True
+        self.assertRaises(ResyncRequired, self.watcher._wait_for_etcd_event)
+        self.assertFalse(self.watcher.resync_after_current_poll)
 
     def test_ready_flag_set(self):
         self.dispatch("/calico/v1/Ready", "set", value="true")

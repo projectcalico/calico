@@ -70,6 +70,7 @@ class IpsetManager(ReferenceManager):
         # index-update functions. We apply the updates in _finish_msg_batch().
         # May include non-live tag IDs.
         self._dirty_tags = set()
+        self._force_reprogram = False
 
     def _create(self, tag_id):
         active_ipset = TagIpset(futils.uniquely_shorten(tag_id, 16),
@@ -94,7 +95,9 @@ class IpsetManager(ReferenceManager):
         assert self._is_starting_or_live(tag_id)
         active_ipset = self.objects_by_id[tag_id]
         members = self.ip_owners_by_tag.get(tag_id, {}).keys()
-        active_ipset.replace_members(set(members), async=True)
+        active_ipset.replace_members(set(members),
+                                     force_reprogram=self._force_reprogram,
+                                     async=True)
 
     def _update_dirty_active_ipsets(self):
         """
@@ -146,7 +149,7 @@ class IpsetManager(ReferenceManager):
         for endpoint_id in missing_endpoints:
             self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
             self._maybe_yield()
-
+        self._force_reprogram = True
         _log.info("Tags snapshot applied: %s tags, %s endpoints",
                   len(tags_by_prof_id), len(endpoints_by_id))
 
@@ -423,6 +426,7 @@ class IpsetManager(ReferenceManager):
         super(IpsetManager, self)._finish_msg_batch(batch, results)
         _log.info("Finishing batch, sending updates to any dirty tags..")
         self._update_dirty_active_ipsets()
+        self._force_reprogram = False
         _log.info("Finished sending updates to dirty tags.")
 
 
@@ -499,7 +503,7 @@ class IpsetActor(Actor):
         self.members = set()
         # Members which really are in the ipset.
         self.programmed_members = None
-
+        self._force_reprogram = False
         self.stopped = False
 
     @property
@@ -521,7 +525,7 @@ class IpsetActor(Actor):
         return set([self._ipset.set_name, self._ipset.temp_set_name])
 
     @actor_message()
-    def replace_members(self, members):
+    def replace_members(self, members, force_reprogram=False):
         """
         Replace the members of this ipset with the supplied set.
 
@@ -530,12 +534,15 @@ class IpsetActor(Actor):
         _log.info("Replacing members of ipset %s", self.name)
         self.members.clear()
         self.members.update(members)
+        self._force_reprogram |= force_reprogram
 
     def _finish_msg_batch(self, batch, results):
         _log.debug("IpsetActor._finish_msg_batch() called")
-        if not self.stopped and self.members != self.programmed_members:
+        if not self.stopped and (self._force_reprogram or
+                                 self.members != self.programmed_members):
             _log.debug("IpsetActor not in sync, updating dataplane.")
             self._sync_to_ipset()
+            self._force_reprogram = False
 
     def _sync_to_ipset(self):
         _log.info("Rewriting %s with %d members.", self, len(self.members))
