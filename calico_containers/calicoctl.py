@@ -20,7 +20,7 @@ Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
 Usage:
-  calicoctl node --ip=<IP> [--node-image=<DOCKER_IMAGE_NAME>] [--ip6=<IP6>]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
                            [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
   calicoctl node stop [--force]
   calicoctl node bgppeer add <PEER_IP> as <AS_NUM>
@@ -334,7 +334,7 @@ def module_loaded(module):
     return any(s.startswith(module) for s in open("/proc/modules").readlines())
 
 
-def node(ip, node_image, log_dir, ip6="", as_num=None):
+def node(node_image, log_dir, ip="", ip6="", as_num=None):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -352,6 +352,24 @@ def node(ip, node_image, log_dir, ip6="", as_num=None):
 
     # Print warnings for any known system issues before continuing
     checksystem(fix=False, quit_if_error=False)
+
+    # Get IP address of host, if none was specified
+    if not ip:
+        ips = get_host_ips(4)
+        try:
+            ip = ips.pop()
+        except IndexError:
+            print "Couldn't autodetect a management IP address. Please provide" \
+                  " an IP by rerunning the command with the --ip=<IP_ADDRESS> flag."
+            sys.exit(1)
+        else:
+            print "No IP provided. Using detected IP: %s" % ip
+
+    # Verify that the chosen IP exists on the current host
+    warn_if_unknown_ip(ip, ip6)
+
+    # Warn if this hostname conflicts with an existing host
+    warn_if_hostname_conflict(ip)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -433,6 +451,73 @@ def normalize_version(version):
     http://stackoverflow.com/questions/1714027/version-number-comparison
     """
     return [int(x) for x in re.sub(r'(\.0+)*$','', version).split(".")]
+
+
+def get_host_ips(version):
+    """
+    Gets all IP addresses assigned to this host.
+
+    :param version: Desired version of IP addresses. Can be 4 or 6
+    :return: List of string representations of IP Addresses.
+    """
+    ip = sh.Command._create("ip")
+    ip_addrs = []
+    addrs_raw = ip("-o", "-%d" % version, "addr").stdout.strip().split("\n")
+    for address_output in addrs_raw:
+        # Each 'address_output' represents a line showing the interface ip
+        values = address_output.split()
+        # Ignore the loopback interface
+        if 'lo' not in values:
+            # Extract the IP, ensure its valid
+            ip_addrs.append(str(netaddr.IPNetwork(values[3]).ip))
+    return ip_addrs
+
+
+def warn_if_unknown_ip(ip, ip6):
+    """
+    Prints a warning message if the IP addresses are not assigned to interfaces
+    on the current host.
+
+    :param ip: IPv4 address which should be present on the host.
+    :param ip6: IPv6 address which should be present on the host.
+    :return: None
+    """
+    if ip not in get_host_ips(4):
+        print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
+              " to this host."
+
+    if ip6 and ip6 not in get_host_ips(6):
+        print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
+              " to this host."
+
+def warn_if_hostname_conflict(ip):
+    """
+    Prints a warning message if it seems like an existing host is already running
+    calico using this hostname.
+
+    :param ip: User-provided IP address to start this node with.
+    :return: Nothing
+    """
+    # If there's already a calico-node container on this host, they're probably
+    # just re-running node to update one of the ip addresses, so skip..
+    if len(docker_client.containers(filters={'name': 'calico-node'})) == 0:
+        # Otherwise, check if another host with the same hostname
+        # is already configured
+        try:
+            current_ipv4, _ = client.get_host_ips(hostname)
+        except KeyError:
+            # No other machine has registered configuration under this hostname.
+            # This must be a new host with a unique hostname, which is the
+            # expected behavior.
+            pass
+        else:
+            if current_ipv4 != "" and current_ipv4 != ip:
+                print "WARNING: Hostname '%s' is already in use with IP address " \
+                      "%s. Calico requires each compute host to have a " \
+                      "unique hostname. If this is your first time running " \
+                      "'calicoctl node' on this host, ensure that " \
+                      "another host is not already using the " \
+                      "same hostname."  % (hostname, ip)
 
 def checksystem(fix=False, quit_if_error=False):
     """
@@ -1669,7 +1754,7 @@ if __name__ == '__main__':
             elif arguments["stop"]:
                 node_stop(arguments["--force"])
             else:
-                node(arguments["--ip"],
+                node(ip=arguments["--ip"],
                      node_image=arguments['--node-image'],
                      log_dir=arguments["--log-dir"],
                      ip6=arguments["--ip6"],
