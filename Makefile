@@ -78,7 +78,7 @@ calico_containers/calico-node.tar: caliconode.created
 
 st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
 	dist/calicoctl checksystem --fix
-	nosetests $(ST_TO_RUN) --pdb -sv --nologcapture --with-timer
+	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
 fast-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer -a '!slow'
