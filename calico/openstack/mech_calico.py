@@ -48,7 +48,9 @@ except ImportError:  # Kilo
 
 # Calico imports.
 import etcd
-from calico.openstack.t_etcd import CalicoTransportEtcd, port_etcd_data
+from calico.openstack.t_etcd import (
+    CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags
+)
 
 LOG = log.getLogger(__name__)
 
@@ -746,6 +748,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Next, grab all the security groups from Neutron. Quickly work out
         # whether a given group is missing from etcd, or if etcd has too many
         # groups. Then, add all missing groups and remove all extra ones.
+        # Anything not in either group is added to the 'reconcile' set.
         # This explicit with statement is technically unnecessary, but it helps
         # keep our transaction scope really clear.
         with context.session.begin(subtransactions=True):
@@ -754,10 +757,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         sgids = set(sg['id'] for sg in sgs)
         missing_groups = sgids - profile_ids
         extra_groups = profile_ids - sgids
+        reconcile_groups = profile_ids & sgids
 
         if missing_groups or extra_groups:
-            LOG.info("Missing groups: %s", missing_groups)
-            LOG.info("Extra groups: %s", extra_groups)
+            LOG.warning("Missing groups: %s", missing_groups)
+            LOG.warning("Extra groups: %s", extra_groups)
 
         # For each missing profile, do a quick profile creation. This takes out
         # a db transaction and regains all the rules. Note that this
@@ -786,6 +790,46 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
+
+        # Finally, reconcile the security profiles. This involves looping over
+        # them, grabbing their data, and then comparing that to what Neutron
+        # has.
+        changed_profiles = (p for p in profiles if p.id in reconcile_groups)
+        for profile in changed_profiles:
+            # Get the data from etcd.
+            try:
+                profile = self.transport.get_profile_data(profile)
+            except etcd.EtcdKeyNotFound:
+                # The profile is gone. That's fine.
+                LOG.info("Failed to update deleted profile %s", profile.id)
+                continue
+
+            # Get the data from Neutron.
+            with context.session.begin(subtransactions=True):
+                rules = self.db.get_security_group_rules(
+                    context, filters={'security_group_id': profile.id}
+                )
+
+            # Convert the etcd data into in-memory data structures.
+            try:
+                etcd_rules = json.loads(profile.rules_data)
+                etcd_tags = json.loads(profile.tags_data)
+            except Exception:
+                # If the JSON data is bad, just ignore it. We can't blow up
+                # here because that will trigger a new resync on another node
+                # that will blow *it* up as well. Just tolerate it.
+                LOG.exception("Bad JSON data in key %s", profile.key)
+                continue
+
+            # Do the same conversion for the Neutron profile.
+            neutron_profile = profile_from_neutron_rules(profile.id, rules)
+            neutron_rules = profile_rules(neutron_profile)
+            neutron_tags = profile_tags(neutron_profile)
+
+            if (etcd_rules != neutron_rules) or (etcd_tags != neutron_tags):
+                # Write to etcd.
+                LOG.warning("Resolving error in profile %s", profile.id)
+                self.transport.write_profile_to_etcd(neutron_profile)
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
