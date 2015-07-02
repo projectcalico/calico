@@ -23,6 +23,7 @@
 # document at http://docs.projectcalico.org/en/latest/architecture.html).
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
+import json
 import os
 import eventlet
 
@@ -47,7 +48,7 @@ except ImportError:  # Kilo
 
 # Calico imports.
 import etcd
-from calico.openstack.t_etcd import CalicoTransportEtcd
+from calico.openstack.t_etcd import CalicoTransportEtcd, port_etcd_data
 
 LOG = log.getLogger(__name__)
 
@@ -616,11 +617,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         endpoints = list(self.transport.get_endpoints())
         endpoint_ids = set(ep.id for ep in endpoints)
 
-        # Then, grab all the ports from Neutron. Quickly work out whether
-        # a given port is missing from etcd, or if etcd has too many ports.
-        # Then, add all missing ports and remove all extra ones.
-        # This explicit with statement is technically unnecessary, but it helps
-        # keep our transaction scope really clear.
+        # Then, grab all the ports from Neutron.
+        # TODO(lukasa): We can reduce the amount of data we load from Neutron
+        # here by filtering in the get_ports call.
         with context.session.begin(subtransactions=True):
             ports = dict((port['id'], port)
                          for port in self.db.get_ports(context)
@@ -629,11 +628,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port_ids = set(ports.keys())
         missing_ports = port_ids - endpoint_ids
         extra_ports = endpoint_ids - port_ids
+        changes_ports = set()
 
         # We need to do one more check: are any ports in the wrong place? The
         # way we handle this is to treat this as a port that is both missing
         # and extra, where the old version is extra and the new version is
         # missing.
+        #
+        # While we're here, anything that's not extra, missing, or in the wrong
+        # place should be added to the list of ports to check for changes.
         for endpoint in endpoints:
             try:
                 port = ports[endpoint.id]
@@ -650,10 +653,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 )
                 missing_ports.add(endpoint.id)
                 extra_ports.add(endpoint.id)
+            else:
+                # Port is common to both: add to changes_ports.
+                changes_ports.add(endpoint.id)
 
         if missing_ports or extra_ports:
-            LOG.info("Missing ports: %s", missing_ports)
-            LOG.info("Extra ports: %s", extra_ports)
+            LOG.warning("Missing ports: %s", missing_ports)
+            LOG.warning("Extra ports: %s", extra_ports)
 
         # First, handle the extra ports. Each of them needs to be atomically
         # deleted.
@@ -686,6 +692,44 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 )
                 self.add_port_gateways(port, context)
                 self.add_port_interface_name(port)
+                self.transport.endpoint_created(port)
+
+        # Finally, scan each of the ports in changes_ports. Work out if there
+        # are any differences. If there are, write out to etcd.
+        changed_endpoints = (e for e in endpoints if e.id in changes_ports)
+
+        for endpoint in changed_endpoints:
+            # Get the endpoint data from etcd.
+            try:
+                endpoint = self.transport.get_endpoint_data(endpoint)
+            except etcd.EtcdKeyNotFound:
+                # The endpoint is gone. That's fine.
+                LOG.info("Failed to update deleted endpoint %s", endpoint.id)
+                continue
+
+            with context.session.begin(subtransactions=True):
+                port = self.db.get_port(endpoint.id)
+
+            # Get the data for both.
+            try:
+                etcd_data = json.loads(endpoint.data)
+            except Exception:
+                # If the JSON data is bad, just ignore it. We can't blow up
+                # here because that will trigger a new resync on another node
+                # that will blow *it* up as well. Just tolerate it.
+                LOG.exception("Bad JSON data in key %s", endpoint.key)
+                continue
+
+            self.add_port_gateways(port, context)
+            self.add_port_interface_name(port)
+            port['security_groups'] = self.get_security_groups_for_port(
+                context, port
+            )
+            neutron_data = port_etcd_data(port)
+
+            if etcd_data != neutron_data:
+                # Write to etcd.
+                LOG.warning("Resolving error in port %s", endpoint.id)
                 self.transport.endpoint_created(port)
 
     def resync_profiles(self, context):
