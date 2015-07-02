@@ -1,5 +1,6 @@
 sh==1.11
+netaddr==0.7.15
+six==1.9.0
 flask
 gunicorn
 subprocess32
-# netaddr and python-etcd is installed via apt in the Dockerfile.
