@@ -73,7 +73,14 @@ Endpoint = namedtuple(
     'Endpoint', ['id', 'key', 'modified_index', 'host', 'data']
 )
 Profile = namedtuple(
-    'Profile', ['id', 'tags_modified_index', 'rules_modified_index']
+    'Profile',
+    [
+        'id',
+        'tags_modified_index',
+        'rules_modified_index',
+        'tags_data',
+        'rules_data',
+    ]
 )
 
 
@@ -316,6 +323,32 @@ class CalicoTransportEtcd(object):
             )
 
         self._cleanup_workload_tree(endpoint.key)
+
+    @_handling_etcd_exceptions
+    def get_profile_data(self, profile):
+        """
+        Get data for a profile out of etcd. This should be used on profiles
+        returned from functions like ``get_profiles``.
+
+        :param profile: A ``Profile`` class.
+        :return: A ``Profile`` class with tags and rules data present.
+        """
+        LOG.debug("Getting profile %s", profile.id)
+
+        tags_result = self.client.read(
+            key_for_profile_tags(profile.id), timeout=5
+        )
+        rules_result = self.client.read(
+            key_for_profile_rules(profile.id), timeout=5
+        )
+
+        return Profile(
+            profile.id,
+            tags_result.modifiedIndex,
+            rules_result.modifiedIndex,
+            tags_result.value,
+            rules_result.value,
+        )
 
     @_handling_etcd_exceptions
     def get_profiles(self):
