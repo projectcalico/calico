@@ -23,10 +23,17 @@ grep -Fxvf  /tmp/base.txt <(dpkg -l | grep ^ii | sed 's_  _\t_g' | cut \
 LC_ALL=C.UTF-8 LANG=C.UTF-8 add-apt-repository -y ppa:cz.nic-labs/bird
 apt-get update
 
-# Install felix and bird
+# Install packages that should not be removed in the cleanup processing.
+# - bird and bird6
+# - packages required by felix
+# -
 apt-get install -qy \
         bird \
-        bird6
+        bird6 \
+        iptables \
+        ipset \
+        conntrack \
+        net-tools
 
 # Copy patched BIRD daemon with tunnel support.
 curl -L https://www.dropbox.com/s/xjhfckzse25x554/bird-6af4e30d3fccb0c6bd184e9168294c807e1e6d68?dl=1 -o /usr/sbin/bird && \

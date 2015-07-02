@@ -167,7 +167,6 @@ class DockerHost(object):
         Exit the context of this host.
         :return: None
         """
-        import pdb; pdb.set_trace()
         self.cleanup()
 
     def cleanup(self):

@@ -6,13 +6,13 @@ dpkg -l | grep ^ii | sed 's_  _\t_g' | cut -f 2 >/tmp/required.txt
 
 apt-get install -qy \
         python-pip=1.5.4-1 \
-        python-dev \
         curl \
         git \
+        python-dev \
         libffi-dev \
         libssl-dev
 
-# Install Felix from a release.
+# Install Felix and python-etcd from the Metaswitch github repos.
 pip install git+https://github.com/Metaswitch/python-etcd.git
 pip install git+https://github.com/Metaswitch/calico.git@0.25
 

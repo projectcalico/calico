@@ -35,7 +35,6 @@ ADD /image/system_services.sh /build/system_services.sh
 RUN	/build/system_services.sh
 ADD /image/install.sh /build/install.sh
 RUN /build/install.sh
-RUN apt-get install -qy iptables
 ADD /image/cleanup.sh /build/cleanup.sh
 RUN	/build/cleanup.sh
 
