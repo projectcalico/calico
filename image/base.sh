@@ -33,6 +33,7 @@ apt-get install -qy \
         iptables \
         ipset \
         conntrack \
+        python-pip=1.5.4-1 \
         net-tools
 
 # Copy patched BIRD daemon with tunnel support.
