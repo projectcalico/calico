@@ -103,13 +103,14 @@ from requests.exceptions import ConnectionError
 
 from urllib3.exceptions import MaxRetryError
 
+
 from pycalico import netns
 from pycalico import diags
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
-                               ETCD_AUTHORITY_DEFAULT)
-from calico_containers.pycalico.datastore_errors import DataStoreError, \
+                                ETCD_AUTHORITY_DEFAULT)
+from pycalico.datastore_errors import DataStoreError, \
     ProfileNotInEndpoint, ProfileAlreadyInEndpoint, MultipleEndpointsMatch
-from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
+from pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
     Rule
 from pycalico.ipam import IPAMClient
 

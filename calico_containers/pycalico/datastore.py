@@ -19,9 +19,9 @@ from etcd import EtcdKeyNotFound, EtcdException
 
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 
-from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
+from pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
     Endpoint, Profile, Rule
-from calico_containers.pycalico.datastore_errors import DataStoreError, \
+from pycalico.datastore_errors import DataStoreError, \
     ProfileNotInEndpoint, ProfileAlreadyInEndpoint, MultipleEndpointsMatch
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"

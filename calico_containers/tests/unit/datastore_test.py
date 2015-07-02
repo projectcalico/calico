@@ -22,11 +22,11 @@ from netaddr import IPNetwork, IPAddress
 from nose.tools import *
 from mock import patch, Mock, call
 
-from calico_containers.pycalico.datastore import (DatastoreClient,
+from pycalico.datastore import (DatastoreClient,
                                                   CALICO_V_PATH)
-from calico_containers.pycalico.datastore_errors import DataStoreError, ProfileNotInEndpoint, ProfileAlreadyInEndpoint, \
+from pycalico.datastore_errors import DataStoreError, ProfileNotInEndpoint, ProfileAlreadyInEndpoint, \
     MultipleEndpointsMatch
-from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
+from pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
     Endpoint, Profile, Rule
 
 TEST_HOST = "TEST_HOST"
@@ -376,8 +376,8 @@ class TestIPPool(unittest.TestCase):
 
 class TestDatastoreClient(unittest.TestCase):
 
-    @patch("calico_containers.pycalico.datastore.os.getenv", autospec=True)
-    @patch("calico_containers.pycalico.datastore.etcd.Client", autospec=True)
+    @patch("pycalico.datastore.os.getenv", autospec=True)
+    @patch("pycalico.datastore.etcd.Client", autospec=True)
     def setUp(self, m_etcd_client, m_getenv):
         m_getenv.return_value = "127.0.0.2:4002"
         self.etcd_client = Mock(spec=EtcdClient)
@@ -540,8 +540,8 @@ class TestDatastoreClient(unittest.TestCase):
             TEST_PROFILE_PATH + "rules",
             profile.rules.to_json())
 
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
     def test_append_profiles_to_endpoint(self, m_update, m_get):
         """
         Test append_profiles_to_endpoint() to check profile_ids are updated.
@@ -567,8 +567,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.append_profiles_to_endpoint(["PROFZ", "PROF5"])
         assert_true(m_update.called)
 
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
     def test_append_profiles_to_endpoint_duplicate(self, m_update, m_get):
         """
         Test append_profiles_to_endpoint() with a duplicate profile.
@@ -587,8 +587,8 @@ class TestDatastoreClient(unittest.TestCase):
                           ["PROFZ", "PROFA"])
         assert_false(m_update.called)
 
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
     def test_set_profiles_on_endpoint(self, m_update, m_get):
         """
         Test set_profiles_on_endpoint() to check profile_ids are updated.
@@ -612,8 +612,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.set_profiles_on_endpoint(["PROFZ", "PROF5"])
         assert_true(m_update.called)
 
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
     def test_remove_profiles_from_endpoint(self, m_update, m_get):
         """
         Test remove_profiles_from_endpoint() to check profile_ids are updated.
@@ -637,8 +637,8 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.remove_profiles_from_endpoint(["PROF1", "PROF2"])
         assert_true(m_update.called)
 
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
-    @patch("calico_containers.pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.get_endpoint", autospec=True)
+    @patch("pycalico.datastore.DatastoreClient.update_endpoint", autospec=True)
     def test_remove_profiles_to_endpoint_missing(self, m_update, m_get):
         """
         Test remove_profiles_from_endpoint() with an invalid profile.

@@ -15,7 +15,7 @@ import unittest
 from subprocess import CalledProcessError
 
 from test_base import TestBase
-from calico_containers.tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost
 
 
 class TestAddIp(TestBase):

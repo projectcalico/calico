@@ -23,7 +23,7 @@ from shutil import copytree
 
 import sh
 
-from datastore import DatastoreClient
+from pycalico.datastore import DatastoreClient
 
 
 def save_diags(log_dir, upload=False):

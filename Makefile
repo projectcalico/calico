@@ -36,36 +36,32 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	# `user` account in the container to write to it.
 	-docker run -v `pwd`/calico_containers:/code/calico_containers \
 	 -v `pwd`/dist:/code/dist --rm \
-	 -e PYTHONPATH=/code/calico_containers \
 	 calico/build \
 	 pyinstaller calico_containers/calicoctl.py -ayF
 
 	# mount calico_containers and dist under /code work directory.  Don't use /code
 	# as the mountpoint directly since the host permissions may not allow the
 	# `user` account in the container to write to it.
-	-docker run -v `pwd`/calico_containers:/code/calico_containers \
-	 -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
-	 docopt-completion --manual-bash ./calicoctl
+	-docker run -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
 
 test: ut st
 
 ut: calicobuild.created
-	docker run --rm -v `pwd`/calico_containers:/code/calico_containers \
-	-v `pwd`/nose.cfg:/code/nose.cfg \
+	docker run --rm -v `pwd`/calico_containers:/code \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	nosetests calico_containers/tests/unit -c nose.cfg'
+	nosetests tests/unit -c nose.cfg'
 
 ut-circle: calicobuild.created
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
-	-v `pwd`:/code \
+	-v `pwd`/calico_containers:/code \
 	-v $(CIRCLE_TEST_REPORTS):/circle_output \
 	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	nosetests calico_containers/tests/unit -c nose.cfg \
+	nosetests tests/unit -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
