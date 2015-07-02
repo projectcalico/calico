@@ -779,9 +779,7 @@ def profile_rule_show(name, human_readable=False):
         for i, rule in enumerate(profile.rules.outbound_rules, start=1):
             print " %3d %s" % (i, rule.pprint())
     else:
-        json.dump(profile.rules._asdict(),
-                  sys.stdout,
-                  indent=2)
+        print profile.rules.to_json(indent=2)
         print ""
 
 

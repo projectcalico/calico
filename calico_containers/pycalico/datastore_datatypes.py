@@ -31,10 +31,13 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
     policy.
     """
 
-    def to_json(self):
+    def to_json(self, indent=None):
         """
         Convert the Rules object to a JSON string.
 
+        :param indent: Integer representing the level of indent from the
+        returned json string. None = no indent, 0 = only newlines. Recommend
+        using 1 for human-readable strings.
         :return:  A JSON string representation of this object.
         """
         json_dict = self._asdict()
@@ -42,7 +45,7 @@ class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
         json_dict["inbound_rules"] = [rule.to_json_dict() for rule in rules]
         rules = json_dict["outbound_rules"]
         json_dict["outbound_rules"] = [rule.to_json_dict() for rule in rules]
-        return json.dumps(json_dict)
+        return json.dumps(json_dict, indent=indent)
 
     @classmethod
     def from_json(cls, json_str):
