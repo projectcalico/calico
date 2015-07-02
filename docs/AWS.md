@@ -111,7 +111,7 @@ Run the following commands to SSH into each node and set up Calico:
 ssh -i mykey.pem core@<instance IP>
 
 # Download calicoctl and make it executable:
-wget http://projectcalico.org/latest/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:

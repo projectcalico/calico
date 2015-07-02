@@ -24,9 +24,9 @@ Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
  - If you don't run the proxy, you can manually set the etcd location using the `--etcd=` option on `calicoctl` commands.  Type `calicoctl help` for details.
  
 
-Get the calico binary onto each node. It's usually safe to just grab the latest [beta](http://projectcalico.org/latest/calicoctl):
+Get the calico binary onto each node:
 
-    wget http://projectcalico.org/latest/calicoctl
+    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
 	chmod +x calicoctl
 
 Note that projectcalico.org is not an HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  e.g.
