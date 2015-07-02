@@ -355,7 +355,7 @@ def node(node_image, log_dir, ip="", ip6="", as_num=None):
 
     # Get IP address of host, if none was specified
     if not ip:
-        ips = get_host_ips()
+        ips = get_host_ips(4)
         try:
             ip = ips.pop()
         except IndexError:
@@ -453,56 +453,25 @@ def normalize_version(version):
     return [int(x) for x in re.sub(r'(\.0+)*$','', version).split(".")]
 
 
-def get_host_ips():
+def get_host_ips(version):
     """
-    Gets all IPv4 addresses assigned to this host.
+    Gets all IP addresses assigned to this host.
 
+    :param version: Desired version of IP addresses. Can be 4 or 6
     :return: List of string representations of IP Addresses.
     """
     ip = sh.Command._create("ip")
-    route_output = ip("-o", "-4", "addr").stdout.strip()
-    routes = route_output.split("\n")
     ip_addrs = []
-    for route in routes:
-        values = route.split()
+    addrs_raw = ip("-o", "-%d" % version, "addr").stdout.strip().split("\n")
+    for address_output in addrs_raw:
+        # Each 'address_output' represents a line showing the interface ip
+        values = address_output.split()
         # Ignore the loopback interface
         if 'lo' not in values:
-            # Third index is the ip address (with subnet mask)
-            ip_addr = values[3]
-            try:
-                # Make sure it is a valid IP address
-                ip_addr = str(netaddr.IPNetwork(ip_addr).ip)
-            except netaddr.AddrFormatError:
-                pass
-            else:
-                ip_addrs.append(ip_addr)
+            # Extract the IP, ensure its valid
+            ip_addrs.append(str(netaddr.IPNetwork(values[3]).ip))
     return ip_addrs
 
-def get_host_ip6s():
-    """
-    Gets all IPv6 addresses assigned to this host.
-
-    :return: List of string representations of IPv6 Addresses.
-    """
-    # Use the IP command since calico-docker has it as a dependency
-    ip = sh.Command._create("ip")
-    route_output = ip("-o", "-6", "addr").stdout.strip()
-    routes = route_output.split("\n")
-    ip_addrs = []
-    for route in routes:
-        values = route.split()
-        # Ignore the loopback interface
-        if 'lo' not in values:
-            # Third index is the ip address (with subnet mask)
-            ip_addr = values[3]
-            try:
-                # Make sure it is a valid IP address
-                ip_addr = str(netaddr.IPNetwork(ip_addr).ip)
-            except netaddr.AddrFormatError:
-                pass
-            else:
-                ip_addrs.append(ip_addr)
-    return ip_addrs
 
 def warn_if_unknown_ip(ip, ip6):
     """
@@ -513,11 +482,11 @@ def warn_if_unknown_ip(ip, ip6):
     :param ip6: IPv6 address which should be present on the host.
     :return: None
     """
-    if ip not in get_host_ips():
+    if ip not in get_host_ips(4):
         print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
               " to this host."
 
-    if ip6 and ip6 not in get_host_ip6s():
+    if ip6 and ip6 not in get_host_ips(6):
         print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
               " to this host."
 
@@ -535,7 +504,7 @@ def warn_if_hostname_conflict(ip):
         # Otherwise, check if another host with the same hostname
         # is already configured
         try:
-            current_ipv4, current_ipv6 = client.get_host_ips(hostname)
+            current_ipv4, _ = client.get_host_ips(hostname)
         except KeyError:
             # No other machine has registered configuration under this hostname.
             # This must be a new host with a unique hostname, which is the
@@ -543,10 +512,10 @@ def warn_if_hostname_conflict(ip):
             pass
         else:
             if current_ipv4 != "" and current_ipv4 != ip:
-                print "WARNING: Hostname %s is already in use with IP address " \
+                print "WARNING: Hostname '%s' is already in use with IP address " \
                       "%s. Calico requires each compute host to have a " \
-                      "unique hostname. If this is your first time running" \
-                      "'calicoctl node' on this host, check to make sure" \
+                      "unique hostname. If this is your first time running " \
+                      "'calicoctl node' on this host, ensure that " \
                       "another host is not already using the " \
                       "same hostname."  % (hostname, ip)
 
