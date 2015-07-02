@@ -732,7 +732,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if etcd_data != neutron_data:
                 # Write to etcd.
                 LOG.warning("Resolving error in port %s", endpoint.id)
-                self.transport.endpoint_created(port)
+                try:
+                    self.transport.write_port_to_etcd(
+                        port, prev_index=endpoint.modified_index
+                    )
+                except ValueError:
+                    # If someone wrote to etcd they probably have more recent
+                    # data than us, let it go.
+                    LOG.info("Atomic CAS failed, no action.")
+                    continue
 
     def resync_profiles(self, context):
         """
@@ -829,7 +837,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if (etcd_rules != neutron_rules) or (etcd_tags != neutron_tags):
                 # Write to etcd.
                 LOG.warning("Resolving error in profile %s", profile.id)
-                self.transport.write_profile_to_etcd(neutron_profile)
+
+                try:
+                    self.transport.write_profile_to_etcd(
+                        neutron_profile,
+                        prev_rules_index=neutron_profile.rules_modified_index,
+                        prev_tags_index=neutron_profile.tags_modified_index,
+                    )
+                except ValueError:
+                    # If someone wrote to etcd they probably have more recent
+                    # data than us, let it go.
+                    LOG.info("Atomic CAS failed, no action.")
+                    continue
+
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]

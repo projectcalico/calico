@@ -165,18 +165,23 @@ class CalicoTransportEtcd(object):
         return self.elector.master()
 
     @_handling_etcd_exceptions
-    def write_profile_to_etcd(self, profile):
+    def write_profile_to_etcd(self,
+                              profile,
+                              prev_rules_index=None,
+                              prev_tags_index=None):
         """
         Write a single security profile into etcd.
         """
         LOG.debug("Writing profile %s", profile)
         self.client.write(
             key_for_profile_rules(profile.id),
-            json.dumps(profile_rules(profile))
+            json.dumps(profile_rules(profile)),
+            prevIndex=prev_rules_index,
         )
         self.client.write(
             key_for_profile_tags(profile.id),
-            json.dumps(profile_tags(profile))
+            json.dumps(profile_tags(profile)),
+            prevIndex=prev_tags_index,
         )
 
     @_handling_etcd_exceptions
@@ -205,13 +210,15 @@ class CalicoTransportEtcd(object):
         self._cleanup_workload_tree(key)
 
     @_handling_etcd_exceptions
-    def write_port_to_etcd(self, port):
+    def write_port_to_etcd(self, port, prev_index=None):
         """
         Writes a given port dictionary to etcd.
         """
         LOG.info("Write port %s to etcd", port)
         data = port_etcd_data(port)
-        self.client.write(port_etcd_key(port), json.dumps(data))
+        self.client.write(
+            port_etcd_key(port), json.dumps(data), prevIndex=prevIndex
+        )
 
     @_handling_etcd_exceptions
     def provide_felix_config(self):
