@@ -110,7 +110,7 @@ The full list of parameters which can be set is as follows.
 |                        |                           | chains and ipsets.   Before the first cleanup, felix operates in "graceful restart" mode, |
 |                        |                           | during which it preserves any pre-existing chains and ipsets.                             |
 |                        |                           |                                                                                           |
-|                        |                           | In a large deployment you may with to increase thise value to give felix more time to     |
+|                        |                           | In a large deployment you may want to increase this value to give felix more time to      |
 |                        |                           | load the initial snapshot from etcd before cleaning up.                                   |
 +------------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | PeriodicResyncInterval | 3600                      | Period, in seconds, at which felix does a full resync with etcd and reprograms            |
