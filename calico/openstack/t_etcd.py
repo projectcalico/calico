@@ -69,7 +69,9 @@ LOG = log.getLogger(__name__)
 
 # Objects for lightly wrapping etcd return values for use in the mechanism
 # driver.
-Endpoint = namedtuple('Endpoint', ['id', 'key', 'modified_index', 'host'])
+Endpoint = namedtuple(
+    'Endpoint', ['id', 'key', 'modified_index', 'host', 'data']
+)
 Profile = namedtuple(
     'Profile', ['id', 'tags_modified_index', 'rules_modified_index']
 )
@@ -235,6 +237,27 @@ class CalicoTransportEtcd(object):
             self.client.write(READY_KEY, 'true')
 
     @_handling_etcd_exceptions
+    def get_endpoint_data(self, endpoint):
+        """
+        Get data for an endpoint out of etcd. This should be used on endpoints
+        returned from functions like ``get_endpoints``.
+
+        :param endpoint: An ``Endpoint`` class.
+        :return: A ``Endpoint`` class with ``data`` not None.
+        """
+        LOG.debug("Getting endpoint %s", endpoint.id)
+
+        result = self.client.read(endpoint.key, timeout=5)
+
+        return Endpoint(
+            endpoint.id,
+            endpoint.key,
+            result.modifiedIndex,
+            endpoint.host,
+            result.value,
+        )
+
+    @_handling_etcd_exceptions
     def get_endpoints(self):
         """
         Gets information about every endpoint in etcd. Returns a generator of
@@ -260,7 +283,9 @@ class CalicoTransportEtcd(object):
             host = match.group('hostname')
 
             LOG.debug("Found endpoint %s", endpoint_id)
-            yield Endpoint(endpoint_id, node.key, node.modifiedIndex, host)
+            yield Endpoint(
+                endpoint_id, node.key, node.modifiedIndex, host, None
+            )
 
     @_handling_etcd_exceptions
     def atomic_delete_endpoint(self, endpoint):
