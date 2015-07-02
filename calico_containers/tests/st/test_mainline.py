@@ -15,7 +15,7 @@ import unittest
 import uuid
 
 from test_base import TestBase
-from calico_containers.tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost
 
 
 class TestMainline(TestBase):

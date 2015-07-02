@@ -1,12 +1,12 @@
 import os
 from functools import partial
 from subprocess import check_output, CalledProcessError, STDOUT
-from calico_containers.tests.st.utils.exceptions import CommandExecError
+from tests.st.utils.exceptions import CommandExecError
 
 from sh import docker
 
-from calico_containers.tests.st.utils import utils
-from calico_containers.tests.st.utils.utils import retry_until_success, get_ip
+from tests.st.utils import utils
+from tests.st.utils.utils import retry_until_success, get_ip
 from workload import Workload
 from network import DockerNetwork
 

@@ -17,8 +17,8 @@ import uuid
 from netaddr import IPAddress
 
 from utils import retry_until_success
-from calico_containers.tests.st.utils.network import DockerNetwork
-from calico_containers.tests.st.utils.exceptions import CommandExecError
+from tests.st.utils.network import DockerNetwork
+from tests.st.utils.exceptions import CommandExecError
 
 NET_NONE = "none"
 

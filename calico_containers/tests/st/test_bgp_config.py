@@ -17,9 +17,9 @@ import uuid
 from nose.plugins.attrib import attr
 
 from test_base import TestBase
-from calico_containers.tests.st.utils.docker_host import (DockerHost,
+from tests.st.utils.docker_host import (DockerHost,
                                                           CommandExecError)
-from calico_containers.tests.st.utils.utils import retry_until_success
+from tests.st.utils.utils import retry_until_success
 from functools import partial
 
 class TestBGPConfig(TestBase):

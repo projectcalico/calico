@@ -14,10 +14,10 @@
 from functools import partial
 from subprocess import CalledProcessError
 
-from calico_containers.tests.st.utils.utils import retry_until_success
-from calico_containers.tests.st.utils.workload import NET_NONE
+from tests.st.utils.utils import retry_until_success
+from tests.st.utils.workload import NET_NONE
 from test_base import TestBase
-from calico_containers.tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost
 
 
 class TestAddContainer(TestBase):
