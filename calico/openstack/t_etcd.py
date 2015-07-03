@@ -398,7 +398,13 @@ class CalicoTransportEtcd(object):
                 rules_modified = rules_indices.pop(profile_id)
 
                 LOG.debug("Found profile id %s", profile_id)
-                yield Profile(profile_id, tag_modified, rules_modified)
+                yield Profile(
+                    profile_id,
+                    tag_modified,
+                    rules_modified,
+                    None,
+                    None,
+                )
 
         # Quickly confirm that the tag and rule indices are empty (they should
         # be).
