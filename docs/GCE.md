@@ -81,7 +81,7 @@ gcloud compute ssh <instance name>
 On each node, run these commands to set up Calico:
 ```
 # Download calicoctl and make it executable:
-wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.7/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
 chmod +x ./calicoctl
 
 # Grab our private IP from the metadata service:
