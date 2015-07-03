@@ -217,7 +217,7 @@ class CalicoTransportEtcd(object):
         LOG.info("Write port %s to etcd", port)
         data = port_etcd_data(port)
         self.client.write(
-            port_etcd_key(port), json.dumps(data), prevIndex=prevIndex
+            port_etcd_key(port), json.dumps(data), prevIndex=prev_index,
         )
 
     @_handling_etcd_exceptions
