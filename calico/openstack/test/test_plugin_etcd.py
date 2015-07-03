@@ -52,7 +52,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 print "etcd reset"
                 self.assert_etcd_writes_deletes = False
 
-    def check_etcd_write(self, key, value):
+    def check_etcd_write(self, key, value, **kwargs):
         """Print each etcd write as it occurs, and save into the accumulated etcd
         database.
         """
@@ -564,6 +564,31 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678',
             '/calico/v1/host/felix-host-1/workload/openstack/instance-2/endpoint/FACEBEEF-1234-5678'
         ]))
+
+        # Change a small amount of information about the port. Expect a resync
+        # to fix it up.
+        old_ips = self.osdb_ports[0]['fixed_ips']
+        self.osdb_ports[0]['fixed_ips'] = [
+            {'subnet_id': '10.65.0/24',
+             'ip_address': '10.65.0.188'}
+        ]
+        print "\nResync with edited data\n"
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        expected_writes = {
+            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
+                {"name": "tapHELLO-1234-",
+                 "profile_ids": ["SG-1"],
+                 "mac": "00:11:22:33:44:66",
+                 "ipv6_nets": [],
+                 "state": "active",
+                 "ipv4_gateway": "10.65.0.1",
+                 "ipv4_nets": ["10.65.0.188/32"]},
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Reset the state for safety.
+        self.osdb_ports[0]['fixed_ips'] = old_ips
 
     def test_noop_entry_points(self):
         """Call the mechanism driver entry points that are currently
