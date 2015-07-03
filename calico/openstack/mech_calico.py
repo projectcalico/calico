@@ -710,7 +710,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 continue
 
             with context.session.begin(subtransactions=True):
-                port = self.db.get_port(endpoint.id)
+                port = self.db.get_port(context, endpoint.id)
 
             # Get the data for both.
             try:
