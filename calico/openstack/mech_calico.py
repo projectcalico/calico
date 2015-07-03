@@ -774,26 +774,53 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("Missing groups: %s", missing_groups)
             LOG.warning("Extra groups: %s", extra_groups)
 
-        # For each missing profile, do a quick profile creation. This takes out
-        # a db transaction and regains all the rules. Note that this
-        # transaction is potentially held for quite a while.
+        # First, resync the missing security profiles.
+        self._resync_missing_profiles(context, missing_groups)
+
+        # Next, handle the extra profiles. Each of them needs to be atomically
+        # deleted.
+        profiles_to_delete = (p for p in profiles if p.id in extra_groups)
+        self._resync_additional_profiles(profiles_to_delete)
+
+        # Finally, reconcile the security profiles. This involves looping over
+        # them, grabbing their data, and then comparing that to what Neutron
+        # has.
+        profiles_to_reconcile = (
+            p for p in profiles if p.id in reconcile_groups
+        )
+        self._resync_changed_profiles(context, profiles_to_reconcile)
+
+    def _resync_missing_profiles(self, context, missing_group_ids):
+        """
+        For each missing profile, do a quick profile creation. This takes out a
+        db transaction and regains all the rules. Note that this transaction is
+        potentially held for quite a while.
+
+        :param context: A Neutron DB context.
+        :param missing_group_ids: The IDs of the missing security groups.
+        :returns: Nothing.
+        """
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
-                context, filters={'security_group_id': missing_groups}
+                context, filters={'security_group_id': missing_group_ids}
             )
 
             profiles_to_write = (
                 profile_from_neutron_rules(sgid, rules)
-                for sgid in missing_groups
+                for sgid in missing_group_ids
             )
 
             for profile in profiles_to_write:
                 self.transport.write_profile_to_etcd(profile)
 
-        # Next, handle the extra profiles. Each of them needs to be atomically
-        # deleted.
-        profiles_to_delete = (p for p in profiles if p.id in extra_groups)
+    def _resync_additional_profiles(self, profiles_to_delete):
+        """
+        Atomically delete profiles that are in etcd, but shouldn't be.
 
+        :param missing_group_ids: An iterable of profile objects to be
+            deleted.
+        :returns: Nothing.
+        """
         for profile in profiles_to_delete:
             try:
                 self.transport.atomic_delete_profile(profile)
@@ -802,12 +829,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # means the profile was created or updated elsewhere.
                 continue
 
-        # Finally, reconcile the security profiles. This involves looping over
-        # them, grabbing their data, and then comparing that to what Neutron
-        # has.
-        profiles_to_reconcile = (
-            p for p in profiles if p.id in reconcile_groups
-        )
+    def _resync_changed_profiles(self, context, profiles_to_reconcile):
+        """
+        Reconcile all changed profiles by checking whether Neutron and etcd
+        agree.
+        """
         for etcd_profile in profiles_to_reconcile:
             # Get the data from etcd.
             try:
@@ -825,25 +851,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     context, filters={'security_group_id': etcd_profile.id}
                 )
 
-            # Convert the etcd data into in-memory data structures.
-            try:
-                etcd_rules = json.loads(etcd_profile.rules_data)
-                etcd_tags = json.loads(etcd_profile.tags_data)
-            except (ValueError, TypeError):
-                # If the JSON data is bad, just ignore it. We can't blow up
-                # here because that will trigger a new resync on another node
-                # that will blow *it* up as well. Just tolerate it.
-                LOG.exception("Bad JSON data in key %s", etcd_profile.key)
-                continue
-
             # Do the same conversion for the Neutron profile.
             neutron_profile = profile_from_neutron_rules(
                 etcd_profile.id, rules
             )
-            neutron_rules = profile_rules(neutron_profile)
-            neutron_tags = profile_tags(neutron_profile)
 
-            if (etcd_rules != neutron_rules) or (etcd_tags != neutron_tags):
+            if not rules_match(etcd_profile, neutron_profile):
                 # Write to etcd.
                 LOG.warning("Resolving error in profile %s", etcd_profile.id)
 
@@ -976,3 +989,32 @@ def port_bound(port):
     Returns true if the port is bound.
     """
     return port['binding:vif_type'] != 'unbound'
+
+
+def rules_match(etcd_profile, neutron_profile):
+    """
+    Given a set of Neutron security group rules and a Profile read from etcd,
+    compare if they're the same.
+
+    :param etcd_profile: A Profile object from etcd.
+    :param neutron_profile: A SecurityProfile object from Neutron.
+    :returns: True if the rules are identical, False otherwise.
+    """
+    # Convert the etcd data into in-memory data structures.
+    try:
+        etcd_rules = json.loads(etcd_profile.rules_data)
+        etcd_tags = json.loads(etcd_profile.tags_data)
+    except (ValueError, TypeError):
+        # If the JSON data is bad, log it then treat this as not matching
+        # Neutron.
+        LOG.exception("Bad JSON data in key %s", etcd_profile.key)
+        return False
+
+    # Do the same conversion for the Neutron profile.
+    neutron_group_rules = profile_rules(neutron_profile)
+    neutron_group_tags = profile_tags(neutron_profile)
+
+    return (
+        (etcd_rules == neutron_group_rules) and
+        (etcd_tags == neutron_group_tags)
+    )
