@@ -295,14 +295,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
 
             # Next, fill out other information we need on the port.
-            port['fixed_ips'] = self.get_fixed_ips_for_port(
+            port = self.add_extra_port_information(
                 context._plugin_context, port
             )
-            port['security_groups'] = self.get_security_groups_for_port(
-                context._plugin_context, port
-            )
-            self.add_port_gateways(port, context._plugin_context)
-            self.add_port_interface_name(port)
 
             # Next, we need to work out what security profiles apply to this
             # port and grab information about it.
@@ -444,14 +439,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # a separate port update event occur?
         LOG.info("Port becoming bound: create.")
         port = self.db.get_port(context._plugin_context, port['id'])
-        port['fixed_ips'] = self.get_fixed_ips_for_port(
-            context._plugin_context, port
-        )
-        port['security_groups'] = self.get_security_groups_for_port(
-            context._plugin_context, port
-        )
-        self.add_port_gateways(port, context._plugin_context)
-        self.add_port_interface_name(port)
+        port = self.add_extra_port_information(context._plugin_context, port)
         profiles = self.get_security_profiles(
             context._plugin_context, port
         )
@@ -499,14 +487,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             with context._plugin_context.session.begin(subtransactions=True):
                 port = self.db.get_port(context._plugin_context, port['id'])
-                port['fixed_ips'] = self.get_fixed_ips_for_port(
+                port = self.add_extra_port_information(
                     context._plugin_context, port
                 )
-                port['security_groups'] = self.get_security_groups_for_port(
-                    context._plugin_context, port
-                )
-                self.add_port_gateways(port, context._plugin_context)
-                self.add_port_interface_name(port)
                 profiles = self.get_security_profiles(
                     context._plugin_context, port
                 )
@@ -693,14 +676,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for port in missing_ports:
                 # Fill out other information we need on the port and write to
                 # etcd.
-                port['fixed_ips'] = self.get_fixed_ips_for_port(
-                    context, port
-                )
-                port['security_groups'] = self.get_security_groups_for_port(
-                    context, port
-                )
-                self.add_port_gateways(port, context)
-                self.add_port_interface_name(port)
+                port = self.add_extra_port_information(context, port)
                 self.transport.endpoint_created(port)
 
     def _resync_extra_ports(self, ports_to_delete):
@@ -751,14 +727,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.exception("Bad JSON data in key %s", endpoint.key)
                 continue
 
-            port['fixed_ips'] = self.get_fixed_ips_for_port(
-                context, port
-            )
-            port['security_groups'] = self.get_security_groups_for_port(
-                context, port
-            )
-            self.add_port_gateways(port, context)
-            self.add_port_interface_name(port)
+            port = self.add_extra_port_information(context, port)
             neutron_data = port_etcd_data(port)
 
             if etcd_data != neutron_data:
@@ -948,6 +917,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 port_id=port['id']
             )
         ]
+
+    def add_extra_port_information(self, context, port):
+        """
+        Gets extra information for a port that is needed before sending it to
+        etcd.
+        """
+        port['fixed_ips'] = self.get_fixed_ips_for_port(
+            context, port
+        )
+        port['security_groups'] = self.get_security_groups_for_port(
+            context, port
+        )
+        self.add_port_gateways(port, context)
+        self.add_port_interface_name(port)
+        return port
 
 
 # This section monkeypatches the AgentNotifierApi.security_groups_rule_updated
