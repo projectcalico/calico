@@ -803,53 +803,56 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # them, grabbing their data, and then comparing that to what Neutron
         # has.
         changed_profiles = (p for p in profiles if p.id in reconcile_groups)
-        for profile in changed_profiles:
+        for etcd_profile in changed_profiles:
             # Get the data from etcd.
             try:
-                profile = self.transport.get_profile_data(profile)
+                etcd_profile = self.transport.get_profile_data(etcd_profile)
             except etcd.EtcdKeyNotFound:
                 # The profile is gone. That's fine.
-                LOG.info("Failed to update deleted profile %s", profile.id)
+                LOG.info(
+                    "Failed to update deleted profile %s", etcd_profile.id
+                )
                 continue
 
             # Get the data from Neutron.
             with context.session.begin(subtransactions=True):
                 rules = self.db.get_security_group_rules(
-                    context, filters={'security_group_id': profile.id}
+                    context, filters={'security_group_id': etcd_profile.id}
                 )
 
             # Convert the etcd data into in-memory data structures.
             try:
-                etcd_rules = json.loads(profile.rules_data)
-                etcd_tags = json.loads(profile.tags_data)
+                etcd_rules = json.loads(etcd_profile.rules_data)
+                etcd_tags = json.loads(etcd_profile.tags_data)
             except Exception:
                 # If the JSON data is bad, just ignore it. We can't blow up
                 # here because that will trigger a new resync on another node
                 # that will blow *it* up as well. Just tolerate it.
-                LOG.exception("Bad JSON data in key %s", profile.key)
+                LOG.exception("Bad JSON data in key %s", etcd_profile.key)
                 continue
 
             # Do the same conversion for the Neutron profile.
-            neutron_profile = profile_from_neutron_rules(profile.id, rules)
+            neutron_profile = profile_from_neutron_rules(
+                etcd_profile.id, rules
+            )
             neutron_rules = profile_rules(neutron_profile)
             neutron_tags = profile_tags(neutron_profile)
 
             if (etcd_rules != neutron_rules) or (etcd_tags != neutron_tags):
                 # Write to etcd.
-                LOG.warning("Resolving error in profile %s", profile.id)
+                LOG.warning("Resolving error in profile %s", etcd_profile.id)
 
                 try:
                     self.transport.write_profile_to_etcd(
                         neutron_profile,
-                        prev_rules_index=neutron_profile.rules_modified_index,
-                        prev_tags_index=neutron_profile.tags_modified_index,
+                        prev_rules_index=etcd_profile.rules_modified_index,
+                        prev_tags_index=etcd_profile.tags_modified_index,
                     )
                 except ValueError:
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
                     continue
-
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
