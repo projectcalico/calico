@@ -663,24 +663,31 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("Missing ports: %s", missing_ports)
             LOG.warning("Extra ports: %s", extra_ports)
 
-        # First, handle the extra ports. Each of them needs to be atomically
-        # deleted.
+        # First, handle the extra ports.
         eps_to_delete = (e for e in endpoints if e.id in extra_ports)
+        self._resync_extra_ports(eps_to_delete)
 
-        for endpoint in eps_to_delete:
-            try:
-                self.transport.atomic_delete_endpoint(endpoint)
-            except (ValueError, etcd.EtcdKeyNotFound):
-                # If the atomic CAD doesn't successfully delete, that's ok, it
-                # means the endpoint was created or updated elsewhere.
-                continue
+        # Next, the missing ports.
+        self._resync_missing_ports(context, missing_ports)
 
-        # Next, for each missing port, do a quick port creation. This takes out
-        # a db transaction and regains all the ports. Note that this
-        # transaction is potentially held for quite a while.
+        # Finally, scan each of the ports in changes_ports. Work out if there
+        # are any differences. If there are, write out to etcd.
+        changed_endpoints = (e for e in endpoints if e.id in changes_ports)
+        self._resync_changed_ports(context, changed_endpoints)
+
+    def _resync_missing_ports(self, context, missing_port_ids):
+        """
+        For each missing port, do a quick port creation. This takes out a DB
+        transaction and regains all the ports. Note that this transaction is
+        potentially held for quite a while.
+
+        :param context: A Neutron DB context.
+        :param missing_port_ids: A set of IDs for ports missing from etcd.
+        :returns: Nothing.
+        """
         with context.session.begin(subtransactions=True):
             missing_ports = self.db.get_ports(
-                context, filters={'id': missing_ports}
+                context, filters={'id': missing_port_ids}
             )
 
             for port in missing_ports:
@@ -696,10 +703,32 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.add_port_interface_name(port)
                 self.transport.endpoint_created(port)
 
-        # Finally, scan each of the ports in changes_ports. Work out if there
-        # are any differences. If there are, write out to etcd.
-        changed_endpoints = (e for e in endpoints if e.id in changes_ports)
+    def _resync_extra_ports(self, ports_to_delete):
+        """
+        Atomically delete ports that are in etcd, but shouldn't be.
 
+        :param ports_to_delete: An iterable of Endpoint objects to be
+            deleted.
+        :returns: Nothing.
+        """
+        for endpoint in ports_to_delete:
+            try:
+                self.transport.atomic_delete_endpoint(endpoint)
+            except (ValueError, etcd.EtcdKeyNotFound):
+                # If the atomic CAD doesn't successfully delete, that's ok, it
+                # means the endpoint was created or updated elsewhere.
+                continue
+
+    def _resync_changed_ports(self, context, changed_endpoints):
+        """
+        Reconcile all changed profiles by checking whether Neutron and etcd
+        agree.
+
+        :param context: A Neutron DB context.
+        :param changed_endpoints: An iterable of Endpoint objects that should
+            be checked for changes.
+        :returns: Nothing.
+        """
         for endpoint in changed_endpoints:
             # Get the endpoint data from etcd.
             try:
