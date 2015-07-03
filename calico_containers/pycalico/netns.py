@@ -18,6 +18,7 @@ import socket
 import logging
 import logging.handlers
 import os
+import errno
 import sys
 import uuid
 
@@ -256,6 +257,9 @@ class NamedNamespace(object):
         self.name = uuid.uuid1().hex
         self.pid_dir = "%s/%s/ns/net" % (proc, cpid)
         self.nsn_dir = "/var/run/netns/%s" % self.name
+        if not os.path.exists(self.pid_dir):
+            raise NamespaceError("Namespace pseudofile %s does not exist." %
+                                 self.pid_dir)
 
     def __enter__(self):
         """
@@ -265,8 +269,10 @@ class NamedNamespace(object):
         _log.debug("Creating link between ns name and PID")
         try:
             os.makedirs("/var/run/netns")
-        except os.error:
-            _log.info("Unable to create /var/run/netns dir")
+        except os.error as oserr:
+            if oserr.errno != errno.EEXIST:
+                _log.error("Unable to create /var/run/netns dir")
+                raise
         os.symlink(self.pid_dir, self.nsn_dir)
         return self
 
@@ -295,3 +301,9 @@ class NamedNamespace(object):
         _log.debug("Run command: %s", command)
         return check_output("ip netns exec %s %s" % (self.name, command),
                             shell=shell)
+
+class NamespaceError(Exception):
+    """
+    Error creating or manipulating a network namespace.
+    """
+    pass
