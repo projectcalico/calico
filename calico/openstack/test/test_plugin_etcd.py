@@ -565,8 +565,29 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-1/workload/openstack/instance-2/endpoint/FACEBEEF-1234-5678'
         ]))
 
-        # Change a small amount of information about the port. Expect a resync
-        # to fix it up.
+        # Change a small amount of information about the port and the security
+        # group. Expect a resync to fix it up.
+        self.db.get_security_groups.return_value[-1] = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5070,
+                 'port_range_max': 5071}]
+        }
+        self.db.get_security_group_rules.return_value[-1] = {
+            'remote_group_id': 'SGID-default',
+            'remote_ip_prefix': None,
+            'protocol': -1,
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'security_group_id': 'SG-1',
+            'port_range_min': 5070,
+            'port_range_max': 5070
+        }
         old_ips = self.osdb_ports[0]['fixed_ips']
         self.osdb_ports[0]['fixed_ips'] = [
             {'subnet_id': '10.65.0/24',
@@ -583,12 +604,41 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "state": "active",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.188/32"]},
+            '/calico/v1/policy/profile/SG-1/rules':
+                {"outbound_rules": [],
+                 "inbound_rules": [{"dst_ports": [5070],
+                                    "src_tag": "SGID-default",
+                                    "ip_version": 4}]},
+            '/calico/v1/policy/profile/SG-1/tags':
+                ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
         # Reset the state for safety.
         self.osdb_ports[0]['fixed_ips'] = old_ips
+
+        self.db.get_security_groups.return_value[-1] = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}]
+        }
+        self.db.get_security_group_rules.return_value[-1] = {
+            'remote_group_id': 'SGID-default',
+            'remote_ip_prefix': None,
+            'protocol': -1,
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'security_group_id': 'SG-1',
+            'port_range_min': 5060,
+            'port_range_max': 5060
+        }
 
     def test_noop_entry_points(self):
         """Call the mechanism driver entry points that are currently
