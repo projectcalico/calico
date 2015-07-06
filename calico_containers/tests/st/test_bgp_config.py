@@ -31,20 +31,20 @@ class TestBGPConfig(TestBase):
         """
         with DockerHost('host', start_calico=False, dind=False) as host:
             # Check default AS command
-            self.assertEquals(host.calicoctl("default-node-as"), "64511")
-            host.calicoctl("default-node-as 12345")
-            self.assertEquals(host.calicoctl("default-node-as"), "12345")
+            self.assertEquals(host.calicoctl("bgp default-node-as"), "64511")
+            host.calicoctl("bgp default-node-as 12345")
+            self.assertEquals(host.calicoctl("bgp default-node-as"), "12345")
             with self.assertRaises(CommandExecError):
-                host.calicoctl("default-node-as 99999999999999999999999")
+                host.calicoctl("bgp default-node-as 99999999999999999999999")
             with self.assertRaises(CommandExecError):
-                host.calicoctl("default-node-as abcde")
+                host.calicoctl("bgp default-node-as abcde")
 
             # Check BGP mesh command
-            self.assertEquals(host.calicoctl("bgp-node-mesh"), "on")
-            host.calicoctl("bgp-node-mesh off")
-            self.assertEquals(host.calicoctl("bgp-node-mesh"), "off")
-            host.calicoctl("bgp-node-mesh on")
-            self.assertEquals(host.calicoctl("bgp-node-mesh"), "on")
+            self.assertEquals(host.calicoctl("bgp node-mesh"), "on")
+            host.calicoctl("bgp node-mesh off")
+            self.assertEquals(host.calicoctl("bgp node-mesh"), "off")
+            host.calicoctl("bgp node-mesh on")
+            self.assertEquals(host.calicoctl("bgp node-mesh"), "on")
 
     @attr('slow')
     def test_as_num(self):
@@ -57,7 +57,7 @@ class TestBGPConfig(TestBase):
              DockerHost('host2', start_calico=False) as host2:
 
             # Set the default AS number.
-            host1.calicoctl("default-node-as 64512")
+            host1.calicoctl("bgp default-node-as 64512")
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).
@@ -109,12 +109,12 @@ class TestBGPConfig(TestBase):
             workload_host1.assert_can_ping(workload_host2.ip, retries=10)
 
             # Turn the node-to-node mesh off and wait for connectivity to drop.
-            host1.calicoctl("bgp-node-mesh off")
+            host1.calicoctl("bgp node-mesh off")
             workload_host1.assert_cant_ping(workload_host2.ip, retries=10)
 
             # Configure per-node peers to explicitly set up a mesh.
-            host1.calicoctl("node bgppeer add %s as 64513" % host2.ip)
-            host2.calicoctl("node bgppeer add %s as 64513" % host1.ip)
+            host1.calicoctl("node bgp peer add %s as 64513" % host2.ip)
+            host2.calicoctl("node bgp peer add %s as 64513" % host1.ip)
 
             # Allow network to converge
             workload_host1.assert_can_ping(workload_host2.ip, retries=10)
@@ -152,13 +152,13 @@ class TestBGPConfig(TestBase):
             workload_host1.assert_can_ping(workload_host2.ip, retries=10)
 
             # Turn the node-to-node mesh off and wait for connectivity to drop.
-            host1.calicoctl("bgp-node-mesh off")
+            host1.calicoctl("bgp node-mesh off")
             workload_host1.assert_cant_ping(workload_host2.ip, retries=10)
 
             # Configure global peers to explicitly set up a mesh.  This means
             # each node will try to peer with itself which will fail.
-            host1.calicoctl("bgppeer add %s as 64513" % host2.ip)
-            host1.calicoctl("bgppeer add %s as 64513" % host1.ip)
+            host1.calicoctl("bgp peer add %s as 64513" % host2.ip)
+            host1.calicoctl("bgp peer add %s as 64513" % host1.ip)
 
             # Allow network to converge
             workload_host1.assert_can_ping(workload_host2.ip, retries=10)

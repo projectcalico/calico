@@ -19,68 +19,21 @@
 Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:4001]
 
-Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
-                           [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-  calicoctl node stop [--force]
-  calicoctl node bgppeer add <PEER_IP> as <AS_NUM>
-  calicoctl node bgppeer remove <PEER_IP>
-  calicoctl node bgppeer show [--ipv4 | --ipv6]
-  calicoctl status
-  calicoctl profile show [--detailed]
-  calicoctl profile (add|remove) <PROFILE>
-  calicoctl profile <PROFILE> tag show
-  calicoctl profile <PROFILE> tag (add|remove) <TAG>
-  calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
-%(rule_spec)s
-  calicoctl profile <PROFILE> rule remove (inbound|outbound) (--at=<POSITION>|
-%(rule_spec)s)
-  calicoctl profile <PROFILE> rule show
-  calicoctl profile <PROFILE> rule json
-  calicoctl profile <PROFILE> rule update
-  calicoctl pool (add|remove) <CIDR> [--ipip] [--nat-outgoing]
-  calicoctl pool show [--ipv4 | --ipv6]
-  calicoctl default-node-as [<AS_NUM>]
-  calicoctl bgppeer add <PEER_IP> as <AS_NUM>
-  calicoctl bgppeer remove <PEER_IP>
-  calicoctl bgppeer show [--ipv4 | --ipv6]
-  calicoctl bgp-node-mesh [on|off]
-  calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
-  calicoctl container <CONTAINER> endpoint-id show
-  calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
-  calicoctl container remove <CONTAINER> [--force]
-  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
-  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
-  calicoctl diags [--log-dir=<LOG_DIR>] [--upload]
-  calicoctl checksystem [--fix]
+usage: calicoctl <command> [<args>...]
 
-Options:
- --interface=<INTERFACE>  The name to give to the interface in the container
-                          [default: eth1]
- --ip=<IP>                The local management address to use.
- --ip6=<IP6>              The local IPv6 management address to use.
- --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for
-                          Calico's per-node container
-                          [default: calico/node:latest]
- --ipv4                   Show IPv4 information only.
- --ipv6                   Show IPv6 information only.
- --log-dir=<LOG_DIR>      The directory for logs [default: /var/log/calico]
- --host=<HOSTNAME>        Filters endpoints on a specific host.
- --orchestrator=<ORCHESTRATOR_ID>    Filters endpoints created on a specific orchestrator.
- --workload=<WORKLOAD_ID> Filters endpoints on a specific workload.
- --endpoint=<ENDPOINT_ID> Filters endpoints with a specific endpoint ID.
- --as=<AS_NUM>            The AS number to assign to the node.
+    status            Print current status information
+    node              Configure the main calico/node container and establish Calico networking
+    container         Configure containers and their addresses
+    profile           Configure profiles
+    endpoint          Configure the endpoints assigned to existing containers
+    pool              Configure ip-pools
+    bgp               Configure bgp
+    checksystem       Check if the host system is configured properly to run calico
+    diags             Save diagnostic information
+
+See 'calicoctl <command> --help' to read about a specific subcommand.
 """
-__doc__ = __doc__ % {"rule_spec": """    (allow|deny) [(
-      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
-                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
-      icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
-           [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])] |
-      [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-      [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
-    )]"""}
+
 import os
 import re
 import socket
@@ -102,6 +55,15 @@ from requests.exceptions import ConnectionError
 
 from urllib3.exceptions import MaxRetryError
 
+import calico_ctl.node
+import calico_ctl.container
+import calico_ctl.profile
+import calico_ctl.endpoint
+import calico_ctl.pool
+import calico_ctl.bgp
+import calico_ctl.checksystem
+import calico_ctl.status
+import calico_ctl.diags
 
 from pycalico import netns
 from pycalico import diags
@@ -1543,28 +1505,33 @@ def validate_arguments():
     """
     # List of valid characters that Felix permits
     valid_chars = '[a-zA-Z0-9_\.\-]'
+
+    # Validate Profiles
     profile_ok = True
-    if arguments["<PROFILES>"] or arguments["<PROFILE>"]:
-        profiles = arguments["<PROFILES>"] or [arguments["<PROFILE>"]]
+    if "<PROFILES>" in arguments or "<PROFILE>" in arguments:
+        profiles = arguments.get("<PROFILES>") or arguments.get("<PROFILE>")
         for profile in profiles:
             if not re.match("^%s+$" % valid_chars, profile):
                 profile_ok = False
                 break
 
-    tag_ok = (arguments["<TAG>"] is None or
+    # Validate tags
+    tag_ok = (arguments.get("<TAG>") is None or
               re.match("^%s+$" % valid_chars, arguments["<TAG>"]))
-    ip_ok = arguments["--ip"] is None or netaddr.valid_ipv4(arguments["--ip"])
-    ip6_ok = arguments["--ip6"] is None or \
-             netaddr.valid_ipv6(arguments["--ip6"])
-    container_ip_ok = arguments["<IP>"] is None or \
+
+    # Validate IPs
+    ip_ok = arguments.get("--ip") is None or netaddr.valid_ipv4(arguments.get("--ip"))
+    ip6_ok = arguments.get("--ip6") is None or \
+             netaddr.valid_ipv6(arguments.get("--ip6"))
+    container_ip_ok = arguments.get("<IP>") is None or \
                       netaddr.valid_ipv4(arguments["<IP>"]) or \
                       netaddr.valid_ipv6(arguments["<IP>"])
-    peer_ip_ok = arguments["<PEER_IP>"] is None or \
+    peer_ip_ok = arguments.get("<PEER_IP>") is None or \
                  netaddr.valid_ipv4(arguments["<PEER_IP>"]) or \
                  netaddr.valid_ipv6(arguments["<PEER_IP>"])
     cidr_ok = True
     for arg in ["<CIDR>", "<SRCCIDR>", "<DSTCIDR>"]:
-        if arguments[arg]:
+        if arguments.get(arg):
             try:
                 arguments[arg] = str(IPNetwork(arguments[arg]))
             except (AddrFormatError, ValueError):
@@ -1573,7 +1540,7 @@ def validate_arguments():
                 cidr_ok = False
     icmp_ok = True
     for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
-        if arguments[arg] is not None:
+        if arguments.get(arg) is not None:
             try:
                 value = int(arguments[arg])
                 if not (0 <= value < 255):  # Felix doesn't support 255
@@ -1581,7 +1548,7 @@ def validate_arguments():
             except ValueError:
                 icmp_ok = False
     asnum_ok = True
-    if arguments["<AS_NUM>"] or arguments["--as"]:
+    if arguments.get("<AS_NUM>") or arguments.get("--as"):
         try:
             asnum = int(arguments["<AS_NUM>"] or arguments["--as"])
             asnum_ok = 0 <= asnum <= 4294967295
@@ -1619,16 +1586,16 @@ def get_container_ipv_from_arguments():
     :return: The IP version.  One of "v4", "v6" or None.
     """
     version = None
-    if arguments["--ipv4"]:
+    if arguments.get("--ipv4"):
         version = "v4"
-    elif arguments["--ipv6"]:
+    elif arguments.get("--ipv6"):
         version = "v6"
-    elif arguments["<IP>"]:
-        version = "v%s" % IPAddress(arguments["<IP>"]).version
-    elif arguments["<PEER_IP>"]:
-        version = "v%s" % IPAddress(arguments["<PEER_IP>"]).version
-    elif arguments["<CIDR>"]:
-        version = "v%s" % IPNetwork(arguments["<CIDR>"]).version
+    elif arguments.get("<IP>"):
+        version = "v%s" % IPAddress(arguments.get("<IP>")).version
+    elif arguments.get("<PEER_IP>"):
+        version = "v%s" % IPAddress(arguments.get("<PEER_IP>")).version
+    elif arguments.get("<CIDR>"):
+        version = "v%s" % IPNetwork(arguments.get("<CIDR>")).version
     return version
 
 
@@ -1731,101 +1698,133 @@ def parse_ports(ports_str):
 
 
 if __name__ == '__main__':
-    arguments = docopt(__doc__)
+    # TODO: come up with a better way to default to --help when no opts provided
+    if len(sys.argv) == 1:
+        sys.argv.append('--help')
+
+    command_args = docopt(__doc__, options_first=True)
+    argv = [command_args['<command>']] + command_args['<args>']
+
+    # Submodule commands with only one function should be called
+    # directly here (status, diags, checksystem)
+    if command_args['<command>'] == 'node':
+        arguments = docopt(calico_ctl.node.__doc__, argv=argv)
+    elif command_args['<command>'] == 'container':
+        arguments = docopt(calico_ctl.container.__doc__, argv=argv)
+    elif command_args['<command>'] == 'profile':
+        arguments = docopt(calico_ctl.profile.__doc__, argv=argv)
+    elif command_args['<command>'] == 'endpoint':
+        arguments = docopt(calico_ctl.endpoint.__doc__, argv=argv)
+    elif command_args['<command>'] == 'pool':
+        arguments = docopt(calico_ctl.pool.__doc__, argv=argv)
+    elif command_args['<command>'] in ['bgp']:
+        arguments = docopt(calico_ctl.bgp.__doc__, argv=argv)
+    elif command_args['<command>'] == 'checksystem':
+        arguments = docopt(calico_ctl.checksystem.__doc__, argv=argv)
+        checksystem(arguments["--fix"], quit_if_error=True)
+        sys.exit(0)
+    elif command_args['<command>'] == 'status':
+        arguments = docopt(calico_ctl.status.__doc__, argv=argv)
+        status()
+        sys.exit(0)
+    elif command_args['<command>'] == 'diags':
+        arguments = docopt(calico_ctl.diags.__doc__, argv=argv)
+        save_diags(arguments["--log-dir"], arguments["--upload"])
+        sys.exit(0)
+
+
+
     validate_arguments()
     ip_version = get_container_ipv_from_arguments()
     try:
-        if arguments["node"]:
-            if arguments["bgppeer"]:
-                if arguments["add"]:
-                    node_bgppeer_add(arguments["<PEER_IP>"], ip_version,
-                                     arguments["<AS_NUM>"])
-                elif arguments["remove"]:
-                    node_bgppeer_remove(arguments["<PEER_IP>"], ip_version)
-                elif arguments["show"]:
-                    if not ip_version:
-                        node_bgppeer_show("v4")
-                        node_bgppeer_show("v6")
-                    else:
-                        node_bgppeer_show(ip_version)
-            elif arguments["stop"]:
-                node_stop(arguments["--force"])
+        if arguments.get("node"):
+            if arguments.get("bgp"):
+                if arguments.get("peer"):
+                    if arguments.get("add"):
+                        node_bgppeer_add(arguments.get("<PEER_IP>"), ip_version,
+                                         arguments.get("<AS_NUM>"))
+                    elif arguments.get("remove"):
+                        node_bgppeer_remove(arguments.get("<PEER_IP>"), ip_version)
+                    elif arguments.get("show"):
+                        if not ip_version:
+                            node_bgppeer_show("v4")
+                            node_bgppeer_show("v6")
+                        else:
+                            node_bgppeer_show(ip_version)
+            elif arguments.get("stop"):
+                node_stop(arguments.get("--force"))
             else:
-                node(ip=arguments["--ip"],
+                node(ip=arguments.get("--ip"),
                      node_image=arguments['--node-image'],
-                     log_dir=arguments["--log-dir"],
-                     ip6=arguments["--ip6"],
-                     as_num=arguments["--as"])
-        elif arguments["status"]:
-            status()
-        elif arguments["checksystem"]:
-            checksystem(arguments["--fix"], quit_if_error=True)
-        elif arguments["endpoint"]:
-            if arguments["profile"]:
-                if arguments["append"]:
-                    endpoint_profile_append(arguments["--host"],
-                                            arguments["--orchestrator"],
-                                            arguments["--workload"],
-                                            arguments["<ENDPOINT_ID>"],
+                     log_dir=arguments.get("--log-dir"),
+                     ip6=arguments.get("--ip6"),
+                     as_num=arguments.get("--as"))
+        elif arguments.get("endpoint"):
+            if arguments.get("profile"):
+                if arguments.get("append"):
+                    endpoint_profile_append(arguments.get("--host"),
+                                            arguments.get("--orchestrator"),
+                                            arguments.get("--workload"),
+                                            arguments.get("<ENDPOINT_ID>"),
                                             arguments['<PROFILES>'])
-                elif arguments["remove"]:
-                    endpoint_profile_remove(arguments["--host"],
-                                            arguments["--orchestrator"],
-                                            arguments["--workload"],
-                                            arguments["<ENDPOINT_ID>"],
+                elif arguments.get("remove"):
+                    endpoint_profile_remove(arguments.get("--host"),
+                                            arguments.get("--orchestrator"),
+                                            arguments.get("--workload"),
+                                            arguments.get("<ENDPOINT_ID>"),
                                             arguments['<PROFILES>'])
-                elif arguments["set"]:
-                    endpoint_profile_set(arguments["--host"],
-                                         arguments["--orchestrator"],
-                                         arguments["--workload"],
-                                         arguments["<ENDPOINT_ID>"],
+                elif arguments.get("set"):
+                    endpoint_profile_set(arguments.get("--host"),
+                                         arguments.get("--orchestrator"),
+                                         arguments.get("--workload"),
+                                         arguments.get("<ENDPOINT_ID>"),
                                          arguments['<PROFILES>'])
-                elif arguments["show"]:
-                    endpoint_profile_show(arguments["--host"],
-                                          arguments["--orchestrator"],
-                                          arguments["--workload"],
-                                          arguments["<ENDPOINT_ID>"])
+                elif arguments.get("show"):
+                    endpoint_profile_show(arguments.get("--host"),
+                                          arguments.get("--orchestrator"),
+                                          arguments.get("--workload"),
+                                          arguments.get("<ENDPOINT_ID>"))
             else:
                 # calicoctl endpoint show
-                endpoint_show(arguments["--host"],
-                              arguments["--orchestrator"],
-                              arguments["--workload"],
-                              arguments["--endpoint"],
-                              arguments["--detailed"])
-        elif arguments["profile"]:
-            if arguments["tag"] and not arguments["rule"]:
-                if arguments["show"]:
-                    profile_tag_show(arguments["<PROFILE>"])
-                elif arguments["add"]:
-                    profile_tag_add(arguments["<PROFILE>"],
-                                    arguments["<TAG>"])
-                elif arguments["remove"]:
-                    profile_tag_remove(arguments["<PROFILE>"],
-                                       arguments["<TAG>"])
-            elif arguments["rule"]:
-                if arguments["show"]:
-                    profile_rule_show(arguments["<PROFILE>"],
+                endpoint_show(arguments.get("--host"),
+                              arguments.get("--orchestrator"),
+                              arguments.get("--workload"),
+                              arguments.get("--endpoint"),
+                              arguments.get("--detailed"))
+        elif arguments.get("profile"):
+            if arguments.get("tag") and not arguments.get("rule"):
+                if arguments.get("show"):
+                    profile_tag_show(arguments.get("<PROFILE>"))
+                elif arguments.get("add"):
+                    profile_tag_add(arguments.get("<PROFILE>"),
+                                    arguments.get("<TAG>"))
+                elif arguments.get("remove"):
+                    profile_tag_remove(arguments.get("<PROFILE>"),
+                                       arguments.get("<TAG>"))
+            elif arguments.get("rule"):
+                if arguments.get("show"):
+                    profile_rule_show(arguments.get("<PROFILE>"),
                                       human_readable=True)
-                elif arguments["json"]:
-                    profile_rule_show(arguments["<PROFILE>"],
+                elif arguments.get("json"):
+                    profile_rule_show(arguments.get("<PROFILE>"),
                                       human_readable=False)
-                elif arguments["update"]:
-                    profile_rule_update(arguments["<PROFILE>"])
-                elif arguments["add"] or arguments["remove"]:
-                    operation = "add" if arguments["add"] else "remove"
+                elif arguments.get("update"):
+                    profile_rule_update(arguments.get("<PROFILE>"))
+                elif arguments.get("add") or arguments.get("remove"):
+                    operation = "add" if arguments.get("add") else "remove"
                     action = "allow" if arguments.get("allow") else "deny"
-                    direction = ("inbound" if arguments["inbound"]
+                    direction = ("inbound" if arguments.get("inbound")
                                  else "outbound")
-                    if arguments["tcp"]:
+                    if arguments.get("tcp"):
                         protocol = "tcp"
-                    elif arguments["udp"]:
+                    elif arguments.get("udp"):
                         protocol = "udp"
-                    elif arguments["icmp"]:
+                    elif arguments.get("icmp"):
                         protocol = "icmp"
                     else:
                         protocol = None
-                    src_ports = parse_ports(arguments["<SRCPORTS>"])
-                    dst_ports = parse_ports(arguments["<DSTPORTS>"])
+                    src_ports = parse_ports(arguments.get("<SRCPORTS>"))
+                    dst_ports = parse_ports(arguments.get("<DSTPORTS>"))
                     position = arguments.get("--at")
                     if position is not None:
                         try:
@@ -1834,90 +1833,90 @@ if __name__ == '__main__':
                             sys.exit(1)
                     profile_rule_add_remove(
                         operation,
-                        arguments["<PROFILE>"],
+                        arguments.get("<PROFILE>"),
                         position,
                         action,
                         direction,
                         protocol=protocol,
-                        icmp_type=arguments["<ICMPTYPE>"],
-                        icmp_code=arguments["<ICMPCODE>"],
-                        src_net=arguments["<SRCCIDR>"],
-                        src_tag=arguments["<SRCTAG>"],
+                        icmp_type=arguments.get("<ICMPTYPE>"),
+                        icmp_code=arguments.get("<ICMPCODE>"),
+                        src_net=arguments.get("<SRCCIDR>"),
+                        src_tag=arguments.get("<SRCTAG>"),
                         src_ports=src_ports,
-                        dst_net=arguments["<DSTCIDR>"],
-                        dst_tag=arguments["<DSTTAG>"],
+                        dst_net=arguments.get("<DSTCIDR>"),
+                        dst_tag=arguments.get("<DSTTAG>"),
                         dst_ports=dst_ports,
                     )
-            elif arguments["add"]:
-                profile_add(arguments["<PROFILE>"])
-            elif arguments["remove"]:
-                profile_remove(arguments["<PROFILE>"])
-            elif arguments["show"]:
-                profile_show(arguments["--detailed"])
-        elif arguments["diags"]:
-            save_diags(arguments["--log-dir"], arguments["--upload"])
-        elif arguments["pool"]:
-            if arguments["add"]:
-                ip_pool_add(arguments["<CIDR>"],
+            elif arguments.get("add"):
+                profile_add(arguments.get("<PROFILE>"))
+            elif arguments.get("remove"):
+                profile_remove(arguments.get("<PROFILE>"))
+            elif arguments.get("show"):
+                profile_show(arguments.get("--detailed"))
+        elif arguments.get("diags"):
+            save_diags(arguments.get("--log-dir"), arguments.get("--upload"))
+        elif arguments.get("pool"):
+            if arguments.get("add"):
+                ip_pool_add(arguments.get("<CIDR>"),
                             ip_version,
-                            arguments["--ipip"],
-                            arguments["--nat-outgoing"])
-            elif arguments["remove"]:
-                ip_pool_remove(arguments["<CIDR>"], ip_version)
-            elif arguments["show"]:
+                            arguments.get("--ipip"),
+                            arguments.get("--nat-outgoing"))
+            elif arguments.get("remove"):
+                ip_pool_remove(arguments.get("<CIDR>"), ip_version)
+            elif arguments.get("show"):
                 if not ip_version:
                     ip_pool_show("v4")
                     ip_pool_show("v6")
                 else:
                     ip_pool_show(ip_version)
-        elif arguments["bgppeer"]:
-            if arguments["add"]:
-                bgppeer_add(arguments["<PEER_IP>"], ip_version,
-                            arguments["<AS_NUM>"])
-            elif arguments["remove"]:
-                bgppeer_remove(arguments["<PEER_IP>"], ip_version)
-            elif arguments["show"]:
+        elif arguments.get("bgp") and arguments.get("peer"):
+            if arguments.get("add"):
+                bgppeer_add(arguments.get("<PEER_IP>"), ip_version,
+                            arguments.get("<AS_NUM>"))
+            elif arguments.get("remove"):
+                bgppeer_remove(arguments.get("<PEER_IP>"), ip_version)
+            elif arguments.get("show"):
                 if not ip_version:
                     bgppeer_show("v4")
                     bgppeer_show("v6")
                 else:
                     bgppeer_show(ip_version)
-        elif arguments["container"]:
-            if arguments["endpoint-id"]:
-                container_endpoint_id_show(arguments["<CONTAINER>"])
-            elif arguments["ip"]:
-                if arguments["add"]:
-                    container_ip_add(arguments["<CONTAINER>"],
-                                     arguments["<IP>"],
+        elif arguments.get("container"):
+            if arguments.get("endpoint-id"):
+                container_endpoint_id_show(arguments.get("<CONTAINER>"))
+            elif arguments.get("ip"):
+                if arguments.get("add"):
+                    container_ip_add(arguments.get("<CONTAINER>"),
+                                     arguments.get("<IP>"),
                                      ip_version,
-                                     arguments["--interface"])
-                elif arguments["remove"]:
-                    container_ip_remove(arguments["<CONTAINER>"],
-                                        arguments["<IP>"],
+                                     arguments.get("--interface"))
+                elif arguments.get("remove"):
+                    container_ip_remove(arguments.get("<CONTAINER>"),
+                                        arguments.get("<IP>"),
                                         ip_version,
-                                        arguments["--interface"])
+                                        arguments.get("--interface"))
                 else:
-                    if arguments["add"]:
-                        container_add(arguments["<CONTAINER>"],
-                                      arguments["<IP>"],
-                                      arguments["--interface"])
-                    if arguments["remove"]:
-                        container_remove(arguments["<CONTAINER>"])
+                    if arguments.get("add"):
+                        container_add(arguments.get("<CONTAINER>"),
+                                      arguments.get("<IP>"),
+                                      arguments.get("--interface"))
+                    if arguments.get("remove"):
+                        container_remove(arguments.get("<CONTAINER>"))
             else:
-                if arguments["add"]:
-                    container_add(arguments["<CONTAINER>"],
-                                  arguments["<IP>"],
-                                  arguments["--interface"])
-                if arguments["remove"]:
-                    container_remove(arguments["<CONTAINER>"])
-        elif arguments["bgp-node-mesh"]:
-            if arguments["on"] or arguments["off"]:
-                set_bgp_node_mesh(arguments["on"])
+                if arguments.get("add"):
+                    container_add(arguments.get("<CONTAINER>"),
+                                  arguments.get("<IP>"),
+                                  arguments.get("--interface"))
+                if arguments.get("remove"):
+                    container_remove(arguments.get("<CONTAINER>"))
+        elif arguments.get("node-mesh"):
+            if arguments.get("on") or arguments.get("off"):
+                set_bgp_node_mesh(arguments.get("on"))
             else:
                 show_bgp_node_mesh()
-        elif arguments["default-node-as"]:
-            if arguments["<AS_NUM>"]:
-                set_default_node_as(arguments["<AS_NUM>"])
+        elif arguments.get("default-node-as"):
+            if arguments.get("<AS_NUM>"):
+                set_default_node_as(arguments.get("<AS_NUM>"))
             else:
                 show_default_node_as()
     except SystemExit:
