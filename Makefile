@@ -52,7 +52,8 @@ ut: calicobuild.created
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests tests/unit -c nose.cfg'
 
-ut-circle: calicobuild.created
+# UT runs on Cicle need to create the calicoctl binary
+ut-circle: calicobuild.created dist/calicoctl
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
