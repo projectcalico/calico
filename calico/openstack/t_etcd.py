@@ -69,6 +69,11 @@ LOG = log.getLogger(__name__)
 
 # Objects for lightly wrapping etcd return values for use in the mechanism
 # driver.
+# These namedtuples are getting pretty heavyweight at this point. If you find
+# yourself wanting to add more fields to them, consider rewriting them as full
+# classes. Note that several of the properties of namedtuples are desirable for
+# these objects (immutability being the biggest), so if you rewrite as classes
+# attempt to preserve those properties.
 Endpoint = namedtuple(
     'Endpoint', ['id', 'key', 'modified_index', 'host', 'data']
 )
@@ -264,11 +269,11 @@ class CalicoTransportEtcd(object):
         result = self.client.read(endpoint.key, timeout=5)
 
         return Endpoint(
-            endpoint.id,
-            endpoint.key,
-            result.modifiedIndex,
-            endpoint.host,
-            result.value,
+            id=endpoint.id,
+            key=endpoint.key,
+            modified_index=result.modifiedIndex,
+            host=endpoint.host,
+            data=result.value,
         )
 
     @_handling_etcd_exceptions
@@ -298,7 +303,11 @@ class CalicoTransportEtcd(object):
 
             LOG.debug("Found endpoint %s", endpoint_id)
             yield Endpoint(
-                endpoint_id, node.key, node.modifiedIndex, host, None
+                id=endpoint_id,
+                key=node.key,
+                modified_index=node.modifiedIndex,
+                host=host,
+                data=None,
             )
 
     @_handling_etcd_exceptions
@@ -350,11 +359,11 @@ class CalicoTransportEtcd(object):
         )
 
         return Profile(
-            profile.id,
-            tags_result.modifiedIndex,
-            rules_result.modifiedIndex,
-            tags_result.value,
-            rules_result.value,
+            id=profile.id,
+            tags_modified_index=tags_result.modifiedIndex,
+            rules_modified_index=rules_result.modifiedIndex,
+            tags_data=tags_result.value,
+            rules_data=rules_result.value,
         )
 
     @_handling_etcd_exceptions
@@ -399,11 +408,11 @@ class CalicoTransportEtcd(object):
 
                 LOG.debug("Found profile id %s", profile_id)
                 yield Profile(
-                    profile_id,
-                    tag_modified,
-                    rules_modified,
-                    None,
-                    None,
+                    id=profile_id,
+                    tags_modified_index=tag_modified,
+                    rules_modified_index=rules_modified,
+                    tags_data=None,
+                    rules_data=None,
                 )
 
         # Quickly confirm that the tag and rule indices are empty (they should
