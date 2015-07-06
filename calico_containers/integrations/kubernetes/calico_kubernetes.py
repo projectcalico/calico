@@ -10,21 +10,22 @@ import sh
 
 # Append to existing env, to avoid losing PATH etc.
 # Need to edit the path here since calicoctl loads client on import.
-# TODO-PAT: This shouldn't be hardcoded
-os.environ['ETCD_AUTHORITY'] = 'kubernetes-master:6666'
+ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
+if ETCD_AUTHORITY_ENV not in os.environ:
+    os.environ[ETCD_AUTHORITY_ENV] = 'kubernetes-master:6666'
+print("Using ETCD_AUTHORITY=%s" % os.environ[ETCD_AUTHORITY_ENV])
 
 from calicoctl import container_add
 from pycalico.datastore import IF_PREFIX
 from pycalico.util import generate_cali_interface_name
 
 CALICOCTL_PATH = os.environ.get('CALICOCTL_PATH', '/home/vagrant/calicoctl')
+print("Using CALICOCTL_PATH=%s" % CALICOCTL_PATH)
 calicoctl = sh.Command(CALICOCTL_PATH).bake(_env=os.environ)
 
-ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
-PROFILE_LABEL = 'CALICO_PROFILE'
-ETCD_PROFILE_PATH = '/calico/'
-AllowRule = namedtuple('AllowRule', ['port', 'proto', 'source'])
-
+KUBE_API_ROOT = os.environ.get('KUBE_API_ROOT',
+                               'https://kubernetes-master:6443/api/v1beta3/')
+print("Using KUBE_API_ROOT=%s" % KUBE_API_ROOT)
 
 class NetworkPlugin(object):
     def __init__(self):
@@ -33,7 +34,8 @@ class NetworkPlugin(object):
 
     def create(self, args):
         """"Create a pod."""
-        # Calicoctl only
+        # Calicoctl does not support the '-' character in iptables rule names.
+        # TODO: fix Felix to support '-' characters.
         self.pod_name = args[3].replace('-', '_')
         self.docker_id = args[4]
 
@@ -57,7 +59,18 @@ class NetworkPlugin(object):
         calicoctl('profile', 'remove', self.pod_name)
 
     def _configure_interface(self):
-        """Configure the Calico interface for a pod."""
+        """Configure the Calico interface for a pod.
+
+        This involves the following steps:
+        1) Determine the IP that docker assigned to the interface inside the
+           container
+        2) Delete the docker-assigned veth pair that's attached to the docker
+           bridge
+        3) Create a new calico veth pair, using the docker-assigned IP for the
+           end in the container's namespace
+        4) Assign the node's IP to the host end of the veth pair (required for
+           compatibility with kube-proxy REDIRECT iptables rules).
+        """
         container_ip = self._read_docker_ip()
         self._delete_docker_interface()
         print('Configuring Calico networking.')
@@ -65,13 +78,27 @@ class NetworkPlugin(object):
         interface_name = generate_cali_interface_name(IF_PREFIX, ep.endpoint_id)
         node_ip = self._get_node_ip()
         print('Adding IP %s to interface %s' % (node_ip, interface_name))
+
+        # This is slightly tricky. Since the kube-proxy sometimes
+        # programs REDIRECT iptables rules, we MUST have an IP on the host end
+        # of the caliXXX veth pairs. This is because the REDIRECT rule
+        # rewrites the destination ip/port of traffic from a pod to a service
+        # VIP. The destination port is rewriten to an arbitrary high-numbered
+        # port, and the destination IP is rewritten to one of the IPs allocated
+        # to the interface. This fails if the interface doesn't have an IP,
+        # so we allocate an IP which is already allocated to the node. We set
+        # the subnet to /32 so that the routing table is not affected;
+        # no traffic for the node_ip's subnet will use the /32 route.
         check_call(['ip', 'addr', 'add', node_ip + '/32',
                     'dev', interface_name])
         print('Finished configuring network interface')
         return ep
 
     def _get_node_ip(self):
-        """Get the IP for the host node from the k8s API."""
+        """Determine the IP for the host node.
+
+        This hits a well-known IP (the Google public DNS).
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('8.8.8.8', 80))
         ip = s.getsockname()[0]
@@ -122,9 +149,9 @@ class NetworkPlugin(object):
 
         Currently assumes one pod with each name.
         """
-        calicoctl('profile', 'add', self.pod_name)
-        pod = self._get_pod_config()
         profile_name = self.pod_name
+        calicoctl('profile', 'add', profile_name)
+        pod = self._get_pod_config()
 
         self._apply_rules(profile_name, pod)
 
@@ -179,10 +206,7 @@ class NetworkPlugin(object):
         bearer_token = self._get_api_token()
         session = requests.Session()
         session.headers.update({'Authorization': 'Bearer ' + bearer_token})
-        response = session.get(
-            'https://kubernetes-master:6443/api/v1beta3/' + path,
-            verify=False,
-        )
+        response = session.get(KUBE_API_ROOT + path, verify=False)
         response_body = response.text
         # The response body contains some metadata, and the pods themselves
         # under the 'items' key.
@@ -246,18 +270,12 @@ class NetworkPlugin(object):
         print('Final profile "%s": %s' % (profile_name, profile_json))
         return profile_json
 
-    def _apply_rules(self, profile_name, pod):
+    def _apply_rules(self, profile_name):
         """
-        Generate a new profile with the specified rules.
-
-        This contains inbound allow rules for all the ports we gathered,
-        plus a default 'allow from <profile_name>' to allow traffic within a
-        profile group.
+        Generate a new profile with the default 'allow all' rules.
 
         :param profile_name: The profile to update
         :type profile_name: string
-        :param pod: The config dictionary for the pod being created.
-        :type pod: dict
         :return:
         """
         rules = self._generate_rules()
