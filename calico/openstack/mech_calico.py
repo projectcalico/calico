@@ -721,11 +721,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 etcd_data = json.loads(endpoint.data)
             except (ValueError, TypeError):
-                # If the JSON data is bad, just ignore it. We can't blow up
-                # here because that will trigger a new resync on another node
-                # that will blow *it* up as well. Just tolerate it.
+                # If the JSON data is bad, we need to fix it up. Set a value
+                # that is impossible for Neutron to be returning: nothing at
+                # all.
                 LOG.exception("Bad JSON data in key %s", endpoint.key)
-                continue
+                etcd_data = []
 
             port = self.add_extra_port_information(context, port)
             neutron_data = port_etcd_data(port)
