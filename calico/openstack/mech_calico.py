@@ -715,7 +715,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Get the data for both.
             try:
                 etcd_data = json.loads(endpoint.data)
-            except Exception:
+            except (ValueError, TypeError):
                 # If the JSON data is bad, just ignore it. We can't blow up
                 # here because that will trigger a new resync on another node
                 # that will blow *it* up as well. Just tolerate it.
@@ -802,8 +802,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Finally, reconcile the security profiles. This involves looping over
         # them, grabbing their data, and then comparing that to what Neutron
         # has.
-        changed_profiles = (p for p in profiles if p.id in reconcile_groups)
-        for etcd_profile in changed_profiles:
+        profiles_to_reconcile = (
+            p for p in profiles if p.id in reconcile_groups
+        )
+        for etcd_profile in profiles_to_reconcile:
             # Get the data from etcd.
             try:
                 etcd_profile = self.transport.get_profile_data(etcd_profile)
@@ -824,7 +826,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 etcd_rules = json.loads(etcd_profile.rules_data)
                 etcd_tags = json.loads(etcd_profile.tags_data)
-            except Exception:
+            except (ValueError, TypeError):
                 # If the JSON data is bad, just ignore it. We can't blow up
                 # here because that will trigger a new resync on another node
                 # that will blow *it* up as well. Just tolerate it.
