@@ -43,6 +43,7 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	# as the mountpoint directly since the host permissions may not allow the
 	# `user` account in the container to write to it.
 	-docker run -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
+	docopt-completion --manual-bash ./calicoctl
 
 test: ut st
 
