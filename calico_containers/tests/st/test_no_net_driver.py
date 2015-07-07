@@ -9,8 +9,7 @@ class TestNoNetDriver(TestBase):
         """
         Test mainline functionality without using the docker network driver.
         """
-        # TODO - work around https://github.com/docker/docker/issues/14107
-        with DockerHost('host', dind=True) as host:
+        with DockerHost('host', dind=False) as host:
             host.calicoctl("profile add TEST_GROUP")
 
             # Use standard docker bridge networking.
