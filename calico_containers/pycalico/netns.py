@@ -44,18 +44,18 @@ PROC_ALIAS = "/proc_host"
 """
 
 
-def setup_logging(logfile):
-    _log.setLevel(logging.DEBUG)
+def setup_logging(logfile, level=logging.INFO):
+    _log.setLevel(level)
     formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.INFO)
+    handler.setLevel(level)
     handler.setFormatter(formatter)
     _log.addHandler(handler)
     handler = logging.handlers.TimedRotatingFileHandler(logfile,
                                                         when='D',
                                                         backupCount=10)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(level)
     handler.setFormatter(formatter)
     _log.addHandler(handler)
 
@@ -157,7 +157,6 @@ def set_up_endpoint(ip, hostname, orchestrator_id, workload_id, cpid, next_hop_i
         check_call("ip link set %s up" % iface, shell=True)
         check_call("ip link set %s netns %s" % (iface_tmp, ns.name),
                    shell=True)
-        _log.debug(check_output("ip link", shell=True))
 
         if mac:
             ns.check_call("ip link set dev %s name %s address %s" %
@@ -266,7 +265,8 @@ class NamedNamespace(object):
         Add the appropriate configuration to name the namespace.  This links
         the PID to the namespace name.
         """
-        _log.debug("Creating link between ns name and PID")
+        _log.debug("Creating link between namespace %s and PID %s",
+                   self.name, self.pid_dir)
         try:
             os.makedirs("/var/run/netns")
         except os.error as oserr:
