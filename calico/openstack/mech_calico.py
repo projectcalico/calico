@@ -679,7 +679,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Fill out other information we need on the port and write to
                 # etcd.
                 port['fixed_ips'] = self.get_fixed_ips_for_port(
-                    context._plugin_context, port
+                    context, port
                 )
                 port['security_groups'] = self.get_security_groups_for_port(
                     context, port
