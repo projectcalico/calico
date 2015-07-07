@@ -112,6 +112,10 @@ def validate_arguments(arguments):
             except ValueError:
                 asnum_ok = False
 
+        detach_ok = True
+        if arguments.get("<DETACH>") or arguments.get("--detach"):
+            detach_ok = arguments.get("--detach") in ["true", "false"]
+
         if not profile_ok:
             print_paragraph("Profile names must be < 40 character long and can "
                             "only contain numbers, letters, dots, dashes and "
@@ -131,9 +135,12 @@ def validate_arguments(arguments):
             print "Invalid ICMP type or code specified."
         if not asnum_ok:
             print "Invalid AS Number specified."
+        if not detach_ok:
+            print "Valid values for --detach are 'true' and 'false'"
 
         if not (profile_ok and ip_ok and ip6_ok and tag_ok and peer_ip_ok and
-                    container_ip_ok and cidr_ok and icmp_ok and asnum_ok):
+                container_ip_ok and cidr_ok and icmp_ok and asnum_ok and
+                detach_ok):
             sys.exit(1)
 
 
