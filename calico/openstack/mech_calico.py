@@ -655,8 +655,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # Finally, scan each of the ports in changes_ports. Work out if there
         # are any differences. If there are, write out to etcd.
-        changed_endpoints = (e for e in endpoints if e.id in changes_ports)
-        self._resync_changed_ports(context, changed_endpoints)
+        common_endpoints = (e for e in endpoints if e.id in changes_ports)
+        self._resync_changed_ports(context, common_endpoints)
 
     def _resync_missing_ports(self, context, missing_port_ids):
         """
@@ -696,17 +696,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.info('Endpoint %s was deleted elsewhere', endpoint)
                 continue
 
-    def _resync_changed_ports(self, context, changed_endpoints):
+    def _resync_changed_ports(self, context, common_endpoints):
         """
         Reconcile all changed profiles by checking whether Neutron and etcd
         agree.
 
         :param context: A Neutron DB context.
-        :param changed_endpoints: An iterable of Endpoint objects that should
+        :param common_endpoints: An iterable of Endpoint objects that should
             be checked for changes.
         :returns: Nothing.
         """
-        for endpoint in changed_endpoints:
+        for endpoint in common_endpoints:
             # Get the endpoint data from etcd.
             try:
                 endpoint = self.transport.get_endpoint_data(endpoint)
