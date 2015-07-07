@@ -49,6 +49,9 @@ from calico.election import Elector
 # The node hostname is used as the default identity for leader election
 hostname = socket.gethostname()
 
+# The amount of time in seconds to wait for etcd responses.
+ETCD_TIMEOUT = 5
+
 # Register Calico-specific options.
 calico_opts = [
     cfg.StrOpt('etcd_host', default='localhost',
@@ -266,7 +269,7 @@ class CalicoTransportEtcd(object):
         """
         LOG.debug("Getting endpoint %s", endpoint.id)
 
-        result = self.client.read(endpoint.key, timeout=5)
+        result = self.client.read(endpoint.key, timeout=ETCD_TIMEOUT)
 
         return Endpoint(
             id=endpoint.id,
@@ -285,7 +288,9 @@ class CalicoTransportEtcd(object):
         LOG.info("Scanning etcd for all endpoints")
 
         try:
-            result = self.client.read(HOST_DIR, recursive=True, timeout=5)
+            result = self.client.read(
+                HOST_DIR, recursive=True, timeout=ETCD_TIMEOUT
+            )
         except etcd.EtcdKeyNotFound:
             # No key yet, which is totally fine: just exit.
             LOG.info("No endpoint key present.")
@@ -329,7 +334,9 @@ class CalicoTransportEtcd(object):
 
         try:
             self.client.delete(
-                endpoint.key, prevIndex=endpoint.modified_index, timeout=5
+                endpoint.key,
+                prevIndex=endpoint.modified_index,
+                timeout=ETCD_TIMEOUT,
             )
         except etcd.EtcdKeyNotFound:
             # Trying to delete stuff that doesn't exist is ok, but log it.
@@ -352,10 +359,10 @@ class CalicoTransportEtcd(object):
         LOG.debug("Getting profile %s", profile.id)
 
         tags_result = self.client.read(
-            key_for_profile_tags(profile.id), timeout=5
+            key_for_profile_tags(profile.id), timeout=ETCD_TIMEOUT
         )
         rules_result = self.client.read(
-            key_for_profile_rules(profile.id), timeout=5
+            key_for_profile_rules(profile.id), timeout=ETCD_TIMEOUT
         )
 
         return Profile(
@@ -375,7 +382,9 @@ class CalicoTransportEtcd(object):
         LOG.info("Scanning etcd for all profiles")
 
         try:
-            result = self.client.read(PROFILE_DIR, recursive=True, timeout=5)
+            result = self.client.read(
+                PROFILE_DIR, recursive=True, timeout=ETCD_TIMEOUT
+            )
         except etcd.EtcdKeyNotFound:
             # No key yet, which is totally fine: just exit.
             LOG.info("No profiles key present")
@@ -448,7 +457,7 @@ class CalicoTransportEtcd(object):
             self.client.delete(
                 key_for_profile_tags(profile.id),
                 prevIndex=profile.tags_modified_index,
-                timeout=5
+                timeout=ETCD_TIMEOUT
             )
         except etcd.EtcdKeyNotFound:
             LOG.info(
@@ -459,7 +468,7 @@ class CalicoTransportEtcd(object):
             self.client.delete(
                 key_for_profile_rules(profile.id),
                 prevIndex=profile.rules_modified_index,
-                timeout=5
+                timeout=ETCD_TIMEOUT
             )
         except etcd.EtcdKeyNotFound:
             LOG.info(
@@ -470,7 +479,7 @@ class CalicoTransportEtcd(object):
         profile_key = key_for_profile(profile.id)
 
         try:
-            self.client.delete(profile_key, dir=True, timeout=5)
+            self.client.delete(profile_key, dir=True, timeout=ETCD_TIMEOUT)
         except etcd.EtcdException as e:
             LOG.debug("Failed to delete %s (%r), giving up.", profile_key, e)
 
@@ -488,7 +497,7 @@ class CalicoTransportEtcd(object):
         for i in range(-1, -3, -1):
             delete_key = '/'.join(key_parts[:i])
             try:
-                self.client.delete(delete_key, dir=True, timeout=5)
+                self.client.delete(delete_key, dir=True, timeout=ETCD_TIMEOUT)
             except etcd.EtcdException as e:
                 LOG.debug("Failed to delete %s (%r), skipping.", delete_key, e)
 
