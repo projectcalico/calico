@@ -693,6 +693,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             except (ValueError, etcd.EtcdKeyNotFound):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the endpoint was created or updated elsewhere.
+                LOG.info('Endpoint %s was deleted elsewhere', endpoint)
                 continue
 
     def _resync_changed_ports(self, context, changed_endpoints):
@@ -725,7 +726,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # that is impossible for Neutron to be returning: nothing at
                 # all.
                 LOG.exception("Bad JSON data in key %s", endpoint.key)
-                etcd_data = []
+                etcd_data = None
 
             port = self.add_extra_port_information(context, port)
             neutron_data = port_etcd_data(port)
@@ -854,7 +855,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 etcd_profile.id, rules
             )
 
-            if not rules_match(etcd_profile, neutron_profile):
+            if not profiles_match(etcd_profile, neutron_profile):
                 # Write to etcd.
                 LOG.warning("Resolving error in profile %s", etcd_profile.id)
 
@@ -1004,7 +1005,7 @@ def port_bound(port):
     return port['binding:vif_type'] != 'unbound'
 
 
-def rules_match(etcd_profile, neutron_profile):
+def profiles_match(etcd_profile, neutron_profile):
     """
     Given a set of Neutron security group rules and a Profile read from etcd,
     compare if they're the same.
