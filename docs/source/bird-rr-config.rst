@@ -86,7 +86,7 @@ of your route reflector::
 
     # This pseudo-protocol watches all interface up/down events.
     protocol device {
-      scan time 2;    # Scan interfaces every 10 seconds
+      scan time 2;    # Scan interfaces every 2 seconds
     }
 
 Then, at the end, for each compute node in your deployment add one of the
