@@ -81,7 +81,6 @@ __doc__ = __doc__ % {"rule_spec": """    (allow|deny) [(
       [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
       [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
     )]"""}
-import json
 import os
 import re
 import socket
@@ -392,6 +391,19 @@ def node(node_image, log_dir, ip="", ip6="", as_num=None):
             raise
 
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
+    etcd_authority_split = etcd_authority.split(':')
+    if len(etcd_authority_split) != 2:
+        print_paragraph("Invalid %s. Must take the form <address>:<port>. Value " \
+              "provided is '%s'" % (ETCD_AUTHORITY_ENV, etcd_authority))
+        sys.exit(1)
+
+    etcd_authority_address = etcd_authority_split[0]
+    etcd_authority_port = etcd_authority_split[1]
+
+    # Always try to convert the address(hostname) to an IP. This is a noop if
+    # the address is already an IP address.
+    etcd_authority = '%s:%s' % (socket.gethostbyname(etcd_authority_address),
+                                etcd_authority_port)
 
     environment = [
         "HOSTNAME=%s" % hostname,
