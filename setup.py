@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 setup(
     name='pycalico',
 
-    version='0.4.8',
+    # Don't need a version until we publish to PIP or other forum.
+    # version='0.0.0',
 
     description='A Python API to Calico',
 
