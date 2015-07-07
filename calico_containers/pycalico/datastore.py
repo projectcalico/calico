@@ -764,13 +764,14 @@ class DatastoreClient(object):
         :return: Dict of {ip_version: IPAddress}
         """
 
-        bgp_ipv4 = BGP_HOST_IPV4_PATH  % {"hostname": hostname}
-        bgp_ipv6 = BGP_HOST_IPV6_PATH  % {"hostname": hostname}
+        bgp_ipv4 = BGP_HOST_IPV4_PATH % {"hostname": hostname}
+        bgp_ipv6 = BGP_HOST_IPV6_PATH % {"hostname": hostname}
         try:
             ipv4 = self.etcd_client.read(bgp_ipv4).value
             ipv6 = self.etcd_client.read(bgp_ipv6).value
         except EtcdKeyNotFound:
-            raise KeyError("BIRD configuration for host %s not found." % hostname)
+            raise KeyError("BGP configuration for host %s not found." %
+                           hostname)
 
         next_hops = {}
 

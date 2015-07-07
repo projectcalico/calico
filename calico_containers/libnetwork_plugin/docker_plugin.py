@@ -20,23 +20,24 @@ import sys
 
 from subprocess32 import check_call, CalledProcessError, call
 from werkzeug.exceptions import HTTPException, default_exceptions
-from netaddr import IPAddress, IPNetwork
+from netaddr import IPNetwork
 
+from libnetwork_plugin.datastore_libnetwork import LibnetworkDatastoreClient
 from pycalico.datastore import IF_PREFIX
 from pycalico.datastore_errors import DataStoreError
 from pycalico.datastore_datatypes import Endpoint
-from pycalico.ipam import SequentialAssignment, IPAMClient
+from pycalico.ipam import SequentialAssignment
+
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"
-
 CONTAINER_NAME = "libnetwork"
-
 ORCHESTRATOR_ID = "docker"
+
 # How long to wait (seconds) for IP commands to complete.
 IP_CMD_TIMEOUT = 5
 
 hostname = socket.gethostname()
-client = IPAMClient()
+client = LibnetworkDatastoreClient()
 
 # Return all errors as JSON. From http://flask.pocoo.org/snippets/83/
 def make_json_app(import_name, **kwargs):
@@ -47,10 +48,10 @@ def make_json_app(import_name, **kwargs):
     manage yourself will have application/json content
     type, and will contain JSON like this (just an example):
 
-    { "message": "405: Method Not Allowed" }
+    { "Err": "405: Method Not Allowed" }
     """
     def make_json_error(ex):
-        response = jsonify(message=str(ex))
+        response = jsonify({"Err":str(ex)})
         response.status_code = (ex.code
                                 if isinstance(ex, HTTPException)
                                 else 500)
@@ -80,12 +81,17 @@ def create_network():
     # If the JSON is malformed, then a BadRequest exception is raised,
     # which returns a HTTP 400 response.
     json_data = request.get_json(force=True)
+    app.logger.debug("CreateNetwork JSON=%s", json_data)
 
     # Create the "network" as a profile. The network ID is somewhat unwieldy
     # so in future we might want to obtain a human readable name for it.
     network_id = json_data["NetworkID"]
-    app.logger.info("Creating profile %s", network_id)
-    client.create_profile(network_id)
+
+    if client.profile_exists(network_id):
+        app.logger.info("Not creating existing profile %s", network_id)
+    else:
+        app.logger.info("Creating profile %s", network_id)
+        client.create_profile(network_id)
 
     return jsonify({})
 
@@ -93,6 +99,7 @@ def create_network():
 @app.route('/NetworkDriver.DeleteNetwork', methods=['POST'])
 def delete_network():
     json_data = request.get_json(force=True)
+    app.logger.debug("DeleteNetwork JSON=%s", json_data)
 
     # Remove the network. We don't raise an error if the profile is still
     # being used by endpoints. We assume libnetwork will enforce this.
@@ -100,8 +107,11 @@ def delete_network():
     #   LibNetwork will not allow the delete to proceed if there are any
     #   existing endpoints attached to the Network.
     network_id = json_data["NetworkID"]
-    app.logger.info("Removing profile %s", network_id)
-    client.remove_profile(network_id)
+    try:
+        client.remove_profile(network_id)
+        app.logger.info("Removed profile %s", network_id)
+    except KeyError:
+        app.logger.info("Not removing missing profile %s", network_id)
 
     return jsonify({})
 
@@ -109,96 +119,67 @@ def delete_network():
 @app.route('/NetworkDriver.CreateEndpoint', methods=['POST'])
 def create_endpoint():
     json_data = request.get_json(force=True)
+    app.logger.debug("CreateEndpoint JSON=%s", json_data)
     ep_id = json_data["EndpointID"]
-    net_id = json_data["NetworkID"]
+    if client.cnm_endpoint_exists(ep_id):
+        app.logger.info("Ignoring existing endpoint %s", ep_id)
+        return jsonify({})
+    app.logger.info("Creating endpoint %s", ep_id)
 
-    # Create a calico endpoint object which we can populate and return to
-    # libnetwork at the end of this method.
-    ep = Endpoint(hostname, "docker", CONTAINER_NAME, ep_id, "active",
-                  FIXED_MAC)
-    ep.profile_ids.append(net_id)
+    # If the host has a v4 address and a v4 pool defined then assign a v4
+    # address. Likewise for v6. If neither are assigned then abort.
+    next_hops = client.get_default_next_hops(hostname)
+    ip = None
+    ip6 = None
+    if next_hops.get(4):
+        ip = assign_ip("v4")
+        if ip:
+            app.logger.info("Assigned IPv4 %s for ep %s" % (ip, ep_id))
+        else:
+            app.logger.error("Failed to allocate IPv4 for endpoint %s", ep_id)
 
-    # This method is split into three phases that have side effects.
-    # 1) Assigning IP addresses
-    # 2) Creating VETHs
-    # 3) Writing the endpoint to the datastore.
-    #
-    # A failure in a later phase attempts to roll back the effects of
-    # the earlier phases.
-
-    # First up is IP assignment. By default we assign both IPv4 and IPv6
-    # addresses.
-    # IPv4 failures may abort the request if the address couldn't be assigned.
-    ipv4_and_gateway(ep)
-    # IPv6 is currently best effort and won't abort the request.
-    ipv6_and_gateway(ep)
-
-    # Next, create the veth.
-    try:
-        create_veth(ep)
-    except CalledProcessError as e:
-        # Failed to create or configure the veth.
-        # Back out the IP assignments and the veth creation.
-        app.logger.exception(e)
-        backout_ip_assignments(ep)
-        remove_veth(ep)
+    if next_hops.get(6):
+        ip6 = assign_ip("v6")
+        if ip6:
+            app.logger.info("Assigned IPv6 %s for ep %s" % (ip6, ep_id))
+        else:
+            app.logger.error("Failed to allocate IPv6 for endpoint %s", ep_id)
+    if not ip and not ip6:
+        app.logger.error("Failed to allocate and address for endpoint %s",
+                        ep_id)
         abort(500)
 
-    # Finally, write the endpoint to the datastore.
-    try:
-        client.set_endpoint(ep)
-    except DataStoreError as e:
-        # We've failed to write the endpoint to the datastore.
-        # Back out the IP assignments and the veth creation.
-        app.logger.exception(e)
-        backout_ip_assignments(ep)
-        remove_veth(ep)
-        abort(500)
+    # Create the JSON to return to libnetwork
+    response = {"Interfaces":
+                    [{"ID": 0,
+                     "MacAddress": FIXED_MAC}]}
+    if ip:
+        response["Interfaces"][0]["Address"] = str(ip)
+    if ip6:
+        response["Interfaces"][0]["AddressIPv6"] = str(ip6)
 
-    # Everything worked, create the JSON and return it to libnetwork.
-    assert len(ep.ipv4_nets) == 1
-    assert len(ep.ipv6_nets) <= 1
-    iface_json = {"ID": 0,
-                  "Address": str(list(ep.ipv4_nets)[0]),
-                  "MacAddress": ep.mac}
+    # Save this response along with the ep_id into the datastore.
+    client.write_cnm_endpoint(ep_id, response)
 
-    if ep.ipv6_nets:
-        iface_json["AddressIPv6"] = str(list(ep.ipv6_nets)[0])
-
-    return jsonify({"Interfaces": [iface_json]})
+    return jsonify(response)
 
 
 @app.route('/NetworkDriver.DeleteEndpoint', methods=['POST'])
 def delete_endpoint():
     json_data = request.get_json(force=True)
+    app.logger.debug("DeleteEndpoint JSON=%s", json_data)
     ep_id = json_data["EndpointID"]
-    app.logger.info("Removing endpoint %s", ep_id)
 
-    # Remove the endpoint from the datastore, the IPs that were assigned to
-    # it and the veth. Even if one fails, try to do the others.
-    ep = None
-    try:
-        ep = client.get_endpoint(hostname=hostname,
-                                 orchestrator_id="docker",
-                                 workload_id=CONTAINER_NAME,
-                                 endpoint_id=ep_id)
-        backout_ip_assignments(ep)
-    except (KeyError, DataStoreError) as e:
-        app.logger.exception(e)
-        app.logger.warning("Failed to unassign IPs for endpoint %s", ep_id)
+    # TODO - Should we backout IP assignment first in case of failure mid way through? If IP backout fails then there is no way to correlate endpoint with IPs again.
 
-    if ep:
-        try:
-            client.remove_endpoint(ep)
-        except DataStoreError as e:
-            app.logger.exception(e)
-            app.logger.warning("Failed to remove endpoint %s from datastore",
-                               ep_id)
+    # Backout IP assignment then remove CNM EP
+    cnm_ep = client.read_cnm_endpoint(ep_id)
 
-    # libnetwork expects us to delete the veth pair.  (Note that we only need
-    # to delete one end).
-    if ep:
-        remove_veth(ep)
+    if cnm_ep and client.delete_cnm_endpoint(ep_id):
+        app.logger.info("Removing endpoint %s", ep_id)
+        backout_ip_assignments(cnm_ep)
+    else:
+        app.logger.info("Not removing missing endpoint %s", ep_id)
 
     return jsonify({})
 
@@ -206,6 +187,7 @@ def delete_endpoint():
 @app.route('/NetworkDriver.EndpointOperInfo', methods=['POST'])
 def endpoint_oper_info():
     json_data = request.get_json(force=True)
+    app.logger.debug("EndpointOperInfo JSON=%s", json_data)
     ep_id = json_data["EndpointID"]
     app.logger.info("Endpoint operation info requested for %s", ep_id)
 
@@ -216,13 +198,47 @@ def endpoint_oper_info():
 @app.route('/NetworkDriver.Join', methods=['POST'])
 def join():
     json_data = request.get_json(force=True)
+    app.logger.debug("Join JSON=%s", json_data)
     ep_id = json_data["EndpointID"]
+    net_id = json_data["NetworkID"]
     app.logger.info("Joining endpoint %s", ep_id)
 
-    ep = client.get_endpoint(hostname=hostname,
-                             orchestrator_id="docker",
-                             workload_id=CONTAINER_NAME,
-                             endpoint_id=ep_id)
+    # Get CNM endpoint ID from datastore so we can find the IP addresses
+    # assigned to it.
+    cnm_ep = client.read_cnm_endpoint(ep_id)
+
+    # Read the next hops from etcd
+    next_hops = client.get_default_next_hops(hostname)
+
+    # Create a Calico endpoint object.
+    #TODO - set the CONTAINER_NAME to something better (the sandbox key?)
+    ep = Endpoint(hostname, "docker", CONTAINER_NAME, ep_id, "active",
+                  FIXED_MAC)
+    ep.profile_ids.append(net_id)
+
+    address_ip4 = cnm_ep['Interfaces'][0].get('Address')
+    if address_ip4:
+        ep.ipv4_nets.add(IPNetwork(address_ip4))
+        ep.ipv4_gateway = next_hops[4]
+
+    address_ip6 = cnm_ep['Interfaces'][0].get('AddressIPv6')
+    if address_ip6:
+        ep.ipv6_nets.add(IPNetwork(address_ip6))
+        ep.ipv6_gateway = next_hops[6]
+
+    try:
+        # Next, create the veth.
+        create_veth(ep)
+
+        # Finally, write the endpoint to the datastore.
+        client.set_endpoint(ep)
+    except (CalledProcessError, DataStoreError) as e:
+        # Failed to create or configure the veth, or failed to write the
+        # endpoint to the datastore. In both cases, ensure veth is removed.
+        app.logger.exception(e)
+        remove_veth(ep)
+        abort(500)
+
     ret_json = {
         "InterfaceNames": [{
             "SrcName": ep.temp_interface_name(),
@@ -233,7 +249,7 @@ def join():
             "Destination": "%s/32" % ep.ipv4_gateway,
             "RouteType": 1,  # 1 = CONNECTED
             "NextHop": "",
-            "InterfaceID": 0  # 1st interface created in EndpointCreate
+            "InterfaceID": 0
             }]
     }
     if ep.ipv6_gateway:
@@ -242,7 +258,7 @@ def join():
             "Destination": "%s/128" % ep.ipv6_gateway,
             "RouteType": 1,  # 1 = CONNECTED
             "NextHop": "",
-            "InterfaceID": 0  # 1st interface created in EndpointCreate
+            "InterfaceID": 0
             })
 
     return jsonify(ret_json)
@@ -251,14 +267,32 @@ def join():
 @app.route('/NetworkDriver.Leave', methods=['POST'])
 def leave():
     json_data = request.get_json(force=True)
+    app.logger.debug("Leave JSON=%s", json_data)
     ep_id = json_data["EndpointID"]
     app.logger.info("Leaving endpoint %s", ep_id)
 
-    # Noop. There's nothing to do.
+    # Remove the endpoint object and the veth
+    ep = None
+    try:
+        ep = client.get_endpoint(hostname=hostname,
+                                 orchestrator_id=ORCHESTRATOR_ID,
+                                 workload_id=CONTAINER_NAME,
+                                 endpoint_id=ep_id)
+        client.remove_endpoint(ep)
+    except (DataStoreError, KeyError) as e:
+        app.logger.exception(e)
+        app.logger.warning("Failed to remove endpoint %s from datastore",
+                           ep_id)
+    # TODO - Remove veth before removing endpoint from etcd in case of errors?
+    if ep:
+        remove_veth(ep)
+    else:
+        app.logger.warning("Failed to remove veth for endpoint %s", ep_id)
+        abort(500)
 
     return jsonify({})
 
-
+#TODO move assign_ip/unassign_ip
 def assign_ip(version):
     """
     Assign a IP address from the configured pools.
@@ -274,7 +308,7 @@ def assign_ip(version):
         assigner = SequentialAssignment()
         ip = assigner.allocate(pool)
         if ip is not None:
-            ip = IPAddress(ip)
+            ip = IPNetwork(ip)
             break
     return ip
 
@@ -294,53 +328,17 @@ def unassign_ip(ip):
     return False
 
 
-def ipv4_and_gateway(ep):
-    # Get the gateway before trying to assign an address. This will avoid
-    # needing to backout the assignment if fetching the gateway fails.
-    try:
-        next_hop = client.get_default_next_hops(hostname)[4]
-    except KeyError as e:
-        app.logger.exception(e)
-        abort(500)
+def backout_ip_assignments(cnm_ep):
+    # TODO - more testing
+    for address in (cnm_ep['Interfaces'][0].get('Address'),
+                    cnm_ep['Interfaces'][0].get('AddressIPv6')):
+        # If either of the addresses aren't present, then .get will just
+        # return None.
+        if address is not None and not unassign_ip(IPNetwork(address).ip):
+            # The unassignment is best effort. Just log if it fails.
+            app.logger.warn("Failed to unassign IP address %s", address)
 
-    ip = assign_ip("v4")
-    app.logger.info("Assigned IPv4 %s", ip)
-
-    if not ip:
-        app.logger.error("Failed to allocate IPv4 for endpoint %s",
-                         ep.endpoint_id)
-        abort(500)
-
-    ip = IPNetwork(ip)
-    ep.ipv4_nets.add(ip)
-    ep.ipv4_gateway = next_hop
-
-
-def ipv6_and_gateway(ep):
-    try:
-        next_hop6 = client.get_default_next_hops(hostname)[6]
-    except KeyError:
-        app.logger.info("Couldn't find IPv6 gateway for endpoint %s. "
-                        "Skipping IPv6 assignment.",
-                        ep.endpoint_id)
-    else:
-        ip6 = assign_ip("v6")
-        if ip6:
-            ip6 = IPNetwork(ip6)
-            ep.ipv6_gateway = next_hop6
-            ep.ipv6_nets.add(ip6)
-        else:
-            app.logger.info("Failed to allocate IPv6 address for endpoint %s",
-                            ep.endpoint_id)
-
-
-def backout_ip_assignments(ep):
-    for net in ep.ipv4_nets.union(ep.ipv6_nets):
-        # The unassignment is best effort. Just log if it fails.
-        if not unassign_ip(net.ip):
-            app.logger.warn("Failed to unassign IP %s", net.ip)
-
-
+# TODO move to netns
 def create_veth(ep):
     # Create the veth
     check_call(['ip', 'link',
@@ -359,7 +357,7 @@ def create_veth(ep):
                 'address', FIXED_MAC],
                timeout=IP_CMD_TIMEOUT)
 
-
+#TODO move to netns
 def remove_veth(ep):
     # The veth removal is best effort. If it fails then just log.
     rc = call(['ip', 'link', 'del', ep.name], timeout=IP_CMD_TIMEOUT)
