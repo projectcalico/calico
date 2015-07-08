@@ -21,7 +21,7 @@ write_files:
     content: |
       #!/bin/bash
       # Download calicoctl and make it executable:
-      wget http://projectcalico.org/latest/calicoctl
+      wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
       chmod +x ./calicoctl
       # Start the calico node service:
       sudo ./calicoctl node --ip=$private_ipv4

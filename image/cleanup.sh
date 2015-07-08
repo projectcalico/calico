@@ -1,11 +1,16 @@
 #!/bin/bash
+set -e
+set -x
+
+# Remove extra packages using dpkg rather than apt-get - this prevents us from
+# deleting dependent packages that we still require.
+# - Remove any temporary packages installed in the install.sh script.
+# - Remove any temporary packages installed in the base.sh script.
 echo "Removing extra packages"
-grep -Fxvf  /tmp/required.txt <(dpkg -l | grep ^ii | sed 's_  _\t_g' | cut -f 2) | xargs apt-get autoremove -qy
-cat /tmp/add-apt.txt | xargs apt-get autoremove -qy
+grep -Fxvf  /tmp/required.txt <(dpkg -l | grep ^ii | sed 's_  _\t_g' | cut -f 2) | xargs dpkg -r --force-depends
+cat /tmp/add-apt.txt | xargs xargs dpkg -r --force-depends
 
-# The above is a little keen. Reinstall one missing required package.
-apt-get install --reinstall python-pkg-resources
-
+# Remove any other junk created during installation that is not required.
 apt-get clean
 rm -rf /build
 rm -rf /tmp/* /var/tmp/*

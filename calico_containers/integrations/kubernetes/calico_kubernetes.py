@@ -14,7 +14,7 @@ if ETCD_AUTHORITY_ENV not in os.environ:
     os.environ[ETCD_AUTHORITY_ENV] = 'kubernetes-master:6666'
 print("Using ETCD_AUTHORITY=%s" % os.environ[ETCD_AUTHORITY_ENV])
 
-from calicoctl import container_add
+from calico_ctl.container import container_add
 from pycalico.datastore import IF_PREFIX
 from pycalico.util import generate_cali_interface_name
 

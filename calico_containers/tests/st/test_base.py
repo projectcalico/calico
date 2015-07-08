@@ -16,7 +16,7 @@ import subprocess
 from unittest import TestCase
 import logging
 
-from calico_containers.tests.st.utils.utils import get_ip
+from tests.st.utils.utils import get_ip
 
 logging.getLogger('sh').setLevel('INFO')
 

@@ -14,7 +14,7 @@
 from nose.plugins.attrib import attr
 
 from test_base import TestBase
-from calico_containers.tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost
 
 
 class TestDiags(TestBase):
@@ -26,4 +26,3 @@ class TestDiags(TestBase):
         with DockerHost('host', start_calico=False) as host:
             results = host.calicoctl("diags")
             self.assertIn(".tar.gz", results)
-

@@ -19,9 +19,9 @@ from etcd import EtcdKeyNotFound, EtcdException
 
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 
-from calico_containers.pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
+from pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
     Endpoint, Profile, Rule
-from calico_containers.pycalico.datastore_errors import DataStoreError, \
+from pycalico.datastore_errors import DataStoreError, \
     ProfileNotInEndpoint, ProfileAlreadyInEndpoint, MultipleEndpointsMatch
 
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
@@ -107,7 +107,7 @@ class DatastoreClient(object):
     @handle_errors
     def create_host(self, hostname, bird_ip, bird6_ip, as_num):
         """
-        Create a new Calico host.
+        Create a new Calico host configuration in etcd.
 
         :param hostname: The name of the host to create.
         :param bird_ip: The IP address BIRD should listen on.
@@ -157,6 +157,24 @@ class DatastoreClient(object):
             self.etcd_client.delete(host_path, dir=True, recursive=True)
         except EtcdKeyNotFound:
             pass
+
+    @handle_errors
+    def get_host_ips(self, hostname):
+        """
+        Check etcd for the configured IPv4 and IPv6 addresses for the specified
+        host. If it hasn't been configured yet, raise an EtcdKeyNotFound.
+
+        :param hostname: The hostname.
+        :return: A tuple containing the IPv4 and IPv6 address.
+        """
+        host_path = HOST_PATH % {"hostname": hostname}
+        try:
+            ipv4 = self.etcd_client.read(host_path + "bird_ip").value
+            ipv6 = self.etcd_client.read(host_path + "bird6_ip").value
+        except EtcdKeyNotFound:
+            raise KeyError("BIRD configuration for host %s not found." % hostname)
+        else:
+            return (ipv4, ipv6)
 
     @handle_errors
     def get_ip_pools(self, version):

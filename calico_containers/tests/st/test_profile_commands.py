@@ -16,7 +16,7 @@ import json
 from nose.plugins.attrib import attr
 
 from test_base import TestBase
-from calico_containers.tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost
 
 
 class TestProfileCommands(TestBase):
@@ -35,7 +35,11 @@ class TestProfileCommands(TestBase):
                               "src_tag": "TEST_PROFILE"},
                              {"action": "deny"}
                          ],
-                         "outbound_rules": [{"action": "deny"}]}
+                         "outbound_rules": [{"action": "deny",
+                                             "dst_net": "192.168.0.0/16"},
+                                            {
+                                                "action": "allow"
+                                            }]}
 
             update = json.dumps(json_dict)
             cmd = "/code/dist/calicoctl profile TEST_PROFILE rule update"

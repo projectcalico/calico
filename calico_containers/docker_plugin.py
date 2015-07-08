@@ -22,10 +22,10 @@ from subprocess32 import check_call, CalledProcessError, call
 from werkzeug.exceptions import HTTPException, default_exceptions
 from netaddr import IPAddress, IPNetwork
 
-from calico_containers.pycalico.datastore import IF_PREFIX
-from calico_containers.pycalico.datastore_errors import DataStoreError
-from calico_containers.pycalico.datastore_datatypes import Endpoint
-from calico_containers.pycalico.ipam import SequentialAssignment, IPAMClient
+from pycalico.datastore import IF_PREFIX
+from pycalico.datastore_errors import DataStoreError
+from pycalico.datastore_datatypes import Endpoint
+from pycalico.ipam import SequentialAssignment, IPAMClient
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"
 

@@ -27,6 +27,6 @@ The calicoctl tool has been installed at /home/vagrant/calicoctl, so this can be
 ## Integration
 To use the Calico network plugin on an existing Kubernetes deployment, you must perform the following steps:
  
-1. Build the plugin using `make kubernetes`, or download it from a [Calico release](https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calico_kubernetes).
-2. Copy the created calico_kubernetes plugin binary to the path `/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/calico` on each kubernetes node in your cluster.
+1. Download the plugin from a [Calico release](https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calico_kubernetes).
+2. Copy the calico_kubernetes plugin binary to the path `/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/calico` on each kubernetes node in your cluster.
 3. Restart the node kubelet processes with the flag `--network_plugin=calico"`.

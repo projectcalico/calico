@@ -16,9 +16,8 @@ from etcd import EtcdKeyNotFound, EtcdAlreadyExist
 
 from netaddr import IPAddress, IPNetwork
 
-from datastore import DatastoreClient
-from calico_containers.pycalico.datastore_datatypes import IPPool
-from datastore import CALICO_V_PATH
+from pycalico.datastore_datatypes import IPPool
+from pycalico.datastore import CALICO_V_PATH, DatastoreClient
 
 IP_ASSIGNMENT_PATH = CALICO_V_PATH + "/ipam/%(version)s/assignment/%(pool)s"
 IP_ASSIGNMENT_KEY = IP_ASSIGNMENT_PATH + "/%(address)s"

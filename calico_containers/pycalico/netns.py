@@ -18,14 +18,15 @@ import socket
 import logging
 import logging.handlers
 import os
+import errno
 import sys
 import uuid
 
 from netaddr import IPNetwork, IPAddress
 from calico_containers.pycalico.util import generate_cali_interface_name
 
-from datastore import IF_PREFIX
-from calico_containers.pycalico.datastore_datatypes import Endpoint, VETH_NAME
+from pycalico.datastore import IF_PREFIX
+from pycalico.datastore_datatypes import Endpoint, VETH_NAME
 
 _log = logging.getLogger(__name__)
 
@@ -44,18 +45,18 @@ PROC_ALIAS = "/proc_host"
 """
 
 
-def setup_logging(logfile):
-    _log.setLevel(logging.DEBUG)
+def setup_logging(logfile, level=logging.INFO):
+    _log.setLevel(level)
     formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] %(name)s %(lineno)d: %(message)s')
     handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.INFO)
+    handler.setLevel(level)
     handler.setFormatter(formatter)
     _log.addHandler(handler)
     handler = logging.handlers.TimedRotatingFileHandler(logfile,
                                                         when='D',
                                                         backupCount=10)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(level)
     handler.setFormatter(formatter)
     _log.addHandler(handler)
 
@@ -157,7 +158,6 @@ def set_up_endpoint(ip, hostname, orchestrator_id, workload_id, cpid, next_hop_i
         check_call("ip link set %s up" % iface, shell=True)
         check_call("ip link set %s netns %s" % (iface_tmp, ns.name),
                    shell=True)
-        _log.debug(check_output("ip link", shell=True))
 
         if mac:
             ns.check_call("ip link set dev %s name %s address %s" %
@@ -257,17 +257,23 @@ class NamedNamespace(object):
         self.name = uuid.uuid1().hex
         self.pid_dir = "%s/%s/ns/net" % (proc, cpid)
         self.nsn_dir = "/var/run/netns/%s" % self.name
+        if not os.path.exists(self.pid_dir):
+            raise NamespaceError("Namespace pseudofile %s does not exist." %
+                                 self.pid_dir)
 
     def __enter__(self):
         """
         Add the appropriate configuration to name the namespace.  This links
         the PID to the namespace name.
         """
-        _log.debug("Creating link between ns name and PID")
+        _log.debug("Creating link between namespace %s and PID %s",
+                   self.name, self.pid_dir)
         try:
             os.makedirs("/var/run/netns")
-        except os.error:
-            _log.info("Unable to create /var/run/netns dir")
+        except os.error as oserr:
+            if oserr.errno != errno.EEXIST:
+                _log.error("Unable to create /var/run/netns dir")
+                raise
         os.symlink(self.pid_dir, self.nsn_dir)
         return self
 
@@ -296,3 +302,9 @@ class NamedNamespace(object):
         _log.debug("Run command: %s", command)
         return check_output("ip netns exec %s %s" % (self.name, command),
                             shell=shell)
+
+class NamespaceError(Exception):
+    """
+    Error creating or manipulating a network namespace.
+    """
+    pass

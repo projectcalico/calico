@@ -56,7 +56,7 @@ export NODE_IP=<This Node's IP Address>
 Run the following set of commands on each **node** to download and start Calico.
 ```
 # Download calicoctl and make it executable:
-wget http://projectcalico.org/latest/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
 chmod +x ./calicoctl
 
 # Point this node at the etcd cluster
@@ -81,7 +81,7 @@ Run the following on your **client**:
 export MANAGER_IP=<Manager's IP Address>
 
 # Download calicoctl and make it executable:
-wget http://projectcalico.org/latest/calicoctl
+wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
 chmod +x ./calicoctl
 
 # Point this node at the etcd cluster
