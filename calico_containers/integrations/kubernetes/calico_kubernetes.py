@@ -1,5 +1,4 @@
 #!/bin/python
-from collections import namedtuple
 import json
 import os
 import socket
@@ -32,12 +31,12 @@ class NetworkPlugin(object):
         self.pod_name = None
         self.docker_id = None
 
-    def create(self, args):
+    def create(self, pod_name, docker_id):
         """"Create a pod."""
         # Calicoctl does not support the '-' character in iptables rule names.
         # TODO: fix Felix to support '-' characters.
-        self.pod_name = args[3].replace('-', '_')
-        self.docker_id = args[4]
+        self.pod_name = pod_name
+        self.docker_id = docker_id
 
         print('Configuring docker container %s' % self.docker_id)
 
@@ -49,10 +48,10 @@ class NetworkPlugin(object):
                 e.returncode, e.output, e))
             sys.exit(1)
 
-    def delete(self, args):
+    def delete(self, pod_name, docker_id):
         """Cleanup after a pod."""
-        self.pod_name = args[3].replace('-', '_')
-        self.docker_id = args[4]
+        self.pod_name = pod_name
+        self.docker_id = docker_id
 
         # Remove the profile for the workload.
         calicoctl('container', 'remove', self.docker_id)
@@ -99,6 +98,10 @@ class NetworkPlugin(object):
 
         This hits a well-known IP (the Google public DNS).
         """
+        # We'd like to use the k8s API here, but it doesn't work in the Vagrant
+        # case since the node's name is set to its IP (so we have no way of
+        # getting from hostname=>IP).
+        # TODO: do this more reliably by parsing 'ip
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('8.8.8.8', 80))
         ip = s.getsockname()[0]
@@ -179,6 +182,7 @@ class NetworkPlugin(object):
         return ports
 
     def _get_pod_config(self):
+        """Get the list of pods from the Kube API server."""
         pods = self._get_api_path('pods')
         print('Got pods %s' % pods)
 
@@ -193,8 +197,7 @@ class NetworkPlugin(object):
         return this_pod
 
     def _get_api_path(self, path):
-        """
-        Get the list of pods from the Kube API server.
+        """Get a resource from the API specified API path.
 
         e.g.
         _get_api_path('pods')
@@ -319,9 +322,13 @@ if __name__ == '__main__':
 
     if mode == 'init':
         print('No initialization work to perform')
-    elif mode == 'setup':
-        print('Executing Calico pod-creation hook')
-        NetworkPlugin().create(sys.argv)
-    elif mode == 'teardown':
-        print('Executing Calico pod-deletion hook')
-        NetworkPlugin().delete(sys.argv)
+    else:
+        # These args only present for setup/teardown.
+        pod_name = sys.argv[3].replace('-', '_')
+        docker_id = sys.argv[4]
+        if mode == 'setup':
+            print('Executing Calico pod-creation hook')
+            NetworkPlugin().create(pod_name, docker_id)
+        elif mode == 'teardown':
+            print('Executing Calico pod-deletion hook')
+            NetworkPlugin().delete(pod_name, docker_id)
