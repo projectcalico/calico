@@ -11,7 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Usage:
+  calicoctl diags [--log-dir=<LOG_DIR>] [--upload]
 
+Description:
+  Save diagnostic information
+
+Options:
+  --log-dir=<LOG_DIR>  The directory for logs [default: /var/log/calico]
+  --upload             Flag, when set, will upload logs to http://transfer.sh
+"""
+import sys
+from utils import enforce_root
+import sh
 import os
 from datetime import datetime
 import tarfile
@@ -20,10 +33,21 @@ import tempfile
 import subprocess
 from etcd import EtcdException
 from shutil import copytree
-
-import sh
-
 from pycalico.datastore import DatastoreClient
+
+
+def diags(arguments):
+    """
+    Main dispatcher for diags commands. Calls the corresponding helper function.
+
+    :param arguments: A dictionary of arguments already processed through
+    this file's docstring with docopt
+    :return: None
+    """
+    enforce_root()
+    print("Collecting diags")
+    save_diags(arguments["--log-dir"], arguments["--upload"])
+    sys.exit(0)
 
 
 def save_diags(log_dir, upload=False):
@@ -136,4 +160,3 @@ def upload_temp_diags(diags_path):
     curl_process.communicate()
     curl_process.wait()
     print("Done")
-

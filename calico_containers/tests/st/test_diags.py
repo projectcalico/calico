@@ -26,4 +26,3 @@ class TestDiags(TestBase):
         with DockerHost('host', start_calico=False) as host:
             results = host.calicoctl("diags")
             self.assertIn(".tar.gz", results)
-
