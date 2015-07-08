@@ -23,7 +23,7 @@ import sys
 import uuid
 
 from netaddr import IPNetwork, IPAddress
-from calico_containers.pycalico.util import generate_cali_interface_name
+from pycalico.util import generate_cali_interface_name
 
 from pycalico.datastore import IF_PREFIX
 from pycalico.datastore_datatypes import Endpoint, VETH_NAME
