@@ -23,8 +23,7 @@ class TestMainline(TestBase):
         """
         Setup two endpoints on one host and check connectivity.
         """
-        # TODO dind=True is just to work around https://github.com/docker/docker/issues/14107
-        with DockerHost('host', dind=True) as host:
+        with DockerHost('host', dind=False) as host:
             network = host.create_network(str(uuid.uuid4()))
             node1 = host.create_workload(str(uuid.uuid4()), network=network)
             node2 = host.create_workload(str(uuid.uuid4()), network=network)
