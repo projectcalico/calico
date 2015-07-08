@@ -23,8 +23,9 @@ print("Using CALICOCTL_PATH=%s" % CALICOCTL_PATH)
 calicoctl = sh.Command(CALICOCTL_PATH).bake(_env=os.environ)
 
 KUBE_API_ROOT = os.environ.get('KUBE_API_ROOT',
-                               'https://kubernetes-master:6443/api/v1beta3/')
+                               'https://kubernetes-master:443/api/v1/')
 print("Using KUBE_API_ROOT=%s" % KUBE_API_ROOT)
+
 
 class NetworkPlugin(object):
     def __init__(self):
@@ -160,7 +161,9 @@ class NetworkPlugin(object):
 
         self._apply_tags(profile_name, pod)
 
-        # Also add the workload to the profile.
+        # Also set the profile for the workload.
+        print('Setting profile %s on endpoint %s' %
+              (profile_name, endpoint.endpoint_id))
         calicoctl('endpoint', endpoint.endpoint_id,
                   'profile', 'set', profile_name)
         print('Finished configuring profile.')
