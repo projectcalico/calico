@@ -48,7 +48,10 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 test: ut st
 
 ut: calicobuild.created
-	docker run --rm -v `pwd`/calico_containers:/code \
+	# Use the `root` user, since code coverage requires the /code directory to
+	# be writable.  It may not be writable for the `user` account inside the
+	# container.
+	docker run --rm -v `pwd`/calico_containers:/code -u root \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests tests/unit -c nose.cfg'
