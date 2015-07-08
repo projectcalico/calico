@@ -7,6 +7,7 @@ BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 # There are subdirectories so use shell rather than wildcard
 NODE_FILESYSTEM=$(shell find node_filesystem/ -type f)
 NODE_FILES=Dockerfile $(wildcard image/*) $(NODE_FILESYSTEM)
+WHEEL_VERSION=0.0.0
 
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -15,6 +16,7 @@ ST_TO_RUN?=calico_containers/tests/st/
 default: all
 all: test
 binary: dist/calicoctl
+wheel: dist/pycalico-$(WHEEL_VERSION)-py2-none-any.whl
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
 	docker build -t calico/node .
@@ -44,6 +46,11 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	# `user` account in the container to write to it.
 	-docker run -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
 	docopt-completion --manual-bash ./calicoctl
+
+dist/pycalico-$(WHEEL_VERSION)-py2-none-any.whl: $(PYCALICO)
+	mkdir -p dist
+	chmod 777 dist
+	python setup.py bdist_wheel
 
 test: ut st
 
@@ -109,10 +116,12 @@ create-dind:
 	docker rm -f $$ID
 
 clean:
-	-rm *.created
+	-rm -f *.created
 	find . -name '*.pyc' -exec rm -f {} +
-	-rm -r dist
-	-rm calico_containers/busybox.tar
+	-rm -rf dist
+	-rm -rf build
+	-rm -rf calico_containers/pycalico.egg-info/
+	-rm -f calico_containers/busybox.tar
 	-docker rm -f calico-build
 	-docker rm -f calico-node
 	-docker rmi calico/node
