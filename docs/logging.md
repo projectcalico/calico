@@ -23,7 +23,7 @@ Directory | Default level
 To change the level, edit the config file at `node_filesystem/templates/bird.cfg.template` by following the [documentation](http://bird.network.cz/?get_doc&f=bird-3.html). This will require a rebuild of the calico-node image.
 
 ## Felix
-Felix is thhe primary Calico agent that runs on each machine that hosts endpoints.
+Felix is the primary Calico agent that runs on each machine that hosts endpoints.
 
 Directory | Default level
 --- | ---
