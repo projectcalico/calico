@@ -157,7 +157,7 @@ class NetworkPlugin(object):
         calicoctl('profile', 'add', profile_name)
         pod = self._get_pod_config()
 
-        self._apply_rules(profile_name, pod)
+        self._apply_rules(profile_name)
 
         self._apply_tags(profile_name, pod)
 
