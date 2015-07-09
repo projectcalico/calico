@@ -44,7 +44,7 @@ Get the calico binary onto each host.  You can download a specific [release](htt
 	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.0/calicoctl
 	chmod +x calicoctl
 
-Finally, preload the Calico Docker image.  This will make the demo more responsive the first time you run it.  Select the same version of the Calico Docker image as you selected for the calico binary.  For example, to pull the latest released version
+Finally, you can optionally preload the Calico Docker image.  This will make the Calico container creation more responsive the first time you run it.  Select the same version of the Calico Docker image as you selected above.  For example, to pull the latest released version
 
     docker pull calico/node:v0.5.0
 
