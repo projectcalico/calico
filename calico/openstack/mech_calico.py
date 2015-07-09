@@ -722,11 +722,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.exception("Bad JSON data in key %s", endpoint.key)
                 continue
 
-            self.add_port_gateways(port, context)
-            self.add_port_interface_name(port)
+            port['fixed_ips'] = self.get_fixed_ips_for_port(
+                context, port
+            )
             port['security_groups'] = self.get_security_groups_for_port(
                 context, port
             )
+            self.add_port_gateways(port, context)
+            self.add_port_interface_name(port)
             neutron_data = port_etcd_data(port)
 
             if etcd_data != neutron_data:
