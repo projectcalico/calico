@@ -7,14 +7,16 @@ This document describes requirements and best practices for setting up a cluster
 2 servers (bare metal or VMs) with a modern 64-bit Linux OS, and Layer-2 network (Ethernet) connectivity between them.
 
 They must have the following software installed.
- * Docker v1.4 or greater: [Installing Docker](https://docs.docker.com/installation/)
+ * Docker v1.8 or greater: [Experimental Docker](https://experimental.docker.com)
  * etcd installed and available on each node: [etcd Documentation](https://coreos.com/etcd/docs/2.0.8/)
  * `ipset`, `iptables`, and `ip6tables` kernel modules.
 
 ## Best Practices
 
 ### CoreOS
-If CoreOS is your distribution, we recommend using cloud-config to bootstrap your etcd cluster.  [CoreOS Cluster Discovery](https://coreos.com/docs/cluster-management/setup/cluster-discovery/) is a good place to start.
+A prepackaged version of CoreOS with the most recent version of Docker is not yet available.  Calico uses the [libnetwork plugin](https://github.com/docker/libnetwork) which is currently only available in Experimental Docker v1.8.
+
+If CoreOS is your distribution, we recommend viewing an earlier version of our [Manual Cluster Setup](https://github.com/Metaswitch/calico-docker/blob/powerstrip-archive/docs/ManualClusterSetup.md) which uses the Powerstrip plugin.
 
 ### Ubuntu
 The Ubuntu-managed Docker package is out of date and will not work with `calicoctl`.  We recommend you follow the instructions at the [Docker Website](https://docs.docker.com/installation/) to get an up-to-date Docker install.
@@ -42,9 +44,9 @@ Get the calico binary onto each host. It's usually safe to just grab the latest 
     wget http://projectcalico.org/latest/calicoctl
 	chmod +x calicoctl
 
-Note that projectcalico.org is not an HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the v0.4.8 release, on each host run
+Note that projectcalico.org is not an HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the v0.5.0 release, on each host run
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.0/calicoctl
 	chmod +x calicoctl
 
 Finally, preload the Calico Docker image.  This will make the demo more responsive the first time you run it.  Select the same version of the Calico Docker image as you selected for the calico binary.  For example, to pull the latest beta
@@ -53,7 +55,7 @@ Finally, preload the Calico Docker image.  This will make the demo more responsi
 
 or to pull the latest released version
 
-    docker pull calico/node:v0.4.8
+    docker pull calico/node:v0.5.0
 
 You are now ready to run the [example commands][example-commands].
 
