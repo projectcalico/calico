@@ -19,7 +19,7 @@ A prepackaged version of CoreOS with the most recent version of Docker is not ye
 If CoreOS is your distribution, we recommend viewing an earlier version of our [Manual Cluster Setup](https://github.com/Metaswitch/calico-docker/blob/powerstrip-archive/docs/ManualClusterSetup.md) which uses the Powerstrip plugin.
 
 ### Ubuntu
-The Ubuntu-managed Docker package is out of date and will not work with `calicoctl`.  We recommend you follow the instructions at the [Docker Website](https://docs.docker.com/installation/) to get an up-to-date Docker install.
+The Ubuntu-managed Docker package is out of date and will not work with `calicoctl`.  We recommend you follow the instructions in the comments of the [Experimental Docker Website](https://experimental.docker.com) to get an up-to-date Docker install.
 
 ### Final checks
 
