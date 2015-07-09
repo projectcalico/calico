@@ -1,6 +1,6 @@
 # Getting started with Calico on Docker
 
->*Note that Calico uses Docker's [libnetwork network driver](https://github.com/docker/libnetwork), available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release.  This replaces Calico's use of powerstrip as a network plugin.   However, Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so the stable powerstrip cluster configuration with CoreOS is still available [here](https://github.com/Metaswitch/calico-coreos-vagrant-example).*
+>*Note that Calico uses Docker's [libnetwork network driver](https://github.com/docker/libnetwork), available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release.  This replaces Calico's use of powerstrip as a network plugin.   However, Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so the stable powerstrip cluster configuration with CoreOS is still available [here](https://github.com/Metaswitch/calico-docker/blob/powerstrip-archive/docs/GettingStarted.md).*
 
 *In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
 * Use Vagrant to set up a virtual cluster on your laptop or workstation, following these instructions: [Calico Ubuntu Vagrant][calico-ubuntu-vagrant].
@@ -47,10 +47,10 @@ You should see output like this on each node
 
 ## Creating networked endpoints
 
-The experimantal channel version of Docker introduces a new flag to `docker run` to network containers:  `--publish-service <service>.<network>.<driver>`.
+The experimental channel version of Docker introduces a new flag to `docker run` to network containers:  `--publish-service <service>.<network>.<driver>`.
 
  * `<service>` is the name by which you want the container to be known on the network.
- * `<network>` is the name of the network to join.  Containers on different networks cannot communicate.
+ * `<network>` is the name of the network to join.  Containers on different networks cannot communicate with each other.
  * `<driver>` is the name of the network driver to use.  Calico's driver is called `calico`.
 
 So let's go ahead and start a few of containers on each host.
@@ -116,7 +116,7 @@ Verify connectivity by pinging.
 
 On ubuntu-0
 
-    ping6 fd80:24e2:f998:72d6::2
+    ping6 -c 4 fd80:24e2:f998:72d7::2
 
 Then restart your calico-node processes with the `--ip6` parameter to enable v6 routing.
 
