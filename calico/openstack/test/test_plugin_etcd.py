@@ -244,6 +244,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Delete lib.port1.
         context = mock.MagicMock()
         context._port = lib.port1
+        context._plugin_context.session.query.return_value.filter_by.side_effect = (
+            self.ips_for_port
+        )
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))

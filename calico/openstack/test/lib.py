@@ -30,6 +30,7 @@ sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()
 sys.modules['neutron.common'] = m_neutron.common
 sys.modules['neutron.common.exceptions'] = m_neutron.common.exceptions
+sys.modules['neutron.db'] = m_neutron.db
 sys.modules['neutron.openstack'] = m_neutron.openstack
 sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
 sys.modules['neutron.plugins'] = m_neutron.plugins
@@ -140,6 +141,10 @@ class Lib(object):
         # Hook the (mock) Neutron database.
         self.db = mech_calico.manager.NeutronManager.get_plugin()
         self.db_context = mech_calico.ctx.get_admin_context()
+
+        self.db_context.session.query.return_value.filter_by.side_effect = (
+            self.ips_for_port
+        )
 
         # Arrange what the DB's get_ports will return.
         self.db.get_ports.side_effect = self.get_ports
@@ -422,3 +427,12 @@ class Lib(object):
 
         return [b for b in self.port_security_group_bindings
                 if b['port_id'] in allowed_ids]
+
+    def ips_for_port(self, port_id):
+        for port in self.osdb_ports:
+            if port['id'] == port_id:
+                break
+        else:
+            return None
+
+        return port['fixed_ips']

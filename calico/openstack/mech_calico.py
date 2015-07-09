@@ -31,6 +31,7 @@ from functools import wraps
 
 # OpenStack imports.
 from neutron.common import constants
+from neutron.db import models_v2
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from neutron import context as ctx
@@ -291,11 +292,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
 
             # Next, fill out other information we need on the port.
-            self.add_port_gateways(port, context._plugin_context)
-            self.add_port_interface_name(port)
+            port['fixed_ips'] = self.get_fixed_ips_for_port(
+                context._plugin_context, port
+            )
             port['security_groups'] = self.get_security_groups_for_port(
                 context._plugin_context, port
             )
+            self.add_port_gateways(port, context._plugin_context)
+            self.add_port_interface_name(port)
 
             # Next, we need to work out what security profiles apply to this
             # port and grab information about it.
@@ -437,11 +441,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # a separate port update event occur?
         LOG.info("Port becoming bound: create.")
         port = self.db.get_port(context._plugin_context, port['id'])
-        self.add_port_gateways(port, context._plugin_context)
-        self.add_port_interface_name(port)
+        port['fixed_ips'] = self.get_fixed_ips_for_port(
+            context._plugin_context, port
+        )
         port['security_groups'] = self.get_security_groups_for_port(
             context._plugin_context, port
         )
+        self.add_port_gateways(port, context._plugin_context)
+        self.add_port_interface_name(port)
         profiles = self.get_security_profiles(
             context._plugin_context, port
         )
@@ -489,11 +496,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             with context._plugin_context.session.begin(subtransactions=True):
                 port = self.db.get_port(context._plugin_context, port['id'])
-                self.add_port_gateways(port, context._plugin_context)
-                self.add_port_interface_name(port)
+                port['fixed_ips'] = self.get_fixed_ips_for_port(
+                    context._plugin_context, port
+                )
                 port['security_groups'] = self.get_security_groups_for_port(
                     context._plugin_context, port
                 )
+                self.add_port_gateways(port, context._plugin_context)
+                self.add_port_interface_name(port)
                 profiles = self.get_security_profiles(
                     context._plugin_context, port
                 )
@@ -668,11 +678,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for port in missing_ports:
                 # Fill out other information we need on the port and write to
                 # etcd.
-                self.add_port_gateways(port, context)
-                self.add_port_interface_name(port)
+                port['fixed_ips'] = self.get_fixed_ips_for_port(
+                    context, port
+                )
                 port['security_groups'] = self.get_security_groups_for_port(
                     context, port
                 )
+                self.add_port_gateways(port, context)
+                self.add_port_interface_name(port)
                 self.transport.endpoint_created(port)
 
     def resync_profiles(self, context):
@@ -759,6 +772,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             context, filters=filters
         )
         return [binding['security_group_id'] for binding in bindings]
+
+    def get_fixed_ips_for_port(self, context, port):
+        """
+        Obtains a complete list of fixed IPs for a port.
+
+        Much like with security groups, for some insane reason we're given an
+        out of date port dictionary when we call get_port. This forces an
+        explicit query of the IPAllocation table to get the right data out of
+        Neutron.
+        """
+        return [
+            {'subnet_id': ip['subnet_id'], 'ip_address': ip['ip_address']}
+            for ip in context.session.query(
+                models_v2.IPAllocation
+            ).filter_by(
+                port_id=port['id']
+            )
+        ]
 
 
 # This section monkeypatches the AgentNotifierApi.security_groups_rule_updated
