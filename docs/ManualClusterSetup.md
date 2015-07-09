@@ -14,7 +14,7 @@ They must have the following software installed.
 ## Best Practices
 
 ### CoreOS
-A prepackaged version of CoreOS with the most recent version of Docker is not yet available.  Calico uses the [libnetwork plugin](https://github.com/docker/libnetwork) which is currently only available in Experimental Docker v1.8.
+A prepackaged version of CoreOS with the required version of Docker is not yet available.  Calico uses the [libnetwork plugin](https://github.com/docker/libnetwork) which is currently only available in Experimental Docker v1.8.
 
 If CoreOS is your distribution, we recommend viewing an earlier version of our [Manual Cluster Setup](https://github.com/Metaswitch/calico-docker/blob/powerstrip-archive/docs/ManualClusterSetup.md) which uses the Powerstrip plugin.
 
