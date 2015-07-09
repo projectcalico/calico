@@ -31,7 +31,7 @@ Get the calico binary onto each node:
 
 Note that projectcalico.org is not an HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  e.g.
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.4/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
 	chmod +x calicoctl
 
 Launch the Calico Node service on each Docker Host you want to use with Calico.

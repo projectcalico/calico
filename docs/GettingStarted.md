@@ -1,7 +1,9 @@
 # Getting started with Calico on Docker
 
+>*Note that Calico uses Docker's [libnetwork network driver](https://github.com/docker/libnetwork), available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release.  This replaces Calico's use of powerstrip as a network plugin.   However, Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so the stable powerstrip cluster configuration with CoreOS is still available [here](https://github.com/Metaswitch/calico-docker/blob/powerstrip-archive/docs/GettingStarted.md).*
+
 *In order to run this example you will need a 2-node Linux cluster with Docker and etcd installed and running.*  You can do one of the following.
-* Use Vagrant to set up a virtual cluster on your laptop or workstation, following these instructions: [Calico CoreOS Vagrant][calico-coreos-vagrant].
+* Use Vagrant to set up a virtual cluster on your laptop or workstation, following these instructions: [Calico Ubuntu Vagrant][calico-ubuntu-vagrant].
 * Set up a cluster manually yourself, following these instructions: [Manual Cluster Setup](./ManualClusterSetup.md).
 
 If you want to get started quickly and easily then we recommend just using Vagrant.
@@ -9,12 +11,12 @@ If you want to get started quickly and easily then we recommend just using Vagra
 If you have difficulty, try the [Troubleshooting Guide](./Troubleshooting.md).
 
 ### A note about names & addresses
-In this example, we will use the server names and IP addresses from the [Calico CoreOS Vagrant][calico-coreos-vagrant] example.
+In this example, we will use the server names and IP addresses from the [Calico Ubuntu Vagrant][calico-ubuntu-vagrant] example.
 
 | hostname | IP address   |
 |----------|--------------|
-| core-01  | 172.17.8.101 |
-| core-02  | 172.17.8.102 |
+| ubuntu-0 | 172.17.8.100 |
+| ubuntu-1 | 172.17.8.101 |
 
 If you set up your own cluster, substitute the hostnames and IP addresses assigned to your servers.
 
@@ -22,13 +24,13 @@ If you set up your own cluster, substitute the hostnames and IP addresses assign
 
 Once you have your cluster up and running, start calico on all the nodes
 
-On core-01
+On ubuntu-0
+
+    sudo ./calicoctl node --ip=172.17.8.100
+
+On ubuntu-1
 
     sudo ./calicoctl node --ip=172.17.8.101
-
-On core-02
-
-    sudo ./calicoctl node --ip=172.17.8.102
 
 This will start a container. Check they are running
 
@@ -36,144 +38,114 @@ This will start a container. Check they are running
 
 You should see output like this on each node
 
-    core@core-01 ~ $ docker ps
-    CONTAINER ID        IMAGE                      COMMAND                CREATED             STATUS              PORTS               NAMES
-    077ceae44fe3        calico/node:v0.4.8     "/sbin/my_init"     About a minute ago   Up About a minute                       calico-node
+    vagrant@ubuntu-0:~$ docker ps -a
+    CONTAINER ID        IMAGE                    COMMAND                CREATED             STATUS              PORTS                                            NAMES
+    39de206f7499        calico/node:v0.5.0   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
+    5e36a7c6b7f0        quay.io/coreos/etcd  "/etcd --name calico   30 minutes ago      Up 30 minutes       0.0.0.0:4001->4001/tcp, 0.0.0.0:7001->7001/tcp   quay.io-coreos-etcd
 
-## Routing via Powerstrip
 
->*Note that Calico's use of powerstrip support will shortly be replaced by Docker's new [libnetwork network driver support](https://github.com/docker/libnetwork) available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release.  However, Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so for now we are continuing to support powerstrip in parallel with libnetwork.*
-
-To allow Calico to set up networking automatically during container creation, Docker API calls need to be routed through the `Powerstrip` proxy which is running on port `2377` on each node. The easiest way to do this is to set the environment before running docker commands.  
-
-On both hosts run
-
-    export DOCKER_HOST=localhost:2377
-
-(Note - this export will only persist for your current SSH session)
-
-Later, once you have guest containers and you want to attach to them or to execute a specific command in them, you'll probably need to skip the Powerstrip proxying, such that the `docker attach` or `docker exec` command speaks directly to the Docker daemon; otherwise standard input and output don't flow cleanly to and from the container. To do that, just prefix the individual relevant command with `DOCKER_HOST=localhost:2375`.
-
-For example, `docker attach` commands should be:
-
-    DOCKER_HOST=localhost:2375 docker attach node1
-
-Also, when attaching, remember to hit Enter a few times to get a prompt to use `Ctrl-P,Q` rather than `exit` to back out of a container but still leave it running.
 
 ## Creating networked endpoints
 
-Now you can start any other containers that you want within the cluster, using normal docker commands. To get Calico to network them, simply add `-e CALICO_IP=<IP address>` to specify the IP address that you want that container to have.
+The experimental channel version of Docker introduces a new flag to `docker run` to network containers:  `--publish-service <service>.<network>.<driver>`.
 
-(By default containers need to be assigned IPs in the `192.168.0.0/16` range. Use `calicoctl` commands to set up different ranges if desired)
+ * `<service>` is the name by which you want the container to be known on the network.
+ * `<network>` is the name of the network to join.  Containers on different networks cannot communicate with each other.
+ * `<driver>` is the name of the network driver to use.  Calico's driver is called `calico`.
 
 So let's go ahead and start a few of containers on each host.
 
-On core-01
+On ubuntu-0
 
-    docker run -e CALICO_IP=192.168.1.1 --name workload-A -tid busybox
-    docker run -e CALICO_IP=192.168.1.2 --name workload-B -tid busybox
-    docker run -e CALICO_IP=192.168.1.3 --name workload-C -tid busybox
+    docker run --publish-service srvA.net1.calico --name workload-A -tid busybox
+    docker run --publish-service srvB.net2.calico --name workload-B -tid busybox
+    docker run --publish-service srvC.net1.calico --name workload-C -tid busybox
 
-On core-02
+On ubuntu-1
 
-    docker run -e CALICO_IP=192.168.1.4 --name workload-D -tid busybox
-    docker run -e CALICO_IP=192.168.1.5 --name workload-E -tid busybox
+    docker run --publish-service srvD.net3.calico --name workload-D -tid busybox
+    docker run --publish-service srvE.net1.calico --name workload-E -tid busybox
 
-At this point, the containers have not been added to any policy profiles so they won't be able to communicate with any other containers.
+By default, networks are configured so that their members can communicate with one another, but workloads in other networks cannot reach them.  A, C and E are all in the same network so should be able to ping each other.  B and D are in their own networks so shouldn't be able to ping anyone else.
 
-Create some profiles (this can be done on either host)
+You can find out a container's IP by running
 
-    ./calicoctl profile add PROF_A_C_E
-    ./calicoctl profile add PROF_B
-    ./calicoctl profile add PROF_D
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" <container name>
 
-When each container is added to calico, an "endpoint" is registered for each container's interface. Containers are only allowed to communicate with one another when both of their endpoints are assigned the same profile. To assign a profile to an endpoint, we will first get the endpoint's ID with `calicoctl container <CONTAINER> endpoint-id show`, then paste it into the `calicoctl endpoint <ENDPOINT_ID> profile append [<PROFILES>]`  command.
+On ubuntu-0, find out the IP addresses of A, B and C.
 
-On core-01:
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-A
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-B
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-C
+    
+On ubuntu-1, find out the IP addresses of D and E.
 
-    ./calicoctl container workload-A endpoint-id show
-    ./calicoctl endpoint <workload-A's Endpoint-ID> profile append PROF_A_C_E
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-D
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-E
+    
+Now we know all the IP addresses, on ubuntu-0 check that A can ping C and E (substitute the IP addresses as required).
 
-    ./calicoctl container workload-B endpoint-id show
-    ./calicoctl endpoint <workload-B's Endpoint-ID> profile append PROF_B
+    docker exec workload-A ping -c 4 192.168.0.3
+    docker exec workload-A ping -c 4 192.168.0.5
 
-    ./calicoctl container workload-C endpoint-id show
-    ./calicoctl endpoint <workload-C's Endpoint-ID> profile append PROF_A_C_E
+Also check that A cannot ping B or D (substitute the IP addresses as required).
 
-On core-02:
+    docker exec workload-A ping -c 4 192.168.0.2
+    docker exec workload-A ping -c 4 192.168.0.4
 
-    ./calicoctl container workload-D endpoint-id show
-    ./calicoctl endpoint <workload-D's Endpoint-ID> profile append PROF_D
+Libnetwork also supports using published service names.  However, note that in the current build of libnetwork these are not yet reliable in multi-host deployments.  On ubuntu-0 try
 
-    ./calicoctl container workload-E endpoint-id show
-    ./calicoctl endpoint <workload-E's Endpoint-ID> profile append PROF_A_C_E
+    docker exec workload-A ping -c 4 srvC
 
-*Note that creating a new profile with `calicoctl profile add` will work on any Calico node, but assigning an endpoint a profile with `calicoctl endpoint <ENDPOINT_ID> profile append` will only work on the Calico node where the container is hosted.*
+To see the list of networks, use
 
-Now, check that A can ping C (192.168.1.3) and E (192.168.1.5):
+    docker network ls
 
-    docker exec workload-A ping -c 4 192.168.1.3
-    docker exec workload-A ping -c 4 192.168.1.5
-
-Also check that A cannot ping B (192.168.1.2) or D (192.168.1.4):
-
-    docker exec workload-A ping -c 4 192.168.1.2
-    docker exec workload-A ping -c 4 192.168.1.4
-
-By default, profiles are configured so that their members can communicate with one another, but workloads in other profiles cannot reach them.  B and D are in their own profiles so shouldn't be able to ping anyone else.
-
-## Streamlining Container Creation
-
-In addition to the step by step approach above you can have Calico assign IP addresses automatically using `CALICO_IP=auto` and specify the profile at creation time using `CALICO_PROFILE=<profile name>`.  (The profile will be created automatically if it does not already exist.)
-
-On core-01
-
-    docker run -e CALICO_IP=auto -e CALICO_PROFILE=PROF_A_C_E --name workload-F -tid busybox
-    docker exec workload-A ping -c 4 192.168.1.6
-
-## IPv6
+## IPv6 (Optional)
 To connect your containers with IPv6, first make sure your Docker hosts each have an IPv6 address assigned.
 
-On core-01
+On ubuntu-0
 
-    sudo ip addr add fd80:24e2:f998:72d6::1/112 dev eth1
+    sudo ip addr add fd80:24e2:f998:72d7::1/112 dev eth1
 
-On core-02
+On ubuntu-1
 
-    sudo ip addr add fd80:24e2:f998:72d6::2/112 dev eth1
+    sudo ip addr add fd80:24e2:f998:72d7::2/112 dev eth1
 
 Verify connectivity by pinging.
 
-On core-01
+On ubuntu-0
 
-    ping6 fd80:24e2:f998:72d6::2
+    ping6 -c 4 fd80:24e2:f998:72d7::2
 
 Then restart your calico-node processes with the `--ip6` parameter to enable v6 routing.
 
-On core-01
+On ubuntu-0
 
-    sudo ./calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d6::1
+    sudo ./calicoctl node --ip=172.17.8.100 --ip6=fd80:24e2:f998:72d7::1
 
-On core-02
+On ubuntu-1
 
-    sudo ./calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d6::2
+    sudo ./calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::2
 
-Then, you can start containers with IPv6 connectivity by giving them an IPv6 address in `CALICO_IP`. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl pool add` to change this).
+Then, you can start containers with IPv6 connectivity. By default, Calico is configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 (`calicoctl pool add` to change this).
 
-On core-01
+On ubuntu-0
 
-    docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:1 --name workload-F -tid phusion/baseimage:0.9.16
-    ./calicoctl profile add PROF_F_G
-    ./calicoctl container workload-F endpoint-id show
-    ./calicoctl endpoint <workload-F's Endpoint-ID>  profile append PROF_F_G
+    docker run --publish-service srvF.net4.calico --name workload-F -tid ubuntu
 
-Note that we have used `phusion/baseimage:0.9.16` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.  Baseimage was chosen since it is the base for the Calico service images, and thus won't require an additional download, but of course you can use whatever image you'd like.
+Then get the ipv6 address of workload-F
 
-One core-02
+    docker inspect --format "{{ .NetworkSettings.GlobalIPv6Address }}" workload-F
 
-    docker run -e CALICO_IP=fd80:24e2:f998:72d6::1:2 --name workload-G -tid phusion/baseimage:0.9.16
-    ./calicoctl container workload-G endpoint-id show
-    ./calicoctl endpoint <workload-G's Endpoint-ID> profile append PROF_F_G
-    docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1:1
+Note that we have used `ubuntu` instead of `busybox`.  Busybox doesn't support IPv6 versions of network tools like ping.
 
-[calico-coreos-vagrant]: https://github.com/Metaswitch/calico-coreos-vagrant-example
+One ubuntu-1
+
+    docker run --publish-service srvG.net4.calico --name workload-G -tid ubuntu
+
+Then ping workload-F via its ipv6 address that you received above (change the IP address if necessary):
+
+    docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1
+
+[calico-ubuntu-vagrant]: https://github.com/Metaswitch/calico-ubuntu-vagrant
