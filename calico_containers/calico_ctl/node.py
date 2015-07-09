@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--plugin-dir=<PLUGIN_DIR>]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
@@ -24,17 +24,19 @@ Description:
   for this node.
 
 Options:
-  --force                  Stop the node process even if it has active endpoints.
+  --force                   Stop the node process even if it has active endpoints.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
                                       container [default: calico/node:latest]
-  --log-dir=<LOG_DIR>      The directory for logs [default: /var/log/calico]
-  --ip=<IP>                The local management address to use.
-  --ip6=<IP6>              The local IPv6 management address to use.
-  --as=<AS_NUM>            The default AS number for this node.
-  --detach=<DETACH>        Set "true" to run Calico service as detached,
-                           "false" to run in the foreground. [default: true]
-  --ipv4                   Show IPv4 information only.
-  --ipv6                   Show IPv6 information only.
+  --detach=<DETACH>         Set "true" to run Calico service as detached,
+                            "false" to run in the foreground. [default: true]
+  --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --plugin-dir=<PLUGIN_DIR> The directory for plugins
+                            [default: /usr/share/docker/plugins/]
+  --ip=<IP>                 The local management address to use.
+  --ip6=<IP6>               The local IPv6 management address to use.
+  --as=<AS_NUM>             The default AS number for this node.
+  --ipv4                    Show IPv4 information only.
+  --ipv6                    Show IPv6 information only.
 """
 import sys
 import os
@@ -93,12 +95,13 @@ def node(arguments):
         node_start(ip=arguments.get("--ip"),
                    node_image=arguments['--node-image'],
                    log_dir=arguments.get("--log-dir"),
+                   plugin_dir=arguments.get("--plugin-dir"),
                    ip6=arguments.get("--ip6"),
                    as_num=arguments.get("--as"),
                    detach=detach)
 
 
-def node_start(node_image, log_dir, ip, ip6, as_num, detach):
+def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -110,11 +113,16 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach):
     the global default value will be used.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
+    :param plugin_dir: The directory that plugins should use for communicating.
     :return:  None.
     """
     # Ensure log directory exists
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    # Ensure plugin directory exists
+    if not os.path.exists(plugin_dir):
+        os.makedirs(plugin_dir)
 
     # Print warnings for any known system issues before continuing
     check_system(fix=False, quit_if_error=False)
@@ -190,9 +198,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach):
                 "bind": "/var/log/calico",
                 "ro": False
             },
-        "/usr/share/docker/plugins/": #TODO make this an optional node
-        # parameter like log_dir
-        #"/run/docker/plugins/":
+        plugin_dir:
             {
                 "bind": "/usr/share/docker/plugins",
                 "ro": False
