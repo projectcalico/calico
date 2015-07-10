@@ -151,13 +151,20 @@ def profile_add(profile_name):
 
 
 def profile_remove(profile_name):
-    # TODO - Don't allow removing a profile that has endpoints in it.
-    try:
-        client.remove_profile(profile_name)
-    except KeyError:
-        print "Couldn't find profile with name %s" % profile_name
+    """
+    Remove a profile as long as it does not contain any endpoints.
+    :param profile_name:
+    :return:
+    """
+    if client.profile_exists(profile_name):
+        members = client.get_profile_members(profile_name)
+        if not members:
+            client.remove_profile(profile_name)
+            print "Deleted profile %s" % profile_name
+        else:
+            print "Cannot remove profile - profile contains endpoints."
     else:
-        print "Deleted profile %s" % profile_name
+        print "Couldn't find profile with name %s" % profile_name
 
 
 def profile_show(detailed):
