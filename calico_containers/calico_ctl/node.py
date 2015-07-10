@@ -54,9 +54,59 @@ from utils import check_ip_version
 from netaddr import IPAddress
 from prettytable import PrettyTable
 from utils import get_container_ipv_from_arguments
+from utils import validate_ip
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
+
+
+def validate_arguments(arguments):
+    """
+    Validate argument values:
+        <IP>
+        <IP6>
+        <PEER_IP>
+        <AS_NUM>
+
+    Arguments not validated:
+        <DOCKER_IMAGE_NAME>
+        <LOG_DIR>
+
+    :param arguments: Docopt processed arguments
+    """
+    # Validate IPs
+    ip_ok = arguments.get("--ip") is None or \
+            validate_ip(arguments.get("--ip"), "v4")
+    ip6_ok = arguments.get("--ip6") is None or \
+             validate_ip(arguments.get("--ip6"), "v6")
+    container_ip_ok = arguments.get("<IP>") is None or \
+                      validate_ip(arguments["<IP>"], "v4") or \
+                      validate_ip(arguments["<IP>"], "v6")
+    peer_ip_ok = arguments.get("<PEER_IP>") is None or \
+                 validate_ip(arguments["<PEER_IP>"], "v4") or \
+                 validate_ip(arguments["<PEER_IP>"], "v6")
+
+    asnum_ok = True
+    if arguments.get("<AS_NUM>") or arguments.get("--as"):
+        try:
+            asnum = int(arguments["<AS_NUM>"] or arguments["--as"])
+            asnum_ok = 0 <= asnum <= 4294967295
+        except ValueError:
+            asnum_ok = False
+
+    # Print error message
+    if not ip_ok:
+        print "Invalid IPv4 address specified with --ip argument."
+    if not ip6_ok:
+        print "Invalid IPv6 address specified with --ip6 argument."
+    if not container_ip_ok or not peer_ip_ok:
+        print "Invalid IP address specified."
+    if not asnum_ok:
+        print "Invalid AS Number specified."
+
+    # Exit if not valid argument
+    if not (ip_ok and ip6_ok and container_ip_ok and peer_ip_ok and asnum_ok):
+        sys.exit(1)
 
 
 def node(arguments):
@@ -67,6 +117,8 @@ def node(arguments):
     this file's docstring with docopt
     :return: None
     """
+    validate_arguments(arguments)
+
     if arguments.get("bgp"):
         if arguments.get("peer"):
             ip_version = get_container_ipv_from_arguments(arguments)

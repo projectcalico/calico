@@ -26,12 +26,34 @@ Options:
   --ipip          Use IP-over-IP encapsulation across hosts
  """
 import sys
+import netaddr
+from netaddr import AddrFormatError
 from netaddr import IPNetwork
 from prettytable import PrettyTable
 from pycalico.datastore_datatypes import IPPool
+from utils import validate_cidr
 from utils import get_container_ipv_from_arguments
 from utils import client
 from utils import check_ip_version
+
+
+def validate_arguments(arguments):
+    """
+    Validate argument values:
+        <CIDR>
+
+    :param arguments: Docopt processed arguments
+    """
+    # Validate CIDR
+    cidr_ok = True
+    for arg in ["<CIDR>"]:
+        if arguments.get(arg):
+            cidr_ok = validate_cidr(arguments[arg])
+
+    # Print error message and exit if not valid
+    if not cidr_ok:
+        print "Invalid CIDR specified."
+        sys.exit(1)
 
 
 def pool(arguments):
@@ -42,6 +64,8 @@ def pool(arguments):
     this file's docstring with docopt
     :return: None
     """
+    validate_arguments(arguments)
+
     ip_version = get_container_ipv_from_arguments(arguments)
     if arguments.get("add"):
         ip_pool_add(arguments.get("<CIDR>"),

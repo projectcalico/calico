@@ -46,6 +46,37 @@ from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.datastore_errors import ProfileNotInEndpoint
 from utils import client
 from utils import print_paragraph
+from utils import validate_characters
+
+
+def validate_arguments(arguments):
+    """
+    Validate argument values:
+        <PROFILES>
+
+    Arguments not validated:
+        <HOSTNAME>
+        <ORCHESTRATOR_ID>
+        <WORKLOAD_ID>
+        <ENDPOINT_ID>
+
+    :param arguments: Docopt processed arguments
+    """
+    # List of valid characters that Felix permits
+    valid_chars = '[a-zA-Z0-9_\.\-]'
+
+    # Validate Profiles
+    profile_ok = True
+    if "<PROFILES>" in arguments:
+        profiles = arguments.get("<PROFILES>")
+        for profile in profiles:
+            profile_ok = validate_characters(profile)
+
+    if not profile_ok:
+        print_paragraph("Profile names must be < 40 character long and can "
+                        "only contain numbers, letters, dots, dashes and "
+                        "underscores.")
+        sys.exit(1)
 
 
 def endpoint(arguments):
@@ -57,6 +88,8 @@ def endpoint(arguments):
     this file's docstring with docopt.
     :return: None
     """
+    validate_arguments(arguments)
+
     if arguments.get("profile"):
         if arguments.get("append"):
             endpoint_profile_append(arguments.get("--host"),

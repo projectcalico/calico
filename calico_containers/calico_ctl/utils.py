@@ -19,6 +19,7 @@ import docker
 import textwrap
 import netaddr
 import docker.errors
+import re
 
 from pycalico.ipam import IPAMClient
 from netaddr.core import AddrFormatError
@@ -98,6 +99,56 @@ def get_container_ipv_from_arguments(arguments):
     elif arguments.get("<CIDR>"):
         version = "v%s" % netaddr.IPNetwork(arguments.get("<CIDR>")).version
     return version
+
+
+def validate_cidr(cidr):
+    """
+    Validate cidr is in correct CIDR notation
+
+    :param cidr: IP addr and associated routing prefix
+    :return: Boolean: True if valid IP, False if invalid
+    """
+    try:
+        netaddr.IPNetwork(cidr)
+        return True
+    except (AddrFormatError, ValueError):
+    # Some versions of Netaddr have a bug causing them to return a
+    # ValueError rather than an AddrFormatError, so catch both.
+        return False
+
+
+def validate_ip(ip_addr, version):
+    """
+    Validate that ip_addr is a valid IPv4 or IPv6 address
+
+    :param ip_addr: IP address to be validated
+    :param version: "v4" or "v6"
+    :return: Boolean: True if valid, False if invalid.
+    """
+    assert version in ("v4", "v6")
+
+    if version == "v4":
+        return netaddr.valid_ipv4(ip_addr)
+    if version == "v6":
+        return netaddr.valid_ipv6(ip_addr)
+
+
+def validate_characters(input_string):
+    """
+    Validate that input_string passed only contains letters a-z,
+    numbers 0-9, and symbols _ . -
+
+    :param input_string: string to be validated
+    :return: Boolean: True is valid, False if invalid
+    """
+    # List of valid characters that Felix permits
+    valid_chars = '[a-zA-Z0-9_\.\-]'
+
+    # Check for invalid characters
+    if not re.match("^%s+$" % valid_chars, input_string):
+        return False
+    else:
+        return True
 
 
 class Vividict(dict):

@@ -62,6 +62,77 @@ from pycalico.datastore import Rule
 from pycalico.datastore import Rules
 from utils import client
 from utils import print_paragraph
+from utils import validate_characters
+from utils import validate_cidr
+
+
+def validate_arguments(arguments):
+    """
+    Validate argument values:
+        <PROFILE>
+        <SRCTAG>
+        <SRCCIDR>
+        <DSTTAG>
+        <DSTCIDR>
+        <ICMPTYPE>
+        <ICMPCODE>
+
+    Arguments not validated:
+        <SRCPORTS>
+        <DSTPORTS>
+        <POSITION>
+
+    :param arguments: Docopt processed arguments
+    """
+    # List of valid characters that Felix permits
+    valid_chars = '[a-zA-Z0-9_\.\-]'
+
+    # Validate Profiles
+    profile_ok = True
+    if "<PROFILE>" in arguments:
+        profile = arguments.get("<PROFILE>")
+        profile_ok = validate_characters(profile)
+
+    # Validate tags
+    tag_src_ok = (arguments.get("<SRCTAG>") is None or
+                validate_characters(arguments["<SRCTAG>"]))
+    tag_dst_ok = (arguments.get("<DSTTAG>") is None or
+                validate_characters(arguments["<DSTTAG>"]))
+
+    # Validate IPs
+    cidr_ok = True
+    for arg in ["<SRCCIDR>", "<DSTCIDR>"]:
+        if arguments.get(arg):
+            cidr_ok = validate_cidr(arguments[arg])
+
+    icmp_ok = True
+    for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
+        if arguments.get(arg) is not None:
+            try:
+                value = int(arguments[arg])
+                if not (0 <= value < 255):  # Felix doesn't support 255
+                    raise ValueError("Invalid %s: %s" % (arg, value))
+            except ValueError:
+                icmp_ok = False
+
+    # Print error message
+    if not profile_ok:
+        print_paragraph("Profile names must be < 40 character long and can "
+                        "only contain numbers, letters, dots, dashes and "
+                        "underscores.")
+    if not (tag_src_ok and tag_dst_ok):
+        print_paragraph("Tags names can only contain numbers, letters, dots, "
+                        "dashes and underscores.")
+    if not cidr_ok:
+        print "Invalid CIDR specified."
+    if not icmp_ok:
+        print "Invalid ICMP type or code specified."
+
+    # Exit if not valid
+    if not (profile_ok and tag_src_ok and tag_dst_ok
+            and cidr_ok and icmp_ok):
+        sys.exit(1)
+
 
 def profile(arguments):
     """
@@ -72,6 +143,8 @@ def profile(arguments):
     this file's docstring with docopt
     :return: None
     """
+    validate_arguments(arguments)
+
     if arguments.get("tag") and not arguments.get("rule"):
         if arguments.get("show"):
             profile_tag_show(arguments.get("<PROFILE>"))
