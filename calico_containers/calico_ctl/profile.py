@@ -153,8 +153,8 @@ def profile_add(profile_name):
 def profile_remove(profile_name):
     """
     Remove a profile as long as it does not contain any endpoints.
-    :param profile_name:
-    :return:
+    :param profile_name: The name of the profile to remove.
+    :return: None.
     """
     if client.profile_exists(profile_name):
         members = client.get_profile_members(profile_name)
