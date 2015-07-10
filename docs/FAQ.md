@@ -4,6 +4,26 @@ This page contains answers to some frequently-asked questions about Calico on Do
 ## Can a guest container have multiple networked IP addresses?
 Yes. You can add IP addresses using the `calicoctl container <CONTAINER> ip (add|remove) <IP>` command.
 
+## Why isn't the `-p` flag on `docker run` working as expected?
+Simply put, you don't need this flag with Calico and so Calico doesn't support it.
+
+The `-p` flag tells Docker to set up port mapping to connect a port on the Docker host
+to a port on your container.  This is useful because with Docker bridge networking, the
+container's IP address isn't reachable outside the host.  But with Calico, the 
+container's IP address is reachable not only within your cluster, but outside as well
+(see later questions for more detail).
+
+If you're used to running your containers like this
+
+    docker run -d -p 8080:80 myhttpserver
+  
+and then accessing them via `<docker-host-ip>:8080`, you can instead run
+
+    docker run -d --publish-service myhttpserver.mynetwork.calico myhttpserver
+  
+and then access via `<container-ip>:80`.  No more ephemeral ports, or port conflicts over
+which container gets to bind to port 80 (or any other port)!
+
 ## How do I get network traffic into and out of my Calico cluster?
 The recommended way to get traffic to/from your Calico network is by peering to 
 your existing data center L3 routers using BGP and by assigning globally 
