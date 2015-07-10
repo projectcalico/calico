@@ -98,7 +98,7 @@ def node(arguments):
                    detach=detach)
 
 
-def node_start(node_image, log_dir, ip="", ip6="", as_num=None, detach=True):
+def node_start(node_image, log_dir, ip, ip6, as_num, detach):
     """
     Create the calico-node container and establish Calico networking on this
     host.
