@@ -17,10 +17,7 @@ import uuid
 from nose.plugins.attrib import attr
 
 from test_base import TestBase
-from tests.st.utils.docker_host import (DockerHost,
-                                                          CommandExecError)
-from tests.st.utils.utils import retry_until_success
-from functools import partial
+from tests.st.utils.docker_host import (DockerHost, CommandExecError)
 
 class TestBGPConfig(TestBase):
 
@@ -81,8 +78,8 @@ class TestBGPConfig(TestBase):
                                                 workload_host2])
 
             # Check the BGP status on each host.
-            self._check_status(host1, [("Mesh", host2.ip, "Established")])
-            self._check_status(host2, [("Mesh", host1.ip, "Established")])
+            self._check_status(host1, [("node-to-node mesh", host2.ip, "Established")])
+            self._check_status(host2, [("node-to-node mesh", host1.ip, "Established")])
 
     @attr('slow')
     def test_node_peers(self):
@@ -124,8 +121,8 @@ class TestBGPConfig(TestBase):
                                                 workload_host2])
 
             # Check the BGP status on each host.
-            self._check_status(host1, [("Node", host2.ip, "Established")])
-            self._check_status(host2, [("Node", host1.ip, "Established")])
+            self._check_status(host1, [("node specific", host2.ip, "Established")])
+            self._check_status(host2, [("node specific", host1.ip, "Established")])
 
     @attr('slow')
     def test_global_peers(self):
@@ -169,10 +166,10 @@ class TestBGPConfig(TestBase):
 
             # Check the BGP status on each host.  Connections from a node to
             # itself will be idle since this is invalid BGP configuration.
-            self._check_status(host1, [("Global", host1.ip, "Idle"),
-                                       ("Global", host2.ip, "Established")])
-            self._check_status(host2, [("Global", host1.ip, "Established"),
-                                       ("Global", host2.ip, "Idle")])
+            self._check_status(host1, [("global", host1.ip, "Idle"),
+                                       ("global", host2.ip, "Established")])
+            self._check_status(host2, [("global", host1.ip, "Established"),
+                                       ("global", host2.ip, "Idle")])
 
     def _check_status(self, host, expected):
         """
@@ -189,20 +186,42 @@ class TestBGPConfig(TestBase):
         output = host.calicoctl("status")
         lines = output.split("\n")
         for (peertype, ipaddr, state) in expected:
-            name = "%s_%s" % (peertype, re.sub("[:\.]", "_", str(ipaddr)))
             for line in lines:
-                columns = re.split("\s*", line.strip())
-                if (columns[0] == name) and (columns[1] == "BGP"):
-                    if columns[5] == state:
+                # Status table format is of the form:
+                # +--------------+----------+---------------+-------+----------+-------------+
+                # |     Name     | Protocol |   Peer type   | State |  Since   |     Info    |
+                # +--------------+----------+---------------+-------+----------+-------------+
+                # |   direct1    |  Direct  |               |   up  | 20:55:05 |             |
+                # | 172.17.42.34 |   BGP    | node specific |   up  | 20:55:21 | Established |
+                # +--------------+----------+---------------+-------+----------+-------------+
+                #
+                # Splitting based on | separators results in an array of the
+                # form:
+                # ['', 'Name', 'Protocol', 'Peer type', 'State', 'Since', 'Info', '']
+                columns = re.split("\s*\|\s*", line.strip())
+                if len(columns) != 8:
+                    continue
+
+                # Find the entry matching this peer.
+                if (columns[1] == ipaddr and
+                      columns[2] == "BGP" and
+                      columns[3] == peertype):
+
+                    # Check that the connection state is as expected.  We check
+                    # that the state starts with the expected value since there
+                    # may be additional diagnostic information included in the
+                    # info field.
+                    if columns[6].startswith(state):
                         break
                     else:
                         msg = "Error in BIRD status for peer %s:\n" \
-                              "Expected established?: %s; Actual: %s\n" \
-                              "Output:\n%s" % (name, established,
-                                               columns[5], output)
+                              "Expected: %s; Actual: %s\n" \
+                              "Output:\n%s" % (ipaddr, state, columns[6],
+                                               output)
                         raise AssertionError(msg)
             else:
                 msg = "Error in BIRD status for peer %s:\n" \
-                      "Expected state?: %s\n" \
-                      "Output: \n%s" % (name, state, output)
+                      "Type: %s\n" \
+                      "Expected: %s\n" \
+                      "Output: \n%s" % (ipaddr, peertype, state, output)
                 raise AssertionError(msg)
