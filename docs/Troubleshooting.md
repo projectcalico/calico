@@ -6,6 +6,12 @@ If you use `sudo` for commands like `docker run`, remember that your environment
 
     sudo DOCKER_HOST=localhost:2377 docker run -td -e CALICO_IP=192.168.100.1 busybox
 
+## Ubuntu (or GNOME) NetworkManager
+
+Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before attepting to use Calico networking.
+
+NetworkManager manipulates the routing table for interfaces in the default network namespace where Calico veth pairs are anchored for connections to containers.  This can interfere with the Calico agent's ability to route correctly. 
+
 ## etcd.EtcdException: No more machines in the cluster
 
 If you see this exception, it means `calicoctl` can't communicate with your etcd cluster.  Ensure etcd is up and listening on `localhost:4001`
