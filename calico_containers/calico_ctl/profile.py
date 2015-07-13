@@ -178,7 +178,7 @@ def profile_remove(profile_name, nocheck):
             print "Deleted profile %s" % profile_name
         else:
             # Members must exist if this branch is reached
-            print "Cannot remove profile - profile contains endpoints.\n" + \
+            print "Cannot remove profile - profile in use by endpoint(s).\n" + \
                   "Use the '--no-check' flag to remove the profile anyway."
     else:
         print "Profile %s not found." % profile_name
