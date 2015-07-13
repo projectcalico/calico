@@ -39,13 +39,33 @@ Examples:
         $ calicoctl endpoint a1b2c3d4 profile append profile-A --host=host1 --orchestrator=docker --workload=f9e8d7e6
 """
 import sys
+from collections import defaultdict
 from prettytable import PrettyTable
-from calico_ctl.utils import Vividict
 from pycalico.datastore_errors import ProfileAlreadyInEndpoint
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.datastore_errors import ProfileNotInEndpoint
 from utils import client
 from utils import print_paragraph
+
+
+class EndpointSummary(object):
+    """
+    Simply holder class used to compile workload and endpoint summaries
+    (see endpoint_show() command).
+    """
+    def __init__(self):
+        self.workload_ids = set()
+        self.num_endpoints = 0
+
+    def add_endpoint(self, endpoint):
+        """
+        Add an endpoint.  We track unique workload IDs and maintain a count
+        of endpoints.
+
+        :param endpoint:  An Endpoint object.
+        """
+        self.num_endpoints += 1
+        self.workload_ids.add(endpoint.workload_id)
 
 
 def endpoint(arguments):
@@ -134,48 +154,32 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
     else:
         headings = ["Hostname",
                     "Orchestrator ID",
-                    "NumWorkloads",
-                    "NumEndpoints"]
+                    "Number of Workloads",
+                    "Number of Endpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        """ To calculate the number of unique endpoints, and unique workloads
-         on each host, we first create a dictionary in the following format:
-        {
-        host1: {
-            workload1: num_workload1_endpoints,
-            workload2: num_workload2_endpoints,
-            ...
-            },
-        host2: {
-            workload3: num_workload3_endpoints,
-            workload4: num_workload4_endpoints,
-            ...
-        }
-        """
-        # Use a vividict so the host key is automatically set
-        table_dict = Vividict()
+        # The summary table has one entry for each host/orchestrator
+        # combination.  We create a dictionary to maintain the summary
+        # information, using the (hostname, orchestrator_id) as the unique
+        # key, with a value of an EndpointSummary object to store unique
+        # workload IDs and a count of endpoint IDs.
+        #
+        # We use a default dict to automatically create an "empty" (zero count)
+        # EndpointSummary for each new table entry.
+        host_orch_summary = defaultdict(EndpointSummary)
         for endpoint in endpoints:
-            if endpoint.workload_id not in table_dict[endpoint.hostname]:
-                table_dict[endpoint.hostname][endpoint.workload_id] = 0
-            table_dict[endpoint.hostname][endpoint.workload_id] += 1
+            key = (endpoint.hostname, endpoint.orchestrator_id)
+            summary = host_orch_summary[key]
+            summary.add_endpoint(endpoint)
 
-        # This table has one entry for each host. So loop through the hosts
-        for host in table_dict:
-            # Check how many workloads belong to each host
-            num_workloads = len(table_dict[host])
-
-            # Add up how many endpoints each workload on this host has
-            num_endpoints = 0
-            for workload, endpoints in iter(table_dict[host].items()):
-                num_endpoints += endpoints
-
-            # Add the results to this table
-            new_row = [endpoint.hostname,
-                       endpoint.orchestrator_id,
-                       num_workloads,
-                       num_endpoints]
-
-            x.add_row(new_row)
+        # This table has one entry for each host/orchestrator combination.
+        for key, summary in host_orch_summary.iteritems():
+            hostname, orchestrator_id = key
+            x.add_row([hostname,
+                       orchestrator_id,
+                       len(summary.workload_ids),
+                       summary.num_endpoints])
+                
     print str(x) + "\n"
 
 

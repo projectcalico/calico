@@ -99,9 +99,3 @@ def get_container_ipv_from_arguments(arguments):
         version = "v%s" % netaddr.IPNetwork(arguments.get("<CIDR>")).version
     return version
 
-
-class Vividict(dict):
-    # From http://stackoverflow.com/a/19829714
-    def __missing__(self, key):
-        value = self[key] = type(self)()
-        return value
