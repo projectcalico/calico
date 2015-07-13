@@ -158,8 +158,14 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
                     "Number of Endpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        # For each host/orchestrator, keep track of endpoint summary
-        # information.
+        # The summary table has one entry for each host/orchestrator
+        # combination.  We create a dictionary to maintain the summary
+        # information, using the (hostname, orchestrator_id) as the unique
+        # key, with a value of an EndpointSummary object to store unique
+        # workload IDs and a count of endpoint IDs.
+        #
+        # We use a default dict to automatically create an "empty" (zero count)
+        # EndpointSummary for each new table entry.
         host_orch_summary = defaultdict(EndpointSummary)
         for endpoint in endpoints:
             key = (endpoint.hostname, endpoint.orchestrator_id)
@@ -167,11 +173,12 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
             summary.add_endpoint(endpoint)
 
         # This table has one entry for each host/orchestrator combination.
-        for (hostname, orchestrator_id), summary in \
-                host_orch_summary.iteritems():
-            # Add the results to this table
-            x.add_row([hostname, orchestrator_id,
-                       len(summary.workload_ids), summary.num_endpoints])
+        for key, summary in host_orch_summary.iteritems():
+            hostname, orchestrator_id = key
+            x.add_row([hostname,
+                       orchestrator_id,
+                       len(summary.workload_ids),
+                       summary.num_endpoints])
                 
     print str(x) + "\n"
 
