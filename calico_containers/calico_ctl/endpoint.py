@@ -59,8 +59,8 @@ class EndpointSummary(object):
 
     def add_endpoint(self, endpoint):
         """
-        Add an endpoint (we don't care about the workload ID, but we do want
-        to compile a list of unique workload IDs).
+        Add an endpoint.  We track unique workload IDs and maintain a count
+        of endpoints.
 
         :param endpoint:  An Endpoint object.
         """
