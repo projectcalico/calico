@@ -39,13 +39,33 @@ Examples:
         $ calicoctl endpoint a1b2c3d4 profile append profile-A --host=host1 --orchestrator=docker --workload=f9e8d7e6
 """
 import sys
+from collections import defaultdict
 from prettytable import PrettyTable
-from calico_ctl.utils import Vividict
 from pycalico.datastore_errors import ProfileAlreadyInEndpoint
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.datastore_errors import ProfileNotInEndpoint
 from utils import client
 from utils import print_paragraph
+
+
+class EndpointSummary(object):
+    """
+    Simply holder class used to compile workload and endpoint summaries
+    (see endpoint_show() command).
+    """
+    def __init__(self):
+        self.workload_ids = set()
+        self.num_endpoints = 0
+
+    def add_endpoint(self, endpoint):
+        """
+        Add an endpoint (we don't care about the workload ID, but we do want
+        to compile a list of unique workload IDs).
+
+        :param endpoint:  An Endpoint object.
+        """
+        self.num_endpoints += 1
+        self.workload_ids.add(endpoint.workload_id)
 
 
 def endpoint(arguments):
@@ -134,24 +154,24 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
     else:
         headings = ["Hostname",
                     "Orchestrator ID",
-                    "NumWorkloads",
-                    "NumEndpoints"]
+                    "Number of Workloads",
+                    "Number of Endpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        # For each host/orchestrator, keep track of unique workload IDs and
-        # total number of endpoints.  For simplicity we just store the working
-        # data in a list [set([workload IDs...], int(running total # eps)]
-        host_orch = {}
-        for ep in endpoints:
-            key = (ep.hostname, ep.orchestrator_id)
-            data = host_orch.setdefault(key, [set(), 0])
-            data[0].add(ep.workload_id)
-            data[1] += 1
+        # For each host/orchestrator, keep track of endpoint summary
+        # information.
+        host_orch_summary = defaultdict(EndpointSummary)
+        for endpoint in endpoints:
+            key = (endpoint.hostname, endpoint.orchestrator_id)
+            summary = host_orch_summary[key]
+            summary.add_endpoint(endpoint)
 
         # This table has one entry for each host/orchestrator combination.
-        for (hn, oi), data in host_orch.iteritems():
+        for (hostname, orchestrator_id), summary in \
+                host_orch_summary.iteritems():
             # Add the results to this table
-            x.add_row([hn, oi, len(data[0]), data[1]])
+            x.add_row([hostname, orchestrator_id,
+                       len(summary.workload_ids), summary.num_endpoints])
                 
     print str(x) + "\n"
 
