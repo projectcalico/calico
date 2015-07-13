@@ -48,7 +48,7 @@ Description:
 Options:
   --detailed        Show additional information.
   --no-check        Remove a profile without checking if there are endpoints
-                    associated with the profile.git
+                    associated with the profile.
   --at=<POSITION>   Specify the position in the chain where the rule should
                     be placed. Default: append at end.
 
@@ -153,7 +153,7 @@ def profile_add(profile_name):
         print "Created profile %s" % profile_name
 
 
-def profile_remove(profile_name, nocheck=None):
+def profile_remove(profile_name, nocheck):
     """
     Remove a profile as long as it does not contain any endpoints.
     Allow user to explicitly remove the profile if desired.
@@ -163,9 +163,17 @@ def profile_remove(profile_name, nocheck=None):
     """
     # Check if the profile exists.
     if client.profile_exists(profile_name):
-        members = client.get_profile_members(profile_name)
-        # Check that the nocheck flag was used or the profile has no endpoints
-        if nocheck or not members:
+        rm_profile = False
+        # Check that the nocheck flag was used
+        if nocheck:
+            rm_profile = True
+        else:
+            # Check if the the profile has endpoints associated with it
+            members = client.get_profile_members(profile_name)
+            if not members:
+                rm_profile = True
+        # Remove the profile if criteria was met
+        if rm_profile:
             client.remove_profile(profile_name)
             print "Deleted profile %s" % profile_name
         else:
