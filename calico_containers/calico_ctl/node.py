@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
@@ -31,6 +31,8 @@ Options:
   --ip=<IP>                The local management address to use.
   --ip6=<IP6>              The local IPv6 management address to use.
   --as=<AS_NUM>            The default AS number for this node.
+  --detach=<DETACH>        Set "true" to run Calico service as detached,
+                           "false" to run in the foreground. [default: true]
   --ipv4                   Show IPv4 information only.
   --ipv6                   Show IPv6 information only.
 """
@@ -54,6 +56,8 @@ from utils import check_ip_version
 from netaddr import IPAddress
 from prettytable import PrettyTable
 from utils import get_container_ipv_from_arguments
+import sys
+import signal
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
@@ -84,14 +88,17 @@ def node(arguments):
     elif arguments.get("stop"):
         node_stop(arguments.get("--force"))
     else:
+        assert arguments.get("--detach") in ["true", "false"]
+        detach = arguments.get("--detach") == "true"
         node_start(ip=arguments.get("--ip"),
                    node_image=arguments['--node-image'],
                    log_dir=arguments.get("--log-dir"),
                    ip6=arguments.get("--ip6"),
-                   as_num=arguments.get("--as"))
+                   as_num=arguments.get("--as"),
+                   detach=detach)
 
 
-def node_start(node_image, log_dir, ip="", ip6="", as_num=None):
+def node_start(node_image, log_dir, ip, ip6, as_num, detach):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -101,6 +108,8 @@ def node_start(node_image, log_dir, ip="", ip6="", as_num=None):
     :param ip6:  The IPv6 address of the host (or None if not configured)
     :param as_num:  The BGP AS Number to use for this node.  If not specified
     the global default value will be used.
+    :param detach: True to run in Docker's "detached" mode, False to run
+    attached.
     :return:  None.
     """
     # Ensure log directory exists
@@ -211,6 +220,9 @@ def node_start(node_image, log_dir, ip="", ip6="", as_num=None):
     docker_client.start(container)
 
     print "Calico node is running with id: %s" % cid
+
+    if not detach:
+        _attach_and_stream(container)
 
 
 def node_stop(force):
@@ -360,3 +372,36 @@ def _find_or_pull_node_image(image_name, client):
             # TODO: Display proper status bar
             print "Pulling Docker image %s" % image_name
             client.pull(image_name)
+
+
+def _attach_and_stream(container):
+    """
+    Attach to a container and stream its stdout and stderr output to this
+    process's stdout, until the container stops.  If the user presses Ctrl-C or
+    the process is killed, also stop the Docker container.
+
+    Used to run the calico-node as a foreground attached service.
+
+    :param container: Docker container to attach to.
+    :return: None.
+    """
+
+    # Register a SIGTERM handler, so we shut down the container if this
+    # process is kill'd.
+    def handle_sigterm(sig, frame):
+        print "Got SIGTERM"
+        docker_client.stop(container)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
+    output = docker_client.attach(container, stream=True)
+    try:
+        for raw_data in output:
+            sys.stdout.write(raw_data)
+    except KeyboardInterrupt:
+        # mainline.  someone press Ctrl-C.
+        print "Stopping Calico node..."
+    finally:
+        # Could either be this process is being killed, or output generator
+        # raises an exception.
+        docker_client.stop(container)
