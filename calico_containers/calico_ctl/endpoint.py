@@ -138,44 +138,21 @@ def endpoint_show(hostname, orchestrator_id, workload_id, endpoint_id,
                     "NumEndpoints"]
         x = PrettyTable(headings, sortby="Hostname")
 
-        """ To calculate the number of unique endpoints, and unique workloads
-         on each host, we first create a dictionary in the following format:
-        {
-        host1: {
-            workload1: num_workload1_endpoints,
-            workload2: num_workload2_endpoints,
-            ...
-            },
-        host2: {
-            workload3: num_workload3_endpoints,
-            workload4: num_workload4_endpoints,
-            ...
-        }
-        """
-        # Use a vividict so the host key is automatically set
-        table_dict = Vividict()
-        for endpoint in endpoints:
-            if endpoint.workload_id not in table_dict[endpoint.hostname]:
-                table_dict[endpoint.hostname][endpoint.workload_id] = 0
-            table_dict[endpoint.hostname][endpoint.workload_id] += 1
+        # For each host/orchestrator, keep track of unique workload IDs and
+        # total number of endpoints.  For simplicity we just store the working
+        # data in a list [set([workload IDs...], int(running total # eps)]
+        host_orch = {}
+        for ep in endpoints:
+            key = (ep.hostname, ep.orchestrator_id)
+            data = host_orch.setdefault(key, [set(), 0])
+            data[0].add(ep.workload_id)
+            data[1] += 1
 
-        # This table has one entry for each host. So loop through the hosts
-        for host in table_dict:
-            # Check how many workloads belong to each host
-            num_workloads = len(table_dict[host])
-
-            # Add up how many endpoints each workload on this host has
-            num_endpoints = 0
-            for workload, endpoints in iter(table_dict[host].items()):
-                num_endpoints += endpoints
-
+        # This table has one entry for each host/orchestrator combination.
+        for (hn, oi), data in host_orch.iteritems():
             # Add the results to this table
-            new_row = [endpoint.hostname,
-                       endpoint.orchestrator_id,
-                       num_workloads,
-                       num_endpoints]
-
-            x.add_row(new_row)
+            x.add_row([hn, oi, len(data[0]), data[1]])
+                
     print str(x) + "\n"
 
 
