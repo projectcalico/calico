@@ -4,13 +4,19 @@ You will require 2 binary builds to use the Calico Docker Prototype:
  1. The `calico/node` Docker image which contains the Calico services.
  2. The `calicoctl` control binary to control your Calico-enabled cluster from the CLI.
 
-## Building the Docker Image and calicoctl
+## Building the Docker Image
 
  From the root directory of the checked out repository, run
 
+    sudo make node
+
+This builds the Dockerfile giving it the name `calico/node:latest`, which is the default image name `calicoctl` will look for when starting Calico services.
+
+## Building `calicoctl` CLI Tool - mainline
+
     sudo make binary
 
-This builds the `calico/node` Docker image as well as the `calicoctl` command line tool.  The Docker image is created by building the Dockerfile, giving it the name `calico/node:latest`, which is the default image name `calicoctl` will look for when starting Calico services.
+This builds `calicoctl` command line tool in the `dist/` directory.
 
 ## Building `calicoctl` CLI Tool - virtualenv
 
