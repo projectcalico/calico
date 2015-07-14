@@ -49,6 +49,9 @@ from calico.election import Elector
 # The node hostname is used as the default identity for leader election
 hostname = socket.gethostname()
 
+# The amount of time in seconds to wait for etcd responses.
+ETCD_TIMEOUT = 5
+
 # Register Calico-specific options.
 calico_opts = [
     cfg.StrOpt('etcd_host', default='localhost',
@@ -69,9 +72,23 @@ LOG = log.getLogger(__name__)
 
 # Objects for lightly wrapping etcd return values for use in the mechanism
 # driver.
-Endpoint = namedtuple('Endpoint', ['id', 'key', 'modified_index', 'host'])
+# These namedtuples are getting pretty heavyweight at this point. If you find
+# yourself wanting to add more fields to them, consider rewriting them as full
+# classes. Note that several of the properties of namedtuples are desirable for
+# these objects (immutability being the biggest), so if you rewrite as classes
+# attempt to preserve those properties.
+Endpoint = namedtuple(
+    'Endpoint', ['id', 'key', 'modified_index', 'host', 'data']
+)
 Profile = namedtuple(
-    'Profile', ['id', 'tags_modified_index', 'rules_modified_index']
+    'Profile',
+    [
+        'id',
+        'tags_modified_index',
+        'rules_modified_index',
+        'tags_data',
+        'rules_data',
+    ]
 )
 
 
@@ -156,18 +173,23 @@ class CalicoTransportEtcd(object):
         return self.elector.master()
 
     @_handling_etcd_exceptions
-    def write_profile_to_etcd(self, profile):
+    def write_profile_to_etcd(self,
+                              profile,
+                              prev_rules_index=None,
+                              prev_tags_index=None):
         """
         Write a single security profile into etcd.
         """
         LOG.debug("Writing profile %s", profile)
         self.client.write(
             key_for_profile_rules(profile.id),
-            json.dumps(profile_rules(profile))
+            json.dumps(profile_rules(profile)),
+            prevIndex=prev_rules_index,
         )
         self.client.write(
             key_for_profile_tags(profile.id),
-            json.dumps(profile_tags(profile))
+            json.dumps(profile_tags(profile)),
+            prevIndex=prev_tags_index,
         )
 
     @_handling_etcd_exceptions
@@ -196,13 +218,15 @@ class CalicoTransportEtcd(object):
         self._cleanup_workload_tree(key)
 
     @_handling_etcd_exceptions
-    def write_port_to_etcd(self, port):
+    def write_port_to_etcd(self, port, prev_index=None):
         """
         Writes a given port dictionary to etcd.
         """
         LOG.info("Write port %s to etcd", port)
         data = port_etcd_data(port)
-        self.client.write(port_etcd_key(port), json.dumps(data))
+        self.client.write(
+            port_etcd_key(port), json.dumps(data), prevIndex=prev_index,
+        )
 
     @_handling_etcd_exceptions
     def provide_felix_config(self):
@@ -235,6 +259,27 @@ class CalicoTransportEtcd(object):
             self.client.write(READY_KEY, 'true')
 
     @_handling_etcd_exceptions
+    def get_endpoint_data(self, endpoint):
+        """
+        Get data for an endpoint out of etcd. This should be used on endpoints
+        returned from functions like ``get_endpoints``.
+
+        :param endpoint: An ``Endpoint`` class.
+        :return: A ``Endpoint`` class with ``data`` not None.
+        """
+        LOG.debug("Getting endpoint %s", endpoint.id)
+
+        result = self.client.read(endpoint.key, timeout=ETCD_TIMEOUT)
+
+        return Endpoint(
+            id=endpoint.id,
+            key=endpoint.key,
+            modified_index=result.modifiedIndex,
+            host=endpoint.host,
+            data=result.value,
+        )
+
+    @_handling_etcd_exceptions
     def get_endpoints(self):
         """
         Gets information about every endpoint in etcd. Returns a generator of
@@ -243,7 +288,9 @@ class CalicoTransportEtcd(object):
         LOG.info("Scanning etcd for all endpoints")
 
         try:
-            result = self.client.read(HOST_DIR, recursive=True, timeout=5)
+            result = self.client.read(
+                HOST_DIR, recursive=True, timeout=ETCD_TIMEOUT
+            )
         except etcd.EtcdKeyNotFound:
             # No key yet, which is totally fine: just exit.
             LOG.info("No endpoint key present.")
@@ -260,7 +307,13 @@ class CalicoTransportEtcd(object):
             host = match.group('hostname')
 
             LOG.debug("Found endpoint %s", endpoint_id)
-            yield Endpoint(endpoint_id, node.key, node.modifiedIndex, host)
+            yield Endpoint(
+                id=endpoint_id,
+                key=node.key,
+                modified_index=node.modifiedIndex,
+                host=host,
+                data=None,
+            )
 
     @_handling_etcd_exceptions
     def atomic_delete_endpoint(self, endpoint):
@@ -281,7 +334,9 @@ class CalicoTransportEtcd(object):
 
         try:
             self.client.delete(
-                endpoint.key, prevIndex=endpoint.modified_index, timeout=5
+                endpoint.key,
+                prevIndex=endpoint.modified_index,
+                timeout=ETCD_TIMEOUT,
             )
         except etcd.EtcdKeyNotFound:
             # Trying to delete stuff that doesn't exist is ok, but log it.
@@ -293,6 +348,32 @@ class CalicoTransportEtcd(object):
         self._cleanup_workload_tree(endpoint.key)
 
     @_handling_etcd_exceptions
+    def get_profile_data(self, profile):
+        """
+        Get data for a profile out of etcd. This should be used on profiles
+        returned from functions like ``get_profiles``.
+
+        :param profile: A ``Profile`` class.
+        :return: A ``Profile`` class with tags and rules data present.
+        """
+        LOG.debug("Getting profile %s", profile.id)
+
+        tags_result = self.client.read(
+            key_for_profile_tags(profile.id), timeout=ETCD_TIMEOUT
+        )
+        rules_result = self.client.read(
+            key_for_profile_rules(profile.id), timeout=ETCD_TIMEOUT
+        )
+
+        return Profile(
+            id=profile.id,
+            tags_modified_index=tags_result.modifiedIndex,
+            rules_modified_index=rules_result.modifiedIndex,
+            tags_data=tags_result.value,
+            rules_data=rules_result.value,
+        )
+
+    @_handling_etcd_exceptions
     def get_profiles(self):
         """
         Gets information about every profile in etcd. Returns a generator of
@@ -301,7 +382,9 @@ class CalicoTransportEtcd(object):
         LOG.info("Scanning etcd for all profiles")
 
         try:
-            result = self.client.read(PROFILE_DIR, recursive=True, timeout=5)
+            result = self.client.read(
+                PROFILE_DIR, recursive=True, timeout=ETCD_TIMEOUT
+            )
         except etcd.EtcdKeyNotFound:
             # No key yet, which is totally fine: just exit.
             LOG.info("No profiles key present")
@@ -333,7 +416,13 @@ class CalicoTransportEtcd(object):
                 rules_modified = rules_indices.pop(profile_id)
 
                 LOG.debug("Found profile id %s", profile_id)
-                yield Profile(profile_id, tag_modified, rules_modified)
+                yield Profile(
+                    id=profile_id,
+                    tags_modified_index=tag_modified,
+                    rules_modified_index=rules_modified,
+                    tags_data=None,
+                    rules_data=None,
+                )
 
         # Quickly confirm that the tag and rule indices are empty (they should
         # be).
@@ -368,7 +457,7 @@ class CalicoTransportEtcd(object):
             self.client.delete(
                 key_for_profile_tags(profile.id),
                 prevIndex=profile.tags_modified_index,
-                timeout=5
+                timeout=ETCD_TIMEOUT
             )
         except etcd.EtcdKeyNotFound:
             LOG.info(
@@ -379,7 +468,7 @@ class CalicoTransportEtcd(object):
             self.client.delete(
                 key_for_profile_rules(profile.id),
                 prevIndex=profile.rules_modified_index,
-                timeout=5
+                timeout=ETCD_TIMEOUT
             )
         except etcd.EtcdKeyNotFound:
             LOG.info(
@@ -390,7 +479,7 @@ class CalicoTransportEtcd(object):
         profile_key = key_for_profile(profile.id)
 
         try:
-            self.client.delete(profile_key, dir=True, timeout=5)
+            self.client.delete(profile_key, dir=True, timeout=ETCD_TIMEOUT)
         except etcd.EtcdException as e:
             LOG.debug("Failed to delete %s (%r), giving up.", profile_key, e)
 
@@ -408,7 +497,7 @@ class CalicoTransportEtcd(object):
         for i in range(-1, -3, -1):
             delete_key = '/'.join(key_parts[:i])
             try:
-                self.client.delete(delete_key, dir=True, timeout=5)
+                self.client.delete(delete_key, dir=True, timeout=ETCD_TIMEOUT)
             except etcd.EtcdException as e:
                 LOG.debug("Failed to delete %s (%r), skipping.", delete_key, e)
 

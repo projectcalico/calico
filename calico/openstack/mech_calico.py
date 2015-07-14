@@ -23,6 +23,7 @@
 # document at http://docs.projectcalico.org/en/latest/architecture.html).
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
+import json
 import os
 import eventlet
 
@@ -47,7 +48,9 @@ except ImportError:  # Kilo
 
 # Calico imports.
 import etcd
-from calico.openstack.t_etcd import CalicoTransportEtcd
+from calico.openstack.t_etcd import (
+    CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags
+)
 
 LOG = log.getLogger(__name__)
 
@@ -616,11 +619,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         endpoints = list(self.transport.get_endpoints())
         endpoint_ids = set(ep.id for ep in endpoints)
 
-        # Then, grab all the ports from Neutron. Quickly work out whether
-        # a given port is missing from etcd, or if etcd has too many ports.
-        # Then, add all missing ports and remove all extra ones.
-        # This explicit with statement is technically unnecessary, but it helps
-        # keep our transaction scope really clear.
+        # Then, grab all the ports from Neutron.
+        # TODO(lukasa): We can reduce the amount of data we load from Neutron
+        # here by filtering in the get_ports call.
         with context.session.begin(subtransactions=True):
             ports = dict((port['id'], port)
                          for port in self.db.get_ports(context)
@@ -629,11 +630,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port_ids = set(ports.keys())
         missing_ports = port_ids - endpoint_ids
         extra_ports = endpoint_ids - port_ids
+        changes_ports = set()
 
         # We need to do one more check: are any ports in the wrong place? The
         # way we handle this is to treat this as a port that is both missing
         # and extra, where the old version is extra and the new version is
         # missing.
+        #
+        # While we're here, anything that's not extra, missing, or in the wrong
+        # place should be added to the list of ports to check for changes.
         for endpoint in endpoints:
             try:
                 port = ports[endpoint.id]
@@ -650,10 +655,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 )
                 missing_ports.add(endpoint.id)
                 extra_ports.add(endpoint.id)
+            else:
+                # Port is common to both: add to changes_ports.
+                changes_ports.add(endpoint.id)
 
         if missing_ports or extra_ports:
-            LOG.info("Missing ports: %s", missing_ports)
-            LOG.info("Extra ports: %s", extra_ports)
+            LOG.warning("Missing ports: %s", missing_ports)
+            LOG.warning("Extra ports: %s", extra_ports)
 
         # First, handle the extra ports. Each of them needs to be atomically
         # deleted.
@@ -688,6 +696,55 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.add_port_interface_name(port)
                 self.transport.endpoint_created(port)
 
+        # Finally, scan each of the ports in changes_ports. Work out if there
+        # are any differences. If there are, write out to etcd.
+        changed_endpoints = (e for e in endpoints if e.id in changes_ports)
+
+        for endpoint in changed_endpoints:
+            # Get the endpoint data from etcd.
+            try:
+                endpoint = self.transport.get_endpoint_data(endpoint)
+            except etcd.EtcdKeyNotFound:
+                # The endpoint is gone. That's fine.
+                LOG.info("Failed to update deleted endpoint %s", endpoint.id)
+                continue
+
+            with context.session.begin(subtransactions=True):
+                port = self.db.get_port(context, endpoint.id)
+
+            # Get the data for both.
+            try:
+                etcd_data = json.loads(endpoint.data)
+            except (ValueError, TypeError):
+                # If the JSON data is bad, just ignore it. We can't blow up
+                # here because that will trigger a new resync on another node
+                # that will blow *it* up as well. Just tolerate it.
+                LOG.exception("Bad JSON data in key %s", endpoint.key)
+                continue
+
+            port['fixed_ips'] = self.get_fixed_ips_for_port(
+                context, port
+            )
+            port['security_groups'] = self.get_security_groups_for_port(
+                context, port
+            )
+            self.add_port_gateways(port, context)
+            self.add_port_interface_name(port)
+            neutron_data = port_etcd_data(port)
+
+            if etcd_data != neutron_data:
+                # Write to etcd.
+                LOG.warning("Resolving error in port %s", endpoint.id)
+                try:
+                    self.transport.write_port_to_etcd(
+                        port, prev_index=endpoint.modified_index
+                    )
+                except ValueError:
+                    # If someone wrote to etcd they probably have more recent
+                    # data than us, let it go.
+                    LOG.info("Atomic CAS failed, no action.")
+                    continue
+
     def resync_profiles(self, context):
         """
         Resynchronize security profiles.
@@ -702,6 +759,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Next, grab all the security groups from Neutron. Quickly work out
         # whether a given group is missing from etcd, or if etcd has too many
         # groups. Then, add all missing groups and remove all extra ones.
+        # Anything not in either group is added to the 'reconcile' set.
         # This explicit with statement is technically unnecessary, but it helps
         # keep our transaction scope really clear.
         with context.session.begin(subtransactions=True):
@@ -710,10 +768,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         sgids = set(sg['id'] for sg in sgs)
         missing_groups = sgids - profile_ids
         extra_groups = profile_ids - sgids
+        reconcile_groups = profile_ids & sgids
 
         if missing_groups or extra_groups:
-            LOG.info("Missing groups: %s", missing_groups)
-            LOG.info("Extra groups: %s", extra_groups)
+            LOG.warning("Missing groups: %s", missing_groups)
+            LOG.warning("Extra groups: %s", extra_groups)
 
         # For each missing profile, do a quick profile creation. This takes out
         # a db transaction and regains all the rules. Note that this
@@ -742,6 +801,63 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
+
+        # Finally, reconcile the security profiles. This involves looping over
+        # them, grabbing their data, and then comparing that to what Neutron
+        # has.
+        profiles_to_reconcile = (
+            p for p in profiles if p.id in reconcile_groups
+        )
+        for etcd_profile in profiles_to_reconcile:
+            # Get the data from etcd.
+            try:
+                etcd_profile = self.transport.get_profile_data(etcd_profile)
+            except etcd.EtcdKeyNotFound:
+                # The profile is gone. That's fine.
+                LOG.info(
+                    "Failed to update deleted profile %s", etcd_profile.id
+                )
+                continue
+
+            # Get the data from Neutron.
+            with context.session.begin(subtransactions=True):
+                rules = self.db.get_security_group_rules(
+                    context, filters={'security_group_id': etcd_profile.id}
+                )
+
+            # Convert the etcd data into in-memory data structures.
+            try:
+                etcd_rules = json.loads(etcd_profile.rules_data)
+                etcd_tags = json.loads(etcd_profile.tags_data)
+            except (ValueError, TypeError):
+                # If the JSON data is bad, just ignore it. We can't blow up
+                # here because that will trigger a new resync on another node
+                # that will blow *it* up as well. Just tolerate it.
+                LOG.exception("Bad JSON data in key %s", etcd_profile.key)
+                continue
+
+            # Do the same conversion for the Neutron profile.
+            neutron_profile = profile_from_neutron_rules(
+                etcd_profile.id, rules
+            )
+            neutron_rules = profile_rules(neutron_profile)
+            neutron_tags = profile_tags(neutron_profile)
+
+            if (etcd_rules != neutron_rules) or (etcd_tags != neutron_tags):
+                # Write to etcd.
+                LOG.warning("Resolving error in profile %s", etcd_profile.id)
+
+                try:
+                    self.transport.write_profile_to_etcd(
+                        neutron_profile,
+                        prev_rules_index=etcd_profile.rules_modified_index,
+                        prev_tags_index=etcd_profile.tags_modified_index,
+                    )
+                except ValueError:
+                    # If someone wrote to etcd they probably have more recent
+                    # data than us, let it go.
+                    LOG.info("Atomic CAS failed, no action.")
+                    continue
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
