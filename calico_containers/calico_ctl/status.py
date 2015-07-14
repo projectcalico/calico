@@ -48,9 +48,9 @@ def status(arguments):
         if result is not None:
             print "Running felix version %s" % result.group(1)
 
-        print "\nIPv4 Bird (BGP) status"
+        print "\nIPv4 BGP status"
         pprint_bird_protocols("v4")
-        print "IPv6 Bird (BGP) status"
+        print "IPv6 BGP status"
         pprint_bird_protocols("v6")
 
 def pprint_bird_protocols(version):
@@ -82,7 +82,7 @@ def pprint_bird_protocols(version):
     # Parse the output from BIRD to extract the values in the protocol status
     # table.  We'll further parse the name since that includes details about
     # the type of peer and the peer IP address.
-    x = PrettyTable(["Name", "Protocol", "Peer type", "State",
+    x = PrettyTable(["Peer address", "Peer type", "State",
                      "Since", "Info"])
     lines = results.split("\n")
     found_table = False
@@ -132,16 +132,16 @@ def pprint_bird_protocols(version):
             name = combined[7:].replace("_", ip_sep)
             ptype = "global"
         else:
-            name = combined
-            ptype = ""
+            # This is not a BGP Peer, so do not include in the output.
+            continue
 
-        x.add_row([name, columns[1], ptype, columns[3], columns[4],
+        x.add_row([name, ptype, columns[3], columns[4],
                    columns[5] if len(columns) == 6 else ""])
 
     # If we parsed the table then pretty print the table, otherwise just output
     # the BIRD output directly.  The first line of the BIRD output provides an
     # overall BIRD status.
     if found_table:
-        print lines[0] + "\n" + str(x) + "\n"
+        print str(x) + "\n"
     else:
         print results + "\n"
