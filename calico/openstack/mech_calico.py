@@ -295,14 +295,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(context._plugin_context, port['id'])
 
             # Next, fill out other information we need on the port.
-            port['fixed_ips'] = self.get_fixed_ips_for_port(
+            port = self.add_extra_port_information(
                 context._plugin_context, port
             )
-            port['security_groups'] = self.get_security_groups_for_port(
-                context._plugin_context, port
-            )
-            self.add_port_gateways(port, context._plugin_context)
-            self.add_port_interface_name(port)
 
             # Next, we need to work out what security profiles apply to this
             # port and grab information about it.
@@ -444,14 +439,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # a separate port update event occur?
         LOG.info("Port becoming bound: create.")
         port = self.db.get_port(context._plugin_context, port['id'])
-        port['fixed_ips'] = self.get_fixed_ips_for_port(
-            context._plugin_context, port
-        )
-        port['security_groups'] = self.get_security_groups_for_port(
-            context._plugin_context, port
-        )
-        self.add_port_gateways(port, context._plugin_context)
-        self.add_port_interface_name(port)
+        port = self.add_extra_port_information(context._plugin_context, port)
         profiles = self.get_security_profiles(
             context._plugin_context, port
         )
@@ -499,14 +487,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             with context._plugin_context.session.begin(subtransactions=True):
                 port = self.db.get_port(context._plugin_context, port['id'])
-                port['fixed_ips'] = self.get_fixed_ips_for_port(
+                port = self.add_extra_port_information(
                     context._plugin_context, port
                 )
-                port['security_groups'] = self.get_security_groups_for_port(
-                    context._plugin_context, port
-                )
-                self.add_port_gateways(port, context._plugin_context)
-                self.add_port_interface_name(port)
                 profiles = self.get_security_profiles(
                     context._plugin_context, port
                 )
@@ -663,44 +646,67 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("Missing ports: %s", missing_ports)
             LOG.warning("Extra ports: %s", extra_ports)
 
-        # First, handle the extra ports. Each of them needs to be atomically
-        # deleted.
+        # First, handle the extra ports.
         eps_to_delete = (e for e in endpoints if e.id in extra_ports)
+        self._resync_extra_ports(eps_to_delete)
 
-        for endpoint in eps_to_delete:
-            try:
-                self.transport.atomic_delete_endpoint(endpoint)
-            except (ValueError, etcd.EtcdKeyNotFound):
-                # If the atomic CAD doesn't successfully delete, that's ok, it
-                # means the endpoint was created or updated elsewhere.
-                continue
+        # Next, the missing ports.
+        self._resync_missing_ports(context, missing_ports)
 
-        # Next, for each missing port, do a quick port creation. This takes out
-        # a db transaction and regains all the ports. Note that this
-        # transaction is potentially held for quite a while.
+        # Finally, scan each of the ports in changes_ports. Work out if there
+        # are any differences. If there are, write out to etcd.
+        common_endpoints = (e for e in endpoints if e.id in changes_ports)
+        self._resync_changed_ports(context, common_endpoints)
+
+    def _resync_missing_ports(self, context, missing_port_ids):
+        """
+        For each missing port, do a quick port creation. This takes out a DB
+        transaction and regains all the ports. Note that this transaction is
+        potentially held for quite a while.
+
+        :param context: A Neutron DB context.
+        :param missing_port_ids: A set of IDs for ports missing from etcd.
+        :returns: Nothing.
+        """
         with context.session.begin(subtransactions=True):
             missing_ports = self.db.get_ports(
-                context, filters={'id': missing_ports}
+                context, filters={'id': missing_port_ids}
             )
 
             for port in missing_ports:
                 # Fill out other information we need on the port and write to
                 # etcd.
-                port['fixed_ips'] = self.get_fixed_ips_for_port(
-                    context, port
-                )
-                port['security_groups'] = self.get_security_groups_for_port(
-                    context, port
-                )
-                self.add_port_gateways(port, context)
-                self.add_port_interface_name(port)
+                port = self.add_extra_port_information(context, port)
                 self.transport.endpoint_created(port)
 
-        # Finally, scan each of the ports in changes_ports. Work out if there
-        # are any differences. If there are, write out to etcd.
-        changed_endpoints = (e for e in endpoints if e.id in changes_ports)
+    def _resync_extra_ports(self, ports_to_delete):
+        """
+        Atomically delete ports that are in etcd, but shouldn't be.
 
-        for endpoint in changed_endpoints:
+        :param ports_to_delete: An iterable of Endpoint objects to be
+            deleted.
+        :returns: Nothing.
+        """
+        for endpoint in ports_to_delete:
+            try:
+                self.transport.atomic_delete_endpoint(endpoint)
+            except (ValueError, etcd.EtcdKeyNotFound):
+                # If the atomic CAD doesn't successfully delete, that's ok, it
+                # means the endpoint was created or updated elsewhere.
+                LOG.info('Endpoint %s was deleted elsewhere', endpoint)
+                continue
+
+    def _resync_changed_ports(self, context, common_endpoints):
+        """
+        Reconcile all changed profiles by checking whether Neutron and etcd
+        agree.
+
+        :param context: A Neutron DB context.
+        :param common_endpoints: An iterable of Endpoint objects that should
+            be checked for changes.
+        :returns: Nothing.
+        """
+        for endpoint in common_endpoints:
             # Get the endpoint data from etcd.
             try:
                 endpoint = self.transport.get_endpoint_data(endpoint)
@@ -716,20 +722,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 etcd_data = json.loads(endpoint.data)
             except (ValueError, TypeError):
-                # If the JSON data is bad, just ignore it. We can't blow up
-                # here because that will trigger a new resync on another node
-                # that will blow *it* up as well. Just tolerate it.
+                # If the JSON data is bad, we need to fix it up. Set a value
+                # that is impossible for Neutron to be returning: nothing at
+                # all.
                 LOG.exception("Bad JSON data in key %s", endpoint.key)
-                continue
+                etcd_data = None
 
-            port['fixed_ips'] = self.get_fixed_ips_for_port(
-                context, port
-            )
-            port['security_groups'] = self.get_security_groups_for_port(
-                context, port
-            )
-            self.add_port_gateways(port, context)
-            self.add_port_interface_name(port)
+            port = self.add_extra_port_information(context, port)
             neutron_data = port_etcd_data(port)
 
             if etcd_data != neutron_data:
@@ -774,26 +773,53 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("Missing groups: %s", missing_groups)
             LOG.warning("Extra groups: %s", extra_groups)
 
-        # For each missing profile, do a quick profile creation. This takes out
-        # a db transaction and regains all the rules. Note that this
-        # transaction is potentially held for quite a while.
+        # First, resync the missing security profiles.
+        self._resync_missing_profiles(context, missing_groups)
+
+        # Next, handle the extra profiles. Each of them needs to be atomically
+        # deleted.
+        profiles_to_delete = (p for p in profiles if p.id in extra_groups)
+        self._resync_additional_profiles(profiles_to_delete)
+
+        # Finally, reconcile the security profiles. This involves looping over
+        # them, grabbing their data, and then comparing that to what Neutron
+        # has.
+        profiles_to_reconcile = (
+            p for p in profiles if p.id in reconcile_groups
+        )
+        self._resync_changed_profiles(context, profiles_to_reconcile)
+
+    def _resync_missing_profiles(self, context, missing_group_ids):
+        """
+        For each missing profile, do a quick profile creation. This takes out a
+        db transaction and regains all the rules. Note that this transaction is
+        potentially held for quite a while.
+
+        :param context: A Neutron DB context.
+        :param missing_group_ids: The IDs of the missing security groups.
+        :returns: Nothing.
+        """
         with context.session.begin(subtransactions=True):
             rules = self.db.get_security_group_rules(
-                context, filters={'security_group_id': missing_groups}
+                context, filters={'security_group_id': missing_group_ids}
             )
 
             profiles_to_write = (
                 profile_from_neutron_rules(sgid, rules)
-                for sgid in missing_groups
+                for sgid in missing_group_ids
             )
 
             for profile in profiles_to_write:
                 self.transport.write_profile_to_etcd(profile)
 
-        # Next, handle the extra profiles. Each of them needs to be atomically
-        # deleted.
-        profiles_to_delete = (p for p in profiles if p.id in extra_groups)
+    def _resync_additional_profiles(self, profiles_to_delete):
+        """
+        Atomically delete profiles that are in etcd, but shouldn't be.
 
+        :param missing_group_ids: An iterable of profile objects to be
+            deleted.
+        :returns: Nothing.
+        """
         for profile in profiles_to_delete:
             try:
                 self.transport.atomic_delete_profile(profile)
@@ -802,12 +828,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # means the profile was created or updated elsewhere.
                 continue
 
-        # Finally, reconcile the security profiles. This involves looping over
-        # them, grabbing their data, and then comparing that to what Neutron
-        # has.
-        profiles_to_reconcile = (
-            p for p in profiles if p.id in reconcile_groups
-        )
+    def _resync_changed_profiles(self, context, profiles_to_reconcile):
+        """
+        Reconcile all changed profiles by checking whether Neutron and etcd
+        agree.
+        """
         for etcd_profile in profiles_to_reconcile:
             # Get the data from etcd.
             try:
@@ -825,25 +850,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     context, filters={'security_group_id': etcd_profile.id}
                 )
 
-            # Convert the etcd data into in-memory data structures.
-            try:
-                etcd_rules = json.loads(etcd_profile.rules_data)
-                etcd_tags = json.loads(etcd_profile.tags_data)
-            except (ValueError, TypeError):
-                # If the JSON data is bad, just ignore it. We can't blow up
-                # here because that will trigger a new resync on another node
-                # that will blow *it* up as well. Just tolerate it.
-                LOG.exception("Bad JSON data in key %s", etcd_profile.key)
-                continue
-
             # Do the same conversion for the Neutron profile.
             neutron_profile = profile_from_neutron_rules(
                 etcd_profile.id, rules
             )
-            neutron_rules = profile_rules(neutron_profile)
-            neutron_tags = profile_tags(neutron_profile)
 
-            if (etcd_rules != neutron_rules) or (etcd_tags != neutron_tags):
+            if not profiles_match(etcd_profile, neutron_profile):
                 # Write to etcd.
                 LOG.warning("Resolving error in profile %s", etcd_profile.id)
 
@@ -906,6 +918,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 port_id=port['id']
             )
         ]
+
+    def add_extra_port_information(self, context, port):
+        """
+        Gets extra information for a port that is needed before sending it to
+        etcd.
+        """
+        port['fixed_ips'] = self.get_fixed_ips_for_port(
+            context, port
+        )
+        port['security_groups'] = self.get_security_groups_for_port(
+            context, port
+        )
+        self.add_port_gateways(port, context)
+        self.add_port_interface_name(port)
+        return port
 
 
 # This section monkeypatches the AgentNotifierApi.security_groups_rule_updated
@@ -976,3 +1003,32 @@ def port_bound(port):
     Returns true if the port is bound.
     """
     return port['binding:vif_type'] != 'unbound'
+
+
+def profiles_match(etcd_profile, neutron_profile):
+    """
+    Given a set of Neutron security group rules and a Profile read from etcd,
+    compare if they're the same.
+
+    :param etcd_profile: A Profile object from etcd.
+    :param neutron_profile: A SecurityProfile object from Neutron.
+    :returns: True if the rules are identical, False otherwise.
+    """
+    # Convert the etcd data into in-memory data structures.
+    try:
+        etcd_rules = json.loads(etcd_profile.rules_data)
+        etcd_tags = json.loads(etcd_profile.tags_data)
+    except (ValueError, TypeError):
+        # If the JSON data is bad, log it then treat this as not matching
+        # Neutron.
+        LOG.exception("Bad JSON data in key %s", etcd_profile.key)
+        return False
+
+    # Do the same conversion for the Neutron profile.
+    neutron_group_rules = profile_rules(neutron_profile)
+    neutron_group_tags = profile_tags(neutron_profile)
+
+    return (
+        (etcd_rules == neutron_group_rules) and
+        (etcd_tags == neutron_group_tags)
+    )
