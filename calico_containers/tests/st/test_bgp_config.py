@@ -188,35 +188,34 @@ class TestBGPConfig(TestBase):
         for (peertype, ipaddr, state) in expected:
             for line in lines:
                 # Status table format is of the form:
-                # +--------------+----------+---------------+-------+----------+-------------+
-                # |     Name     | Protocol |   Peer type   | State |  Since   |     Info    |
-                # +--------------+----------+---------------+-------+----------+-------------+
-                # |   direct1    |  Direct  |               |   up  | 20:55:05 |             |
-                # | 172.17.42.34 |   BGP    | node specific |   up  | 20:55:21 | Established |
-                # +--------------+----------+---------------+-------+----------+-------------+
+                # +--------------+-------------------+-------+----------+-------------+
+                # | Peer address |     Peer type     | State |  Since   |     Info    |
+                # +--------------+-------------------+-------+----------+-------------+
+                # | 172.17.42.21 | node-to-node mesh |   up  | 16:17:25 | Established |
+                # | 10.20.30.40  |       global      | start | 16:28:38 |   Connect   |
+                # |  192.10.0.0  |   node specific   | start | 16:28:57 |   Connect   |
+                # +--------------+-------------------+-------+----------+-------------+
                 #
                 # Splitting based on | separators results in an array of the
                 # form:
-                # ['', 'Name', 'Protocol', 'Peer type', 'State', 'Since', 'Info', '']
+                # ['', 'Peer address', 'Peer type', 'State', 'Since', 'Info', '']
                 columns = re.split("\s*\|\s*", line.strip())
-                if len(columns) != 8:
+                if len(columns) != 7:
                     continue
 
                 # Find the entry matching this peer.
-                if (columns[1] == ipaddr and
-                      columns[2] == "BGP" and
-                      columns[3] == peertype):
+                if columns[1] == ipaddr and columns[2] == peertype:
 
                     # Check that the connection state is as expected.  We check
                     # that the state starts with the expected value since there
                     # may be additional diagnostic information included in the
                     # info field.
-                    if columns[6].startswith(state):
+                    if columns[5].startswith(state):
                         break
                     else:
                         msg = "Error in BIRD status for peer %s:\n" \
                               "Expected: %s; Actual: %s\n" \
-                              "Output:\n%s" % (ipaddr, state, columns[6],
+                              "Output:\n%s" % (ipaddr, state, columns[5],
                                                output)
                         raise AssertionError(msg)
             else:
