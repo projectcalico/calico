@@ -140,6 +140,14 @@ class DatastoreClient(object):
         else:
             self.etcd_client.write(host_path + "bgp_as", as_num)
 
+        # Configure Felix to allow traffic from the containers to the host (if
+        # not otherwise firewalled by the host administrator or profiles).
+        # This is important for Mesos, where the containerized executor process
+        # needs to exchange messages with the Mesos Slave process running on
+        # the host.
+        self.etcd_client.write(host_path +
+                               "config/DefaultEndpointToHostAction", "RETURN")
+
         # Flag to Felix that the host is created.
         self.etcd_client.write(host_path + "config/marker", "created")
 
