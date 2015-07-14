@@ -14,7 +14,8 @@
 """
 Usage:
   calicoctl profile show [--detailed]
-  calicoctl profile (add|remove) <PROFILE>
+  calicoctl profile add <PROFILE>
+  calicoctl profile remove <PROFILE> [--no-check]
   calicoctl profile <PROFILE> tag show
   calicoctl profile <PROFILE> tag (add|remove) <TAG>
   calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
@@ -46,6 +47,8 @@ Description:
 
 Options:
   --detailed        Show additional information.
+  --no-check        Remove a profile without checking if there are endpoints
+                    associated with the profile.
   --at=<POSITION>   Specify the position in the chain where the rule should
                     be placed. Default: append at end.
 
@@ -130,7 +133,7 @@ def profile(arguments):
     elif arguments.get("add"):
         profile_add(arguments.get("<PROFILE>"))
     elif arguments.get("remove"):
-        profile_remove(arguments.get("<PROFILE>"))
+        profile_remove(arguments.get("<PROFILE>"), arguments.get("--no-check"))
     elif arguments.get("show"):
         profile_show(arguments.get("--detailed"))
 
@@ -150,14 +153,35 @@ def profile_add(profile_name):
         print "Created profile %s" % profile_name
 
 
-def profile_remove(profile_name):
-    # TODO - Don't allow removing a profile that has endpoints in it.
-    try:
-        client.remove_profile(profile_name)
-    except KeyError:
-        print "Couldn't find profile with name %s" % profile_name
+def profile_remove(profile_name, nocheck):
+    """
+    Remove a profile as long as it does not contain any endpoints.
+    Allow user to explicitly remove the profile if desired.
+    :param profile_name: The name of the profile to remove.
+    :param nocheck: Flag saying to remove profile regardless of endpoints.
+    :return: None.
+    """
+    # Check if the profile exists.
+    if client.profile_exists(profile_name):
+        rm_profile = False
+        # Check that the nocheck flag was used
+        if nocheck:
+            rm_profile = True
+        else:
+            # Check if the the profile has endpoints associated with it
+            members = client.get_profile_members(profile_name)
+            if not members:
+                rm_profile = True
+        # Remove the profile if criteria was met
+        if rm_profile:
+            client.remove_profile(profile_name)
+            print "Deleted profile %s" % profile_name
+        else:
+            # Members must exist if this branch is reached
+            print "Cannot remove profile - profile in use by endpoint(s).\n" + \
+                  "Use the '--no-check' flag to remove the profile anyway."
     else:
-        print "Deleted profile %s" % profile_name
+        print "Profile %s not found." % profile_name
 
 
 def profile_show(detailed):
