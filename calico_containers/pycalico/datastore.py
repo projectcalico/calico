@@ -27,7 +27,7 @@ from pycalico.datastore_errors import DataStoreError, \
 ETCD_AUTHORITY_DEFAULT = "127.0.0.1:4001"
 ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
-# etcd paths for Calico
+# etcd paths for Calico workloads, endpoints and IPAM.
 CALICO_V_PATH = "/calico/v1"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
 CONFIG_IF_PREF_PATH = CONFIG_PATH + "InterfacePrefix"
@@ -43,12 +43,26 @@ TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
 IP_POOLS_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool/"
 IP_POOL_KEY = IP_POOLS_PATH + "%(pool)s"
-BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/"
-BGP_PEER_PATH = CALICO_V_PATH + "/config/bgp_peer_%(version)s/%(peer_ip)s"
-BGP_NODE_DEF_AS_PATH = CONFIG_PATH + "bgp_as"
-BGP_NODE_MESH_PATH = CONFIG_PATH + "bgp_node_mesh"
-HOST_BGP_PEERS_PATH = HOST_PATH + "bgp_peer_%(version)s/"
-HOST_BGP_PEER_PATH = HOST_PATH + "bgp_peer_%(version)s/%(peer_ip)s"
+
+# Felix IPv4 host value.
+# @TODO This is a throw-back to the previous datamodel, and the field is badly
+# @TODO named.  New PR will sort out the naming in calico-docker and felix.
+HOST_IPV4_PATH = HOST_PATH + "bird_ip"
+
+# etcd paths for BGP specific configuration
+BGP_V_PATH = "/calico/bgp/v1/"
+BGP_GLOBAL_PATH = BGP_V_PATH + "global/"
+BGP_GLOBAL_PEERS_PATH = BGP_GLOBAL_PATH + "peer_%(version)s/"
+BGP_GLOBAL_PEER_PATH = BGP_GLOBAL_PEERS_PATH + "%(peer_ip)s"
+BGP_NODE_DEF_AS_PATH = BGP_GLOBAL_PATH + "as_num"
+BGP_NODE_MESH_PATH = BGP_GLOBAL_PATH + "node_mesh"
+BGP_HOSTS_PATH = BGP_V_PATH + "host/"
+BGP_HOST_PATH = BGP_HOSTS_PATH + "%(hostname)s/"
+BGP_HOST_IPV4_PATH = BGP_HOST_PATH + "ip_addr_v4"
+BGP_HOST_IPV6_PATH = BGP_HOST_PATH + "ip_addr_v6"
+BGP_HOST_AS_PATH = BGP_HOST_PATH + "as_num"
+BGP_HOST_PEERS_PATH = BGP_HOST_PATH + "peer_%(version)s/"
+BGP_HOST_PEER_PATH = BGP_HOST_PATH + "peer_%(version)s/%(peer_ip)s"
 
 IF_PREFIX = "cali"
 """
@@ -56,9 +70,11 @@ prefix that appears in all Calico interface names in the root namespace. e.g.
 cali123456789ab.
 """
 
-# The default node AS number
+# The default node AS number.
 DEFAULT_AS_NUM = 64511
 
+# The default node mesh configuration.
+DEFAULT_NODE_MESH = {"enabled": True}
 
 def handle_errors(fn):
     """
@@ -95,32 +111,52 @@ class DatastoreClient(object):
         defaults if they don't.
         :return: None.
         """
+        # Configure Felix config.
         try:
             self.etcd_client.read(CONFIG_IF_PREF_PATH)
         except EtcdKeyNotFound:
             # Didn't exist, create it now.
             self.etcd_client.write(CONFIG_IF_PREF_PATH, IF_PREFIX)
 
+        # Configure BGP global (default) config if it doesn't exist.
+        try:
+            self.etcd_client.read(BGP_NODE_DEF_AS_PATH)
+        except EtcdKeyNotFound:
+            # Didn't exist, create it now.
+            self.etcd_client.write(BGP_NODE_DEF_AS_PATH, DEFAULT_AS_NUM)
+
+        try:
+            self.etcd_client.read(BGP_NODE_MESH_PATH)
+        except EtcdKeyNotFound:
+            # Didn't exist, create it now.
+            self.etcd_client.write(BGP_NODE_MESH_PATH,
+                                   json.dumps(DEFAULT_NODE_MESH))
+
         # We are always ready.
         self.etcd_client.write(CALICO_V_PATH + "/Ready", "true")
 
     @handle_errors
-    def create_host(self, hostname, bird_ip, bird6_ip, as_num):
+    def create_host(self, hostname, ipv4, ipv6, as_num):
         """
         Create a new Calico host configuration in etcd.
 
         :param hostname: The name of the host to create.
-        :param bird_ip: The IP address BIRD should listen on.
-        :param bird6_ip: The IP address BIRD6 should listen on.
+        :param ipv4: The IPv4 address bound to the node.
+        :param ipv6: The IPv6 address bound to the node.
         :param as_num: Optional AS Number to use for this host.  If not
         specified, the configured global or default global value is used.
         :return: nothing.
         """
         host_path = HOST_PATH % {"hostname": hostname}
+        host_ipv4 = HOST_IPV4_PATH % {"hostname": hostname}
+        bgp_ipv4 = BGP_HOST_IPV4_PATH  % {"hostname": hostname}
+        bgp_ipv6 = BGP_HOST_IPV6_PATH  % {"hostname": hostname}
+        bgp_as = BGP_HOST_AS_PATH  % {"hostname": hostname}
 
         # Set up the host
-        self.etcd_client.write(host_path + "bird_ip", bird_ip)
-        self.etcd_client.write(host_path + "bird6_ip", bird6_ip)
+        self.etcd_client.write(host_ipv4, ipv4)
+        self.etcd_client.write(bgp_ipv4, ipv4)
+        self.etcd_client.write(bgp_ipv6, ipv6)
         workload_dir = host_path + "workload"
         try:
             self.etcd_client.read(workload_dir)
@@ -134,11 +170,11 @@ class DatastoreClient(object):
         # hardcoded default value).
         if as_num is None:
             try:
-                self.etcd_client.delete(host_path + "bgp_as")
+                self.etcd_client.delete(bgp_as)
             except EtcdKeyNotFound:
                 pass
         else:
-            self.etcd_client.write(host_path + "bgp_as", as_num)
+            self.etcd_client.write(bgp_as, as_num)
 
         # Configure Felix to allow traffic from the containers to the host (if
         # not otherwise firewalled by the host administrator or profiles).
@@ -160,6 +196,14 @@ class DatastoreClient(object):
         :param hostname: The name of the host to remove.
         :return: nothing.
         """
+        # Remove the host BGP tree.
+        bgp_host_path = BGP_HOST_PATH % {"hostname": hostname}
+        try:
+            self.etcd_client.delete(bgp_host_path, dir=True, recursive=True)
+        except EtcdKeyNotFound:
+            pass
+
+        # Remove the host calico tree.
         host_path = HOST_PATH % {"hostname": hostname}
         try:
             self.etcd_client.delete(host_path, dir=True, recursive=True)
@@ -167,18 +211,20 @@ class DatastoreClient(object):
             pass
 
     @handle_errors
-    def get_host_ips(self, hostname):
+    def get_host_bgp_ips(self, hostname):
         """
         Check etcd for the configured IPv4 and IPv6 addresses for the specified
-        host. If it hasn't been configured yet, raise an EtcdKeyNotFound.
+        host BGP binding. If it hasn't been configured yet, raise an
+        EtcdKeyNotFound.
 
         :param hostname: The hostname.
         :return: A tuple containing the IPv4 and IPv6 address.
         """
-        host_path = HOST_PATH % {"hostname": hostname}
+        bgp_ipv4 = BGP_HOST_IPV4_PATH  % {"hostname": hostname}
+        bgp_ipv6 = BGP_HOST_IPV6_PATH  % {"hostname": hostname}
         try:
-            ipv4 = self.etcd_client.read(host_path + "bird_ip").value
-            ipv6 = self.etcd_client.read(host_path + "bird6_ip").value
+            ipv4 = self.etcd_client.read(bgp_ipv4).value
+            ipv6 = self.etcd_client.read(bgp_ipv6).value
         except EtcdKeyNotFound:
             raise KeyError("BIRD configuration for host %s not found." % hostname)
         else:
@@ -289,9 +335,9 @@ class DatastoreClient(object):
         """
         assert version in ("v4", "v6")
         if hostname is None:
-            bgp_peers_path = BGP_PEERS_PATH % {"version": version}
+            bgp_peers_path = BGP_GLOBAL_PEERS_PATH % {"version": version}
         else:
-            bgp_peers_path = HOST_BGP_PEERS_PATH % {"hostname": hostname,
+            bgp_peers_path = BGP_HOST_PEERS_PATH % {"hostname": hostname,
                                                     "version": version}
 
         try:
@@ -322,10 +368,10 @@ class DatastoreClient(object):
         """
         assert version in ("v4", "v6")
         if hostname is None:
-            bgp_peer_path = BGP_PEER_PATH % {"version": version,
-                                             "peer_ip": str(bgp_peer.ip)}
+            bgp_peer_path = BGP_GLOBAL_PEER_PATH % {"version": version,
+                                                   "peer_ip": str(bgp_peer.ip)}
         else:
-            bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+            bgp_peer_path = BGP_HOST_PEER_PATH % {"hostname": hostname,
                                                   "version": version,
                                                   "peer_ip": str(bgp_peer.ip)}
         self.etcd_client.write(bgp_peer_path, bgp_peer.to_json())
@@ -347,10 +393,10 @@ class DatastoreClient(object):
         assert version in ("v4", "v6")
         assert isinstance(ip, IPAddress)
         if hostname is None:
-            bgp_peer_path = BGP_PEER_PATH % {"version": version,
+            bgp_peer_path = BGP_GLOBAL_PEER_PATH % {"version": version,
                                              "peer_ip": str(ip)}
         else:
-            bgp_peer_path = HOST_BGP_PEER_PATH % {"hostname": hostname,
+            bgp_peer_path = BGP_HOST_PEER_PATH % {"hostname": hostname,
                                                   "version": version,
                                                   "peer_ip": str(ip)}
         try:
@@ -718,10 +764,11 @@ class DatastoreClient(object):
         :return: Dict of {ip_version: IPAddress}
         """
 
-        host_path = HOST_PATH % {"hostname": hostname}
+        bgp_ipv4 = BGP_HOST_IPV4_PATH  % {"hostname": hostname}
+        bgp_ipv6 = BGP_HOST_IPV6_PATH  % {"hostname": hostname}
         try:
-            ipv4 = self.etcd_client.read(host_path + "bird_ip").value
-            ipv6 = self.etcd_client.read(host_path + "bird6_ip").value
+            ipv4 = self.etcd_client.read(bgp_ipv4).value
+            ipv6 = self.etcd_client.read(bgp_ipv6).value
         except EtcdKeyNotFound:
             raise KeyError("BIRD configuration for host %s not found." % hostname)
 
@@ -790,14 +837,17 @@ class DatastoreClient(object):
 
         :return: (Boolean) Whether the BGP node mesh is enabled.
         """
+        # The default value is stored in etcd, however it is only initialised
+        # during node instantiation.  Therefore, if the value is not present
+        # return the default value.  The default should match the value
+        # assigned in ensure_global_config().
         try:
             node_mesh = json.loads(
                                self.etcd_client.read(BGP_NODE_MESH_PATH).value)
         except EtcdKeyNotFound:
-            enabled = True
-        else:
-            enabled = node_mesh["enabled"]
-        return enabled
+            node_mesh = DEFAULT_NODE_MESH
+
+        return node_mesh["enabled"]
 
     @handle_errors
     def set_default_node_as(self, as_num):
@@ -811,15 +861,17 @@ class DatastoreClient(object):
     @handle_errors
     def get_default_node_as(self):
         """
-        Return the default node BGP AS Number
+        Return the default node BGP AS Number.
 
         :return: The default node BGP AS Number.
         """
+        # The default value is stored in etcd, however it is only initialised
+        # during node instantiation.  Therefore, if the value is not present
+        # return the default value.  The default should match the value
+        # assigned in ensure_global_config().
         try:
             as_num = self.etcd_client.read(BGP_NODE_DEF_AS_PATH).value
         except EtcdKeyNotFound:
-            as_num = DEFAULT_AS_NUM
-
-        return as_num
-
-
+            return DEFAULT_AS_NUM
+        else:
+            return as_num
