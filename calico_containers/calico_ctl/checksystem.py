@@ -115,7 +115,7 @@ def check_system(fix=False, quit_if_error=False):
     try:
         info = docker_client.version()
     except ConnectionError:
-        print >> sys.stderr, "ERROR: Docker daemon not running or not found."
+        print >> sys.stderr, "ERROR: Docker daemon not running."
         system_ok = False
     except docker.errors.APIError:
         print >> sys.stderr, "ERROR: Docker server must support Docker " \
