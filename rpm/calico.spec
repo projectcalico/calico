@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.26
+Version:        0.27
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -202,6 +202,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Jul 14 2015 Matt Dupre <matt@projectcalico.org> 0.27
+  - Limit number of concurrent shell-outs in felix to prevent file descriptor
+    exhaustion.
+  - Have felix periodically resync from etcd and force-refresh the dataplane.
+  - Stop restarting Felix on Ubuntu if it fails more than 5 times in 10 seconds.
+  - Move DHCP checksum calculation to Neutron.
+  - Get all fixed IPs for a port.
+
 * Mon Jun 29 2015 Cory Benfield <cory@projectcalico.org> 0.26
   - Update and improve security model documentation.
   - Streamline conntrack rules, move them to top-level chains to avoid

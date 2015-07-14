@@ -1,3 +1,14 @@
+calico (0.27) trusty; urgency=medium
+
+  * Limit number of concurrent shell-outs in felix to prevent file descriptor
+    exhaustion.
+  * Have felix periodically resync from etcd and force-refresh the dataplane.
+  * Stop restarting Felix on Ubuntu if it fails more than 5 times in 10 seconds.
+  * Move DHCP checksum calculation to Neutron.
+  * Get all fixed IPs for a port.
+
+ -- Matt Dupre <matt@projectcalico.org>  Tue, 14 Jul 2015 11:58:44 +0100
+
 calico (0.26) trusty; urgency=medium
 
   * Update and improve security model documentation.
