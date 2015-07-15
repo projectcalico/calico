@@ -1,3 +1,9 @@
+calico (0.27.1) trusty; urgency=medium
+
+  * Interim bug-fix release - reinstate DHCP checksum calculation rule.
+
+ -- Matt Dupre <matt@projectcalico.org>  Wed, 15 Jul 2015 17:28:43 +0100
+
 calico (0.27) trusty; urgency=medium
 
   * Limit number of concurrent shell-outs in felix to prevent file descriptor

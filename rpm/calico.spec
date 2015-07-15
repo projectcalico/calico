@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.27
+Version:        0.27.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -209,6 +209,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Jul 15 2015 Matt Dupre <matt@projectcalico.org> 0.27.1
+  - Interim bug-fix release - reinstate DHCP checksum calculation rule.
+
 * Tue Jul 14 2015 Matt Dupre <matt@projectcalico.org> 0.27
   - Limit number of concurrent shell-outs in felix to prevent file descriptor
     exhaustion.
