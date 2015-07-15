@@ -177,7 +177,7 @@ class TestRule(unittest.TestCase):
                      dst_ports=[80],
                      dst_net=IPNetwork("fd80::23:0/112"))
         assert_equal(
-            "deny from fd80::4:0/112 to ports 80 fd80::23:0/112",
+            "deny from cidr fd80::4:0/112 to ports 80 cidr fd80::23:0/112",
             rule3.pprint())
 
         rule4 = Rule(action="allow",
@@ -185,7 +185,7 @@ class TestRule(unittest.TestCase):
                      icmp_code=100,
                      icmp_type=8,
                      src_net=IPNetwork("10/8"))
-        assert_equal("allow icmp type 8 code 100 from 10.0.0.0/8",
+        assert_equal("allow icmp type 8 code 100 from cidr 10.0.0.0/8",
                      rule4.pprint())
 
 
