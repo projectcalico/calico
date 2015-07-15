@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--plugin-dir=<PLUGIN_DIR>]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--plugin-dir=<PLUGIN_DIR>] [--kubernetes]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
@@ -37,6 +37,7 @@ Options:
   --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
+  --kubernetes              Download and install the kubernetes plugin
 """
 import sys
 import os
@@ -63,6 +64,10 @@ import signal
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
+
+KUBERNETES_BINARY_URL = 'https://github.com/Metaswitch/calico-docker/releases/download/v0.5.1/calico_kubernetes'
+KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
+KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
 
 
 def node(arguments):
@@ -98,10 +103,11 @@ def node(arguments):
                    plugin_dir=arguments.get("--plugin-dir"),
                    ip6=arguments.get("--ip6"),
                    as_num=arguments.get("--as"),
-                   detach=detach)
+                   detach=detach,
+                   kubernetes=arguments.get("--kubernetes"))
 
 
-def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach):
+def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach, kubernetes):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -144,6 +150,15 @@ def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach):
 
     # Warn if this hostname conflicts with an existing host
     warn_if_hostname_conflict(ip)
+
+    # Install kubernetes plugin
+    if kubernetes:
+        try:
+            # Attempt to install to the default kubernetes directory
+            install_kubernetes(KUBERNETES_PLUGIN_DIR)
+        except OSError:
+            # Use the backup directory
+            install_kubernetes(KUBERNETES_PLUGIN_DIR_BACKUP)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools("v4")
@@ -411,3 +426,19 @@ def _attach_and_stream(container):
         # Could either be this process is being killed, or output generator
         # raises an exception.
         docker_client.stop(container)
+
+def install_kubernetes(kubernetes_plugin_dir):
+    """
+    Downloads the kubernetes plugin to the specified directory.
+    :param kubernetes_plugin_dir: Desired download location for the plugin.
+    :return: Nothing
+    """
+    if not os.path.exists(kubernetes_plugin_dir):
+        os.makedirs(kubernetes_plugin_dir)
+    kubernetes_binary_path = kubernetes_plugin_dir + 'calico'
+    wget = sh.Command._create('wget')
+    try:
+        wget('-O', kubernetes_binary_path, KUBERNETES_BINARY_URL)
+    except sh.ErrorReturnCode_8:
+        print "ERROR: Couldn't download the kubernetes binary"
+        sys.exit(1)
