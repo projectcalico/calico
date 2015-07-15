@@ -678,11 +678,14 @@ class TestDatastoreClient(unittest.TestCase):
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
                            call(TEST_HOST_PATH + "/bgp_as", bgp_as),
+                           call(TEST_HOST_PATH +
+                                "/config/DefaultEndpointToHostAction",
+                                "RETURN"),
                            call(TEST_HOST_PATH + "/config/marker",
                                 "created")]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        assert_equal(self.etcd_client.write.call_count, 4)
+        assert_equal(self.etcd_client.write.call_count, 5)
 
     def test_create_host_mainline(self):
         """
@@ -705,13 +708,16 @@ class TestDatastoreClient(unittest.TestCase):
         self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip, bgp_as)
         expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
                            call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
+                           call(TEST_HOST_PATH +
+                                "/config/DefaultEndpointToHostAction",
+                                "RETURN"),
                            call(TEST_HOST_PATH + "/config/marker",
                                 "created"),
                            call(TEST_HOST_PATH + "/workload",
                                 None, dir=True)]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        assert_equal(self.etcd_client.write.call_count, 4)
+        assert_equal(self.etcd_client.write.call_count, 5)
 
     def test_remove_host_mainline(self):
         """
