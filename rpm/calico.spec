@@ -40,6 +40,13 @@ This package provides the pieces needed on a compute node.
 if [ $1 -eq 1 ] ; then
     # Initial installation
 
+    # Enable checksum calculation on DHCP responses.  This is needed
+    # when sending DHCP responses over the TAP interfaces to guest
+    # VMs, as apparently Linux doesn't itself do the checksum
+    # calculation in that case.
+    iptables -D POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill >/dev/null 2>&1 || true
+    iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill
+
     # Don't reject INPUT and FORWARD packets by default on the compute host.
     iptables -D INPUT -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
     iptables -D FORWARD -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
