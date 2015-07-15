@@ -180,7 +180,8 @@ class IptablesUpdater(Actor):
 
     @actor_message()
     def rewrite_chains(self, update_calls_by_chain,
-                       dependent_chains, callback=None):
+                       dependent_chains, callback=None,
+                       suppress_upd_log=False):
         """
         Atomically apply a set of updates to the table.
 
@@ -195,8 +196,12 @@ class IptablesUpdater(Actor):
         """
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
-        _log.info("Iptables update: %s", update_calls_by_chain)
-        _log.info("Iptables deps: %s", dependent_chains)
+        if suppress_upd_log:
+            _log.info("Iptables update to %s chains",
+                      len(update_calls_by_chain))
+        else:
+            _log.info("Iptables update: %s", update_calls_by_chain)
+            _log.info("Iptables deps: %s", dependent_chains)
         self._stats.increment("Chain rewrites")
         for chain, updates in update_calls_by_chain.iteritems():
             # TODO: double-check whether this flush is needed.
@@ -355,19 +360,31 @@ class IptablesUpdater(Actor):
             # We want to know about this but it's not fatal.
             _log.error("Chains in data plane inconsistent with calculated "
                        "index.  In dataplane but not in index: %s; In index: "
-                       "but not dataplane: %s.",
+                       "but not dataplane: %s.  Another process may have "
+                       "clobbered our updates.",
                        self._chains_in_dataplane - temp_chains,
                        temp_chains - self._chains_in_dataplane)
 
-        missing_chains = ((self._explicitly_prog_chains | required_chains) -
-                          self._chains_in_dataplane)
-        if missing_chains:
-            # This is fatal, some of our chains have disappeared.
-            _log.error("Some of our chains disappeared from the dataplane: %s."
-                       " Raising an exception.",
-                       missing_chains)
-            raise IptablesInconsistent(
-                "Felix chains missing from iptables: %s" % missing_chains)
+        # Defensively refresh our chains.
+        self.refresh_iptables()
+
+    @actor_message(needs_own_batch=True)
+    def refresh_iptables(self):
+        """
+        Re-apply our iptables state to the kernel.
+        """
+        # Use our cache of all the explicitly programmed chains to
+        # refresh all our chains.
+        #
+        # Note: we're explicitly using the fact that this message is executed
+        # in its own batch (otherwise the transaction could have other updates
+        # that we'd squash).
+        _log.info("Refreshing all our chains")
+        self.rewrite_chains(
+            self._programmed_chain_contents,
+            self._required_chains,
+            suppress_upd_log=True,  # Prevent a very large log.
+        )
 
     def _start_msg_batch(self, batch):
         self._reset_batched_work()
