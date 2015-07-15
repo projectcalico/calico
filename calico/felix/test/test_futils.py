@@ -129,13 +129,11 @@ class TestFutils(unittest.TestCase):
 
 class TestStats(unittest.TestCase):
     def setUp(self):
+        futils._registered_diags = []
         self.sc = futils.StatCounter("foo")
 
     def tearDown(self):
-        try:
-            futils._registered_diags.remove(("foo", self.sc._dump))
-        except ValueError:
-            pass
+        futils._registered_diags = []
 
     def test_stats_counter(self):
         self.assertTrue(("foo", self.sc._dump) in futils._registered_diags)
