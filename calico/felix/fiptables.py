@@ -28,6 +28,7 @@ import re
 
 from gevent import subprocess
 import gevent
+import sys
 
 from calico.felix import frules, futils
 from calico.felix.actor import (
@@ -96,9 +97,10 @@ class IptablesUpdater(Actor):
 
     """
 
-    def __init__(self, table, ip_version=4):
+    def __init__(self, table, ip_version=4, refresh_interval=60):
         super(IptablesUpdater, self).__init__(qualifier="v%d" % ip_version)
         self.table = table
+        self.refresh_interval = refresh_interval
         if ip_version == 4:
             self._restore_cmd = "iptables-restore"
             self._save_cmd = "iptables-save"
@@ -323,6 +325,11 @@ class IptablesUpdater(Actor):
                 self._stub_out_chains(chains_to_stub)
             except NothingToDo:
                 pass
+            if self.refresh_interval > 0:
+                _log.info("Periodic iptables refresh enabled, starting "
+                          "resync greenlet")
+                refresh_greenlet = gevent.spawn(self._periodic_refresh)
+                refresh_greenlet.link_exception(self._on_worker_died)
             self._grace_period_finished = True
 
         # Now the generic cleanup, look for chains that we're not expecting to
@@ -368,23 +375,26 @@ class IptablesUpdater(Actor):
         # Defensively refresh our chains.
         self.refresh_iptables()
 
-    @actor_message(needs_own_batch=True)
+    def _periodic_refresh(self):
+        while True:
+            gevent.sleep(self.refresh_interval)
+            self.refresh_iptables(async=True)
+
+    def _on_worker_died(self, watch_greenlet):
+        """
+        Greenlet: spawned by the gevent Hub if the etcd watch loop ever
+        stops, kills the process.
+        """
+        _log.critical("Worker greenlet died: %s; exiting.", watch_greenlet)
+        sys.exit(1)
+
+    @actor_message()
     def refresh_iptables(self):
         """
         Re-apply our iptables state to the kernel.
         """
-        # Use our cache of all the explicitly programmed chains to
-        # refresh all our chains.
-        #
-        # Note: we're explicitly using the fact that this message is executed
-        # in its own batch (otherwise the transaction could have other updates
-        # that we'd squash).
         _log.info("Refreshing all our chains")
-        self.rewrite_chains(
-            self._programmed_chain_contents,
-            self._required_chains,
-            suppress_upd_log=True,  # Prevent a very large log.
-        )
+        self._txn.store_refresh()
 
     def _start_msg_batch(self, batch):
         self._reset_batched_work()
@@ -721,6 +731,15 @@ class _Transaction(object):
         # Store off the update.
         self.updates[chain] = updates
         self.prog_chains[chain] = updates
+        self._invalidate_cache()
+
+    def store_refresh(self):
+        """
+        Records that we should refresh all chains as part of this transaction.
+        """
+        # Copy the whole state over to the delta for this transaction so it
+        # all gets reapplied.  The dependency index should already be correct.
+        self.updates.update(self.prog_chains)
         self._invalidate_cache()
 
     def _update_deps(self, chain, new_deps):
