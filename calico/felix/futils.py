@@ -32,6 +32,11 @@ from gevent import subprocess
 import tempfile
 import time
 
+try:
+    import resource
+except ImportError:
+    resource = None
+
 from collections import namedtuple
 
 CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
@@ -196,6 +201,37 @@ class StatCounter(object):
         stats_copy = self.stats.items()
         for name, stat in sorted(stats_copy):
             log.info("%s: %s", name, stat)
+
+
+def register_process_statistics():
+    """
+    Called once to register a stats handler for process-specific information.
+    """
+    if resource is None:
+        log.warning(
+            'Unable to import resource module, memory diags not available'
+        )
+        return
+
+    rusage_fields = [
+        ('Execution time in user mode (seconds)', 'ru_utime'),
+        ('Execution time in kernel mode (seconds)', 'ru_stime'),
+        ('Maximum Resident Set Size (KB)', 'ru_maxrss'),
+        ('Soft page faults', 'ru_minflt'),
+        ('Hard page faults', 'ru_majflt'),
+        ('Input events', 'ru_inblock'),
+        ('Output events', 'ru_oublock'),
+        ('Voluntary context switches', 'ru_nvcsw'),
+        ('Involuntary context switches', 'ru_nivcsw'),
+    ]
+
+    def dump(self, log):
+        process = resource.getrusage(resource.RUSAGE_SELF)
+        for name, field in rusage_fields:
+            data = getattr(process, field, 'None')
+            log.info('%s: %s', name, data)
+
+    register_diags('Process Statistics', dump)
 
 
 def dump_diags():
