@@ -195,12 +195,13 @@ class CalicoTransportEtcd(object):
         self.client.write(
             key_for_profile_rules(profile.id),
             json.dumps(profile_rules(profile)),
-            **rules_kwargs,
+            **rules_kwargs
         )
+
         self.client.write(
             key_for_profile_tags(profile.id),
             json.dumps(profile_tags(profile)),
-            **tags_kwargs,
+            **tags_kwargs
         )
 
     @_handling_etcd_exceptions
@@ -242,7 +243,7 @@ class CalicoTransportEtcd(object):
             kwargs['prevIndex'] = prev_index
 
         self.client.write(
-            port_etcd_key(port), json.dumps(data), **kwargs,
+            port_etcd_key(port), json.dumps(data), **kwargs
         )
 
     @_handling_etcd_exceptions
