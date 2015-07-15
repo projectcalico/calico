@@ -18,12 +18,12 @@ from calico_ctl.container import container_add
 from pycalico.datastore import IF_PREFIX
 from pycalico.util import generate_cali_interface_name
 
-CALICOCTL_PATH = os.environ.get('CALICOCTL_PATH', '/home/vagrant/calicoctl')
+CALICOCTL_PATH = os.environ.get('CALICOCTL_PATH', '/usr/bin/calicoctl')
 print("Using CALICOCTL_PATH=%s" % CALICOCTL_PATH)
 calicoctl = sh.Command(CALICOCTL_PATH).bake(_env=os.environ)
 
 KUBE_API_ROOT = os.environ.get('KUBE_API_ROOT',
-                               'https://kubernetes-master:443/api/v1/')
+                               'http://kubernetes-master:8080/api/v1/')
 print("Using KUBE_API_ROOT=%s" % KUBE_API_ROOT)
 
 
@@ -214,6 +214,7 @@ class NetworkPlugin(object):
         session.headers.update({'Authorization': 'Bearer ' + bearer_token})
         response = session.get(KUBE_API_ROOT + path, verify=False)
         response_body = response.text
+
         # The response body contains some metadata, and the pods themselves
         # under the 'items' key.
         return json.loads(response_body)['items']
@@ -221,12 +222,18 @@ class NetworkPlugin(object):
     def _get_api_token(self):
         """
         Get the kubelet Bearer token for this node, used for HTTPS auth.
+        If no token exists, this method will return an empty string.
         :return: The token.
         :rtype: str
         """
-        with open('/var/lib/kubelet/kubernetes_auth') as f:
-            json_string = f.read()
-        print('Got kubernetes_auth: ' + json_string)
+        try:
+            with open('/var/lib/kubelet/kubernetes_auth') as f:
+                json_string = f.read()
+        except IOError, e:
+            print("Failed to open auth_file (%s), assuming insecure mode" % e)
+            return ""
+
+        print('Using kubernetes_auth: ' + json_string)
 
         auth_data = json.loads(json_string)
         return auth_data['BearerToken']
