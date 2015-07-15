@@ -2,6 +2,9 @@
 
 ## 0.28-dev
 
+- More thorough resynchronization of etcd from the Neutron mechanism driver.
+- Added process-specific information to the diagnostics dumps from Felix.
+
 ## 0.27
 
 - Limit number of concurrent shell-outs in felix to prevent file descriptor
