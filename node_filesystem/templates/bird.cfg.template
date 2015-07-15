@@ -2,7 +2,7 @@
 router id {{getenv "IP"}};
 
 filter calico_pools {
-{{if ls "/ipam"}}{{range ls "/ipam/v4/pool"}}{{$data := json (getv (printf "/ipam/v4/pool/%s" .))}}
+{{if ls "/v1/ipam"}}{{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
   if ( net ~ {{$data.cidr}} ) then {
     accept;
   }
@@ -11,7 +11,7 @@ filter calico_pools {
 }
 
 filter calico_ipip {
-{{if ls "/ipam"}}{{range ls "/ipam/v4/pool"}}{{$data := json (getv (printf "/ipam/v4/pool/%s" .))}}{{if $data.ipip}}
+{{if ls "/v1/ipam"}}{{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}{{if $data.ipip}}
   if ( net ~ {{$data.cidr}} ) then {
     krt_tunnel = "{{$data.ipip}}";
     accept;
@@ -45,25 +45,12 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
-{{/* ------------ Template definitions ----------------- */}}
-{{define "MESH4"}}
-{{range $host := lsdir "/host"}}
-{{$onode_as_key := printf "/host/%s/bgp_as" .}}
-{{$onode_ip_key := printf "/host/%s/bird_ip" .}}{{$onode_ip := getv $onode_ip_key}}
-{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
-# For peer {{$onode_ip_key}}
-{{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
-{{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
-  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
-}{{end}}{{end}}
-{{end}}
-
-{{$node_as_key := printf "/host/%s/bgp_as" (getenv "HOSTNAME")}}
+{{$node_as_key := printf "/bgp/v1/host/%s/as_num" (getenv "HOSTNAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
   debug all;
   description "Connection to BGP peer";
-  local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else if exists "/config/bgp_as"}}{{getv "/config/bgp_as"}}{{else}}64511{{end}};
+  local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/bgp/v1/global/as_num"}}{{end}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
@@ -77,18 +64,24 @@ template bgp bgp_template {
 }
 
 # ------------- Node-to-node mesh -------------
-{{if not (exists "/config/bgp_node_mesh")}}
-{{template "MESH4"}}
-{{else if (json (getv "/config/bgp_node_mesh")).enabled}}
-{{template "MESH4"}}
+{{if (json (getv "/bgp/v1/global/node_mesh")).enabled}}
+{{range $host := lsdir "/bgp/v1/host"}}
+{{$onode_as_key := printf "/bgp/v1/host/%s/as_num" .}}
+{{$onode_ip_key := printf "/bgp/v1/host/%s/ip_addr_v4" .}}{{$onode_ip := getv $onode_ip_key}}
+{{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
+# For peer {{$onode_ip_key}}
+{{if eq $onode_ip (getenv "IP") }}# Skipping ourselves ({{getenv "IP"}})
+{{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
+  neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/bgp/v1/global/as_num"}}{{end}};
+}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
 {{end}}
 
 
 # ------------- Global peers -------------
-{{if ls "/config/bgp_peer_v4"}}
-{{range gets "/config/bgp_peer_v4/*"}}{{$data := json .Value}}
+{{if ls "/bgp/v1/global/peer_v4"}}
+{{range gets "/bgp/v1/global/peer_v4/*"}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
 # For peer {{.Key}}
 protocol bgp Global_{{$id}} from bgp_template {
@@ -99,7 +92,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 
 
 # ------------- Node-specific peers -------------
-{{$node_peers_key := printf "/host/%s/bgp_peer_v4" (getenv "HOSTNAME")}}
+{{$node_peers_key := printf "/bgp/v1/host/%s/peer_v4" (getenv "HOSTNAME")}}
 {{if ls $node_peers_key}}
 {{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}

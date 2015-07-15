@@ -51,6 +51,7 @@ from utils import ORCHESTRATOR_ID
 from utils import hostname
 from utils import client
 from utils import docker_client
+from utils import print_paragraph
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
@@ -362,7 +363,7 @@ def warn_if_hostname_conflict(ip):
         # Otherwise, check if another host with the same hostname
         # is already configured
         try:
-            current_ipv4, _ = client.get_host_ips(hostname)
+            current_ipv4, _ = client.get_host_bgp_ips(hostname)
         except KeyError:
             # No other machine has registered configuration under this hostname.
             # This must be a new host with a unique hostname, which is the
@@ -370,12 +371,12 @@ def warn_if_hostname_conflict(ip):
             pass
         else:
             if current_ipv4 != "" and current_ipv4 != ip:
-                print "WARNING: Hostname '%s' is already in use with IP address " \
-                      "%s. Calico requires each compute host to have a " \
-                      "unique hostname. If this is your first time running " \
-                      "'calicoctl node' on this host, ensure that " \
-                      "another host is not already using the " \
-                      "same hostname."  % (hostname, ip)
+                print_paragraph("WARNING: Hostname '%s' is already in use "
+                    "with IP address %s. Calico requires each compute host to "
+                    "have a unique hostname. If this is your first time "
+                    "running 'calicoctl node' on this host, ensure that " \
+                    "another host is not already using the " \
+                    "same hostname."  % (hostname, ip))
 
 
 def _find_or_pull_node_image(image_name, client):

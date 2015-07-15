@@ -1,10 +1,10 @@
 [template]
 src = "bird6.cfg.template"
 dest = "/config/bird6.cfg"
-prefix = "/calico/v1"
+prefix = "/calico"
 keys = [
-    "/host",
-    "/ipam/v6/pool",
-    "/config"
+    "/v1/ipam/v6/pool",
+    "/bgp/v1/host",
+    "/bgp/v1/global"
 ]
 reload_cmd = "pkill -HUP bird6 || true"

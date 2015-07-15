@@ -38,12 +38,10 @@ TEST_ENDPOINT_ID2 = "90abcdef1234"
 TEST_HOST_PATH = CALICO_V_PATH + "/host/TEST_HOST"
 IPV4_POOLS_PATH = CALICO_V_PATH + "/ipam/v4/pool/"
 IPV6_POOLS_PATH = CALICO_V_PATH + "/ipam/v6/pool/"
-BGP_PEERS_PATH = CALICO_V_PATH + "/config/bgp_peer_v4/"
 TEST_PROFILE_PATH = CALICO_V_PATH + "/policy/profile/TEST/"
 ALL_PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 ALL_ENDPOINTS_PATH = CALICO_V_PATH + "/host/"
 ALL_HOSTS_PATH = CALICO_V_PATH + "/host/"
-TEST_NODE_BGP_PEERS_PATH = TEST_HOST_PATH + "/bgp_peer_v4/"
 TEST_ORCHESTRATORS_PATH = CALICO_V_PATH + "/host/TEST_HOST/"
 TEST_WORKLOADS_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/"
 TEST_ENDPOINT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/" \
@@ -52,8 +50,18 @@ TEST_CONT_ENDPOINTS_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/" \
                                           "1234/"
 TEST_CONT_PATH = CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/"
 CONFIG_PATH = CALICO_V_PATH + "/config/"
-BGP_NODE_DEF_AS_PATH = CALICO_V_PATH + "/config/bgp_as"
-BGP_NODE_MESH_PATH = CALICO_V_PATH + "/config/bgp_node_mesh"
+
+BGP_V_PATH = "/calico/bgp/v1"
+BGP_GLOBAL_PATH = BGP_V_PATH + "/global"
+TEST_BGP_HOST_PATH = BGP_V_PATH + "/host/TEST_HOST"
+BGP_PEERS_PATH = BGP_GLOBAL_PATH + "/peer_v4/"
+TEST_NODE_BGP_PEERS_PATH = TEST_BGP_HOST_PATH + "/peer_v4/"
+BGP_NODE_DEF_AS_PATH = BGP_GLOBAL_PATH + "/as_num"
+BGP_NODE_MESH_PATH = BGP_GLOBAL_PATH + "/node_mesh"
+TEST_HOST_IPV4_PATH = TEST_HOST_PATH + "/bird_ip"
+TEST_BGP_HOST_IPV4_PATH = TEST_BGP_HOST_PATH + "/ip_addr_v4"
+TEST_BGP_HOST_IPV6_PATH = TEST_BGP_HOST_PATH + "/ip_addr_v6"
+TEST_BGP_HOST_AS_PATH = TEST_BGP_HOST_PATH + "/as_num"
 
 # 4 endpoints, with 2 TEST profile and 2 UNIT profile.
 EP_56 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "567890abcdef",
@@ -398,8 +406,13 @@ class TestDatastoreClient(unittest.TestCase):
         # the interface prefix since the config directory may contain other
         # global configuration.
         self.datastore.ensure_global_config()
-        self.etcd_client.read.assert_called_once_with(int_prefix_path)
+        expected_reads = [call(int_prefix_path),
+                          call(BGP_NODE_DEF_AS_PATH),
+                          call(BGP_NODE_MESH_PATH)]
+        self.etcd_client.read.assert_has_calls(expected_reads)
         expected_writes = [call(int_prefix_path, "cali"),
+                           call(BGP_NODE_DEF_AS_PATH, 64511),
+                           call(BGP_NODE_MESH_PATH, json.dumps({"enabled": True})),
                            call(CALICO_V_PATH + "/Ready", "true")]
         self.etcd_client.write.assert_has_calls(expected_writes)
 
@@ -408,8 +421,10 @@ class TestDatastoreClient(unittest.TestCase):
         Test ensure_global_config() when it already exists.
         """
         self.datastore.ensure_global_config()
-        self.etcd_client.read.assert_called_once_with(
-                                               CONFIG_PATH + "InterfacePrefix")
+        expected_reads = [call(CONFIG_PATH + "InterfacePrefix"),
+                          call(BGP_NODE_DEF_AS_PATH),
+                          call(BGP_NODE_MESH_PATH)]
+        self.etcd_client.read.assert_has_calls(expected_reads)
 
     def test_ensure_global_config_exists_etcd_exc(self):
         """
@@ -671,13 +686,14 @@ class TestDatastoreClient(unittest.TestCase):
 
         self.etcd_client.read.side_effect = mock_read_success
 
-        bird_ip = "192.168.2.4"
-        bird6_ip = "fd80::4"
+        ipv4 = "192.168.2.4"
+        ipv6 = "fd80::4"
         bgp_as = 65531
-        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip, bgp_as)
-        expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
-                           call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
-                           call(TEST_HOST_PATH + "/bgp_as", bgp_as),
+        self.datastore.create_host(TEST_HOST, ipv4, ipv6, bgp_as)
+        expected_writes = [call(TEST_HOST_IPV4_PATH, ipv4),
+                           call(TEST_BGP_HOST_IPV4_PATH, ipv4),
+                           call(TEST_BGP_HOST_IPV6_PATH, ipv6),
+                           call(TEST_BGP_HOST_AS_PATH, bgp_as),
                            call(TEST_HOST_PATH +
                                 "/config/DefaultEndpointToHostAction",
                                 "RETURN"),
@@ -685,7 +701,7 @@ class TestDatastoreClient(unittest.TestCase):
                                 "created")]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        assert_equal(self.etcd_client.write.call_count, 5)
+        assert_equal(self.etcd_client.write.call_count, 6)
 
     def test_create_host_mainline(self):
         """
@@ -702,12 +718,13 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = mock_read
         self.etcd_client.delete.side_effect = EtcdKeyNotFound()
 
-        bird_ip = "192.168.2.4"
-        bird6_ip = "fd80::4"
+        ipv4 = "192.168.2.4"
+        ipv6 = "fd80::4"
         bgp_as = None
-        self.datastore.create_host(TEST_HOST, bird_ip, bird6_ip, bgp_as)
-        expected_writes = [call(TEST_HOST_PATH + "/bird_ip", bird_ip),
-                           call(TEST_HOST_PATH + "/bird6_ip", bird6_ip),
+        self.datastore.create_host(TEST_HOST, ipv4, ipv6, bgp_as)
+        expected_writes = [call(TEST_HOST_IPV4_PATH, ipv4),
+                           call(TEST_BGP_HOST_IPV4_PATH, ipv4),
+                           call(TEST_BGP_HOST_IPV6_PATH, ipv6),
                            call(TEST_HOST_PATH +
                                 "/config/DefaultEndpointToHostAction",
                                 "RETURN"),
@@ -717,7 +734,7 @@ class TestDatastoreClient(unittest.TestCase):
                                 None, dir=True)]
         self.etcd_client.write.assert_has_calls(expected_writes,
                                                 any_order=True)
-        assert_equal(self.etcd_client.write.call_count, 5)
+        assert_equal(self.etcd_client.write.call_count, 6)
 
     def test_remove_host_mainline(self):
         """
@@ -725,9 +742,13 @@ class TestDatastoreClient(unittest.TestCase):
         :return:
         """
         self.datastore.remove_host(TEST_HOST)
-        self.etcd_client.delete.assert_called_once_with(TEST_HOST_PATH + "/",
-                                                        dir=True,
-                                                        recursive=True)
+        expected_deletes = [call(TEST_BGP_HOST_PATH + "/",
+                                 dir=True,
+                                 recursive=True),
+                            call(TEST_HOST_PATH + "/",
+                                 dir=True,
+                                 recursive=True)]
+        self.etcd_client.delete.assert_has_calls(expected_deletes)
 
     def test_remove_host_doesnt_exist(self):
         """
@@ -1088,10 +1109,10 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             result = Mock(spec=EtcdResult)
-            if path == TEST_HOST_PATH + "/bird_ip":
+            if path == TEST_BGP_HOST_IPV4_PATH:
                 result.value = "192.168.24.1"
                 return result
-            if path == TEST_HOST_PATH + "/bird6_ip":
+            if path == TEST_BGP_HOST_IPV6_PATH:
                 result.value = "fd30:4500::1"
                 return result
             assert False
@@ -1106,10 +1127,10 @@ class TestDatastoreClient(unittest.TestCase):
         """
         def mock_read(path):
             result = Mock(spec=EtcdResult)
-            if path == TEST_HOST_PATH + "/bird_ip":
+            if path == TEST_BGP_HOST_IPV4_PATH:
                 result.value = ""
                 return result
-            if path == TEST_HOST_PATH + "/bird6_ip":
+            if path == TEST_BGP_HOST_IPV6_PATH:
                 result.value = ""
                 return result
             assert False
@@ -1337,7 +1358,6 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None.
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound()
-
         assert_true(self.datastore.get_bgp_node_mesh())
 
     def test_set_default_node_as(self):
@@ -1371,8 +1391,44 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None.
         """
         self.etcd_client.read.side_effect = EtcdKeyNotFound()
-
         assert_equal(self.datastore.get_default_node_as(), 64511)
+
+    def test_get_host_bgp_ips(self):
+        """
+        Check etcd for the configured IPv4 and IPv6 addresses for the specified
+        host BGP binding. If it hasn't been configured yet, raise an
+        EtcdKeyNotFound.
+
+        :param hostname: The hostname.
+        :return: A tuple containing the IPv4 and IPv6 address.
+        """
+        def mock_read(path):
+            if path == TEST_BGP_HOST_IPV4_PATH:
+                result = Mock(spec=EtcdResult)
+                result.value = "1.2.3.4"
+                return result
+            if path == TEST_BGP_HOST_IPV6_PATH:
+                result = Mock(spec=EtcdResult)
+                result.value = "aa:bb::ee"
+                return result
+            raise AssertionError("Unexpected path %s" % path)
+        self.etcd_client.read = mock_read
+
+        assert_equal(self.datastore.get_host_bgp_ips(TEST_HOST),
+                     ("1.2.3.4", "aa:bb::ee"))
+
+    def test_get_host_bgp_ips_not_found(self):
+        """
+        Check etcd for the configured IPv4 and IPv6 addresses for the specified
+        host BGP binding. If it hasn't been configured yet, raise an
+        EtcdKeyNotFound.
+
+        :param hostname: The hostname.
+        :return: A tuple containing the IPv4 and IPv6 address.
+        """
+        self.etcd_client.read.side_effect = EtcdKeyNotFound
+
+        assert_raises(KeyError, self.datastore.get_host_bgp_ips, TEST_HOST)
 
 
 def mock_read_2_peers(path):
@@ -1507,15 +1563,11 @@ def mock_read_4_endpoints(path, recursive):
     leaves = []
 
     specs = [
-        (CALICO_V_PATH + "/host/TEST_HOST/bird_ip", "192.168.1.1"),
-        (CALICO_V_PATH + "/host/TEST_HOST/bird6_ip", "fd80::4"),
         (CALICO_V_PATH + "/host/TEST_HOST/config/marker", "created"),
         (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/1234/endpoint/567890abcdef",
          EP_56.to_json()),
         (CALICO_V_PATH + "/host/TEST_HOST/workload/docker/5678/endpoint/90abcdef1234",
          EP_90.to_json()),
-        (CALICO_V_PATH + "/host/TEST_HOST2/bird_ip", "192.168.1.2"),
-        (CALICO_V_PATH + "/host/TEST_HOST2/bird6_ip", "fd80::3"),
         (CALICO_V_PATH + "/host/TEST_HOST2/config/marker", "created"),
         (CALICO_V_PATH + "/host/TEST_HOST2/workload/docker/1234/endpoint/7890abcdef12",
          EP_78.to_json()),
