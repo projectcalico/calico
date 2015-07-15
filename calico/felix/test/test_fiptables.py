@@ -448,7 +448,9 @@ class TestTransaction(BaseTestCase):
     def setUp(self):
         super(TestTransaction, self).setUp()
         self.txn = fiptables._Transaction(
-            set(["felix-a", "felix-b", "felix-c"]),
+            {
+                "felix-a": [], "felix-b": [], "felix-c": []
+            },
             defaultdict(set, {"felix-a": set(["felix-b", "felix-stub"])}),
             defaultdict(set, {"felix-b": set(["felix-a"]),
                               "felix-stub": set(["felix-a"])}),
@@ -464,8 +466,13 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_stub_out, set([]))
         self.assertEqual(self.txn.chains_to_delete, set(["felix-stub"]))
         self.assertEqual(self.txn.referenced_chains, set(["felix-b"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-b", "felix-c"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": ["foo"],
+                "felix-b": [],
+                "felix-c": []
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-b"])})
         self.assertEqual(self.txn.requiring_chns,
@@ -481,8 +488,13 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_stub_out, set([]))
         self.assertEqual(self.txn.chains_to_delete, set([]))
         self.assertEqual(self.txn.referenced_chains, set(["felix-stub"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-b", "felix-c"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": ["foo"],
+                "felix-b": [],
+                "felix-c": [],
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-stub"])})
         self.assertEqual(self.txn.requiring_chns,
@@ -499,8 +511,12 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_delete, set(["felix-c"]))
         self.assertEqual(self.txn.referenced_chains,
                          set(["felix-b", "felix-stub"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-b"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": [],
+                "felix-b": [],
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-b", "felix-stub"])})
         self.assertEqual(self.txn.requiring_chns,
@@ -518,8 +534,12 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_delete, set())
         self.assertEqual(self.txn.referenced_chains,
                          set(["felix-b", "felix-stub"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-c"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": [],
+                "felix-c": [],
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-b", "felix-stub"])})
         self.assertEqual(self.txn.requiring_chns,

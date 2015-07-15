@@ -119,8 +119,9 @@ class IptablesUpdater(Actor):
         Flag that is set after the graceful restart window is over.
         """
 
-        self._explicitly_prog_chains = set()
-        """Set of chains that we've explicitly programmed."""
+        self._programmed_chain_contents = {}
+        """Map from chain name to chain contents, only contains chains that
+        have been explicitly programmed."""
 
         self._required_chains = defaultdict(set)
         """Map from chain name to the set of names of chains that it
@@ -147,9 +148,13 @@ class IptablesUpdater(Actor):
         self._reset_batched_work()
         self._refresh_chains_in_dataplane(async=True)
 
+    @property
+    def _explicitly_prog_chains(self):
+        return set(self._programmed_chain_contents.keys())
+
     def _reset_batched_work(self):
         """Reset the per-batch state in preparation for a new batch."""
-        self._txn = _Transaction(self._explicitly_prog_chains,
+        self._txn = _Transaction(self._programmed_chain_contents,
                                  self._required_chains,
                                  self._requiring_chains)
         self._completion_callbacks = []
@@ -476,7 +481,7 @@ class IptablesUpdater(Actor):
         Called after successfully processing a batch, updates the
         indices with the values calculated by the _Transaction.
         """
-        self._explicitly_prog_chains = self._txn.expl_prog_chains
+        self._programmed_chain_contents = self._txn.prog_chains
         self._required_chains = self._txn.required_chns
         self._requiring_chains = self._txn.requiring_chns
 
@@ -644,12 +649,12 @@ class _Transaction(object):
 
     """
     def __init__(self,
-                 old_expl_prog_chains,
+                 old_prog_chain_contents,
                  old_deps,
                  old_requiring_chains):
         # Figure out what stub chains should already be present.
         self.already_stubbed = (set(old_requiring_chains.keys()) -
-                                old_expl_prog_chains)
+                                set(old_prog_chain_contents.keys()))
 
         # Deltas.
         self.updates = {}
@@ -657,7 +662,7 @@ class _Transaction(object):
 
         # New state.  These will be copied back to the IptablesUpdater
         # if the transaction succeeds.
-        self.expl_prog_chains = copy.deepcopy(old_expl_prog_chains)
+        self.prog_chains = old_prog_chain_contents.copy()
         self.required_chns = copy.deepcopy(old_deps)
         self.requiring_chns = copy.deepcopy(old_requiring_chains)
 
@@ -680,7 +685,7 @@ class _Transaction(object):
         self._deletes.add(chain)
         # Remove any now-stale rewrite state.
         self.updates.pop(chain, None)
-        self.expl_prog_chains.discard(chain)
+        self.prog_chains.pop(chain, None)
         self._invalidate_cache()
 
     def store_rewrite_chain(self, chain, updates, dependencies):
@@ -698,7 +703,7 @@ class _Transaction(object):
         self._deletes.discard(chain)
         # Store off the update.
         self.updates[chain] = updates
-        self.expl_prog_chains.add(chain)
+        self.prog_chains[chain] = updates
         self._invalidate_cache()
 
     def _update_deps(self, chain, new_deps):
@@ -749,7 +754,7 @@ class _Transaction(object):
         if self._chains_to_stub is None:
             # Don't stub out chains that we're now explicitly programming.
             impl_required_chains = (self.referenced_chains -
-                                    self.expl_prog_chains)
+                                    set(self.prog_chains.keys()))
             # Don't stub out chains that are already stubbed.
             self._chains_to_stub = impl_required_chains - self.already_stubbed
         return self._chains_to_stub
@@ -766,7 +771,8 @@ class _Transaction(object):
             _log.debug("Chains we'd like to delete: %s", chains_we_dont_want)
             # But we need to keep the chains that are explicitly programmed
             # or referenced.
-            chains_we_need = self.expl_prog_chains | self.referenced_chains
+            chains_we_need = (set(self.prog_chains.keys()) |
+                              self.referenced_chains)
             _log.debug("Chains we still need for some reason: %s",
                        chains_we_need)
             self._chains_to_delete = chains_we_dont_want - chains_we_need
@@ -863,7 +869,6 @@ def _parse_ipt_restore_error(input_lines, err):
             return False, "Line %s failed: %s" % (line_number, offending_line)
     else:
         return False, "ip(6)tables-restore failed with output: %s" % err
-
 
 
 class NothingToDo(Exception):
