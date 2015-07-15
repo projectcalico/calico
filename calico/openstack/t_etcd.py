@@ -181,15 +181,26 @@ class CalicoTransportEtcd(object):
         Write a single security profile into etcd.
         """
         LOG.debug("Writing profile %s", profile)
+
+        # python-etcd is stupid about the prevIndex keyword argument, so we
+        # need to explicitly filter out None-y values ourselves.
+        rules_kwargs = {}
+        if prev_rules_index is not None:
+            rules_kwargs['prevIndex'] = prev_rules_index
+
+        tags_kwargs = {}
+        if prev_tags_index is not None:
+            tags_kwargs['prevIndex'] = prev_tags_index
+
         self.client.write(
             key_for_profile_rules(profile.id),
             json.dumps(profile_rules(profile)),
-            prevIndex=prev_rules_index,
+            **rules_kwargs,
         )
         self.client.write(
             key_for_profile_tags(profile.id),
             json.dumps(profile_tags(profile)),
-            prevIndex=prev_tags_index,
+            **tags_kwargs,
         )
 
     @_handling_etcd_exceptions
@@ -224,8 +235,14 @@ class CalicoTransportEtcd(object):
         """
         LOG.info("Write port %s to etcd", port)
         data = port_etcd_data(port)
+
+        # python-etcd doesn't keyword argument properly.
+        kwargs = {}
+        if prev_index is not None:
+            kwargs['prevIndex'] = prev_index
+
         self.client.write(
-            port_etcd_key(port), json.dumps(data), prevIndex=prev_index,
+            port_etcd_key(port), json.dumps(data), **kwargs,
         )
 
     @_handling_etcd_exceptions
