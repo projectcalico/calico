@@ -57,6 +57,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         database.
         """
         self.maybe_reset_etcd()
+
+        # Confirm that, if prevIndex is provided, its value is not None.
+        self.assertTrue(kwargs.get('prevIndex', 0) is not None)
+
         print "etcd write: %s\n%s" % (key, value)
         self.etcd_data[key] = value
         try:
