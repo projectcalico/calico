@@ -85,7 +85,7 @@ def save_diags(log_dir, upload=False):
     with open(os.path.join(temp_diags_dir, 'route'), 'w') as f:
         try:
             route = sh.Command._create("route")
-            f.write("route --numeric")
+            f.write("route --numeric\n")
             f.writelines(route(numeric=True))
             f.write('\n')
         except sh.CommandNotFound as e:
@@ -93,11 +93,11 @@ def save_diags(log_dir, upload=False):
 
         try:
             ip = sh.Command._create("ip")
-            f.write("ip route")
+            f.write("ip route\n")
             f.writelines(ip("route"))
             f.write('\n')
 
-            f.write("ip -6 route")
+            f.write("ip -6 route\n")
             f.writelines(ip("-6", "route"))
             f.write('\n')
         except sh.CommandNotFound as e:
@@ -135,7 +135,13 @@ def save_diags(log_dir, upload=False):
         datastore_client = DatastoreClient()
         datastore_data = datastore_client.etcd_client.read("/calico", recursive=True)
         with open(os.path.join(temp_diags_dir, 'etcd_calico'), 'w') as f:
-            f.write(str(datastore_data))
+            f.write("dir?, key, value\n")
+            # TODO: python-etcd bug: Leaves show up twice in get_subtree().
+            for child in datastore_data.get_subtree():
+                if child.dir:
+                    f.write("DIR,  %s,\n" % child.key)
+                else:
+                    f.write("FILE, %s, %s\n" % (child.key, child.value))
     except EtcdException:
         print "Unable to dump etcd datastore"
 
