@@ -16,6 +16,7 @@ ST_TO_RUN?=calico_containers/tests/st/
 default: all
 all: test
 binary: dist/calicoctl
+node: caliconode.created
 wheel: dist/pycalico-$(WHEEL_VERSION)-py2-none-any.whl
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
@@ -126,6 +127,7 @@ clean:
 	-docker rm -f calico-node
 	-docker rmi calico/node
 	-docker rmi calico/build
+	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 
 setup-env:
 	virtualenv venv

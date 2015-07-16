@@ -25,6 +25,7 @@ import sys
 import re
 import sh
 import docker
+from requests import ConnectionError
 from utils import DOCKER_VERSION
 from utils import enforce_root
 from utils import sysctl
@@ -41,7 +42,7 @@ def checksystem(arguments):
     this file's docstring with docopt
     :return: None
     """
-    check_system(arguments["--fix"], quit_if_error=True)
+    check_system(fix=arguments["--fix"], quit_if_error=True)
 
 def check_system(fix=False, quit_if_error=False):
     """
@@ -113,6 +114,9 @@ def check_system(fix=False, quit_if_error=False):
     # Check docker version compatability
     try:
         info = docker_client.version()
+    except ConnectionError:
+        print >> sys.stderr, "ERROR: Docker daemon not running."
+        system_ok = False
     except docker.errors.APIError:
         print >> sys.stderr, "ERROR: Docker server must support Docker " \
                              "Remote API v%s or greater." % DOCKER_VERSION

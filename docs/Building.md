@@ -8,13 +8,15 @@ You will require 2 binary builds to use the Calico Docker Prototype:
 
  From the root directory of the checked out repository, run
 
-    ./build_node.sh
+    sudo make node
 
 This builds the Dockerfile giving it the name `calico/node:latest`, which is the default image name `calicoctl` will look for when starting Calico services.
 
 ## Building `calicoctl` CLI Tool - mainline
 
-    ./create_binary.sh
+    sudo make binary
+
+This builds `calicoctl` command line tool in the `dist/` directory.
 
 ## Building `calicoctl` CLI Tool - virtualenv
 
@@ -31,8 +33,8 @@ Activate your virtual env.
 
 Install the build requirements.
 
-    pip install -r requirements.txt
+    pip install -r build_calicoctl/requirements.txt
 
 Build `calicoctl` with `pyinstaller`.
 
-    pyinstaller ../calicoctl.py -a -F -s --clean
+    pyinstaller calico_containers/calicoctl.py -a -F -s --clean

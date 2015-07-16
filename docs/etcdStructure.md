@@ -2,51 +2,59 @@
 
 The following illustrates the directory structure calico uses in etcd.
 
- 	+--calico/v1  # root namespace
- 	   |--config
- 	   |  |--InterfacePrefix # the prefix for Calico interface names
- 	   |  |--LogSeverityFile # Log severity level for writing to file e.g. "DEBUG"
- 	   |  |--bgp_as # the default BGP AS number for the nodes
- 	   |  |--bgp_node_mesh # JSON node-to-node mesh configuration (see below)
-	   |  |--bgp_peer_v4  # Global IPv4 BGP peers (all nodes peer with)
-	   |  |  `--<BGP peer IPv4 address>  # JSON BGP peer configuration (see below)
-	   |  `--bgp_peer_v6  # Global IPv6 BGP peers (all nodes peer with)
-	   |     `--<BGP peer IPv6 address>  # JSON BGP peer configuration (see below)
-	   |--host
-	   |  `--<hostname>  # one for each Docker host in the cluster
-	   |     |--config  # Host level config
-	   |     |  `--marker
-	   |     |--bgp_peer_v4  # Host specific IPv4 BGP peers
-	   |     |  `--<BGP peer IPv4 address>  # JSON BGP peer configuration (see below)
-	   |     |--bgp_peer_v6  # Host specific IPv6 BGP peers
-	   |     |  `--<BGP peer IPv6 address>  # JSON BGP peer configuration (see below)
-	   |     |--bird_ip  # the IP address BIRD listens on
-	   |     |--bird6_ip  # the IP address BIRD6 listens on
-	   |     `--workload
-	   |        `--docker
-	   |           `--<container-id>  # one for each container on the Docker Host
-	   |              `--endpoint
-	   |                 `--<endpoint-id>  # JSON endpoint config (see below)
-	   |--policy
-	   |  `--profile
-	   |     `--<profile-id>  # Unique string name
-	   |        |--tags  # JSON list of tags
-	   |        `--rules  # JSON rules config (see below)
-	   `--ipam  #IP Address Management
-	      |--v4
-	      |   |--pool
-	      |   |  `--<CIDR>  # One per pool, key is CIDR with '/' replaced 
-	      |   |             # by '-', value is JSON object (see below)
-	      |   `--assignment
-	      |      `--<CIDR>  # One per pool
-	      |         `--<address>  # One per assigned address in the pool
-	      `--v6
-	          |--pool
-	          |  `--<CIDR>  # One per pool, key is CIDR with '/' replaced
-	          |             # by '-', value is JSON object (see below)
-	          `--assignment
-	             `--<CIDR>  # One per pool
-	                `--<address>  # One per assigned address in the pool
+ 	+--calico  # root namespace
+ 	   |
+ 	   |--v1
+ 	   |  |--config
+ 	   |  |  |--InterfacePrefix # the prefix for Calico interface names
+ 	   |  |  `--LogSeverityFile # Log severity level for writing to file e.g. "DEBUG"
+	   |  |--host
+	   |  |  `--<hostname>  # one for each Docker host in the cluster
+	   |  |     |--config  # Host level config
+	   |  |     |  `--marker
+	   |  |     `--workload
+	   |  |        `--docker
+	   |  |           `--<container-id>  # one for each container on the Docker Host
+	   |  |              `--endpoint
+	   |  |                 `--<endpoint-id>  # JSON endpoint config (see below)
+	   |  |--policy
+	   |  |  `--profile
+	   |  |     `--<profile-id>  # Unique string name
+	   |  |        |--tags  # JSON list of tags
+	   |  |        `--rules  # JSON rules config (see below)
+	   |  `--ipam  #IP Address Management
+	   |     |--v4
+	   |     |   |--pool
+	   |     |   |  `--<CIDR>  # One per pool, key is CIDR with '/' replaced
+	   |     |   |             # by '-', value is JSON object (see below)
+	   |     |   `--assignment
+	   |     |      `--<CIDR>  # One per pool
+	   |     |         `--<address>  # One per assigned address in the pool
+	   |     `--v6
+	   |         |--pool
+	   |         |  `--<CIDR>  # One per pool, key is CIDR with '/' replaced
+	   |         |             # by '-', value is JSON object (see below)
+	   |         `--assignment
+	   |            `--<CIDR>  # One per pool
+	   |               `--<address>  # One per assigned address in the pool
+ 	   `--bgp/v1  # root namespace
+ 	      |--global
+ 	      |  |--as_num    # the default BGP AS number for the nodes
+ 	      |  |--node_mesh # JSON node-to-node mesh configuration (see below)
+	      |  |--peer_v4   # Global IPv4 BGP peers (all nodes peer with)
+	      |  |  `--<BGP peer IPv4 address>  # JSON BGP peer configuration (see below)
+	      |  `--peer_v6   # Global IPv6 BGP peers (all nodes peer with)
+	      |     `--<BGP peer IPv6 address>  # JSON BGP peer configuration (see below)
+	      `--host
+	         `--<hostname>  # one for each Docker host in the cluster
+	            |--ip_addr_v4 # the IP address BIRD listens on
+	            |--ip_addr_v6 # the IP address BIRD6 listens on
+	            |--as_num     # the AS number for this host
+	            |--peer_v4    # Host specific IPv4 BGP peers
+	            |  `--<BGP peer IPv4 address>  # JSON BGP peer configuration (see below)
+	            `--peer_v6  # Host specific IPv6 BGP peers
+	               `--<BGP peer IPv6 address>  # JSON BGP peer configuration (see below)
+
 
 ## JSON endpoint configuration
 

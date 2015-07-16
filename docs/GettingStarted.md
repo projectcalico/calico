@@ -40,7 +40,7 @@ You should see output like this on each node
 
     vagrant@ubuntu-1:~$ docker ps -a
     CONTAINER ID        IMAGE                    COMMAND                CREATED             STATUS              PORTS                                            NAMES
-    39de206f7499        calico/node:v0.5.0   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
+    39de206f7499        calico/node:v0.5.1   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
     5e36a7c6b7f0        quay.io/coreos/etcd  "/etcd --name calico   30 minutes ago      Up 30 minutes       0.0.0.0:4001->4001/tcp, 0.0.0.0:7001->7001/tcp   quay.io-coreos-etcd
 
 

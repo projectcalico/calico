@@ -150,9 +150,3 @@ def validate_characters(input_string):
     else:
         return True
 
-
-class Vividict(dict):
-    # From http://stackoverflow.com/a/19829714
-    def __missing__(self, key):
-        value = self[key] = type(self)()
-        return value
