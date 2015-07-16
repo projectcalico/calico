@@ -41,6 +41,7 @@ Options:
 """
 import sys
 import os
+import stat
 import sh
 import docker
 import netaddr
@@ -440,6 +441,9 @@ def install_kubernetes(kubernetes_plugin_dir):
     wget = sh.Command._create('wget')
     try:
         wget('-O', kubernetes_binary_path, KUBERNETES_BINARY_URL)
+        st = os.stat(kubernetes_binary_path)
+        executable_permissions = st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+        os.chmod(kubernetes_binary_path, executable_permissions)
     except sh.ErrorReturnCode_8:
         print "ERROR: Couldn't download the kubernetes binary"
         sys.exit(1)
