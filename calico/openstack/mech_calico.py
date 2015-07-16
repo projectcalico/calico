@@ -847,7 +847,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Get the data from Neutron.
             with context.session.begin(subtransactions=True):
                 rules = self.db.get_security_group_rules(
-                    context, filters={'security_group_id': etcd_profile.id}
+                    context, filters={'security_group_id': [etcd_profile.id]}
                 )
 
             # Do the same conversion for the Neutron profile.
