@@ -23,4 +23,4 @@ This will create a 2-node, 1-master cluster, with Calico providing network conne
 ## Operating the cluster
 The cluster will operate as normal; from the perspective of a Pod's containers, IP connectivity is the same.
 
-The calicoctl tool has been installed at /home/vagrant/calicoctl, so this can be used as normal to assist debugging. Note that Calico policy can be configured using calicoctl, but it is not fully supported in the Kubernetes environment; pod-to-pod policy can be enforced, but traffic to Kubernetes Services will not hit the correct policy rules.
+The calicoctl tool has been installed at /home/vagrant/calicoctl, so this can be used as normal to assist debugging. Note that Calico policy can be configured using calicoctl, but it is not fully supported in the Kubernetes environment; pod-to-pod policy can be enforced, but traffic to Kubernetes Services will not hit the correct policy rules. We are actively working on enhancing Kubernetes to support Calico policy with services.

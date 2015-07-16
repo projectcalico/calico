@@ -1,7 +1,7 @@
 # Kubernetes with Calico networking
 Calico can be used as a network plugin for Kubernetes, to provide connectivity for workloads in a Kubernetes cluster.
 
-Calico is particularly suitable for large Kubernetes deployments on bare metal, where the performance and complexity costs of overlay networks can become significant. It can also be used in public clouds.
+Calico is particularly suitable for large Kubernetes deployments on bare metal or private clouds, where the performance and complexity costs of overlay networks can become significant. It can also be used in public clouds.
 
 The following configuration guides have been written:
 
