@@ -20,23 +20,23 @@ Usage:
   calicoctl profile <PROFILE> tag (add|remove) <TAG>
   calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
     (allow|deny) [(
-      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
-                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
-           [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])] |
-      [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-      [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
+           [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+           [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
+      [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+      [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
     )]
   calicoctl profile <PROFILE> rule remove (inbound|outbound) (--at=<POSITION>|
     (allow|deny) [(
-      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [<SRCCIDR>])]
-                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [<DSTCIDR>])] |
+      (tcp|udp) [(from [(ports <SRCPORTS>)] [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+                [(to   [(ports <DSTPORTS>)] [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
-           [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-           [(to   [(tag <DSTTAG>)] [<DSTCIDR>])] |
-      [(from [(tag <SRCTAG>)] [<SRCCIDR>])]
-      [(to   [(tag <DSTTAG>)] [<DSTCIDR>])]
+           [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+           [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
+      [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+      [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
     )])
   calicoctl profile <PROFILE> rule show
   calicoctl profile <PROFILE> rule json

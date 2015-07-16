@@ -395,7 +395,7 @@ class Rule(dict):
         if "src_tag" in self:
             out.extend(["tag", self["src_tag"]])
         if "src_net" in self:
-            out.append(str(self["src_net"]))
+            out.extend(["cidr", str(self["src_net"])])
 
         if "dst_tag" in self or "dst_ports" in self or "dst_net" in self:
             out.append("to")
@@ -405,6 +405,6 @@ class Rule(dict):
         if "dst_tag" in self:
             out.extend(["tag", self["dst_tag"]])
         if "dst_net" in self:
-            out.append(str(self["dst_net"]))
+            out.extend(["cidr", str(self["dst_net"])])
 
         return " ".join(out)
