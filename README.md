@@ -24,6 +24,7 @@ In addition to the [Getting Started Guide](docs/GettingStarted.md) we also have 
 - [Calico on Google Compute Engine](docs/GCE.md)
 - [Calico on DigitalOcean](docs/DigitalOcean.md)
 - [Calico and Docker Swarm](docs/CalicoSwarm.md)
+- [Calico and Kubernetes](docs/kubernetes/getting-started.md)
 
 Finally, if you want to try out networking containers using Calico with Docker's new [libnetwork network driver support](https://github.com/docker/libnetwork) then you can try out our [Ubuntu Vagrant libnetwork example](https://github.com/Metaswitch/calico-ubuntu-vagrant).
 

@@ -5,17 +5,18 @@ The Kubernetes Vagrant provider uses OpenVSwitch networking by default, but it c
 
 ## Getting Started
 First, you'll need to check out a copy of the Kubernetes git repo. Currently the Calico Vagrant plugin code is waiting to be merged into the Kubernetes repo, so for now you'll need to check out our fork of the Kubernetes repo (which is based on the latest 1.0 release candidate).
-'''
+```
 git clone git@github.com:Metaswitch/calico-kubernetes.git
+cd calico-kubernetes
 git checkout calico-network-plugin-dev
-'''
+```
 
 Now set the environment variables to specify the Calico Vagrant provisioner, and run the cluster init script from the root of the kubernetes repo:
-'''
+```
 export KUBERNETES_PROVIDER=vagrant
 export NETWORK_MODE=calico
 cluster/kube-up.sh
-'''
+```
 
 This will create a 2-node, 1-master cluster, with Calico providing network connectivity for Pods. As with the openvswitch mode, you can set the `NUM_MINIONS` environment variable to change the number of nodes that are provisioned.
 
