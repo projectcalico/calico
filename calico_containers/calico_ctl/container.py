@@ -27,6 +27,29 @@ from utils import check_ip_version
 from utils import get_container_ipv_from_arguments
 from utils import docker_client
 from utils import print_paragraph
+from utils import validate_ip
+
+
+def validate_arguments(arguments):
+    """
+    Validate argument values:
+        <IP>
+
+    Arguments not validated:
+        <CONTAINER>
+        <INTERFACE>
+
+    :param arguments: Docopt processed arguments
+    """
+    # Validate IP
+    container_ip_ok = arguments.get("<IP>") is None or \
+                        validate_ip(arguments["<IP>"], "v4") or \
+                        validate_ip(arguments["<IP>"], "v6")
+
+    # Print error message and exit if not valid argument
+    if not container_ip_ok:
+        print "Invalid IP address specified."
+        sys.exit(1)
 
 
 def container(arguments):
@@ -38,6 +61,8 @@ def container(arguments):
     this file's docstring with docopt
     :return: None
     """
+    validate_arguments(arguments)
+
     ip_version = get_container_ipv_from_arguments(arguments)
     try:
         if arguments.get("endpoint-id"):

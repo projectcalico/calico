@@ -35,6 +35,40 @@ from netaddr import IPAddress
 from utils import check_ip_version
 from prettytable import PrettyTable
 from utils import get_container_ipv_from_arguments
+from utils import validate_ip
+
+
+def validate_arguments(arguments):
+    """
+    Validate argument values:
+        <PEER_IP>
+        <AS_NUM>
+
+    Arguments not validated:
+
+    :param arguments: Docopt processed arguments
+    """
+    # Validate IPs
+    peer_ip_ok = arguments.get("<PEER_IP>") is None or \
+                    validate_ip(arguments["<PEER_IP>"], "v4") or \
+                    validate_ip(arguments["<PEER_IP>"], "v6")
+    asnum_ok = True
+    if arguments.get("<AS_NUM>"):
+        try:
+            asnum = int(arguments["<AS_NUM>"])
+            asnum_ok = 0 <= asnum <= 4294967295
+        except ValueError:
+            asnum_ok = False
+
+    # Print error messages
+    if not peer_ip_ok:
+        print "Invalid IP address specified."
+    if not asnum_ok:
+        print "Invalid AS Number specified."
+
+    # Exit if not valid arguments
+    if not (peer_ip_ok and asnum_ok):
+        sys.exit(1)
 
 
 def bgp(arguments):
@@ -45,6 +79,8 @@ def bgp(arguments):
     this file's docstring with docopt
     :return: None
     """
+    validate_arguments(arguments)
+
     ip_version = get_container_ipv_from_arguments(arguments)
     if arguments.get("peer"):
         if arguments.get("add"):
