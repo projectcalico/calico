@@ -162,6 +162,7 @@ def _main_greenlet(config):
                 # The output will include queue length and the like.
                 log.info("%s", a)
         futils.register_diags("Top-level actors", dump_top_level_actors)
+        futils.register_process_statistics()
         try:
             gevent.signal(signal.SIGUSR1, functools.partial(futils.dump_diags))
         except AttributeError:
