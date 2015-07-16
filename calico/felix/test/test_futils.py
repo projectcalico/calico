@@ -162,6 +162,40 @@ class TestStats(unittest.TestCase):
                 mock.call.info("=== END OF DIAGNOSTICS ==="),
             ], any_order=True)
 
+    def test_dump_diags_process(self):
+        process_results = [
+            ('Execution time in user mode (seconds)', 'ru_utime', 1),
+            ('Execution time in kernel mode (seconds)', 'ru_stime', 2),
+            ('Maximum Resident Set Size (KB)', 'ru_maxrss', 3),
+            ('Soft page faults', 'ru_minflt', 4),
+            ('Hard page faults', 'ru_majflt', 5),
+            ('Input events', 'ru_inblock', 6),
+            ('Output events', 'ru_oublock', 7),
+            ('Voluntary context switches', 'ru_nvcsw', 8),
+            ('Involuntary context switches', 'ru_nivcsw', 9),
+        ]
+
+        with mock.patch('calico.felix.futils.stat_log') as m_log:
+            with mock.patch('calico.felix.futils.resource') as m_resource:
+                res = m_resource.getrusage.return_value
+                for _, field, val in process_results:
+                    setattr(res, field, val)
+
+                calls = [
+                    mock.call.info('=== DIAGNOSTICS ==='),
+                    mock.call.info("--- %s ---", "foo"),
+                    mock.call.info('--- %s ---', 'Process Statistics'),
+                    mock.call.info('=== END OF DIAGNOSTICS ==='),
+                ]
+                calls.extend(
+                    mock.call.info('%s: %s', name, value) for name, _, value
+                    in process_results
+                )
+
+                futils.register_process_statistics()
+                futils.dump_diags()
+                m_log.assert_has_calls(calls, any_order=True)
+
     def test_dump_diags_cover(self):
         with mock.patch("calico.felix.futils.stat_log") as m_log:
             m_log.info.side_effect = Exception()

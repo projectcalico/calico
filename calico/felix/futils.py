@@ -225,7 +225,7 @@ def register_process_statistics():
         ('Involuntary context switches', 'ru_nivcsw'),
     ]
 
-    def dump(self, log):
+    def dump(log):
         process = resource.getrusage(resource.RUSAGE_SELF)
         for name, field in rusage_fields:
             data = getattr(process, field, 'None')
