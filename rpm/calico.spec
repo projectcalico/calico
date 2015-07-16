@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        0.27
+Version:        0.27.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -39,6 +39,13 @@ This package provides the pieces needed on a compute node.
 %post compute
 if [ $1 -eq 1 ] ; then
     # Initial installation
+
+    # Enable checksum calculation on DHCP responses.  This is needed
+    # when sending DHCP responses over the TAP interfaces to guest
+    # VMs, as apparently Linux doesn't itself do the checksum
+    # calculation in that case.
+    iptables -D POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill >/dev/null 2>&1 || true
+    iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill
 
     # Don't reject INPUT and FORWARD packets by default on the compute host.
     iptables -D INPUT -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
@@ -202,6 +209,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Jul 15 2015 Matt Dupre <matt@projectcalico.org> 0.27.1
+  - Interim bug-fix release - reinstate DHCP checksum calculation rule.
+
 * Tue Jul 14 2015 Matt Dupre <matt@projectcalico.org> 0.27
   - Limit number of concurrent shell-outs in felix to prevent file descriptor
     exhaustion.
