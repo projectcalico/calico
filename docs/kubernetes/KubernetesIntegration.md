@@ -20,7 +20,7 @@ This guide will describe the configuration required to use the Calico network pl
 
 * #####Automatic Install
 
-   As of Calico v0.5.1, we have included a `--kubernetes` flag to the `calicoctl node` command that will automatically install the Calico-Kubernetes Plugin as you spin up a Calico Node.
+   As of Calico v0.5.1, we have included a `--kubernetes` flag to the `calicoctl node` command that will automatically install the Calico Network Plugin as you spin up a Calico Node.
    ```
    sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> calicoctl node --ip=<NODE_IP> --kubernetes
    ```
@@ -31,7 +31,4 @@ This guide will describe the configuration required to use the Calico network pl
    Alternatively, you can download the [latest release](https://github.com/Metaswitch/calico-docker/releases/latest) of the plugin binary directly from our Github Repo.
 
 #### Configuring Kubelet Services
-   On each of your nodes, you will need to verify that your kubelet service config files (`/etc/systemd/kube-kubelet.service` by default) include a reference to the calico networking plugin. Look for/add this line to the config:
-   ``` 
-   --network_plugin=calico
-   ```
+   On each of your nodes, you will need to configure the Kubelet to use the Calico Networking Plugin. This can be done by including the `--network_plugin=calico` option when starting the Kubelet. If you are using systemd to manage your services, you can add this line to the Kubelet config file (`/etc/systemd/` by default) and restart your Kubelets to begin using Calico.
