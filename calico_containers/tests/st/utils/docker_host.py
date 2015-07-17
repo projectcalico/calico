@@ -199,11 +199,13 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, ip=None, image="busybox", network=None):
+    def create_workload(self, name, ip=None, image="busybox", network=None,
+                        service=None):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, ip=ip, image=image, network=network)
+        workload = Workload(self, name, ip=ip, image=image, network=network,
+                            service=service)
         self.workloads.add(workload)
         return workload
 

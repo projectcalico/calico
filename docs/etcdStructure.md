@@ -9,9 +9,10 @@ The following illustrates the directory structure calico uses in etcd.
  	   |  |  |--InterfacePrefix # the prefix for Calico interface names
  	   |  |  `--LogSeverityFile # Log severity level for writing to file e.g. "DEBUG"
 	   |  |--host
-	   |  |  `--<hostname>  # one for each Docker host in the cluster
-	   |  |     |--config  # Host level config
+	   |  |  `--<hostname>      # one for each Docker host in the cluster
+	   |  |     |--config       # Host level config
 	   |  |     |  `--marker
+	   |  |     |--ipv4_address # the next hop IP address of this host
 	   |  |     `--workload
 	   |  |        `--docker
 	   |  |           `--<container-id>  # one for each container on the Docker Host

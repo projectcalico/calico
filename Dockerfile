@@ -49,4 +49,4 @@ RUN /build/base.sh && \
 # builds for developer, as it's thing they're most likely to change.
 COPY node_filesystem /
 COPY calico_containers/pycalico /calico_containers/pycalico
-COPY calico_containers/docker_plugin.py /calico_containers/
+COPY calico_containers/libnetwork_plugin /calico_containers/libnetwork_plugin

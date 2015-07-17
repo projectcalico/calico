@@ -36,6 +36,18 @@ class DockerNetwork(object):
         command = ' '.join(args)
         self.uuid = host.execute(command).rstrip()
 
+    def delete(self):
+        """
+        Delete the network.
+        :return: Nothing
+        """
+        args = [
+            "docker", "network", "rm",
+            self.name,
+        ]
+        command = ' '.join(args)
+        self.init_host.execute(command).rstrip()
+
     def __str__(self):
         return self.name
 
