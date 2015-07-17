@@ -12,7 +12,7 @@ This guide will describe the configuration required to use the Calico network pl
    This plugin requires access to the `calicoctl` binary. If your binary is not located at `/usr/bin/calicoctl`, you can set the `CALICOCTL_PATH` environment variable to the correct path.
 
 * #####KUBE_API_ROOT
-   The `KUBE_API_ROOT` environment variable specifies where the Kubernetes API resources are located, defaulting to the `<MASTER_IP>/api/v1/`
+   The `KUBE_API_ROOT` environment variable specifies where the Kubernetes API resources are located, defaulting to the `<MASTER_IP>:8080/api/v1/`
 
 ## Configuring Nodes
 
@@ -20,16 +20,15 @@ This guide will describe the configuration required to use the Calico network pl
 
 * #####Automatic Install
 
-   With our latest distribtution of Calico, we have included a `--kubernetes` flag to the `calicoctl node` command that will automatically install the Calico-Kubernetes Plugin as you spin up a Calico Node.
+   As of Calico v0.5.1, we have included a `--kubernetes` flag to the `calicoctl node` command that will automatically install the Calico-Kubernetes Plugin as you spin up a Calico Node.
    ```
-   sudo ETCD_AUTHORITY=<MASTER_IP> calicoctl node --ip=<NODE_IP> --kubernetes
+   sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> calicoctl node --ip=<NODE_IP> --kubernetes
    ```
-   >_Note in this example, we embedded the ETCD_AUTHORITY environment config_
+   >_Note in this example, we set the ETCD_AUTHORITY environment config for the duration of the command_
 
 * #####Manual Install
 
    Alternatively, you can download the [latest release](https://github.com/Metaswitch/calico-docker/releases/latest) of the plugin binary directly from our Github Repo.
-   To apply a plugin to the node, you can use the `--plugin-dir=<PLUGIN_DIR>` option of the `calicoctl node` command
 
 #### Configuring Kubelet Services
    On each of your nodes, you will need to verify that your kubelet service config files (`/etc/systemd/kube-kubelet.service` by default) include a reference to the calico networking plugin. Look for/add this line to the config:
