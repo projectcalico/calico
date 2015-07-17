@@ -41,6 +41,7 @@ import sys
 import os
 import stat
 import sh
+from subprocess import check_output, CalledProcessError
 import docker
 import netaddr
 import socket
@@ -368,19 +369,24 @@ def get_host_ips(version):
     """
     Gets all IP addresses assigned to this host.
 
+    This function is fail-safe and will return an empty array instead of
+    raising any exceptions.
+
     :param version: Desired version of IP addresses. Can be 4 or 6
     :return: List of string representations of IP Addresses.
     """
-    ip = sh.Command._create("ip")
     ip_addrs = []
-    addrs_raw = ip("-o", "-%d" % version, "addr").stdout.strip().split("\n")
-    for address_output in addrs_raw:
-        # Each 'address_output' represents a line showing the interface ip
-        values = address_output.split()
-        # Ignore the loopback interface and the docker0 bridge
+    addr_lines_raw = check_output(["ip", "-o", "-%d" % (version), "addr"]).strip().split("\n")
+    for addr_line_raw in addr_lines_raw:
+        # Each addr_line_raw is a single line from the ip addr command
+        values = addr_line_raw.split()
         if 'lo' not in values and 'docker0' not in values:
-            # Extract the IP, ensure its valid
-            ip_addrs.append(str(netaddr.IPNetwork(values[3]).ip))
+            try:
+                # Extract the IP, ensure its valid
+                ip_addrs.append(str(netaddr.IPNetwork(values[3]).ip))
+            except (OSError, CalledProcessError, IndexError, netaddr.AddrFormatError):
+                # Ignore any encountered errors to maintain fail-safe
+                pass
     return ip_addrs
 
 
