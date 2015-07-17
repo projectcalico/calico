@@ -756,8 +756,10 @@ class _Transaction(object):
                  old_deps,
                  old_requiring_chains):
         # Figure out what stub chains should already be present.
-        self.already_stubbed = (set(old_requiring_chains.keys()) -
-                                set(old_prog_chain_contents.keys()))
+        old_required_chains = set(old_requiring_chains.keys())
+        old_explicitly_programmed_chains = set(old_prog_chain_contents.keys())
+        self.already_stubbed = (old_required_chains -
+                                old_explicitly_programmed_chains)
 
         # Deltas.
         self.updates = {}
@@ -871,8 +873,15 @@ class _Transaction(object):
             # Don't stub out chains that we're now explicitly programming.
             impl_required_chains = (self.referenced_chains -
                                     set(self.prog_chains.keys()))
-            # Don't stub out chains that are already stubbed.
-            self._chains_to_stub = impl_required_chains - self.already_stubbed
+            if self.refresh:
+                # Re-stub all chains that should be stubbed.
+                _log.debug("Refresh in progress, re-stub all stubbed chains.")
+                self._chains_to_stub = impl_required_chains
+            else:
+                # Don't stub out chains that are already stubbed.
+                _log.debug("No refresh in progress.")
+                self._chains_to_stub = (impl_required_chains -
+                                        self.already_stubbed)
         return self._chains_to_stub
 
     @property
