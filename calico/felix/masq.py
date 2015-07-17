@@ -79,16 +79,12 @@ class MasqueradeManager(Actor):
             else:
                 _log.info("No masquerade-enabled pools present. "
                           "Removing rules and ipsets.")
-                # We can only have programmed the rule if the ipsets are
-                # present.  If they're not present, iptables rejects the
-                # delete with an error that IptablesUpdater doesn't expect.
-                if (self._all_pools_ipset.exists() and
-                        self._masq_pools_ipset.exists()):
-                    # Have to make a blocking call so that we don't try to
-                    # remove the ipsets before we've cleaned up the rule that
-                    # references them.
-                    self._iptables_mgr.ensure_rule_removed(MASQ_RULE_FRAGMENT,
-                                                           async=False)
+                # Ensure that the rule doesn't exist before we try to remove
+                # our ipsets. Have to make a blocking call so that we don't
+                # try to remove the ipsets before we've cleaned up the rule
+                # that references them.
+                self._iptables_mgr.ensure_rule_removed(MASQ_RULE_FRAGMENT,
+                                                       async=False)
                 # Safe to call even if the ipsets don't exist:
                 self._all_pools_ipset.delete()
                 self._masq_pools_ipset.delete()
