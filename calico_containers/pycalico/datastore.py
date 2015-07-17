@@ -102,7 +102,8 @@ class DatastoreClient(object):
     def __init__(self):
         etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
         (host, port) = etcd_authority.split(":", 1)
-        self.etcd_client = etcd.Client(host=host, port=int(port))
+        self.etcd_client = etcd.Client(host=host,
+                                       port=int(port))
 
     @handle_errors
     def ensure_global_config(self):
