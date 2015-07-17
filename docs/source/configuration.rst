@@ -121,6 +121,9 @@ The full list of parameters which can be set is as follows.
 | PeriodicResyncInterval      | 3600                      | Period, in seconds, at which felix does a full resync with etcd and reprograms            |
 |                             |                           | iptables/ipsets.  Set to 0 to disable periodic resync.                                    |
 +-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| IptablesRefreshInterval     | 60                        | Period, in seconds, at which felix re-applies all iptables state to ensure that no other  |
+|                             |                           | process has accidentally broken Calico's rules.  Set to 0 to disable iptables refresh.    |
++-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
 
 
 Environment variables

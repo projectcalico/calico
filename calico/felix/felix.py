@@ -68,8 +68,9 @@ def _main_greenlet(config):
 
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
-        v4_filter_updater = IptablesUpdater("filter", ip_version=4)
-        v4_nat_updater = IptablesUpdater("nat", ip_version=4)
+        v4_filter_updater = IptablesUpdater("filter", ip_version=4,
+                                            config=config)
+        v4_nat_updater = IptablesUpdater("nat", ip_version=4, config=config)
         v4_ipset_mgr = IpsetManager(IPV4)
         v4_masq_manager = MasqueradeManager(IPV4, v4_nat_updater)
         v4_rules_manager = RulesManager(4, v4_filter_updater, v4_ipset_mgr)
@@ -80,7 +81,8 @@ def _main_greenlet(config):
                                         v4_dispatch_chains,
                                         v4_rules_manager)
 
-        v6_filter_updater = IptablesUpdater("filter", ip_version=6)
+        v6_filter_updater = IptablesUpdater("filter", ip_version=6,
+                                            config=config)
         v6_ipset_mgr = IpsetManager(IPV6)
         v6_rules_manager = RulesManager(6, v6_filter_updater, v6_ipset_mgr)
         v6_dispatch_chains = DispatchChains(config, 6, v6_filter_updater)

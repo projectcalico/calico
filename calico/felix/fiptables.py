@@ -97,11 +97,11 @@ class IptablesUpdater(Actor):
 
     """
 
-    def __init__(self, table, ip_version=4, refresh_interval=10):
+    def __init__(self, table, config, ip_version=4):
         super(IptablesUpdater, self).__init__(qualifier="v%d-%s" %
                                                         (ip_version, table))
         self.table = table
-        self.refresh_interval = refresh_interval
+        self.refresh_interval = config.REFRESH_INTERVAL
         if ip_version == 4:
             self._restore_cmd = "iptables-restore"
             self._save_cmd = "iptables-save"
