@@ -336,6 +336,26 @@ class TestEndpoint(unittest.TestCase):
                                        workload_id=TEST_CONT_ID,
                                        endpoint_id="INVALID"))
 
+    def test_repr(self):
+        """
+        Test __repr__ returns the correct string value.
+        """
+        jsondata = {"state": "active",
+                    "name": "caliaabbccddeef",
+                    "mac": "11-22-33-44-55-66",
+                    "profile_id": "TEST23",
+                    "ipv4_nets": ["192.168.3.2/32", "10.3.4.23/32"],
+                    "ipv6_nets": ["fd20::4:2:1/128"],
+                    "ipv4_gateway": "10.3.4.2",
+                    "ipv6_gateway": "2001:2:4a::1"}
+        endpoint = Endpoint.from_json(TEST_ENDPOINT_PATH, json.dumps(jsondata))
+
+        # Not the best test since this repeats the underlying implementation,
+        # but checks that it isn't changed unexpectedly.
+        assert_equal(endpoint.__repr__(),
+                     "Endpoint(%s)" % endpoint.to_json())
+
+
 class TestBGPPeer(unittest.TestCase):
     def test_operator(self):
         """
