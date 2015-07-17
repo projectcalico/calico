@@ -97,8 +97,9 @@ class IptablesUpdater(Actor):
 
     """
 
-    def __init__(self, table, ip_version=4, refresh_interval=60):
-        super(IptablesUpdater, self).__init__(qualifier="v%d" % ip_version)
+    def __init__(self, table, ip_version=4, refresh_interval=10):
+        super(IptablesUpdater, self).__init__(qualifier="v%d-%s" %
+                                                        (ip_version, table))
         self.table = table
         self.refresh_interval = refresh_interval
         if ip_version == 4:
