@@ -152,7 +152,7 @@ def create_endpoint():
     # Create the JSON to return to libnetwork
     response = {"Interfaces":
                     [{"ID": 0,
-                     "MacAddress": FIXED_MAC}]}
+                 "MacAddress": FIXED_MAC}]}
     if ip:
         response["Interfaces"][0]["Address"] = str(ip)
     if ip6:
@@ -216,6 +216,8 @@ def join():
                   FIXED_MAC)
     ep.profile_ids.append(net_id)
 
+    #TODO - this assumes there are still IPv6 gateways configured (could
+    # have been deleted in the interim)
     address_ip4 = cnm_ep['Interfaces'][0].get('Address')
     if address_ip4:
         ep.ipv4_nets.add(IPNetwork(address_ip4))

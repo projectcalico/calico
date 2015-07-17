@@ -310,6 +310,12 @@ class Endpoint(object):
     def temp_interface_name(self):
         return "tmp" + self.endpoint_id[:11]
 
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return self.to_json()
+
 
 class Profile(object):
     """A Calico policy profile."""
