@@ -23,7 +23,7 @@ import copy
 
 import logging
 import re
-from mock import patch, call
+from mock import patch, call, Mock
 from calico.felix import fiptables
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.futils import FailedSystemCall
@@ -69,7 +69,9 @@ class TestIptablesUpdater(BaseTestCase):
     def setUp(self):
         super(TestIptablesUpdater, self).setUp()
         self.stub = IptablesStub("filter")
-        self.ipt = IptablesUpdater("filter", 4)
+        self.m_config = Mock()
+        self.m_config.REFRESH_INTERVAL = 10
+        self.ipt = IptablesUpdater("filter", self.m_config, 4)
         self.ipt._execute_iptables = self.stub.apply_iptables_restore
         self.check_output_patch = patch("gevent.subprocess.check_output",
                                         autospec=True)

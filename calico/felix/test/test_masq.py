@@ -71,7 +71,13 @@ class TestMasqueradeManager(BaseTestCase):
         self.masq_mgr.apply_snapshot({"foo": {"cidr": "10.0.0.0/16"}},
                                      async=True)
         self.step_actor(self.masq_mgr)
-        self.assertFalse(self.m_iptables_mgr.ensure_rule_removed.called)
+        self.m_iptables_mgr.ensure_rule_removed.assert_called_once_with(
+            "POSTROUTING "
+            "--match set --match-set felix-masq-ipam-pools src "
+            "--match set ! --match-set felix-all-ipam-pools dst "
+            "--jump MASQUERADE",
+            async=False
+        )
         self.m_all_pools.delete.assert_called_once_with()
         self.m_masq_pools.delete.assert_called_once_with()
 
