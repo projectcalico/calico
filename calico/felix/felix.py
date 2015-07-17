@@ -95,7 +95,8 @@ def _main_greenlet(config):
                                          [v4_rules_manager, v6_rules_manager],
                                          [v4_ep_manager, v6_ep_manager],
                                          [v4_filter_updater,
-                                          v6_filter_updater],
+                                          v6_filter_updater,
+                                          v4_nat_updater],
                                          v4_masq_manager)
         iface_watcher = InterfaceWatcher(update_splitter)
 
