@@ -367,7 +367,8 @@ prevent routes from other nodes in the network from not being
 installed due to it coming from the *local* AS (since they share the
 source and dest of the route share the same AS).
 
-The following diagram will 
+The following diagram will show the AS relationships in this model.
+
 .. figure:: _static/l3-interconnectFabric/l3-fabric-downward-default.*
    :align: center
    :alt: A diagram showing the replicated AS model in the downward
