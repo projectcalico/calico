@@ -314,7 +314,7 @@ class Endpoint(object):
         return self.__str__()
 
     def __str__(self):
-        return self.to_json()
+        return "Endpoint(%s)" % self.to_json()
 
 
 class Profile(object):

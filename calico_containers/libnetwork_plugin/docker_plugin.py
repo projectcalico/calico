@@ -87,6 +87,7 @@ def create_network():
     # so in future we might want to obtain a human readable name for it.
     network_id = json_data["NetworkID"]
 
+    #@TODO Maybe, for atomicity write with prevExist=False
     if client.profile_exists(network_id):
         app.logger.info("Not creating existing profile %s", network_id)
     else:
@@ -121,6 +122,9 @@ def create_endpoint():
     json_data = request.get_json(force=True)
     app.logger.debug("CreateEndpoint JSON=%s", json_data)
     ep_id = json_data["EndpointID"]
+
+    #@TODO We assume libnetwork runs this first on the local host first and
+    # then on other hosts.  We should verify this is the case.
     if client.cnm_endpoint_exists(ep_id):
         app.logger.info("Ignoring existing endpoint %s", ep_id)
         return jsonify({})
@@ -286,6 +290,7 @@ def leave():
         app.logger.warning("Failed to remove endpoint %s from datastore",
                            ep_id)
     # TODO - Remove veth before removing endpoint from etcd in case of errors?
+    # TODO - If we fail to remove endpoint, still return success?
     if ep:
         remove_veth(ep)
     else:
@@ -294,7 +299,9 @@ def leave():
 
     return jsonify({})
 
+
 #TODO move assign_ip/unassign_ip
+#TODO This current returns an IPNetwork not an IPAddress
 def assign_ip(version):
     """
     Assign a IP address from the configured pools.
@@ -324,9 +331,8 @@ def unassign_ip(ip):
     # For each configured pool, attempt to unassign the IP before giving up.
     version = "v%d" % ip.version
     for pool in client.get_ip_pools(version):
-        if ip in pool:
-            if client.unassign_address(pool, ip):
-                return True
+        if ip in pool and client.unassign_address(pool, ip):
+            return True
     return False
 
 
@@ -340,8 +346,9 @@ def backout_ip_assignments(cnm_ep):
             # The unassignment is best effort. Just log if it fails.
             app.logger.warn("Failed to unassign IP address %s", address)
 
+
 # TODO move to netns
-def create_veth(ep):
+def create_veth(ep):  #pragma: no cover
     # Create the veth
     check_call(['ip', 'link',
                 'add', ep.name,
@@ -360,14 +367,14 @@ def create_veth(ep):
                timeout=IP_CMD_TIMEOUT)
 
 #TODO move to netns
-def remove_veth(ep):
+def remove_veth(ep):  #pragma: no cover
     # The veth removal is best effort. If it fails then just log.
     rc = call(['ip', 'link', 'del', ep.name], timeout=IP_CMD_TIMEOUT)
     if rc != 0:
         app.logger.warn("Failed to delete veth %s", ep.name)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':   #pragma: no cover
     # Used when being invoked by the flask development server
     PLUGIN_DIR = "/usr/share/docker/plugins/"
     if not os.path.exists(PLUGIN_DIR):
