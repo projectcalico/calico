@@ -128,7 +128,7 @@ BGP-only interconnect fabrics
 ==============================
 
 There are multiple methods to build a BGP-only interconnect fabric.
-We will focus on two models, each with two widely viable variations.
+We will focus on three models, each with two widely viable variations.
 There are other options, and we will briefly touch on why we didn't
 include some of them in the `Other Options`_ appendix.
 
@@ -333,7 +333,7 @@ provide a set of independent Ethernet planes to interconnect the ToR
 switches, and the other where that is done by a set of independent
 routers.
 
-The real difference between the two models is that, in this model, the
+The real difference in this model, is that the
 compute servers as well as the ToR switches are all independent
 autonomous systems.  To make this work at scale, the use of  four byte AS
 numbers as discussed in :RFC:`4893`.  Without using four byte AS
@@ -355,6 +355,68 @@ servers in the rack).
 
 The inter-ToR connectivity considerations are the same in scale and
 scope as in the AS per rack model.
+
+The *Downward Default* model
+----------------------------
+
+The final model is a bit different.  Whereas, in the previous models,
+all of the routers in the infrastructure carry full routing tables,
+and leave their AS paths in-tact, this model [#defaultGenesis]_
+removes the AS numbers at each stage of the routing path.  This is to
+prevent routes from other nodes in the network from not being
+installed due to it coming from the *local* AS (since they share the
+source and dest of the route share the same AS).
+
+The following diagram will show the AS relationships in this model.
+
+.. figure:: _static/l3-interconnectFabric/l3-fabric-downward-default.*
+   :align: center
+   :alt: A diagram showing the replicated AS model in the downward
+	 default model.
+
+   In this diagram, we are showing that all Calico nodes share the
+   same AS number, as do all ToR switches.  However, those ASs are
+   different (*A1* is not the same network as *A2*, even though the both
+   share the same AS number *A* ).
+
+While the use of a single AS for all ToR switches, and another for all
+compute servers simplifies deployment (standardized configuration),
+the real benefit comes in the offloading of the routing tables in the
+ToR switches.
+
+In this model, each router announces all of its routes to its upstream
+peer (the Calico routers to their ToR, the ToRs to the spine
+switches).  However, in return, the upstream router only announces a
+default route.  In this case, a given Calico router only has routes
+for the endpoints that are locally hosted on it, as well as the
+default from the ToR.  Since the ToR is the only route for the Calico
+network the rest of the network, this matches reality.  The same
+happens between the ToR switches and the spine.  This means that the
+ToR only has to install the routes that are for endpoints that are
+hosted on its downstream Calico nodes.  Even if we were to host 200
+endpoints per Calico node, and stuff 80 Calico nodes in each rack,
+that would still limit the routing table on the ToR to a maximum of
+16,000 entries (well within the capabilities of even the most modest
+of switches).
+
+Since the default is originated by the Spine (originally) there is no
+chance for a downward announced route to originate from the
+recipient's AS, preventing the *AS puddling* problem.
+
+There is one (minor) drawback to this model, in that all traffic that
+is destined for an invalid destination (the destination IP does not
+exist) will be forwarded to the spine switches before they are
+dropped.
+
+It should also be noted that the spine switches do need to carry all
+of the Calico network routes, just as they do in the routed spines in
+the previous examples.  In short, this model imposes no more load on
+the spines than they already would have, and substantially reduces the
+amount of routing table space used on the ToR switches.  It also
+reduces the number of routes in the Calico nodes, but, as we have
+discussed before, that is not a concern in most deployments as the
+amount of memory consumed by a full routing table in Calico is a
+fraction of the total memory available on a modern compute server.
 
 Recommendation
 ==============
@@ -546,6 +608,12 @@ today of 128,000 endpoints.
    discouraged.  The chance for routing system failure or incorrect
    routing is substantial, and not restricted to the entity that is
    doing the reuse.
+
+.. [#defaultGenesis]
+   We first saw this design in a customer's lab, and thought it
+   innovative enough to share (we asked them first, of course).
+   Similar *AS Path Stripping* approaches are used in ISP networks,
+   however.
 
 .. [#bgpPolicy]
    However those tools are available if a given Calico instance needs to
