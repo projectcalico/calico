@@ -30,7 +30,6 @@ TEST_NETWORK_ID = "TEST_NETWORK_ID"
 # Expected 500 error response.
 ERROR_RESPONSE_500 = {"Err": "500: Internal Server Error"}
 
-#@TODO Misuse of Mock - when mocking out a function, safest to use patch.
 
 class TestPlugin(unittest.TestCase):
 
