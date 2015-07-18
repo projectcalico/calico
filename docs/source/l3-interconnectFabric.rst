@@ -430,6 +430,9 @@ If a Calico user is interested in the AS per compute server, the Project
 Calico team would be very interested in discussing the deployment of
 that model.
 
+Similarly, if a potential user has *very* constrained ToR switches
+deployed, the *Downward Default* model may be worthwhile considering.
+
 Appendix
 ========
 Other Options
