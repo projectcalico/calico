@@ -24,13 +24,16 @@ The main logic for Felix.
 from gevent import monkey
 monkey.patch_all()
 
+import functools
 import logging
 import optparse
 import os
+import signal
 
 import gevent
 
 from calico import common
+from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
@@ -40,8 +43,9 @@ from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.devices import InterfaceWatcher
 from calico.felix.endpoint import EndpointManager
-from calico.felix.fetcd import EtcdWatcher
-from calico.felix.ipsets import IpsetManager
+from calico.felix.ipsets import IpsetManager, IpsetActor, HOSTS_IPSET_V4
+from calico.felix.masq import MasqueradeManager
+from calico.felix.fetcd import EtcdAPI
 
 _log = logging.getLogger(__name__)
 
@@ -53,17 +57,21 @@ def _main_greenlet(config):
     """
     try:
         _log.info("Connecting to etcd to get our configuration.")
-        etcd_watcher = EtcdWatcher(config)
-        etcd_watcher.start()
-        # Ask the EtcdWatcher to fill in the global config object before we
+        hosts_ipset_v4 = IpsetActor(HOSTS_IPSET_V4)
+
+        etcd_api = EtcdAPI(config, hosts_ipset_v4)
+        etcd_api.start()
+        # Ask the EtcdAPI to fill in the global config object before we
         # proceed.  We don't yet support config updates.
-        etcd_watcher.load_config(async=False)
+        config_loaded = etcd_api.load_config(async=False)
+        config_loaded.wait()
 
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
         v4_filter_updater = IptablesUpdater("filter", ip_version=4)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4)
         v4_ipset_mgr = IpsetManager(IPV4)
+        v4_masq_manager = MasqueradeManager(IPV4, v4_nat_updater)
         v4_rules_manager = RulesManager(4, v4_filter_updater, v4_ipset_mgr)
         v4_dispatch_chains = DispatchChains(config, 4, v4_filter_updater)
         v4_ep_manager = EndpointManager(config,
@@ -86,15 +94,19 @@ def _main_greenlet(config):
                                          [v4_ipset_mgr, v6_ipset_mgr],
                                          [v4_rules_manager, v6_rules_manager],
                                          [v4_ep_manager, v6_ep_manager],
-                                         [v4_filter_updater, v6_filter_updater])
+                                         [v4_filter_updater,
+                                          v6_filter_updater],
+                                         v4_masq_manager)
         iface_watcher = InterfaceWatcher(update_splitter)
 
         _log.info("Starting actors.")
+        hosts_ipset_v4.start()
         update_splitter.start()
 
         v4_filter_updater.start()
         v4_nat_updater.start()
         v4_ipset_mgr.start()
+        v4_masq_manager.start()
         v4_rules_manager.start()
         v4_dispatch_chains.start()
         v4_ep_manager.start()
@@ -107,26 +119,30 @@ def _main_greenlet(config):
 
         iface_watcher.start()
 
-        monitored_items = [
-            update_splitter.greenlet,
+        top_level_actors = [
+            hosts_ipset_v4,
+            update_splitter,
 
-            v4_nat_updater.greenlet,
-            v4_filter_updater.greenlet,
-            v4_nat_updater.greenlet,
-            v4_ipset_mgr.greenlet,
-            v4_rules_manager.greenlet,
-            v4_dispatch_chains.greenlet,
-            v4_ep_manager.greenlet,
+            v4_nat_updater,
+            v4_filter_updater,
+            v4_nat_updater,
+            v4_ipset_mgr,
+            v4_masq_manager,
+            v4_rules_manager,
+            v4_dispatch_chains,
+            v4_ep_manager,
 
-            v6_filter_updater.greenlet,
-            v6_ipset_mgr.greenlet,
-            v6_rules_manager.greenlet,
-            v6_dispatch_chains.greenlet,
-            v6_ep_manager.greenlet,
+            v6_filter_updater,
+            v6_ipset_mgr,
+            v6_rules_manager,
+            v6_dispatch_chains,
+            v6_ep_manager,
 
-            iface_watcher.greenlet,
-            etcd_watcher.greenlet
+            iface_watcher,
+            etcd_api,
         ]
+
+        monitored_items = [actor.greenlet for actor in top_level_actors]
 
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
@@ -138,8 +154,21 @@ def _main_greenlet(config):
         _log.info("Starting polling for interface and etcd updates.")
         f = iface_watcher.watch_interfaces(async=True)
         monitored_items.append(f)
-        f = etcd_watcher.watch_etcd(update_splitter, async=True)
-        monitored_items.append(f)
+        etcd_api.start_watch(update_splitter, async=True)
+
+        # Register a SIG_USR handler to trigger a diags dump.
+        def dump_top_level_actors(log):
+            for a in top_level_actors:
+                # The output will include queue length and the like.
+                log.info("%s", a)
+        futils.register_diags("Top-level actors", dump_top_level_actors)
+        futils.register_process_statistics()
+        try:
+            gevent.signal(signal.SIGUSR1, functools.partial(futils.dump_diags))
+        except AttributeError:
+            # It doesn't matter too much if we fail to do this.
+            _log.warning("Unable to install diag dump handler")
+            pass
 
         # Wait for something to fail.
         _log.info("All top-level actors started, waiting on failures...")

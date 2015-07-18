@@ -79,7 +79,8 @@ class ConfigParameter(object):
     - Where the value was read from
     """
     def __init__(self, name, description, default,
-                 sources=DEFAULT_SOURCES, value_is_int=False):
+                 sources=DEFAULT_SOURCES, value_is_int=False,
+                 value_is_bool=False):
         """
         Create a configuration parameter.
         :param str description: Description for logging
@@ -93,6 +94,7 @@ class ConfigParameter(object):
         self.value = default
         self.active_source = None
         self.value_is_int = value_is_int
+        self.value_is_bool = value_is_bool
 
     def set(self, value, source):
         """
@@ -117,6 +119,16 @@ class ConfigParameter(object):
                     self.value = int(value)
                 except ValueError:
                     raise ConfigException("Field was not integer",
+                                          self)
+            elif self.value_is_bool:
+                lower_val = str(value).lower()
+                log.debug("Parsing %r as a Boolean.", lower_val)
+                if lower_val in ("true", "1", "yes", "y", "t"):
+                    self.value = True
+                elif lower_val in ("false", "0", "no", "n", "f"):
+                    self.value = False
+                else:
+                    raise ConfigException("Field was not a valid Boolean",
                                           self)
             else:
                 # Calling str in principle can throw an exception, but it's
@@ -156,11 +168,17 @@ class Config(object):
 
         self.add_parameter("StartupCleanupDelay", "Delay before cleanup starts",
                            30, value_is_int=True)
+        self.add_parameter("PeriodicResyncInterval",
+                           "How often to do cleanups, seconds",
+                           60 * 60, value_is_int=True)
         self.add_parameter("MetadataAddr", "Metadata IP address or hostname",
                            "127.0.0.1")
         self.add_parameter("MetadataPort", "Metadata Port",
                            8775, value_is_int=True)
         self.add_parameter("InterfacePrefix", "Interface name prefix", None)
+        self.add_parameter("DefaultEndpointToHostAction",
+                           "Action to take for packets that arrive from"
+                           "an endpoint to the host.", "DROP")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("LogSeverityFile",
@@ -169,6 +187,9 @@ class Config(object):
                            "Log severity for logging to syslog", "ERROR")
         self.add_parameter("LogSeverityScreen",
                            "Log severity for logging to screen", "ERROR")
+        self.add_parameter("IpInIpEnabled",
+                           "IP-in-IP device support enabled", False,
+                           value_is_bool=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
@@ -191,29 +212,42 @@ class Config(object):
         Responsible for :
         - storing the parameters in the relevant fields in the structure
         - validating the configuration is valid (for this stage in the process)
-        - updating logging parameters (if this is the final call)
+        - updating logging parameters
+
+        Note that we complete the logging even before etcd configuration
+        changes are read. Hence, for example, if logging to file is turned on
+        after reading environment variables and config file, then the log file
+        is created and logging to it starts - even if later on etcd
+        configuration turns the file off. That's because we must log if etcd
+        configuration load fails, and not having the log file early enough is
+        worse.
+
         :param final: Have we completed (rather than just read env and config file)
         """
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.HOSTNAME = self.parameters["FelixHostname"].value
         self.STARTUP_CLEANUP_DELAY = self.parameters["StartupCleanupDelay"].value
+        self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
+        self.DEFAULT_INPUT_CHAIN_ACTION = \
+            self.parameters["DefaultEndpointToHostAction"].value
         self.LOGFILE = self.parameters["LogFilePath"].value
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
+        self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
 
         self._validate_cfg(final=final)
 
-        if final:
-            # Update logging.
-            common.complete_logging(self.LOGFILE,
-                                    self.LOGLEVFILE,
-                                    self.LOGLEVSYS,
-                                    self.LOGLEVSCR)
+        # Update logging.
+        common.complete_logging(self.LOGFILE,
+                                self.LOGLEVFILE,
+                                self.LOGLEVSYS,
+                                self.LOGLEVSCR)
 
+        if final:
             # Log configuration - the whole lot of it.
             for name, parameter in self.parameters.iteritems():
                 log.info("Parameter %s (%s) has value %r read from %s",
@@ -334,6 +368,12 @@ class Config(object):
                 raise ConfigException("Invalid field value",
                                       self.parameters["MetadataPort"])
 
+        if self.DEFAULT_INPUT_CHAIN_ACTION not in ("DROP", "RETURN", "ACCEPT"):
+            raise ConfigException(
+                "Invalid field value",
+                self.parameters["DefaultEndpointToHostAction"]
+            )
+
         if not final:
             # Do not check that unset parameters are defaulted; we have more
             # config to read.
@@ -350,7 +390,6 @@ class Config(object):
         for lKey in cfg_dict:
             log.warning("Got unexpected config item %s=%s",
                         lKey, cfg_dict[lKey])
-
 
     def _validate_addr(self, name, addr):
         """

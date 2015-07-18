@@ -18,6 +18,7 @@ openstack.test.test_plugin_etcd
 
 Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
+import copy
 import eventlet
 import json
 import mock
@@ -29,9 +30,14 @@ import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
 
 
-class EtcdKeyNotFound(BaseException):
+class EtcdException(Exception):
     pass
 
+
+class EtcdKeyNotFound(EtcdException):
+    pass
+
+lib.m_etcd.EtcdException = EtcdException
 lib.m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
 
 
@@ -46,11 +52,15 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 print "etcd reset"
                 self.assert_etcd_writes_deletes = False
 
-    def check_etcd_write(self, key, value):
+    def check_etcd_write(self, key, value, **kwargs):
         """Print each etcd write as it occurs, and save into the accumulated etcd
         database.
         """
         self.maybe_reset_etcd()
+
+        # Confirm that, if prevIndex is provided, its value is not None.
+        self.assertTrue(kwargs.get('prevIndex', 0) is not None)
+
         print "etcd write: %s\n%s" % (key, value)
         self.etcd_data[key] = value
         try:
@@ -69,7 +79,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                     del self.etcd_data[k]
             self.recent_deletes.add(key + '(recursive)')
         else:
-            del self.etcd_data[key]
+            try:
+                del self.etcd_data[key]
+            except KeyError:
+                raise EtcdKeyNotFound()
             self.recent_deletes.add(key)
 
     def assertEtcdWrites(self, expected):
@@ -82,7 +95,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.assertEqual(self.recent_deletes, expected)
         self.recent_deletes = set()
 
-    def etcd_read(self, key, recursive=False):
+    def etcd_read(self, key, recursive=False, timeout=None):
         """Read from the accumulated etcd database.
         """
         self.maybe_reset_etcd()
@@ -148,14 +161,29 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data.
         """
-        # Tell the driver to initialize.
-        self.driver.initialize()
-
-        # Allow the etcd transport's resync thread to run.
+        # Allow the etcd transport's resync thread to run. The last thing it
+        # does is write the Felix config, so let it run three reads.
         self.give_way()
-        self.simulated_time_advance(1)
-        self.assertEtcdWrites({'/calico/v1/config/InterfacePrefix': 'tap',
-                               '/calico/v1/Ready': True})
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites(
+            {'/calico/v1/config/InterfacePrefix': 'tap',
+             '/calico/v1/Ready': True,
+            '/calico/v1/policy/profile/SGID-default/rules':
+                {"outbound_rules": [{"dst_ports": ["1:65535"],
+                                     "dst_net": "0.0.0.0/0",
+                                     "ip_version": 4},
+                                    {"dst_ports": ["1:65535"],
+                                     "dst_net": "::/0",
+                                     "ip_version": 6}],
+                 "inbound_rules": [{"dst_ports": ["1:65535"],
+                                    "src_tag": "SGID-default",
+                                    "ip_version": 4},
+                                   {"dst_ports": ["1:65535"],
+                                    "src_tag": "SGID-default",
+                                    "ip_version": 6}]},
+            '/calico/v1/policy/profile/SGID-default/tags':
+                ["SGID-default"]
+        })
 
     def test_etcd_reset(self):
         for n in range(1, 20):
@@ -170,18 +198,15 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Provide two Neutron ports.
         self.osdb_ports = [lib.port1, lib.port2]
 
-        # Tell the driver to initialize.
-        self.driver.initialize()
-
         # Allow the etcd transport's resync thread to run.
         self.give_way()
-        self.simulated_time_advance(1)
+        self.simulated_time_advance(31)
         expected_writes = {
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/Ready': True,
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_id": "SGID-default",
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
@@ -189,7 +214,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv6_nets": []},
             '/calico/v1/host/felix-host-1/workload/openstack/instance-2/endpoint/FACEBEEF-1234-5678':
                 {"name": "tapFACEBEEF-12",
-                 "profile_id": "SGID-default",
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.3/32"],
@@ -216,13 +241,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Allow it to run again, this time auditing against the etcd data that
         # was written on the first iteration.
         print "\nResync with existing etcd data\n"
-        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
-        # Delete lib.port1
-        context = mock.Mock()
+        # Delete lib.port1.
+        context = mock.MagicMock()
         context._port = lib.port1
+        context._plugin_context.session.query.return_value.filter_by.side_effect = (
+            self.ips_for_port
+        )
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
@@ -230,16 +258,17 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Do another resync - expect no changes to the etcd data.
         print "\nResync with existing etcd data\n"
-        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
         # Add lib.port1 back again.
+        self.osdb_ports = [lib.port1, lib.port2]
         self.driver.create_port_postcommit(context)
         expected_writes = {
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_id": "SGID-default",
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
@@ -264,17 +293,17 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
         self.check_update_port_status_called(context)
-        self.osdb_ports = [lib.port1, lib.port2]
 
         # Migrate port1 to a different host.
         context._port = lib.port1.copy()
+        context.original = lib.port1.copy()
         context._port['binding:host_id'] = 'new-host'
-        context.original = lib.port1
+        self.osdb_ports[0]['binding:host_id'] = 'new-host'
         self.driver.update_port_postcommit(context)
         del expected_writes['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']
         expected_writes['/calico/v1/host/new-host/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678'] = {
             "name": "tapDEADBEEF-12",
-            "profile_id": "SGID-default",
+            "profile_ids": ["SGID-default"],
             "mac": "00:11:22:33:44:55",
             "ipv4_gateway": "10.65.0.1",
             "ipv4_nets": ["10.65.0.2/32"],
@@ -283,17 +312,19 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
+        self.check_update_port_status_called(context)
 
-        # Now resync again without updating self.osdb_ports to reflect that
-        # port1 has moved to new-host.  The effect will be as though we've
+        # Now resync again, moving self.osdb_ports to move port 1 back to the
+        # old host felix-host-1.  The effect will be as though we've
         # missed a further update that moved port1 back to felix-host-1; this
         # resync will now discover that.
         print "\nResync with existing etcd data\n"
-        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.osdb_ports[0]['binding:host_id'] = 'felix-host-1'
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         expected_writes = {
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_id": "SGID-default",
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
@@ -304,12 +335,13 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdDeletes(set(['/calico/v1/host/new-host/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
 
         # Add another port with an IPv6 address.
-        context._port = lib.port3.copy()
+        context._port = copy.deepcopy(lib.port3)
+        self.osdb_ports.append(context._port)
         self.driver.create_port_postcommit(context)
         expected_writes = {
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
-                 "profile_id": "SGID-default",
+                 "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
@@ -337,46 +369,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.osdb_ports = [lib.port1, lib.port2, context._port]
 
         # Create a new security group.
-        self.notify_security_group_update(
-            'SG-1',
-            [
-                {'remote_group_id': 'SGID-default',
-                 'remote_ip_prefix': None,
-                 'protocol': -1,
-                 'direction': 'ingress',
-                 'ethertype': 'IPv4',
-                 'port_range_min': 5060,
-                 'port_range_max': 5061}
-            ],
-            None,
-            'rule'
-        )
-        self.assertEtcdWrites({})
-
-        # Now change the security group for that port.
-        context.original = context._port.copy()
-        context._port['security_groups'] = ['SG-1']
-        self.driver.update_port_postcommit(context)
-        expected_writes = {
-            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
-                {"name": "tapHELLO-1234-",
-                 "profile_id": "SG-1",
-                 "mac": "00:11:22:33:44:66",
-                 "ipv6_gateway": "2001:db8:a41:2::1",
-                 "ipv6_nets": ["2001:db8:a41:2::12/128"],
-                 "state": "active",
-                 "ipv4_nets": []},
-            '/calico/v1/policy/profile/SG-1/rules':
-                {"outbound_rules": [],
-                 "inbound_rules": [{"dst_ports": ["5060:5061"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4}]},
-            '/calico/v1/policy/profile/SG-1/tags':
-                ["SG-1"]
-        }
-        self.assertEtcdWrites(expected_writes)
-
-        # Update what the DB's get_security_groups query should now return.
+        # Update what the DB's queries should now return.
         self.db.get_security_groups.return_value = [
             {'id': 'SGID-default',
              'security_group_rules': [
@@ -416,14 +409,128 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                   'port_range_max': 5061}
              ]}
         ]
+        self.db.get_security_group_rules.return_value = [
+             {'remote_group_id': 'SGID-default',
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'ingress',
+              'ethertype': 'IPv4',
+              'security_group_id': 'SGID-default',
+              'port_range_min': -1},
+             {'remote_group_id': 'SGID-default',
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'ingress',
+              'ethertype': 'IPv6',
+              'security_group_id': 'SGID-default',
+              'port_range_min': -1},
+             {'remote_group_id': None,
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'egress',
+              'ethertype': 'IPv4',
+              'security_group_id': 'SGID-default',
+              'port_range_min': -1},
+             {'remote_group_id': None,
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'egress',
+              'security_group_id': 'SGID-default',
+              'ethertype': 'IPv6',
+              'port_range_min': -1},
+             {'remote_group_id': 'SGID-default',
+              'remote_ip_prefix': None,
+              'protocol': -1,
+              'direction': 'ingress',
+              'ethertype': 'IPv4',
+              'security_group_id': 'SG-1',
+              'port_range_min': 5060,
+              'port_range_max': 5061}
+        ]
+
+        # Then, send in an update.
+        self.notify_security_group_update(
+            'SG-1',
+            [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}
+            ],
+            None,
+            'rule'
+        )
+        self.assertEtcdWrites({
+            '/calico/v1/policy/profile/SG-1/rules':
+                {"outbound_rules": [],
+                 "inbound_rules": [{"dst_ports": ["5060:5061"],
+                                    "src_tag": "SGID-default",
+                                    "ip_version": 4}]},
+            '/calico/v1/policy/profile/SG-1/tags':
+                ["SG-1"]
+        })
+
+        # Now change the security group for that port.
+        context.original = copy.deepcopy(context._port)
+        context.original['security_groups'] = ['SGID-default']
+        context._port['security_groups'] = ['SG-1']
+        self.port_security_group_bindings.pop(2)
+        self.port_security_group_bindings.append({
+            'port_id': 'HELLO-1234-5678', 'security_group_id': 'SG-1'
+        })
+        self.driver.update_port_postcommit(context)
+        expected_writes = {
+            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
+                {"name": "tapHELLO-1234-",
+                 "profile_ids": ["SG-1"],
+                 "mac": "00:11:22:33:44:66",
+                 "ipv6_gateway": "2001:db8:a41:2::1",
+                 "ipv6_nets": ["2001:db8:a41:2::12/128"],
+                 "state": "active",
+                 "ipv4_nets": []},
+            '/calico/v1/policy/profile/SG-1/rules':
+                {"outbound_rules": [],
+                 "inbound_rules": [{"dst_ports": ["5060:5061"],
+                                    "src_tag": "SGID-default",
+                                    "ip_version": 4}]},
+            '/calico/v1/policy/profile/SG-1/tags':
+                ["SG-1"]
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.check_update_port_status_called(context)
+
 
         # Resync with all latest data - expect no etcd writes or deletes.
         print "\nResync with existing etcd data\n"
-        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([]))
 
         # Change SG-1 to allow only port 5060.
+        self.db.get_security_groups.return_value[-1] = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}]
+        }
+        self.db.get_security_group_rules.return_value[-1] = {
+            'remote_group_id': 'SGID-default',
+            'remote_ip_prefix': None,
+            'protocol': -1,
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'security_group_id': 'SG-1',
+            'port_range_min': 5060,
+            'port_range_max': 5060
+        }
         self.notify_security_group_update(
             'SG-1',
             [
@@ -439,7 +546,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'rule'
         )
 
-        # Expect an etcd write because SG-1 is now in use.
+        # Expect an etcd write
         expected_writes = {
             '/calico/v1/policy/profile/SG-1/rules':
                 {"outbound_rules": [],
@@ -452,23 +559,96 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites(expected_writes)
 
         # Resync with only the last port.  Expect the first two ports to be
-        # cleaned up, and also SGID-default, because now only SG-1 is needed.
-        self.osdb_ports = [context._port]
-        self.db.get_security_groups.return_value[1]['security_group_rules'][0]['port_range_max'] = 5060
+        # cleaned up.
+        self.osdb_ports = [context.original]
         print "\nResync with existing etcd data\n"
-        self.simulated_time_advance(t_etcd.PERIODIC_RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678',
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-2/endpoint/FACEBEEF-1234-5678',
-            '/calico/v1/policy/profile/SGID-default(recursive)']))
+            '/calico/v1/host/felix-host-1/workload/openstack/instance-2/endpoint/FACEBEEF-1234-5678'
+        ]))
+
+        # Change a small amount of information about the port and the security
+        # group. Expect a resync to fix it up.
+        self.db.get_security_groups.return_value[-1] = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5070,
+                 'port_range_max': 5071}]
+        }
+        self.db.get_security_group_rules.return_value[-1] = {
+            'remote_group_id': 'SGID-default',
+            'remote_ip_prefix': None,
+            'protocol': -1,
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'security_group_id': 'SG-1',
+            'port_range_min': 5070,
+            'port_range_max': 5070
+        }
+        old_ips = self.osdb_ports[0]['fixed_ips']
+        self.osdb_ports[0]['fixed_ips'] = [
+            {'subnet_id': '10.65.0/24',
+             'ip_address': '10.65.0.188'}
+        ]
+        print "\nResync with edited data\n"
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        expected_writes = {
+            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/endpoint/HELLO-1234-5678':
+                {"name": "tapHELLO-1234-",
+                 "profile_ids": ["SG-1"],
+                 "mac": "00:11:22:33:44:66",
+                 "ipv6_nets": [],
+                 "state": "active",
+                 "ipv4_gateway": "10.65.0.1",
+                 "ipv4_nets": ["10.65.0.188/32"]},
+            '/calico/v1/policy/profile/SG-1/rules':
+                {"outbound_rules": [],
+                 "inbound_rules": [{"dst_ports": [5070],
+                                    "src_tag": "SGID-default",
+                                    "ip_version": 4}]},
+            '/calico/v1/policy/profile/SG-1/tags':
+                ["SG-1"]
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Reset the state for safety.
+        self.osdb_ports[0]['fixed_ips'] = old_ips
+
+        self.db.get_security_groups.return_value[-1] = {
+            'id': 'SG-1',
+            'security_group_rules': [
+                {'remote_group_id': 'SGID-default',
+                 'remote_ip_prefix': None,
+                 'protocol': -1,
+                 'direction': 'ingress',
+                 'ethertype': 'IPv4',
+                 'port_range_min': 5060,
+                 'port_range_max': 5061}]
+        }
+        self.db.get_security_group_rules.return_value[-1] = {
+            'remote_group_id': 'SGID-default',
+            'remote_ip_prefix': None,
+            'protocol': -1,
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'security_group_id': 'SG-1',
+            'port_range_min': 5060,
+            'port_range_max': 5060
+        }
 
     def test_noop_entry_points(self):
         """Call the mechanism driver entry points that are currently
         implemented as no-ops (because Calico function does not need
         them).
         """
-        self.driver.initialize()
         self.driver.update_subnet_postcommit(None)
         self.driver.update_network_postcommit(None)
         self.driver.delete_subnet_postcommit(None)
@@ -482,18 +662,18 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """Test calls to the mechanism driver's check_segment_for_agent entry
         point.
         """
-        self.driver.initialize()
-
         # Simulate ML2 asking the driver if it can handle a port.
         self.assertTrue(self.driver.check_segment_for_agent(
-            {mech_calico.api.NETWORK_TYPE: 'flat'},
+            {mech_calico.api.NETWORK_TYPE: 'flat',
+             mech_calico.api.ID: 'shiny'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
 
         # Simulate ML2 asking the driver if it can handle a port that
         # it can't handle.
         self.assertFalse(self.driver.check_segment_for_agent(
-            {mech_calico.api.NETWORK_TYPE: 'vlan'},
+            {mech_calico.api.NETWORK_TYPE: 'vlan',
+             mech_calico.api.ID: 'not-shiny'},
             mech_calico.constants.AGENT_TYPE_DHCP
         ))
 
@@ -545,6 +725,19 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'icmp_code': 100,
         })
 
+    def test_not_master_does_not_resync(self):
+        """Test that a driver that is not master does not resync.
+        """
+        # Initialize the state early to put the elector in place, then override
+        # it to claim that the driver is not master.
+        self.driver._init_state()
+        self.driver.transport.elector.master = lambda *args: False
+
+        # Allow the etcd transport's resync thread to run. Nothing will happen.
+        self.give_way()
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites({})
+
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(etcd_rule, exp_etcd_rule)
@@ -556,7 +749,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         else:
             rules = {"outbound_rules": [etcd_rule],
                      "inbound_rules": []}
-        common.validate_rules(rules)
+        common.validate_rules("profile_id", rules)
 
 
 def _neutron_rule_from_dict(overrides):

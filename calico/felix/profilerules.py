@@ -23,6 +23,7 @@ import logging
 from calico.felix.actor import actor_message
 from calico.felix.frules import (profile_to_chain_name,
                                  rules_to_chain_rewrite_lines)
+from calico.felix.futils import FailedSystemCall
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 
 _log = logging.getLogger(__name__)
@@ -62,15 +63,16 @@ class RulesManager(ReferenceManager):
                   len(rules_by_profile_id))
         missing_ids = set(self.rules_by_profile_id.keys())
         for profile_id, profile in rules_by_profile_id.iteritems():
-            self.on_rules_update(profile_id, profile)  # Skips queue
+            self.on_rules_update(profile_id, profile,
+                                 force_reprogram=True)  # Skips queue
             missing_ids.discard(profile_id)
             self._maybe_yield()
         for dead_profile_id in missing_ids:
             self.on_rules_update(dead_profile_id, None)
 
     @actor_message()
-    def on_rules_update(self, profile_id, profile):
-        if profile_id is not None:
+    def on_rules_update(self, profile_id, profile, force_reprogram=False):
+        if profile is not None:
             _log.info("Rules for profile %s updated.", profile_id)
             self.rules_by_profile_id[profile_id] = profile
         else:
@@ -80,7 +82,8 @@ class RulesManager(ReferenceManager):
             _log.info("Profile %s is active, kicking the ProfileRules.",
                       profile_id)
             ap = self.objects_by_id[profile_id]
-            ap.on_profile_update(profile, async=True)
+            ap.on_profile_update(profile, force_reprogram=force_reprogram,
+                                 async=True)
 
 
 class ProfileRules(RefCountedActor):
@@ -93,17 +96,20 @@ class ProfileRules(RefCountedActor):
 
         self.id = profile_id
         self.ip_version = ip_version
-        self.ipset_mgr = ipset_mgr
+        self._ipset_mgr = ipset_mgr
         self._iptables_updater = iptables_updater
-        self.notified_ready = False
+        self._ipset_refs = RefHelper(self, ipset_mgr, self._on_ipsets_acquired)
 
-        self.ipset_refs = RefHelper(self, ipset_mgr, self._maybe_update)
-
+        # Latest profile update - a profile dictionary.
+        self._pending_profile = None
+        # Currently-programmed profile dictionary.
         self._profile = None
-        """
-        :type dict|None: filled in by first update.  Reset to None on delete.
-        """
-        self.dead = False
+
+        # State flags.
+        self._notified_ready = False
+        self._cleaned_up = False
+        self._dead = False
+        self._dirty = True
 
         self.chain_names = {
             "inbound": profile_to_chain_name("inbound", profile_id),
@@ -113,77 +119,136 @@ class ProfileRules(RefCountedActor):
                   profile_id, self.chain_names)
 
     @actor_message()
-    def on_profile_update(self, profile):
+    def on_profile_update(self, profile, force_reprogram=False):
         """
         Update the programmed iptables configuration with the new
         profile.
+
+        :param dict[str]|NoneType profile: Dictionary of all profile data or
+            None if profile is to be deleted.
         """
         _log.debug("%s: Profile update: %s", self, profile)
-        assert profile is None or profile["id"] == self.id
-        assert not self.dead, "Shouldn't receive updates after we're dead."
-
-        old_tags = extract_tags_from_profile(self._profile)
-        new_tags = extract_tags_from_profile(profile)
-
-        removed_tags = old_tags - new_tags
-        added_tags = new_tags - old_tags
-        for tag in removed_tags:
-            _log.debug("Queueing ipset for tag %s for decref", tag)
-            self.ipset_refs.discard_ref(tag)
-        for tag in added_tags:
-            _log.debug("Requesting ipset for tag %s", tag)
-            self.ipset_refs.acquire_ref(tag)
-
-        self._profile = profile
-        self._maybe_update()
-
-    def _maybe_update(self):
-        if self.dead:
-            _log.info("Not updating: profile is dead.")
-        elif not self.ipset_refs.ready:
-            _log.info("Can't program rules %s yet, waiting on ipsets",
-                      self.id)
-        else:
-            _log.info("Ready to program rules for %s", self.id)
-            self._update_chains()
+        assert not self._dead, "Shouldn't receive updates after we're dead."
+        self._pending_profile = profile
+        self._dirty |= force_reprogram
 
     @actor_message()
     def on_unreferenced(self):
         """
-        Called to tell us that this profile is no longer needed.  Removes
-        our iptables configuration.
+        Called to tell us that this profile is no longer needed.
         """
-        try:
-            _log.info("%s unreferenced, removing our chains", self)
-            self.dead = True
-            chains = []
-            for direction in ["inbound", "outbound"]:
-                chain_name = self.chain_names[direction]
-                chains.append(chain_name)
-            self._iptables_updater.delete_chains(chains, async=False)
-            self.ipset_refs.discard_all()
-            self.ipset_refs = None # Break ref cycle.
-            self._profile = None
-        finally:
-            self._notify_cleanup_complete()
+        # Flag that we're dead and then let finish_msg_batch() do the cleanup.
+        self._dead = True
+
+    def _on_ipsets_acquired(self):
+        """
+        Callback from the RefHelper once it's acquired all the ipsets we
+        need.
+
+        This is called from an actor_message on our greenlet.
+        """
+        # Nothing to do here, if this is being called then we're already in
+        # a message batch so _finish_msg_batch() will get called next.
+        _log.info("All required ipsets acquired.")
+
+    def _finish_msg_batch(self, batch, results):
+        # Due to dependency management in IptablesUpdater, we don't need to
+        # worry about programming the dataplane before notifying so do it on
+        # this common code path.
+        if not self._notified_ready:
+            self._notify_ready()
+            self._notified_ready = True
+
+        if self._dead:
+            # Only want to clean up once.  Note: we can get here a second time
+            # if we had a pending ipset incref in-flight when we were asked
+            # to clean up.
+            if not self._cleaned_up:
+                try:
+                    _log.info("%s unreferenced, removing our chains", self)
+                    self._delete_chains()
+                    self._ipset_refs.discard_all()
+                    self._ipset_refs = None # Break ref cycle.
+                    self._profile = None
+                    self._pending_profile = None
+                finally:
+                    self._cleaned_up = True
+                    self._notify_cleanup_complete()
+        else:
+            if self._pending_profile != self._profile:
+                _log.debug("Profile data changed, updating ipset references.")
+                old_tags = extract_tags_from_profile(self._profile)
+                new_tags = extract_tags_from_profile(self._pending_profile)
+                removed_tags = old_tags - new_tags
+                added_tags = new_tags - old_tags
+                for tag in removed_tags:
+                    _log.debug("Queueing ipset for tag %s for decref", tag)
+                    self._ipset_refs.discard_ref(tag)
+                for tag in added_tags:
+                    _log.debug("Requesting ipset for tag %s", tag)
+                    self._ipset_refs.acquire_ref(tag)
+                self._dirty = True
+                self._profile = self._pending_profile
+
+            if (self._dirty and
+                    self._ipset_refs.ready and
+                    self._pending_profile is not None):
+                _log.info("Ready to program rules for %s", self.id)
+                try:
+                    self._update_chains()
+                except FailedSystemCall as e:
+                    _log.error("Failed to program profile chain %s; error: %r",
+                               self, e)
+                else:
+                    self._dirty = False
+            elif not self._dirty:
+                _log.debug("No changes to program.")
+            elif self._pending_profile is None:
+                _log.info("Profile is None, removing our chains")
+                try:
+                    self._delete_chains()
+                except FailedSystemCall:
+                    _log.exception("Failed to delete chains for profile %s",
+                                   self.id)
+                else:
+                    self._dirty = False
+            elif not self._ipset_refs.ready:
+                _log.info("Can't program rules %s yet, waiting on ipsets",
+                          self.id)
+
+    def _delete_chains(self):
+        """
+        Removes our chains from the dataplane, blocks until complete.
+        """
+        chains = set(self.chain_names.values())
+        # Need to block here: have to wait for chains to be deleted
+        # before we can decref our ipsets.
+        self._iptables_updater.delete_chains(chains, async=False)
 
     def _update_chains(self):
         """
         Updates the chains in the dataplane.
+
+        Blocks until the update is complete.
+
+        On entry, self._pending_profile must not be None.
+
+        :raises FailedSystemCall: if the update fails.
         """
         _log.info("%s Programming iptables with our chains.", self)
+        assert self._pending_profile is not None, \
+               "_update_chains called with no _pending_profile"
         updates = {}
         for direction in ("inbound", "outbound"):
             chain_name = self.chain_names[direction]
             _log.info("Updating %s chain %r for profile %s",
                       direction, chain_name, self.id)
             _log.debug("Profile %s: %s", self.id, self._profile)
-            new_profile = self._profile or {}
             rules_key = "%s_rules" % direction
-            new_rules = new_profile.get(rules_key, [])
+            new_rules = self._pending_profile.get(rules_key, [])
             tag_to_ip_set_name = {}
-            for tag, ipset in self.ipset_refs.iteritems():
-                tag_to_ip_set_name[tag] = ipset.name
+            for tag, ipset in self._ipset_refs.iteritems():
+                tag_to_ip_set_name[tag] = ipset.ipset_name
             updates[chain_name] = rules_to_chain_rewrite_lines(
                 chain_name,
                 new_rules,
@@ -194,14 +259,6 @@ class ProfileRules(RefCountedActor):
         _log.debug("Queueing programming for rules %s: %s", self.id,
                    updates)
         self._iptables_updater.rewrite_chains(updates, {}, async=False)
-        # TODO Isolate exceptions from programming the chains to this profile.
-        # Radical thought - could we just say that the profile should be OK,
-        # and therefore we don't care? In other words, do we need to handle the
-        # error cleverly, or could we just say that since we built the rules
-        # they really should always work.
-        if not self.notified_ready:
-            self._notify_ready()
-            self.notified_ready = True
 
 
 def extract_tags_from_profile(profile):

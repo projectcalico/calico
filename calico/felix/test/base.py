@@ -2,6 +2,8 @@
 
 import logging
 import sys
+import gevent
+import gc
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
@@ -21,9 +23,14 @@ class BaseTestCase(unittest.TestCase):
         self._m_exit = self._exit_patch.start()
 
     def tearDown(self):
+        gc.collect()
         self.assertFalse(self._m_exit.called)
         self._exit_patch.stop()
 
     def step_actor(self, actor):
-        self.assertFalse(actor._event_queue.empty())
-        actor._step()
+        # Pretend that the current greenlet is the Actor to bypass
+        # actor_message's asserts.
+        with mock.patch.object(actor, "greenlet"):
+            actor.greenlet = gevent.getcurrent()
+            while not actor._event_queue.empty():
+                actor._step()

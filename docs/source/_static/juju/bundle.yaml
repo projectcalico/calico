@@ -1,7 +1,7 @@
 envExport:
   services:
     cinder:
-      charm: "cs:trusty/cinder-136"
+      charm: "cs:trusty/cinder-24"
       num_units: 1
       annotations:
         "gui-x": "1045.973572253264"
@@ -9,7 +9,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "neutron-calico":
-      charm: "cs:~cory-benfield/trusty/neutron-calico-9"
+      charm: "cs:~cory-benfield/trusty/neutron-calico-10"
       num_units: 0
       annotations:
         "gui-x": "832.4871538385408"
@@ -20,8 +20,6 @@ envExport:
       annotations:
         "gui-x": "946.0883464963425"
         "gui-y": "371.8920951236375"
-      to:
-        - "rabbitmq-server=0"
     "rabbitmq-server":
       charm: "cs:trusty/rabbitmq-server-19"
       num_units: 1
@@ -29,7 +27,7 @@ envExport:
         "gui-x": "746.3178949824998"
         "gui-y": "371.8920951236375"
     keystone:
-      charm: "cs:trusty/keystone-0"
+      charm: "cs:trusty/keystone-26"
       num_units: 1
       annotations:
         "gui-x": "646.4326692255784"
@@ -37,7 +35,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     glance:
-      charm: "cs:trusty/glance-150"
+      charm: "cs:trusty/glance-22"
       num_units: 1
       annotations:
         "gui-x": "746.3178949824998"
@@ -45,7 +43,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "openstack-dashboard":
-      charm: "cs:trusty/openstack-dashboard-32"
+      charm: "cs:trusty/openstack-dashboard-14"
       num_units: 1
       options:
         "ubuntu-theme": "no"
@@ -55,7 +53,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     etcd:
-      charm: "cs:~cory-benfield/trusty/etcd-3"
+      charm: "cs:~cory-benfield/trusty/etcd-1"
       num_units: 1
       annotations:
         "gui-x": "1120.2440237671067"
@@ -79,7 +77,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "neutron-api":
-      charm: "cs:~cory-benfield/trusty/neutron-api-7"
+      charm: "cs:~cory-benfield/trusty/neutron-api-14"
       num_units: 1
       options:
         "neutron-plugin": Calico
@@ -87,8 +85,6 @@ envExport:
       annotations:
         "gui-x": "946.0883464963425"
         "gui-y": "717.904666996588"
-      to:
-        - "rabbitmq-server=0"
     "nova-compute":
       charm: "cs:~cory-benfield/trusty/nova-compute-6"
       num_units: 2

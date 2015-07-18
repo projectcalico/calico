@@ -60,18 +60,18 @@ class TestFutils(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_time_ms(self):
-        # Bit feeble, but validate that we can call it and get back something.
-        time_ms = futils.time_ms()
-
     def test_good_check_call(self):
-        # Test a command. Result must include "calico" given where it is run from.
-        args = ["ls"]
-        result = futils.check_call(args)
-        self.assertNotEqual(result.stdout, None)
-        self.assertNotEqual(result.stderr, None)
-        self.assertTrue("calico" in result.stdout)
-        self.assertEqual(result.stderr, "")
+        with mock.patch("calico.felix.futils._call_semaphore",
+                        wraps=futils._call_semaphore) as m_sem:
+            # Test a command. Result must include "calico" given where it is
+            # run from.
+            args = ["ls"]
+            result = futils.check_call(args)
+            self.assertNotEqual(result.stdout, None)
+            self.assertNotEqual(result.stderr, None)
+            self.assertTrue("calico" in result.stdout)
+            self.assertEqual(result.stderr, "")
+            self.assertTrue(m_sem.__enter__.called)
 
     def test_bad_check_call(self):
         # Test an invalid command - must parse but not return anything.
@@ -126,3 +126,78 @@ class TestFutils(unittest.TestCase):
                                           "should have given output "
                                           "%r but got %r" %
                                           (inp, length, exp, output))
+
+class TestStats(unittest.TestCase):
+    def setUp(self):
+        futils._registered_diags = []
+        self.sc = futils.StatCounter("foo")
+
+    def tearDown(self):
+        futils._registered_diags = []
+
+    def test_stats_counter(self):
+        self.assertTrue(("foo", self.sc._dump) in futils._registered_diags)
+        self.sc.increment("bar")
+        self.sc.increment("baz")
+        self.assertEqual(self.sc.stats["bar"], 1)
+        self.sc.increment("bar")
+        self.assertEqual(self.sc.stats["bar"], 2)
+        self.sc.increment("baz", by=2)
+        self.assertEqual(self.sc.stats["baz"], 3)
+        m_log = mock.Mock(spec=logging.Logger)
+        self.sc._dump(m_log)
+        m_log.assert_has_calls([
+            mock.call.info("%s: %s", "bar", 2),
+            mock.call.info("%s: %s", "baz", 3),
+        ])
+
+    def test_dump_diags(self):
+        with mock.patch("calico.felix.futils.stat_log") as m_log:
+            self.sc.increment("bar")
+            futils.dump_diags()
+            m_log.assert_has_calls([
+                mock.call.info("=== DIAGNOSTICS ==="),
+                mock.call.info("--- %s ---", "foo"),
+                mock.call.info("%s: %s", "bar", 1),
+                mock.call.info("=== END OF DIAGNOSTICS ==="),
+            ], any_order=True)
+
+    def test_dump_diags_process(self):
+        process_results = [
+            ('Execution time in user mode (seconds)', 'ru_utime', 1),
+            ('Execution time in kernel mode (seconds)', 'ru_stime', 2),
+            ('Maximum Resident Set Size (KB)', 'ru_maxrss', 3),
+            ('Soft page faults', 'ru_minflt', 4),
+            ('Hard page faults', 'ru_majflt', 5),
+            ('Input events', 'ru_inblock', 6),
+            ('Output events', 'ru_oublock', 7),
+            ('Voluntary context switches', 'ru_nvcsw', 8),
+            ('Involuntary context switches', 'ru_nivcsw', 9),
+        ]
+
+        with mock.patch('calico.felix.futils.stat_log') as m_log:
+            with mock.patch('calico.felix.futils.resource') as m_resource:
+                res = m_resource.getrusage.return_value
+                for _, field, val in process_results:
+                    setattr(res, field, val)
+
+                calls = [
+                    mock.call.info('=== DIAGNOSTICS ==='),
+                    mock.call.info("--- %s ---", "foo"),
+                    mock.call.info('--- %s ---', 'Process Statistics'),
+                    mock.call.info('=== END OF DIAGNOSTICS ==='),
+                ]
+                calls.extend(
+                    mock.call.info('%s: %s', name, value) for name, _, value
+                    in process_results
+                )
+
+                futils.register_process_statistics()
+                futils.dump_diags()
+                m_log.assert_has_calls(calls, any_order=True)
+
+    def test_dump_diags_cover(self):
+        with mock.patch("calico.felix.futils.stat_log") as m_log:
+            m_log.info.side_effect = Exception()
+            m_log.exception.side_effect = Exception()
+            futils.dump_diags()

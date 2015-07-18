@@ -18,7 +18,7 @@ Calico etcd Data Model
 
 In Calico, etcd is used as the data store and communication mechanism for all
 the Calico components. This data store contains all the information the various
-Calico components to set up the Calico network.
+Calico components require to set up the Calico network.
 
 This document discusses the way Calico stores its data in etcd. This data store
 and structure acts as Calico's primary external and internal API, granting
@@ -54,7 +54,7 @@ Endpoints
 Each endpoint object is stored in an etcd key that matches the following
 pattern::
 
-    /calico/host/<hostname>/workload/<orchestrator_id>/<workload_id>/endpoint/<endpoint_id>
+    /calico/v1/host/<hostname>/workload/<orchestrator_id>/<workload_id>/endpoint/<endpoint_id>
 
 where the properties have the following meanings:
 
@@ -80,7 +80,7 @@ The object stored is a JSON blob with the following structure:
       "state": "active|inactive",
       "name": "<name of linux interface>",
       "mac": "<MAC of the interface>",
-      "profile_id": "<profile_id>",
+      "profile_ids": ["<profile_id>", …],
       "ipv4_nets": [
         "198.51.100.17/32",
         …
@@ -105,9 +105,10 @@ The various properties in this object have the following meanings:
 ``mac``
   the MAC address of the endpoint interface.
 
-``profile_id``
-  the identifier of a single :ref:`security-profile-data` object, which applies
-  to this endpoint.
+``profile_ids``
+  a list of identifiers of :ref:`security-profile-data` objects that apply to
+  this endpoint. Each profile is applied to packets in the order that they
+  appear in this list.
 
 ``ipv4_nets``
   a list of IPv4 subnets allocated to this endpoint. IPv4 packets will only be
@@ -146,8 +147,8 @@ rather than by membership.
 For each profile, the rules objects and tag objects are stored in different
 keys, of the form::
 
-    /calico/policy/profile/<profile_id>/rules
-    /calico/policy/profile/<profile_id>/tags
+    /calico/v1/policy/profile/<profile_id>/rules
+    /calico/v1/policy/profile/<profile_id>/tags
 
 Rules
 ^^^^^
@@ -237,4 +238,3 @@ policy. These tags can be referred to by rules, as shown above.
 
 A single tag may be associated with multiple security profiles, in which case
 it expands to reference all endpoints in all of those profiles.
-

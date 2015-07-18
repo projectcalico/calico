@@ -20,12 +20,11 @@ felix.endpoint
 Endpoint management.
 """
 import logging
-from subprocess import CalledProcessError
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4
-from calico.felix.refcount import ReferenceManager, RefCountedActor
+from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (
@@ -62,12 +61,12 @@ class EndpointManager(ReferenceManager):
         # increffed.
         self.local_endpoint_ids = set()
 
-    def _create(self, endpoint_id):
+    def _create(self, combined_id):
         """
         Overrides ReferenceManager._create()
         """
         return LocalEndpoint(self.config,
-                             endpoint_id,
+                             combined_id,
                              self.ip_type,
                              self.iptables_updater,
                              self.dispatch_chains,
@@ -95,7 +94,8 @@ class EndpointManager(ReferenceManager):
         # deleted.
         missing_endpoints = set(self.endpoints_by_id.keys())
         for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            self.on_endpoint_update(endpoint_id, endpoint)
+            self.on_endpoint_update(endpoint_id, endpoint,
+                                    force_reprogram=True)
             missing_endpoints.discard(endpoint_id)
             self._maybe_yield()
         for endpoint_id in missing_endpoints:
@@ -103,7 +103,7 @@ class EndpointManager(ReferenceManager):
             self._maybe_yield()
 
     @actor_message()
-    def on_endpoint_update(self, endpoint_id, endpoint):
+    def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
         """
         Event to indicate that an endpoint has been updated (including
         creation or deletion).
@@ -119,8 +119,8 @@ class EndpointManager(ReferenceManager):
         if self._is_starting_or_live(endpoint_id):
             # Local endpoint thread is running; tell it of the change.
             _log.info("Update for live endpoint %s", endpoint_id)
-            self.objects_by_id[endpoint_id].on_endpoint_update(endpoint,
-                                                               async=True)
+            self.objects_by_id[endpoint_id].on_endpoint_update(
+                endpoint, force_reprogram=force_reprogram, async=True)
 
         old_ep = self.endpoints_by_id.pop(endpoint_id, {})
         # Interface name shouldn't change but popping it now is correct for
@@ -168,25 +168,41 @@ class EndpointManager(ReferenceManager):
 
 class LocalEndpoint(RefCountedActor):
 
-    def __init__(self, config, endpoint_id, ip_type, iptables_updater,
+    def __init__(self, config, combined_id, ip_type, iptables_updater,
                  dispatch_chains, rules_manager):
+        """
+        Controls a single local endpoint.
+
+        :param combined_id: EndpointId for this endpoint.
+        :param ip_type: IP type for this endpoint (IPv4 or IPv6)
+        :param iptables_updater: IptablesUpdater to use
+        :param dispatch_chains: DispatchChains to use
+        :param rules_manager: RulesManager to use
+        """
         super(LocalEndpoint, self).__init__(qualifier="%s(%s)" %
-                                            (endpoint_id.endpoint, ip_type))
+                                            (combined_id.endpoint, ip_type))
         assert isinstance(dispatch_chains, DispatchChains)
         assert isinstance(rules_manager, RulesManager)
 
-        self.endpoint_id = endpoint_id
+        self.combined_id = combined_id
 
         self.config = config
         self.ip_type = ip_type
         self.ip_version = futils.IP_TYPE_TO_VERSION[ip_type]
+        if self.ip_type == IPV4:
+            self.nets_key = "ipv4_nets"
+        else:
+            self.nets_key = "ipv6_nets"
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
+        self.rules_ref_helper = RefHelper(self, rules_manager,
+                                          self._on_profiles_ready)
 
         # Will be filled in as we learn about the OS interface and the
         # endpoint config.
         self.endpoint = None
+        self._mac = None
         self._iface_name = None
         self._suffix = None
 
@@ -197,33 +213,44 @@ class LocalEndpoint(RefCountedActor):
         self._dirty = False
 
     @actor_message()
-    def on_endpoint_update(self, endpoint):
+    def on_endpoint_update(self, endpoint, force_reprogram=False):
         """
         Called when this endpoint has received an update.
         :param dict[str] endpoint: endpoint parameter dictionary.
         """
         _log.info("%s updated: %s", self, endpoint)
+        mac_changed = False
+
+        if not endpoint and not self.endpoint:
+            # First time we have been called, but it's a delete! Maybe some
+            # odd timing window, but we have nothing to tidy up.
+            return
+
+        if endpoint and endpoint['mac'] != self._mac:
+            # Either we have not seen this MAC before, or it has changed.
+            self._mac = endpoint['mac']
+            mac_changed = True
+
         if endpoint and not self.endpoint:
             # This is the first time we have seen the endpoint, so extract the
             # interface name and endpoint ID.
             self._iface_name = endpoint["name"]
             self._suffix = interface_to_suffix(self.config,
                                                self._iface_name)
+
         was_ready = self._ready
 
-        old_profile_id = self.endpoint and self.endpoint["profile_id"]
-        new_profile_id = endpoint and endpoint["profile_id"]
-        if old_profile_id != new_profile_id:
-            if old_profile_id:
-                # Clean up the old profile.
-                _log.info("Profile changed, decreffing old profile %s",
-                          old_profile_id)
-                self.rules_mgr.decref(old_profile_id, async=True)
-            if new_profile_id is not None:
-                _log.info("Acquiring new profile %s", new_profile_id)
-                self.rules_mgr.get_and_incref(new_profile_id, async=True)
+        # Activate the required profile IDs (and deactivate any that we no
+        # longer need).
+        if endpoint:
+            new_profile_ids = set(endpoint["profile_ids"])
+        else:
+            new_profile_ids = set()
+        # Note: we don't actually need to wait for the activation to finish
+        # due to the dependency management in the iptables layer.
+        self.rules_ref_helper.replace_all(new_profile_ids)
 
-        if endpoint != self.endpoint:
+        if endpoint != self.endpoint or force_reprogram:
             self._dirty = True
 
         # Store off the endpoint we were passed.
@@ -232,7 +259,7 @@ class LocalEndpoint(RefCountedActor):
         if endpoint:
             # Configure the network interface; may fail if not there yet (in
             # which case we'll just do it when the interface comes up).
-            self._configure_interface()
+            self._configure_interface(mac_changed)
         else:
             # Remove the network programming.
             self._deconfigure_interface()
@@ -247,6 +274,9 @@ class LocalEndpoint(RefCountedActor):
         """
         _log.info("%s now unreferenced, cleaning up", self)
         assert not self._ready, "Should be deleted before being unreffed."
+        # Removing all profile refs should have been done already but be
+        # defensive.
+        self.rules_ref_helper.discard_all()
         self._notify_cleanup_complete()
 
     @actor_message()
@@ -254,7 +284,7 @@ class LocalEndpoint(RefCountedActor):
         """
         Actor event to report that the interface is either up or changed.
         """
-        _log.info("Endpoint %s received interface kick", self.endpoint_id)
+        _log.info("Endpoint %s received interface kick", self.combined_id)
         self._configure_interface()
 
     @property
@@ -267,7 +297,7 @@ class LocalEndpoint(RefCountedActor):
             missing_deps.append("endpoint")
         elif self.endpoint.get("state", "active") != "active":
             missing_deps.append("endpoint active")
-        elif not self.endpoint.get("profile_id"):
+        elif not self.endpoint.get("profile_ids"):
             missing_deps.append("profile")
         return missing_deps
 
@@ -314,16 +344,16 @@ class LocalEndpoint(RefCountedActor):
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(
-            self.endpoint_id.endpoint,
+            self.combined_id.endpoint,
             self._suffix,
             self.ip_version,
             self.endpoint.get("ipv%s_nets" % self.ip_version, []),
             self.endpoint["mac"],
-            self.endpoint["profile_id"]
+            self.endpoint["profile_ids"]
         )
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
-        except CalledProcessError:
+        except FailedSystemCall:
             _log.exception("Failed to program chains for %s. Removing.", self)
             self._failed = True
             self._remove_chains()
@@ -332,41 +362,47 @@ class LocalEndpoint(RefCountedActor):
         try:
             self.iptables_updater.delete_chains(chain_names(self._suffix),
                                                 async=True)
-        except CalledProcessError:
+        except FailedSystemCall:
             _log.exception("Failed to delete chains for %s", self)
             self._failed = True
 
-    def _configure_interface(self):
+    def _configure_interface(self, mac_changed=True):
         """
         Applies sysctls and routes to the interface.
+
+        :param: bool mac_changed: Has the MAC address changed since it was last
+                     configured? If so, we reconfigure ARP for the interface in
+                     IPv4 (ARP does not exist for IPv6, which uses neighbour
+                     solicitation instead).
         """
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)
-                nets_key = "ipv4_nets"
+                reset_arp = mac_changed
             else:
                 ipv6_gw = self.endpoint.get("ipv6_gateway", None)
                 devices.configure_interface_ipv6(self._iface_name, ipv6_gw)
-                nets_key = "ipv6_nets"
+                reset_arp = False
 
             ips = set()
-            for ip in self.endpoint.get(nets_key, []):
+            for ip in self.endpoint.get(self.nets_key, []):
                 ips.add(futils.net_to_ip(ip))
             devices.set_routes(self.ip_type, ips,
                                self._iface_name,
-                               self.endpoint["mac"])
+                               self.endpoint["mac"],
+                               reset_arp=reset_arp)
 
-        except (IOError, FailedSystemCall, CalledProcessError):
+        except (IOError, FailedSystemCall):
             if not devices.interface_exists(self._iface_name):
                 _log.info("Interface %s for %s does not exist yet",
-                          self._iface_name, self.endpoint_id)
+                          self._iface_name, self.combined_id)
             elif not devices.interface_up(self._iface_name):
                 _log.info("Interface %s for %s is not up yet",
-                          self._iface_name, self.endpoint_id)
+                          self._iface_name, self.combined_id)
             else:
                 # Interface flapped back up after we failed?
                 _log.warning("Failed to configure interface %s for %s",
-                             self._iface_name, self.endpoint_id)
+                             self._iface_name, self.combined_id)
 
     def _deconfigure_interface(self):
         """
@@ -374,97 +410,93 @@ class LocalEndpoint(RefCountedActor):
         """
         try:
             devices.set_routes(self.ip_type, set(), self._iface_name, None)
-        except (IOError, FailedSystemCall, CalledProcessError):
+        except (IOError, FailedSystemCall):
             if not devices.interface_exists(self._iface_name):
                 # Deleted under our feet - so the rules are gone.
                 _log.debug("Interface %s for %s deleted",
-                           self._iface_name, self.endpoint_id)
+                           self._iface_name, self.combined_id)
             else:
                 # An error deleting the rules. Log and continue.
                 _log.exception("Cannot delete rules for interface %s for %s",
-                               self._iface_name, self.endpoint_id)
+                               self._iface_name, self.combined_id)
+
+    def _on_profiles_ready(self):
+        # We don't actually need to talk to the profiles, just log.
+        _log.info("Endpoint %s acquired all required profile references",
+                  self.combined_id)
 
     def __str__(self):
         return ("Endpoint<%s,id=%s,iface=%s>" %
-                (self.ip_type, self.endpoint_id,
+                (self.ip_type, self.combined_id,
                  self._iface_name or "unknown"))
 
 
 def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
-                        profile_id):
+                        profile_ids):
     to_chain_name, from_chain_name = chain_names(suffix)
 
-    to_chain = ["--flush %s" % to_chain_name]
-    if ip_version == 6:
-        #  In ipv6 only, there are 6 rules that need to be created first.
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 130
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 131
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmptype 132
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp router-advertisement
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-solicitation
-        #  RETURN ipv6-icmp anywhere anywhere ipv6-icmp neighbour-advertisement
-        #
-        #  These rules are ICMP types 130, 131, 132, 134, 135 and 136, and can
-        #  be created on the command line with something like :
-        #     ip6tables -A plw -j RETURN --protocol ipv6-icmp --icmpv6-type 130
-        for icmp_type in ["130", "131", "132", "134", "135", "136"]:
-            to_chain.append("--append %s --jump RETURN "
-                            "--protocol ipv6-icmp "
-                            "--icmpv6-type %s" % (to_chain_name, icmp_type))
-    to_chain.append("--append %s --match conntrack --ctstate INVALID "
-                    "--jump DROP" % to_chain_name)
-    to_chain.append("--append %s --match conntrack "
-                    "--ctstate RELATED,ESTABLISHED --jump RETURN" %
-                    to_chain_name)
-    assert profile_id, "Profile ID should be set, not %s" % profile_id
-    profile_in_chain = profile_to_chain_name("inbound", profile_id)
-    to_chain.append("--append %s --goto %s" %
-                    (to_chain_name, profile_in_chain))
-    # This drop rule is not hittable, but it gives us a place to stash the
-    # comment with our ID.
+    # First build the chain that manages packets to the interface.
+    # Common chain prefixes.
+    to_chain = []
+
+    # Jump to each profile in turn.  The profile will do one of the
+    # following:
+    # * DROP the packet; in which case we won't see it again.
+    # * RETURN without MARKing the packet; indicates that the packet was
+    #   accepted.
+    # * RETURN with a mark on the packet, indicates reaching the end
+    #   of the chain.
+    to_deps = set()
+    for profile_id in profile_ids:
+        profile_in_chain = profile_to_chain_name("inbound", profile_id)
+        to_deps.add(profile_in_chain)
+        to_chain.append("--append %s --jump MARK --set-mark 0" %
+                        to_chain_name)
+        to_chain.append("--append %s --jump %s" %
+                        (to_chain_name, profile_in_chain))
+        to_chain.append('--append %s --match mark ! --mark 1/1 '
+                        '--match comment --comment "No mark means profile '
+                        'accepted packet" --jump RETURN' % to_chain_name)
+
+    # Default drop rule.
     to_chain.append(commented_drop_fragment(to_chain_name,
                                             "Endpoint %s:" % endpoint_id))
-    to_deps = set([profile_in_chain])
 
     # Now the chain that manages packets from the interface...
-    from_chain = ["--flush %s" % from_chain_name]
-    if ip_version == 6:
-        # In ipv6 only, allows all ICMP traffic from this endpoint to anywhere.
-        from_chain.append("--append %s --protocol ipv6-icmp --jump RETURN" %
+    from_chain = []
+
+    # Combined anti-spoofing and jump to profile rules.  The only way to
+    # get to a profile chain is to have the correct IP and MAC address.
+    from_deps = set()
+    for profile_id in profile_ids:
+        profile_out_chain = profile_to_chain_name("outbound", profile_id)
+        from_deps.add(profile_out_chain)
+        from_chain.append("--append %s --jump MARK --set-mark 0" %
+                          from_chain_name)
+        for ip in local_ips:
+            if "/" in ip:
+                cidr = ip
+            else:
+                cidr = "%s/32" % ip if ip_version == 4 else "%s/128" % ip
+            # Jump to each profile in turn.  The profile will do one of the
+            # following:
+            # * DROP the packet; in which case we won't see it again.
+            # * RETURN without MARKing the packet; indicates that the packet
+            #   was accepted.
+            # * RETURN with a mark on the packet, indicates reaching the end
+            #   of the chain.
+            from_chain.append("--append %s --src %s --match mac "
+                              "--mac-source %s --jump %s" %
+                              (from_chain_name, cidr, mac.upper(),
+                               profile_out_chain))
+        from_chain.append('--append %s --match mark ! --mark 1/1 '
+                          '--match comment --comment "No mark means profile '
+                          'accepted packet" --jump RETURN' %
                           from_chain_name)
 
-    # Conntrack rules.
-    from_chain.append("--append %s --match conntrack --ctstate INVALID "
-                      "--jump DROP" % from_chain_name)
-    from_chain.append("--append %s --match conntrack "
-                      "--ctstate RELATED,ESTABLISHED --jump RETURN" %
-                      from_chain_name)
-
-    if ip_version == 4:
-        from_chain.append("--append %s --protocol udp --sport 68 --dport 67 "
-                          "--jump RETURN" % from_chain_name)
-    else:
-        assert ip_version == 6
-        from_chain.append("--append %s --protocol udp --sport 546 --dport 547 "
-                          "--jump RETURN" % from_chain_name)
-
-    # Anti-spoofing rules.  Only allow traffic from known (IP, MAC) pairs to
-    # get to the profile chain, drop other traffic.
-    profile_out_chain = profile_to_chain_name("outbound", profile_id)
-    from_deps = set([profile_out_chain])
-    for ip in local_ips:
-        if "/" in ip:
-            cidr = ip
-        else:
-            cidr = "%s/32" % ip if ip_version == 4 else "%s/128" % ip
-        # Note use of --goto rather than --jump; this means that when the
-        # profile chain returns, it will return the chain that called us, not
-        # this chain.
-        from_chain.append("--append %s --src %s --match mac --mac-source %s "
-                          "--goto %s" % (from_chain_name, cidr,
-                                         mac.upper(), profile_out_chain))
+    # Final default DROP if no profile RETURNed or no MAC matched.
     drop_frag = commented_drop_fragment(from_chain_name,
-                                        "Anti-spoof DROP (endpoint %s):" %
+                                        "Default DROP if no match (endpoint %s):" %
                                         endpoint_id)
     from_chain.append(drop_frag)
 

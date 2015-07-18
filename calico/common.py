@@ -30,8 +30,10 @@ import logging.handlers
 import netaddr
 import netaddr.core
 import os
+import re
 import sys
 from types import StringTypes
+from netaddr.strategy import eui48
 
 _log = logging.getLogger(__name__)
 
@@ -43,6 +45,23 @@ FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lin
 # by the code in this module. This allows us to dynamically generate the format
 # string used by the logger.
 SYSLOG_FORMAT_STRING = '{excname}[%(process)s]: %(module)s@%(lineno)d %(message)s'
+
+# White-list for the --protocol match criteria.  We allow the guaranteed
+# string shortcuts as well as int/string versions of the raw IDs.  We disallow
+# 0 because the kernel cannot match on it directly.
+KERNEL_PROTOCOLS = set(["tcp", "udp", "icmp", "icmpv6", "sctp", "udplite"])
+KERNEL_PROTOCOLS.update(xrange(1, 256))
+KERNEL_PROTOCOLS.update(intern(str(p)) for p in xrange(1, 256))
+
+# Protocols that support a port match in iptables.  We allow the name and
+# protocol number.
+KERNEL_PORT_PROTOCOLS = set([
+    "tcp", 6, "6",
+    "udp", 17, "17",
+    "udplite", 136, "136",
+    "sctp", 132, "132",
+    "dccp", 33, "33",
+])
 
 # Valid keys for a rule JSON dict.
 KNOWN_RULE_KEYS = set([
@@ -58,6 +77,17 @@ KNOWN_RULE_KEYS = set([
     "icmp_code",
     "ip_version",
 ])
+
+# Regex that matches only names with valid characters in them. The list of
+# valid characters is the same for endpoints, profiles, and tags.
+VALID_ID_RE = re.compile('^[a-zA-Z0-9_\.\-]+$')
+
+VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
+
+# Not that thorough: we don't care if it's a valid CIDR, only that it doesn't
+# have anything malicious in it.
+VALID_IPAM_POOL_ID_RE = re.compile(r'^[0-9\.:a-fA-F\-]{1,43}$')
+EXPECTED_IPAM_POOL_KEYS = set(["cidr", "masquerade"])
 
 tid_storage = gevent.local.local()
 tid_counter = itertools.count()
@@ -93,17 +123,25 @@ def validate_port(port):
         return False
 
 
-def validate_ip_addr(addr, version):
+def validate_ip_addr(addr, version=None):
     """
     Validates that an IP address is valid. Returns true if valid, false if
     not. Version can be "4", "6", None for "IPv4", "IPv6", or "either"
     respectively.
     """
-    try:
-        ip = netaddr.IPAddress(addr, version=version)
-        return True
-    except (netaddr.core.AddrFormatError, ValueError, TypeError):
-        return False
+    if version == 4:
+        return netaddr.valid_ipv4(addr)
+    elif version == 6:
+        return netaddr.valid_ipv6(addr)
+    else:
+        return netaddr.valid_ipv4(addr) or netaddr.valid_ipv6(addr)
+
+
+def canonicalise_ip(addr, version):
+    if addr is None:
+        return None
+    ip = netaddr.IPAddress(addr, version=version)
+    return intern(str(ip))
 
 
 def validate_cidr(cidr, version):
@@ -117,6 +155,20 @@ def validate_cidr(cidr, version):
         return True
     except (netaddr.core.AddrFormatError, ValueError, TypeError):
         return False
+
+
+def canonicalise_cidr(cidr, version):
+    if cidr is None:
+        return None
+    nw = netaddr.IPNetwork(cidr, version=version)
+    return intern(str(nw))
+
+
+def canonicalise_mac(mac):
+    # Use the Unix dialect, which uses ':' for its separator instead of
+    # '-'.  This fits best with what iptables is expecting.
+    eui = netaddr.EUI(mac, dialect=eui48.mac_unix)
+    return str(eui)
 
 
 def mkdir_p(path):
@@ -211,7 +263,7 @@ def complete_logging(logfile=None,
                 root_logger.removeHandler(handler)
             else:
                 handler.setLevel(stream_level)
-        elif isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+        elif isinstance(handler, logging.handlers.WatchedFileHandler):
             file_handler = handler
             if file_level is None:
                 root_logger.removeHandler(handler)
@@ -223,9 +275,7 @@ def complete_logging(logfile=None,
         if not file_handler:
             mkdir_p(os.path.dirname(logfile))
             formatter = logging.Formatter(FORMAT_STRING)
-            file_handler = logging.handlers.TimedRotatingFileHandler(
-                logfile, when="D", backupCount=10
-            )
+            file_handler = logging.handlers.WatchedFileHandler(logfile)
             file_handler.addFilter(GreenletFilter())
             file_handler.setLevel(file_level)
             file_handler.setFormatter(formatter)
@@ -241,13 +291,17 @@ class ValidationFailed(Exception):
     pass
 
 
-def validate_endpoint(config, endpoint):
+def validate_endpoint(config, combined_id, endpoint):
     """
     Ensures that the supplied endpoint is valid. Once this routine has returned
     successfully, we know that all required fields are present and have valid
     values.
 
+    Has the side-effect of putting IP and MAC addresses in canonical form in
+    the input dict.
+
     :param config: configuration structure
+    :param combined_id: EndpointId object
     :param endpoint: endpoint dictionary as read from etcd
     :raises ValidationFailed
     """
@@ -256,33 +310,68 @@ def validate_endpoint(config, endpoint):
     if not isinstance(endpoint, dict):
         raise ValidationFailed("Expected endpoint to be a dict.")
 
+    if not VALID_ID_RE.match(combined_id.endpoint):
+        issues.append("Invalid endpoint ID '%r'." % combined_id.endpoint)
+
     if "state" not in endpoint:
         issues.append("Missing 'state' field.")
     elif endpoint["state"] not in ("active", "inactive"):
         issues.append("Expected 'state' to be one of active/inactive.")
 
-    for field in ["name", "mac", "profile_id"]:
+    for field in ["name", "mac"]:
         if field not in endpoint:
             issues.append("Missing '%s' field." % field)
         elif not isinstance(endpoint[field], StringTypes):
             issues.append("Expected '%s' to be a string; got %r." %
                           (field, endpoint[field]))
+        elif field == "mac":
+            if not netaddr.valid_mac(endpoint.get("mac")):
+                issues.append("Invalid MAC address")
+            else:
+                endpoint["mac"] = canonicalise_mac(endpoint.get("mac"))
 
-    if "name" in endpoint:
-        if not endpoint["name"].startswith(config.IFACE_PREFIX):
-            issues.append("Interface %r does not start with %r." %
-                          (endpoint["name"], config.IFACE_PREFIX))
+    if "profile_id" in endpoint:
+        if "profile_ids" not in endpoint:
+            endpoint["profile_ids"] = [endpoint["profile_id"]]
+        del endpoint["profile_id"]
+
+    if "profile_ids" not in endpoint:
+        issues.append("Missing 'profile_id(s)' field.")
+    else:
+        for value in endpoint["profile_ids"]:
+            if not isinstance(value, StringTypes):
+                issues.append("Expected profile IDs to be strings.")
+                break
+
+            if not VALID_ID_RE.match(value):
+                issues.append("Invalid profile ID '%r'." % value)
+
+    if ("name" in endpoint and isinstance(endpoint['name'], StringTypes)
+        and combined_id.host == config.HOSTNAME
+        and not endpoint["name"].startswith(config.IFACE_PREFIX)):
+        # Only test the interface for local endpoints - remote hosts may have
+        # a different interface prefix.
+        issues.append("Interface %r does not start with %r." %
+                      (endpoint["name"], config.IFACE_PREFIX))
 
     for version in (4, 6):
         nets = "ipv%d_nets" % version
         if nets not in endpoint:
-            issues.append("Missing network %s." % nets)
+            endpoint[nets] = []
         else:
-            for ip in endpoint.get(nets, []):
-                if not validate_cidr(ip, version):
-                    issues.append("IP address %r is not a valid IPv%d CIDR." %
-                                  (ip, version))
-                    break
+            canonical_nws = []
+            nets_list = endpoint.get(nets, [])
+            if not isinstance(nets_list, list):
+                issues.append("%s should be a list" % nets)
+            else:
+                for ip in nets_list:
+                    if not validate_cidr(ip, version):
+                        issues.append("IP address %r is not a valid "
+                                      "IPv%d CIDR." % (ip, version))
+                        break
+                    else:
+                        canonical_nws.append(canonicalise_cidr(ip, version))
+                endpoint[nets] = canonical_nws
 
         gw_key = "ipv%d_gateway" % version
         try:
@@ -291,18 +380,21 @@ def validate_endpoint(config, endpoint):
                                                            version):
                 issues.append("%s is not a valid IPv%d gateway address." %
                               (gw_key, version))
+            else:
+                endpoint[gw_key] = canonicalise_ip(gw_str, version)
         except KeyError:
             pass
 
     if issues:
         raise ValidationFailed(" ".join(issues))
 
-def validate_rules(rules):
+def validate_rules(profile_id, rules):
     """
     Ensures that the supplied rules are valid. Once this routine has returned
     successfully, we know that all required fields are present and have valid
     values.
 
+    :param profile_id: Profile ID from etcd
     :param rules: rules list as read from etcd
     :raises ValidationFailed
     """
@@ -311,26 +403,39 @@ def validate_rules(rules):
     if not isinstance(rules, dict):
         raise ValidationFailed("Expected rules to be a dict.")
 
+    if not VALID_ID_RE.match(profile_id):
+        issues.append("Invalid profile_id '%r'." % profile_id)
+
     for dirn in ("inbound_rules", "outbound_rules"):
         if dirn not in rules:
             issues.append("No %s in rules." % dirn)
             continue
 
         if not isinstance(rules[dirn], list):
-            issues.append("Expected rules[%s] to be a dict." % dirn)
+            issues.append("Expected rules[%s] to be a list." % dirn)
             continue
 
         for rule in rules[dirn]:
+            if not isinstance(rule, dict):
+                issues.append("Rules should be dicts.")
+                break
+
+            for key, value in rule.items():
+                if value is None:
+                    del rule[key]
+
             # Absolutely all fields are optional, but some have valid and
             # invalid values.
             protocol = rule.get('protocol')
-            if (protocol is not None and
-                not protocol in [ "tcp", "udp", "icmp", "icmpv6" ]):
-                    issues.append("Invalid protocol in rule %s." % rule)
+            if protocol is not None and protocol not in KERNEL_PROTOCOLS:
+                issues.append("Invalid protocol %s in rule %s" %
+                              (protocol, rule))
+            elif protocol is not None:
+                protocol = intern(str(protocol))
+                rule['protocol'] = str(protocol)
 
             ip_version = rule.get('ip_version')
-            if (ip_version is not None and
-                not ip_version in [ 4, 6 ]):
+            if ip_version is not None and ip_version not in (4, 6):
                 # Bad IP version prevents further validation
                 issues.append("Invalid ip_version in rule %s." % rule)
                 continue
@@ -340,7 +445,12 @@ def validate_rules(rules):
             if ip_version == 6 and protocol == "icmp":
                 issues.append("Using icmp with IPv6 in rule %s." % rule)
 
-            # TODO: Validate that src_tag and dst_tag contain only valid characters.
+            for tag_type in ('src_tag', 'dst_tag'):
+                tag = rule.get(tag_type)
+                if tag is None:
+                    continue
+                if not VALID_ID_RE.match(tag):
+                    issues.append("Invalid %s '%r'." % (tag_type, tag))
 
             for key in ("src_net", "dst_net"):
                 network = rule.get(key)
@@ -348,7 +458,8 @@ def validate_rules(rules):
                     not validate_cidr(rule[key], ip_version)):
                     issues.append("Invalid CIDR (version %s) in rule %s." %
                                   (ip_version, rule))
-
+                elif network is not None:
+                    rule[key] = canonicalise_cidr(network, ip_version)
             for key in ("src_ports", "dst_ports"):
                 ports = rule.get(key)
                 if (ports is not None and
@@ -358,6 +469,9 @@ def validate_rules(rules):
                     continue
 
                 if ports is not None:
+                    if protocol not in KERNEL_PORT_PROTOCOLS:
+                        issues.append("%s is not allowed for protocol %s in "
+                                      "rule %s" % (key, protocol, rule))
                     for port in ports:
                         error = validate_rule_port(port)
                         if error:
@@ -371,11 +485,18 @@ def validate_rules(rules):
 
             icmp_type = rule.get('icmp_type')
             if icmp_type is not None:
-                if not 0 <= icmp_type <= 255:
-                    issues.append("ICMP type is out of range.")
+                if not isinstance(icmp_type, int):
+                    issues.append("ICMP type is not an integer in rule %s." %
+                                  rule)
+                elif not 0 <= icmp_type <= 255:
+                    issues.append("ICMP type is out of range in rule %s." %
+                                  rule)
             icmp_code = rule.get("icmp_code")
             if icmp_code is not None:
-                if not 0 <= icmp_code <= 255:
+                if not isinstance(icmp_code, int):
+                    issues.append("ICMP code is not an integer in rule %s." %
+                                  rule)
+                elif not 0 <= icmp_code <= 255:
                     issues.append("ICMP code is out of range.")
                 if icmp_type is None:
                     # TODO: ICMP code without ICMP type not supported by iptables
@@ -399,7 +520,7 @@ def validate_rule_port(port):
     :returns: None or an error string if invalid
     """
     if isinstance(port, int):
-        if port < 1 or port > 65535:
+        if port < 0 or port > 65535:
             return "integer out of range"
         return None
 
@@ -418,22 +539,26 @@ def validate_rule_port(port):
     except ValueError:
         return "range invalid"
 
-    if start >= end or start < 1 or end > 65535:
+    if start >= end or start < 0 or end > 65535:
         return "range invalid"
 
     return None
 
 
-def validate_tags(tags):
+def validate_tags(profile_id, tags):
     """
     Ensures that the supplied tags are valid. Once this routine has returned
     successfully, we know that all required fields are present and have valid
     values.
 
+    :param profile_id: profile_id as read from etcd
     :param tags: tag set as read from etcd
     :raises ValidationFailed
     """
     issues = []
+
+    if not VALID_ID_RE.match(profile_id):
+        issues.append("Invalid profile_id '%r'." % profile_id)
 
     if not isinstance(tags, list):
         issues.append("Expected tags to be a list.")
@@ -443,5 +568,48 @@ def validate_tags(tags):
                 issues.append("Expected tag '%s' to be a string." % tag)
                 break
 
+            if not VALID_ID_RE.match(tag):
+                issues.append("Invalid tag '%r'." % tag)
+
     if issues:
         raise ValidationFailed(" ".join(issues))
+
+def validate_ipam_pool(pool_id, pool, ip_version):
+    """
+    Validates and canonicalises an IPAM pool dict.  Removes any fields that
+    it doesn't know about.
+
+    Modifies the dict in-place.
+    """
+    if not isinstance(pool, dict):
+        raise ValidationFailed("Pool should be a dict")
+
+    # Remove any keys that we're not expecting.  Stops unvalidated data from
+    # slipping through.  We ignore other keys since this structure is used
+    # by calicoctl for its own purposes too.
+    keys_to_remove = set()
+    for key in pool:
+        if key not in EXPECTED_IPAM_POOL_KEYS:
+            keys_to_remove.add(key)
+    for key in keys_to_remove:
+        pool.pop(key)
+
+    issues = []
+    if "cidr" not in pool:
+        # CIDR is mandatory.
+        issues.append("'cidr' field is missing")
+    else:
+        cidr = pool["cidr"]
+        if cidr is None or not validate_cidr(cidr, ip_version):
+            issues.append("Invalid CIDR: %r" % cidr)
+        else:
+            pool["cidr"] = canonicalise_cidr(cidr, ip_version)
+
+    if not isinstance(pool.get("masquerade", False), bool):
+        issues.append("Invalid 'masquerade' field: %r" % pool["masquerade"])
+
+    if not VALID_IPAM_POOL_ID_RE.match(pool_id):
+        issues.append("Invalid pool ID: %r" % pool)
+
+    if issues:
+        raise ValidationFailed(','.join(issues))

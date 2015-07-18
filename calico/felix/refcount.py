@@ -90,7 +90,8 @@ class ReferenceManager(Actor):
         """
         _log.debug("Object startup complete for %s", object_id)
         if self.objects_by_id.get(object_id) is not obj:
-            _log.info("Ignoring on_object_startup_complete for old instance")
+            _log.info("Ignoring on_object_startup_complete for old instance:"
+                      "%r is not %r", self.objects_by_id.get(object_id), obj)
             return
         if obj.ref_mgmt_state != STARTING:
             # We can hit this case if the object was starting and we asked it
@@ -238,6 +239,15 @@ class RefHelper(object):
         """
         Mapping from object ID to object that we've acquired.
         """
+
+    def replace_all(self, new_obj_ids):
+        """
+        Change the set of references we require to the given set.
+        """
+        for obj_id in new_obj_ids:
+            self.acquire_ref(obj_id)
+        for obj_id in [r for r in self.required_refs if r not in new_obj_ids]:
+            self.discard_ref(obj_id)
 
     def acquire_ref(self, obj_id):
         """

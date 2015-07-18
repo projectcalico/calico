@@ -27,7 +27,7 @@ which you sign depends on on whose behalf you are contributing:
   [Corporate Contributor License Agreement](http://www.projectcalico.org/community/corporate-contributor-agreement/)
   providing a list of people authorized to commit code to Project Calico.
 - Employees of the U.S. government do not sign the Individual Contributor
-  License Agremeent.  Instead, someone with authority to sign on behalf of your
+  License Agreement.  Instead, someone with authority to sign on behalf of your
   agency should sign the [U.S Government Contributor License Agreement](http://www.projectcalico.org/community/us-government-contributor-agreement).
 
 It is important to re-iterate: until you sign the required agreements we cannot

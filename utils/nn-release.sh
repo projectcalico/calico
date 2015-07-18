@@ -41,6 +41,7 @@ git merge --no-edit calico_$TAG
 # which we want to add changes into the Calico patch.
 
 git checkout ubuntu_$TAG
+grep calico.patch debian/patches/series || quilt new calico.patch
 quilt add `git diff --name-only HEAD..merge-tmp`
 git add -A .
 git commit -a -m "Prepare for merging new changes"

@@ -33,6 +33,10 @@ _log = logging.getLogger(__name__)
 # All Calico data is stored under this path.
 ROOT_DIR = "/calico"
 
+# OpenStack data is stored under this path.
+OPENSTACK_DIR = ROOT_DIR + "/openstack"
+OPENSTACK_VERSION_DIR = OPENSTACK_DIR + "/v1"
+
 # Data that flows from orchestrator to felix is stored under a versioned
 # sub-tree.
 VERSION_DIR = ROOT_DIR + "/v1"
@@ -43,6 +47,9 @@ CONFIG_DIR = VERSION_DIR + '/config'
 HOST_DIR = VERSION_DIR + '/host'
 POLICY_DIR = VERSION_DIR + '/policy'
 PROFILE_DIR = POLICY_DIR + "/profile"
+
+# Key used for leader election by Neutron mechanism drivers.
+NEUTRON_ELECTION_KEY = OPENSTACK_VERSION_DIR + '/neutron_election'
 
 # Regex to match profile rules, capturing the profile ID in capture group
 # "profile_id".
@@ -61,6 +68,11 @@ ENDPOINT_KEY_RE = re.compile(
     r'(?P<workload_id>[^/]+)/'
     r'endpoint/(?P<endpoint_id>[^/]+)')
 
+HOST_IP_KEY_RE = re.compile(r'^' + HOST_DIR +
+                            r'/(?P<hostname>[^/]+)/bird_ip')
+
+IPAM_V4_CIDR_KEY_RE = re.compile(r'^' + VERSION_DIR +
+                                 r'/ipam/v4/pool/(?P<encoded_cidr>[^/]+)')
 
 def dir_for_host(hostname):
     return HOST_DIR+ "/%s" % hostname
@@ -103,7 +115,33 @@ def get_profile_id_for_profile_dir(key):
     return final_node if prefix == PROFILE_DIR else None
 
 
-class EndpointId(namedtuple("EndpointId", ["host", "orchestrator",
-                                           "workload", "endpoint"])):
+class EndpointId(object):
+    __slots__ = ["host", "orchestrator", "workload", "endpoint"]
+
+    def __init__(self, host, orchestrator, workload, endpoint):
+        # We intern these strings since they can occur in many IDs.  The
+        # host and orchestrator are trivially repeated for all endpoints
+        # on a host.  The others get repeated over time.
+        self.host = intern(host.encode("utf8"))
+        self.orchestrator = intern(orchestrator.encode("utf8"))
+        self.workload = intern(workload.encode("utf8"))
+        self.endpoint = intern(endpoint.encode("utf8"))
+
     def __str__(self):
-        return self.__class__.__name__ + ("<%s/%s/%s/%s>" % self)
+        return self.__class__.__name__ + ("<%s>" % self.endpoint)
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        if not isinstance(other, EndpointId):
+            return False
+        return (other.endpoint == self.endpoint and
+                other.workload == self.workload and
+                other.host == self.host and
+                other.orchestrator == self.orchestrator)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.endpoint) + hash(self.workload)

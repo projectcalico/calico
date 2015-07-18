@@ -2,7 +2,7 @@
 include =
     calico/felix/*
     calico/openstack/*
-    calico/common.py
+    calico/*.py
 omit =
     calico/felix/test/*
     calico/openstack/test/*

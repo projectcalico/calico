@@ -59,14 +59,12 @@ Interface Management
 
 Felix programs some information about interfaces into the kernel in order to
 get the kernel to correctly handle the traffic emitted by that endpoint. In
-particular, it may enable `Proxy ARP`_, `Proxy NDP`_, and IP forwarding for
+particular, it will ensure that the host responds to ARP requests from each
+workload with the MAC of the host, and will enable IP forwarding for
 interfaces that it manages.
 
 It also monitors for interfaces to appear and disappear so that it can ensure
 that the programming for those interfaces is applied at the appropriate time.
-
-.. _Proxy ARP: http://en.wikipedia.org/wiki/Proxy_ARP
-.. _Proxy NDP: http://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol
 
 Route Programming
 ~~~~~~~~~~~~~~~~~
@@ -108,7 +106,7 @@ driver. This component integrates with Neutron's ML2 plugin, and allows users
 to configure the Calico network by making Neutron API calls. This provides
 seamless integration with Neutron.
 
-The orchestrator plugin is repsonsible for the following tasks:
+The orchestrator plugin is responsible for the following tasks:
 
 API Translation
 ~~~~~~~~~~~~~~~
@@ -135,12 +133,12 @@ Felix liveness; marking certain endpoints as failed if network setup failed.
 etcd
 ----
 
-etcd is a distributed key-value store that has a focus on consistency. 
+etcd is a distributed key-value store that has a focus on consistency.
 Calico uses etcd to provide the communication between components and as a
-consistent data store, which ensures Calico can always build an accurate 
+consistent data store, which ensures Calico can always build an accurate
 network.
 
-Depending on the orchestrator plug-in, etcd may either be the master data store
+Depending on the orchestrator plugin, etcd may either be the master data store
 or a lightweight mirror of a separate data store.  For example, in an
 OpenStack deployment, the OpenStack database is considered the "source of
 truth" and etcd is used to mirror information about the network to the other
@@ -152,16 +150,16 @@ into two groups of machines: the core cluster, and the proxies.
 For small deployments the core cluster can be an etcd cluster of one node
 (which would typically be co-located with the :ref:`calico-orchestrator-plugin`
 component). This deployment model is simple but provides no redundancy for
-etcd - in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
+etcd -- in the case of etcd failure the :ref:`calico-orchestrator-plugin` would
 have to rebuild the database which, as noted for OpenStack, will simply require
-that the plug-in resynchonizes state to etcd from the OpenStack database.
+that the plugin resynchronizes state to etcd from the OpenStack database.
 
-In larger deployments the core cluster can be scaled up, as per the 
+In larger deployments the core cluster can be scaled up, as per the
 `etcd admin guide`_.
 
 Additionally, on each machine that hosts either a
 :ref:`calico-felix-component` or a :ref:`calico-orchestrator-plugin`, we run
-an etcd proxy. This is reduces load on the core cluster and shields nodes from
+an etcd proxy. This reduces load on the core cluster and shields nodes from
 the specifics of the etcd cluster. In the case where the etcd cluster has a
 member on the same machine as a :ref:`calico-orchestrator-plugin`, we can
 forgo the proxy on that machine.
@@ -174,9 +172,10 @@ Data Storage
 ~~~~~~~~~~~~
 
 etcd stores the data for the Calico network in a distributed, consistent,
-fault-tolerant manner (for cluster sizes of at least 3 etcd nodes). This set of
-properties ensures that the Calico network is always in a known-good state,
-while allowing for some number of the machines hosting etcd to fail or become unreachable.
+fault-tolerant manner (for cluster sizes of at least three etcd nodes). This set
+of properties ensures that the Calico network is always in a known-good state,
+while allowing for some number of the machines hosting etcd to fail or become
+unreachable.
 
 This distributed storage of Calico data also improves the ability of the Calico
 components to read from the database (which is their most common operation), as
@@ -186,9 +185,9 @@ Communication
 ~~~~~~~~~~~~~
 
 etcd is also used as a communication bus between components. We do this by
-having the non-etcd components watch certain points in the keyspice to ensure
+having the non-etcd components watch certain points in the keyspace to ensure
 that they see any changes that have been made, allowing them to respond to
-tohose changes in a timely manner. This allows the act of committing state
+those changes in a timely manner. This allows the act of committing state
 to the database to cause that state to be programmed into the network.
 
 
@@ -243,7 +242,7 @@ route reflector rather than as a standard BGP client.
 
 The BGP route reflector is responsible for the following tasks:
 
-Centralised Route Distribution
+Centralized Route Distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When :ref:`calico-bgp-component` advertises routes from its FIB to the route
