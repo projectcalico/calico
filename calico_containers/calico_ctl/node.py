@@ -46,6 +46,7 @@ import sh
 import docker
 import netaddr
 import socket
+import urllib
 
 from pycalico.datastore_datatypes import IPPool
 from utils import ORCHESTRATOR_ID
@@ -498,12 +499,17 @@ def install_kubernetes(kubernetes_plugin_dir):
     if not os.path.exists(kubernetes_plugin_dir):
         os.makedirs(kubernetes_plugin_dir)
     kubernetes_binary_path = kubernetes_plugin_dir + 'calico'
-    wget = sh.Command._create('wget')
     try:
-        wget('-O', kubernetes_binary_path, KUBERNETES_BINARY_URL)
-        st = os.stat(kubernetes_binary_path)
-        executable_permissions = st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-        os.chmod(kubernetes_binary_path, executable_permissions)
-    except sh.ErrorReturnCode_8:
-        print "ERROR: Couldn't download the kubernetes binary"
+        urllib.urlretrieve(KUBERNETES_BINARY_URL, kubernetes_binary_path)
+    except IOError:
+        print "ERROR: Couldn't download the Kubernetes plugin"
         sys.exit(1)
+    else:
+        # Download successful - change permissions to allow execution.
+        try:
+            st = os.stat(kubernetes_binary_path)
+            executable_permissions = st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+            os.chmod(kubernetes_binary_path, executable_permissions)
+        except OSError:
+            print "ERROR: Unable to set permissions on Kubernetes plugin"
+            sys.exit(1)
