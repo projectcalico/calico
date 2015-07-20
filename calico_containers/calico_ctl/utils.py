@@ -98,6 +98,10 @@ def get_container_ipv_from_arguments(arguments):
         version = "v%s" % netaddr.IPAddress(arguments.get("<PEER_IP>")).version
     elif arguments.get("<CIDR>"):
         version = "v%s" % netaddr.IPNetwork(arguments.get("<CIDR>")).version
+    elif arguments.get("<CIDRS>"):
+        version = "v%s" % netaddr.IPNetwork(arguments.get("<CIDRS>")[0]).version
+    elif arguments.get("<START_IP>"):
+        version = "v%s" % netaddr.IPNetwork(arguments.get("<START_IP>")).version
     return version
 
 

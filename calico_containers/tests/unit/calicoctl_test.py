@@ -14,8 +14,7 @@
 
 import unittest
 from StringIO import StringIO
-from mock import patch, Mock, call
-from netaddr import IPAddress
+from mock import patch, Mock
 from calico_ctl.bgp import *
 from calico_ctl.bgp import validate_arguments as bgp_validate_arguments
 from calico_ctl.endpoint import validate_arguments as ep_validate_arguments
@@ -253,11 +252,21 @@ class TestPool(unittest.TestCase):
         """
         # Set up arguments
         cases = (
-            ({'add':1, '<CIDR>':'127.a.0.1'}, False),
-            ({'add':1, '<CIDR>':'aa:bb::zz'}, False),
-            ({'add':1, '<CIDR>':'1.2.3.4'}, True),
-            ({'add':1, '<CIDR>':'1.2.3.0/24'}, True),
-            ({'add':1, '<CIDR>':'aa:bb::ff'}, True)
+            ({'add':1, '<CIDRS>':['127.a.0.1']}, False),
+            ({'add':1, '<CIDRS>':['aa:bb::zz']}, False),
+            ({'add':1, '<CIDRS>':['1.2.3.4']}, True),
+            ({'add':1, '<CIDRS>':['1.2.3.0/24', '8.8.0.0/16']}, True),
+            ({'add':1, '<CIDRS>':['aa:bb::ff']}, True),
+            ({'range':1, 'add':1, '<START_IP>':'1.2.3.0',
+                                                '<END_IP>':'1.2.3.255'}, True),
+            ({'range':1, 'add':1, '<START_IP>':'1.2.3.255',
+                                                '<END_IP>':'1.2.3.1'}, False),
+            ({'range':1, 'add':1, '<START_IP>':'1.2.3.0',
+                                                '<END_IP>':'bad'}, False),
+            ({'range':1, 'add':1, '<START_IP>':'bad',
+                                                '<END_IP>':'1.2.3.1'}, False),
+            ({'range':1, 'add':1, '<START_IP>':'1.2.3.255',
+                                                '<END_IP>':'aaaa::'}, False),
         )
 
         # Call method under test for each test case
