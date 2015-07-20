@@ -49,9 +49,9 @@ def status(arguments):
             print "Running felix version %s" % result.group(1)
 
         print "\nIPv4 BGP status"
-        pprint_bird_protocols("v4")
+        pprint_bird_protocols(4)
         print "IPv6 BGP status"
-        pprint_bird_protocols("v6")
+        pprint_bird_protocols(6)
 
 def pprint_bird_protocols(version):
     """
@@ -63,7 +63,7 @@ def pprint_bird_protocols(version):
     """
     # Based on the IP version, run the appropriate BIRD command, and select
     # the appropriate separator char for an IP address.
-    if version == "v4":
+    if version == 4:
         bird_cmd = docker_client.exec_create("calico-node",
                                     ["/bin/bash", "-c",
                                      "echo show protocols | "

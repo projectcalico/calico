@@ -23,7 +23,6 @@ from pycalico import netns
 from utils import hostname, ORCHESTRATOR_ID
 from utils import client
 from utils import enforce_root
-from utils import check_ip_version
 from utils import get_container_ipv_from_arguments
 from utils import docker_client
 from utils import print_paragraph
@@ -43,8 +42,8 @@ def validate_arguments(arguments):
     """
     # Validate IP
     container_ip_ok = arguments.get("<IP>") is None or \
-                        validate_ip(arguments["<IP>"], "v4") or \
-                        validate_ip(arguments["<IP>"], "v6")
+                        validate_ip(arguments["<IP>"], 4) or \
+                        validate_ip(arguments["<IP>"], 6)
 
     # Print error message and exit if not valid argument
     if not container_ip_ok:
@@ -208,7 +207,7 @@ def container_remove(container_name):
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
         assert(net.size == 1)
         ip = net.ip
-        pools = client.get_ip_pools("v%s" % ip.version)
+        pools = client.get_ip_pools(ip.version)
         for pool in pools:
             if ip in pool:
                 # Ignore failure to unassign address, since we're not
@@ -224,18 +223,17 @@ def container_remove(container_name):
     print "Removed Calico interface from %s" % container_name
 
 
-def container_ip_add(container_name, ip, version, interface):
+def container_ip_add(container_name, ip, interface):
     """
     Add an IP address to an existing Calico networked container.
 
     :param container_name: The name of the container.
     :param ip: The IP to add
-    :param version: The IP version ("v4" or "v6")
     :param interface: The name of the interface in the container.
 
     :return: None
     """
-    address = check_ip_version(ip, version, IPAddress)
+    address = IPAddress(ip)
 
     # The netns manipulations must be done as root.
     enforce_root()
@@ -296,18 +294,17 @@ def container_ip_add(container_name, ip, version, interface):
     print "IP %s added to %s" % (ip, container_id)
 
 
-def container_ip_remove(container_name, ip, version, interface):
+def container_ip_remove(container_name, ip, interface):
     """
     Add an IP address to an existing Calico networked container.
 
     :param container_name: The name of the container.
     :param ip: The IP to add
-    :param version: The IP version ("v4" or "v6")
     :param interface: The name of the interface in the container.
 
     :return: None
     """
-    address = check_ip_version(ip, version, IPAddress)
+    address = IPAddress(ip)
 
     # The netns manipulations must be done as root.
     enforce_root()
@@ -370,7 +367,7 @@ def get_pool_or_exit(ip):
     :param ip: The IPAddress to find the pool for.
     :return: The pool or sys.exit
     """
-    pools = client.get_ip_pools("v%s" % ip.version)
+    pools = client.get_ip_pools(ip.version)
     pool = None
     for candidate_pool in pools:
         if ip in candidate_pool:
@@ -441,7 +438,6 @@ def get_container_info_or_exit(container_name):
             print e.message
         sys.exit(1)
     return info
-
 
 
 def permission_denied_error(conn_error):

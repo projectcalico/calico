@@ -136,14 +136,14 @@ def create_endpoint():
     ip = None
     ip6 = None
     if next_hops.get(4):
-        ip = assign_ip("v4")
+        ip = assign_ip(4)
         if ip:
             app.logger.info("Assigned IPv4 %s for ep %s" % (ip, ep_id))
         else:
             app.logger.error("Failed to allocate IPv4 for endpoint %s", ep_id)
 
     if next_hops.get(6):
-        ip6 = assign_ip("v6")
+        ip6 = assign_ip(6)
         if ip6:
             app.logger.info("Assigned IPv6 %s for ep %s" % (ip6, ep_id))
         else:
@@ -305,13 +305,13 @@ def leave():
 def assign_ip(version):
     """
     Assign a IP address from the configured pools.
-    :param version: "v4" for IPv4, "v6" for IPv6.
+    :param version: 4 for IPv4, 6 for IPv6.
     :return: An IPAddress, or None if an IP couldn't be
              assigned
     """
     ip = None
 
-    assert version in ["v4", "v6"]
+    assert version in [4, 6]
     # For each configured pool, attempt to assign an IP before giving up.
     for pool in client.get_ip_pools(version):
         assigner = SequentialAssignment()
@@ -329,7 +329,7 @@ def unassign_ip(ip):
     :return: True if the unassignment succeeded. False otherwise.
     """
     # For each configured pool, attempt to unassign the IP before giving up.
-    version = "v%d" % ip.version
+    version = ip.version
     for pool in client.get_ip_pools(version):
         if ip in pool and client.unassign_address(pool, ip):
             return True

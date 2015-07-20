@@ -53,43 +53,39 @@ class TestBgp(unittest.TestCase):
                 assert m_sys_exit.called
             m_sys_exit.reset_mock()
 
-    @patch('calico_ctl.bgp.check_ip_version', autospec=True)
     @patch('calico_ctl.bgp.BGPPeer', autospec=True)
     @patch('calico_ctl.bgp.client', autospec=True)
-    def test_bgp_peer_add(self, m_client, m_BGPPeer, m_check_ipv):
+    def test_bgp_peer_add(self, m_client, m_BGPPeer):
         """
         Test bgp_peer_add function for calico_ctl bgp
         """
         # Set up mock objects
-        address = '1.2.3.4'
         peer = Mock(spec=BGPPeer)
-        m_check_ipv.return_value = address
         m_BGPPeer.return_value = peer
 
+        # Set up arguments
+        address = '1.2.3.4'
+
         # Call method under test
-        bgp_peer_add('1.2.3.4', 'v4', 1)
+        bgp_peer_add(address, 4, 1)
 
         # Assert
-        m_check_ipv.assert_called_once_with('1.2.3.4', 'v4', IPAddress)
-        m_BGPPeer.assert_called_once_with(address, 1)
-        m_client.add_bgp_peer.assert_called_once_with('v4', peer)
+        m_BGPPeer.assert_called_once_with(IPAddress(address), 1)
+        m_client.add_bgp_peer.assert_called_once_with(4, peer)
 
-    @patch('calico_ctl.bgp.check_ip_version', autospec=True)
     @patch('calico_ctl.bgp.client', autospec=True)
-    def test_bgp_peer_remove(self, m_client, m_check_ipv):
+    def test_bgp_peer_remove(self, m_client):
         """
         Test bgp_peer_remove function for calicoctl bgp
         """
-        # Set up mock objects
+        # Set up arguments
         address = '1.2.3.4'
-        m_check_ipv.return_value = address
 
         # Call method under test
-        bgp_peer_remove('1.2.3.0', 'v4')
+        bgp_peer_remove(address, 4)
 
         # Assert
-        m_check_ipv.assert_called_once_with('1.2.3.0', 'v4', IPAddress)
-        m_client.remove_bgp_peer.assert_called_once_with('v4', address)
+        m_client.remove_bgp_peer.assert_called_once_with(4, IPAddress(address))
 
     @patch('calico_ctl.bgp.client', autospec=True)
     def test_set_default_node_as(self, m_client):

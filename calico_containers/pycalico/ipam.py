@@ -19,7 +19,7 @@ from netaddr import IPAddress, IPNetwork
 from pycalico.datastore_datatypes import IPPool
 from pycalico.datastore import CALICO_V_PATH, DatastoreClient
 
-IP_ASSIGNMENT_PATH = CALICO_V_PATH + "/ipam/%(version)s/assignment/%(pool)s"
+IP_ASSIGNMENT_PATH = CALICO_V_PATH + "/ipam/v%(version)s/assignment/%(pool)s"
 IP_ASSIGNMENT_KEY = IP_ASSIGNMENT_PATH + "/%(address)s"
 
 
@@ -93,7 +93,7 @@ class IPAMClient(DatastoreClient):
         assert isinstance(pool, IPNetwork)
         assert isinstance(address, IPAddress)
 
-        key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
+        key = IP_ASSIGNMENT_KEY % {"version": pool.version,
                                    "pool": str(pool).replace("/", "-"),
                                    "address": address}
         try:
@@ -119,7 +119,7 @@ class IPAMClient(DatastoreClient):
         assert isinstance(pool, IPNetwork)
         assert isinstance(address, IPAddress)
 
-        key = IP_ASSIGNMENT_KEY % {"version": "v%s" % pool.version,
+        key = IP_ASSIGNMENT_KEY % {"version": pool.version,
                                    "pool": str(pool).replace("/", "-"),
                                    "address": address}
         try:
@@ -139,7 +139,7 @@ class IPAMClient(DatastoreClient):
             pool = pool.cidr
         assert isinstance(pool, IPNetwork)
 
-        directory = IP_ASSIGNMENT_PATH % {"version": "v%s" % pool.version,
+        directory = IP_ASSIGNMENT_PATH % {"version": pool.version,
                                           "pool": str(pool).replace("/", "-")}
         try:
             nodes = self.etcd_client.read(directory).children

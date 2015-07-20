@@ -39,27 +39,6 @@ except sh.CommandNotFound as e:
     print "Missing command: %s" % e.message
 
 
-def check_ip_version(ip, version, cls):
-    """
-    Parses and checks that the given IP matches the provided version.
-    :param ip: The IP (string) to check.
-    :param version: The version
-    :param cls: The type of IP object (IPAddress or IPNetwork)
-    :return: The parsed object of type "type"
-    """
-    assert version in ("v4", "v6")
-    try:
-        parsed = cls(ip)
-    except AddrFormatError:
-        print "%s is not a valid IP address." % ip
-        sys.exit(1)
-    if "v%d" % parsed.version != version:
-        print "%s is an IPv%d prefix, this command is for IP%s." % \
-              (parsed, parsed.version, version)
-        sys.exit(1)
-    return parsed
-
-
 def enforce_root():
     """
     Check if the current process is running as the root user.
@@ -85,23 +64,24 @@ def get_container_ipv_from_arguments(arguments):
     Determine the container IP version from the arguments.
 
     :param arguments: Docopt processed arguments.
-    :return: The IP version.  One of "v4", "v6" or None.
+    :return: The IP version.  4, 6 or None.
     """
     version = None
     if arguments.get("--ipv4"):
-        version = "v4"
+        version = 4
     elif arguments.get("--ipv6"):
-        version = "v6"
+        version = 6
     elif arguments.get("<IP>"):
-        version = "v%s" % netaddr.IPAddress(arguments.get("<IP>")).version
+        version = netaddr.IPAddress(arguments.get("<IP>")).version
     elif arguments.get("<PEER_IP>"):
-        version = "v%s" % netaddr.IPAddress(arguments.get("<PEER_IP>")).version
+        version = netaddr.IPAddress(arguments.get("<PEER_IP>")).version
     elif arguments.get("<CIDR>"):
-        version = "v%s" % netaddr.IPNetwork(arguments.get("<CIDR>")).version
+        version = netaddr.IPNetwork(arguments.get("<CIDR>")).version
     elif arguments.get("<CIDRS>"):
-        version = "v%s" % netaddr.IPNetwork(arguments.get("<CIDRS>")[0]).version
+        version = netaddr.IPNetwork(arguments.get("<CIDRS>")[0]).version
     elif arguments.get("<START_IP>"):
-        version = "v%s" % netaddr.IPNetwork(arguments.get("<START_IP>")).version
+        version = netaddr.IPNetwork(arguments.get("<START_IP>")).version
+
     return version
 
 
@@ -126,14 +106,14 @@ def validate_ip(ip_addr, version):
     Validate that ip_addr is a valid IPv4 or IPv6 address
 
     :param ip_addr: IP address to be validated
-    :param version: "v4" or "v6"
+    :param version: 4 or 6
     :return: Boolean: True if valid, False if invalid.
     """
-    assert version in ("v4", "v6")
+    assert version in (4, 6)
 
-    if version == "v4":
+    if version == 4:
         return netaddr.valid_ipv4(ip_addr)
-    if version == "v6":
+    if version == 6:
         return netaddr.valid_ipv6(ip_addr)
 
 

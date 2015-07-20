@@ -32,7 +32,6 @@ import sys
 from utils import client
 from pycalico.datastore_datatypes import BGPPeer
 from netaddr import IPAddress
-from utils import check_ip_version
 from prettytable import PrettyTable
 from utils import get_container_ipv_from_arguments
 from utils import validate_ip
@@ -50,8 +49,8 @@ def validate_arguments(arguments):
     """
     # Validate IPs
     peer_ip_ok = arguments.get("<PEER_IP>") is None or \
-                    validate_ip(arguments["<PEER_IP>"], "v4") or \
-                    validate_ip(arguments["<PEER_IP>"], "v6")
+                    validate_ip(arguments["<PEER_IP>"], 4) or \
+                    validate_ip(arguments["<PEER_IP>"], 6)
     asnum_ok = True
     if arguments.get("<AS_NUM>"):
         try:
@@ -85,13 +84,13 @@ def bgp(arguments):
     if arguments.get("peer"):
         if arguments.get("add"):
             bgp_peer_add(arguments.get("<PEER_IP>"), ip_version,
-                        arguments.get("<AS_NUM>"))
+                         arguments.get("<AS_NUM>"))
         elif arguments.get("remove"):
             bgp_peer_remove(arguments.get("<PEER_IP>"), ip_version)
         elif arguments.get("show"):
             if not ip_version:
-                bgp_peer_show("v4")
-                bgp_peer_show("v6")
+                bgp_peer_show(4)
+                bgp_peer_show(6)
             else:
                 bgp_peer_show(ip_version)
 
@@ -113,11 +112,11 @@ def bgp_peer_add(ip, version, as_num):
     nodes will peer with this.
 
     :param ip: The address to add
-    :param version: v4 or v6
+    :param version: 4 or 6
     :param as_num: The peer AS Number.
     :return: None
     """
-    address = check_ip_version(ip, version, IPAddress)
+    address = IPAddress(ip)
     peer = BGPPeer(address, as_num)
     client.add_bgp_peer(version, peer)
 
@@ -127,10 +126,10 @@ def bgp_peer_remove(ip, version):
     Remove a global BGP peer.
 
     :param ip: The address to use.
-    :param version: v4 or v6
+    :param version: 4 or 6
     :return: None
     """
-    address = check_ip_version(ip, version, IPAddress)
+    address = IPAddress(ip)
     try:
         client.remove_bgp_peer(version, address)
     except KeyError:
@@ -144,17 +143,17 @@ def bgp_peer_show(version):
     """
     Print a list of the global BGP Peers.
     """
-    assert version in ("v4", "v6")
+    assert version in (4, 6)
     peers = client.get_bgp_peers(version)
     if peers:
-        heading = "Global IP%s BGP Peer" % version
+        heading = "Global IPv%s BGP Peer" % version
         x = PrettyTable([heading, "AS Num"], sortby=heading)
         for peer in peers:
             x.add_row([peer.ip, peer.as_num])
         x.align = "l"
         print x.get_string(sortby=heading)
     else:
-        print "No global IP%s BGP Peers defined.\n" % version
+        print "No global IPv%s BGP Peers defined.\n" % version
 
 
 def set_default_node_as(as_num):

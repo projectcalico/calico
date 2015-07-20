@@ -52,10 +52,10 @@ def validate_arguments(arguments):
                 print "Invalid CIDR specified %s" % cidr
                 sys.exit(1)
     elif start_ip or end_ip:
-        if not (validate_ip(start_ip, "v4") or validate_ip(start_ip, "v6")):
+        if not (validate_ip(start_ip, 4) or validate_ip(start_ip, 6)):
             print "Invalid START_IP specified."
             sys.exit(1)
-        elif not (validate_ip(end_ip, "v4") or validate_ip(end_ip, "v6")):
+        elif not (validate_ip(end_ip, 4) or validate_ip(end_ip, 6)):
             print "Invalid END_IP specified."
             sys.exit(1)
         elif IPAddress(start_ip).version != IPAddress(end_ip).version:
@@ -93,8 +93,8 @@ def pool(arguments):
         ip_pool_remove(arguments.get("<CIDRS>"), ip_version)
     elif arguments.get("show"):
         if not ip_version:
-            ip_pool_show("v4")
-            ip_pool_show("v6")
+            ip_pool_show(4)
+            ip_pool_show(6)
         else:
             ip_pool_show(ip_version)
 
@@ -104,11 +104,11 @@ def ip_pool_add(cidrs, version, ipip, masquerade):
     Add the given CIDRS to the IP address allocation pool.
 
     :param cidrs: The pools to set in CIDR format, e.g. 192.168.0.0/16
-    :param version: v4 or v6
+    :param version: 4 or 6
     :param ipip: Use IP in IP for this pool.
     :return: None
     """
-    if version == "v6" and ipip:
+    if version == 6 and ipip:
         print "IP in IP not supported for IPv6 pools"
         sys.exit(1)
 
@@ -124,11 +124,11 @@ def ip_pool_range_add(start_ip, end_ip, version, ipip, masquerade):
 
     :param start_ip: The first ip address the ip range.
     :param end_ip: The last ip address in the ip range.
-    :param version: v4 or v6
+    :param version: 4 or 6
     :param ipip: Use IP in IP for this pool.
     :return: None
     """
-    if version == "v6" and ipip:
+    if version == 6 and ipip:
         print "IP in IP not supported for IPv6 pools"
         sys.exit(1)
 
@@ -157,7 +157,7 @@ def ip_pool_remove(cidrs, version):
     Remove the given CIDRs from the IP address allocation pool.
 
     :param cidrs: The pools to remove in CIDR format, e.g. 192.168.0.0/16
-    :param version: v4 or v6
+    :param version: 4 or 6
     :return: None
     """
     for cidr in cidrs:
@@ -172,13 +172,13 @@ def ip_pool_show(version):
     Print a list of IP allocation pools.
     :return: None
     """
-    assert version in ("v4", "v6")
-    headings = ["IP%s CIDR" % version, "Options"]
+    assert version in (4, 6)
+    headings = ["IPv%s CIDR" % version, "Options"]
     pools = client.get_ip_pools(version)
     x = PrettyTable(headings)
     for pool in pools:
         enabled_options = []
-        if version == "v4":
+        if version == 4:
             if pool.ipip:
                 enabled_options.append("ipip")
             if pool.masquerade:

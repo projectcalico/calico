@@ -785,7 +785,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_pools
-        pools = self.datastore.get_ip_pools("v4")
+        pools = self.datastore.get_ip_pools(4)
         assert_list_equal([IPPool("192.168.3.0/24"), IPPool("192.168.5.0/24")],
                           pools)
 
@@ -800,7 +800,7 @@ class TestDatastoreClient(unittest.TestCase):
             raise EtcdKeyNotFound()
 
         self.etcd_client.read.side_effect = mock_read
-        pools = self.datastore.get_ip_pools("v4")
+        pools = self.datastore.get_ip_pools(4)
         assert_list_equal([], pools)
 
     def test_get_ip_pools_no_pools(self):
@@ -810,7 +810,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_no_pools
-        pools = self.datastore.get_ip_pools("v4")
+        pools = self.datastore.get_ip_pools(4)
         assert_list_equal([], pools)
 
     def test_get_ip_pool_config(self):
@@ -827,7 +827,7 @@ class TestDatastoreClient(unittest.TestCase):
             return result
 
         self.etcd_client.read.side_effect = mock_read
-        config = self.datastore.get_ip_pool_config("v4",
+        config = self.datastore.get_ip_pool_config(4,
                                                    IPNetwork("1.2.3.4/16"))
         assert_equal(config,
                      IPPool("1.2.0.0/16", ipip=True, masquerade=True))
@@ -839,7 +839,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.read.side_effect = EtcdKeyNotFound
         self.assertRaises(KeyError,
                           self.datastore.get_ip_pool_config,
-                          "v4", IPNetwork("1.2.3.4/1"))
+                          4, IPNetwork("1.2.3.4/1"))
 
     def test_add_ip_pool(self):
         """
@@ -847,7 +847,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         pool = IPPool("192.168.100.5/24", ipip=True, masquerade=True)
-        self.datastore.add_ip_pool("v4", pool)
+        self.datastore.add_ip_pool(4, pool)
         self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "192.168.100.0-24",
                                                        ANY)
         raw_data = self.etcd_client.write.call_args[0][1]
@@ -859,7 +859,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         self.etcd_client.write.reset_mock()
         pool = IPPool("192.168.100.5/24")
-        self.datastore.add_ip_pool("v4", pool)
+        self.datastore.add_ip_pool(4, pool)
         self.etcd_client.write.assert_called_once_with(IPV4_POOLS_PATH + "192.168.100.0-24",
                                                        ANY)
         raw_data = self.etcd_client.write.call_args[0][1]
@@ -873,7 +873,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         cidr = IPNetwork("192.168.3.1/24")
-        self.datastore.remove_ip_pool("v4", cidr)
+        self.datastore.remove_ip_pool(4, cidr)
         self.etcd_client.delete.assert_called_once_with(IPV4_POOLS_PATH + "192.168.3.0-24")
 
     def test_del_ip_pool_doesnt_exist(self):
@@ -884,7 +884,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.side_effect = EtcdKeyNotFound
         cidr = IPNetwork("192.168.100.1/24")
         self.assertRaises(KeyError,
-                          self.datastore.remove_ip_pool, "v4", cidr)
+                          self.datastore.remove_ip_pool, 4, cidr)
 
     def test_profile_exists_true(self):
         """
@@ -1207,7 +1207,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_peers
-        peers = self.datastore.get_bgp_peers("v4")
+        peers = self.datastore.get_bgp_peers(4)
         assert_equal(peers, [BGPPeer("192.168.3.1", 32245),
                              BGPPeer("192.168.5.1", 32245)])
 
@@ -1221,7 +1221,7 @@ class TestDatastoreClient(unittest.TestCase):
             raise EtcdKeyNotFound()
 
         self.etcd_client.read.side_effect = mock_read
-        peers = self.datastore.get_bgp_peers("v4")
+        peers = self.datastore.get_bgp_peers(4)
         assert_list_equal([], peers)
 
     def test_get_bgp_peers_no_peers(self):
@@ -1231,7 +1231,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_no_bgppeers
-        peers = self.datastore.get_bgp_peers("v4")
+        peers = self.datastore.get_bgp_peers(4)
         assert_list_equal([], peers)
 
     def test_add_bgp_peer(self):
@@ -1249,7 +1249,7 @@ class TestDatastoreClient(unittest.TestCase):
 
         self.etcd_client.write.side_effect = mock_write
         peer = BGPPeer("192.168.100.5", 32245)
-        self.datastore.add_bgp_peer("v4", peer)
+        self.datastore.add_bgp_peer(4, peer)
         assert_true(data["write"])
 
     def test_remove_bgp_peer_exists(self):
@@ -1259,7 +1259,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.delete = Mock()
         peer = IPAddress("192.168.3.1")
-        self.datastore.remove_bgp_peer("v4", peer)
+        self.datastore.remove_bgp_peer(4, peer)
         # 192.168.3.1 has a key ...v4/0 in the ordered list.
         self.etcd_client.delete.assert_called_once_with(
                                                 BGP_PEERS_PATH + "192.168.3.1")
@@ -1271,7 +1271,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.delete.side_effect = EtcdKeyNotFound()
         peer = IPAddress("192.168.100.1")
-        assert_raises(KeyError, self.datastore.remove_bgp_peer, "v4", peer)
+        assert_raises(KeyError, self.datastore.remove_bgp_peer, 4, peer)
 
     def test_get_node_bgp_peer(self):
         """
@@ -1279,7 +1279,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_node_peers
-        peers = self.datastore.get_bgp_peers("v4", hostname="TEST_HOST")
+        peers = self.datastore.get_bgp_peers(4, hostname="TEST_HOST")
         assert_equal(peers, [BGPPeer("192.169.3.1", 32245),
                              BGPPeer("192.169.5.1", 32245)])
 
@@ -1289,7 +1289,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_2_node_peers
-        peers = self.datastore.get_bgp_peers("v4", hostname="BLAH")
+        peers = self.datastore.get_bgp_peers(4, hostname="BLAH")
         assert_list_equal([], peers)
 
     def test_get_node_bgp_peer_no_peers(self):
@@ -1299,7 +1299,7 @@ class TestDatastoreClient(unittest.TestCase):
         :return: None
         """
         self.etcd_client.read.side_effect = mock_read_no_node_bgppeers
-        peers = self.datastore.get_bgp_peers("v4", hostname="TEST_HOST")
+        peers = self.datastore.get_bgp_peers(4, hostname="TEST_HOST")
         assert_list_equal([], peers)
 
     def test_add_node_bgp_peer(self):
@@ -1318,7 +1318,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.write.side_effect = mock_write
 
         peer = BGPPeer(IPAddress("192.169.100.5"), 32245)
-        self.datastore.add_bgp_peer("v4", peer, hostname="TEST_HOST")
+        self.datastore.add_bgp_peer(4, peer, hostname="TEST_HOST")
         assert_true(data["write"])
 
     def test_remove_node_bgp_peer_exists(self):
@@ -1328,7 +1328,7 @@ class TestDatastoreClient(unittest.TestCase):
         """
         self.etcd_client.delete = Mock()
         peer = IPAddress("192.168.3.1")
-        self.datastore.remove_bgp_peer("v4", peer, "TEST_HOST")
+        self.datastore.remove_bgp_peer(4, peer, "TEST_HOST")
         # 192.168.3.1 has a key ...v4/0 in the ordered list.
         self.etcd_client.delete.assert_called_once_with(
                                       TEST_NODE_BGP_PEERS_PATH + "192.168.3.1")
@@ -1341,7 +1341,7 @@ class TestDatastoreClient(unittest.TestCase):
         self.etcd_client.delete.side_effect = EtcdKeyNotFound()
         peer = IPAddress("192.168.100.1")
         assert_raises(KeyError, self.datastore.remove_bgp_peer,
-                      "v4", peer, hostname="BLAH")
+                      4, peer, hostname="BLAH")
 
     def test_set_bgp_node_mesh(self):
         """
