@@ -637,3 +637,39 @@ class TestPlugin(unittest.TestCase):
         cnm_ep = {"Interfaces": [{"Address": "1.2.3.4"}]}
         docker_plugin.backout_ip_assignments(cnm_ep)
         m_unassign.assert_called_once_with(IPAddress("1.2.3.4"))
+
+    @patch("pycalico.netns.set_veth_mac", autospec=True)
+    @patch("pycalico.netns.create_veth", autospec=True)
+    def test_create_veth(self, m_create, m_set):
+        """
+        Test create_veth calls through to netns to create the veth and
+        set the MAC.
+        """
+        endpoint = Endpoint("hostname",
+                            "docker",
+                            "libnetwork",
+                            TEST_ENDPOINT_ID,
+                            "active",
+                            "EE:EE:EE:EE:EE:EE")
+
+        docker_plugin.create_veth(endpoint)
+        m_create.assert_called_once_with(endpoint.name,
+                                         endpoint.temp_interface_name)
+        m_set.assert_called_once_with(endpoint.temp_interface_name,
+                                      endpoint.mac)
+
+    @patch("pycalico.netns.remove_veth", autospec=True, side_effect=CalledProcessError(2, "test"))
+    def test_remove_veth_fail(self, m_remove):
+        """
+        Test remove_veth calls through to netns to remove the veth.
+        Fail with a CalledProcessError to write the log.
+        """
+        endpoint = Endpoint("hostname",
+                            "docker",
+                            "libnetwork",
+                            TEST_ENDPOINT_ID,
+                            "active",
+                            "EE:EE:EE:EE:EE:EE")
+
+        docker_plugin.remove_veth(endpoint)
+        m_remove.assert_called_once_with(endpoint.name)

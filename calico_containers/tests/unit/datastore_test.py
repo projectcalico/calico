@@ -67,19 +67,15 @@ TEST_BGP_HOST_AS_PATH = TEST_BGP_HOST_PATH + "/as_num"
 EP_56 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "567890abcdef",
                  "active", "AA-22-BB-44-CC-66")
 EP_56.profile_ids = ["TEST"]
-EP_56.if_name = "eth0"
 EP_78 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "7890abcdef12",
                  "active", "11-AA-33-BB-55-CC")
 EP_78.profile_ids = ["TEST"]
-EP_78.if_name = "eth0"
 EP_90 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, "90abcdef1234",
                  "active", "1A-2B-3C-4D-5E-6E")
 EP_90.profile_ids = ["UNIT"]
-EP_90.if_name = "eth0"
 EP_12 = Endpoint(TEST_HOST, "docker", TEST_CONT_ID, TEST_ENDPOINT_ID,
                  "active", "11-22-33-44-55-66")
 EP_12.profile_ids = ["UNIT"]
-EP_12.if_name = "eth0"
 
 # A complicated set of Rules JSON for testing serialization / deserialization.
 RULES_JSON = """
@@ -247,7 +243,6 @@ class TestEndpoint(unittest.TestCase):
         expected = {"state": "active",
                     "name": "caliaabbccddeef",
                     "mac": "11-22-33-44-55-66",
-                    "container:if_name": None,
                     "profile_ids": [],
                     "ipv4_nets": [],
                     "ipv6_nets": [],
@@ -272,7 +267,6 @@ class TestEndpoint(unittest.TestCase):
         endpoint = Endpoint.from_json(TEST_ENDPOINT_PATH, json.dumps(expected))
         assert_equal(endpoint.state, "active")
         assert_equal(endpoint.endpoint_id, TEST_ENDPOINT_ID)
-        assert_equal(endpoint.if_name, "eth1")
         assert_equal(endpoint.mac, "11-22-33-44-55-66")
         assert_equal(endpoint.profile_ids, ["TEST23"])
         assert_equal(endpoint.ipv4_gateway, IPAddress("10.3.4.2"))
@@ -1042,7 +1036,6 @@ class TestDatastoreClient(unittest.TestCase):
         ep = EP_12.copy()
         original_json = ep.to_json()
         ep._original_json = original_json
-        ep.if_name = "a different interface name"
         ep.profile_ids = ["a", "different", "set", "of", "ids"]
         assert_not_equal(ep._original_json, ep.to_json())
 

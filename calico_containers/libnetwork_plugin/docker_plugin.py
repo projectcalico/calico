@@ -23,10 +23,10 @@ from werkzeug.exceptions import HTTPException, default_exceptions
 from netaddr import IPNetwork
 
 from libnetwork_plugin.datastore_libnetwork import LibnetworkDatastoreClient
-from pycalico.datastore import IF_PREFIX
 from pycalico.datastore_errors import DataStoreError
-from pycalico.datastore_datatypes import Endpoint
+from pycalico.datastore_datatypes import IF_PREFIX, Endpoint
 from pycalico.ipam import SequentialAssignment
+from pycalico import netns
 
 
 FIXED_MAC = "EE:EE:EE:EE:EE:EE"
@@ -247,7 +247,7 @@ def join():
 
     ret_json = {
         "InterfaceNames": [{
-            "SrcName": ep.temp_interface_name(),
+            "SrcName": ep.temp_interface_name,
             "DstPrefix": IF_PREFIX
         }],
         "Gateway": str(ep.ipv4_gateway),
@@ -347,31 +347,28 @@ def backout_ip_assignments(cnm_ep):
             app.logger.warn("Failed to unassign IP address %s", address)
 
 
-# TODO move to netns
-def create_veth(ep):  #pragma: no cover
-    # Create the veth
-    check_call(['ip', 'link',
-                'add', ep.name,
-                'type', 'veth',
-                'peer', 'name', ep.temp_interface_name()],
-               timeout=IP_CMD_TIMEOUT)
-
-    # Set the host end of the veth to 'up' so felix notices it.
-    check_call(['ip', 'link', 'set', ep.name, 'up'],
-               timeout=IP_CMD_TIMEOUT)
+def create_veth(endpoint):
+    """
+    Create the veth, and configure the MAC address (since libnetwork does not
+    do this).
+    :param endpoint: The Endpoint being configured.
+    """
+    # Create the veth pair.
+    netns.create_veth(endpoint.name, endpoint.temp_interface_name)
 
     # Set the mac as libnetwork doesn't do this for us.
-    check_call(['ip', 'link', 'set',
-                'dev', ep.temp_interface_name(),
-                'address', FIXED_MAC],
-               timeout=IP_CMD_TIMEOUT)
+    netns.set_veth_mac(endpoint.temp_interface_name, endpoint.mac)
 
-#TODO move to netns
-def remove_veth(ep):  #pragma: no cover
-    # The veth removal is best effort. If it fails then just log.
-    rc = call(['ip', 'link', 'del', ep.name], timeout=IP_CMD_TIMEOUT)
-    if rc != 0:
-        app.logger.warn("Failed to delete veth %s", ep.name)
+
+def remove_veth(endpoint):
+    """
+    Best effort removal of veth, logging if removal fails.
+    :param endpoint: The Endpoint tied to the veth.
+    """
+    try:
+        netns.remove_veth(endpoint.name)
+    except CalledProcessError:
+        app.logger.warn("Failed to delete veth %s", endpoint.name)
 
 
 if __name__ == '__main__':   #pragma: no cover
