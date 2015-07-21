@@ -87,9 +87,6 @@ def validate_arguments(arguments):
 
     :param arguments: Docopt processed arguments
     """
-    # List of valid characters that Felix permits
-    valid_chars = '[a-zA-Z0-9_\.\-]'
-
     # Validate Profiles
     profile_ok = True
     if arguments.get("<PROFILE>") is not None:
