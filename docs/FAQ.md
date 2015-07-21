@@ -32,8 +32,17 @@ This allows incoming traffic to be routed directly to your containers without th
 need for NAT.  This flat L3 approach delivers exceptional network scalability
 and performance.
 
-Detailed datacenter networking recommendations are given in the main 
+A common scenario is for your container hosts to be on their own 
+isolated layer 2 network, like a rack in your server room or an entire data 
+center.  Access to that network is via a router, which also is the default 
+router for all the container hosts.
+
+If this describes your infrastructure, [this guide](ExternalConnectivity.md) 
+explains in more detail what to do. Otherwise, detailed datacenter networking 
+recommendations are given in the main 
 [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
+We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/) 
+to discuss your environment.
 
 ### How can I enable NAT for outgoing traffic from containers with private IP addresses?
 If you want to allow containers with private IP addresses to be able to access the 
@@ -51,7 +60,7 @@ Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 Remember: the security profile for the container will need to allow traffic to the internet as well. You can read about how to configure security profiles in the [Advanced Network Policy](AdvancedNetworkPolicy.md) guide.
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
-As discussed already, the recommended way to get traffic to a containers that 
+As discussed, the recommended way to get traffic to containers that 
 need to be accessed from the internet is to give them public IP addresses and
 to configure Calico to peer with the data center's existing L3 routers.
 
