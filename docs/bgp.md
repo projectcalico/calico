@@ -29,7 +29,7 @@ If all of your Calico nodes are within the same AS, but you require a
 different AS number to be used (e.g because you are peering with a border
 router), changing the default AS number to the value you require eliminates
 the need to explicitly set it on a per Calico node basis.  For more
-complicated toplogies where you are explicitly setting the AS number on each
+complicated topologies where you are explicitly setting the AS number on each
 node, the default value will not be used and therefore using this command is
 not necessary.
 

@@ -8,7 +8,7 @@ If you use `sudo` for commands like `docker run`, remember that your environment
 
 ## Ubuntu (or GNOME) NetworkManager
 
-Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before attepting to use Calico networking.
+Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before attempting to use Calico networking.
 
 NetworkManager manipulates the routing table for interfaces in the default network namespace where Calico veth pairs are anchored for connections to containers.  This can interfere with the Calico agent's ability to route correctly. 
 
