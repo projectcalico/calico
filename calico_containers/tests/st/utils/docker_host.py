@@ -110,11 +110,14 @@ class DockerHost(object):
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
-        if self.dind:
-            calicoctl = "/code/dist/calicoctl %s"
+        if os.environ.get("CALICOCTL"):
+            calicoctl = os.environ["CALICOCTL"]
         else:
-            calicoctl = "dist/calicoctl %s"
-        return self.execute(calicoctl % command)
+            if self.dind:
+                calicoctl = "/code/dist/calicoctl"
+            else:
+                calicoctl = "dist/calicoctl"
+        return self.execute(calicoctl + " " + command)
 
     def start_calico_node(self, as_num=None):
         """

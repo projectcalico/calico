@@ -89,8 +89,11 @@ st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-e
 	dist/calicoctl checksystem --fix
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
-fast-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
-	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer -a '!slow'
+fast-st: calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
+	# This runs the tests by calling python directory without using the
+	# calicoctl binary
+	CALICOCTL=$(CURDIR)/calico_containers/calicoctl.py nosetests $(ST_TO_RUN) \
+	-sv --nologcapture --with-timer -a '!slow'
 
 run-etcd:
 	@-docker rm -f calico-etcd
