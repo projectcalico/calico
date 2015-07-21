@@ -731,7 +731,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # If the JSON data is bad, we need to fix it up. Set a value
                 # that is impossible for Neutron to be returning: nothing at
                 # all.
-                LOG.exception("Bad JSON data in key %s", endpoint.key)
+                LOG.warning("Bad JSON data in key %s", endpoint.key)
                 etcd_data = None
 
             port = self.add_extra_port_information(context, port)
