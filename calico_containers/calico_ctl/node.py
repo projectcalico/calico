@@ -377,8 +377,8 @@ def get_host_ips(version):
     for address_output in addrs_raw:
         # Each 'address_output' represents a line showing the interface ip
         values = address_output.split()
-        # Ignore the loopback interface
-        if 'lo' not in values:
+        # Ignore the loopback interface and the docker0 bridge
+        if 'lo' not in values and 'docker0' not in values:
             # Extract the IP, ensure its valid
             ip_addrs.append(str(netaddr.IPNetwork(values[3]).ip))
     return ip_addrs
