@@ -32,7 +32,7 @@ import socket
 import tempfile
 import subprocess
 from etcd import EtcdException
-from shutil import copytree
+from shutil import copytree, ignore_patterns
 from pycalico.datastore import DatastoreClient
 
 
@@ -44,7 +44,6 @@ def diags(arguments):
     this file's docstring with docopt
     :return: None
     """
-    enforce_root()
     print("Collecting diags")
     save_diags(arguments["--log-dir"], arguments["--upload"])
     sys.exit(0)
@@ -122,6 +121,8 @@ def save_diags(log_dir, upload=False):
             f.writelines(ipset("list"))
         except sh.CommandNotFound as e:
             print "Missing command: %s" % e.message
+        except sh.ErrorReturnCode_1 as e:
+            print "Error running ipset. Maybe you need to run as root."
 
     # Ask Felix to dump stats to its log file - ignore errors as the
     # calico-node might not be running
@@ -130,7 +131,9 @@ def save_diags(log_dir, upload=False):
 
     if os.path.isdir(log_dir):
         print("Copying Calico logs")
-        copytree(log_dir, os.path.join(temp_diags_dir, "logs"))
+        # Skip the lock files as they can only be copied by root.
+        copytree(log_dir, os.path.join(temp_diags_dir, "logs"),
+                 ignore=ignore_patterns('lock'))
     else:
         print('No logs found in %s; skipping log copying' % log_dir)
 
