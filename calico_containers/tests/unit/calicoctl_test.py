@@ -15,6 +15,8 @@
 import unittest
 from StringIO import StringIO
 from mock import patch, Mock
+from nose_parameterized import parameterized
+from netaddr import IPAddress, IPNetwork
 from calico_ctl.bgp import *
 from calico_ctl.bgp import validate_arguments as bgp_validate_arguments
 from calico_ctl.endpoint import validate_arguments as ep_validate_arguments
@@ -22,36 +24,30 @@ from calico_ctl.node import validate_arguments as node_validate_arguments
 from calico_ctl.pool import validate_arguments as pool_validate_arguments
 from calico_ctl.profile import validate_arguments as profile_validate_arguments
 from calico_ctl.container import validate_arguments as container_validate_arguments
+from calico_ctl.utils import validate_cidr, validate_ip, validate_characters
 from pycalico.datastore_datatypes import BGPPeer
 
 
 class TestBgp(unittest.TestCase):
 
-    @patch('sys.exit', autospec=True)
-    def test_validate_arguments(self, m_sys_exit):
+    @parameterized.expand([
+        ({'<PEER_IP>':'127.a.0.1'}, True),
+        ({'<PEER_IP>':'aa:bb::zz'}, True),
+        ({'<AS_NUM>':9}, False),
+        ({'<AS_NUM>':'9'}, False),
+        ({'<AS_NUM>':'nine'}, True),
+        ({'show':1, '--ipv4':1}, False)
+    ])
+    def test_validate_arguments(self, case, sys_exit_called):
         """
         Test validate_arguments for calicoctl bgp command
         """
-        # Set up arguments
-        cases = (
-            ({'<PEER_IP>':'127.a.0.1'}, False),
-            ({'<PEER_IP>':'aa:bb::zz'}, False),
-            ({'<AS_NUM>':9}, True),
-            ({'<AS_NUM>':'9'}, True),
-            ({'<AS_NUM>':'nine'}, False),
-            ({'show':1, '--ipv4':1}, True)
-        )
-
-        # Call method under test for each test case
-        # Assert that method exits on bad input
-        for case, is_valid in cases:
-            print "Testing case %s ..." % case
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
             bgp_validate_arguments(case)
-            if is_valid:
-                assert not m_sys_exit.called
-            else:
-                assert m_sys_exit.called
-            m_sys_exit.reset_mock()
+
+            # Assert that method exits on bad input
+            self.assertEqual(m_sys_exit.called, sys_exit_called)
 
     @patch('calico_ctl.bgp.BGPPeer', autospec=True)
     @patch('calico_ctl.bgp.client', autospec=True)
@@ -163,150 +159,188 @@ class TestBgp(unittest.TestCase):
 
 class TestContainer(unittest.TestCase):
 
-    @patch('sys.exit', autospec=True)
-    def test_validate_arguments(self, m_sys_exit):
+    @parameterized.expand([
+        ({'<CONTAINER>':'node1', 'ip':1, 'add':1, '<IP>':'127.a.0.1'}, True),
+        ({'<CONTAINER>':'node1', 'ip':1, 'add':1, '<IP>':'aa:bb::zz'}, True),
+        ({'add':1, '<CONTAINER>':'node1', '<IP>':'127.a.0.1'}, True),
+        ({'add':1, '<CONTAINER>':'node1', '<IP>':'aa:bb::zz'}, True)
+    ])
+    def test_validate_arguments(self, case, sys_exit_called):
         """
         Test validate_arguments for calicoctl container command
         """
-        # Set up arguments
-        cases =(
-            ({'<CONTAINER>':'node1', 'ip':1, 'add':1, '<IP>':'127.a.0.1'}, False),
-            ({'<CONTAINER>':'node1', 'ip':1, 'add':1, '<IP>':'aa:bb::zz'}, False),
-            ({'add':1, '<CONTAINER>':'node1', '<IP>':'127.a.0.1'}, False),
-            ({'add':1, '<CONTAINER>':'node1', '<IP>':'aa:bb::zz'}, False)
-        )
-
-        # Call method under test for each test case
-        # Assert that method exits on bad input
-        for case, is_valid in cases:
-            print "Testing case %s ..." % case
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
             container_validate_arguments(case)
-            if is_valid:
-                assert not m_sys_exit.called
-            else:
-                assert m_sys_exit.called
-            m_sys_exit.reset_mock()
+
+            # Assert method exits if bad input
+            self.assertEqual(m_sys_exit.called, sys_exit_called)
 
 
 class TestEndpoint(unittest.TestCase):
 
-    @patch('sys.exit', autospec=True)
-    def test_validate_arguments(self, m_sys_exit):
+    @parameterized.expand([
+        ({'<PROFILES>':['profile-1', 'profile-2', 'profile-3']}, False),
+        ({'<PROFILES>':['Profile1', 'Profile!']}, True),
+        ({}, False)
+    ])
+    def test_validate_arguments(self, case, sys_exit_called):
         """
         Test validate_arguments for calicoctl endpoint command
         """
-        # Set up arguments
-        cases = (
-            ({'<PROFILES>':['profile-1', 'profile-2', 'profile-3']}, True),
-            ({'<PROFILES>':['Profile1', 'Profile!']}, False),
-            ({}, True)
-        )
-
-        # Call method under test
-        for case, is_valid in cases:
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
             ep_validate_arguments(case)
-            if is_valid:
-                assert not m_sys_exit.called
-            else:
-                assert m_sys_exit.called
-            m_sys_exit.reset_mock()
+
+            # Assert method exits if bad input
+            self.assertEqual(m_sys_exit.called, sys_exit_called)
 
 
 class TestNode(unittest.TestCase):
 
-    @patch('sys.exit', autospec=True)
-    def test_validate_arguments(self, m_sys_exit):
+    @parameterized.expand([
+        ({'--ip':'127.a.0.1'}, True),
+        ({'--ip':'aa:bb::cc'}, True),
+        ({'--ip':'127.0.0.1', '--ip6':'127.0.0.1'}, True),
+        ({'--ip':'127.0.0.1', '--ip6':'aa:bb::zz'}, True)
+    ])
+    def test_validate_arguments(self, case, sys_exit_called):
         """
         Test validate_arguments for calicoctl node command
         """
-        # Set up arguments
-        cases = (
-            ({'--ip':'127.a.0.1'}, False),
-            ({'--ip':'aa:bb::cc'}, False),
-            ({'--ip':'127.0.0.1', '--ip6':'127.0.0.1'}, False),
-            ({'--ip':'127.0.0.1', '--ip6':'aa:bb::zz'}, False)
-        )
-
-        # Call method under test for each test case
-        # Assert that method exits on bad input
-        for case, is_valid in cases:
-            print "Testing case %s ..." % case
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
             node_validate_arguments(case)
-            if is_valid:
-                assert not m_sys_exit.called
-            else:
-                assert m_sys_exit.called
-            m_sys_exit.reset_mock()
+
+            # Assert that method exits on bad input
+            self.assertEqual(m_sys_exit.called, sys_exit_called)
 
 
 class TestPool(unittest.TestCase):
 
-    @patch('sys.exit', autospec=True)
-    def test_validate_arguments(self, m_sys_exit):
+    @parameterized.expand([
+        ({'add':1, '<CIDRS>':['127.a.0.1']}, True),
+        ({'add':1, '<CIDRS>':['aa:bb::zz']}, True),
+        ({'add':1, '<CIDRS>':['1.2.3.4']}, False),
+        ({'add':1, '<CIDRS>':['1.2.3.0/24', '8.8.0.0/16']}, False),
+        ({'add':1, '<CIDRS>':['aa:bb::ff']}, False),
+        ({'range':1, 'add':1, '<START_IP>':'1.2.3.0',
+          '<END_IP>':'1.2.3.255'}, False),
+        ({'range':1, 'add':1, '<START_IP>':'1.2.3.255',
+          '<END_IP>':'1.2.3.1'}, True),
+        ({'range':1, 'add':1, '<START_IP>':'1.2.3.0',
+          '<END_IP>':'bad'}, True),
+        ({'range':1, 'add':1, '<START_IP>':'bad',
+          '<END_IP>':'1.2.3.1'}, True),
+        ({'range':1, 'add':1, '<START_IP>':'1.2.3.255',
+          '<END_IP>':'aaaa::'}, True),
+    ])
+    def test_validate_arguments(self, case, sys_exit_called):
         """
         Test validate_arguments for calicoctl pool command
         """
-        # Set up arguments
-        cases = (
-            ({'add':1, '<CIDRS>':['127.a.0.1']}, False),
-            ({'add':1, '<CIDRS>':['aa:bb::zz']}, False),
-            ({'add':1, '<CIDRS>':['1.2.3.4']}, True),
-            ({'add':1, '<CIDRS>':['1.2.3.0/24', '8.8.0.0/16']}, True),
-            ({'add':1, '<CIDRS>':['aa:bb::ff']}, True),
-            ({'range':1, 'add':1, '<START_IP>':'1.2.3.0',
-                                                '<END_IP>':'1.2.3.255'}, True),
-            ({'range':1, 'add':1, '<START_IP>':'1.2.3.255',
-                                                '<END_IP>':'1.2.3.1'}, False),
-            ({'range':1, 'add':1, '<START_IP>':'1.2.3.0',
-                                                '<END_IP>':'bad'}, False),
-            ({'range':1, 'add':1, '<START_IP>':'bad',
-                                                '<END_IP>':'1.2.3.1'}, False),
-            ({'range':1, 'add':1, '<START_IP>':'1.2.3.255',
-                                                '<END_IP>':'aaaa::'}, False),
-        )
-
-        # Call method under test for each test case
-        # Assert that method exits on bad input
-        for case, is_valid in cases:
-            print "Testing case %s ..." % case
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
             pool_validate_arguments(case)
-            if is_valid:
-                assert not m_sys_exit.called
-            else:
-                assert m_sys_exit.called
-            m_sys_exit.reset_mock()
+
+            # Call method under test for each test case
+            self.assertEqual(m_sys_exit.called, sys_exit_called)
 
 
 class TestProfile(unittest.TestCase):
 
-    @patch('sys.exit', autospec=True)
-    def test_validate_arguments(self, m_sys_exit):
+    @parameterized.expand([
+        ({'<PROFILE>':'profile-1'}, False),
+        ({'<PROFILE>':'Profile!'}, True),
+        ({'<SRCTAG>':'Tag-1', '<DSTTAG>':'Tag-2'}, False),
+        ({'<SRCTAG>':'Tag~1', '<DSTTAG>':'Tag~2'}, True),
+        ({'<SRCCIDR>':'127.a.0.1'}, True),
+        ({'<DSTCIDR>':'aa:bb::zz'}, True),
+        ({'<SRCCIDR>':'1.2.3.4', '<DSTCIDR>':'1.2.3.4'}, False),
+        ({'<ICMPCODE>':'5'}, False),
+        ({'<ICMPTYPE>':'16'}, False),
+        ({'<ICMPCODE>':100, '<ICMPTYPE>':100}, False),
+        ({'<ICMPCODE>':4, '<ICMPTYPE>':255}, True),
+        ({}, False)
+    ])
+    def test_validate_arguments(self, case, sys_exit_called):
         """
         Test validate_arguments for calicoctl profile command
         """
-        # Set up arguments
-        cases = (
-            ({'<PROFILE>':'profile-1'}, True),
-            ({'<PROFILE>':'Profile!'}, False),
-            ({'<SRCTAG>':'Tag-1', '<DSTTAG>':'Tag-2'}, True),
-            ({'<SRCTAG>':'Tag~1', '<DSTTAG>':'Tag~2'}, False),
-            ({'<SRCCIDR>':'127.a.0.1'}, False),
-            ({'<DSTCIDR>':'aa:bb::zz'}, False),
-            ({'<SRCCIDR>':'1.2.3.4', '<DSTCIDR>':'1.2.3.4'}, True),
-            ({'<ICMPCODE>':'5'}, True),
-            ({'<ICMPTYPE>':'16'}, True),
-            ({'<ICMPCODE>':100, '<ICMPTYPE>':100}, True),
-            ({'<ICMPCODE>':4, '<ICMPTYPE>':255}, False),
-            ({}, True)
-        )
-
-        # Call method under test for each test case
-        # Assert that method exits on bad input
-        for case, is_valid in cases:
-            print "Testing case %s ..." % case
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
             profile_validate_arguments(case)
-            if is_valid:
-                assert not m_sys_exit.called
-            else:
-                assert m_sys_exit.called
-            m_sys_exit.reset_mock()
+
+            # Assert that method exits on bad input
+            self.assertEqual(m_sys_exit.called, sys_exit_called)
+
+
+class TestUtils(unittest.TestCase):
+
+    @parameterized.expand([
+        ('127.a.0.1', False),
+        ('aa:bb::zz', False),
+        ('1.2.3.4', True),
+        ('1.2.3.0/24', True),
+        ('aa:bb::ff', True),
+        ('1111:2222:3333:4444:5555:6666:7777:8888', True),
+        ('4294967295', False)
+    ])
+    def test_validate_cidr(self, cidr, expected_result):
+        """
+        Test validate_cidr function in calico_ctl utils
+        """
+        # Call method under test
+        test_result = validate_cidr(cidr)
+
+        # Assert
+        self.assertEqual(expected_result, test_result)
+
+    @parameterized.expand([
+        ('1.2.3.4', 4, True),
+        ('1.2.3.4', 6, False),
+        ('1.2.3.4', 4, True),
+        ('1.2.3.0/24', 4, False),
+        ('aa:bb::ff', 4, False),
+        ('aa:bb::ff', 6, True),
+        ('1111:2222:3333:4444:5555:6666:7777:8888', 6, True),
+        ('4294967295', 4, True),
+        ('5000000000', 4, False)
+    ])
+    def test_validate_ip(self, ip, version, expected_result):
+        """
+        Test validate_ip function in calico_ctl utils
+        """
+        # Call method under test
+        test_result = validate_ip(ip, version)
+
+        # Assert
+        self.assertEqual(expected_result, test_result)
+
+    @parameterized.expand([
+        ('abcdefghijklmnopqrstuvwxyz', True),
+        ('0123456789', True),
+        ('profile_1', True),
+        ('profile-1', True),
+        ('profile 1', False),
+        ('profile.1', True),
+        ('!', False),
+        ('@', False),
+        ('#', False),
+        ('$', False),
+        ('%', False),
+        ('^', False),
+        ('&', False),
+        ('*', False),
+        ('()', False)
+    ])
+    def test_validate_characters(self, input_string, expected_result):
+        """
+        Test validate_characters function in calico_ctl utils
+        """
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
+            test_result = validate_characters(input_string)
+
+            # Assert expected result
+            self.assertEqual(expected_result, test_result)
