@@ -30,7 +30,7 @@ class Workload(object):
     These are the end-users containers that will run application-level
     software.
     """
-    def __init__(self, host, name, ip=None, image="busybox", network=None,
+    def __init__(self, host, name, image="busybox", network=None,
                  service=None):
         """
         Create the workload and detect its IPs.
@@ -40,10 +40,6 @@ class Workload(object):
         via docker exec.
         :param name: The name given to the workload container. This name is
         passed to docker and can be used inside docker commands.
-        :param ip: The IP to be assigned to this workload via calico. May be
-        either IPv4 or IPv6. May also be None or 'auto' in which case it will
-        be assigned one by IPAM. Calico supports multiple IPs per workload, but
-        this testing framework does not yet.
         :param image: The docker image to be used to instantiate this
         container. busybox used by default because it is extremely small and
         has ping.
@@ -62,7 +58,6 @@ class Workload(object):
             "--detach",
             "--name", name,
         ]
-        assert ip is None, "Static IP assignment not supported by libnetwork."
         if network:
             if network is not NET_NONE:
                 assert isinstance(network, DockerNetwork)
@@ -74,26 +69,13 @@ class Workload(object):
 
         host.execute(command)
 
-        # There is an unofficial ip=auto option in addition to ip=None.
-        if ip is None:
-            version = None
-        else:
-            version = IPAddress(ip).version
-
-        if version == 6:
-            version_key = "GlobalIPv6Address"
-        else:
-            version_key = "IPAddress"
+        version_key = "IPAddress"
+        # TODO Use version_key = "GlobalIPv6Address" for IPv6
 
         self.ip = host.execute("docker inspect --format "
                                "'{{ .NetworkSettings.%s }}' %s" % (version_key,
                                                                    name),
                                ).rstrip()
-
-        if ip:
-            # Currently unhittable until libnetwork lets us configure IPs.
-            assert ip == self.ip, "IP param = %s, configured IP = %s." % \
-                                  (ip, self.ip)
 
     def execute(self, command):
         """
