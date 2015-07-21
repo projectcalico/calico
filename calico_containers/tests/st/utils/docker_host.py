@@ -23,7 +23,7 @@ from tests.st.utils.utils import retry_until_success, get_ip
 from workload import Workload
 from network import DockerNetwork
 
-CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
+CALICO_DRIVER_SOCK = "/run/docker/plugins/calico.sock"
 
 
 class DockerHost(object):

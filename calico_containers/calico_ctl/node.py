@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--plugin-dir=<PLUGIN_DIR>] [--kubernetes]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
@@ -30,8 +30,6 @@ Options:
   --detach=<DETACH>         Set "true" to run Calico service as detached,
                             "false" to run in the foreground. [default: true]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
-  --plugin-dir=<PLUGIN_DIR> The directory for plugins
-                            [default: /usr/share/docker/plugins/]
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
   --as=<AS_NUM>             The default AS number for this node.
@@ -162,14 +160,13 @@ def node(arguments):
         node_start(ip=arguments.get("--ip"),
                    node_image=arguments['--node-image'],
                    log_dir=arguments.get("--log-dir"),
-                   plugin_dir=arguments.get("--plugin-dir"),
                    ip6=arguments.get("--ip6"),
                    as_num=arguments.get("--as"),
                    detach=detach,
                    kubernetes=arguments.get("--kubernetes"))
 
 
-def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach, kubernetes):
+def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -181,16 +178,11 @@ def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach, kuberne
     the global default value will be used.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
-    :param plugin_dir: The directory that plugins should use for communicating.
     :return:  None.
     """
     # Ensure log directory exists
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-
-    # Ensure plugin directory exists
-    if not os.path.exists(plugin_dir):
-        os.makedirs(plugin_dir)
 
     # Print warnings for any known system issues before continuing
     check_system(fix=False, quit_if_error=False)
@@ -275,7 +267,7 @@ def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach, kuberne
                 "bind": "/var/log/calico",
                 "ro": False
             },
-        plugin_dir:
+        "/run/docker/plugins":
             {
                 "bind": "/usr/share/docker/plugins",
                 "ro": False
