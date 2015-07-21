@@ -39,14 +39,14 @@ The [example script][example-commands] assumes that your ordinary user account h
 
 ## Getting Calico Binaries
 
-Get the calico binary onto each host.  You can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the latest v0.5.1 release, on each host run
+Get the calico binary onto each host.  You can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the latest v0.5.2 release, on each host run
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.1/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.2/calicoctl
 	chmod +x calicoctl
 
 Finally, you can optionally preload the Calico Docker image.  This will make the Calico container creation more responsive the first time you run it.  Select the same version of the Calico Docker image as you selected above.  For example, to pull the latest released version
 
-    docker pull calico/node:v0.5.1
+    docker pull calico/node:v0.5.2
 
 You are now ready to run the [example commands][example-commands].
 
