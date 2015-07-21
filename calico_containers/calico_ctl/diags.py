@@ -123,6 +123,11 @@ def save_diags(log_dir, upload=False):
         except sh.CommandNotFound as e:
             print "Missing command: %s" % e.message
 
+    # Ask Felix to dump stats to its log file - ignore errors as the
+    # calico-node might not be running
+    subprocess.call(["docker", "exec", "calico-node",
+                     "pkill", "-SIGUSR1", "felix"])
+
     if os.path.isdir(log_dir):
         print("Copying Calico logs")
         copytree(log_dir, os.path.join(temp_diags_dir, "logs"))
