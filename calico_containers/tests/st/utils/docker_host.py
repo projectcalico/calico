@@ -1,16 +1,30 @@
+# Copyright 2015 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import os
 from functools import partial
 from subprocess import check_output, CalledProcessError, STDOUT
-from tests.st.utils.exceptions import CommandExecError
 
 from sh import docker
 
+from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils import utils
 from tests.st.utils.utils import retry_until_success, get_ip
 from workload import Workload
 from network import DockerNetwork
 
 CALICO_DRIVER_SOCK = "/usr/share/docker/plugins/calico.sock"
+
 
 class DockerHost(object):
     """
@@ -33,6 +47,7 @@ class DockerHost(object):
                        "-e", "DOCKER_DAEMON_ARGS="
                        "--kv-store=consul:%s:8500" % utils.get_ip(),
                        "-tid", "calico/dind")
+            # TODO use pydocker
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
 
@@ -43,7 +58,8 @@ class DockerHost(object):
 
             # Make sure docker is up
             docker_ps = partial(self.execute, "docker ps")
-            retry_until_success(docker_ps, ex_class=CalledProcessError)
+            retry_until_success(docker_ps, ex_class=CalledProcessError,
+                                retries=100)
             self.execute("docker load --input /code/calico_containers/calico-node.tar && "
                          "docker load --input /code/calico_containers/busybox.tar")
         else:
@@ -140,7 +156,7 @@ class DockerHost(object):
         for workload in self.workloads:
             try:
                 self.execute("docker rm -f %s" % workload.name)
-            except CalledProcessError as e:
+            except CalledProcessError:
                 # Make best effort attempt to clean containers. Don't fail the
                 # test if a container can't be removed.
                 pass
@@ -223,7 +239,8 @@ class DockerHost(object):
         """
         return DockerNetwork(self, name, driver=driver)
 
-    def escape_bash_single_quotes(self, command):
+    @staticmethod
+    def escape_bash_single_quotes(command):
         """
         Escape single quotes in bash string strings.
 

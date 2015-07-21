@@ -13,7 +13,7 @@
 # limitations under the License.
 import uuid
 
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.exceptions import CommandExecError
 
@@ -31,6 +31,8 @@ class MultiHostMainline(TestBase):
         ping between them.
         """
         with DockerHost('host1') as host1, DockerHost('host2') as host2:
+            # TODO work IPv6 into this test too
+
             # Create the network on host1, but it should be usable from all
             # hosts.
             network = host1.create_network(str(uuid.uuid4()))
@@ -41,8 +43,8 @@ class MultiHostMainline(TestBase):
             # check that pings work.
             # TODO To make things harder, we should be able to create a
             # network using the UUID, but that doesn't work...
-            #docker run --tty --interactive --detach --name workload2 --publish-service=a5accd88-869e-4149-8031-87af7c20318a.966204b315e55324148888e3808f6b4bf079a15f572142a69d4dab745bac7783 busybox
-            #Error response from daemon: Cannot start container 11e8089573d188399487b1b490c1a786260dbd7cb33ec3b7817ea87528935b3f: Interface name 966204b315e55324148888e3808f6b4bf079a15f572142a69d4dab745bac7783 too long
+            # docker run --tty --interactive --detach --name workload2 --publish-service=a5accd88-869e-4149-8031-87af7c20318a.966204b315e55324148888e3808f6b4bf079a15f572142a69d4dab745bac7783 busybox
+            # Error response from daemon: Cannot start container 11e8089573d188399487b1b490c1a786260dbd7cb33ec3b7817ea87528935b3f: Interface name 966204b315e55324148888e3808f6b4bf079a15f572142a69d4dab745bac7783 too long
 
             workload_host1 = host1.create_workload("workload1",
                                                    service="workload1",
@@ -53,24 +55,36 @@ class MultiHostMainline(TestBase):
             workload_host2 = host2.create_workload("workload2",
                                                    service="workload2",
                                                    network=network)
+            # TODO - assert on output of endpoint show and endpoint profile
+            # show commands.
             workload_host1.assert_can_ping(workload_host2.ip, retries=5)
+
+            # Ping using IP addresses
             self.assert_connectivity(pass_list=[workload_host1,
                                                 workload_host2])
             # Ping using service names
             workload_host1.execute("ping -c 1 -W 1 workload2")
             workload_host2.execute("ping -c 1 -W 1 workload1")
 
+            # TODO - detach ("leave") the endpoints - (assert can't ping and
+            #  endpoints are removed from calicoctl)
+
             # Test deleting the network. It will fail if there are any
             # endpoints connected still.
             self.assertRaises(CommandExecError, network.delete)
 
-            # Remove the workloads, so the endpoints can be unpubloshed, then
+            # Remove the workloads, so the endpoints can be unpublished, then
             # the delete should succeed.
             host1.remove_workloads()
             host2.remove_workloads()
 
+            # TODO - unpublish the endpoints - (assert IPs are released)
             host1.execute("docker service unpublish workload1.%s" % network)
             host1.execute("docker service unpublish workload2.%s" % network)
+
+            # TODO - remove the network - (assert profile is removed)
             network.delete()
+
+            # TODO - Remove this calico node
 
             # TODO Would like to assert that there are no errors in the logs...

@@ -17,6 +17,7 @@ import os
 
 LOCAL_IP_ENV = "MY_IP"
 
+
 def get_ip():
     """
     Return a string of the IP of the hosts interface.
