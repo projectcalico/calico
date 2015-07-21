@@ -22,6 +22,7 @@ from tests.st.utils.exceptions import CommandExecError
 
 NET_NONE = "none"
 
+
 class Workload(object):
     """
     A calico workload.
@@ -94,7 +95,7 @@ class Workload(object):
             assert ip == self.ip, "IP param = %s, configured IP = %s." % \
                                   (ip, self.ip)
 
-    def execute(self, command, **kwargs):
+    def execute(self, command):
         """
         Execute arbitrary commands on this workload.
         """
@@ -163,6 +164,7 @@ class Workload(object):
         :return: None.
         """
         ping = self._get_ping_function(ip)
+
         def cant_ping():
             try:
                 ping()
@@ -182,5 +184,5 @@ class Workload(object):
         return self.name
 
 
-def _PingError(Exception):
+class _PingError(Exception):
     pass

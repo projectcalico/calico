@@ -16,24 +16,19 @@ from test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 
 """
-Test calicoctl diags.
+Test calicoctl checksystem
 
-It's worth testing that the command can be executed. It's debatable whether
-it's worth testing the upload.
+It's worth doing a simple return code check. Anything more is going to be
+difficult given the environmental requirements.
 
-We're not trying to assert on the contents of the diags package.
-
-TODO We could check that the file is actually written (and doesn't just appear
-in the output) and is a decent size.
-TODO We could check collecting diags when calico-node is actually running.
+The --fix command is already executed as part of the tests (in the Makefile)
 """
 
 
-class TestDiags(TestBase):
-    def test_diags(self):
+class TestCheckSystem(TestBase):
+    def test_checksystem(self):
         """
-        Test that the diags command successfully creates a tar.gz file.
+        Test that the checksystem command can be executed.
         """
         with DockerHost('host', dind=False, start_calico=False) as host:
-            results = host.calicoctl("diags")
-            self.assertIn(".tar.gz", results)
+            host.calicoctl("checksystem")

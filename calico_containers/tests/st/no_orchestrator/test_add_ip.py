@@ -11,26 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import unittest
 from subprocess import CalledProcessError
+from unittest import skip
 
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
+
+"""
+Test the calicoctl container <CONTAINER> ip add/remove commands.
+
+Tests the edge cases that aren't already covered by the mainline tests.
+"""
 
 
 class TestAddIp(TestBase):
+    @skip("Not written yet")
+    def test_add_remove_ip_with_interface(self):
+        """
+        Test the --interface option to calicoctl container <CONTAINER> ip
+        add/remove <IP>
+        """
+        pass
 
-    @unittest.skip("Libnetwork doesn't support multiple IPs.")
+    @skip("Needs rewrite")
     def test_add_ip(self):
         """
         Test adding multiple IPs per workload.
         """
+        # TODO - split this up into multiple tests
+        # TODO - add IPv6 testing here too
         with DockerHost('host') as host:
-
-            # TODO get this test working with libnetwork.  Right now we don't
-            # have any way to assign multiple IPs with libnetwork, nor can we
-            # use calicoctl commands to manipulate libnetwork-based containers
-            # or profiles since these names are not presented to the driver.
             # host.execute("docker run --net=calico:test -tid"
             #              " --name=node1 busybox")
             # ip11 = host.execute("docker inspect --format "

@@ -12,14 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import re
+from unittest import skip
 import uuid
 
 from nose.plugins.attrib import attr
 
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import (DockerHost, CommandExecError)
 
-class TestBGPConfig(TestBase):
+"""
+Test "calicoctl bgp" and "calicoctl node bgp" commands.
+
+Testing should be focused around the different topologies that we claim to support.
+    Mesh is covered (a little) by existing multi host tests
+    Single RR cluster
+    AS per ToR
+    AS per calico node
+
+Test IPv4 and IPv6
+Two threads to the testing:
+    Function of the commands (which we already are testing) - see below
+    BGP functionality in the different topologies
+
+TODO - rework BGP tests.
+"""
+
+
+class TestBGP(TestBase):
 
     @attr('slow')
     def test_defaults(self):

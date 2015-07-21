@@ -1,11 +1,41 @@
-import unittest
+# Copyright 2015 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+from unittest import skip
 
-from tests.st.utils.docker_host import DockerHost
 from test_base import TestBase
+from tests.st.utils.docker_host import DockerHost
+
+"""
+Test calicoctl profile commands.
+
+Should mainly be covered by UTs and lots of this is covered by felix already
+"""
 
 
-class TestEndpointCommands(TestBase):
-    @unittest.skip("Libnetwork doesn't support multi-host yet.")
+class TestProfileCommands(TestBase):
+    @skip("Not written yet")
+    def test_three_containers(self):
+        """
+        Test with three containers spanning multiple profiles.
+        """
+        pass
+        # TODO Create three containers.
+        # Have one container with two profiles, and the other two with one profile.
+        # Check the two-profile container can ping both of the others.
+        # But the one profile containers can't ping each other.
+
+    @skip("TODO - needs rewrite")
     def test_endpoint_commands_mainline(self):
         """
         Run a mainline multi-host test using endpoint commands.
@@ -60,7 +90,7 @@ class TestEndpointCommands(TestBase):
         self.assert_connectivity(pass_list=[workload_d],
                                  fail_list=[workload_a, workload_b, workload_c, workload_e])
 
-    @unittest.skip("Libnetwork doesn't support multi-host yet.")
+    @skip("TODO - needs rewrite")
     def test_endpoint_commands(self):
         """
         Run a mainline multi-host test using endpoint commands
