@@ -41,7 +41,7 @@ PROFILES_PATH = CALICO_V_PATH + "/policy/profile/"
 PROFILE_PATH = PROFILES_PATH + "%(profile_id)s/"
 TAGS_PATH = PROFILE_PATH + "tags"
 RULES_PATH = PROFILE_PATH + "rules"
-IP_POOLS_PATH = CALICO_V_PATH + "/ipam/%(version)s/pool/"
+IP_POOLS_PATH = CALICO_V_PATH + "/ipam/v%(version)s/pool/"
 IP_POOL_KEY = IP_POOLS_PATH + "%(pool)s"
 
 # Felix IPv4 host value.
@@ -52,7 +52,7 @@ HOST_IPV4_PATH = HOST_PATH + "bird_ip"
 # etcd paths for BGP specific configuration
 BGP_V_PATH = "/calico/bgp/v1/"
 BGP_GLOBAL_PATH = BGP_V_PATH + "global/"
-BGP_GLOBAL_PEERS_PATH = BGP_GLOBAL_PATH + "peer_%(version)s/"
+BGP_GLOBAL_PEERS_PATH = BGP_GLOBAL_PATH + "peer_v%(version)s/"
 BGP_GLOBAL_PEER_PATH = BGP_GLOBAL_PEERS_PATH + "%(peer_ip)s"
 BGP_NODE_DEF_AS_PATH = BGP_GLOBAL_PATH + "as_num"
 BGP_NODE_MESH_PATH = BGP_GLOBAL_PATH + "node_mesh"
@@ -61,8 +61,8 @@ BGP_HOST_PATH = BGP_HOSTS_PATH + "%(hostname)s/"
 BGP_HOST_IPV4_PATH = BGP_HOST_PATH + "ip_addr_v4"
 BGP_HOST_IPV6_PATH = BGP_HOST_PATH + "ip_addr_v6"
 BGP_HOST_AS_PATH = BGP_HOST_PATH + "as_num"
-BGP_HOST_PEERS_PATH = BGP_HOST_PATH + "peer_%(version)s/"
-BGP_HOST_PEER_PATH = BGP_HOST_PATH + "peer_%(version)s/%(peer_ip)s"
+BGP_HOST_PEERS_PATH = BGP_HOST_PATH + "peer_v%(version)s/"
+BGP_HOST_PEER_PATH = BGP_HOST_PATH + "peer_v%(version)s/%(peer_ip)s"
 
 IF_PREFIX = "cali"
 """
@@ -236,11 +236,11 @@ class DatastoreClient(object):
         """
         Get the configured IP pools.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :return: List of IPPool.
         """
-        assert version in ("v4", "v6")
-        pool_path = IP_POOLS_PATH % {"version": version}
+        assert version in (4, 6)
+        pool_path = IP_POOLS_PATH % {"version": str(version)}
         try:
             leaves = self.etcd_client.read(pool_path, recursive=True).leaves
         except EtcdKeyNotFound:
@@ -260,17 +260,17 @@ class DatastoreClient(object):
         """
         Get the configuration for the given pool.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :param pool: IPNetwork object representing the pool
         :return: An IPPool object.
         """
-        assert version in ("v4", "v6")
+        assert version in (4, 6)
         assert isinstance(cidr, IPNetwork)
 
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
         cidr = cidr.cidr
 
-        key = IP_POOL_KEY % {"version": version,
+        key = IP_POOL_KEY % {"version": str(version),
                              "pool": str(cidr).replace("/", "-")}
 
         try:
@@ -288,14 +288,14 @@ class DatastoreClient(object):
         already exists, this method completes silently without modifying the
         list of pools, other than possibly updating the ipip config.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :param pool: IPPool object
         :return: None
         """
-        assert version in ("v4", "v6")
+        assert version in (4, 6)
         assert isinstance(pool, IPPool)
 
-        key = IP_POOL_KEY % {"version": version,
+        key = IP_POOL_KEY % {"version": str(version),
                              "pool": str(pool.cidr).replace("/", "-")}
         self.etcd_client.write(key, pool.to_json())
 
@@ -305,17 +305,17 @@ class DatastoreClient(object):
         Delete the given CIDR range from the list of pools.  If the pool does
         not exist, raise a KeyError.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :param cidr: IPNetwork object representing the pool
         :return: None
         """
-        assert version in ("v4", "v6")
+        assert version in (4, 6)
         assert isinstance(cidr, IPNetwork)
 
         # Normalize to CIDR format (i.e. 10.1.1.1/8 goes to 10.0.0.0/8)
         cidr = cidr.cidr
 
-        key = IP_POOL_KEY % {"version": version,
+        key = IP_POOL_KEY % {"version": str(version),
                              "pool": str(cidr).replace("/", "-")}
         try:
             self.etcd_client.delete(key)
@@ -328,18 +328,18 @@ class DatastoreClient(object):
         """
         Get the configured BGP Peers.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :param hostname: Optional hostname.  If supplied, this returns the
         node-specific BGP peers.  If None, this returns the globally configured
         BGP peers.
         :return: List of BGPPeer.
         """
-        assert version in ("v4", "v6")
+        assert version in (4, 6)
         if hostname is None:
-            bgp_peers_path = BGP_GLOBAL_PEERS_PATH % {"version": version}
+            bgp_peers_path = BGP_GLOBAL_PEERS_PATH % {"version": str(version)}
         else:
             bgp_peers_path = BGP_HOST_PEERS_PATH % {"hostname": hostname,
-                                                    "version": version}
+                                                    "version": str(version)}
 
         try:
             nodes = self.etcd_client.read(bgp_peers_path).children
@@ -360,20 +360,20 @@ class DatastoreClient(object):
         If a peer exists with the peer IP address, this will update the peer .
         configuration.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :param bgp_peer: The BGPPeer to add or update.
         :param hostname: Optional hostname.  If supplied, this stores the BGP
          peer in the node specific configuration.  If None, this stores the BGP
          peer as a globally configured peer.
         :return: Nothing
         """
-        assert version in ("v4", "v6")
+        assert version in (4, 6)
         if hostname is None:
-            bgp_peer_path = BGP_GLOBAL_PEER_PATH % {"version": version,
+            bgp_peer_path = BGP_GLOBAL_PEER_PATH % {"version": str(version),
                                                    "peer_ip": str(bgp_peer.ip)}
         else:
             bgp_peer_path = BGP_HOST_PEER_PATH % {"hostname": hostname,
-                                                  "version": version,
+                                                  "version": str(version),
                                                   "peer_ip": str(bgp_peer.ip)}
         self.etcd_client.write(bgp_peer_path, bgp_peer.to_json())
 
@@ -384,21 +384,21 @@ class DatastoreClient(object):
 
         Raises KeyError if the Peer does not exist.
 
-        :param version: "v4" for IPv4, "v6" for IPv6
+        :param version: 4 for IPv4, 6 for IPv6
         :param ip: The IP address of the BGP peer to delete. (an IPAddress)
         :param hostname: Optional hostname.  If supplied, this stores the BGP
          peer in the node specific configuration.  If None, this stores the BGP
          peer as a globally configured peer.
         :return: Nothing
         """
-        assert version in ("v4", "v6")
+        assert version in (4, 6)
         assert isinstance(ip, IPAddress)
         if hostname is None:
-            bgp_peer_path = BGP_GLOBAL_PEER_PATH % {"version": version,
+            bgp_peer_path = BGP_GLOBAL_PEER_PATH % {"version": str(version),
                                              "peer_ip": str(ip)}
         else:
             bgp_peer_path = BGP_HOST_PEER_PATH % {"hostname": hostname,
-                                                  "version": version,
+                                                  "version": str(version),
                                                   "peer_ip": str(ip)}
         try:
             self.etcd_client.delete(bgp_peer_path)

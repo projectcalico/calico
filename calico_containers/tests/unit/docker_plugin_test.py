@@ -441,9 +441,9 @@ class TestPlugin(unittest.TestCase):
 
             # Return the required assigned IPs.
             def assign_ip(version):
-                if version == "v4":
+                if version == 4:
                     return ipv4
-                elif version == "v6":
+                elif version == 6:
                     return ipv6
                 raise AssertionError("Unexpected version: %s" % version)
             m_assign_ip.side_effect = assign_ip
@@ -537,9 +537,9 @@ class TestPlugin(unittest.TestCase):
         """
         m_pools.return_value = [IPNetwork("1.2.3.0/24"), IPNetwork("2.3.4.5/32")]
         m_allocate.return_value = IPAddress("1.2.3.6")
-        ip = docker_plugin.assign_ip("v4")
+        ip = docker_plugin.assign_ip(4)
         assert_equal(ip, IPNetwork("1.2.3.6"))
-        m_pools.assert_called_once_with("v4")
+        m_pools.assert_called_once_with(4)
         m_allocate.assert_called_once_with(ANY, IPNetwork("1.2.3.0/24"))
 
     @patch("libnetwork_plugin.docker_plugin.client.get_ip_pools", autospec=True)
@@ -551,9 +551,9 @@ class TestPlugin(unittest.TestCase):
         m_pools.return_value = [IPNetwork("1.2.3.0/24"),
                                 IPNetwork("2.3.4.5/32")]
         m_allocate.return_value = None
-        ip = docker_plugin.assign_ip("v4")
+        ip = docker_plugin.assign_ip(4)
         assert_equal(ip, None)
-        m_pools.assert_called_once_with("v4")
+        m_pools.assert_called_once_with(4)
 
         # We should have attempted to allocate for each pool.
         m_allocate.assert_has_calls([call(ANY, IPNetwork("1.2.3.0/24")),
@@ -569,7 +569,7 @@ class TestPlugin(unittest.TestCase):
         m_unassign.return_value = True
         self.assertTrue(docker_plugin.unassign_ip(IPAddress("2.3.4.5")))
 
-        m_pools.assert_called_once_with("v4")
+        m_pools.assert_called_once_with(4)
         m_unassign.assert_called_once_with(IPNetwork("2.3.0.0/16"),
                                            IPAddress("2.3.4.5"))
 
@@ -582,7 +582,7 @@ class TestPlugin(unittest.TestCase):
         m_pools.return_value = [IPNetwork("1.2.3.0/24"), IPNetwork("2.3.0.0/16")]
         m_unassign.return_value = False
         self.assertFalse(docker_plugin.unassign_ip(IPAddress("2.30.11.11")))
-        m_pools.assert_called_once_with("v4")
+        m_pools.assert_called_once_with(4)
         self.assertEquals(m_unassign.call_count, 0)
 
     @patch("libnetwork_plugin.docker_plugin.client.get_ip_pools", autospec=True)
@@ -596,7 +596,7 @@ class TestPlugin(unittest.TestCase):
                                 IPNetwork("1.2.0.0/16")]
         m_unassign.return_value = False
         self.assertFalse(docker_plugin.unassign_ip(IPAddress("1.2.3.4")))
-        m_pools.assert_called_once_with("v4")
+        m_pools.assert_called_once_with(4)
         m_unassign.assert_has_calls([call(IPNetwork("1.2.3.0/24"),
                                           IPAddress("1.2.3.4")),
                                      call(IPNetwork("1.2.0.0/16"),

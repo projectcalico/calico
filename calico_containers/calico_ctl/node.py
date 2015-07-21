@@ -58,7 +58,6 @@ from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
 from checksystem import check_system
-from utils import check_ip_version
 from netaddr import IPAddress
 from prettytable import PrettyTable
 from utils import get_container_ipv_from_arguments
@@ -91,15 +90,15 @@ def validate_arguments(arguments):
     """
     # Validate IPs
     ip_ok = arguments.get("--ip") is None or \
-            validate_ip(arguments.get("--ip"), "v4")
+            validate_ip(arguments.get("--ip"), 4)
     ip6_ok = arguments.get("--ip6") is None or \
-             validate_ip(arguments.get("--ip6"), "v6")
+             validate_ip(arguments.get("--ip6"), 6)
     container_ip_ok = arguments.get("<IP>") is None or \
-                      validate_ip(arguments["<IP>"], "v4") or \
-                      validate_ip(arguments["<IP>"], "v6")
+                      validate_ip(arguments["<IP>"], 4) or \
+                      validate_ip(arguments["<IP>"], 6)
     peer_ip_ok = arguments.get("<PEER_IP>") is None or \
-                 validate_ip(arguments["<PEER_IP>"], "v4") or \
-                 validate_ip(arguments["<PEER_IP>"], "v6")
+                 validate_ip(arguments["<PEER_IP>"], 4) or \
+                 validate_ip(arguments["<PEER_IP>"], 6)
 
     asnum_ok = True
     if arguments.get("<AS_NUM>") or arguments.get("--as"):
@@ -151,8 +150,8 @@ def node(arguments):
                 node_bgppeer_remove(arguments.get("<PEER_IP>"), ip_version)
             elif arguments.get("show"):
                 if not ip_version:
-                    node_bgppeer_show("v4")
-                    node_bgppeer_show("v6")
+                    node_bgppeer_show(4)
+                    node_bgppeer_show(6)
                 else:
                     node_bgppeer_show(ip_version)
     elif arguments.get("stop"):
@@ -224,14 +223,14 @@ def node_start(node_image, log_dir, plugin_dir, ip, ip6, as_num, detach, kuberne
             install_kubernetes(KUBERNETES_PLUGIN_DIR_BACKUP)
 
     # Set up etcd
-    ipv4_pools = client.get_ip_pools("v4")
-    ipv6_pools = client.get_ip_pools("v6")
+    ipv4_pools = client.get_ip_pools(4)
+    ipv6_pools = client.get_ip_pools(6)
 
     # Create default pools if required
     if not ipv4_pools:
-        client.add_ip_pool("v4", DEFAULT_IPV4_POOL)
+        client.add_ip_pool(4, DEFAULT_IPV4_POOL)
     if not ipv6_pools:
-        client.add_ip_pool("v6", DEFAULT_IPV6_POOL)
+        client.add_ip_pool(6, DEFAULT_IPV6_POOL)
 
     client.ensure_global_config()
     client.create_host(hostname, ip, ip6, as_num)
@@ -329,11 +328,11 @@ def node_bgppeer_add(ip, version, as_num):
     Add a new BGP peer with the supplied IP address and AS Number to this node.
 
     :param ip: The address to add
-    :param version: v4 or v6
+    :param version: 4 or 6
     :param as_num: The peer AS Number.
     :return: None
     """
-    address = check_ip_version(ip, version, IPAddress)
+    address = IPAddress(ip)
     peer = BGPPeer(address, as_num)
     client.add_bgp_peer(version, peer, hostname=hostname)
 
@@ -343,10 +342,10 @@ def node_bgppeer_remove(ip, version):
     Remove a global BGP peer from this node.
 
     :param ip: The address to use.
-    :param version: v4 or v6
+    :param version: 4 or 6
     :return: None
     """
-    address = check_ip_version(ip, version, IPAddress)
+    address = IPAddress(ip)
     try:
         client.remove_bgp_peer(version, address, hostname=hostname)
     except KeyError:
@@ -360,17 +359,17 @@ def node_bgppeer_show(version):
     """
     Print a list of the BGP Peers for this node.
     """
-    assert version in ("v4", "v6")
+    assert version in (4, 6)
     peers = client.get_bgp_peers(version, hostname=hostname)
     if peers:
-        heading = "Node specific IP%s BGP Peer" % version
+        heading = "Node specific IPv%s BGP Peer" % version
         x = PrettyTable([heading, "AS Num"], sortby=heading)
         for peer in peers:
             x.add_row([peer.ip, peer.as_num])
         x.align = "l"
         print x.get_string(sortby=heading)
     else:
-        print "No IP%s BGP Peers defined for this node.\n" % version
+        print "No IPv%s BGP Peers defined for this node.\n" % version
 
 
 def get_host_ips(version):
