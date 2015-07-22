@@ -41,13 +41,13 @@ class DockerHost(object):
         self._cleaned = False
 
         if dind:
+            # TODO use pydocker
             docker.rm("-f", self.name, _ok_code=[0, 1])
             docker.run("--privileged", "-v", os.getcwd()+":/code", "--name",
                        self.name,
                        "-e", "DOCKER_DAEMON_ARGS="
                        "--kv-store=consul:%s:8500" % utils.get_ip(),
                        "-tid", "calico/dind")
-            # TODO use pydocker
             self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
                                      self.name).stdout.rstrip()
 
@@ -218,12 +218,12 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, ip=None, image="busybox", network=None,
+    def create_workload(self, name, image="busybox", network=None,
                         service=None):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, ip=ip, image=image, network=network,
+        workload = Workload(self, name, image=image, network=network,
                             service=service)
         self.workloads.add(workload)
         return workload
