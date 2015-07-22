@@ -146,8 +146,8 @@ architecture is used to build the fabric.
 "I need to use hard-coded private IP addresses: how do I do that?"
 ------------------------------------------------------------------
 
-That's fine, Calico entirely lets you do that using a stateless variant of
-RFC 6877 (464-XLAT). For more detail, see :doc:`overlap-ips`.
+While this isn't supported today, this is on our roadmap using a stateless 
+variant of RFC 6877 (464-XLAT). For more detail, see :doc:`overlap-ips`.
 
 "How do I control policy/connectivity without virtual/physical firewalls?"
 --------------------------------------------------------------------------
