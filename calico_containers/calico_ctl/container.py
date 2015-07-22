@@ -139,6 +139,12 @@ def container_add(container_name, ip, interface):
         print "%s is not currently running." % container_name
         sys.exit(1)
 
+    # We can't set up Calico if the container shares the host namespace.
+    if info["HostConfig"]["NetworkMode"] == "host":
+        print "Can't add %s to Calico because it is " \
+              "running NetworkMode = host." % container_name
+        sys.exit(1)
+
     # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
     # it.
     ip = IPAddress(ip)
