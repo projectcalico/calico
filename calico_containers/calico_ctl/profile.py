@@ -105,7 +105,7 @@ def validate_arguments(arguments):
     # Validate IPs
     cidr_ok = True
     for arg in ["<SRCCIDR>", "<DSTCIDR>"]:
-        if arguments.get(arg):
+        if arguments.get(arg) is not None:
             cidr_ok = validate_cidr(arguments[arg])
 
     icmp_ok = True
