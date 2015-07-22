@@ -19,6 +19,9 @@ This page contains answers to several frequently asked technical questions
 about Calico. It is updated on a regular basis: please check back for more
 information.
 
+.. contents::
+   :local:
+
 "Why use Calico?"
 -----------------
 
@@ -88,6 +91,94 @@ This makes the Calico design very simple, because we store very little
 state. All of our components can be shutdown and restarted without risk,
 because they resynchronize state as necessary. This makes modelling
 their behaviour extremely simple, reducing the complexity of bugs.
+
+"Does Calico use microsegmentation?"
+------------------------------------
+
+Not really, no.
+
+"Microsegmentation" is a very L2-centric way of looking at an L3 network.
+An L2 network is divided into physical segments: for example, an Ethernet
+segment is a collection of machines plugged into the same switching
+infrastructure such that they can communicate directly via their MAC addresses.
+When two devices are on the same L2 segment they can communicate: when they
+aren't, they can't.
+
+IP doesn't have an analogy to this notion of a 'segment'. Instead, IP networks
+use longest-prefix matches to locate their machines. Basically IP addresses can
+be grouped on bit boundaries as prefixes (e.g. 192.0.2.0/24, 198.51.100.16/30,
+and 2001:db8:://128). Those have no relation to the underlying physical
+topology other than to say all the addresses that match that pattern share a
+common "route" from that router.  So, if a router has a route that says
+192.0.2.0/24 is down interface 1, and that 192.0.2.26/32 is down interface 2,
+then all traffic destined for anything in 192.0.2.0/24 will go down interface
+1, unless it is destined for 192.0.2.26, which would go down interface 2.
+
+This allows for all sorts of capabilities that are just not available in
+Ethernet networks, and makes the whole concept of "microsegmentation" basically
+inapplicable to an IP network.
+
+"I heard Calico is suggesting layer 2: I thought you were layer 3! What's happening?"
+-------------------------------------------------------------------------------------
+
+It's important to distinguish what Calico provides to the workloads hosted in
+a data center (a purely layer 3 network) with what the Calico project
+*recommends* operators use to build their underlying network fabric.
+
+Calico's core principle is that *applications* and *workloads* overwhelmingly
+need only IP connectivity to communicate. For this reason we build an
+IP-forwarded network to expose to tenant applications and workloads.
+
+However, the underlying physical fabric obviously needs to be set up too. Here,
+Calico has discussed how both a layer 2 (see :doc:`l2-interconnectFabric`) or a
+layer 3 (see :doc:`l3-interconnectFabric`) fabric could be
+integrated with Calico. This is one of the great strengths of the Calico model:
+it allows the infrastructure to be decoupled from what we show to the tenant
+applications and workloads.
+
+We have some thoughts on different interconnect approaches (as noted above),
+but just because we say that there are layer 2 and layer 3 ways of building the
+fabric, and that those decisions may have an impact on route scale, does not
+mean that Calico is "going back to Ethernet" or that we're recommending layer 2
+for tenant applications. In all cases we forward on IP packets, no matter what
+architecture is used to build the fabric.
+
+"I need to use hard-coded private IP addresses: how do I do that?"
+------------------------------------------------------------------
+
+That's fine, Calico entirely lets you do that using a stateless variant of
+RFC 6877 (464-XLAT). For more detail, see :doc:`overlap-ips`.
+
+"How do I control policy/connectivity without virtual/physical firewalls?"
+--------------------------------------------------------------------------
+
+Calico provides an extremely rich security policy model, detailed in
+:doc:`security-model`. This model applies the policy at the first and last hop
+of the routed traffic within the Calico network (the source and destination
+compute hosts).
+
+This model is substantially more robust to failure than a centralised
+firewall-based model. In particular, the Calico approach has no
+single-point-of-failure: if the device enforcing the firewall has failed then
+so has one of the workloads involved in the traffic (because the firewall is
+enforced by the compute host).
+
+This model is also extremely amenable to scaling out. Because we have a central
+repository of policy configuration, but apply it at the edges of the network
+(the hosts) where it is needed, we automatically ensure that the rules match
+the topology of the data center. This allows easy scaling out, and gives us all
+the advantages of a single firewall (one place to manage the rules), but none
+of the disadvantages (single points of failure, state sharing, hairpinning of
+traffic, etc.).
+
+Lastly, we decouple the reachability of nodes and the policy applied to them.
+We use BGP to distribute the topology of the network, telling every node how to
+get to every endpoint in case two endpoints need to communicate. We use policy
+to decide *if* those two nodes should communicate, and if so, how. If policy
+changes and two endpoints should now communicate, where before they shouldn’t
+have, all we have to do is update policy: the reachability information does not
+change. If later they should be denied the ability to communicate, the policy
+is updated again, and again the reachability doesn’t have to change.
 
 "How does Calico interact with the Neutron API?"
 ------------------------------------------------
