@@ -67,8 +67,8 @@ def validate_arguments(arguments):
 
     # Validate Profiles
     profile_ok = True
-    if "<PROFILES>" in arguments:
-        profiles = arguments.get("<PROFILES>")
+    profiles = arguments.get("<PROFILES>")
+    if profiles is not None:
         for profile in profiles:
             profile_ok = validate_characters(profile)
 
