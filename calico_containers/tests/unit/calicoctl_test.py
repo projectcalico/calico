@@ -24,6 +24,7 @@ from calico_ctl.node import validate_arguments as node_validate_arguments
 from calico_ctl.pool import validate_arguments as pool_validate_arguments
 from calico_ctl.profile import validate_arguments as profile_validate_arguments
 from calico_ctl.container import validate_arguments as container_validate_arguments
+from calico_ctl.container import container_add
 from calico_ctl.utils import validate_cidr, validate_ip, validate_characters
 from pycalico.datastore_datatypes import BGPPeer
 
@@ -176,6 +177,31 @@ class TestContainer(unittest.TestCase):
             # Assert method exits if bad input
             self.assertEqual(m_sys_exit.called, sys_exit_called)
 
+    @patch("calico_ctl.container.get_container_info_or_exit", autospec=True)
+    @patch("calico_ctl.container.enforce_root", autospec=True)
+    @patch("calico_ctl.container.sys", autospec=True)
+    @patch("calico_ctl.container.client", autospec=True)
+    def test_container_add_host_network(self, m_client, m_sys,m_root, m_info):
+        """
+        Test container_add exits if the container has host networking.
+        """
+
+        info = {"Id": "TEST_ID",
+                "State": {"Running": True},
+                "HostConfig": {"NetworkMode": "host"}}
+        m_info.return_value = info
+        m_client.get_endpoint.side_effect = KeyError()
+        m_sys.exit.side_effect = SysExitMock()
+
+        # Run function under test.
+        name = "TEST_NAME"
+        ip = "10.1.2.3"
+        interface = "eth1"
+        self.assertRaises(SysExitMock, container_add, name, ip, interface)
+
+        m_root.assert_called_once_with()
+        m_info.assert_called_once_with(name)
+        m_sys.exit.assert_called_once_with(1)
 
 class TestEndpoint(unittest.TestCase):
 
@@ -344,3 +370,11 @@ class TestUtils(unittest.TestCase):
 
             # Assert expected result
             self.assertEqual(expected_result, test_result)
+
+
+class SysExitMock(Exception):
+    """
+    Used to mock the behaviour of sys.exit(), that is, ending execution of the
+    code under test, without exiting the test framework.
+    """
+    pass
