@@ -101,7 +101,8 @@ a data center (a purely layer 3 network) with what the Calico project
 
 Calico's core principle is that *applications* and *workloads* overwhelmingly
 need only IP connectivity to communicate. For this reason we build an
-IP-forwarded network to expose to tenant applications and workloads.
+IP-forwarded network to connect the tenant applications and workloads
+to each other, and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up too. Here,
 Calico has discussed how both a layer 2 (see :doc:`l2-interconnectFabric`) or a
