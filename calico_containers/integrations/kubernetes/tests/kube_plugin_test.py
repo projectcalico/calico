@@ -123,21 +123,16 @@ class NetworkPluginTest(unittest.TestCase):
             self.assertEqual(return_val.endpoint_id, 'ep_id')
 
     def test_get_node_ip(self):
-        with patch('integrations.kubernetes.calico_kubernetes.socket.socket',
-                   autospec=True) as m_socket:
+        with patch('integrations.kubernetes.calico_kubernetes.get_host_ips',
+                   autospec=True) as m_get_host_ips:
             # Set up mock objects
-            m_socket_return = MagicMock()
-            m_socket_return.getsockname.return_value = ['1.2.3.4']
-            m_socket.return_value = m_socket_return
+            m_get_host_ips.return_value = ['1.2.3.4','4.2.3.4']
 
             # Call method under test
             return_val = self.plugin._get_node_ip()
 
             # Assert
-            m_socket.assert_called_once_with(socket.AF_INET, socket.SOCK_DGRAM)
-            m_socket_return.connect.assert_called_once_with(('8.8.8.8', 80))
-            m_socket_return.getsockname.assert_called_once_with()
-            m_socket_return.close.assert_called_once_with()
+            m_get_host_ips.assert_called_once_with(version=4)
             self.assertEqual(return_val, '1.2.3.4')
 
     def test_read_docker_ip(self):
@@ -246,7 +241,7 @@ class NetworkPluginTest(unittest.TestCase):
             m_get_api_path.return_value = pods
 
             # Set up class member
-            self.plugin.pod_name = 'pod_2'
+            self.plugin.pod_name = 'pod-2'
 
             # Call method under test
             return_val = self.plugin._get_pod_config()
