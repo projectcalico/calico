@@ -53,7 +53,7 @@ dist/pycalico-$(WHEEL_VERSION)-py2-none-any.whl: $(PYCALICO)
 	chmod 777 dist
 	python setup.py bdist_wheel
 
-test: ut st
+test: st ut ut-kubernetes
 
 ut: calicobuild.created
 	# Use the `root` user, since code coverage requires the /code directory to
@@ -63,6 +63,13 @@ ut: calicobuild.created
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests tests/unit -c nose.cfg'
+
+ut-kubernetes: calicobuild.created
+	docker run --rm -v `pwd`/calico_containers:/code/calico_containers \
+	-v `pwd`/nose.cfg:/code/nose.cfg \
+	calico/build bash -c \
+	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
+	PYTHONPATH=calico_containers nosetests calico_containers/integrations/kubernetes/tests -c nose.cfg'
 
 # UT runs on Cicle need to create the calicoctl binary
 ut-circle: calicobuild.created dist/calicoctl

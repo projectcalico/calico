@@ -20,7 +20,6 @@ from pycalico.util import generate_cali_interface_name
 
 CALICOCTL_PATH = os.environ.get('CALICOCTL_PATH', '/usr/bin/calicoctl')
 print("Using CALICOCTL_PATH=%s" % CALICOCTL_PATH)
-calicoctl = sh.Command(CALICOCTL_PATH).bake(_env=os.environ)
 
 KUBE_API_ROOT = os.environ.get('KUBE_API_ROOT',
                                'http://kubernetes-master:8080/api/v1/')
@@ -31,6 +30,7 @@ class NetworkPlugin(object):
     def __init__(self):
         self.pod_name = None
         self.docker_id = None
+        self.calicoctl = sh.Command(CALICOCTL_PATH).bake(_env=os.environ)
 
     def create(self, pod_name, docker_id):
         """"Create a pod."""
@@ -55,8 +55,8 @@ class NetworkPlugin(object):
         self.docker_id = docker_id
 
         # Remove the profile for the workload.
-        calicoctl('container', 'remove', self.docker_id)
-        calicoctl('profile', 'remove', self.pod_name)
+        self.calicoctl('container', 'remove', self.docker_id)
+        self.calicoctl('profile', 'remove', self.pod_name)
 
     def _configure_interface(self):
         """Configure the Calico interface for a pod.
@@ -154,7 +154,7 @@ class NetworkPlugin(object):
         Currently assumes one pod with each name.
         """
         profile_name = self.pod_name
-        calicoctl('profile', 'add', profile_name)
+        self.calicoctl('profile', 'add', profile_name)
         pod = self._get_pod_config()
 
         self._apply_rules(profile_name)
@@ -164,8 +164,8 @@ class NetworkPlugin(object):
         # Also set the profile for the workload.
         print('Setting profile %s on endpoint %s' %
               (profile_name, endpoint.endpoint_id))
-        calicoctl('endpoint', endpoint.endpoint_id,
-                  'profile', 'set', profile_name)
+        self.calicoctl('endpoint', endpoint.endpoint_id,
+                       'profile', 'set', profile_name)
         print('Finished configuring profile.')
 
     def _get_pod_ports(self, pod):
@@ -295,7 +295,7 @@ class NetworkPlugin(object):
         profile_json = self._generate_profile_json(profile_name, rules)
 
         # Pipe the Profile JSON into the calicoctl command to update the rule.
-        calicoctl('profile', profile_name, 'rule', 'update', _in=profile_json)
+        self.calicoctl('profile', profile_name, 'rule', 'update', _in=profile_json)
         print('Finished applying rules.')
 
     def _apply_tags(self, profile_name, pod):
@@ -321,7 +321,7 @@ class NetworkPlugin(object):
             tag = tag.replace('-', '_')
             print('Adding tag ' + tag)
             try:
-                calicoctl('profile', profile_name, 'tag', 'add', tag)
+                self.calicoctl('profile', profile_name, 'tag', 'add', tag)
             except sh.ErrorReturnCode as e:
                 print('Could not create tag %s.\n%s' % (tag, e))
         print('Finished applying tags.')
