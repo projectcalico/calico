@@ -22,7 +22,7 @@ We recommend that you download your Docker binary from [the release page](https:
 
 For example: 
 
-    sudo wget -O $(which docker) https://github.com/Metaswitch/calico-docker/releases/download/v0.5.2/docker
+    sudo wget -O $(which docker) https://github.com/Metaswitch/calico-docker/releases/download/v0.5.3/docker
 
 ## Docker libnetwork setup
 
@@ -44,14 +44,14 @@ The [example script][example-commands] assumes that your ordinary user account h
 
 ## Getting Calico Binaries
 
-Get the calico binary onto each host.  You can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the latest v0.5.2 release, on each host run
+Get the calico binary onto each host.  You can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  For example, to retrieve the latest v0.5.3 release, on each host run
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.2/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.3/calicoctl
 	chmod +x calicoctl
 
 Finally, you can optionally preload the `calico/node` Docker image, which is the agent that runs on each compute host.  This will make starting Calico on each node more responsive the first time you run it.  Select the same version of the `calico/node` Docker image as the version of `calicoctl` you downloaded above.  For example, to pull the latest released version
 
-    docker pull calico/node:v0.5.2
+    docker pull calico/node:v0.5.3
     
 ## IP-in-IP setup for public clouds
 If you are setting up a Calico cluster in a public cloud where you do not have control over the physical interconnect fabric, you will need to enable IP-in-IP.  There specific guides for the following cloud providers
