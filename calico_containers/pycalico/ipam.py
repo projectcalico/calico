@@ -17,9 +17,10 @@ from etcd import EtcdKeyNotFound, EtcdAlreadyExist
 from netaddr import IPAddress, IPNetwork
 
 from pycalico.datastore_datatypes import IPPool
-from pycalico.datastore import CALICO_V_PATH, DatastoreClient
+from pycalico.datastore import CALICO_V_PATH, DatastoreClient, handle_errors
 
-IP_ASSIGNMENT_PATH = CALICO_V_PATH + "/ipam/v%(version)s/assignment/%(pool)s"
+IP_VERSION_PATH = CALICO_V_PATH + "/ipam/v%(version)s"
+IP_ASSIGNMENT_PATH = IP_VERSION_PATH + "/assignment/%(pool)s"
 IP_ASSIGNMENT_KEY = IP_ASSIGNMENT_PATH + "/%(address)s"
 
 
@@ -75,6 +76,8 @@ class SequentialAssignment(object):
 
 
 class IPAMClient(DatastoreClient):
+
+    @handle_errors
     def assign_address(self, pool, address):
         """
         Attempt to assign an IPAddress in a pool.
@@ -103,6 +106,7 @@ class IPAMClient(DatastoreClient):
         else:
             return True
 
+    @handle_errors
     def unassign_address(self, pool, address):
         """
         Unassign an IP from a pool.
@@ -129,6 +133,7 @@ class IPAMClient(DatastoreClient):
         else:
             return True
 
+    @handle_errors
     def get_assigned_addresses(self, pool):
         """
         :param IPPool or IPNetwork pool: The pool to get assignments for.

@@ -113,6 +113,14 @@ class DatastoreClient(object):
             # Didn't exist, create it now.
             self.etcd_client.write(CONFIG_IF_PREF_PATH, IF_PREFIX)
 
+        # Configure IPAM directory structures (to ensure confd is able to
+        # watch appropriate directory trees).
+        try:
+            self.etcd_client.read(CONFIG_IF_PREF_PATH)
+        except EtcdKeyNotFound:
+            # Didn't exist, create it now.
+            self.etcd_client.write(CONFIG_IF_PREF_PATH, IF_PREFIX)
+
         # Configure BGP global (default) config if it doesn't exist.
         try:
             self.etcd_client.read(BGP_NODE_DEF_AS_PATH)
