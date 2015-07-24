@@ -54,6 +54,9 @@ class NetworkPlugin(object):
         self.pod_name = pod_name
         self.docker_id = docker_id
 
+        print('Deleting container %s with profile %s' % 
+            (self.pod_name, self.docker_id))
+
         # Remove the profile for the workload.
         self.calicoctl('container', 'remove', self.docker_id)
         self.calicoctl('profile', 'remove', self.pod_name)
@@ -73,7 +76,7 @@ class NetworkPlugin(object):
         """
         container_ip = self._read_docker_ip()
         self._delete_docker_interface()
-        print('Configuring Calico networking.')
+        print('Configuring Calico network interface')
         ep = container_add(self.docker_id, container_ip, 'eth0')
         interface_name = generate_cali_interface_name(IF_PREFIX, ep.endpoint_id)
         node_ip = self._get_node_ip()
@@ -106,6 +109,7 @@ class NetworkPlugin(object):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('8.8.8.8', 80))
         ip = s.getsockname()[0]
+        print('Node IP: %s' % ip)
         s.close()
         return ip
 
@@ -123,7 +127,7 @@ class NetworkPlugin(object):
 
     def _delete_docker_interface(self):
         """Delete the existing veth connecting to the docker bridge."""
-        print('Deleting eth0')
+        print('Deleting docker interface eth0')
 
         # Get the PID of the container.
         pid = check_output([
@@ -132,8 +136,10 @@ class NetworkPlugin(object):
         ])
         # Clean trailing whitespace (expect a '\n' at least).
         pid = pid.strip()
+        print('Container %s running with PID %s' % (self.docker_id, pid))
 
         # Set up a link to the container's netns.
+        print("Linking to container's netns")
         print(check_output(['mkdir', '-p', '/var/run/netns']))
         netns_file = '/var/run/netns/' + pid
         if not os.path.isfile(netns_file):
@@ -153,6 +159,7 @@ class NetworkPlugin(object):
 
         Currently assumes one pod with each name.
         """
+        print('Configuring Pod Profile')
         profile_name = self.pod_name
         self.calicoctl('profile', 'add', profile_name)
         pod = self._get_pod_config()
@@ -209,6 +216,7 @@ class NetworkPlugin(object):
         :return: A list of JSON API objects
         :rtype list
         """
+        print('Getting API Resource: %s from KUBE_API_ROOT: %s' % (path, KUBE_API_ROOT))
         bearer_token = self._get_api_token()
         session = requests.Session()
         session.headers.update({'Authorization': 'Bearer ' + bearer_token})
@@ -226,6 +234,7 @@ class NetworkPlugin(object):
         :return: The token.
         :rtype: str
         """
+        print('Getting Kubernetes Authorization')
         try:
             with open('/var/lib/kubelet/kubernetes_auth') as f:
                 json_string = f.read()
@@ -233,8 +242,7 @@ class NetworkPlugin(object):
             print("Failed to open auth_file (%s), assuming insecure mode" % e)
             return ""
 
-        print('Using kubernetes_auth: ' + json_string)
-
+        print('Got kubernetes_auth: ' + json_string)
         auth_data = json.loads(json_string)
         return auth_data['BearerToken']
 
@@ -309,6 +317,7 @@ class NetworkPlugin(object):
         :type pod: dict
         :return:
         """
+        print('Applying tags')
         try:
             labels = pod['metadata']['labels']
         except KeyError:
