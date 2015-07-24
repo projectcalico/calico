@@ -91,12 +91,6 @@ def move_veth_into_ns(cpid, veth_name_ns_temp, veth_name_ns):
     :param veth_name_ns: The name of the interface in the namespace.
     :return: None. Raises CalledProcessError on error.
     """
-    # Configure the container end.  To do this we create a temporary link from
-    # the proc alias to the /var/run/netns to provide a named namespace.  If we
-    # don't do this, when run from the calico-node container the PID of the
-    # container process is not recognised by `ip link set <if> netns <pid>`
-    # command because that uses /proc rather than the proc alias to
-    # dereference the PID.
     with NamedNamespace(cpid) as ns:
         # Create the veth pair and move one end into container:
         check_call(["ip", "link", "set", veth_name_ns_temp,
