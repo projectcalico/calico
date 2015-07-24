@@ -191,7 +191,7 @@ class NetworkPlugin(object):
 
         for pod in pods:
             print('Processing pod %s' % pod)
-            if pod['metadata']['name'].replace('-', '_') == self.pod_name:
+            if pod['metadata']['name'].replace('/', '_') == self.pod_name:
                 this_pod = pod
                 break
         else:
@@ -318,7 +318,7 @@ class NetworkPlugin(object):
 
         for k, v in labels.iteritems():
             tag = '%s_%s' % (k, v)
-            tag = tag.replace('-', '_')
+            tag = tag.replace('/', '_')
             print('Adding tag ' + tag)
             try:
                 self.calicoctl('profile', profile_name, 'tag', 'add', tag)
@@ -334,7 +334,7 @@ if __name__ == '__main__':
         print('No initialization work to perform')
     else:
         # These args only present for setup/teardown.
-        pod_name = sys.argv[3].replace('-', '_')
+        pod_name = sys.argv[3].replace('/', '_')
         docker_id = sys.argv[4]
         if mode == 'setup':
             print('Executing Calico pod-creation hook')
