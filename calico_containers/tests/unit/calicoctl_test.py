@@ -324,7 +324,7 @@ class TestNode(unittest.TestCase):
         m_os_path_exists.assert_called_once_with(log_dir)
         m_os_makedirs.assert_called_once_with(log_dir)
         m_check_system.assert_called_once_with(fix=False, quit_if_error=False)
-        m_get_host_ips.assert_called_once_with(4)
+        m_get_host_ips.assert_called_once_with(exclude=["docker0"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
         m_install_kube.assert_called_once_with(node.KUBERNETES_PLUGIN_DIR)

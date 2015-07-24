@@ -56,6 +56,7 @@ from utils import print_paragraph
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
+from pycalico.util import get_host_ips
 from checksystem import check_system
 from netaddr import IPAddress
 from prettytable import PrettyTable
@@ -190,7 +191,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
 
     # Get IP address of host, if none was specified
     if not ip:
-        ips = get_host_ips(4)
+        ips = get_host_ips(exclude=["docker0"])
         try:
             ip = ips.pop()
         except IndexError:
@@ -365,31 +366,6 @@ def node_bgppeer_show(version):
         print "No IPv%s BGP Peers defined for this node.\n" % version
 
 
-def get_host_ips(version):
-    """
-    Gets all IP addresses assigned to this host.
-
-    This function is fail-safe and will return an empty array instead of
-    raising any exceptions.
-
-    :param version: Desired version of IP addresses. Can be 4 or 6
-    :return: List of string representations of IP Addresses.
-    """
-    ip_addrs = []
-    addr_lines_raw = check_output(["ip", "-o", "-%d" % (version), "addr"]).strip().split("\n")
-    for addr_line_raw in addr_lines_raw:
-        # Each addr_line_raw is a single line from the ip addr command
-        values = addr_line_raw.split()
-        if 'lo' not in values and 'docker0' not in values:
-            try:
-                # Extract the IP, ensure its valid
-                ip_addrs.append(str(netaddr.IPNetwork(values[3]).ip))
-            except (OSError, CalledProcessError, IndexError, netaddr.AddrFormatError):
-                # Ignore any encountered errors to maintain fail-safe
-                pass
-    return ip_addrs
-
-
 def warn_if_unknown_ip(ip, ip6):
     """
     Prints a warning message if the IP addresses are not assigned to interfaces
@@ -399,11 +375,11 @@ def warn_if_unknown_ip(ip, ip6):
     :param ip6: IPv6 address which should be present on the host.
     :return: None
     """
-    if ip not in get_host_ips(4):
+    if ip and ip not in get_host_ips(version=4, exclude=["docker0"]):
         print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
               " to this host."
 
-    if ip6 and ip6 not in get_host_ips(6):
+    if ip6 and ip6 not in get_host_ips(version=6, exclude=["docker0"]):
         print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
               " to this host."
 

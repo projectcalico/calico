@@ -16,7 +16,7 @@ print("Using ETCD_AUTHORITY=%s" % os.environ[ETCD_AUTHORITY_ENV])
 
 from calico_ctl.container import container_add
 from pycalico.datastore import IF_PREFIX
-from pycalico.util import generate_cali_interface_name
+from pycalico.util import generate_cali_interface_name, get_host_ips
 
 CALICOCTL_PATH = os.environ.get('CALICOCTL_PATH', '/usr/bin/calicoctl')
 print("Using CALICOCTL_PATH=%s" % CALICOCTL_PATH)
@@ -98,20 +98,22 @@ class NetworkPlugin(object):
         return ep
 
     def _get_node_ip(self):
-        """Determine the IP for the host node.
-
-        This hits a well-known IP (the Google public DNS).
+        """ 
+        Determine the IP for the host node.
         """
-        # We'd like to use the k8s API here, but it doesn't work in the Vagrant
-        # case since the node's name is set to its IP (so we have no way of
-        # getting from hostname=>IP).
-        # TODO: do this more reliably by parsing 'ip
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-        print('Node IP: %s' % ip)
-        s.close()
-        return ip
+        # Compile list of addresses on network, return the first entry.
+        # Try IPv4 and IPv6.
+        addrs = get_host_ips(version=4) or get_host_ips(version=6)
+
+        try:
+            addr = addrs[0]
+            print('Using IP Address %s' % (addr))
+            return addr
+        except IndexError:
+            # If both get_host_ips return empty lists, print message and exit.
+            print('No Valid IP Address Found for Host - cannot configure networking for pod %s' % (self.pod_name))
+            sys.exit(1)
+
 
     def _read_docker_ip(self):
         """Get the IP for the pod's infra container."""
