@@ -20,7 +20,7 @@ from etcd import EtcdKeyNotFound, EtcdException
 from netaddr import IPNetwork, IPAddress, AddrFormatError
 
 from pycalico.datastore_datatypes import Rules, BGPPeer, IPPool, \
-    Endpoint, Profile, Rule
+    Endpoint, Profile, Rule, IF_PREFIX
 from pycalico.datastore_errors import DataStoreError, \
     ProfileNotInEndpoint, ProfileAlreadyInEndpoint, MultipleEndpointsMatch
 
@@ -63,12 +63,6 @@ BGP_HOST_IPV6_PATH = BGP_HOST_PATH + "ip_addr_v6"
 BGP_HOST_AS_PATH = BGP_HOST_PATH + "as_num"
 BGP_HOST_PEERS_PATH = BGP_HOST_PATH + "peer_v%(version)s/"
 BGP_HOST_PEER_PATH = BGP_HOST_PATH + "peer_v%(version)s/%(peer_ip)s"
-
-IF_PREFIX = "cali"
-"""
-prefix that appears in all Calico interface names in the root namespace. e.g.
-cali123456789ab.
-"""
 
 # The default node AS number.
 DEFAULT_AS_NUM = 64511

@@ -13,6 +13,8 @@ Options:
                            [default: eth1]
 """
 import sys
+import uuid
+
 import docker.errors
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
@@ -20,6 +22,7 @@ from subprocess import CalledProcessError
 from netaddr import IPAddress, IPNetwork
 
 from pycalico import netns
+from pycalico.datastore_datatypes import Endpoint
 from utils import hostname, ORCHESTRATOR_ID
 from utils import client
 from utils import enforce_root
@@ -111,6 +114,7 @@ def container_add(container_name, ip, interface):
 
     :param container_name: The name or ID of the container.
     :param ip: An IPAddress object with the desired IP to assign.
+    :param interface: The name of the interface in the container.
     """
     # The netns manipulations must be done as root.
     enforce_root()
@@ -163,25 +167,39 @@ def container_add(container_name, ip, interface):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
-    # Actually configure the netns. Defaults to eth1 since eth0 could
-    # already be in use (e.g. by the Docker bridge)
+    # Get the next hop for the IP address.
+    next_hop = next_hops[ip.version]
+
+    network = IPNetwork(IPAddress(ip))
+    ep = Endpoint(hostname=hostname,
+                  orchestrator_id=ORCHESTRATOR_ID,
+                  workload_id=container_id,
+                  endpoint_id=uuid.uuid1().hex,
+                  state="active",
+                  mac=None)
+    if network.version == 4:
+        ep.ipv4_nets.add(network)
+        ep.ipv4_gateway = next_hop
+    else:
+        ep.ipv6_nets.add(network)
+        ep.ipv6_gateway = next_hop
+
+    # Create the veth, move into the container namespace, add the IP and
+    # set up the default routes.
     pid = info["State"]["Pid"]
-    endpoint = netns.set_up_endpoint(ip=ip,
-                                     hostname=hostname,
-                                     orchestrator_id=ORCHESTRATOR_ID,
-                                     workload_id=container_id,
-                                     cpid=pid,
-                                     next_hop_ips=next_hops,
-                                     veth_name=interface,
-                                     proc_alias="/proc")
+    netns.create_veth(ep.name, ep.temp_interface_name)
+    netns.move_veth_into_ns(pid, ep.temp_interface_name, interface)
+    netns.add_ip_to_ns_veth(pid, ip, interface)
+    netns.add_ns_default_route(pid, next_hop, interface)
 
-    # Register the endpoint
-    client.set_endpoint(endpoint)
+    # Grab the MAC assigned to the veth in the namespace.
+    ep.mac = netns.get_ns_veth_mac(pid, interface)
 
-    print "IP %s added to %s" % (ip, container_name)
+    # Register the endpoint with Felix.
+    client.set_endpoint(ep)
 
     # Let the caller know what endpoint was created.
-    return endpoint
+    return ep
 
 
 def container_remove(container_name):
@@ -221,7 +239,7 @@ def container_remove(container_name):
                 client.unassign_address(pool, ip)
 
     # Remove the endpoint
-    netns.remove_endpoint(endpoint.endpoint_id)
+    netns.remove_veth(endpoint.name)
 
     # Remove the container from the datastore.
     client.remove_workload(hostname, ORCHESTRATOR_ID, workload_id)
@@ -229,6 +247,8 @@ def container_remove(container_name):
     print "Removed Calico interface from %s" % container_name
 
 
+# TODO: If container created with IPv4 and then add IPv6 address, do we set up the
+# default route for IPv6 correctly (code read suggests not).
 def container_ip_add(container_name, ip, interface):
     """
     Add an IP address to an existing Calico networked container.
@@ -283,10 +303,7 @@ def container_ip_add(container_name, ip, interface):
 
     try:
         container_pid = info["State"]["Pid"]
-        netns.add_ip_to_interface(container_pid,
-                                  address,
-                                  interface,
-                                  proc_alias="/proc")
+        netns.add_ip_to_ns_veth(container_pid, address, interface)
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
         if address.version == 4:
@@ -352,10 +369,7 @@ def container_ip_remove(container_name, ip, interface):
 
     try:
         container_pid = info["State"]["Pid"]
-        netns.remove_ip_from_interface(container_pid,
-                                       address,
-                                       interface,
-                                       proc_alias="/proc")
+        netns.remove_ip_from_ns_veth(container_pid, address, interface)
 
     except CalledProcessError:
         print "Error updating networking in container. Aborting."

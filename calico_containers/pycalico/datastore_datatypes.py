@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""
+Module containing all of the datatypes written and read from the datastore.
+"""
 from collections import namedtuple
 import copy
 import json
@@ -19,11 +21,15 @@ import re
 
 from netaddr import IPAddress, IPNetwork
 
-VETH_NAME = "eth1"
-"""The name to give to the veth in the target container's namespace. Default
-to eth1 because eth0 could be in use"""
+from pycalico.util import generate_cali_interface_name
 
-# The various datatype classes used by datastore.py are collected here.
+
+IF_PREFIX = "cali"
+"""
+prefix that appears in all Calico interface names in the root namespace. e.g.
+cali123456789ab.
+"""
+
 
 class Rules(namedtuple("Rules", ["id", "inbound_rules", "outbound_rules"])):
     """
@@ -189,14 +195,13 @@ class Endpoint(object):
         self.endpoint_id = endpoint_id
         self.state = state
         self.mac = mac
-        self.name = "cali" + endpoint_id[:11]
+        self.name = generate_cali_interface_name(IF_PREFIX, endpoint_id)
 
         self.ipv4_nets = set()
         self.ipv6_nets = set()
         self.ipv4_gateway = None
         self.ipv6_gateway = None
 
-        self.if_name = None
         self.profile_ids = []
         self._original_json = None
 
@@ -204,7 +209,6 @@ class Endpoint(object):
         json_dict = {"state": self.state,
                      "name": self.name,
                      "mac": self.mac,
-                     "container:if_name": self.if_name,
                      "profile_ids": self.profile_ids,
                      "ipv4_nets": sorted([str(net) for net in self.ipv4_nets]),
                      "ipv6_nets": sorted([str(net) for net in self.ipv6_nets]),
@@ -252,7 +256,6 @@ class Endpoint(object):
         profile_id = json_dict.get("profile_id", None)
         ep.profile_ids = [profile_id] if profile_id else \
                          json_dict.get("profile_ids", [])
-        ep.if_name = json_dict.get("container:if_name", VETH_NAME)
 
         # Store the original JSON representation of this Endpoint.
         ep._original_json = json_str
@@ -290,7 +293,6 @@ class Endpoint(object):
             return NotImplemented
         return (self.endpoint_id == other.endpoint_id and
                 self.state == other.state and
-                self.if_name == other.if_name and
                 self.mac == other.mac and
                 self.profile_ids == other.profile_ids and
                 self.ipv4_nets == other.ipv4_nets and
@@ -307,8 +309,9 @@ class Endpoint(object):
     def copy(self):
         return copy.deepcopy(self)
 
+    @property
     def temp_interface_name(self):
-        return "tmp" + self.endpoint_id[:11]
+        return generate_cali_interface_name("tmp", self.endpoint_id)
 
     def __repr__(self):
         return self.__str__()
