@@ -20,6 +20,7 @@ Etcd polling functions.
 """
 from collections import defaultdict
 import functools
+import os
 import random
 from socket import timeout as SocketTimeout
 import httplib
@@ -64,6 +65,8 @@ PER_ORCH_DIR = WORKLOAD_DIR + "/<orchestrator>"
 PER_WORKLOAD_DIR = PER_ORCH_DIR + "/<workload_id>"
 ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
 PER_ENDPOINT_KEY = ENDPOINT_DIR + "/<endpoint_id>"
+CONFIG_PARAM_KEY = CONFIG_DIR + "/<config_param>"
+PER_HOST_CONFIG_PARAM_KEY = PER_HOST_DIR + "/config/<config_param>"
 
 IPAM_DIR = VERSION_DIR + "/ipam"
 IPAM_V4_DIR = IPAM_DIR + "/v4"
@@ -247,6 +250,14 @@ class _EtcdWatcher(gevent.Greenlet):
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
+        # Configuration keys.  If these change, by default, we'll die and
+        # let the init daemon restart us.
+        reg(CONFIG_PARAM_KEY,
+            on_set=self.on_global_config_set,
+            on_del=self.on_global_config_delete)
+        reg(PER_HOST_CONFIG_PARAM_KEY,
+            on_set=self.on_host_config_set,
+            on_del=self.on_host_config_delete)
 
     @logging_exceptions
     def _run(self):
@@ -658,6 +669,31 @@ class _EtcdWatcher(gevent.Greenlet):
         if not self.endpoint_ids_per_host[hostname]:
             del self.endpoint_ids_per_host[hostname]
 
+    def on_global_config_set(self, response, config_param):
+        _log.warning("Config param %s updated while felix is running; "
+                     "restarting.", config_param)
+        self.die_and_restart()
+
+    def on_global_config_delete(self, response, config_param):
+        _log.warning("Config param %s deleted while felix is running; "
+                     "restarting.", config_param)
+        self.die_and_restart()
+
+    def on_host_config_set(self, response, hostname, config_param):
+        if hostname == self.config.HOSTNAME:
+            _log.warning("Config param %s updated while felix is running; "
+                         "restarting.", config_param)
+            self.die_and_restart()
+
+    def on_host_config_delete(self, response, hostname, config_param):
+        if hostname == self.config.HOSTNAME:
+            _log.warning("Config param %s deleted while felix is running; "
+                         "restarting.", config_param)
+            self.die_and_restart()
+
+    def die_and_restart(self):
+        gevent.sleep(2)
+        os._exit(1)
 
 def _build_config_dict(cfg_node):
     """
