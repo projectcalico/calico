@@ -23,7 +23,7 @@ import copy
 
 import logging
 import re
-from mock import patch, call, Mock
+from mock import patch, call, Mock, ANY
 from calico.felix import fiptables
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.futils import FailedSystemCall
@@ -70,7 +70,7 @@ class TestIptablesUpdater(BaseTestCase):
         super(TestIptablesUpdater, self).setUp()
         self.stub = IptablesStub("filter")
         self.m_config = Mock()
-        self.m_config.REFRESH_INTERVAL = 10
+        self.m_config.REFRESH_INTERVAL = 0  # disable refresh thread
         self.ipt = IptablesUpdater("filter", self.m_config, 4)
         self.ipt._execute_iptables = self.stub.apply_iptables_restore
         self.check_output_patch = patch("gevent.subprocess.check_output",
@@ -79,6 +79,7 @@ class TestIptablesUpdater(BaseTestCase):
         self.m_check_output.side_effect = self.fake_check_output
 
     def fake_check_output(self, cmd, *args, **kwargs):
+        _log.info("Stubbing out call to %s", cmd)
         if cmd == ["iptables-save", "--table", "filter"]:
             return self.stub.generate_iptables_save()
         elif cmd == ['iptables', '--wait', '--list', '--table', 'filter']:
@@ -102,7 +103,22 @@ class TestIptablesUpdater(BaseTestCase):
         self.step_actor(self.ipt)
         self.assertEqual(self.stub.chains_contents,
             {"foo": ["--append foo --jump bar"],
-             'bar': [MISSING_CHAIN_DROP % "bar"] })
+             'bar': [MISSING_CHAIN_DROP % "bar"]})
+
+    def test_rewrite_chains_cover(self):
+        """
+        Hits remaining code paths in rewrite chains.
+        """
+        cb = Mock()
+        self.ipt.rewrite_chains(
+            {"foo": ["--append foo --jump bar"]},
+            {"foo": set(["bar"])},
+            suppress_upd_log=True,
+            async=True,
+            callback=cb,
+        )
+        self.step_actor(self.ipt)
+        cb.assert_called_once_with(None)
 
     def test_delete_required_chain_stub(self):
         """
@@ -219,6 +235,52 @@ class TestIptablesUpdater(BaseTestCase):
             # before.
         })
 
+    def test_cleanup_bad_read_back(self):
+        # IptablesUpdater hears about some chains before the cleanup.
+        self.ipt.rewrite_chains(
+            {"felix-foo": ["--append felix-foo --jump felix-boff"]},
+            {"felix-foo": set(["felix-boff"])},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+        self.stub.assert_chain_contents({
+            "felix-foo": ["--append felix-foo --jump felix-boff"],
+            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+        })
+
+        # Some other process then breaks our chains.
+        self.stub.chains_contents = {}
+        self.stub.iptables_save_output = [
+            None,  # Start of cleanup.
+            # End of cleanup.  Out of sync:
+            "*filter\n"
+            ":INPUT DROP [68:4885]\n"
+            ":FORWARD DROP [0:0]\n"
+            ":OUTPUT ACCEPT [20:888]\n"
+            ":DOCKER - [0:0]\n"
+            "-A INPUT -i lxcbr0 -p tcp -m tcp --dport 53 -j ACCEPT\n"
+            "-A FORWARD -o lxcbr0 -j ACCEPT\n"
+            "COMMIT\n"
+        ]
+        _log.info("Forcing iptables-save to always return %s",
+                  self.stub.iptables_save_output)
+
+        # Issue the cleanup.
+        with patch.object(fiptables._log, "error") as m_error:
+            self.ipt.cleanup(async=True)
+            self.step_actor(self.ipt)
+            m_error.assert_called_once_with(
+                ANY,
+                set([]),
+                set([]),
+                set(["felix-foo", "felix-boff"])
+            )
+            self.stub.assert_chain_contents({
+                "felix-foo": ["--append felix-foo --jump felix-boff"],
+                "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            })
+
+
     def test_ensure_rule_removed(self):
         with patch.object(self.ipt, "_execute_iptables") as m_exec:
             m_exec.side_effect = iter([None,
@@ -237,6 +299,21 @@ class TestIptablesUpdater(BaseTestCase):
         with patch.object(self.ipt, "_execute_iptables") as m_exec:
             m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
                                                         "line 2 failed")])
+            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call])
+
+    def test_ensure_rule_removed_missing_dep(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([
+                FailedSystemCall("Message", [], 1, "",
+                                 "at line: 2\n"
+                                 "ipset doesn't exist")])
             self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
             self.step_actor(self.ipt)
             exp_call = call([
@@ -327,8 +404,15 @@ class IptablesStub(object):
         self.new_contents = None
         self.new_dependencies = None
         self.declared_chains = None
+
+        self.iptables_save_output = []
         
     def generate_iptables_save(self):
+        if self.iptables_save_output:
+            output = self.iptables_save_output.pop(0)
+            if output:
+                _log.debug("Forcing iptables-save output")
+                return output
         lines = ["*" + self.table]
         for chain_name in sorted(self.chains_contents.keys()):
             lines.append(":%s - [0:0]" % chain_name)
@@ -338,7 +422,7 @@ class IptablesStub(object):
         return "\n".join(lines)
 
     def generate_iptables_list(self):
-        _log.debug("Generating iptables --list for chsins %s\n%s",
+        _log.debug("Generating iptables --list for chains %s\n%s",
                    self.chains_contents, self.chain_dependencies)
         chunks = []
         for chain, entries in sorted(self.chains_contents.items()):
