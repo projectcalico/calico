@@ -12,7 +12,7 @@
    #    implied. See the License for the specific language governing
    #    permissions and limitations under the License.
 
-Integration with Mirantis Fuel 5.1
+Integration with Mirantis Fuel 6.1
 ==================================
 
 This document describes our experimental integration of Calico with the
@@ -60,9 +60,8 @@ The procedure for deploying such a cluster consists of the following
 steps.
 
 - Prepare a Fuel master (aka admin) node in the usual way.
-- Apply some changes to the Puppet files on the master node.
+- Install the Calico plugin for Fuel on the master node.
 - Deploy an OpenStack cluster in the usual way, using the Fuel web UI.
-- Run a route reflector configuration script on the controller node.
 
 The following subsections flesh out these steps.
 
@@ -70,88 +69,55 @@ Prepare a Fuel master node
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Follow Mirantis's instructions for preparing a Fuel master node,
-starting from `here`_. Typically this involves
-downloading an ISO image and then booting a fresh machine from that
-ISO.
+from the `Fuel 6.1 User Guide`_. You will need to download a Fuel 6.1 ISO
+image from the `Mirantis website`_.
 
-Our Calico-related changes (described next) take the Fuel 5.1 release
-as their base, so it would be most reliable to download and use the
-ISO image for 5.1.
+.. _Fuel 6.1 User Guide: https://docs.mirantis.com/openstack/fuel/fuel-6.1/user-guide.html#download-and-install-fuel
+.. _Mirantis Website: https://www.mirantis.com/products/mirantis-openstack-software/
 
-.. _here: https://software.mirantis.com/
+Install the Calico plugin for Fuel on the master node
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+We are currently working with Mirantis to get the Calico plugin certified
+with Fuel, at which point you will be able to download it from the `Fuel 
+Plugin Catalog`_. Currently, you will need to build a copy of the plugin
+yourself, following the instructions on the plugin's `GitHub`_ page.
 
-Apply changes to Puppet files on the master node
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _Fuel Plugin Catalog: https://www.mirantis.com/products/openstack-drivers-and-plugins/fuel-plugins/
+.. _GitHub: https://github.com/stackforge/fuel-plugin-calico
 
-We are developing Calico-related Puppet file changes in a
-`fork of Mirantis's fuel-library repository`_. Our changes are in the
-``calico2`` branch.
+However you obtain a copy of the Calico plugin, you will need to copy it onto
+the master node and install it with::
 
-Clone this repository and checkout the ``calico2`` branch.  This can be
-done on any machine where you have Git and that is convenient for you
-to develop on, and from which you can access the Fuel master node.
-Linux-based machines will probably be more straightforward than Windows-based
-ones, because it avoids the pitfalls of line ending and permissions
-conversion when synchronizing files from this machine onto the Fuel
-master node.
+    fuel plugins --install calico-fuel-plugin-<version>.noarch.rpm
 
-First, obtain the code::
+You can check that the plugin was successfully installed using::
 
-    git clone https://github.com/Metaswitch/fuel-library.git
-    cd fuel-library
-    git checkout calico2
-
-Copy the puppet files from this repository to an interim location on
-the Fuel master node.
-
-::
-
-    sshpass -pr00tme rsync -rv --delete deployment root@MASTER-NODE-IP:fuel-library/
-
-On the master node, go to that interim location, then run the
-following commands to modify the relevant files under ``/etc/puppet``::
-
-    cd deployment
-    bash install.sh
-
-The output from the last command should look something like this::
-
-    [root@mirantis-fuelmaster2 deployment]# sh install.sh
-    sending incremental file list
-    calico/files/
-    calico/files/calico_compute.sh
-    calico/files/calico_controller.sh
-    calico/files/calico_route_reflector.sh
-    calico/files/extra.list
-    calico/files/extra_prefs
-    calico/files/network-settings.org
-    calico/files/todo.org
-    calico/manifests/
-    calico/manifests/init.pp
-    calico/manifests/params.pp
-    calico/manifests/stop_neutron_agents.pp
-
-    sent 12827 bytes  received 211 bytes  26076.00 bytes/sec
-    total size is 12105  speedup is 0.93
-    Overwrite osnailyfacter/manifests/cluster_simple.pp
-    Overwrite osnailyfacter/examples/site.pp
-
-.. _fork of Mirantis's fuel-library repository: https://github.com/Metaswitch/fuel-library
+    fuel plugins --list
 
 Deploy an OpenStack cluster
 ---------------------------
 
-Use the Fuel web UI to deploy an OpenStack cluster in the usual way,
+Use the Fuel web UI to deploy an OpenStack cluster in the `usual way`_,
 with the following guidelines.
 
-- Select non-HA controller (i.e. "Multi-node" option).
-- Select neutron with VLAN segmentation, for networking.
-- Select Ubuntu Precise as the OS.
-- Check the "Assign public network to all nodes" option (under the Settings
-  tab).
-- You'll need at least two compute nodes, for a meaningful test of
-  Calico networking.
+- Create a new OpenStack environment, selecting:
+
+  - Juno on Ubuntu Trusty (14.x)
+  - "Neutron with VLAN segmentation" as the networking setup
+
+- Under the settings tab, make sure the following options are checked:
+
+  - "Assign public network to all nodes"
+  - "Use Calico Virtual Networking"
+
 - Network settings as advised in the following subsections.
+
+- Add nodes (for meaningful testing, you will need at least two compute nodes
+  in addition to the controller).
+
+- Deploy changes.
+
+.. _usual way: https://docs.mirantis.com/openstack/fuel/fuel-6.1/user-guide.html#create-a-new-openstack-environment
 
 Public
 ~~~~~~
@@ -171,6 +137,7 @@ public addresses: feel free to change this to match your own local network.
 - CIDR: 172.18.203.0/24
 - Use VLAN tagging: No
 - Gateway: 172.18.203.1
+- Floating IP ranges: 172.18.203.50 - 172.18.203.59
 
 By default, Fuel associates the public IP address with the second NIC
 (i.e. ``eth1``) on each node.
@@ -229,22 +196,16 @@ simplify the web UI for Calico networking.
 
 - Internal network CIDR: 192.168.111.0/24
 - Internal network gateway: 192.168.111.1
-- Floating IP ranges: 172.18.203.50 - 172.18.203.59
 - DNS servers: 8.8.4.4, 8.8.8.8
 
-Configure BGP route reflector on the controller
------------------------------------------------
+Check BGP connectivity on the controller
+----------------------------------------
 
-Once the deployment is complete -- and also, if you later add more
-compute nodes to the deployment -- you need to update the BGP route
-reflector configuration on the controller node.
+Once the deployment is complete, you may wish to verify that the route 
+reflector running on the controller node has established BGP sessions 
+to all of the compute nodes. 
 
 To do this, log onto the controller node and run::
-
-    /calico_route_reflector.sh
-
-To verify that BGP sessions are established to all the compute nodes,
-you can then do::
 
     birdc
     show protocols all
@@ -260,13 +221,27 @@ network and subnet from which instance IP addresses will be allocated.
 We use the following values.
 
 - Name: 'demo'
-- IP subnet: 10.65.0/24
+- IP subnet: 10.65.0.0/24
 - Gateway: 10.65.0.1
 - DHCP-enabled: Yes.
 
-Also in the OpenStack web UI, under Admin, System Info, Network
-Agents, verify that there is an instance of 'Felix (Calico agent)'
-running on each compute node, and that its Status is Up.
+Under Project, Compute, Access & Security, create two new security groups. For
+each security group, select 'Manage Rules' and add two new rules:
+
+- Allow incoming ICMP (ping) traffic only if it originates from other instances
+  in this security group:
+
+  - Rule: ALL ICMP
+  - Direction: Ingress
+  - Remote: Security Group
+  - Security Group: Current Group
+  - Ether Type: IPv4
+
+- Enable SSH onto instances in this security group:
+
+  - Rule: SSH
+  - Remote: CIDR
+  - CIDR: 0.0.0.0/0
 
 Under Project, Instances, launch a batch of VMs -- enough of them to
 ensure that there will be at least one VM on each compute node -- with
@@ -274,6 +249,8 @@ the following details.
 
 - Flavor: m1.tiny
 - Boot from image: TestVM
+- Under the Access & Security tab, select one of your new security groups
+  (split your instances roughly 50:50 between the two security groups).
 - Under the Networking tab, drag 'demo' into the 'Selected Networks'
   box.
 
@@ -287,24 +264,17 @@ Under Admin, Instances, verify that:
 - they reach Active status within about a minute.
 
 Log on to one of the VMs, e.g. by clicking on one of the instances and
-then on its Console tab, and use 'ping' to verify connectivity to the
-IP address of each other VM.
-
-Under Project, Access & Security, change the rules of the 'default'
-security group so that they don't allow access between all VMs in that
-group, but instead only to and from particular VM IP addresses.
-
-Log on to one of the VMs that you would now expect *not* to have
-access to all of the others, and verify that it can still ping the VMs
-that you would expect, and cannot ping the others.
+then on its Console tab, and use 'ping' to verify connectivity is as expected
+from the security group configuration, i.e. that you can ping the IP addresses
+of all of the other VMs in the same security group, but you cannot ping the VMs
+in the other security group.
 
 Detailed Observations
 ---------------------
 
 This section records some more detailed notes about the state of the
-cluster that results from following the above procedure with HEAD
-commit 854d2353 from `our fork of the Fuel library
-<https://github.com/Metaswitch/fuel-library>`__.
+cluster that results from following the above procedure.
+
 Reading this section should not be required in order to demonstrate or
 understand OpenStack and Calico function, but it may be useful as a reference
 if a newly deployed system does not appear to be behaving correctly.
@@ -349,7 +319,6 @@ On the controller:
 
 - Various Neutron agents are running that Calico does not require.
 
-  - neutron-ns-metadata-proxy
   - neutron-metadata-agent
   - neutron-dhcp-agent
   - neutron-openvswitch-agent
@@ -364,9 +333,3 @@ On each compute node:
 
 - There is a complex set of OVS bridges present, that Calico does not
   require.
-
-In the OpenStack configuration:
-
-- There is a router configured, that Calico doesn't require.
-- There are networks configured with subnets 192.168.111.0/24 and
-  172.18.203.0/24, which Calico doesn't require.
