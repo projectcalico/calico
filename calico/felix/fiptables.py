@@ -424,16 +424,25 @@ class IptablesUpdater(Actor):
                 finished = True
 
         # Then some sanity checks:
-        temp_chains = self._chains_in_dataplane
+        expected_chains = self._chains_in_dataplane
         self._load_chain_names_from_iptables()
-        if temp_chains != self._chains_in_dataplane:
-            # We want to know about this but it's not fatal.
+        loaded_chains = self._chains_in_dataplane
+        missing_chains = ((self._explicitly_prog_chains | required_chains) -
+                          self._chains_in_dataplane)
+        if expected_chains != self._chains_in_dataplane or missing_chains:
+            # This is serious, either there's a bug in our model of iptables
+            # or someone else has changed iptables under our feet.
             _log.error("Chains in data plane inconsistent with calculated "
                        "index.  In dataplane but not in index: %s; In index: "
-                       "but not dataplane: %s.  Another process may have "
-                       "clobbered our updates.",
-                       self._chains_in_dataplane - temp_chains,
-                       temp_chains - self._chains_in_dataplane)
+                       "but not dataplane: %s; missing from iptables: %s.  "
+                       "Another process may have clobbered our updates.",
+                       loaded_chains - expected_chains,
+                       expected_chains - loaded_chains,
+                       missing_chains)
+
+            # Try to recover: trigger a full refresh of the dataplane to
+            # bring it into sync.
+            self.refresh_iptables()
 
     def _periodic_refresh(self):
         while True:
