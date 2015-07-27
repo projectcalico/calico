@@ -327,6 +327,7 @@ class IptablesUpdater(Actor):
                                         'COMMIT'],
                                        fail_log_level=logging.DEBUG)
                 num_instances += 1
+                assert num_instances < 100, "Too many deletes, infinite loop?"
         except FailedSystemCall as e:
             if num_instances == 0:
                 if "line 2 failed" in e.stderr:

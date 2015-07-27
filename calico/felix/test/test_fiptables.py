@@ -280,13 +280,64 @@ class TestIptablesUpdater(BaseTestCase):
                 "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
             })
 
+    def test_ensure_rule_inserted(self):
+        fragment = "FOO --jump DROP"
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
+                                                        "line 2 failed"),
+                                       None,
+                                       None])
+            self.ipt.ensure_rule_inserted(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertEqual(
+                m_exec.mock_calls,
+                [
+                    call(["*filter",
+                          "--delete FOO --jump DROP",
+                          "--insert FOO --jump DROP",
+                          "COMMIT"],
+                         fail_log_level=logging.DEBUG),
+                    call(["*filter",
+                          "--insert FOO --jump DROP",
+                          "COMMIT"]),
+                ])
+
+            self.assertTrue(fragment in self.ipt._inserted_rule_fragments)
+
+    def test_insert_remove_tracking(self):
+        fragment = "FOO --jump DROP"
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = [
+                # Insert.
+                None,
+                # Remove: requires an exception to terminate loop.
+                None,
+                FailedSystemCall("Message", [], 1, "", "line 2 failed"),
+                # Insert.
+                None,
+            ]
+            self.ipt.ensure_rule_inserted(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertTrue(fragment in self.ipt._inserted_rule_fragments)
+            self.assertTrue(fragment not in self.ipt._removed_rule_fragments)
+
+            self.ipt.ensure_rule_removed(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertTrue(fragment not in self.ipt._inserted_rule_fragments)
+            self.assertTrue(fragment in self.ipt._removed_rule_fragments)
+
+            self.ipt.ensure_rule_inserted(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertTrue(fragment in self.ipt._inserted_rule_fragments)
+            self.assertTrue(fragment not in self.ipt._removed_rule_fragments)
 
     def test_ensure_rule_removed(self):
+        fragment = "FOO --jump DROP"
         with patch.object(self.ipt, "_execute_iptables") as m_exec:
             m_exec.side_effect = iter([None,
                                        FailedSystemCall("Message", [], 1, "",
                                                         "line 2 failed")])
-            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.ipt.ensure_rule_removed(fragment, async=True)
             self.step_actor(self.ipt)
             exp_call = call([
                 '*filter',
