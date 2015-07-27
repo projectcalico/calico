@@ -388,6 +388,21 @@ class TestIptablesUpdater(BaseTestCase):
             ], fail_log_level=logging.DEBUG)
             self.assertEqual(m_exec.mock_calls, [exp_call])
 
+    def test_refresh_iptables(self):
+        self.ipt.ensure_rule_inserted("INPUT -j ACCEPT", async=True)
+        self.ipt.ensure_rule_inserted("INPUT -j DROP", async=True)
+        self.ipt.ensure_rule_removed("INPUT -j DROP", async=True)
+        self.step_actor(self.ipt)
+
+        self.ipt.refresh_iptables(async=True)
+        with patch.object(self.ipt, "_insert_rule") as m_insert_rule:
+            with patch.object(self.ipt, "_remove_rule") as m_remove_rule:
+                self.step_actor(self.ipt)
+                m_insert_rule.assert_called_once_with("INPUT -j ACCEPT",
+                                                      log_level=logging.DEBUG)
+                m_remove_rule.assert_called_once_with("INPUT -j DROP",
+                                                      log_level=logging.DEBUG)
+
 
 class TestIptablesStub(BaseTestCase):
     """
@@ -449,7 +464,7 @@ class IptablesStub(object):
 
     def __init__(self, table):
         self.table = table
-        self.chains_contents = {}
+        self.chains_contents = defaultdict(list)
         self.chain_dependencies = defaultdict(set)
 
         self.new_contents = None
@@ -538,10 +553,12 @@ class IptablesStub(object):
         ipt_op = splits[0]
         chain = splits[1]
         _log.debug("Rule op: %s, chain name: %s", ipt_op, chain)
-        if ipt_op in ("--append", "-A"):
-            if chain not in self.declared_chains:
-                raise AssertionError("Append to non-existent chain %s" % chain)
-            self.new_contents[chain].append(rule)
+        if ipt_op in ("--append", "-A", "--insert", "-I"):
+            self.assert_chain_declared(chain, ipt_op)
+            if ipt_op in ("--append", "-A"):
+                self.new_contents[chain].append(rule)
+            else:
+                self.new_contents[chain].insert(0, rule)
             m = re.search(r'(?:--jump|-j|--goto|-g)\s+(\S+)', rule)
             if m:
                 action = m.group(1)
@@ -550,17 +567,31 @@ class IptablesStub(object):
                     # Assume a dependent chain.
                     self.new_dependencies[chain].add(action)
         elif ipt_op in ("--delete-chain", "-X"):
-            if chain not in self.declared_chains:
-                raise AssertionError("Delete to non-existent chain %s" % chain)
+            self.assert_chain_declared(chain, ipt_op)
             del self.new_contents[chain]
             del self.new_dependencies[chain]
         elif ipt_op in ("--flush", "-F"):
-            if chain not in self.declared_chains:
-                raise AssertionError("Flush to non-existent chain %s" % chain)
+            self.assert_chain_declared(chain, ipt_op)
             self.new_contents[chain] = []
             self.new_dependencies[chain] = set()
+        elif ipt_op in ("--delete", "-D"):
+            self.assert_chain_declared(chain, ipt_op)
+            for rule in self.new_contents.get(chain, []):
+                rule_fragment = " ".join(splits[1:])
+                if rule.endswith(rule_fragment):
+                    self.new_contents[chain].remove(rule)
+                    break
+            else:
+                raise FailedSystemCall("Delete for non-existent rule", [], 1,
+                                       "", "line 2 failed")
         else:
             raise AssertionError("Unknown operation %s" % ipt_op)
+
+    def assert_chain_declared(self, chain, ipt_op):
+        kernel_chains = set(["INPUT", "FORWARD", "OUTPUT"])
+        if chain not in self.declared_chains and chain not in kernel_chains:
+            raise AssertionError("%s to non-existent chain %s" %
+                                 (ipt_op, chain))
 
     def _handle_commit(self):
         for chain, deps in self.chain_dependencies.iteritems():
