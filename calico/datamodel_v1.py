@@ -24,7 +24,6 @@ made in a new copy of the file with revved version suffix.  That allows
 us to maintain multiple copies of the data model in parallel during
 migrations.
 """
-from collections import namedtuple
 import logging
 import re
 

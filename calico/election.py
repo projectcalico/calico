@@ -28,7 +28,7 @@ from httplib import HTTPException
 import logging
 from socket import timeout as SocketTimeout
 from urllib3 import Timeout
-from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError, HTTPError
+from urllib3.exceptions import HTTPError
 
 import os
 
