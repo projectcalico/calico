@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import unittest
-from mock import patch, Mock, call, ANY
+from mock import patch, Mock
 from calico_ctl.checksystem import _check_kernel_modules
 from sh import Command, ErrorReturnCode
 

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import unittest
-from mock import patch, Mock
+from mock import patch
 from subprocess import CalledProcessError, check_output
 from pycalico.util import get_host_ips
 

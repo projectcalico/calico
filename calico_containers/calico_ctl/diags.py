@@ -23,7 +23,6 @@ Options:
   --upload             Flag, when set, will upload logs to http://transfer.sh
 """
 import sys
-from utils import enforce_root
 import sh
 import os
 from datetime import datetime

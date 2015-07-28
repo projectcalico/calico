@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import unittest
-from mock import patch, Mock, call, ANY
+from mock import patch, Mock, call
 from calico_ctl.node import _attach_and_stream
 from docker import Client
 import sys

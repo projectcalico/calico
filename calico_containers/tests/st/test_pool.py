@@ -14,7 +14,6 @@
 from unittest import skip
 
 from test_base import TestBase
-from tests.st.utils.docker_host import DockerHost
 
 """
 Test calicoctl pool

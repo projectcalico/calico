@@ -18,7 +18,7 @@ import socket
 import logging
 import sys
 
-from subprocess32 import check_call, CalledProcessError, call
+from subprocess32 import CalledProcessError
 from werkzeug.exceptions import HTTPException, default_exceptions
 from netaddr import IPNetwork
 

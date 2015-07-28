@@ -11,13 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from etcd import EtcdResult
 import json
 import unittest
 
 from mock import patch, ANY, call
 from netaddr import IPAddress, IPNetwork
-from nose.tools import assert_equal, assert_dict_equal
+from nose.tools import assert_equal
 from subprocess32 import CalledProcessError
 
 from libnetwork_plugin import docker_plugin

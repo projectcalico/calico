@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import re
-from unittest import skip
 import uuid
 
 from nose.plugins.attrib import attr

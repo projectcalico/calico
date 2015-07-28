@@ -1,7 +1,6 @@
 #!/bin/python
 import json
 import os
-import socket
 import sys
 from subprocess import check_output, CalledProcessError, check_call
 import requests

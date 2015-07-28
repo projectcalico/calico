@@ -14,8 +14,7 @@
 
 import json
 import unittest
-import socket
-from mock import patch, Mock, MagicMock, call
+from mock import patch, Mock, call
 from subprocess import CalledProcessError
 from integrations.kubernetes import calico_kubernetes
 from pycalico.datastore import IF_PREFIX
