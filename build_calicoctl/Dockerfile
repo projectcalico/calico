@@ -15,12 +15,12 @@
 # This image is based on the "main" calico/node image. It shares many of the
 # dependencies which makes it a good base for an image used for building and
 # unit testing
-FROM ubuntu:14.04
+FROM debian:wheezy
 
 WORKDIR /code/
 
 RUN apt-get update && \
-    apt-get install -qy curl python-dev python-pip git libffi-dev libssl-dev
+    apt-get install -qy curl python-dev python-pip git libffi-dev libssl-dev procps
 
 # Make an etcd available as some UTs rely on it.
 RUN curl -L  https://www.github.com/coreos/etcd/releases/download/v2.0.10/etcd-v2.0.10-linux-amd64.tar.gz -o /tmp/etcd.tar.gz
