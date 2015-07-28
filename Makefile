@@ -1,7 +1,7 @@
 .PHONEY: all binary test ut ut-circle st clean setup-env run-etcd install-completion fast-st
 
 SRCDIR=calico_containers
-PYCALICO=$(wildcard $(SRCDIR)/pycalico/*.py) $(wildcard $(SRCDIR)/calico_ctl/*.py) $(wildcard $(SRCDIR)/*.py) $(wildcard $(SRCDIR)/libnetwork_plugin/*.py)
+PYCALICO=$(wildcard $(SRCDIR)/calico_ctl/*.py) $(wildcard $(SRCDIR)/*.py) $(wildcard $(SRCDIR)/libnetwork_plugin/*.py)
 BUILD_DIR=build_calicoctl
 BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 # There are subdirectories so use shell rather than wildcard
@@ -17,7 +17,6 @@ default: all
 all: test
 binary: dist/calicoctl
 node: caliconode.created
-wheel: dist/pycalico-$(WHEEL_VERSION)-py2-none-any.whl
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
 	docker build -t calico/node .
@@ -48,11 +47,6 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	-docker run -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
 	docopt-completion --manual-bash ./calicoctl
 
-dist/pycalico-$(WHEEL_VERSION)-py2-none-any.whl: $(PYCALICO)
-	mkdir -p dist
-	chmod 777 dist
-	python setup.py bdist_wheel
-
 test: st ut ut-kubernetes
 
 ut: calicobuild.created
@@ -62,7 +56,7 @@ ut: calicobuild.created
 	docker run --rm -v `pwd`/calico_containers:/code -u root \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	nosetests tests/unit pycalico/tests -c nose.cfg'
+	nosetests tests/unit  -c nose.cfg'
 
 ut-kubernetes: calicobuild.created
 	docker run --rm -v `pwd`/calico_containers:/code/calico_containers \
@@ -131,7 +125,6 @@ clean:
 	find . -name '*.pyc' -exec rm -f {} +
 	-rm -rf dist
 	-rm -rf build
-	-rm -rf calico_containers/pycalico.egg-info/
 	-rm -f calico_containers/busybox.tar
 	-docker rm -f calico-build
 	-docker rm -f calico-node
@@ -141,7 +134,6 @@ clean:
 
 setup-env:
 	virtualenv venv
-	venv/bin/pip install --upgrade -r calico_containers/pycalico/requirements.txt
 	venv/bin/pip install --upgrade -r build_calicoctl/requirements.txt
 	@echo "run\n. venv/bin/activate"
 
