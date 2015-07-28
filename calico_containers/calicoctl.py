@@ -35,9 +35,6 @@ See 'calicoctl <command> --help' to read about a specific subcommand.
 """
 import sys
 import traceback
-import netaddr
-from netaddr import AddrFormatError
-import re
 from docopt import docopt
 from pycalico.datastore_errors import DataStoreError
 

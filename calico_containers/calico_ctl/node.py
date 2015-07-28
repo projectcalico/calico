@@ -40,10 +40,7 @@ Options:
 import sys
 import os
 import stat
-import sh
-from subprocess import check_output, CalledProcessError
 import docker
-import netaddr
 import socket
 import urllib
 
@@ -62,7 +59,6 @@ from netaddr import IPAddress
 from prettytable import PrettyTable
 from utils import get_container_ipv_from_arguments
 from utils import validate_ip
-import sys
 import signal
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
