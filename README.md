@@ -91,11 +91,13 @@ integration please see the
 
 To run the unit tests, you'll also need to type:
 
-    pip install nose mock
+    pip install tox
 
 Then, still at the root of the calico directory, run:
 
-    nosetests
+    tox
+
+Tox runs the tests under Python 2.6, 2.7 and PyPy, which you will need to [install separately](http://pypy.readthedocs.org/en/latest/install.html).
 
 ### Fewer dependencies
 
