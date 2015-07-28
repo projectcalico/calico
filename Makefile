@@ -157,7 +157,7 @@ kubernetes: /dist/calico_kubernetes
 	cd build_calicoctl; docker build -t calico-build .
 	mkdir -p dist
 	chmod 777 `pwd`/dist
-	# Build the rkt plugin
+	# Build the kubernetes plugin
 	docker run -u user -v `pwd`/calico_containers:/code/calico_containers \
 	-v `pwd`/dist:/code/dist \
 	-e PYTHONPATH=/code/calico_containers \
