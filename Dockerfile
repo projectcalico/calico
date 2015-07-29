@@ -20,7 +20,7 @@ CMD ["/sbin/my_init"]
 
 ENV HOME /root
 
-ADD calico_containers/pycalico/requirements.txt /pycalico/
+ADD calico_containers/requirements.txt /pycalico/
 
 # Uncomment these lines and comment the section underneath to allow faster
 # rebuilds when making changes to the scripts.
@@ -48,5 +48,4 @@ RUN /build/base.sh && \
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's thing they're most likely to change.
 COPY node_filesystem /
-COPY calico_containers/pycalico /calico_containers/pycalico
 COPY calico_containers/libnetwork_plugin /calico_containers/libnetwork_plugin
