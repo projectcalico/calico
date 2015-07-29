@@ -178,12 +178,12 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
     attached.
     :return:  None.
     """
+    # Print warnings for any known system issues before continuing
+    check_system(fix=False, quit_if_error=False)
+
     # Ensure log directory exists
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-
-    # Print warnings for any known system issues before continuing
-    check_system(fix=False, quit_if_error=False)
 
     # Get IP address of host, if none was specified
     if not ip:
