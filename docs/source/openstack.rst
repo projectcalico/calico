@@ -33,8 +33,7 @@ following methods:
 
 - our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`
 
-- our experimental integration of Calico with Mirantis Fuel 5.1 - see
-  :doc:`fuel-integration`.
+- our integration of Calico with Mirantis Fuel 6.1 - see :doc:`fuel-integration`
 
 In all cases, you just need at least two servers to get going (one OpenStack
 controller and one OpenStack compute node).
