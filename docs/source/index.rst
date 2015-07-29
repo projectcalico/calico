@@ -19,7 +19,7 @@ Calico is an open source solution for virtual networking in
 cloud data centers, developed by `Metaswitch
 Networks <http://www.metaswitch.com/>`__ and released under the `Apache
 2.0
-License <https://github.com/Metaswitch/calico/blob/master/LICENSE>`__.
+License <https://github.com/projectcalico/calico/blob/master/LICENSE>`__.
 You can find high level information about it on `our
 website <http://www.projectcalico.org/>`__, and more detailed documentation
 here.

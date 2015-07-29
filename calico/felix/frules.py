@@ -337,7 +337,7 @@ def _rule_to_iptables_fragment(chain_name, rule, ip_version, tag_to_ipset,
         icmp_type = rule["icmp_type"]
         if icmp_type == 255:
             # Temporary work-around for this issue:
-            # https://github.com/Metaswitch/calico/issues/451
+            # https://github.com/projectcalico/calico/issues/451
             # This exception will be caught by the caller, which will replace
             # this rule with a DROP rule.  That's arguably better than
             # forbidding this case in the validation routine, which would

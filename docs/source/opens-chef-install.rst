@@ -100,7 +100,7 @@ Prepare Chef
 
    ::
 
-       git clone https://github.com/Metaswitch/calico-chef.git
+       git clone https://github.com/projectcalico/calico-chef.git
 
 -  Create a directory for the chef installation configuration. The
    following instructions assume you created a ``.chef`` directory under
@@ -154,7 +154,7 @@ How To Use It: For Experienced Chef Users
 -----------------------------------------
 
 We provide a single ``calico`` cookbook in `this
-repository <https://github.com/Metaswitch/calico-chef>`__. This cookbook
+repository <https://github.com/projectcalico/calico-chef>`__. This cookbook
 can be cloned in git and then added to the Chef server in the usual way.
 
 The cookbook defines two roles: ``controller`` and ``compute``. To set
