@@ -32,7 +32,7 @@ RUN tar -zxvf /tmp/etcd.tar.gz -C /tmp --strip-components=1
 ADD requirements.txt /code/
 RUN pip install -r requirements.txt
 RUN pip install git+https://github.com/Metaswitch/python-etcd.git
-RUN pip install git+https://github.com/projectcalico/libcalico.git
+RUN pip install git+https://github.com/projectcalico/libcalico.git@v0.1.0
 
 # Can't run pyinstaller as root so add a user - https://github.com/pyinstaller/pyinstaller/issues/1081
 RUN useradd -d /home/user -m -s /bin/bash user
