@@ -47,7 +47,7 @@ Read the Source, Luke!
 All Calico's code is on `GitHub <https://github.com/Metaswitch>`__, in the
 following repositories, separated by function.
 
-- `calico <https://github.com/Metaswitch/calico>`__ - All of the core Calico
+- `calico <https://github.com/projectcalico/calico>`__ - All of the core Calico
   code except for that specific to Docker/container environments: the Felix
   agent, the OpenStack plugin; testing for all of those; and
   the source for Calico's documentation.
@@ -58,16 +58,16 @@ following repositories, separated by function.
   instructions for demonstrating Calico networking in various container
   environments.
 
-- `calico-neutron <https://github.com/Metaswitch/calico-neutron>`__ -
+- `calico-neutron <https://github.com/projectcalico/calico-neutron>`__ -
   Calico-specific patched version of OpenStack Neutron.
 
-- `calico-nova <https://github.com/Metaswitch/calico-nova>`__ - Calico-specific
+- `calico-nova <https://github.com/projectcalico/calico-nova>`__ - Calico-specific
   patched version of OpenStack Nova.
 
-- `calico-dnsmasq <https://github.com/Metaswitch/calico-dnsmasq>`__ -
+- `calico-dnsmasq <https://github.com/projectcalico/calico-dnsmasq>`__ -
   Calico-specific patched version of Dnsmasq.
 
-- `calico-chef <https://github.com/Metaswitch/calico-chef>`__ - Chef cookbooks
+- `calico-chef <https://github.com/projectcalico/calico-chef>`__ - Chef cookbooks
   for installing test versions of OpenStack-using-Calico.
 
 Contributing

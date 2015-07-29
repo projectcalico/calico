@@ -77,7 +77,7 @@ changes will suffice to meet the requirements just listed.
        net.ipv6.conf.eth0.router_solicitation_delay = 10
 
 .. _this known issue: https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html
-.. _a bug: https://github.com/Metaswitch/calico/issues/12
+.. _a bug: https://github.com/projectcalico/calico/issues/12
 
 Implementation details
 ----------------------
