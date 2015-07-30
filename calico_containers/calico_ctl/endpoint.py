@@ -40,11 +40,13 @@ Examples:
 """
 import sys
 from collections import defaultdict
+
 from prettytable import PrettyTable
 from pycalico.datastore_errors import ProfileAlreadyInEndpoint
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.datastore_errors import ProfileNotInEndpoint
-from utils import client
+
+from connectors import client
 from utils import print_paragraph
 from utils import validate_characters
 

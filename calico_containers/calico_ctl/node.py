@@ -43,23 +43,24 @@ import stat
 import docker
 import socket
 import urllib
+import signal
 
 from pycalico.datastore_datatypes import IPPool
-from utils import ORCHESTRATOR_ID
-from utils import hostname
-from utils import client
-from utils import docker_client
-from utils import print_paragraph
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
 from pycalico.util import get_host_ips
-from checksystem import check_system
 from netaddr import IPAddress
 from prettytable import PrettyTable
+
+from connectors import client
+from connectors import docker_client
+from utils import ORCHESTRATOR_ID
+from utils import hostname
+from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
 from utils import validate_ip
-import signal
+from checksystem import check_system
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
@@ -233,18 +234,11 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
         if err.response.status_code != 404:
             raise
 
-    etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
-    etcd_authority_split = etcd_authority.split(':')
-    if len(etcd_authority_split) != 2:
-        print_paragraph("Invalid %s. Must take the form <address>:<port>. Value " \
-              "provided is '%s'" % (ETCD_AUTHORITY_ENV, etcd_authority))
-        sys.exit(1)
-
-    etcd_authority_address = etcd_authority_split[0]
-    etcd_authority_port = etcd_authority_split[1]
-
     # Always try to convert the address(hostname) to an IP. This is a noop if
-    # the address is already an IP address.
+    # the address is already an IP address.  Note that the format of the authority
+    # string has already been validated.
+    etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
+    etcd_authority_address, etcd_authority_port = etcd_authority.split(':')
     etcd_authority = '%s:%s' % (socket.gethostbyname(etcd_authority_address),
                                 etcd_authority_port)
 
@@ -281,7 +275,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
         network_mode="host",
         binds=binds)
 
-    _find_or_pull_node_image(node_image, docker_client)
+    _find_or_pull_node_image(node_image)
     container = docker_client.create_container(
         node_image,
         name="calico-node",
@@ -302,7 +296,8 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
 
 
 def node_stop(force):
-    if force or len(client.get_endpoints(hostname=hostname, orchestrator_id=ORCHESTRATOR_ID)) == 0:
+    if force or len(client.get_endpoints(hostname=hostname,
+                                         orchestrator_id=ORCHESTRATOR_ID)) == 0:
         client.remove_host(hostname)
         try:
             docker_client.stop("calico-node")
@@ -413,7 +408,7 @@ def warn_if_hostname_conflict(ip):
                     "same hostname."  % (hostname, ip))
 
 
-def _find_or_pull_node_image(image_name, client):
+def _find_or_pull_node_image(image_name):
     """
     Check if Docker has a cached copy of an image, and if not, attempt to pull
     it.
@@ -422,12 +417,12 @@ def _find_or_pull_node_image(image_name, client):
     :return: None.
     """
     try:
-        _ = client.inspect_image(image_name)
+        _ = docker_client.inspect_image(image_name)
     except docker.errors.APIError as err:
         if err.response.status_code == 404:
             # TODO: Display proper status bar
             print "Pulling Docker image %s" % image_name
-            client.pull(image_name)
+            docker_client.pull(image_name)
 
 
 def _attach_and_stream(container):

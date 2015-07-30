@@ -30,9 +30,12 @@ import tarfile
 import socket
 import tempfile
 import subprocess
+
 from etcd import EtcdException
-from shutil import copytree, ignore_patterns
 from pycalico.datastore import DatastoreClient
+from shutil import copytree, ignore_patterns
+
+from utils import print_paragraph
 
 
 def diags(arguments):
@@ -57,7 +60,8 @@ def save_diags(log_dir, upload=False):
 
     # Write date to file
     with open(os.path.join(temp_diags_dir, 'date'), 'w') as f:
-        f.write("DATE=%s" % datetime.strftime(datetime.today(),"%Y-%m-%d_%H-%M-%S"))
+        f.write("DATE=%s" % datetime.strftime(datetime.today(),
+                                              "%Y-%m-%d_%H-%M-%S"))
 
     # Write hostname to file
     with open(os.path.join(temp_diags_dir, 'hostname'), 'w') as f:
@@ -140,7 +144,8 @@ def save_diags(log_dir, upload=False):
     # TODO: May want to move this into datastore.py as a dump-calico function
     try:
         datastore_client = DatastoreClient()
-        datastore_data = datastore_client.etcd_client.read("/calico", recursive=True)
+        datastore_data = datastore_client.etcd_client.read("/calico",
+                                                           recursive=True)
         with open(os.path.join(temp_diags_dir, 'etcd_calico'), 'w') as f:
             f.write("dir?, key, value\n")
             # TODO: python-etcd bug: Leaves show up twice in get_subtree().
@@ -153,7 +158,8 @@ def save_diags(log_dir, upload=False):
         print "Unable to dump etcd datastore"
 
     # Create tar and upload
-    tar_filename = datetime.strftime(datetime.today(),"diags-%d%m%y_%H%M%S.tar.gz")
+    tar_filename = datetime.strftime(datetime.today(),
+                                     "diags-%d%m%y_%H%M%S.tar.gz")
     full_tar_path = os.path.join(temp_dir, tar_filename)
     with tarfile.open(full_tar_path, "w:gz") as tar:
         # pass in arcname, otherwise zip contains layers of subfolders
@@ -167,8 +173,11 @@ def save_diags(log_dir, upload=False):
 
 def upload_temp_diags(diags_path):
     # TODO: Rewrite into httplib
-    print("Uploading file. Available for 14 days from the URL printed when the upload completes")
-    curl_cmd = ["curl", "--upload-file", diags_path, os.path.join("https://transfer.sh", os.path.basename(diags_path))]
+    print_paragraph("Uploading file. Available for 14 days from the URL "
+                    "printed when the upload completes")
+    curl_cmd = ["curl", "--upload-file", diags_path,
+                os.path.join("https://transfer.sh",
+                             os.path.basename(diags_path))]
     curl_process = subprocess.Popen(curl_cmd)
     curl_process.communicate()
     curl_process.wait()

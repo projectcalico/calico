@@ -60,10 +60,12 @@ Examples:
 """
 import sys
 import re
+
 from prettytable import PrettyTable
 from pycalico.datastore import Rule
 from pycalico.datastore import Rules
-from utils import client
+
+from connectors import client
 from utils import print_paragraph
 from utils import validate_characters
 from utils import validate_cidr

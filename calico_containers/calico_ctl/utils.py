@@ -15,23 +15,15 @@ import socket
 import os
 import sys
 import sh
-import docker
 import textwrap
 import netaddr
-import docker.errors
 import re
 
-from pycalico.ipam import IPAMClient
 from netaddr.core import AddrFormatError
-
 
 DOCKER_VERSION = "1.16"
 ORCHESTRATOR_ID = "docker"
 hostname = socket.gethostname()
-client = IPAMClient()
-docker_client = docker.Client(version=DOCKER_VERSION,
-                              base_url=os.getenv("DOCKER_HOST",
-                                                 "unix://var/run/docker.sock"))
 
 try:
     sysctl = sh.Command._create("sysctl")
@@ -96,8 +88,8 @@ def validate_cidr(cidr):
         netaddr.IPNetwork(cidr)
         return True
     except (AddrFormatError, ValueError):
-    # Some versions of Netaddr have a bug causing them to return a
-    # ValueError rather than an AddrFormatError, so catch both.
+        # Some versions of Netaddr have a bug causing them to return a
+        # ValueError rather than an AddrFormatError, so catch both.
         return False
 
 
@@ -134,3 +126,45 @@ def validate_characters(input_string):
     else:
         return True
 
+
+def validate_hostname(hostname):
+    """
+    Validate a hostname string.  This allows standard hostnames and IPv4
+    addresses.
+
+    :param hostname: The hostname to validate.
+    :return: Boolean: True if valid, False if invalid
+    """
+    # Hostname length is limited.
+    if len(hostname) > 255:
+        return False
+
+    # Hostname labels may consist of numbers, letters and hyphens, but may not
+    # end or begin with a hyphen.
+    allowed = re.compile("(?!-)[a-z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+    return all(allowed.match(x) for x in hostname.split("."))
+
+
+def validate_hostname_port(hostname_port):
+    """
+    Validate the hostname and port format.  (<HOSTNAME>:<PORT>)
+    An IPv4 address is a valid hostname.
+
+    :return: Boolean: True if valid, False if invalid
+    """
+    # Should contain a single ":" separating hostname and port
+    hostname_port = hostname_port.split(":")
+    if len(hostname_port) != 2:
+        return False
+
+    # Check the hostname format.
+    if not validate_hostname(hostname_port[0]):
+        return False
+
+    # Check port range.
+    try:
+        port = int(hostname_port[1])
+    except ValueError:
+        return False
+    else:
+        return 1 <= port <= 65535
