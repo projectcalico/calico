@@ -16,7 +16,7 @@ Usage:
   calicoctl checksystem [--fix] [--libnetwork]
 
 Description:
-  Check for incompatibilities between calico and the host system
+  Check for incompatibilities between Calico and the host system
 
 Options:
   --fix  DEPRECATED: checksystem no longer fixes issues that it detects

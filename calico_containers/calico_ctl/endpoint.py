@@ -13,9 +13,12 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
-  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
+  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>]
+    [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>]
+    [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
+  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>]
+    [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
 
 Description:
   Configure or show endpoints assigned to existing containers
@@ -244,7 +247,7 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
                                            orchestrator_id=orchestrator_id,
                                            workload_id=workload_id,
                                            endpoint_id=endpoint_id)
-        print_paragraph("Profiles %s appended" %
+        print_paragraph("Profile(s) %s appended." %
                         (", ".join(profile_names)))
     except KeyError:
         print "Failed to append profiles to endpoint.\n"
@@ -290,7 +293,7 @@ def endpoint_profile_set(hostname, orchestrator_id, workload_id,
                                         orchestrator_id=orchestrator_id,
                                         workload_id=workload_id,
                                         endpoint_id=endpoint_id)
-        print_paragraph("Profiles %s set." %
+        print_paragraph("Profile(s) %s set." %
                         (", ".join(profile_names)))
     except KeyError:
         print "Failed to set profiles for endpoint.\n"
@@ -328,7 +331,7 @@ def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
                                              orchestrator_id=orchestrator_id,
                                              workload_id=workload_id,
                                              endpoint_id=endpoint_id)
-        print_paragraph("Profiles %s removed." %
+        print_paragraph("Profile(s) %s removed." %
                         (",".join(profile_names)))
     except KeyError:
         print "Failed to remove profiles from endpoint.\n"

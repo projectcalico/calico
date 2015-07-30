@@ -13,7 +13,8 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl pool (add|remove) <CIDRS>... [--ipip] [--nat-outgoing]
+  calicoctl pool add <CIDRS>... [--ipip] [--nat-outgoing]
+  calicoctl pool remove <CIDRS>...
   calicoctl pool range add <START_IP> <END_IP> [--ipip] [--nat-outgoing]
   calicoctl pool show [--ipv4 | --ipv6]
 
