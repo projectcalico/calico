@@ -194,6 +194,11 @@ class _EtcdWatcher(gevent.Greenlet):
         self.config = config
         self.hosts_ipset = hosts_ipset
 
+        # Keep track of the config loaded from etcd so we can spot if it
+        # changes.
+        self.last_global_config = None
+        self.last_host_config = None
+
         # Events triggered by the EtcdAPI Actor to tell us to load the config
         # and start polling.  These are one-way flags.
         self.load_config = Event()
@@ -253,11 +258,11 @@ class _EtcdWatcher(gevent.Greenlet):
         # Configuration keys.  If these change, by default, we'll die and
         # let the init daemon restart us.
         reg(CONFIG_PARAM_KEY,
-            on_set=self.on_global_config_set,
-            on_del=self.on_global_config_delete)
+            on_set=self._resync,
+            on_del=self._resync)
         reg(PER_HOST_CONFIG_PARAM_KEY,
-            on_set=self.on_host_config_set,
-            on_del=self.on_host_config_delete)
+            on_set=self._resync,
+            on_del=self._resync)
 
     @logging_exceptions
     def _run(self):
@@ -271,8 +276,11 @@ class _EtcdWatcher(gevent.Greenlet):
             self._reconnect(copy_cluster_id=False)
             self._wait_for_ready()
 
-            while not self.configured.is_set():
-                self._load_config()
+            # Always reload the config.  This lets us detect if the config has
+            # changed and restart felix if so.
+            self._load_config()
+
+            if not self.configured.is_set():
                 # Unblock anyone who's waiting on the config.
                 self.configured.set()
 
@@ -363,7 +371,22 @@ class _EtcdWatcher(gevent.Greenlet):
                            "retry.", e)
                 gevent.sleep(RETRY_DELAY)
             else:
-                self.config.report_etcd_config(host_dict, global_dict)
+                if self.configured.is_set():
+                    # We've already been configured.  We don't yet support
+                    # dynamic config update so instead we check if the config
+                    # has changed and die if it has.
+                    _log.info("Checking configuration for changes...")
+                    if (host_dict != self.last_host_config or
+                            global_dict != self.last_global_config):
+                        _log.critical("Felix configuration has changed, "
+                                      "felix must restart.")
+                        die_and_restart()
+                else:
+                    # First time loading the config.  Report it to the config
+                    # object.
+                    self.last_host_config = host_dict
+                    self.last_global_config = global_dict
+                    self.config.report_etcd_config(host_dict, global_dict)
                 return
 
     def _load_initial_dump(self):
@@ -669,31 +692,16 @@ class _EtcdWatcher(gevent.Greenlet):
         if not self.endpoint_ids_per_host[hostname]:
             del self.endpoint_ids_per_host[hostname]
 
-    def on_global_config_set(self, response, config_param):
-        _log.warning("Config param %s updated while felix is running; "
-                     "restarting.", config_param)
-        self.die_and_restart()
 
-    def on_global_config_delete(self, response, config_param):
-        _log.warning("Config param %s deleted while felix is running; "
-                     "restarting.", config_param)
-        self.die_and_restart()
+def die_and_restart():
+    # Sleep so that we can't die more than 5 times in 10s even if someone is
+    # churning the config.  This prevents our upstart/systemd jobs from giving
+    # up on us.
+    gevent.sleep(2)
+    # Use a failure code to tell systemd that we expect to be restarted.  We
+    # use os._exit() because it is bullet-proof.
+    os._exit(1)
 
-    def on_host_config_set(self, response, hostname, config_param):
-        if hostname == self.config.HOSTNAME:
-            _log.warning("Config param %s updated while felix is running; "
-                         "restarting.", config_param)
-            self.die_and_restart()
-
-    def on_host_config_delete(self, response, hostname, config_param):
-        if hostname == self.config.HOSTNAME:
-            _log.warning("Config param %s deleted while felix is running; "
-                         "restarting.", config_param)
-            self.die_and_restart()
-
-    def die_and_restart(self):
-        gevent.sleep(2)
-        os._exit(1)
 
 def _build_config_dict(cfg_node):
     """
