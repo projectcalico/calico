@@ -64,6 +64,8 @@ import signal
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
+POLICY_ONLY_ENV = "POLICY_ONLY_CALICO"
+
 KUBERNETES_BINARY_URL = 'https://github.com/Metaswitch/calico-docker/releases/download/v0.5.3/calico_kubernetes'
 KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
 KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
@@ -252,6 +254,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
         "IP6=%s" % (ip6 or ""),
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
         "FELIX_ETCDADDR=%s" % etcd_authority,  # etcd host:port
+        "POLICY_ONLY_CALICO=%s" % os.getenv(POLICY_ONLY_ENV, ""),
     ]
 
     binds = {
