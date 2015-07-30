@@ -2,6 +2,14 @@
 # Record current boot time. Helps with debugging.
 date > /tmp/boottime.txt
 
-# Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
-# felix to start.  Don't fail startup if this confd execution fails.
-./confd -confdir=. -onetime -node ${ETCD_AUTHORITY} || true
+if [ -n "$POLICY_ONLY_CALICO" ]; then
+	# If running in policy only mode, we don't need to run BIRD / Confd.
+	echo "Running in policy-only mode - disable BIRD and Confd"
+	rm -r /etc/service/bird
+	rm -r /etc/service/bird6
+	rm -r /etc/service/confd
+else
+    # Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
+    # felix to start.  Don't fail startup if this confd execution fails.
+    ./confd -confdir=. -onetime -node ${ETCD_AUTHORITY} || true
+fi
