@@ -3,12 +3,14 @@ import json
 
 import logging
 from etcd import EtcdResult
+import etcd
 from gevent.event import Event
 from mock import Mock, call, patch, ANY
 from calico.datamodel_v1 import EndpointId
 from calico.felix.config import Config
 from calico.felix.ipsets import IpsetActor
-from calico.felix.fetcd import _EtcdWatcher, ResyncRequired, EtcdAPI
+from calico.felix.fetcd import _EtcdWatcher, ResyncRequired, EtcdAPI, \
+    die_and_restart
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase
 
@@ -113,6 +115,7 @@ class TestExcdWatcher(BaseTestCase):
         self.watcher = _EtcdWatcher(self.m_config, self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
+        self.watcher.client = Mock(spec=etcd.Client)
 
     def test_resync_flag(self):
         self.watcher.resync_after_current_poll = True
@@ -259,6 +262,7 @@ class TestExcdWatcher(BaseTestCase):
                     "/calico/v1/policy",
                     "/calico/v1/policy/profile",
                     "/calico/v1/config",
+                    "/calico/v1/config/Foo",
                     "/calico/v1/Ready",]:
             self.assertRaises(ResyncRequired, self.dispatch, key, "delete")
 
@@ -366,6 +370,19 @@ class TestExcdWatcher(BaseTestCase):
             [],
             async=True,
         )
+
+    def test_config_update_triggers_resync(self):
+        self.assertRaises(ResyncRequired, self.dispatch,
+                          "/calico/v1/config/Foo", "set", "bar")
+        self.assertRaises(ResyncRequired, self.dispatch,
+                          "/calico/v1/host/foo/config/Foo", "set", "bar")
+
+    @patch("os._exit", autospec=True)
+    @patch("gevent.sleep", autospec=True)
+    def test_die_and_restart(self, m_sleep, m_exit):
+        die_and_restart()
+        m_sleep.assert_called_once_with(2)
+        m_exit.assert_called_once_with(1)
 
     def dispatch(self, key, action, value=None):
         """
