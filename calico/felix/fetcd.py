@@ -347,16 +347,24 @@ class _EtcdWatcher(gevent.Greenlet):
 
     def _load_config(self):
         """
-        Loads our start-of-day configuration from etcd.  Does not return
+        Loads our configuration from etcd.  Does not return
         until the config is successfully loaded.
+
+        The first call to this method populates the config object.
+
+        Subsequent calls check the config hasn't changed and kill
+        the process if it has.  This allows us to be restarted by
+        the init daemon in order to pick up the new config.
         """
         while True:
             try:
-                global_cfg = self.client.read(CONFIG_DIR)
+                global_cfg = self.client.read(CONFIG_DIR,
+                                              recursive=True)
                 global_dict = _build_config_dict(global_cfg)
 
                 try:
-                    host_cfg = self.client.read(self.my_config_dir)
+                    host_cfg = self.client.read(self.my_config_dir,
+                                                recursive=True)
                     host_dict = _build_config_dict(host_cfg)
                 except EtcdKeyNotFound:
                     # It is not an error for there to be no per-host
