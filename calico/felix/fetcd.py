@@ -386,8 +386,8 @@ class _EtcdWatcher(gevent.Greenlet):
                     _log.info("Checking configuration for changes...")
                     if (host_dict != self.last_host_config or
                             global_dict != self.last_global_config):
-                        _log.critical("Felix configuration has changed, "
-                                      "felix must restart.")
+                        _log.warning("Felix configuration has changed, "
+                                     "felix must restart.")
                         die_and_restart()
                 else:
                     # First time loading the config.  Report it to the config
