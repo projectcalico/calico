@@ -20,6 +20,7 @@ Etcd polling functions.
 """
 from collections import defaultdict
 import functools
+import os
 import random
 from socket import timeout as SocketTimeout
 import httplib
@@ -64,6 +65,8 @@ PER_ORCH_DIR = WORKLOAD_DIR + "/<orchestrator>"
 PER_WORKLOAD_DIR = PER_ORCH_DIR + "/<workload_id>"
 ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
 PER_ENDPOINT_KEY = ENDPOINT_DIR + "/<endpoint_id>"
+CONFIG_PARAM_KEY = CONFIG_DIR + "/<config_param>"
+PER_HOST_CONFIG_PARAM_KEY = PER_HOST_DIR + "/config/<config_param>"
 
 IPAM_DIR = VERSION_DIR + "/ipam"
 IPAM_V4_DIR = IPAM_DIR + "/v4"
@@ -191,6 +194,11 @@ class _EtcdWatcher(gevent.Greenlet):
         self.config = config
         self.hosts_ipset = hosts_ipset
 
+        # Keep track of the config loaded from etcd so we can spot if it
+        # changes.
+        self.last_global_config = None
+        self.last_host_config = None
+
         # Events triggered by the EtcdAPI Actor to tell us to load the config
         # and start polling.  These are one-way flags.
         self.load_config = Event()
@@ -247,6 +255,14 @@ class _EtcdWatcher(gevent.Greenlet):
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
+        # Configuration keys.  If these change, by default, we'll die and
+        # let the init daemon restart us.
+        reg(CONFIG_PARAM_KEY,
+            on_set=self._resync,
+            on_del=self._resync)
+        reg(PER_HOST_CONFIG_PARAM_KEY,
+            on_set=self._resync,
+            on_del=self._resync)
 
     @logging_exceptions
     def _run(self):
@@ -260,8 +276,11 @@ class _EtcdWatcher(gevent.Greenlet):
             self._reconnect(copy_cluster_id=False)
             self._wait_for_ready()
 
-            while not self.configured.is_set():
-                self._load_config()
+            # Always reload the config.  This lets us detect if the config has
+            # changed and restart felix if so.
+            self._load_config()
+
+            if not self.configured.is_set():
                 # Unblock anyone who's waiting on the config.
                 self.configured.set()
 
@@ -328,16 +347,24 @@ class _EtcdWatcher(gevent.Greenlet):
 
     def _load_config(self):
         """
-        Loads our start-of-day configuration from etcd.  Does not return
+        Loads our configuration from etcd.  Does not return
         until the config is successfully loaded.
+
+        The first call to this method populates the config object.
+
+        Subsequent calls check the config hasn't changed and kill
+        the process if it has.  This allows us to be restarted by
+        the init daemon in order to pick up the new config.
         """
         while True:
             try:
-                global_cfg = self.client.read(CONFIG_DIR)
+                global_cfg = self.client.read(CONFIG_DIR,
+                                              recursive=True)
                 global_dict = _build_config_dict(global_cfg)
 
                 try:
-                    host_cfg = self.client.read(self.my_config_dir)
+                    host_cfg = self.client.read(self.my_config_dir,
+                                                recursive=True)
                     host_dict = _build_config_dict(host_cfg)
                 except EtcdKeyNotFound:
                     # It is not an error for there to be no per-host
@@ -352,7 +379,22 @@ class _EtcdWatcher(gevent.Greenlet):
                            "retry.", e)
                 gevent.sleep(RETRY_DELAY)
             else:
-                self.config.report_etcd_config(host_dict, global_dict)
+                if self.configured.is_set():
+                    # We've already been configured.  We don't yet support
+                    # dynamic config update so instead we check if the config
+                    # has changed and die if it has.
+                    _log.info("Checking configuration for changes...")
+                    if (host_dict != self.last_host_config or
+                            global_dict != self.last_global_config):
+                        _log.warning("Felix configuration has changed, "
+                                     "felix must restart.")
+                        die_and_restart()
+                else:
+                    # First time loading the config.  Report it to the config
+                    # object.
+                    self.last_host_config = host_dict
+                    self.last_global_config = global_dict
+                    self.config.report_etcd_config(host_dict, global_dict)
                 return
 
     def _load_initial_dump(self):
@@ -657,6 +699,16 @@ class _EtcdWatcher(gevent.Greenlet):
                 self.endpoint_ids_per_host[hostname].discard(endpoint_id)
         if not self.endpoint_ids_per_host[hostname]:
             del self.endpoint_ids_per_host[hostname]
+
+
+def die_and_restart():
+    # Sleep so that we can't die more than 5 times in 10s even if someone is
+    # churning the config.  This prevents our upstart/systemd jobs from giving
+    # up on us.
+    gevent.sleep(2)
+    # Use a failure code to tell systemd that we expect to be restarted.  We
+    # use os._exit() because it is bullet-proof.
+    os._exit(1)
 
 
 def _build_config_dict(cfg_node):
