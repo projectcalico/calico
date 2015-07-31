@@ -2,6 +2,8 @@
 
 ## 0.28-dev
 
+- Felix now preiodically refreshes iptables to be robust to other processes
+  corrupting its chains.
 - More thorough resynchronization of etcd from the Neutron mechanism driver.
 - Added process-specific information to the diagnostics dumps from Felix.
 
