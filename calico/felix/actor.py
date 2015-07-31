@@ -360,7 +360,8 @@ class Actor(object):
             self._op_count = 0
 
     def __str__(self):
-        return self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s>" % (
+        return self.__class__.__name__ + "<%s,queue_len=%s,live=%s,msg=%s>" % (
+            self.qualifier,
             self._event_queue.qsize(),
             bool(self.greenlet),
             self._current_msg

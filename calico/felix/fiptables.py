@@ -28,6 +28,7 @@ import re
 
 from gevent import subprocess
 import gevent
+import sys
 
 from calico.felix import frules, futils
 from calico.felix.actor import (
@@ -96,9 +97,11 @@ class IptablesUpdater(Actor):
 
     """
 
-    def __init__(self, table, ip_version=4):
-        super(IptablesUpdater, self).__init__(qualifier="v%d" % ip_version)
+    def __init__(self, table, config, ip_version=4):
+        super(IptablesUpdater, self).__init__(qualifier="v%d-%s" %
+                                                        (ip_version, table))
         self.table = table
+        self.refresh_interval = config.REFRESH_INTERVAL
         if ip_version == 4:
             self._restore_cmd = "iptables-restore"
             self._save_cmd = "iptables-save"
@@ -119,8 +122,15 @@ class IptablesUpdater(Actor):
         Flag that is set after the graceful restart window is over.
         """
 
-        self._explicitly_prog_chains = set()
-        """Set of chains that we've explicitly programmed."""
+        self._programmed_chain_contents = {}
+        """Map from chain name to chain contents, only contains chains that
+        have been explicitly programmed."""
+        self._inserted_rule_fragments = set()
+        """Special-case rule fragments that we've explicitly inserted."""
+        self._removed_rule_fragments = set()
+        """Special-case rule fragments that we've explicitly removed.
+        We need to cache this to defend against other processes accidentally
+        reverting our removal."""
 
         self._required_chains = defaultdict(set)
         """Map from chain name to the set of names of chains that it
@@ -145,26 +155,42 @@ class IptablesUpdater(Actor):
 
         # Avoid duplicating init logic.
         self._reset_batched_work()
-        self._refresh_chains_in_dataplane(async=True)
+        self._load_chain_names_from_iptables(async=True)
+
+        # Optionally, start periodic refresh timer.
+        if self.refresh_interval > 0:
+            _log.info("Periodic iptables refresh enabled, starting "
+                      "resync greenlet")
+            refresh_greenlet = gevent.spawn(self._periodic_refresh)
+            refresh_greenlet.link_exception(self._on_worker_died)
+
+    @property
+    def _explicitly_prog_chains(self):
+        return set(self._programmed_chain_contents.keys())
 
     def _reset_batched_work(self):
         """Reset the per-batch state in preparation for a new batch."""
-        self._txn = _Transaction(self._explicitly_prog_chains,
+        self._txn = _Transaction(self._programmed_chain_contents,
                                  self._required_chains,
                                  self._requiring_chains)
         self._completion_callbacks = []
 
     @actor_message(needs_own_batch=True)
-    def _refresh_chains_in_dataplane(self):
+    def _load_chain_names_from_iptables(self):
+        """
+        Loads the set of (our) chains that already exist from iptables.
+
+        Populates self._chains_in_dataplane.
+        """
         self._stats.increment("Refreshed chain list")
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",
                                                   self.table])
         self._chains_in_dataplane = _extract_our_chains(self.table,
                                                         raw_ipt_output)
 
-    def _read_unreferenced_chains(self):
+    def _get_unreferenced_chains(self):
         """
-        Read the list of chains in the dataplane which are not referenced.
+        Reads the list of chains in the dataplane which are not referenced.
 
         :returns list[str]: list of chains currently in the dataplane that
             are not referenced by other chains.
@@ -175,7 +201,8 @@ class IptablesUpdater(Actor):
 
     @actor_message()
     def rewrite_chains(self, update_calls_by_chain,
-                       dependent_chains, callback=None):
+                       dependent_chains, callback=None,
+                       suppress_upd_log=False):
         """
         Atomically apply a set of updates to the table.
 
@@ -190,8 +217,12 @@ class IptablesUpdater(Actor):
         """
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
-        _log.info("Iptables update: %s", update_calls_by_chain)
-        _log.info("Iptables deps: %s", dependent_chains)
+        if suppress_upd_log:
+            _log.info("Iptables update to %s chains",
+                      len(update_calls_by_chain))
+        else:
+            _log.info("Iptables update: %s", update_calls_by_chain)
+            _log.info("Iptables deps: %s", dependent_chains)
         self._stats.increment("Chain rewrites")
         for chain, updates in update_calls_by_chain.iteritems():
             # TODO: double-check whether this flush is needed.
@@ -218,11 +249,28 @@ class IptablesUpdater(Actor):
            "INPUT --jump felix-INPUT"
         """
         self._stats.increment("Rule inserts")
+        _log.info("Inserting rule %r", rule_fragment)
+        self._inserted_rule_fragments.add(rule_fragment)
+        self._removed_rule_fragments.discard(rule_fragment)
+        self._insert_rule(rule_fragment)
+
+    def _insert_rule(self, rule_fragment, log_level=logging.INFO):
+        """
+        Execute the iptables commands to atomically (re)insert the
+        given rule fragment into iptables.
+
+        Has the side-effect of moving the rule to the top of the
+        chain.
+
+        :param rule_fragment: A rule fragment, starting with the chain
+            name; will be prefixed with "--insert ", for example, to
+            create the actual iptables line to execute.
+        """
         try:
             # Do an atomic delete + insert of the rule.  If the rule already
             # exists then the rule will be moved to the start of the chain.
-            _log.info("Attempting to move any existing instance of rule %r"
-                      "to top of chain.", rule_fragment)
+            _log.log(log_level, "Attempting to move any existing instance "
+                                "of rule %r to top of chain.", rule_fragment)
             self._execute_iptables(['*%s' % self.table,
                                     '--delete %s' % rule_fragment,
                                     '--insert %s' % rule_fragment,
@@ -230,8 +278,8 @@ class IptablesUpdater(Actor):
                                    fail_log_level=logging.DEBUG)
         except FailedSystemCall:
             # Assume the rule didn't exist. Try inserting it.
-            _log.info("Didn't find any existing instance of rule %r, "
-                      "inserting it instead.", rule_fragment)
+            _log.log(log_level, "Didn't find any existing instance of rule "
+                                "%r, inserting it instead.", rule_fragment)
             self._execute_iptables(['*%s' % self.table,
                                     '--insert %s' % rule_fragment,
                                     'COMMIT'])
@@ -239,12 +287,38 @@ class IptablesUpdater(Actor):
     @actor_message(needs_own_batch=True)
     def ensure_rule_removed(self, rule_fragment):
         """
-        Runs the given rule fragment, prefixed with --delete.
+        If it exists, removes the given rule fragment.  Caches that the
+        rule fragment should now not be present.
+
+        WARNING: due to the caching, this is only suitable for a small
+        number of static rules.  For example, to add and remove our
+        "root" rules, which dispatch to our dynamic chains, from the
+        top-level kernel chains.
+
+        The caching is required to defend against other poorly-written
+        processes, which use an iptables-save and then iptables-restore
+        call to update their rules.  That clobbers our updates (including
+        deletions).
 
         :param rule_fragment: fragment to be deleted. For example,
            "INPUT --jump felix-INPUT"
         """
         _log.info("Removing rule %r", rule_fragment)
+        self._stats.increment("Rule removals")
+        self._inserted_rule_fragments.discard(rule_fragment)
+        self._removed_rule_fragments.add(rule_fragment)
+        self._remove_rule(rule_fragment)
+
+    def _remove_rule(self, rule_fragment, log_level=logging.INFO):
+        """
+        Execute the iptables commands required to (atomically) remove
+        the given rule_fragment if it is present.
+
+        :param rule_fragment: A rule fragment, starting with the chain
+            name; will be prefixed with "--delete " to create the
+            actual iptables line to execute.
+        """
+        _log.log(log_level, "Ensuring rule is not present %r", rule_fragment)
         num_instances = 0
         try:
             while True:  # Delete all instances of rule.
@@ -253,20 +327,27 @@ class IptablesUpdater(Actor):
                                         'COMMIT'],
                                        fail_log_level=logging.DEBUG)
                 num_instances += 1
+                assert num_instances < 100, "Too many deletes, infinite loop?"
         except FailedSystemCall as e:
             if num_instances == 0:
                 if "line 2 failed" in e.stderr:
                     # Rule was parsed OK but failed to apply, this means that
                     # it wasn't present.
-                    _log.warning("Removal of rule %r failed; not present?",
-                                 rule_fragment)
+                    _log.log(log_level, "Removal of rule %r rejected; not "
+                                        "present?", rule_fragment)
+                elif "at line: 2" in e.stderr and "doesn't exist" in e.stderr:
+                    # Rule was rejected because some pre-requisite (such as an
+                    # ipset) didn't exist.
+                    _log.log(log_level, "Removal of rule %r failed due to "
+                                        "missing pre-requisite; rule must "
+                                        "not be present.", rule_fragment)
                 else:
                     _log.exception("Unexpected failure when trying to "
                                    "delete rule %r" % rule_fragment)
                     raise
             else:
-                _log.info("%s instances of rule %r removed", num_instances,
-                          rule_fragment)
+                _log.log(log_level, "%s instances of rule %r removed",
+                         num_instances, rule_fragment)
 
     @actor_message()
     def delete_chains(self, chain_names, callback=None):
@@ -296,7 +377,7 @@ class IptablesUpdater(Actor):
         self._stats.increment("Cleanups performed")
 
         # Start with the current state.
-        self._refresh_chains_in_dataplane()
+        self._load_chain_names_from_iptables()
 
         required_chains = set(self._requiring_chains.keys())
         if not self._grace_period_finished:
@@ -323,7 +404,7 @@ class IptablesUpdater(Actor):
             # Try to delete all the unreferenced chains, we use a loop to
             # ensure that we then clean up any chains that become unreferenced
             # when we delete the previous lot.
-            unreferenced_chains = self._read_unreferenced_chains()
+            unreferenced_chains = self._get_unreferenced_chains()
             orphans = (unreferenced_chains -
                        self._explicitly_prog_chains -
                        required_chains)
@@ -344,25 +425,47 @@ class IptablesUpdater(Actor):
                 finished = True
 
         # Then some sanity checks:
-        temp_chains = self._chains_in_dataplane
-        self._refresh_chains_in_dataplane()
-        if temp_chains != self._chains_in_dataplane:
-            # We want to know about this but it's not fatal.
-            _log.error("Chains in data plane inconsistent with calculated "
-                       "index.  In dataplane but not in index: %s; In index: "
-                       "but not dataplane: %s.",
-                       self._chains_in_dataplane - temp_chains,
-                       temp_chains - self._chains_in_dataplane)
-
+        expected_chains = self._chains_in_dataplane
+        self._load_chain_names_from_iptables()
+        loaded_chains = self._chains_in_dataplane
         missing_chains = ((self._explicitly_prog_chains | required_chains) -
                           self._chains_in_dataplane)
-        if missing_chains:
-            # This is fatal, some of our chains have disappeared.
-            _log.error("Some of our chains disappeared from the dataplane: %s."
-                       " Raising an exception.",
+        if expected_chains != self._chains_in_dataplane or missing_chains:
+            # This is serious, either there's a bug in our model of iptables
+            # or someone else has changed iptables under our feet.
+            _log.error("Chains in data plane inconsistent with calculated "
+                       "index.  In dataplane but not in index: %s; In index: "
+                       "but not dataplane: %s; missing from iptables: %s.  "
+                       "Another process may have clobbered our updates.",
+                       loaded_chains - expected_chains,
+                       expected_chains - loaded_chains,
                        missing_chains)
-            raise IptablesInconsistent(
-                "Felix chains missing from iptables: %s" % missing_chains)
+
+            # Try to recover: trigger a full refresh of the dataplane to
+            # bring it into sync.
+            self.refresh_iptables()
+
+    def _periodic_refresh(self):
+        while True:
+            # Jitter our sleep times by 20%.
+            gevent.sleep(self.refresh_interval * (1 + random.random() * 0.2))
+            self.refresh_iptables(async=True)
+
+    def _on_worker_died(self, watch_greenlet):
+        """
+        Greenlet: spawned by the gevent Hub if the etcd watch loop ever
+        stops, kills the process.
+        """
+        _log.critical("Worker greenlet died: %s; exiting.", watch_greenlet)
+        sys.exit(1)
+
+    @actor_message()
+    def refresh_iptables(self):
+        """
+        Re-apply our iptables state to the kernel.
+        """
+        _log.info("Refreshing all our chains")
+        self._txn.store_refresh()
 
     def _start_msg_batch(self, batch):
         self._reset_batched_work()
@@ -411,6 +514,21 @@ class IptablesUpdater(Actor):
             self._delete_best_effort(self._txn.chains_to_delete)
             for c in self._completion_callbacks:
                 c(None)
+            if self._txn.refresh:
+                # Re-apply our inserts and deletions.  We do this after the
+                # above processing because our inserts typically reference
+                # our other chains and if the insert has been "rolled back"
+                # by another process then it's likely that the referenced
+                # chain was too.
+                _log.info("Transaction included a refresh, re-applying our "
+                          "inserts and deletions.")
+                try:
+                    for fragment in self._inserted_rule_fragments:
+                        self._insert_rule(fragment, log_level=logging.DEBUG)
+                    for fragment in self._removed_rule_fragments:
+                        self._remove_rule(fragment, log_level=logging.DEBUG)
+                except FailedSystemCall:
+                    _log.error("Failed to refresh inserted/removed rules")
         finally:
             self._reset_batched_work()
             self._stats.increment("Batches finished")
@@ -476,7 +594,7 @@ class IptablesUpdater(Actor):
         Called after successfully processing a batch, updates the
         indices with the values calculated by the _Transaction.
         """
-        self._explicitly_prog_chains = self._txn.expl_prog_chains
+        self._programmed_chain_contents = self._txn.prog_chains
         self._required_chains = self._txn.required_chns
         self._requiring_chains = self._txn.requiring_chns
 
@@ -644,12 +762,14 @@ class _Transaction(object):
 
     """
     def __init__(self,
-                 old_expl_prog_chains,
+                 old_prog_chain_contents,
                  old_deps,
                  old_requiring_chains):
         # Figure out what stub chains should already be present.
-        self.already_stubbed = (set(old_requiring_chains.keys()) -
-                                old_expl_prog_chains)
+        old_required_chains = set(old_requiring_chains.keys())
+        old_explicitly_programmed_chains = set(old_prog_chain_contents.keys())
+        self.already_stubbed = (old_required_chains -
+                                old_explicitly_programmed_chains)
 
         # Deltas.
         self.updates = {}
@@ -657,7 +777,7 @@ class _Transaction(object):
 
         # New state.  These will be copied back to the IptablesUpdater
         # if the transaction succeeds.
-        self.expl_prog_chains = copy.deepcopy(old_expl_prog_chains)
+        self.prog_chains = old_prog_chain_contents.copy()
         self.required_chns = copy.deepcopy(old_deps)
         self.requiring_chns = copy.deepcopy(old_requiring_chains)
 
@@ -666,6 +786,9 @@ class _Transaction(object):
         self._chains_to_stub = None
         self._affected_chains = None
         self._chains_to_delete = None
+
+        # Whether to do a refresh.
+        self.refresh = False
 
     def store_delete(self, chain):
         """
@@ -680,7 +803,7 @@ class _Transaction(object):
         self._deletes.add(chain)
         # Remove any now-stale rewrite state.
         self.updates.pop(chain, None)
-        self.expl_prog_chains.discard(chain)
+        self.prog_chains.pop(chain, None)
         self._invalidate_cache()
 
     def store_rewrite_chain(self, chain, updates, dependencies):
@@ -698,7 +821,17 @@ class _Transaction(object):
         self._deletes.discard(chain)
         # Store off the update.
         self.updates[chain] = updates
-        self.expl_prog_chains.add(chain)
+        self.prog_chains[chain] = updates
+        self._invalidate_cache()
+
+    def store_refresh(self):
+        """
+        Records that we should refresh all chains as part of this transaction.
+        """
+        # Copy the whole state over to the delta for this transaction so it
+        # all gets reapplied.  The dependency index should already be correct.
+        self.updates.update(self.prog_chains)
+        self.refresh = True
         self._invalidate_cache()
 
     def _update_deps(self, chain, new_deps):
@@ -749,9 +882,16 @@ class _Transaction(object):
         if self._chains_to_stub is None:
             # Don't stub out chains that we're now explicitly programming.
             impl_required_chains = (self.referenced_chains -
-                                    self.expl_prog_chains)
-            # Don't stub out chains that are already stubbed.
-            self._chains_to_stub = impl_required_chains - self.already_stubbed
+                                    set(self.prog_chains.keys()))
+            if self.refresh:
+                # Re-stub all chains that should be stubbed.
+                _log.debug("Refresh in progress, re-stub all stubbed chains.")
+                self._chains_to_stub = impl_required_chains
+            else:
+                # Don't stub out chains that are already stubbed.
+                _log.debug("No refresh in progress.")
+                self._chains_to_stub = (impl_required_chains -
+                                        self.already_stubbed)
         return self._chains_to_stub
 
     @property
@@ -766,7 +906,8 @@ class _Transaction(object):
             _log.debug("Chains we'd like to delete: %s", chains_we_dont_want)
             # But we need to keep the chains that are explicitly programmed
             # or referenced.
-            chains_we_need = self.expl_prog_chains | self.referenced_chains
+            chains_we_need = (set(self.prog_chains.keys()) |
+                              self.referenced_chains)
             _log.debug("Chains we still need for some reason: %s",
                        chains_we_need)
             self._chains_to_delete = chains_we_dont_want - chains_we_need
@@ -863,7 +1004,6 @@ def _parse_ipt_restore_error(input_lines, err):
             return False, "Line %s failed: %s" % (line_number, offending_line)
     else:
         return False, "ip(6)tables-restore failed with output: %s" % err
-
 
 
 class NothingToDo(Exception):

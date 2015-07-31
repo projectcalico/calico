@@ -23,7 +23,7 @@ import copy
 
 import logging
 import re
-from mock import patch, call
+from mock import patch, call, Mock, ANY
 from calico.felix import fiptables
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.futils import FailedSystemCall
@@ -69,7 +69,9 @@ class TestIptablesUpdater(BaseTestCase):
     def setUp(self):
         super(TestIptablesUpdater, self).setUp()
         self.stub = IptablesStub("filter")
-        self.ipt = IptablesUpdater("filter", 4)
+        self.m_config = Mock()
+        self.m_config.REFRESH_INTERVAL = 0  # disable refresh thread
+        self.ipt = IptablesUpdater("filter", self.m_config, 4)
         self.ipt._execute_iptables = self.stub.apply_iptables_restore
         self.check_output_patch = patch("gevent.subprocess.check_output",
                                         autospec=True)
@@ -77,6 +79,7 @@ class TestIptablesUpdater(BaseTestCase):
         self.m_check_output.side_effect = self.fake_check_output
 
     def fake_check_output(self, cmd, *args, **kwargs):
+        _log.info("Stubbing out call to %s", cmd)
         if cmd == ["iptables-save", "--table", "filter"]:
             return self.stub.generate_iptables_save()
         elif cmd == ['iptables', '--wait', '--list', '--table', 'filter']:
@@ -100,7 +103,22 @@ class TestIptablesUpdater(BaseTestCase):
         self.step_actor(self.ipt)
         self.assertEqual(self.stub.chains_contents,
             {"foo": ["--append foo --jump bar"],
-             'bar': [MISSING_CHAIN_DROP % "bar"] })
+             'bar': [MISSING_CHAIN_DROP % "bar"]})
+
+    def test_rewrite_chains_cover(self):
+        """
+        Hits remaining code paths in rewrite chains.
+        """
+        cb = Mock()
+        self.ipt.rewrite_chains(
+            {"foo": ["--append foo --jump bar"]},
+            {"foo": set(["bar"])},
+            suppress_upd_log=True,
+            async=True,
+            callback=cb,
+        )
+        self.step_actor(self.ipt)
+        cb.assert_called_once_with(None)
 
     def test_delete_required_chain_stub(self):
         """
@@ -217,12 +235,109 @@ class TestIptablesUpdater(BaseTestCase):
             # before.
         })
 
+    def test_cleanup_bad_read_back(self):
+        # IptablesUpdater hears about some chains before the cleanup.
+        self.ipt.rewrite_chains(
+            {"felix-foo": ["--append felix-foo --jump felix-boff"]},
+            {"felix-foo": set(["felix-boff"])},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+        self.stub.assert_chain_contents({
+            "felix-foo": ["--append felix-foo --jump felix-boff"],
+            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+        })
+
+        # Some other process then breaks our chains.
+        self.stub.chains_contents = {}
+        self.stub.iptables_save_output = [
+            None,  # Start of cleanup.
+            # End of cleanup.  Out of sync:
+            "*filter\n"
+            ":INPUT DROP [68:4885]\n"
+            ":FORWARD DROP [0:0]\n"
+            ":OUTPUT ACCEPT [20:888]\n"
+            ":DOCKER - [0:0]\n"
+            "-A INPUT -i lxcbr0 -p tcp -m tcp --dport 53 -j ACCEPT\n"
+            "-A FORWARD -o lxcbr0 -j ACCEPT\n"
+            "COMMIT\n"
+        ]
+        _log.info("Forcing iptables-save to always return %s",
+                  self.stub.iptables_save_output)
+
+        # Issue the cleanup.
+        with patch.object(fiptables._log, "error") as m_error:
+            self.ipt.cleanup(async=True)
+            self.step_actor(self.ipt)
+            m_error.assert_called_once_with(
+                ANY,
+                set([]),
+                set([]),
+                set(["felix-foo", "felix-boff"])
+            )
+            self.stub.assert_chain_contents({
+                "felix-foo": ["--append felix-foo --jump felix-boff"],
+                "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            })
+
+    def test_ensure_rule_inserted(self):
+        fragment = "FOO --jump DROP"
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
+                                                        "line 2 failed"),
+                                       None,
+                                       None])
+            self.ipt.ensure_rule_inserted(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertEqual(
+                m_exec.mock_calls,
+                [
+                    call(["*filter",
+                          "--delete FOO --jump DROP",
+                          "--insert FOO --jump DROP",
+                          "COMMIT"],
+                         fail_log_level=logging.DEBUG),
+                    call(["*filter",
+                          "--insert FOO --jump DROP",
+                          "COMMIT"]),
+                ])
+
+            self.assertTrue(fragment in self.ipt._inserted_rule_fragments)
+
+    def test_insert_remove_tracking(self):
+        fragment = "FOO --jump DROP"
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = [
+                # Insert.
+                None,
+                # Remove: requires an exception to terminate loop.
+                None,
+                FailedSystemCall("Message", [], 1, "", "line 2 failed"),
+                # Insert.
+                None,
+            ]
+            self.ipt.ensure_rule_inserted(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertTrue(fragment in self.ipt._inserted_rule_fragments)
+            self.assertTrue(fragment not in self.ipt._removed_rule_fragments)
+
+            self.ipt.ensure_rule_removed(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertTrue(fragment not in self.ipt._inserted_rule_fragments)
+            self.assertTrue(fragment in self.ipt._removed_rule_fragments)
+
+            self.ipt.ensure_rule_inserted(fragment, async=True)
+            self.step_actor(self.ipt)
+            self.assertTrue(fragment in self.ipt._inserted_rule_fragments)
+            self.assertTrue(fragment not in self.ipt._removed_rule_fragments)
+
     def test_ensure_rule_removed(self):
+        fragment = "FOO --jump DROP"
         with patch.object(self.ipt, "_execute_iptables") as m_exec:
             m_exec.side_effect = iter([None,
                                        FailedSystemCall("Message", [], 1, "",
                                                         "line 2 failed")])
-            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.ipt.ensure_rule_removed(fragment, async=True)
             self.step_actor(self.ipt)
             exp_call = call([
                 '*filter',
@@ -235,6 +350,21 @@ class TestIptablesUpdater(BaseTestCase):
         with patch.object(self.ipt, "_execute_iptables") as m_exec:
             m_exec.side_effect = iter([FailedSystemCall("Message", [], 1, "",
                                                         "line 2 failed")])
+            self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
+            self.step_actor(self.ipt)
+            exp_call = call([
+                '*filter',
+                '--delete FOO --jump DROP',
+                'COMMIT',
+            ], fail_log_level=logging.DEBUG)
+            self.assertEqual(m_exec.mock_calls, [exp_call])
+
+    def test_ensure_rule_removed_missing_dep(self):
+        with patch.object(self.ipt, "_execute_iptables") as m_exec:
+            m_exec.side_effect = iter([
+                FailedSystemCall("Message", [], 1, "",
+                                 "at line: 2\n"
+                                 "ipset doesn't exist")])
             self.ipt.ensure_rule_removed("FOO --jump DROP", async=True)
             self.step_actor(self.ipt)
             exp_call = call([
@@ -257,6 +387,21 @@ class TestIptablesUpdater(BaseTestCase):
                 'COMMIT',
             ], fail_log_level=logging.DEBUG)
             self.assertEqual(m_exec.mock_calls, [exp_call])
+
+    def test_refresh_iptables(self):
+        self.ipt.ensure_rule_inserted("INPUT -j ACCEPT", async=True)
+        self.ipt.ensure_rule_inserted("INPUT -j DROP", async=True)
+        self.ipt.ensure_rule_removed("INPUT -j DROP", async=True)
+        self.step_actor(self.ipt)
+
+        self.ipt.refresh_iptables(async=True)
+        with patch.object(self.ipt, "_insert_rule") as m_insert_rule:
+            with patch.object(self.ipt, "_remove_rule") as m_remove_rule:
+                self.step_actor(self.ipt)
+                m_insert_rule.assert_called_once_with("INPUT -j ACCEPT",
+                                                      log_level=logging.DEBUG)
+                m_remove_rule.assert_called_once_with("INPUT -j DROP",
+                                                      log_level=logging.DEBUG)
 
 
 class TestIptablesStub(BaseTestCase):
@@ -319,14 +464,21 @@ class IptablesStub(object):
 
     def __init__(self, table):
         self.table = table
-        self.chains_contents = {}
+        self.chains_contents = defaultdict(list)
         self.chain_dependencies = defaultdict(set)
 
         self.new_contents = None
         self.new_dependencies = None
         self.declared_chains = None
+
+        self.iptables_save_output = []
         
     def generate_iptables_save(self):
+        if self.iptables_save_output:
+            output = self.iptables_save_output.pop(0)
+            if output:
+                _log.debug("Forcing iptables-save output")
+                return output
         lines = ["*" + self.table]
         for chain_name in sorted(self.chains_contents.keys()):
             lines.append(":%s - [0:0]" % chain_name)
@@ -336,7 +488,7 @@ class IptablesStub(object):
         return "\n".join(lines)
 
     def generate_iptables_list(self):
-        _log.debug("Generating iptables --list for chsins %s\n%s",
+        _log.debug("Generating iptables --list for chains %s\n%s",
                    self.chains_contents, self.chain_dependencies)
         chunks = []
         for chain, entries in sorted(self.chains_contents.items()):
@@ -401,10 +553,12 @@ class IptablesStub(object):
         ipt_op = splits[0]
         chain = splits[1]
         _log.debug("Rule op: %s, chain name: %s", ipt_op, chain)
-        if ipt_op in ("--append", "-A"):
-            if chain not in self.declared_chains:
-                raise AssertionError("Append to non-existent chain %s" % chain)
-            self.new_contents[chain].append(rule)
+        if ipt_op in ("--append", "-A", "--insert", "-I"):
+            self.assert_chain_declared(chain, ipt_op)
+            if ipt_op in ("--append", "-A"):
+                self.new_contents[chain].append(rule)
+            else:
+                self.new_contents[chain].insert(0, rule)
             m = re.search(r'(?:--jump|-j|--goto|-g)\s+(\S+)', rule)
             if m:
                 action = m.group(1)
@@ -413,17 +567,31 @@ class IptablesStub(object):
                     # Assume a dependent chain.
                     self.new_dependencies[chain].add(action)
         elif ipt_op in ("--delete-chain", "-X"):
-            if chain not in self.declared_chains:
-                raise AssertionError("Delete to non-existent chain %s" % chain)
+            self.assert_chain_declared(chain, ipt_op)
             del self.new_contents[chain]
             del self.new_dependencies[chain]
         elif ipt_op in ("--flush", "-F"):
-            if chain not in self.declared_chains:
-                raise AssertionError("Flush to non-existent chain %s" % chain)
+            self.assert_chain_declared(chain, ipt_op)
             self.new_contents[chain] = []
             self.new_dependencies[chain] = set()
+        elif ipt_op in ("--delete", "-D"):
+            self.assert_chain_declared(chain, ipt_op)
+            for rule in self.new_contents.get(chain, []):
+                rule_fragment = " ".join(splits[1:])
+                if rule.endswith(rule_fragment):
+                    self.new_contents[chain].remove(rule)
+                    break
+            else:
+                raise FailedSystemCall("Delete for non-existent rule", [], 1,
+                                       "", "line 2 failed")
         else:
             raise AssertionError("Unknown operation %s" % ipt_op)
+
+    def assert_chain_declared(self, chain, ipt_op):
+        kernel_chains = set(["INPUT", "FORWARD", "OUTPUT"])
+        if chain not in self.declared_chains and chain not in kernel_chains:
+            raise AssertionError("%s to non-existent chain %s" %
+                                 (ipt_op, chain))
 
     def _handle_commit(self):
         for chain, deps in self.chain_dependencies.iteritems():
@@ -448,7 +616,9 @@ class TestTransaction(BaseTestCase):
     def setUp(self):
         super(TestTransaction, self).setUp()
         self.txn = fiptables._Transaction(
-            set(["felix-a", "felix-b", "felix-c"]),
+            {
+                "felix-a": [], "felix-b": [], "felix-c": []
+            },
             defaultdict(set, {"felix-a": set(["felix-b", "felix-stub"])}),
             defaultdict(set, {"felix-b": set(["felix-a"]),
                               "felix-stub": set(["felix-a"])}),
@@ -464,8 +634,13 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_stub_out, set([]))
         self.assertEqual(self.txn.chains_to_delete, set(["felix-stub"]))
         self.assertEqual(self.txn.referenced_chains, set(["felix-b"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-b", "felix-c"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": ["foo"],
+                "felix-b": [],
+                "felix-c": []
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-b"])})
         self.assertEqual(self.txn.requiring_chns,
@@ -481,8 +656,13 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_stub_out, set([]))
         self.assertEqual(self.txn.chains_to_delete, set([]))
         self.assertEqual(self.txn.referenced_chains, set(["felix-stub"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-b", "felix-c"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": ["foo"],
+                "felix-b": [],
+                "felix-c": [],
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-stub"])})
         self.assertEqual(self.txn.requiring_chns,
@@ -499,8 +679,12 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_delete, set(["felix-c"]))
         self.assertEqual(self.txn.referenced_chains,
                          set(["felix-b", "felix-stub"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-b"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": [],
+                "felix-b": [],
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-b", "felix-stub"])})
         self.assertEqual(self.txn.requiring_chns,
@@ -518,8 +702,12 @@ class TestTransaction(BaseTestCase):
         self.assertEqual(self.txn.chains_to_delete, set())
         self.assertEqual(self.txn.referenced_chains,
                          set(["felix-b", "felix-stub"]))
-        self.assertEqual(self.txn.expl_prog_chains,
-                         set(["felix-a", "felix-c"]))
+        self.assertEqual(
+            self.txn.prog_chains,
+            {
+                "felix-a": [],
+                "felix-c": [],
+            })
         self.assertEqual(self.txn.required_chns,
                          {"felix-a": set(["felix-b", "felix-stub"])})
         self.assertEqual(self.txn.requiring_chns,
