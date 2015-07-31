@@ -29,10 +29,12 @@ Options:
  --ipv6    Show IPv6 information only.
 """
 import sys
-from utils import client
+
 from pycalico.datastore_datatypes import BGPPeer
 from netaddr import IPAddress
 from prettytable import PrettyTable
+
+from connectors import client
 from utils import get_container_ipv_from_arguments
 from utils import validate_ip
 

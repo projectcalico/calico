@@ -27,11 +27,14 @@ Options:
   --ipip          Use IP-over-IP encapsulation across hosts
  """
 import sys
+
 import netaddr
 from netaddr import IPNetwork, IPRange, IPAddress
 from prettytable import PrettyTable
 from pycalico.datastore_datatypes import IPPool
-from utils import (validate_cidr, validate_ip, client,
+
+from connectors import client
+from utils import (validate_cidr, validate_ip,
                    get_container_ipv_from_arguments)
 
 

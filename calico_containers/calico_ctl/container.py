@@ -20,14 +20,14 @@ from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 from subprocess import CalledProcessError
 from netaddr import IPAddress, IPNetwork
-
 from pycalico import netns
 from pycalico.datastore_datatypes import Endpoint
+
+from connectors import client
+from connectors import docker_client
 from utils import hostname, ORCHESTRATOR_ID
-from utils import client
 from utils import enforce_root
 from utils import get_container_ipv_from_arguments
-from utils import docker_client
 from utils import print_paragraph
 from utils import validate_ip
 

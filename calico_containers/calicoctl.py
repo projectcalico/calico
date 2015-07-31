@@ -33,8 +33,10 @@ Usage: calicoctl <command> [<args>...]
 
 See 'calicoctl <command> --help' to read about a specific subcommand.
 """
+import os
 import sys
 import traceback
+
 from docopt import docopt
 from pycalico.datastore_errors import DataStoreError
 

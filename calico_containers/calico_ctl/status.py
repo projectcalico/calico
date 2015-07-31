@@ -20,8 +20,10 @@ Description:
   and the BIRD routing daemon.
 """
 import re
-from utils import docker_client
+
 from prettytable import PrettyTable
+
+from connectors import docker_client
 
 
 def status(arguments):
@@ -42,9 +44,11 @@ def status(arguments):
         print "calico-node container is running. Status: %s" % \
               calico_node_info[0]["Status"]
 
-        apt_cmd = docker_client.exec_create("calico-node", ["/bin/bash", "-c",
-                                           "apt-cache policy calico-felix"])
-        result = re.search(r"Installed: (.*?)\s", docker_client.exec_start(apt_cmd))
+        apt_cmd = docker_client.exec_create("calico-node",
+                                           ["/bin/bash", "-c",
+                                            "apt-cache policy calico-felix"])
+        result = re.search(r"Installed: (.*?)\s",
+                           docker_client.exec_start(apt_cmd))
         if result is not None:
             print "Running felix version %s" % result.group(1)
 
@@ -52,6 +56,7 @@ def status(arguments):
         pprint_bird_protocols(4)
         print "IPv6 BGP status"
         pprint_bird_protocols(6)
+
 
 def pprint_bird_protocols(version):
     """

@@ -24,12 +24,14 @@ Options:
 import sys
 import re
 import sh
+
 import docker
 from requests import ConnectionError
+
 from utils import DOCKER_VERSION
 from utils import enforce_root
 from utils import sysctl
-from utils import docker_client
+from connectors import docker_client
 
 def checksystem(arguments):
     """
