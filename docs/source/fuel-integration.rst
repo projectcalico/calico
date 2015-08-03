@@ -269,6 +269,22 @@ from the security group configuration, i.e. that you can ping the IP addresses
 of all of the other VMs in the same security group, but you cannot ping the VMs
 in the other security group.
 
+Note that whilst the VMs should be able to reach other (security group
+configuration permitting), they are not expected to have external connectivity
+unless appropriate routing has been set up:
+
+- For outbound access, you need to ensure that your VMs can send traffic to
+  your border gateway router (typically this will be the case, because usually
+  your compute hosts will be able to do so). The border gateway can then
+  perform SNAT.
+
+- For inbound connections, you need assign a publically routable IP address to
+  your VM - that is, attach it to a network with a public IP address. You will
+  also need to make sure that your border router (and any intermediate routers
+  between the border router and the compute host) can route to that address
+  too. The simplest way to do that is to peer the border router with the route
+  reflector on the controller.
+
 Detailed Observations
 ---------------------
 
