@@ -7,8 +7,8 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 
 1) Install dependencies
 
-* [VirtualBox][virtualbox] 4.3.10 or greater.
-* [Vagrant][vagrant] 1.6 or greater.
+* [VirtualBox][virtualbox] 5.0.0 or greater.
+* [Vagrant][vagrant] 1.7.4 or greater.
 * [Git][git]
 
 2) Clone this project

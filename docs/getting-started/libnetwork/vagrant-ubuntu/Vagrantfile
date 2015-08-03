@@ -38,8 +38,7 @@ Vagrant.configure(2) do |config|
       # The docker provisioner installs docker.
       host.vm.provision :docker, images: [
           "busybox:latest",
-          "calico/node:#{calico_docker_ver}",
-          "quay.io/coreos/etcd:v2.0.11",
+          "calico/node:#{calico_docker_ver}"
       ]
 
       # Replace docker with known good version.
