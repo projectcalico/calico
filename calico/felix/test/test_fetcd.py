@@ -124,11 +124,12 @@ class TestExcdWatcher(BaseTestCase):
     @patch("calico.felix.fetcd.die_and_restart", autospec=True)
     def test_load_config(self, m_die, m_build_dict, m_sleep):
         # First call, loads the config.
+        global_cfg = {"foo": "bar"}
         m_build_dict.side_effect = iter([
             # First call, global-only.
-            {"foo": "bar"},
+            global_cfg,
             # Second call, no change.
-            {"foo": "bar"},
+            global_cfg,
             # Third call, change of config.
             {"foo": "baz"}, {"biff": "bop"}])
         self.client.read.side_effect = iter([
@@ -147,12 +148,18 @@ class TestExcdWatcher(BaseTestCase):
 
         m_sleep.assert_called_once_with(5)
         self.assertFalse(m_die.called)
-        self.m_config.report_etcd_config.assert_called_once_with(
-            {},
-            {"foo": "bar"}
-        )
+
+        m_report = self.m_config.report_etcd_config
+        rpd_host_cfg, rpd_global_cfg = m_report.mock_calls[0][1]
+        self.assertEqual(rpd_host_cfg, {})
+        self.assertEqual(rpd_global_cfg, global_cfg)
+        self.assertTrue(rpd_host_cfg is not self.watcher.last_host_config)
+        self.assertTrue(rpd_global_cfg is not self.watcher.last_global_config)
+        self.assertEqual(rpd_host_cfg, self.watcher.last_host_config)
+        self.assertEqual(rpd_global_cfg, self.watcher.last_global_config)
+
         self.assertEqual(self.watcher.last_host_config, {})
-        self.assertEqual(self.watcher.last_global_config, {"foo": "bar"})
+        self.assertEqual(self.watcher.last_global_config, global_cfg)
         self.watcher.configured.set()  # Normally done by the caller.
         self.client.read.assert_has_calls([
             call("/calico/v1/config", recursive=True),

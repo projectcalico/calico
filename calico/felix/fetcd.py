@@ -388,12 +388,18 @@ class _EtcdWatcher(gevent.Greenlet):
                             global_dict != self.last_global_config):
                         _log.warning("Felix configuration has changed, "
                                      "felix must restart.")
+                        _log.info("Old host config: %s", self.last_host_config)
+                        _log.info("New host config: %s", host_dict)
+                        _log.info("Old global config: %s",
+                                  self.last_global_config)
+                        _log.info("New global config: %s", global_dict)
                         die_and_restart()
                 else:
                     # First time loading the config.  Report it to the config
-                    # object.
-                    self.last_host_config = host_dict
-                    self.last_global_config = global_dict
+                    # object.  Take copies because report_etcd_config is
+                    # destructive.
+                    self.last_host_config = host_dict.copy()
+                    self.last_global_config = global_dict.copy()
                     self.config.report_etcd_config(host_dict, global_dict)
                 return
 
