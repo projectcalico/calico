@@ -63,7 +63,9 @@ gcloud compute instances create \
   --metadata-from-file user-data=<PATH_TO_CLOUD_CONFIG>/user-data-first
 ```
 
-For the second server run:
+Open your `user-data-others` file and replace the instances of `172.17.8.101` with the private IP address of the `calico-01` server you just created.  You can find this in the output of the previous command.
+
+Then, for the second server, run:
 
 ```
 gcloud compute instances create \

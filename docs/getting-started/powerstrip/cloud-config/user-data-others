@@ -5,7 +5,7 @@ coreos:
     reboot-strategy: 'off'
   fleet:
     public-ip: $public_ipv4
-    etcd_servers: http://calico-01:4001
+    etcd_servers: http://172.17.8.101:4001
   units:
   - name: fleet.service
     command: start
@@ -33,7 +33,7 @@ write_files:
     mkdir -p /opt/bin
     rm /home/core/.bashrc
     echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
-    echo 'export ETCD_AUTHORITY="calico-01:4001"' >> /home/core/.bashrc
+    echo 'export ETCD_AUTHORITY="172.17.8.101:4001"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_AUTHORITY"' >>/etc/sudoers.d/etcd
 - path: /home/core/get_calicoctl.sh
   permissions: 777

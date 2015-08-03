@@ -46,7 +46,7 @@ address.
 Repeat this process for a second host `calico-02`, but this time use the
 cloud config from `user-data-other`, making the following global changes before
 pasting it in:
-- Replace all instances of calico-01 with the private IPv4 address of calico-01
+- Replace all instances of `172.17.8.101` with the private IPv4 address of `calico-01`.
 
 
 ## Set up the IP Pool before running the demo
