@@ -5,7 +5,7 @@ coreos:
     reboot-strategy: 'off'
   fleet:
     public-ip: $public_ipv4
-    etcd_servers: http://calico-01:4001
+    etcd_servers: http://172.17.8.101:4001
   units:
   - name: fleet.service
     command: start
@@ -47,7 +47,7 @@ coreos:
       MountFlags=slave
       LimitNOFILE=1048576
       LimitNPROC=1048576
-      ExecStart=/opt/bin/docker --kv-store=consul:calico-01:8500 --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
+      ExecStart=/opt/bin/docker --kv-store=consul:172.17.8.101:8500 --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
       ExecStartPost=/opt/bin/calicoctl checksystem --fix
       RestartSec=10
       Restart=always
@@ -65,7 +65,7 @@ write_files:
     mkdir -p /opt/bin
     rm /home/core/.bashrc
     echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
-    echo 'export ETCD_AUTHORITY="calico-01:4001"' >> /home/core/.bashrc
+    echo 'export ETCD_AUTHORITY="172.17.8.101:4001"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_AUTHORITY"' >>/etc/sudoers.d/etcd
 - path: /home/core/get_experimental_docker.sh
   permissions: 777

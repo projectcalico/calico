@@ -95,7 +95,7 @@ aws ec2 run-instances \
 
 replacing <PATH_TO_CLOUD_CONFIG> with the appropriate directory containing the cloud config.
 
-Find the PrivateIpAddress value of the first server by checking the output of this command.  Open your `user-data-others` file and replace the instances of `calico-01` with this private IP address.
+Find the PrivateIpAddress value of the first server by checking the output of this command.  Open your `user-data-others` file and replace the instances of `172.17.8.101` with this private IP address.
 
 Now, for the second server run:
 
