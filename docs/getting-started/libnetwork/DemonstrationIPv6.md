@@ -46,7 +46,7 @@ On calico-01
 
     docker run --publish-service srvF.net4.calico --name workload-F -tid ubuntu
 
-Then get the ipv6 address of workload-F
+Then get the IPv6 address of workload-F
 
     docker inspect --format "{{ .NetworkSettings.GlobalIPv6Address }}" workload-F
 
@@ -57,7 +57,7 @@ One calico-02
 
     docker run --publish-service srvG.net4.calico --name workload-G -tid ubuntu
 
-Then ping workload-F via its ipv6 address that you received above (change the 
+Then ping workload-F via its IPv6 address that you received above (change the 
 IP address if necessary):
 
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1
