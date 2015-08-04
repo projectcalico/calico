@@ -1,3 +1,13 @@
+calico (0.28) trusty; urgency=medium
+
+  * Felix now restarts if its etcd configuration changes.
+  * Felix now periodically refreshes iptables to be robust to other processes
+    corrupting its chains.
+  * More thorough resynchronization of etcd from the Neutron mechanism driver.
+  * Added process-specific information to the diagnostics dumps from Felix.
+
+ -- Matt Dupre <matt@projectcalico.org>  Tue, 04 Aug 2015 17:36:13 +0100
+
 calico (0.27.1) trusty; urgency=medium
 
   * Interim bug-fix release - reinstate DHCP checksum calculation rule.

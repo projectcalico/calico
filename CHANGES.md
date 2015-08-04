@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.28-dev
+## 0.28
 
 - Felix now restarts if its etcd configuration changes.
 - Felix now periodically refreshes iptables to be robust to other processes
