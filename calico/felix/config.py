@@ -193,6 +193,9 @@ class Config(object):
         self.add_parameter("IpInIpEnabled",
                            "IP-in-IP device support enabled", False,
                            value_is_bool=True)
+        self.add_parameter("IpInIpMtu",
+                           "MTU to set on the IP-in-IP device", 1440,
+                           value_is_int=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
@@ -242,6 +245,7 @@ class Config(object):
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
         self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
+        self.IP_IN_IP_MTU = self.parameters["IpInIpMtu"].value
 
         self._validate_cfg(final=final)
 

@@ -208,6 +208,7 @@ class TestRules(BaseTestCase):
 
         m_config = Mock(spec=Config)
         m_config.IP_IN_IP_ENABLED = True
+        m_config.IP_IN_IP_MTU = 1480
         m_config.METADATA_IP = "123.0.0.1"
         m_config.METADATA_PORT = 1234
         m_config.DEFAULT_INPUT_CHAIN_ACTION = "RETURN"
@@ -224,6 +225,7 @@ class TestRules(BaseTestCase):
             m_check_call.mock_calls,
             [
                 call(["ip", "tunnel", "add", "tunl0", "mode", "ipip"]),
+                call(["ip", "link", "set", "tunl0", "mtu", "1480"]),
                 call(["ip", "link", "set", "tunl0", "up"]),
             ]
         )
