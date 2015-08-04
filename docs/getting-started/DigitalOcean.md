@@ -119,8 +119,8 @@ On the same host, create a NAT that forwards port 80 traffic to a new container.
 sudo iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.2.1:80
 ```
 
-You should now be able to access the containers using the public IP address of your DigitalOcean host on port 80 by 
-visiting http://<host public ip>:80 or running:
+You should now be able to access the container using the public IP address of your DigitalOcean host on port 80 by 
+visiting `http://<host public ip>:80` or running:
 
 ```
 curl http://<host public ip>:80
