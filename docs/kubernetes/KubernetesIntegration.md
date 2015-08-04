@@ -28,7 +28,7 @@ This guide will describe the configuration required to use the Calico network pl
 
 * #####Manual Install
 
-   Alternatively, you can download the [latest release](https://github.com/Metaswitch/calico-docker/releases/latest) of the plugin binary directly from our Github Repo.
+   Alternatively, you can download the [latest release](https://github.com/Metaswitch/calico-docker/releases/latest) of the plugin binary directly from our GitHub Repo.
 
 #### Configuring Kubelet Services
    On each of your nodes, you will need to configure the Kubelet to use the Calico Networking Plugin. This can be done by including the `--network_plugin=calico` option when starting the Kubelet. If you are using systemd to manage your services, you can add this line to the Kubelet config file (`/etc/systemd/` by default) and restart your Kubelets to begin using Calico.

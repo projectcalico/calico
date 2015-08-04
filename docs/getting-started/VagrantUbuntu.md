@@ -72,7 +72,7 @@ And finally check that Docker is running on both hosts by running
 
 ## Try out Calico Networking
 
-Now you have a basic two node Ubuntu cluster setup and you are ready to try Calico neworking.
+Now you have a basic two node Ubuntu cluster setup and you are ready to try Calico networking.
 
 You can now run through the standard Calico demonstration.  There are three demonstration options depending on 
 whether you are running with libnetwork, Powerstrip or the default Docker networking.

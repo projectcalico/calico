@@ -150,8 +150,8 @@ gcloud compute firewall-rules create allow-http \
   --description "Incoming http allowed." --allow tcp:80
 ```
 
-You should now be able to access the container using the public ip address of your GCE host on port 80 by 
-visiting http://<host public ip>:80 or running:
+You should now be able to access the container using the public IP address of your GCE host on port 80 by 
+visiting `http://<host public ip>:80` or running:
 
 ```
 curl http://<host public ip>:80

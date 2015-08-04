@@ -67,7 +67,7 @@ aws ec2 authorize-security-group-ingress \
 ```
 
 ## Spinning up the VMs
-Create the 2 Calico Docker hosts by passing in a `cloud-config` file. 
+Create the two Calico Docker hosts by passing in a `cloud-config` file. 
 
 There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or the 
 default Docker networking.  Select the appropriate cloud-config based on the demonstration option.
@@ -195,8 +195,9 @@ aws ec2 authorize-security-group-ingress \
   --cidr 0.0.0.0/0
 ```
 
-You should now be able to access the container using the public ip address of your AWS host on port 80 by visiting 
-http://`<host public ip>`:80 or running:
+You should now be able to access the container using the public IP address of your AWS host on port 80 by visiting 
+`http://<host public ip>:80` or running:
+
 ```
 curl http://<host public ip>:80
 ```

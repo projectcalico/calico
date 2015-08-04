@@ -91,7 +91,7 @@ The unit tests are written using the nose and unittest framework.  The test file
 
 ### Running the system tests
 
-The Calico Docker system tests provide detailed testing of the `calicoctl` command line tool and the `calio/node`
+The Calico Docker system tests provide detailed testing of the `calicoctl` command line tool and the `calico/node`
 container image.  The tests cover multiple topologies and covers most of the available `calicoctl` command line
 options.
 
@@ -131,7 +131,7 @@ From the root directory of the checked out repository, run
     sudo make fast-st
 
 Unlike the full ST suite, the fast ST suite does not build the calicoctl binary - instead it runs calicoctl directly
-from the python intepreter.  It starts containers running etcd and Consul, and then runs all of the tests defined in
+from the python interpreter.  It starts containers running etcd and Consul, and then runs all of the tests defined in
 tests/st that do not have the "slow" attribute assigned to them.
 
 #### Running a subset of system tests
