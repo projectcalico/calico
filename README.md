@@ -69,10 +69,9 @@ With each of these tutorials we provide details for running the demonstration
 using manual setup on your own servers, or with a quick set-up in a virtualized
 environment using Vagrant, or a number of cloud services.
 
-We also provide a demonstration of a 
-[Docker Swarm cluster](docs/getting-started/powerstrip/CalicoSwarm.md) 
-networked using Calico. This particular demonstration utilizes the 
-[powerstrip](#docker-with-powerstrip) networking option.
+We also provide the following additional demonstrations: 
+- [Docker Swarm cluster](docs/getting-started/powerstrip/CalicoSwarm.md) 
+- [Calico and Kubernetes](docs/kubernetes/README.md)
 
 
 ### Networking options
