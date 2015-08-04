@@ -30,10 +30,11 @@ Usage: calicoctl <command> [<args>...]
     bgp               Configure global bgp
     checksystem       Check for incompatabilities on the host system
     diags             Save diagnostic information
+    version           Display the version of calicoctl
 
 See 'calicoctl <command> --help' to read about a specific subcommand.
 """
-import os
+
 import sys
 import traceback
 
@@ -49,6 +50,7 @@ import calico_ctl.bgp
 import calico_ctl.checksystem
 import calico_ctl.status
 import calico_ctl.diags
+import calico_ctl.version
 from calico_ctl.utils import print_paragraph
 
 
@@ -67,7 +69,7 @@ if __name__ == '__main__':
     # to trigger the main help message
     if len(sys.argv) == 1:
         docopt(__doc__, options_first=True, argv=['--help'])
-        exit(1)
+        sys.exit(1)
 
     # Run command through initial docopt processing to determine subcommand
     command_args = docopt(__doc__, options_first=True)
@@ -83,6 +85,13 @@ if __name__ == '__main__':
         # shares the same name as the input command
         command_module = getattr(calico_ctl, command)
 
+        # The command module should have a function the same name as the
+        # command.  This protects against trying to run an invalid command that
+        # happens to have the same name as a non-command module.
+        if not hasattr(command_module, command):
+            docopt(__doc__, options_first=True, argv=['--help'])
+            sys.exit(1)
+
         # docopt the arguments through that module's docstring
         arguments = docopt(command_module.__doc__, argv=argv)
 
@@ -92,6 +101,7 @@ if __name__ == '__main__':
     except AttributeError:
         # Unrecognized submodule. Show main help message
         docopt(__doc__, options_first=True, argv=['--help'])
+        sys.exit(1)
     except SystemExit:
         raise
     except DataStoreError as e:

@@ -63,7 +63,7 @@ def pprint_bird_protocols(version):
     Pretty print the output from the BIRD "show protocols".  This parses the
     existing output and lays it out in pretty printed table.
 
-    :param version:
+    :param version:  The IP version (4 or 6).
     :return: None.
     """
     # Based on the IP version, run the appropriate BIRD command, and select
