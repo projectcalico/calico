@@ -24,7 +24,7 @@ protocol device {
 }
 
 protocol direct {
-  debug all;
+  debug { states };
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
@@ -32,7 +32,7 @@ protocol direct {
 {{else}}{{$node_as_key := printf "/host/%s/as_num" (getenv "HOSTNAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
-  debug all;
+  debug { states };
   description "Connection to BGP peer";
   local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
   multihop;
