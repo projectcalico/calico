@@ -15,7 +15,7 @@ apt-get install -qy \
 
 # Install Felix and python-etcd from the Metaswitch github repos.
 pip install git+https://github.com/Metaswitch/python-etcd.git
-pip install git+https://github.com/Metaswitch/calico.git@0.27
+pip install git+https://github.com/Metaswitch/calico.git@0.28
 pip install git+https://github.com/projectcalico/libcalico.git@v0.1.0
 
 # Install Confd
