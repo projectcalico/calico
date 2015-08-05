@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29-dev
+
+- Add support for setting MTU on IP-in-IP device.
+
 ## 0.28
 
 - Felix now restarts if its etcd configuration changes.

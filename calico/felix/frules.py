@@ -90,6 +90,8 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             _log.info("Tunnel device didn't exist; creating.")
             futils.check_call(["ip", "tunnel", "add", IP_IN_IP_DEV_NAME,
                                "mode", "ipip"])
+        futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "mtu",
+                           str(config.IP_IN_IP_MTU)])
         if not devices.interface_up(IP_IN_IP_DEV_NAME):
             _log.info("Tunnel device wasn't up; enabling.")
             futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
