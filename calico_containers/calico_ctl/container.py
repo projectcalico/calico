@@ -65,7 +65,6 @@ def container(arguments):
     """
     validate_arguments(arguments)
 
-    ip_version = get_container_ipv_from_arguments(arguments)
     try:
         if arguments.get("endpoint-id"):
             container_endpoint_id_show(arguments.get("<CONTAINER>"))
@@ -73,12 +72,10 @@ def container(arguments):
             if arguments.get("add"):
                 container_ip_add(arguments.get("<CONTAINER>"),
                                  arguments.get("<IP>"),
-                                 ip_version,
                                  arguments.get("--interface"))
             elif arguments.get("remove"):
                 container_ip_remove(arguments.get("<CONTAINER>"),
                                     arguments.get("<IP>"),
-                                    ip_version,
                                     arguments.get("--interface"))
             else:
                 if arguments.get("add"):
@@ -286,7 +283,7 @@ def container_ip_add(container_name, ip, interface):
 
     # From here, this method starts having side effects. If something
     # fails then at least try to leave the system in a clean state.
-    if not client.assign_address(pool, ip):
+    if not client.assign_address(pool, address):
         print "IP address is already assigned in pool %s " % pool
         sys.exit(1)
 
