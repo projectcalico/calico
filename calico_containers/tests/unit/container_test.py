@@ -311,6 +311,7 @@ class TestContainer(unittest.TestCase):
         # Set up arguments to pass to method under test
         container_name = 'container1'
         ip = '1.1.1.1'
+        ip_addr = IPAddress(ip)
         interface = 'interface'
 
         # Call method under test
@@ -318,18 +319,18 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_get_pool_or_exit.assert_called_once_with(IPAddress(ip))
+        m_get_pool_or_exit.assert_called_once_with(ip_addr)
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
             orchestrator_id=utils.ORCHESTRATOR_ID,
             workload_id=666
         )
-        m_client.assign_address.assert_called_once_with(pool_return, ip)
-        m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(IPAddress(ip)))
+        m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
+        m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.add_ip_to_ns_veth.assert_called_once_with(
-            'Pid_info', IPAddress(ip), interface
+            'Pid_info', ip_addr, interface
         )
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -358,6 +359,7 @@ class TestContainer(unittest.TestCase):
         # Set up arguments to pass to method under test
         container_name = 'container1'
         ip = '1::1'
+        ip_addr = IPAddress(ip)
         interface = 'interface'
 
         # Call method under test
@@ -365,18 +367,18 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_get_pool_or_exit.assert_called_once_with(IPAddress(ip))
+        m_get_pool_or_exit.assert_called_once_with(ip_addr)
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
             orchestrator_id=utils.ORCHESTRATOR_ID,
             workload_id=666
         )
-        m_client.assign_address.assert_called_once_with(pool_return, ip)
-        m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(IPAddress(ip)))
+        m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
+        m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.add_ip_to_ns_veth.assert_called_once_with(
-            'Pid_info', IPAddress(ip), interface
+            'Pid_info', ip_addr, interface
         )
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
