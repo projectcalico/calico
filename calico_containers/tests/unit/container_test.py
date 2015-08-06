@@ -285,6 +285,45 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_client.get_endpoint.called)
         self.assertFalse(m_client.get_ip_pools.called)
 
+    @patch('pycalico.netns.remove_veth')
+    @patch('calico_ctl.container.enforce_root', autospec=True)
+    @patch('calico_ctl.container.get_container_id', autospec=True)
+    @patch('calico_ctl.container.client', autospec=True)
+    def test_container_remove_veth_error(self, m_client, m_get_container_id,
+                                         m_enforce_root, m_remove_veth):
+        """
+        Test for container_remove when remove_veth throws an error
+
+        Assert that the system exits and workload is not removed.
+        """
+        # Set up mock objects
+        ipv4_nets = set()
+        ipv4_nets.add(IPNetwork(IPAddress('1.1.1.1')))
+        ipv6_nets = set()
+        m_endpoint = Mock(spec=Endpoint)
+        m_endpoint.ipv4_nets = ipv4_nets
+        m_endpoint.ipv6_nets = ipv6_nets
+        m_endpoint.endpoint_id = 12
+        m_endpoint.name = "eth1234"
+        ippool = IPPool('1.1.1.1/24')
+        m_client.get_endpoint.return_value = m_endpoint
+        m_client.get_ip_pools.return_value = [ippool]
+        m_get_container_id.return_value = 52
+        m_remove_veth.side_effect = CalledProcessError(1, "test")
+
+        # Call function under test expecting a SystemExit
+        self.assertRaises(SystemExit, container.container_remove, 'container1')
+
+        # Assert
+        m_enforce_root.assert_called_once_with()
+        m_get_container_id.assert_called_once_with("container1")
+        m_client.get_endpoint.assert_called_once_with(
+                                         hostname=utils.hostname,
+                                         orchestrator_id=utils.ORCHESTRATOR_ID,
+                                         workload_id=52)
+        m_client.get_ip_pools.assert_called_once_with(4)
+        self.assertFalse(m_client.remove_workload.called)
+
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)

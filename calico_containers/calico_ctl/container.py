@@ -27,7 +27,6 @@ from connectors import client
 from connectors import docker_client
 from utils import hostname, ORCHESTRATOR_ID
 from utils import enforce_root
-from utils import get_container_ipv_from_arguments
 from utils import print_paragraph
 from utils import validate_ip
 
@@ -235,8 +234,12 @@ def container_remove(container_name):
                 # enforcing assignments strictly in datastore.py.
                 client.unassign_address(pool, ip)
 
-    # Remove the endpoint
-    netns.remove_veth(endpoint.name)
+    try:
+        # Remove the interface if it exists
+        netns.remove_veth(endpoint.name)
+    except CalledProcessError:
+        print "Could not remove Calico interface %s" % endpoint.name
+        sys.exit(1)
 
     # Remove the container from the datastore.
     client.remove_workload(hostname, ORCHESTRATOR_ID, workload_id)
