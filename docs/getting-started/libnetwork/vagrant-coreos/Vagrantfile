@@ -8,7 +8,7 @@
 # image which slows down the install process, but speeds up the demonstration.
 # This version should match the version of calicotl installed in the cloud
 # config files.
-calico_docker_ver = "v0.5.3"
+calico_docker_ver = "v0.5.4"
 
 # Size of the cluster created by Vagrant
 num_instances=2

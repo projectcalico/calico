@@ -29,7 +29,7 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps -a
     CONTAINER ID        IMAGE                    COMMAND                CREATED             STATUS              PORTS                                            NAMES
-    39de206f7499        calico/node:v0.5.3   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
+    39de206f7499        calico/node:v0.5.4   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
 
 
 ## Creating networked endpoints

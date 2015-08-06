@@ -96,9 +96,9 @@ If you prefer not to do this you can still run the demo but remember to run
 
 Get the calicoctl binary onto each host.  You can download a specific 
 [release][calico-releases] from github.  
-For example, to retrieve the latest v0.5.3 release, on each host run
+For example, to retrieve the latest v0.5.4 release, on each host run
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.3/calicoctl
+	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.4/calicoctl
 	chmod +x calicoctl
 	
 This binary should be placed in your `$PATH` so it can be run from any
@@ -111,7 +111,7 @@ run `calicoctl node` the first time.  Select the same version of the Calico
 Docker image as you selected above.  For example, to pull the latest released 
 version
 
-    docker pull calico/node:v0.5.3
+    docker pull calico/node:v0.5.4
 
 ## Final checks
 
