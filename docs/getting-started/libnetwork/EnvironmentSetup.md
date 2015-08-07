@@ -98,7 +98,7 @@ Get the calicoctl binary onto each host.  You can download a specific
 [release][calico-releases] from github.  
 For example, to retrieve the latest v0.5.4 release, on each host run
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.4/calicoctl
+	wget https://github.com/projectcalico/calico-docker/releases/download/v0.5.4/calicoctl
 	chmod +x calicoctl
 	
 This binary should be placed in your `$PATH` so it can be run from any
@@ -133,5 +133,5 @@ an error if etcd is not available.
     etcdctl ls /
     
 [etcd]: https://coreos.com/etcd/docs/latest/
-[calico-releases]: https://github.com/Metaswitch/calico-docker/releases/
+[calico-releases]: https://github.com/projectcalico/calico-docker/releases/
 [experimental-docker-git]: https://github.com/docker/docker/tree/master/experimental

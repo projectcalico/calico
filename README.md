@@ -107,7 +107,7 @@ For more information on what you can do with Calico, please visit the
 
 [powerstrip]: https://github.com/ClusterHQ/powerstrip
 [libnetwork]: https://github.com/docker/libnetwork
-[raise-issues]: https://github.com/Metaswitch/calico-docker/issues/new
+[raise-issues]: https://github.com/projectcalico/calico-docker/issues/new
 [docker-experimental]: https://github.com/docker/docker/tree/master/experimental
 [irc]: http://webchat.freenode.net?randomnick=1&channels=%23calico&uio=d4
 [project-calico]: http://www.projectcalico.org

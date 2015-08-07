@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 # The version of calico to install
-calico_docker_ver = "v0.4.8"
+calico_docker_ver = "v0.4.9"
 
 # Size of the cluster created by Vagrant
 num_instances=2
@@ -42,7 +42,7 @@ Vagrant.configure(2) do |config|
       ]
 
       # download calicoctl.
-      host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl https://github.com/Metaswitch/calico-docker/releases/download/#{calico_docker_ver}/calicoctl", :privileged => true
+      host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/#{calico_docker_ver}/calicoctl", :privileged => true
 
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
 

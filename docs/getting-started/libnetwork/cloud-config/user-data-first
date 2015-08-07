@@ -103,12 +103,12 @@ write_files:
   content: |
     #!/usr/bin/bash -e
     cd /opt/bin
-    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.5.4/docker
+    wget https://github.com/projectcalico/calico-docker/releases/download/v0.5.4/docker
     chmod +x ./docker
 - path: /home/core/get_calicoctl.sh
   permissions: 777
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/calicoctl https://github.com/Metaswitch/calico-docker/releases/download/v0.5.4/calicoctl
+    wget -O /opt/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/v0.5.4/calicoctl
     chmod +x /opt/bin/calicoctl
