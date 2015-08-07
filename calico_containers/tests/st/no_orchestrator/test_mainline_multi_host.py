@@ -51,7 +51,6 @@ class TestNoOrchestratorMultiHost(TestBase):
             node1.assert_can_ping("192.168.1.2", retries=3)
             node2.assert_can_ping("192.168.1.1", retries=3)
 
-
             # Test the teardown commands
             host1.calicoctl("profile remove TEST_GROUP")
             host1.calicoctl("container remove %s" % node1)

@@ -12,16 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from test_base import TestBase
-
-"""
-Test calicoctl endpoint commands.
-
-This class only covers the endpoint show commands. The profile commands are
-in the profile test case.
-There is some endpoint coverage in the mainline tests.
-"""
-
-
-class TestEndpointCommands(TestBase):
-    pass
+DEFAULT_IPV4_POOL_CIDR = "192.168.0.0/16"
+DEFAULT_IPV6_POOL_CIDR = "fd80:24e2:f998:72d6::/64"

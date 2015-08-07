@@ -26,7 +26,7 @@ contains a simple return code check.
 class TestStatus(TestBase):
     def test_status(self):
         """
-        Test that the diags command successfully creates a tar.gz file.
+        Test that the status command can be executed.
         """
         with DockerHost('host', dind=False, start_calico=False) as host:
             host.calicoctl("status")
