@@ -37,8 +37,8 @@ Features or any changes to the codebase should be done as follows:
 5. Reviewer process:
 
    -  Receive notice of review by GitHub email, GitHub notification, or by
-      checking `all your Metaswitch GitHub
-      issues <https://github.com/organizations/Metaswitch/dashboard/issues/assigned?direction=desc&state=open>`__.
+      checking `all your Project Calico GitHub
+      issues <https://github.com/organizations/projectcalico/dashboard/issues/assigned?direction=desc&state=open>`__.
    -  Make markups as comments on the pull request (either line comments or
       top-level comments).
    -  Make a top-level comment saying something along the lines of “Fine;

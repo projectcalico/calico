@@ -91,7 +91,7 @@ Red Hat 7
 
 First, upgrade python-etcd::
 
-    curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+    curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
     tar xvf python-etcd.tar.gz
     cd python-etcd-master
     python setup.py install
@@ -123,7 +123,7 @@ Red Hat 7
 
 First, upgrade python-etcd::
 
-    curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+    curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
     tar xvf python-etcd.tar.gz
     cd python-etcd-master
     python setup.py install
