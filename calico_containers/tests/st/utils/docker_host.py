@@ -178,6 +178,20 @@ class DockerHost(object):
             # Best effort only.
             pass
 
+    def remove_containers(self):
+        """
+        Remove all containers running on this host.
+
+        Useful for test shut down to ensure the host is cleaned up.
+        :return: None
+        """
+        cmd = "docker rm -f $(docker ps -qa)"
+        try:
+            self.execute(cmd)
+        except CalledProcessError:
+            # Best effort only.
+            pass
+
     def __enter__(self):
         return self
 
@@ -195,15 +209,20 @@ class DockerHost(object):
         volumes.
         :return:
         """
-        self.remove_workloads()
-        # And remove the calico-node
-        docker.rm("-f", "calico-node", _ok_code=[0, 1])
-
         if self.dind:
-            # For docker in docker, we need to remove images too.
+            # For Docker-in-Docker, we need to remove all containers and
+            # all images...
+            self.remove_containers()
             self.remove_images()
-            # Remove the outer container for DinD.
+
+            # ...and the outer container for DinD.
             docker.rm("-f", self.name, _ok_code=[0, 1])
+        else:
+            # For non Docker-in-Docker, we can only remove the containers we
+            # created - so remove the workloads and the calico node.
+            self.remove_workloads()
+            docker.rm("-f", "calico-node", _ok_code=[0, 1])
+
         self._cleaned = True
 
     def __del__(self):

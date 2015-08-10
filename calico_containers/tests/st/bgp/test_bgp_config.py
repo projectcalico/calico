@@ -22,9 +22,9 @@ from tests.st.utils.docker_host import (DockerHost, CommandExecError)
 """
 Test "calicoctl bgp" and "calicoctl node bgp" commands.
 
-Testing should be focused around the different topologies that we claim to support.
-    Mesh is covered (a little) by existing multi host tests
-    Single RR cluster
+Testing should be focused around the different topologies that we support.
+    Mesh is covered (a little) by existing multi host tests (done)
+    Single RR cluster  (done)
     AS per ToR
     AS per calico node
 

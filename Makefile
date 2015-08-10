@@ -83,14 +83,18 @@ calico_containers/busybox.tar:
 	docker pull busybox:latest
 	docker save --output calico_containers/busybox.tar busybox:latest
 
+calico_containers/routereflector.tar:
+	docker pull calico/routereflector:latest
+	docker save --output calico_containers/routereflector.tar calico/routereflector:latest
+
 calico_containers/calico-node.tar: caliconode.created
 	docker save --output calico_containers/calico-node.tar calico/node
 
-st: binary calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
+st: binary calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd run-consul
 	dist/calicoctl checksystem --fix
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
-fast-st: calico_containers/busybox.tar calico_containers/calico-node.tar run-etcd run-consul
+fast-st: calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd run-consul
 	# This runs the tests by calling python directory without using the
 	# calicoctl binary
 	CALICOCTL=$(CURDIR)/calico_containers/calicoctl.py nosetests $(ST_TO_RUN) \
@@ -126,6 +130,8 @@ clean:
 	-rm -rf dist
 	-rm -rf build
 	-rm -f calico_containers/busybox.tar
+	-rm -f calico_containers/calico-node.tar
+	-rm -f calico_containers/routereflector.tar
 	-docker rm -f calico-build
 	-docker rm -f calico-node
 	-docker rmi calico/node
