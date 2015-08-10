@@ -1,3 +1,9 @@
+calico (0.29~rc1) trusty; urgency=medium
+
+  * First release candidate
+
+ -- Matt Dupre <matt@projectcalico.org>  Wed, 05 Aug 2015 16:46:08 +0100
+
 calico (0.28) trusty; urgency=medium
 
   * Felix now restarts if its etcd configuration changes.
