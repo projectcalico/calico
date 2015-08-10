@@ -26,12 +26,12 @@ Install and [bootstrap etcd](https://www.youtube.com/watch?v=duUTk8xxGbU)
 
 Get the calico binary onto each node:
 
-    wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
+    wget https://github.com/projectcalico/calico-docker/releases/download/v0.4.9/calicoctl
 	chmod +x calicoctl
 
-Note that projectcalico.org is not an HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/Metaswitch/calico-docker/releases/) from github.  e.g.
+Note that projectcalico.org is not an HA repository, so using this download URL is not recommended for any automated production installation process.  Alternatively, you can download a specific [release](https://github.com/projectcalico/calico-docker/releases/) from github.  e.g.
 
-	wget https://github.com/Metaswitch/calico-docker/releases/download/v0.4.8/calicoctl
+	wget https://github.com/projectcalico/calico-docker/releases/download/v0.4.9/calicoctl
 	chmod +x calicoctl
 
 Launch the Calico Node service on each Docker Host you want to use with Calico.

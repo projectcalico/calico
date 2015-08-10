@@ -13,7 +13,7 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 
 2) Clone this project
 
-    git clone https://github.com/Metaswitch/calico-docker.git
+    git clone https://github.com/projectcalico/calico-docker.git
     
 3) There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or 
 the default Docker networking.  Select the required demonstration by changing into the appropriate directory:
@@ -81,7 +81,7 @@ whether you are running with libnetwork, Powerstrip or the default Docker networ
 - [demonstration with Powerstrip](powerstrip/Demonstration.md)
 
 
-[calico-networking]: https://github.com/Metaswitch/calico-docker
+[calico-networking]: https://github.com/projectcalico/calico-docker
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [using-coreos]: http://coreos.com/docs/using-coreos/

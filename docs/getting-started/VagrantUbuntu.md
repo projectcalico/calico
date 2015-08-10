@@ -14,7 +14,7 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
 
 2) Clone this project
 
-    git clone https://github.com/Metaswitch/calico-docker.git
+    git clone https://github.com/projectcalico/calico-docker.git
     
 3) There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or the
    default Docker networking.  Select the required demonstration by changing into the appropriate directory:
@@ -83,8 +83,7 @@ whether you are running with libnetwork, Powerstrip or the default Docker networ
 
 [libnetwork]: https://github.com/docker/libnetwork
 [experimental-channel]: https://github.com/docker/docker/tree/master/experimental
-[calico-ubuntu-vagrant]: https://github.com/Metaswitch/calico-ubuntu-vagrant-example
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
-[calico-networking]: https://github.com/Metaswitch/calico-docker
+[calico-networking]: https://github.com/projectcalico/calico-docker

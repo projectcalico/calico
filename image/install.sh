@@ -14,8 +14,8 @@ apt-get install -qy \
         libssl-dev
 
 # Install Felix and python-etcd from the Metaswitch github repos.
-pip install git+https://github.com/Metaswitch/python-etcd.git
-pip install git+https://github.com/Metaswitch/calico.git@0.28
+pip install git+https://github.com/projectcalico/python-etcd.git
+pip install git+https://github.com/projectcalico/calico.git@0.28
 pip install git+https://github.com/projectcalico/libcalico.git@v0.1.1
 
 # Install Confd
