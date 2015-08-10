@@ -27,6 +27,7 @@ protocol kernel {
   persist;        # Don't remove routes on bird shutdown
   scan time 2;    # Scan kernel routing table every 2 seconds
   import all;
+  graceful restart;
   export all;     # Default is export none
 }
 
@@ -47,6 +48,7 @@ protocol bgp N1 {
   neighbor @RR_IPV6_ADDRESS@ as @AS_NUMBER@;
   multihop;
   import all;
+  graceful restart;
   export filter export_bgp;
   next hop self;    # Disable next hop processing and always advertise our
                     # local address as nexthop
