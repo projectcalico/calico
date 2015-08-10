@@ -80,7 +80,7 @@ starting the bootstrap process:
       -  Set your hostname IP address to your static IP.
    -  Configure the hostnames / IPs of the other OpenStack nodes.
 
-If you are using VMWare and VMs for each of these machines (for
+If you are using VMware and VMs for each of these machines (for
 testing), ensure the VM setting allows the VM to expose hardware
 assisted virtualization to the guest OS (setting under the CPU
 configuration).

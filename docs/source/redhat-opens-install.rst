@@ -51,7 +51,7 @@ Install OpenStack
 ~~~~~~~~~~~~~~~~~
 
 If you haven't already done so, install Openstack with Neutron and ML2 networking.
-Instructions for installing OpenStack on RHEL can be found here -
+Instructions for installing OpenStack on RHEL can be found here --
 `Juno <http://docs.openstack.org/juno/install-guide/install/yum/content/index.html>`__ /
 `Kilo <http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html>`__.
 
@@ -91,9 +91,9 @@ For Kilo::
     EOF
 
 
-Note: The priority setting in ``calico.repo`` is needed so that the
-Calico repository can install Calico-enhanced versions of some of the
-OpenStack Nova and Neutron packages.
+.. note:: The priority setting in ``calico.repo`` is needed so that the
+          Calico repository can install Calico-enhanced versions of some of the
+          OpenStack Nova and Neutron packages.
 
 .. _etcd-install:
 
@@ -193,7 +193,7 @@ please get in touch with us and we'll be happy to help you through the process.
 
 4. Install python-etcd::
 
-        curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
         tar xvf python-etcd.tar.gz
         cd python-etcd-master
         python setup.py install
@@ -263,7 +263,7 @@ running the etcd database itself (both control and compute nodes).
 
 4. Install python-etcd::
 
-        curl -L https://github.com/Metaswitch/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
         tar xvf python-etcd.tar.gz
         cd python-etcd-master
         python setup.py install

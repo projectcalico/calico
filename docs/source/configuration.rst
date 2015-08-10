@@ -79,7 +79,7 @@ The full list of parameters which can be set is as follows.
 | EtcdAddr                    | localhost:4001            | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
 |                             |                           | to.                                                                                       |
 +-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| DefaultEndpointToHostAction | DROP                      | By default Caclico blocks traffic from endpoints to the host itself by using an iptables  |
+| DefaultEndpointToHostAction | DROP                      | By default Calico blocks traffic from endpoints to the host itself by using an iptables   |
 |                             |                           | DROP action.  If you want to allow some or all traffic from endpoint to host then set     |
 |                             |                           | this parameter to "RETURN" (which causes the rest of the iptables INPUT chain to be       |
 |                             |                           | processed) or "ACCEPT" (which immediately accepts packets).                               |

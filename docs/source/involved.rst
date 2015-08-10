@@ -44,7 +44,7 @@ correctly.
 Read the Source, Luke!
 ----------------------
 
-All Calico's code is on `GitHub <https://github.com/Metaswitch>`__, in the
+All Calico's code is on `GitHub <https://github.com/projectcalico>`__, in the
 following repositories, separated by function.
 
 - `calico <https://github.com/projectcalico/calico>`__ - All of the core Calico
@@ -52,8 +52,8 @@ following repositories, separated by function.
   agent, the OpenStack plugin; testing for all of those; and
   the source for Calico's documentation.
 
-- `calico-docker <https://github.com/Metaswitch/calico-docker>`__ - Calico code
-  and components specific to Docker/container environments: the lightweight
+- `calico-docker <https://github.com/projectcalico/calico-docker>`__ - Calico
+  code and components specific to Docker/container environments: the lightweight
   orchestrator for Docker environments, Powerstrip adapter, and so on; and
   instructions for demonstrating Calico networking in various container
   environments.
