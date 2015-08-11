@@ -103,7 +103,11 @@ write_files:
   content: |
     #!/usr/bin/bash -e
     cd /opt/bin
-    wget https://github.com/projectcalico/calico-docker/releases/download/v0.5.4/docker
+    # The version number v0.5.3 is explicitly set here because it is the latest Docker
+    # binary we have stored that is statically linked and usable by CoreOS.
+    # DO NOT CHANGE THIS VERSION, unless you explicitly and successfully test a new
+    # Docker binary with the CoreOS vagrant libnetwork demonstration.
+    wget https://github.com/projectcalico/calico-docker/releases/download/v0.5.3/docker
     chmod +x ./docker
 - path: /home/core/get_calicoctl.sh
   permissions: 777
