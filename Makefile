@@ -70,12 +70,12 @@ ut-circle: calicobuild.created dist/calicoctl
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
-	-v `pwd`/calico_containers:/code \
+	-v `pwd`:/code \
 	-v $(CIRCLE_TEST_REPORTS):/circle_output \
 	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	nosetests tests/unit -c nose.cfg \
+	cd calico_containers; nosetests tests/unit -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
