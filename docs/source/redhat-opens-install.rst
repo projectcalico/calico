@@ -290,7 +290,8 @@ On each control node, perform the following steps:
 2. Run ``yum update``. This will bring in Calico-specific updates to the
    OpenStack packages and to ``dnsmasq``.
 
-3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file.  In the `[ml2]`
+   section:
 
    -  Find the ``type_drivers`` setting and change it to read
       ``type_drivers = local, flat``.
@@ -299,7 +300,7 @@ On each control node, perform the following steps:
    -  Find the ``mechanism_drivers`` setting and change it to read
       ``mechanism_drivers = calico``.
 
-4. Edit the ``/etc/neutron/neutron.conf`` file:
+4. Edit the ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -363,14 +364,15 @@ On each compute node, perform the following steps:
 
            service libvirtd restart
 
-2. Open ``/etc/nova/nova.conf`` and remove the line that reads:
+2. Open ``/etc/nova/nova.conf`` and remove the line from the `[DEFAULT]` section
+   that reads:
 
    ::
 
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
-   Remove the line setting ``service_neutron_metadata_proxy`` or
-   ``service_metadata_proxy`` to ``True``, if there is one. Additionally, if
+   Remove the lines from the `[neutron]` section setting ``service_neutron_metadata_proxy``
+   or ``service_metadata_proxy`` to ``True``, if there is one. Additionally, if
    there is a line setting ``metadata_proxy_shared_secret``, comment that line
    out as well.
 
