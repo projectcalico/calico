@@ -387,6 +387,12 @@ perform the following steps:
    generate the configuration for a single peer connection, which you can
    duplicate and update for each compute host in your mesh.
 
+   To maintain connectivity between VMs if BIRD crashes or is reloaded, enable
+   BIRD graceful restart by adding `-R` to `BIRD_ARGS` in `/etc/bird/envvars`
+   (you may need to uncomment this option).  Please not that this will not work
+   if BIRD is stopped normally - if you need that function, you should modify
+   the upstart job to kill BIRD on stop.
+
 9. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
    supplied sample config at ``/etc/calico/felix.cfg.example``.
 

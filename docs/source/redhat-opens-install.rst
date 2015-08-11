@@ -494,6 +494,12 @@ On each compute node, perform the following steps:
     generate the configuration for a single peer connection, which you can
     duplicate and update for each compute host in your mesh.
 
+    To maintain connectivity between VMs if BIRD crashes or is reloaded, enable
+    BIRD graceful restart by adding `-R` to the `ExecStart` line in the BIRD
+    systemd unit file (`/usr/lib/systemd/system/bird.service` and `bird6.service`).
+    Please not that this will not work if BIRD is stopped normally - if you need
+    that function, you should modify the unit to kill BIRD on stop.
+
     Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on reboot:
 
     ::
