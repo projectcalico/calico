@@ -31,21 +31,22 @@ following methods:
 - an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see
   :doc:`redhat-opens-install`
 
-- our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`
-
 - our integration of Calico with Mirantis Fuel 6.1 - see :doc:`fuel-integration`
 
-In all cases, you just need at least two servers to get going (one OpenStack
-controller and one OpenStack compute node).
+- our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`
 
-.. toctree::
+In all cases, you just need at least two to three servers to get going (one OpenStack
+controller, one OpenStack compute node and, for Mirantis Fuel, a third node to
+serve as the Fuel master).
+
+.. toctree::b
    :maxdepth: 1
 
-   opens-chef-install
-   redhat-opens-install
    ubuntu-opens-install
+   redhat-opens-install
+   fuel-integration
    juju-opens-install
+   opens-chef-install
    opens-upgrade
    bird-rr-config
-   fuel-integration
    worked-examples-openstack
