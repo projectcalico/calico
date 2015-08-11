@@ -372,7 +372,7 @@ On each compute node, perform the following steps:
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
    Remove the lines from the `[neutron]` section setting ``service_neutron_metadata_proxy``
-   or ``service_metadata_proxy`` to ``True``, if there is one. Additionally, if
+   or ``service_metadata_proxy`` to ``True``, if there are any. Additionally, if
    there is a line setting ``metadata_proxy_shared_secret``, comment that line
    out as well.
 
