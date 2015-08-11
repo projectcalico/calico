@@ -109,9 +109,11 @@ Step 3 (Optional): Set your BIRD IPv6 configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you want to use IPv6 connectivity, you'll need to repeat step 2 but using
-``/etc/bird/bird6.conf``. The *only* difference between the two is that, where
-before you set ``<node_ip>`` to the compute node's IPv4 address, this time you
-need to set it to the compute node's IPv6 address.
+``/etc/bird/bird6.conf``. The *only* differences between the two are:
+
+- the filter needs to filter out ::/0 instead of 0.0.0.0/0
+- where before you set ``<node_ip>`` to the compute node's IPv4 address, this 
+  time you need to set it to the compute node's IPv6 address
 
 Note that ``<router_id>`` should still be set to the route reflector's IPv4
 address: you cannot use an IPv6 address in that field.
