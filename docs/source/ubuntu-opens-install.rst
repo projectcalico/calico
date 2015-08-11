@@ -280,7 +280,7 @@ perform the following steps:
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
    Remove the lines from the `[neutron]` section setting ``service_neutron_metadata_proxy``
-   or ``service_metadata_proxy`` to ``True``, if there is one.
+   or ``service_metadata_proxy`` to ``True``, if there are any.
 
    Restart nova compute.
 
