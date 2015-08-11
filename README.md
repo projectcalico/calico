@@ -1,4 +1,4 @@
-[![Circle CI](https://circleci.com/gh/projectcalico/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/projectcalico/calico-docker/tree/master)
+[![Circle CI](https://circleci.com/gh/projectcalico/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/projectcalico/calico-docker/tree/master) [![Coverage Status](https://coveralls.io/repos/projectcalico/calico-docker/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico-docker?branch=master)
 # Calico on Docker
 As well as providing networking for OpenStack VMs, Calico can provide
 networking for containers in a Docker environment.  Each container gets its 
