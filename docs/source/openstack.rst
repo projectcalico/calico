@@ -35,10 +35,11 @@ following methods:
 
 - our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`
 
-In all cases, you just need at least two servers to get going (one OpenStack
-controller and one OpenStack compute node).
+In all cases, you just need at least two to three servers to get going (one OpenStack
+controller, one OpenStack compute node, and for Mirantis Fuel only a third node to
+serve as the Fuel master).
 
-.. toctree::
+.. toctree::b
    :maxdepth: 1
 
    ubuntu-opens-install
