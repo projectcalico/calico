@@ -1,0 +1,7 @@
+[run]
+branch = True
+source = networking-calico
+omit = networking-calico/openstack/*
+
+[report]
+ignore-errors = True
