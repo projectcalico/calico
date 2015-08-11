@@ -15,7 +15,7 @@
 Integration with Mirantis Fuel 6.1
 ==================================
 
-This document describes our experimental integration of Calico with the
+This document describes our integration of Calico with the
 Mirantis Fuel system for rapidly deploying an OpenStack cluster.
 
 It is presented in sections covering the following aspects of our integration
@@ -77,10 +77,9 @@ image from the `Mirantis website`_.
 
 Install the Calico plugin for Fuel on the master node
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-We are currently working with Mirantis to get the Calico plugin certified
-with Fuel, at which point you will be able to download it from the `Fuel 
-Plugin Catalog`_. Currently, you will need to build a copy of the plugin
-yourself, following the instructions on the plugin's `GitHub`_ page.
+The Calico plugin has been certified by Mirantis and is available for download
+from the `Fuel Plugin Catalog`_. Alternatively, you can build a copy of the
+plugin yourself, following the instructions on the plugin's `GitHub`_ page.
 
 .. _Fuel Plugin Catalog: https://www.mirantis.com/products/openstack-drivers-and-plugins/fuel-plugins/
 .. _GitHub: https://github.com/stackforge/fuel-plugin-calico
