@@ -3,14 +3,15 @@ The [Calico Kubernetes plugin](https://github.com/projectcalico/calico-docker/bl
 
 ## Prerequisites
 * A Kubernetes Deployment
-    - To implement service policy using recent builds of Kubernetes, make sure you have configured your kube-proxy using the `--legacy-userspace-proxy=false` option
+    - To implement service policy, you will need a build of Kubernetes after [`kubernetes/kubernetes@b8dc963`](https://github.com/kubernetes/kubernetes/commit/b8dc963512326bcf7186026830b0dcbceecbcc80).
+    - Make sure you have configured your kube-proxy using the `--legacy-userspace-proxy=false` option.
 * [v0.1.0+](https://github.com/projectcalico/calico-kubernetes/releases) of the Calico Kubernetes Plugin
-    - For more information on how to integrate Calico into your Kubernetes Deployment, view our [integration doc](KubernetesIntegration.md)
+    - For more information on how to integrate Calico into your Kubernetes Deployment, view our [integration doc](KubernetesIntegration.md).
 
 ### Declaring Policy
-To enforce a policy rule to your pod, add a `policy` key to the annotations section of your pod's metadata. This `policy` key should map to a single string that outlines networking behavior semantically.
+To enforce a policy rule to your pod, add a `policy` key to the annotations section of your pod's metadata. This `policy` key should map to a single string which defines network behavior. Programming policy follows a simple syntax that can specify any combination of label*, protocol, source/dest ports, and source/dest net. The syntax for this can be seen below.
 
-Programming policy follows a simple syntax that can specify any combination of label (multiple labels per rule are unsupported), protocol, source/dest ports, and source/dest net.
+>*Note: Multiple labels per rule are unsupported in the current release of the plugin.
 
 ##### Policy Syntax
 ```
@@ -37,7 +38,7 @@ You can specify multiple rules by separating them with semicolons.
       policy: "allow from label name=backend; allow tcp to ports 4001,443"
 ...
 ```
-In it's current state, the Calico Kubernetes Plugin supports whitelist oriented, inbound rules. This means that any traffic not specified in a pod's policy is unauthorized, and unauthorized traffic will be dropped at the receiving Kubernetes node.
+In its current state, the Calico Kubernetes Plugin supports whitelist oriented, inbound rules. This means that any traffic not specified in a pod's policy is unauthorized, and unauthorized traffic will be dropped at the receiving Kubernetes node.
 
 ### Defaults
 With no specified policy, Calico will only allow traffic from within a pod's own namespace. This default rule will be overidden if any policy is programmed. The only exception to this are resources within the `kube-system` namespace. These are universally accessed by all namespaces and will accept all traffic.
@@ -49,15 +50,15 @@ For example, the metadata
 ```
 metadata:
   name: pod1
-  namespace: app1
+  namespace: production
   labels:
-    name: backend
-    stage: production
+    role: backend
+    version: v1.2.3
 ```
 will generate the following tags
 ```
-namespace_app1
-app1_pod1
-app1_name_backend
-app1_stage_production
+namespace_production
+production_pod1
+production_role_backend
+production_version_v1.2.3
 ```
