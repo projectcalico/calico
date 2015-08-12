@@ -4,7 +4,7 @@ The [Calico Kubernetes plugin](https://github.com/projectcalico/calico-docker/bl
 ## Prerequisites
 * A Kubernetes Deployment
     - To implement service policy using recent builds of Kubernetes, make sure you have configured your kube-proxy using the `--legacy-userspace-proxy=false` option
-* v0.1.0+ of the Calico Kubernetes Plugin
+* [v0.1.0+](https://github.com/projectcalico/calico-kubernetes/releases) of the Calico Kubernetes Plugin
     - For more information on how to integrate Calico into your Kubernetes Deployment, view our [integration doc](KubernetesIntegration.md)
 
 ### Declaring Policy
@@ -40,7 +40,7 @@ You can specify multiple rules by separating them with semicolons.
 In it's current state, the Calico Kubernetes Plugin supports whitelist oriented, inbound rules. This means that any traffic not specified in a pod's policy is unauthorized, and unauthorized traffic will be dropped at the receiving Kubernetes node.
 
 ### Defaults
-With no specified policy, Calico will only allow traffic from within a pod's own namespace. This default rule will be overidden if any policy is programmed. The only exception to this are services within the `kube-system` namespace. These services are universally accessed by all namespaces and will allow all traffic.
+With no specified policy, Calico will only allow traffic from within a pod's own namespace. This default rule will be overidden if any policy is programmed. The only exception to this are resources within the `kube-system` namespace. These are universally accessed by all namespaces and will accept all traffic.
 
 ### Tags, Labels, and Namespaces
 For each policy profile, Calico will generate a tag for its namespace, pod name, and for each label pair.
