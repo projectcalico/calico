@@ -47,7 +47,7 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	-docker run -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
 	docopt-completion --manual-bash ./calicoctl
 
-test: st ut ut-kubernetes
+test: st ut 
 
 ut: calicobuild.created
 	# Use the `root` user, since code coverage requires the /code directory to
@@ -57,13 +57,6 @@ ut: calicobuild.created
 	calico/build bash -c \
 	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
 	nosetests tests/unit  -c nose.cfg'
-
-ut-kubernetes: calicobuild.created
-	docker run --rm -v `pwd`/calico_containers:/code/calico_containers \
-	-v `pwd`/nose.cfg:/code/nose.cfg \
-	calico/build bash -c \
-	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	PYTHONPATH=calico_containers nosetests calico_containers/integrations/kubernetes/tests -c nose.cfg'
 
 # UT runs on Cicle need to create the calicoctl binary
 ut-circle: calicobuild.created dist/calicoctl
@@ -146,18 +139,3 @@ setup-env:
 install-completion: /etc/bash_completion.d/calicoctl.sh
 /etc/bash_completion.d/calicoctl.sh: dist/calicoctl
 	cp dist/calicoctl.sh /etc/bash_completion.d
-
-.PHONY: kubernetes	
-kubernetes: /dist/calico_kubernetes
-
-/dist/calico_kubernetes:
-	# Build docker container
-	cd build_calicoctl; docker build -t calico-build .
-	mkdir -p dist
-	chmod 777 `pwd`/dist
-	# Build the kubernetes plugin
-	docker run -u user -v `pwd`/calico_containers:/code/calico_containers \
-	-v `pwd`/dist:/code/dist \
-	-e PYTHONPATH=/code/calico_containers \
-	calico-build pyinstaller calico_containers/integrations/kubernetes/calico_kubernetes.py -a -F -s --clean
-
