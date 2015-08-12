@@ -23,19 +23,19 @@ To enforce a policy rule to your pod, add a `policy` key to the annotations sect
     )]
 ```
 
-Here is an example of how this syntax looks in a pod spec.
+Here is an example of how this looks in a pod spec.
 ```
 ...
   metadata:
     annotations:
-      policy: "allow tcp from label name=backend"
+      policy: "allow tcp from label role=backend"
 ...
 ```
 
 You can specify multiple rules by separating them with semicolons.
 ```
 ...
-      policy: "allow from label name=backend; allow tcp to ports 4001,443"
+      policy: "allow from label role=backend; allow tcp to ports 4001,443"
 ...
 ```
 In its current state, the Calico Kubernetes Plugin supports whitelist oriented, inbound rules. This means that any traffic not specified in a pod's policy is unauthorized, and unauthorized traffic will be dropped at the receiving Kubernetes node.
