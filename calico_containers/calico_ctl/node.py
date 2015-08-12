@@ -421,8 +421,21 @@ def _find_or_pull_node_image(image_name):
     except docker.errors.APIError as err:
         if err.response.status_code == 404:
             # TODO: Display proper status bar
-            print "Pulling Docker image %s" % image_name
-            docker_client.pull(image_name)
+            print_paragraph("Pulling Docker image %s" % image_name)
+
+            try:
+                # Pull the image and then verify that it was succesfully
+                # pulled (the pull doesn't raise an exception on failure).
+                docker_client.pull(image_name)
+                docker_client.inspect_image(image_name)
+            except docker.errors.APIError:
+                # Unable to download the Docker image.
+                print_paragraph("ERROR: Unable to download Docker image.")
+                print_paragraph("Please verify that you have network "
+                                "connectivity to DockerHub and that, if you "
+                                "explicitly specified which calico/node image "
+                                "to use, the image name is correct.")
+                sys.exit(1)
 
 
 def _attach_and_stream(container):
@@ -456,6 +469,7 @@ def _attach_and_stream(container):
         # Could either be this process is being killed, or output generator
         # raises an exception.
         docker_client.stop(container)
+
 
 def install_kubernetes(kubernetes_plugin_dir):
     """
