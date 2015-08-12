@@ -26,10 +26,9 @@ class TestNoOrchestratorSingleHost(TestBase):
             # TODO ipv6 too
             host.calicoctl("profile add TEST_GROUP")
 
-            # Use standard docker bridge networking for one and --net=none
-            # for the other
+            # Create a workload on each host.
             node1 = host.create_workload("node1")
-            node2 = host.create_workload("node2", network=NET_NONE)
+            node2 = host.create_workload("node2")
 
             # TODO - find a better home for this assertion
             # # Attempt to configure the nodes with the same profiles.  This will

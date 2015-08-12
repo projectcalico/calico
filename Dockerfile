@@ -46,6 +46,5 @@ RUN /build/base.sh && \
     /build/cleanup.sh
 
 # Copy in our custom configuration files etc. We do this last to speed up
-# builds for developer, as it's thing they're most likely to change.
+# builds for developer, as it's the thing they're most likely to change.
 COPY node_filesystem /
-COPY calico_containers/libnetwork_plugin /calico_containers/libnetwork_plugin

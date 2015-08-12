@@ -25,10 +25,9 @@ class DockerNetwork(object):
     def __init__(self, host, name, driver="calico"):
         """
         Create the network.
-        :param host: The Docker Host which creates the network (note that
-        networks
+        :param host: The Docker Host which creates the network.
         :param name: The name of the network.  This must be unique per cluster
-        and it the user-facing identifier for the network.  (Calico itself will
+        and is the user-facing identifier for the network.  (Calico itself will
         get a UUID for the network via the driver API and will not get the
         name).
         :param driver: The name of the network driver to use.  (The Calico
