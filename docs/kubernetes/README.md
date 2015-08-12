@@ -8,8 +8,8 @@ The following configuration guides have been written:
 
 - [Kubernetes Vagrant Saltfiles](https://github.com/projectcalico/calico-docker/tree/master/docs/kubernetes/VagrantProvisioner.md)
 - [Ubuntu bare-metal](https://github.com/djosborne/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
+- [CoreOS bare-metal](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
 
 Coming soon:
 
-- CoreOS bare metal
 - Digital Ocean
