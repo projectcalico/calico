@@ -3,5 +3,6 @@ venv
 build
 calico_containers/busybox.tar
 calico_containers/calico-node.tar
+calico_containers/routereflector.tar
 default.etcd
 .semaphore-cache
