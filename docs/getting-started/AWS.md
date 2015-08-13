@@ -5,7 +5,7 @@ network containers using Calico routing and the Calico security model on AWS.
 
 ## Getting started with AWS
 These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see 
-[the CoreOS on AWS documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
+[the CoreOS on AWS EC2 documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
 
 Download and install AWS Command Line Interface: 
 ```

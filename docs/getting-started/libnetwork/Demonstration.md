@@ -1,5 +1,5 @@
 # Calico as a libnetwork plugin.
-This demonstration uses Docker's native [libnetwork network driver](https://github.com/docker/libnetwork), available in the Docker (experimental channel)[https://github.com/docker/docker/tree/master/experimental] alongside the Docker 1.7 release. Docker's experimental channel is still moving fast and some of its features are not yet fully stable.
+This demonstration uses Docker's native [libnetwork network driver](https://github.com/docker/libnetwork), available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7 release. Docker's experimental channel is still moving fast and some of its features are not yet fully stable.
 
 ## Environment
 This demonstration makes some assumptions about the environment you have. See 

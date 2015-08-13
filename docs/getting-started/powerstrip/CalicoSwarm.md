@@ -1,7 +1,7 @@
 # Running Calico on a Docker Swarm
 The following instructions configure a Docker Swarm cluster networked using Calico.  In this tutorial, we will do the following. 
-- Configure etcd and Calico on a cluster.
-- Configure Docker Swarm on our VM cluster.
+- Configure [etcd][etcd] and Calico on a cluster.
+- Configure [Docker Swarm][swarm] on our VM cluster.
 - Provision workloads on the Swarm, and check they can communicate.
 
 ## Prerequisites
@@ -16,7 +16,7 @@ Our Docker Swarm will consist of four nodes with the following roles:
 ## Installing etcd
 Calico requires etcd, so let's install it on our cluster.  For this example, we'll only configure a single node etcd cluster.  However, in a production environment, a minimum size of three nodes is recommended.
 
-Run the following on the **manager server* to download the etcd binaries:
+Run the following on the **manager server** to download the etcd binaries:
 ```
 # Download etcd for Linux 
 curl -L https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
@@ -166,3 +166,6 @@ Container workload-A should be able to ping workload-B and workload-C, since the
 docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 192.168.1.2 
 docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 192.168.1.3 
 ```
+
+[etcd]: https://github.com/coreos/etcd
+[swarm]: https://docs.docker.com/swarm/
