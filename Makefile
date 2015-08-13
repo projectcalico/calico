@@ -41,12 +41,6 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	 calico/build \
 	 pyinstaller calico_containers/calicoctl.py -ayF
 
-	# mount calico_containers and dist under /code work directory.  Don't use /code
-	# as the mountpoint directly since the host permissions may not allow the
-	# `user` account in the container to write to it.
-	-docker run -v `pwd`/dist:/code/dist --rm -w /code/dist calico/build \
-	docopt-completion --manual-bash ./calicoctl
-
 test: st ut 
 
 ut: calicobuild.created
@@ -136,6 +130,3 @@ setup-env:
 	venv/bin/pip install --upgrade -r build_calicoctl/requirements.txt
 	@echo "run\n. venv/bin/activate"
 
-install-completion: /etc/bash_completion.d/calicoctl.sh
-/etc/bash_completion.d/calicoctl.sh: dist/calicoctl
-	cp dist/calicoctl.sh /etc/bash_completion.d
