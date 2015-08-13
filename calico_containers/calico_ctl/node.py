@@ -67,7 +67,8 @@ DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
 POLICY_ONLY_ENV = "POLICY_ONLY_CALICO"
 
-KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-docker/releases/download/v0.5.4/calico_kubernetes'
+KUBERNETES_PLUGIN_VERSION = 'v0.1.0'
+KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes' % KUBERNETES_PLUGIN_VERSION
 KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
 KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
 
