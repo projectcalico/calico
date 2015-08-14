@@ -25,10 +25,10 @@ Mailing Lists
 -------------
 Project Calico runs two mailing lists:
 
--  `calico-announce <http://lists.projectcalico.org/listinfo/calico-announce>`__
+-  `calico-announce <http://lists.projectcalico.org/mailman/listinfo/calico-announce_lists.projectcalico.org>`__
    provides a read-only list providing a regular update on Project Calico.
    Please subscribe so that you can keep up to date on the project.
--  `calico-tech <http://lists.projectcalico.org/listinfo/calico-tech>`__
+-  `calico-tech <http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org>`__
    provides a list for technical discussions and queries about the project.
    You're welcome to subscribe and to post any Calico-related discussion to
    this list, including problems, ideas, or requirements.

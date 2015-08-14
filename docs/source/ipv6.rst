@@ -41,13 +41,6 @@ connectivity requires certain configuration in the guest VM image:
 -  If it uses the widely deployed DHCP client from ISC, the VM must have
    a fix or workaround for `this known issue`_.
 
--  When it boots up, the VM should wait a short while (say, 10 seconds)
-   before sending a Router Solicit message for each of its interfaces,
-   to ensure that the communication path to the Router Advertisement
-   daemon is ready. This is a pragmatic workaround for `a bug`_ that needs
-   further investigation, and should become unnecessary when that bug is
-   resolved.
-
 These requirements are not yet all met in common cloud images - but it
 is easy to remedy that by launching an image, making appropriate changes
 to its configuration files, taking a snapshot, and then using that
@@ -77,7 +70,6 @@ changes will suffice to meet the requirements just listed.
        net.ipv6.conf.eth0.router_solicitation_delay = 10
 
 .. _this known issue: https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html
-.. _a bug: https://github.com/projectcalico/calico/issues/12
 
 Implementation details
 ----------------------

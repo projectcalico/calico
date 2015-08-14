@@ -56,7 +56,7 @@ However, a brief discussion of the routing and data paths is useful for
 the discussion.
 
 .. _`architectural overview`:
-   http://docs.projectcalico.org/en/latest/arch-felix-and-acl.html
+   http://docs.projectcalico.org/en/latest/architecture.html
 
 In a Calico network, each compute server acts as a router for all of the
 endpoints that are hosted on that compute server. We call that function

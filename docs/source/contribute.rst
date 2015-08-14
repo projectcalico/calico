@@ -37,8 +37,8 @@ Features or any changes to the codebase should be done as follows:
 5. Reviewer process:
 
    -  Receive notice of review by GitHub email, GitHub notification, or by
-      checking `all your Project Calico GitHub
-      issues <https://github.com/organizations/projectcalico/dashboard/issues/assigned?direction=desc&state=open>`__.
+      checking your assigned `Project Calico GitHub
+      issues <https://github.com/issues?utf8=%E2%9C%93&q=is%3Aopen+is%3Aissue+user%3Aprojectcalico>`__.
    -  Make markups as comments on the pull request (either line comments or
       top-level comments).
    -  Make a top-level comment saying something along the lines of “Fine;
