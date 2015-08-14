@@ -105,6 +105,11 @@ Then, update the relevant components::
 
     yum update dnsmasq openstack-nova-api openstack-neutron calico-compute
 
+Finally, if dnsmasq was updated, kill it (`pkill dnsmasq`) and restart the DHCP
+agent (`service neutron-dhcp-agent restart`).  This is required due to an upstream
+problem: oslo-rootwrap can't kill a process when the binary has been updated since
+it started running.
+
 3: Upgrade control software
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
