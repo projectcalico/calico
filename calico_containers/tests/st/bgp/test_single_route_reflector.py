@@ -48,13 +48,9 @@ class TestSingleRouteReflector(TestBase):
             host2.calicoctl("container add %s %s" % (workload_host2,
                                                      DEFAULT_IPV4_ADDR_2))
 
-            # Get the endpoint IDs for the containers
-            ep1 = host1.calicoctl("container %s endpoint-id show" % workload_host1)
-            ep2 = host2.calicoctl("container %s endpoint-id show" % workload_host2)
-
             # Now add the profiles - one using set and one using append
-            host1.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
-            host2.calicoctl("endpoint %s profile append TEST_GROUP" % ep2)
+            host1.calicoctl("container %s profile set TEST_GROUP" % workload_host1)
+            host2.calicoctl("container %s profile append TEST_GROUP" % workload_host2)
 
             # Allow network to converge (which it won't)
             try:

@@ -36,13 +36,9 @@ class TestNoOrchestratorMultiHost(TestBase):
             host1.calicoctl("container add %s 192.168.1.1" % node1)
             host2.calicoctl("container add %s 192.168.1.2" % node2)
 
-            # Get the endpoint IDs for the containers
-            ep1 = host1.calicoctl("container %s endpoint-id show" % node1)
-            ep2 = host2.calicoctl("container %s endpoint-id show" % node2)
-
             # Now add the profiles - one using set and one using append
-            host1.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
-            host2.calicoctl("endpoint %s profile append TEST_GROUP" % ep2)
+            host1.calicoctl("container %s profile set TEST_GROUP" % node1)
+            host2.calicoctl("container %s profile append TEST_GROUP" % node2)
 
             # TODO - assert on output of endpoint show and endpoint profile
             # show commands.

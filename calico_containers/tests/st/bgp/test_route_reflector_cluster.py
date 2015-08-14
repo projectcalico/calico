@@ -52,15 +52,10 @@ class TestRouteReflectorCluster(TestBase):
             host3.calicoctl("container add %s %s" % (workload_host3,
                                                      DEFAULT_IPV4_ADDR_3))
 
-            # Get the endpoint IDs for the containers
-            ep1 = host1.calicoctl("container %s endpoint-id show" % workload_host1)
-            ep2 = host2.calicoctl("container %s endpoint-id show" % workload_host2)
-            ep3 = host3.calicoctl("container %s endpoint-id show" % workload_host3)
-
             # Now add the profiles
-            host1.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
-            host2.calicoctl("endpoint %s profile append TEST_GROUP" % ep2)
-            host3.calicoctl("endpoint %s profile append TEST_GROUP" % ep3)
+            host1.calicoctl("container %s profile set TEST_GROUP" % workload_host1)
+            host2.calicoctl("container %s profile append TEST_GROUP" % workload_host2)
+            host3.calicoctl("container %s profile append TEST_GROUP" % workload_host3)
 
             # Allow network to converge (which it won't)
             try:
