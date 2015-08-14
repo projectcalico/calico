@@ -1,3 +1,9 @@
+calico (1.0.0-1) trusty; urgency=medium
+
+  * Calico version 1.0.0 release
+
+ -- Matt Dupre <matt@projectcalico.org>  Fri, 14 Aug 2015 13:40:28 +0100
+
 calico (0.29~rc1) trusty; urgency=medium
 
   * First release candidate

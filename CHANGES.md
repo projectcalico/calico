@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.29-dev
+## 1.0.0
 
 - Add support for setting MTU on IP-in-IP device.
+- Enhance BIRD configuration and documentation for graceful restart.
 
 ## 0.28
 
