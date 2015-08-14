@@ -41,7 +41,7 @@ The experimental channel version of Docker introduces a new flag to
  * `<network>` is the name of the network to join.  Containers on different networks cannot communicate with each other.
  * `<driver>` is the name of the network driver to use.  Calico's driver is called `calico`.
 
-So let's go ahead and start a few of containers on each host.
+So let's go ahead and start a few containers on each host.
 
 On calico-01
 
