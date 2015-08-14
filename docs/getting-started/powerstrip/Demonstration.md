@@ -68,7 +68,7 @@ container to have.
 (By default containers need to be assigned IPs in the `192.168.0.0/16` range. 
 Use `calicoctl` commands to set up different ranges if desired)
 
-So let's go ahead and start a few of containers on each host.
+So let's go ahead and start a few containers on each host.
 
 On core-01
 

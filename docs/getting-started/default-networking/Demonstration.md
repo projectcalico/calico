@@ -36,7 +36,7 @@ You should see output like this on each node
 ## Networking containers.
 
 ### Starting containers
-Let's go ahead and start a few of containers on each host.
+Let's go ahead and start a few containers on each host.
 
 On calico-01
 
