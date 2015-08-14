@@ -86,6 +86,11 @@ Then, restart Felix to ensure that it picks up any changes::
 
     service calico-felix restart
 
+Finally, if dnsmasq was updated, kill it (`pkill dnsmasq`) and restart the DHCP
+agent (`service neutron-dhcp-agent restart`).  This is required due to an upstream
+problem: oslo-rootwrap can't kill a process when the binary has been updated since
+it started running.
+
 Red Hat 7
 ^^^^^^^^^
 
@@ -99,6 +104,11 @@ First, upgrade python-etcd::
 Then, update the relevant components::
 
     yum update dnsmasq openstack-nova-api openstack-neutron calico-compute
+
+Finally, if dnsmasq was updated, kill it (`pkill dnsmasq`) and restart the DHCP
+agent (`service neutron-dhcp-agent restart`).  This is required due to an upstream
+problem: oslo-rootwrap can't kill a process when the binary has been updated since
+it started running.
 
 3: Upgrade control software
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

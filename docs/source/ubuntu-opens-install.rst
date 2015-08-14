@@ -209,7 +209,8 @@ perform the following steps:
 
        sudo apt-get install calico-control
 
-3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file:
+3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file.  In the `[ml2]`
+   section:
 
    -  Find the line beginning with ``type_drivers``, and change it to
       read ``type_drivers = local, flat``.
@@ -218,7 +219,7 @@ perform the following steps:
    -  Find the line beginning with ``tenant_network_types``, and change
       it to read ``tenant_network_types = local``.
 
-4. Edit the ``/etc/neutron/neutron.conf`` file:
+4. Edit the ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -271,14 +272,15 @@ perform the following steps:
 
        sudo service libvirt-bin restart
 
-2. Open ``/etc/nova/nova.conf`` and remove the line that reads:
+2. Open ``/etc/nova/nova.conf`` and remove the line from the `[DEFAULT]` section
+   that reads:
 
    ::
 
        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
 
-   Remove the line setting ``service_neutron_metadata_proxy`` or
-   ``service_metadata_proxy`` to ``True``, if there is one.
+   Remove the lines from the `[neutron]` section setting ``service_neutron_metadata_proxy``
+   or ``service_metadata_proxy`` to ``True``, if there are any.
 
    Restart nova compute.
 
@@ -386,6 +388,22 @@ perform the following steps:
    ``<route_reflector_ip>`` with the IP of one other compute host -- this will
    generate the configuration for a single peer connection, which you can
    duplicate and update for each compute host in your mesh.
+
+   To maintain connectivity between VMs if BIRD crashes or is upgraded, configure
+   BIRD graceful restart:
+
+   - Add `-R` to `BIRD_ARGS` in `/etc/bird/envvars` (you may need to uncomment this
+     option).
+
+   - Edit the upstart jobs `/etc/init/bird.conf` and `bird6.conf` ()if you're
+     using IPv6), and add the following script to it.
+
+     ::
+
+         pre-stop script
+         PID=`status bird | egrep -oi '([0-9]+)$' | head -n1`
+         kill -9 $PID
+         end script
 
 9. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
    supplied sample config at ``/etc/calico/felix.cfg.example``.

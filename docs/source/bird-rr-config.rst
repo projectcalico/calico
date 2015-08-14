@@ -101,6 +101,7 @@ used within this file), ``<node_ip>`` with the node's IPv4 address, and
       neighbor <node_ip> as <as_number>;
       multihop;
       rr client;
+      graceful restart;
       import all;
       export all;
     }
@@ -112,7 +113,7 @@ If you want to use IPv6 connectivity, you'll need to repeat step 2 but using
 ``/etc/bird/bird6.conf``. The *only* differences between the two are:
 
 - the filter needs to filter out ::/0 instead of 0.0.0.0/0
-- where before you set ``<node_ip>`` to the compute node's IPv4 address, this 
+- where before you set ``<node_ip>`` to the compute node's IPv4 address, this
   time you need to set it to the compute node's IPv6 address
 
 Note that ``<router_id>`` should still be set to the route reflector's IPv4
