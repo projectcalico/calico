@@ -82,14 +82,13 @@ a profile to an endpoint, we will first get the endpoint's ID with
 `calicoctl container <CONTAINER> endpoint-id show`, then paste it into the 
 `calicoctl endpoint <ENDPOINT_ID> profile append [<PROFILES>]`  command.
 
-On core-01:
-
+On calico-01:
     
     calicoctl endpoint $(calicoctl container workload-A endpoint-id show) profile append PROF_A_C_E
     calicoctl endpoint $(calicoctl container workload-B endpoint-id show) profile append PROF_B
     calicoctl endpoint $(calicoctl container workload-C endpoint-id show) profile append PROF_A_C_E
 
-On core-02:
+On calico-02:
 
     calicoctl endpoint $(calicoctl container workload-D endpoint-id show) profile append PROF_D
     calicoctl endpoint $(calicoctl container workload-E endpoint-id show) profile append PROF_A_C_E
