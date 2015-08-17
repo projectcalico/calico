@@ -126,7 +126,7 @@ class SpawnedProcess(Popen):
         if isinstance(args, types.StringTypes):
             args = [args]
         else:
-            args = list(args)
+            args = [a.encode("ascii") for a in args]
 
         if shell:
             args = ["/bin/sh", "-c"] + args
