@@ -1,12 +1,14 @@
 """
 Usage:
   calicoctl container <CONTAINER> ip (add|remove) <IP> [--interface=<INTERFACE>]
-  calicoctl container <CONTAINER> endpoint-id show
+  calicoctl container <CONTAINER> endpoint show
+  calicoctl container <CONTAINER> profile (append|remove|set) [<PROFILES>...]
   calicoctl container add <CONTAINER> <IP> [--interface=<INTERFACE>]
   calicoctl container remove <CONTAINER>
 
 Description:
-  Add or remove containers to calico networking and manage their assigned IP addresses.
+  Add or remove containers to calico networking, manage their IP addresses and profiles.
+  All these commands must be run on the host that contains the container.
 
 Options:
   --interface=<INTERFACE>  The name to give to the interface in the container
@@ -20,6 +22,7 @@ from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 from subprocess import CalledProcessError
 from netaddr import IPAddress, IPNetwork
+from calico_ctl import endpoint
 from pycalico import netns
 from pycalico.datastore_datatypes import Endpoint
 
@@ -52,6 +55,7 @@ def validate_arguments(arguments):
         print "Invalid IP address specified."
         sys.exit(1)
 
+    endpoint.validate_arguments(arguments)
 
 def container(arguments):
     """
@@ -65,9 +69,10 @@ def container(arguments):
     validate_arguments(arguments)
 
     try:
-        if arguments.get("endpoint-id"):
-            container_endpoint_id_show(arguments.get("<CONTAINER>"))
-        elif arguments.get("ip"):
+        workload_id = None
+        if "<CONTAINER>" in arguments:
+            workload_id = get_container_id(arguments.get("<CONTAINER>"))
+        if arguments.get("ip"):
             if arguments.get("add"):
                 container_ip_add(arguments.get("<CONTAINER>"),
                                  arguments.get("<IP>"),
@@ -83,6 +88,31 @@ def container(arguments):
                                   arguments.get("--interface"))
                 if arguments.get("remove"):
                     container_remove(arguments.get("<CONTAINER>"))
+        if arguments.get("endpoint"):
+            endpoint.endpoint_show(hostname,
+                                   ORCHESTRATOR_ID,
+                                   workload_id,
+                                   None,
+                                   True)
+        if arguments.get("profile"):
+            if arguments.get("append"):
+                endpoint.endpoint_profile_append(hostname,
+                                                 ORCHESTRATOR_ID,
+                                                 workload_id,
+                                                 None,
+                                                 arguments['<PROFILES>'])
+            elif arguments.get("remove"):
+                endpoint.endpoint_profile_remove(hostname,
+                                                 ORCHESTRATOR_ID,
+                                                 workload_id,
+                                                 None,
+                                                 arguments['<PROFILES>'])
+            elif arguments.get("set"):
+                endpoint.endpoint_profile_set(hostname,
+                                              ORCHESTRATOR_ID,
+                                              workload_id,
+                                              None,
+                                              arguments['<PROFILES>'])
         else:
             if arguments.get("add"):
                 container_add(arguments.get("<CONTAINER>"),
@@ -398,25 +428,6 @@ def get_pool_or_exit(ip):
         sys.exit(1)
 
     return pool
-
-
-def container_endpoint_id_show(container_name):
-    """
-    Prints the endpoint-id of the endpoint attached to the specified
-    container, or an appropriate Not-found error message.
-
-    :param container_name: Name of the container the target endpoint
-    is attached to.
-    :return: None
-    """
-    workload_id = get_container_id(container_name)
-    try:
-        endpoint = client.get_endpoint(hostname=hostname,
-                                       orchestrator_id=ORCHESTRATOR_ID,
-                                       workload_id=workload_id)
-        print endpoint.endpoint_id
-    except KeyError:
-        print "No endpoint was found for %s" % container_name
 
 
 def print_container_not_in_calico_msg(container_name):

@@ -69,17 +69,11 @@ class TestProfileCommands(TestBase):
         host1.calicoctl("profile add PROF_2")
         host1.calicoctl("profile add PROF_4")
 
-        workload_a_endpoint_id = host1.calicoctl("container workload_a endpoint-id show").strip()
-        workload_b_endpoint_id = host1.calicoctl("container workload_b endpoint-id show").strip()
-        workload_c_endpoint_id = host1.calicoctl("container workload_c endpoint-id show").strip()
-        workload_d_endpoint_id = host2.calicoctl("container workload_d endpoint-id show").strip()
-        workload_e_endpoint_id = host2.calicoctl("container workload_e endpoint-id show").strip()
-
-        host1.calicoctl("endpoint %s profile set PROF_1_3_5" % workload_a_endpoint_id)
-        host1.calicoctl("endpoint %s profile set PROF_2" % workload_b_endpoint_id)
-        host1.calicoctl("endpoint %s profile set PROF_1_3_5" % workload_c_endpoint_id)
-        host2.calicoctl("endpoint %s profile set PROF_4" % workload_d_endpoint_id)
-        host2.calicoctl("endpoint %s profile set PROF_1_3_5" % workload_e_endpoint_id)
+        host1.calicoctl("container %s profile set PROF_1_3_5" % workload_a)
+        host1.calicoctl("container %s profile set PROF_2" % workload_b)
+        host1.calicoctl("container %s profile set PROF_1_3_5" % workload_c)
+        host2.calicoctl("container %s profile set PROF_4" % workload_d)
+        host2.calicoctl("container %s profile set PROF_1_3_5" % workload_e)
 
         self.assert_connectivity(pass_list=[workload_a, workload_c, workload_e],
                                  fail_list=[workload_b, workload_d])
@@ -112,27 +106,22 @@ class TestProfileCommands(TestBase):
         host2.create_workload("workload_b", ip_b)
         host2.create_workload("workload_c", ip_c)
 
-        workload_main_endpoint_id = host1.calicoctl("container workload_main endpoint-id show").strip()
-        workload_a_endpoint_id = host2.calicoctl("container workload_a endpoint-id show").strip()
-        workload_b_endpoint_id = host2.calicoctl("container workload_b endpoint-id show").strip()
-        workload_c_endpoint_id = host2.calicoctl("container workload_c endpoint-id show").strip()
-
         host1.calicoctl("profile add PROF_A")
         host1.calicoctl("profile add PROF_B")
         host1.calicoctl("profile add PROF_C")
 
-        host2.calicoctl("endpoint %s profile set PROF_A" % workload_a_endpoint_id)
-        host2.calicoctl("endpoint %s profile set PROF_B" % workload_b_endpoint_id)
-        host2.calicoctl("endpoint %s profile set PROF_C" % workload_c_endpoint_id)
+        host2.calicoctl("container workload_a profile set PROF_A")
+        host2.calicoctl("container workload_b profile set PROF_B")
+        host2.calicoctl("container workload_c profile set PROF_C")
 
         # Test set single profile
-        host1.calicoctl("endpoint %s profile set PROF_A" % workload_main_endpoint_id)
+        host1.calicoctl("container %s profile set PROF_A" % workload_main)
         workload_main.assert_can_ping(ip_a, retries=4)
         workload_main.assert_cant_ping(ip_b)
         workload_main.assert_cant_ping(ip_c)
 
         # Test set multiple profiles (note: PROF_A should now be removed)
-        host1.calicoctl("endpoint %s profile set PROF_B PROF_C" % workload_main_endpoint_id)
+        host1.calicoctl("container %s profile set PROF_B PROF_C" % workload_main)
         workload_main.assert_cant_ping(ip_a, retries=4)
         workload_main.assert_can_ping(ip_b)
         workload_main.assert_can_ping(ip_c)

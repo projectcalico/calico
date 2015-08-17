@@ -38,11 +38,8 @@ class TestContainerToHost(TestBase):
             # Add the nodes to Calico networking.
             host.calicoctl("container add %s 192.168.100.1" % node1)
 
-            # Get the endpoint IDs for the containers
-            ep1 = host.calicoctl("container %s endpoint-id show" % node1)
-
             # Now add the profiles.
-            host.calicoctl("endpoint %s profile set TEST" % ep1)
+            host.calicoctl("container %s profile set TEST" % node1)
 
             # Check it works.  Note that the profile allows all outgoing
             # traffic by default, and conntrack should allow the reply.
