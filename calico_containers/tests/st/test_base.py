@@ -49,3 +49,26 @@ class TestBase(TestCase):
                 source.assert_can_ping(dest.ip)
             for dest in fail_list:
                 source.assert_cant_ping(dest.ip)
+
+    def assert_ip_connectivity(self, workload_list, ip_pass_list,
+                               ip_fail_list=None):
+        """
+        Assert partial connectivity graphs between workloads and given ips.
+
+        This function is used for checking connectivity for ips that are
+        explicitly assigned to containers when added to calico networking.
+
+        :param workload_list: List of workloads used to check connectivity.
+        :param ip_pass_list: Every workload in workload_list should be able to
+        ping every ip in this list.
+        :param ip_fail_list: Every workload in workload_list should *not* be
+        able to ping any ip in this list. Interconnectivity is not checked
+        *within* the fail_list.
+        """
+        if ip_fail_list is None:
+            ip_fail_list = []
+        for workload in workload_list:
+            for ip in ip_pass_list:
+                workload.assert_can_ping(ip)
+            for ip in ip_fail_list:
+                workload.assert_cant_ping(ip)

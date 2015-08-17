@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import re
-import uuid
 
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import (DockerHost, CommandExecError)
+from tests.st.utils.workload import NET_NONE
+from tests.st.utils.constants import DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2
 
 """
 Test "calicoctl bgp" and "calicoctl node bgp" commands.
@@ -39,7 +40,6 @@ TODO - rework BGP tests.
 
 class TestBGP(TestBase):
 
-    @attr('slow')
     def test_defaults(self):
         """
         Test default BGP configuration commands.
@@ -77,23 +77,40 @@ class TestBGP(TestBase):
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).
             host1.start_calico_node()
-            host1.assert_driver_up()
             host2.start_calico_node(as_num="64512")
-            host2.assert_driver_up()
+
+            # Create a profile to associate with both workloads
+            host1.calicoctl("profile add TEST_GROUP")
 
             # Create the network on host1, but it should be usable from all
             # hosts.
-            net = host1.create_network(str(uuid.uuid4()))
+            workload_host1 = host1.create_workload("workload1")
+            workload_host2 = host2.create_workload("workload2")
 
-            workload_host1 = host1.create_workload("workload1", network=net)
-            workload_host2 = host2.create_workload("workload2", network=net)
+            # Add the workloads to Calico networking
+            host1.calicoctl("container add %s %s" % (workload_host1,
+                                                     DEFAULT_IPV4_ADDR_1))
+            host2.calicoctl("container add %s %s" % (workload_host2,
+                                                     DEFAULT_IPV4_ADDR_2))
+
+            # Get the endpoint IDs for the containers
+            ep1 = host1.calicoctl("container %s endpoint-id show" %
+                                  workload_host1)
+            ep2 = host2.calicoctl("container %s endpoint-id show" %
+                                  workload_host2)
+
+            # Now add the profiles - one using set and one using append
+            host1.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
+            host2.calicoctl("endpoint %s profile append TEST_GROUP" % ep2)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
-            # And check connectivity in both directions.
-            self.assert_connectivity(pass_list=[workload_host1,
-                                                workload_host2])
+            # Check connectivity in both directions
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[DEFAULT_IPV4_ADDR_1,
+                                                      DEFAULT_IPV4_ADDR_2])
 
             # Check the BGP status on each host.
             self._check_status(host1, [("node-to-node mesh", host2.ip, "Established")])
@@ -102,41 +119,61 @@ class TestBGP(TestBase):
     @attr('slow')
     def test_node_peers(self):
         """
-        Test per-node BGP peer configuration by turning off the mesh and
-        configuring the mesh as a set of per node peers.
+        Test per-node BGP peer configuration.
+
+        Test by turning off the mesh and configuring the mesh as
+        a set of per node peers.
         """
         with DockerHost('host1', start_calico=False) as host1, \
              DockerHost('host2', start_calico=False) as host2:
 
             # Start both hosts using specific AS numbers.
             host1.start_calico_node(as_num="64513")
-            host1.assert_driver_up()
             host2.start_calico_node(as_num="64513")
-            host2.assert_driver_up()
+
+            # Create a profile to associate with both workloads
+            host1.calicoctl("profile add TEST_GROUP")
 
             # Create the network on host1, but it should be usable from all
             # hosts.
-            net = host1.create_network(str(uuid.uuid4()))
-            workload_host1 = host1.create_workload("workload1", network=net)
-            workload_host2 = host2.create_workload("workload2", network=net)
+            workload_host1 = host1.create_workload("workload1",
+                                                   network=NET_NONE)
+            workload_host2 = host2.create_workload("workload2",
+                                                   network=NET_NONE)
+
+            # Add the workloads to Calico networking
+            host1.calicoctl("container add %s %s" % (workload_host1,
+                                                     DEFAULT_IPV4_ADDR_1))
+            host2.calicoctl("container add %s %s" % (workload_host2,
+                                                     DEFAULT_IPV4_ADDR_2))
+
+            # Get the endpoint IDs for the containers
+            ep1 = host1.calicoctl("container %s endpoint-id show" % workload_host1)
+            ep2 = host2.calicoctl("container %s endpoint-id show" % workload_host2)
+
+            # Now add the profiles - one using set and one using append
+            host1.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
+            host2.calicoctl("endpoint %s profile append TEST_GROUP" % ep2)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
             # Turn the node-to-node mesh off and wait for connectivity to drop.
             host1.calicoctl("bgp node-mesh off")
-            workload_host1.assert_cant_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
             # Configure per-node peers to explicitly set up a mesh.
             host1.calicoctl("node bgp peer add %s as 64513" % host2.ip)
             host2.calicoctl("node bgp peer add %s as 64513" % host1.ip)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
-            # And check connectivity in both directions.
-            self.assert_connectivity(pass_list=[workload_host1,
-                                                workload_host2])
+            # Check connectivity in both directions
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[DEFAULT_IPV4_ADDR_1,
+                                                      DEFAULT_IPV4_ADDR_2])
 
             # Check the BGP status on each host.
             self._check_status(host1, [("node specific", host2.ip, "Established")])
@@ -145,30 +182,46 @@ class TestBGP(TestBase):
     @attr('slow')
     def test_global_peers(self):
         """
-        Test global BGP peer configuration by turning off the mesh and
-        configuring the mesh as a set of global peers.
+        Test global BGP peer configuration.
+
+        Test by turning off the mesh and configuring the mesh as
+        a set of global peers.
         """
         with DockerHost('host1', start_calico=False) as host1, \
              DockerHost('host2', start_calico=False) as host2:
 
             # Start both hosts using specific AS numbers.
             host1.start_calico_node(as_num="64513")
-            host1.assert_driver_up()
             host2.start_calico_node(as_num="64513")
-            host2.assert_driver_up()
 
             # Create the network on host1, but it should be usable from all
             # hosts.
-            net = host1.create_network(str(uuid.uuid4()))
-            workload_host1 = host1.create_workload("workload1", network=net)
-            workload_host2 = host2.create_workload("workload2", network=net)
+            workload_host1 = host1.create_workload("workload1")
+            workload_host2 = host2.create_workload("workload2")
+
+            # Create a profile to associate with both workloads
+            host1.calicoctl("profile add TEST_GROUP")
+
+            # Add the workloads to Calico networking
+            host1.calicoctl("container add %s %s" % (workload_host1,
+                                                     DEFAULT_IPV4_ADDR_1))
+            host2.calicoctl("container add %s %s" % (workload_host2,
+                                                     DEFAULT_IPV4_ADDR_2))
+
+            # Get the endpoint IDs for the containers
+            ep1 = host1.calicoctl("container %s endpoint-id show" % workload_host1)
+            ep2 = host2.calicoctl("container %s endpoint-id show" % workload_host2)
+
+            # Now add the profiles - one using set and one using append
+            host1.calicoctl("endpoint %s profile set TEST_GROUP" % ep1)
+            host2.calicoctl("endpoint %s profile append TEST_GROUP" % ep2)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
             # Turn the node-to-node mesh off and wait for connectivity to drop.
             host1.calicoctl("bgp node-mesh off")
-            workload_host1.assert_cant_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
             # Configure global peers to explicitly set up a mesh.  This means
             # each node will try to peer with itself which will fail.
@@ -176,11 +229,13 @@ class TestBGP(TestBase):
             host1.calicoctl("bgp peer add %s as 64513" % host1.ip)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
+            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
-            # And check connectivity in both directions.
-            self.assert_connectivity(pass_list=[workload_host1,
-                                                workload_host2])
+            # Check connectivity in both directions
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[DEFAULT_IPV4_ADDR_1,
+                                                      DEFAULT_IPV4_ADDR_2])
 
             # Check the BGP status on each host.  Connections from a node to
             # itself will be idle since this is invalid BGP configuration.

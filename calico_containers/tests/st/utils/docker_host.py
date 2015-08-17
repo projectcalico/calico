@@ -67,7 +67,6 @@ class DockerHost(object):
 
         if start_calico:
             self.start_calico_node()
-            self.assert_driver_up()
 
     def execute(self, command):
         """
