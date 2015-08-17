@@ -22,7 +22,8 @@ import re
 from netaddr.core import AddrFormatError
 
 DOCKER_VERSION = "1.16"
-ORCHESTRATOR_ID = "docker"
+DOCKER_ORCHESTRATOR_ID = "docker"
+NAMESPACE_ORCHESTRATOR_ID = "namespace"
 hostname = socket.gethostname()
 
 try:
@@ -49,6 +50,16 @@ def print_paragraph(msg):
     """
     print "\n".join(textwrap.wrap(msg, width=80))
     print
+
+
+def escape_etcd(path):
+    """
+    Escape a string to make it safe for use as a path in etcd.
+    See https://github.com/coreos/etcd/issues/669
+    :param path: The path to escape
+    :return: The escaped path.
+    """
+    return path.replace('/', '-')
 
 
 def get_container_ipv_from_arguments(arguments):

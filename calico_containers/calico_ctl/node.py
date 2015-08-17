@@ -55,7 +55,7 @@ from prettytable import PrettyTable
 
 from connectors import client
 from connectors import docker_client
-from utils import ORCHESTRATOR_ID
+from utils import DOCKER_ORCHESTRATOR_ID
 from utils import hostname
 from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
@@ -298,7 +298,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
 
 def node_stop(force):
     if force or len(client.get_endpoints(hostname=hostname,
-                                         orchestrator_id=ORCHESTRATOR_ID)) == 0:
+                                         orchestrator_id=DOCKER_ORCHESTRATOR_ID)) == 0:
         client.remove_host(hostname)
         try:
             docker_client.stop("calico-node")
