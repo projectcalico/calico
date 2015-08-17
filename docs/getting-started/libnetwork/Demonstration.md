@@ -15,11 +15,11 @@ Once you have your cluster up and running, start calico on all the nodes
 
 On calico-01
 
-    sudo calicoctl node
+    sudo calicoctl node --libnetwork
 
 On calico-02
 
-    sudo calicoctl node
+    sudo calicoctl node --libnetwork
 
 This will start a container on each host. Check they are running
 
@@ -29,7 +29,7 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps -a
     CONTAINER ID        IMAGE                    COMMAND                CREATED             STATUS              PORTS                                            NAMES
-    39de206f7499        calico/node:v0.5.5   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
+    39de206f7499        calico/node-libnetwork   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
 
 
 ## Creating networked endpoints
@@ -81,6 +81,6 @@ the host.
 
 For example:
 
-    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1
+    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
     
 See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.

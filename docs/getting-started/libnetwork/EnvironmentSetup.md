@@ -106,12 +106,11 @@ directory.
 
 ### Preload the Calico docker image (optional)
 
-You can optionally preload the Calico Docker image to avoid the delay when you 
-run `calicoctl node` the first time.  Select the same version of the Calico 
-Docker image as you selected above.  For example, to pull the latest released 
-version
+You can optionally preload this image to avoid the delay when you run 
+`calicoctl node --libnetwork` the first time.  For example, to pull the latest 
+released version, run
 
-    docker pull calico/node:v0.5.5
+    docker pull calico/node-libnetwork:v0.1.0
 
 ## Final checks
 

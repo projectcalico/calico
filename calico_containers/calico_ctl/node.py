@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes] [--libnetwork]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
@@ -26,7 +26,9 @@ Description:
 Options:
   --force                   Stop the node process even if it has active endpoints.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
-                                      container [default: calico/node:latest]
+                                      container. Default is calico/node:latest.
+                                      Default for Calico with libnetwork is
+                                      calico/node-libnetwork:latest.
   --detach=<DETACH>         Set "true" to run Calico service as detached,
                             "false" to run in the foreground. [default: true]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
@@ -35,7 +37,8 @@ Options:
   --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
-  --kubernetes              Download and install the kubernetes plugin
+  --kubernetes              Download and install the kubernetes plugin.
+  --libnetwork              Use the libnetwork plugin.
 """
 import sys
 import os
@@ -71,6 +74,9 @@ KUBERNETES_PLUGIN_VERSION = 'v0.1.0'
 KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes' % KUBERNETES_PLUGIN_VERSION
 KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
 KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
+
+CALICO_DEFAULT_IMAGE = "calico/node:latest"
+LIBNETWORK_IMAGE = 'calico/node-libnetwork:latest'
 
 
 def validate_arguments(arguments):
@@ -160,15 +166,17 @@ def node(arguments):
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
         node_start(ip=arguments.get("--ip"),
-                   node_image=arguments['--node-image'],
+                   node_image=arguments.get('--node-image'),
                    log_dir=arguments.get("--log-dir"),
                    ip6=arguments.get("--ip6"),
                    as_num=arguments.get("--as"),
                    detach=detach,
-                   kubernetes=arguments.get("--kubernetes"))
+                   kubernetes=arguments.get("--kubernetes"),
+                   libnetwork=arguments.get("--libnetwork"))
 
 
-def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
+def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes,
+               libnetwork):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -180,6 +188,9 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
     the global default value will be used.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
+    :param kubernetes: True to install the kubernetes plugin, False otherwise.
+    :param libnetwork: True to use the calico/node-libnetwork image as the node
+    image, False otherwise.
     :return:  None.
     """
     # Print warnings for any known system issues before continuing
@@ -275,6 +286,11 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes):
         restart_policy={"Name": "Always"},
         network_mode="host",
         binds=binds)
+
+    if not node_image:
+        # Use the calico/node-libnetwork image if the libnetwork flag was
+        # passed in.  Otherwise, use the default calico/node image.
+        node_image = LIBNETWORK_IMAGE if libnetwork else CALICO_DEFAULT_IMAGE
 
     _find_or_pull_node_image(node_image)
     container = docker_client.create_container(
