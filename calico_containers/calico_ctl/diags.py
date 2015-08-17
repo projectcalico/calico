@@ -13,14 +13,13 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl diags [--log-dir=<LOG_DIR>] [--upload]
+  calicoctl diags [--log-dir=<LOG_DIR>]
 
 Description:
   Save diagnostic information
 
 Options:
   --log-dir=<LOG_DIR>  The directory for logs [default: /var/log/calico]
-  --upload             Flag, when set, will upload logs to http://transfer.sh
 """
 import sys
 import sh
@@ -47,11 +46,11 @@ def diags(arguments):
     :return: None
     """
     print("Collecting diags")
-    save_diags(arguments["--log-dir"], arguments["--upload"])
+    save_diags(arguments["--log-dir"])
     sys.exit(0)
 
 
-def save_diags(log_dir, upload=False):
+def save_diags(log_dir):
     # Create temp directory
     temp_dir = tempfile.mkdtemp()
     temp_diags_dir = os.path.join(temp_dir, 'diagnostics')
@@ -157,7 +156,7 @@ def save_diags(log_dir, upload=False):
     except EtcdException:
         print "Unable to dump etcd datastore"
 
-    # Create tar and upload
+    # Create tar.
     tar_filename = datetime.strftime(datetime.today(),
                                      "diags-%d%m%y_%H%M%S.tar.gz")
     full_tar_path = os.path.join(temp_dir, tar_filename)
@@ -165,20 +164,9 @@ def save_diags(log_dir, upload=False):
         # pass in arcname, otherwise zip contains layers of subfolders
         tar.add(temp_dir, arcname="")
 
-    print("Diags saved to %s" % (full_tar_path))
-
-    if upload:
-        upload_temp_diags(full_tar_path)
-
-
-def upload_temp_diags(diags_path):
-    # TODO: Rewrite into httplib
-    print_paragraph("Uploading file. Available for 14 days from the URL "
-                    "printed when the upload completes")
-    curl_cmd = ["curl", "--upload-file", diags_path,
-                os.path.join("https://transfer.sh",
-                             os.path.basename(diags_path))]
-    curl_process = subprocess.Popen(curl_cmd)
-    curl_process.communicate()
-    curl_process.wait()
-    print("Done")
+    print("\nDiags saved to %s\n" % (full_tar_path))
+    print_paragraph("If required, you can upload the diagnostics bundle to a "
+                    "file sharing service such as transfer.sh using curl or "
+                    "similar.  For example:")
+    print("  curl --upload-file %s https://transfer.sh/%s" %
+             (full_tar_path, os.path.basename(full_tar_path)))

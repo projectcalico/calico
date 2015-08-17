@@ -35,9 +35,8 @@ class TestDiags(unittest.TestCase):
     @patch('calico_ctl.diags.copytree', autospec=True)
     @patch('tarfile.open', autospec=True)
     @patch('calico_ctl.diags.DatastoreClient', autospec=True)
-    @patch('calico_ctl.diags.upload_temp_diags', autospec=True)
     @patch('calico_ctl.diags.subprocess', autospec=True)
-    def test_save_diags(self, m_subprocess, m_upload_temp_diags,
+    def test_save_diags(self, m_subprocess,
                         m_DatastoreClient, m_tarfile_open, m_copytree,
                         m_sh_command, m_socket, m_open, m_datetime,
                         os_path_isdir, m_os_mkdir, m_tempfile):
@@ -71,7 +70,7 @@ class TestDiags(unittest.TestCase):
         diags_dir = temp_dir + 'diagnostics'
 
         # Call method under test
-        diags.save_diags(log_dir, upload=True)
+        diags.save_diags(log_dir)
 
         # Assert
         m_subprocess.call.assert_called_once_with(
@@ -117,7 +116,6 @@ class TestDiags(unittest.TestCase):
         m_datastore_client.etcd_client.read.assert_called_once_with('/calico', recursive=True)
         m_copytree.assert_called_once_with(log_dir, diags_dir + '/logs', ignore=ANY)
         m_tarfile_open.assert_called_once_with(temp_dir + date_today, 'w:gz')
-        m_upload_temp_diags.assert_called_once_with(temp_dir + date_today)
 
     @patch('calico_ctl.diags.tempfile', autospec=True)
     @patch('os.mkdir', autospec=True)
@@ -161,7 +159,7 @@ class TestDiags(unittest.TestCase):
         diags_dir = temp_dir + 'diagnostics'
 
         # Call method under test
-        diags.save_diags(log_dir, upload=False)
+        diags.save_diags(log_dir)
 
         # Assert
         m_subprocess.call.assert_called_once_with(

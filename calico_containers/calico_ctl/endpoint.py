@@ -64,9 +64,6 @@ def validate_arguments(arguments):
 
     :param arguments: Docopt processed arguments
     """
-    # List of valid characters that Felix permits
-    valid_chars = '[a-zA-Z0-9_\.\-]'
-
     # Validate Profiles
     profile_ok = True
     profiles = arguments.get("<PROFILES>")
@@ -247,8 +244,8 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
                                            orchestrator_id=orchestrator_id,
                                            workload_id=workload_id,
                                            endpoint_id=endpoint_id)
-        print_paragraph("Profiles %s appended to %s." %
-                        (", ".join(profile_names), endpoint_id))
+        print_paragraph("Profiles %s appended" %
+                        (", ".join(profile_names)))
     except KeyError:
         print "Failed to append profiles to endpoint.\n"
         print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
@@ -293,11 +290,11 @@ def endpoint_profile_set(hostname, orchestrator_id, workload_id,
                                         orchestrator_id=orchestrator_id,
                                         workload_id=workload_id,
                                         endpoint_id=endpoint_id)
-        print_paragraph("Profiles %s set for %s." %
-                        (", ".join(profile_names), endpoint_id))
+        print_paragraph("Profiles %s set." %
+                        (", ".join(profile_names)))
     except KeyError:
         print "Failed to set profiles for endpoint.\n"
-        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+        print_paragraph("Endpoint could not be found.\n")
         sys.exit(1)
 
 
@@ -331,11 +328,11 @@ def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
                                              orchestrator_id=orchestrator_id,
                                              workload_id=workload_id,
                                              endpoint_id=endpoint_id)
-        print_paragraph("Profiles %s removed from %s." %
-                        (",".join(profile_names), endpoint_id))
+        print_paragraph("Profiles %s removed." %
+                        (",".join(profile_names)))
     except KeyError:
         print "Failed to remove profiles from endpoint.\n"
-        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+        print_paragraph("Endpoint could not be found.\n")
         sys.exit(1)
     except ProfileNotInEndpoint, e:
         print_paragraph("Profile %s is not in endpoint profile "
