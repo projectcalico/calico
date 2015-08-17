@@ -21,4 +21,4 @@ Running `ip route` shows what routes have been programmed. Routes from other hos
 
 If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS image is out of date.  Use `vagrant box update` to pull the new version.  I recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 
-If you hit issues, please raise tickets. Diags can be collected and easily uploaded with the `sudo ./calicoctl diags --upload` command.
+If you hit issues, please raise tickets. Diags can be collected with the `sudo ./calicoctl diags` command.

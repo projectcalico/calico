@@ -65,9 +65,9 @@ This will set up Calico networking in the container's namespace as `eth1` with t
 Please note that in this set up, Calico's ACLs will only be asserted against the Calico network interface.  For example, if you use the Docker Bridge network as the other interface, containers on the same Docker Host may communicate with one another even if the Calico ACLs would otherwise prevent this.
 
 ## Collecting diags
-To collect (from the current machine only) and upload the diags, run the following command
+To collect diags from the current machine only, run the following command
 
-	sudo ./calicoctl diags --upload
+	sudo ./calicoctl diags
 
 It prints a local file name and a URL where the diags can be downloaded from.
 
