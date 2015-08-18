@@ -188,11 +188,11 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         kubernetes = True
+        libnetwork = False
 
         # Call method under test
-        node.node_start(
-            node_image, log_dir, ip, ip6, as_num, detach, kubernetes
-        )
+        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
+                        kubernetes, libnetwork)
 
         # Set up variables used in assertion statements
         environment = [
@@ -248,9 +248,7 @@ class TestNode(unittest.TestCase):
             network_mode="host",
             binds=binds
         )
-        m_find_or_pull_node_image.assert_called_once_with(
-            'node_image'
-        )
+        m_find_or_pull_node_image.assert_called_once_with('node_image')
         m_docker_client.create_container.assert_called_once_with(
             node_image,
             name='calico-node',
@@ -285,17 +283,19 @@ class TestNode(unittest.TestCase):
         m_install_kube.side_effect = OSError
 
         # Set up arguments
-        node_image = 'node_image'
+        node_image = "node_image"
         log_dir = './log_dir'
         ip = ''
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
         kubernetes = True
+        libnetwork = False
 
         # Test expecting OSError exception
         self.assertRaises(OSError, node.node_start,
-                          node_image, log_dir, ip, ip6, as_num, detach, kubernetes)
+                          node_image, log_dir, ip, ip6, as_num, detach,
+                          kubernetes, libnetwork)
         m_install_kube.assert_has_calls([
             call(node.KUBERNETES_PLUGIN_DIR),
             call(node.KUBERNETES_PLUGIN_DIR_BACKUP)
@@ -330,10 +330,12 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         kubernetes = True
+        libnetwork = False
 
         # Testing expecting APIError exception
         self.assertRaises(APIError, node.node_start,
-                          node_image, log_dir, ip, ip6, as_num, detach, kubernetes)
+                          node_image, log_dir, ip, ip6, as_num, detach,
+                          kubernetes, libnetwork)
 
     @patch('sys.exit', autospec=True)
     @patch('os.path.exists', autospec=True)
@@ -365,11 +367,11 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         kubernetes = True
+        libnetwork = False
 
         # Call method under test
-        node.node_start(
-            node_image, log_dir, ip, ip6, as_num, detach, kubernetes
-        )
+        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
+                        kubernetes, libnetwork)
 
         # Assert
         m_sys_exit.assert_called_once_with(1)
@@ -402,17 +404,104 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         kubernetes = True
+        libnetwork = False
 
         # Call method under test
-        node.node_start(
-            node_image, log_dir, ip, ip6, as_num, detach, kubernetes
-        )
+        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
+                        kubernetes, libnetwork)
 
         # Assert
         m_client.add_ip_pool.assert_has_calls([
             call(4, node.DEFAULT_IPV4_POOL),
             call(6, node.DEFAULT_IPV6_POOL)
         ])
+
+    @patch('calico_ctl.node.LIBNETWORK_IMAGE', autospec=True)
+    @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
+    @patch('os.path.exists', autospec=True)
+    @patch('os.makedirs', autospec=True)
+    @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node.get_host_ips', autospec=True)
+    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
+    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.install_kubernetes', autospec=True)
+    @patch('calico_ctl.node.client', autospec=True)
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    def test_node_start_use_libnetwork(self, m_docker_client, m_client,
+            m_install_kube, m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
+            m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists,
+            m_find_or_pull_node_image, m_LIBNETWORK_IMAGE):
+        """
+        Test that the libnetwork image is used when libnetwork flag is True.
+        """
+        # Set up mock objects
+        m_client.get_ip_pools.return_value = []
+
+        # Set up arguments
+        node_image = False
+        log_dir = './log_dir'
+        ip = ''
+        ip6 = 'aa:bb::zz'
+        as_num = ''
+        detach = False
+        kubernetes = False
+        libnetwork = True
+
+        # Call method under test
+        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
+                        kubernetes, libnetwork)
+
+        # Assert
+        m_client.add_ip_pool.assert_has_calls([
+            call(4, node.DEFAULT_IPV4_POOL),
+            call(6, node.DEFAULT_IPV6_POOL)
+        ])
+        self.assertFalse(m_install_kube.called)
+        m_find_or_pull_node_image.assert_called_once_with(m_LIBNETWORK_IMAGE)
+
+    @patch('calico_ctl.node.CALICO_DEFAULT_IMAGE', autospec=True)
+    @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
+    @patch('os.path.exists', autospec=True)
+    @patch('os.makedirs', autospec=True)
+    @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node.get_host_ips', autospec=True)
+    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
+    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.install_kubernetes', autospec=True)
+    @patch('calico_ctl.node.client', autospec=True)
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    def test_node_start_no_node_no_libnetwork(self, m_docker_client, m_client,
+            m_install_kube, m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
+            m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists,
+            m_find_or_pull_node_image, m_CALICO_DEFAULT_IMAGE):
+        """
+        Test default node image is used in node_start when no image is
+        specified and the libnetwork param is not used.
+        """
+        # Set up mock objects
+        m_client.get_ip_pools.return_value = []
+
+        # Set up arguments
+        node_image = False
+        log_dir = './log_dir'
+        ip = ''
+        ip6 = 'aa:bb::zz'
+        as_num = ''
+        detach = False
+        kubernetes = False
+        libnetwork = False
+
+        # Call method under test
+        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
+                        kubernetes, libnetwork)
+
+        # Assert
+        m_client.add_ip_pool.assert_has_calls([
+            call(4, node.DEFAULT_IPV4_POOL),
+            call(6, node.DEFAULT_IPV6_POOL)
+        ])
+        self.assertFalse(m_install_kube.called)
+        m_find_or_pull_node_image.assert_called_once_with(m_CALICO_DEFAULT_IMAGE)
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)

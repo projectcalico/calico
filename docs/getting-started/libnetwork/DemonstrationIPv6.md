@@ -32,11 +32,11 @@ v6 routing.
 
 On calico-01
 
-    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1
+    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
 
 On calico-02
 
-    calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d7::2
+    calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d7::2 --libnetwork
 
 Then, you can start containers with IPv6 connectivity. By default, Calico is 
 configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 
