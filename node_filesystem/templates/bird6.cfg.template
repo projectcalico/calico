@@ -3,6 +3,14 @@ include "bird6_ipam.cfg";
 
 router id {{getenv "IP"}};  # Use IPv4 address since router id is 4 octets, even in MP-BGP
 
+{{define "LOGGING"}}
+{{$node_logging_key := printf "/host/%s/loglevel" (getenv "HOSTNAME")}}{{if exists $node_logging_key}}{{$logging := getv $node_logging_key}}
+{{if eq $logging "debug"}}  debug all;{{else if ne $logging "none"}}  debug { states };{{end}}
+{{else if exists "/global/loglevel"}}{{$logging := getv "/global/loglevel"}}
+{{if eq $logging "debug"}}  debug all;{{else if ne $logging "none"}}  debug { states };{{end}}
+{{else}}  debug { states };{{end}}
+{{end}}
+
 # Configure synchronization between routing tables and kernel.
 protocol kernel {
   learn;             # Learn all alien routes from the kernel
@@ -20,11 +28,12 @@ protocol kernel {
 
 # Watch interface up/down events.
 protocol device {
+  {{template "LOGGING"}}
   scan time 2;    # Scan interfaces every 2 seconds
 }
 
 protocol direct {
-  debug { states };
+  {{template "LOGGING"}}
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
@@ -32,7 +41,7 @@ protocol direct {
 {{else}}{{$node_as_key := printf "/host/%s/as_num" (getenv "HOSTNAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
-  debug { states };
+  {{template "LOGGING"}}
   description "Connection to BGP peer";
   local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
   multihop;

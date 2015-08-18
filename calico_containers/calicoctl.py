@@ -31,6 +31,7 @@ Usage: calicoctl <command> [<args>...]
     checksystem       Check for incompatibilities on the host system
     diags             Save diagnostic information
     version           Display the version of calicoctl
+    config            Configure low-level component configuration
 
 See 'calicoctl <command> --help' to read about a specific subcommand.
 """
@@ -51,6 +52,7 @@ import calico_ctl.checksystem
 import calico_ctl.status
 import calico_ctl.diags
 import calico_ctl.version
+import calico_ctl.config
 from calico_ctl.utils import print_paragraph
 
 
