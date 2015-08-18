@@ -28,7 +28,7 @@ Usage: calicoctl <command> [<args>...]
     endpoint          Configure the endpoints assigned to existing containers
     pool              Configure ip-pools
     bgp               Configure global bgp
-    checksystem       Check for incompatabilities on the host system
+    checksystem       Check for incompatibilities on the host system
     diags             Save diagnostic information
     version           Display the version of calicoctl
 
