@@ -53,10 +53,10 @@ from utils import hostname
 # Dictionaries providing look up between the configuration name, and a tuple
 # of (internal name, value regex string)
 FELIX_CONFIG_DATA = {
-    "logging": ("LogSeverityScreen", "none|debug|info|warning|error|critical")
+    "loglevel": ("LogSeverityScreen", "none|debug|info|warning|error|critical")
 }
 BGP_CONFIG_DATA = {
-    "logging": ("LogSeverityScreen", "none|debug|info")
+    "loglevel": ("loglevel", "none|debug|info")
 }
 
 def validate_arguments(arguments):

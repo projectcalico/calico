@@ -4,9 +4,9 @@ include "bird_ipam.cfg";
 router id {{getenv "IP"}};
 
 {{define "LOGGING"}}
-{{$node_logging_key := printf "/host/%s/LogSeverityScreen" (getenv "HOSTNAME")}}{{if exists $node_logging_key}}{{$logging := getv $node_logging_key}}
+{{$node_logging_key := printf "/host/%s/loglevel" (getenv "HOSTNAME")}}{{if exists $node_logging_key}}{{$logging := getv $node_logging_key}}
 {{if eq $logging "debug"}}  debug all;{{else if ne $logging "none"}}  debug { states };{{end}}
-{{else if exists "/global/LogSeverityScreen"}}{{$logging := getv "/global/LogSeverityScreen"}}
+{{else if exists "/global/loglevel"}}{{$logging := getv "/global/loglevel"}}
 {{if eq $logging "debug"}}  debug all;{{else if ne $logging "none"}}  debug { states };{{end}}
 {{else}}  debug { states };{{end}}
 {{end}}
