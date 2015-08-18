@@ -14,6 +14,7 @@ Options:
   --interface=<INTERFACE>  The name to give to the interface in the container
                            [default: eth1]
 """
+import os
 import sys
 import uuid
 
@@ -28,7 +29,8 @@ from pycalico.datastore_datatypes import Endpoint
 
 from connectors import client
 from connectors import docker_client
-from utils import hostname, ORCHESTRATOR_ID
+from utils import hostname, DOCKER_ORCHESTRATOR_ID, NAMESPACE_ORCHESTRATOR_ID, \
+    escape_etcd
 from utils import enforce_root
 from utils import print_paragraph
 from utils import validate_ip
@@ -71,7 +73,15 @@ def container(arguments):
     try:
         workload_id = None
         if "<CONTAINER>" in arguments:
-            workload_id = get_container_id(arguments.get("<CONTAINER>"))
+            container_id = arguments.get("<CONTAINER>")
+            if container_id.startswith("/") and os.path.exists(container_id):
+                # The ID is a path. Don't do any docker lookups
+                workload_id = escape_etcd(container_id)
+                orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+            else:
+                info = get_container_info_or_exit(container_id)
+                workload_id = info["Id"]
+                orchestrator_id = DOCKER_ORCHESTRATOR_ID
         if arguments.get("ip"):
             if arguments.get("add"):
                 container_ip_add(arguments.get("<CONTAINER>"),
@@ -90,26 +100,26 @@ def container(arguments):
                     container_remove(arguments.get("<CONTAINER>"))
         if arguments.get("endpoint"):
             endpoint.endpoint_show(hostname,
-                                   ORCHESTRATOR_ID,
+                                   orchestrator_id,
                                    workload_id,
                                    None,
                                    True)
         if arguments.get("profile"):
             if arguments.get("append"):
                 endpoint.endpoint_profile_append(hostname,
-                                                 ORCHESTRATOR_ID,
+                                                 orchestrator_id,
                                                  workload_id,
                                                  None,
                                                  arguments['<PROFILES>'])
             elif arguments.get("remove"):
                 endpoint.endpoint_profile_remove(hostname,
-                                                 ORCHESTRATOR_ID,
+                                                 orchestrator_id,
                                                  workload_id,
                                                  None,
                                                  arguments['<PROFILES>'])
             elif arguments.get("set"):
                 endpoint.endpoint_profile_set(hostname,
-                                              ORCHESTRATOR_ID,
+                                              orchestrator_id,
                                               workload_id,
                                               None,
                                               arguments['<PROFILES>'])
@@ -134,24 +144,44 @@ def container(arguments):
         sys.exit(1)
 
 
-def container_add(container_name, ip, interface):
+def container_add(container_id, ip, interface):
     """
     Add a container (on this host) to Calico networking with the given IP.
 
-    :param container_name: The name or ID of the container.
+    :param container_id: The namespace path or the docker name/ID of the container.
     :param ip: An IPAddress object with the desired IP to assign.
     :param interface: The name of the interface in the container.
     """
     # The netns manipulations must be done as root.
     enforce_root()
-    info = get_container_info_or_exit(container_name)
-    container_id = info["Id"]
+
+    if container_id.startswith("/") and os.path.exists(container_id):
+        # The ID is a path. Don't do any docker lookups
+        workload_id = escape_etcd(container_id)
+        orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+        namespace_path = container_id
+    else:
+        info = get_container_info_or_exit(container_id)
+        workload_id = info["Id"]
+        orchestrator_id = DOCKER_ORCHESTRATOR_ID
+        namespace_path = "/proc/%s/ns/net" % info["State"]["Pid"]
+
+        # Check the container is actually running.
+        if not info["State"]["Running"]:
+            print "%s is not currently running." % container_id
+            sys.exit(1)
+
+        # We can't set up Calico if the container shares the host namespace.
+        if info["HostConfig"]["NetworkMode"] == "host":
+            print "Can't add %s to Calico because it is " \
+                  "running NetworkMode = host." % container_id
+            sys.exit(1)
 
     # Check if the container already exists
     try:
         _ = client.get_endpoint(hostname=hostname,
-                                orchestrator_id=ORCHESTRATOR_ID,
-                                workload_id=container_id)
+                                orchestrator_id=orchestrator_id,
+                                workload_id=workload_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
@@ -161,18 +191,7 @@ def container_add(container_name, ip, interface):
         # that would confuse the user: the container would not be reachable on
         # that IP address.
         print "%s has already been configured with Calico Networking." % \
-              container_name
-        sys.exit(1)
-
-    # Check the container is actually running.
-    if not info["State"]["Running"]:
-        print "%s is not currently running." % container_name
-        sys.exit(1)
-
-    # We can't set up Calico if the container shares the host namespace.
-    if info["HostConfig"]["NetworkMode"] == "host":
-        print "Can't add %s to Calico because it is " \
-              "running NetworkMode = host." % container_name
+              container_id
         sys.exit(1)
 
     # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
@@ -198,8 +217,8 @@ def container_add(container_name, ip, interface):
 
     network = IPNetwork(IPAddress(ip))
     ep = Endpoint(hostname=hostname,
-                  orchestrator_id=ORCHESTRATOR_ID,
-                  workload_id=container_id,
+                  orchestrator_id=DOCKER_ORCHESTRATOR_ID,
+                  workload_id=workload_id,
                   endpoint_id=uuid.uuid1().hex,
                   state="active",
                   mac=None)
@@ -212,14 +231,13 @@ def container_add(container_name, ip, interface):
 
     # Create the veth, move into the container namespace, add the IP and
     # set up the default routes.
-    pid = info["State"]["Pid"]
     netns.create_veth(ep.name, ep.temp_interface_name)
-    netns.move_veth_into_ns(pid, ep.temp_interface_name, interface)
-    netns.add_ip_to_ns_veth(pid, ip, interface)
-    netns.add_ns_default_route(pid, next_hop, interface)
+    netns.move_veth_into_ns(namespace_path, ep.temp_interface_name, interface)
+    netns.add_ip_to_ns_veth(namespace_path, ip, interface)
+    netns.add_ns_default_route(namespace_path, next_hop, interface)
 
     # Grab the MAC assigned to the veth in the namespace.
-    ep.mac = netns.get_ns_veth_mac(pid, interface)
+    ep.mac = netns.get_ns_veth_mac(namespace_path, interface)
 
     # Register the endpoint with Felix.
     client.set_endpoint(ep)
@@ -228,7 +246,7 @@ def container_add(container_name, ip, interface):
     return ep
 
 
-def container_remove(container_name):
+def container_remove(container_id):
     """
     Remove a container (on this host) from Calico networking.
 
@@ -236,21 +254,27 @@ def container_remove(container_name):
     If there is a network adaptor in the host namespace used by the container
     then it is removed.
 
-    :param container_name: The name or ID of the container.
+    :param container_id: The namespace path or the ID of the container.
     """
     # The netns manipulations must be done as root.
     enforce_root()
 
     # Resolve the name to ID.
-    workload_id = get_container_id(container_name)
+    if container_id.startswith("/") and os.path.exists(container_id):
+        # The ID is a path. Don't do any docker lookups
+        workload_id = escape_etcd(container_id)
+        orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+    else:
+        workload_id = get_workload_id(container_id)
+        orchestrator_id = DOCKER_ORCHESTRATOR_ID
 
     # Find the endpoint ID. We need this to find any ACL rules
     try:
         endpoint = client.get_endpoint(hostname=hostname,
-                                       orchestrator_id=ORCHESTRATOR_ID,
+                                       orchestrator_id=orchestrator_id,
                                        workload_id=workload_id)
     except KeyError:
-        print "Container %s doesn't contain any endpoints" % container_name
+        print "Container %s doesn't contain any endpoints" % container_id
         sys.exit(1)
 
     # Remove any IP address assignments that this endpoint has
@@ -272,18 +296,18 @@ def container_remove(container_name):
         sys.exit(1)
 
     # Remove the container from the datastore.
-    client.remove_workload(hostname, ORCHESTRATOR_ID, workload_id)
+    client.remove_workload(hostname, orchestrator_id, workload_id)
 
-    print "Removed Calico interface from %s" % container_name
+    print "Removed Calico interface from %s" % container_id
 
 
 # TODO: If container created with IPv4 and then add IPv6 address, do we set up the
 # default route for IPv6 correctly (code read suggests not).
-def container_ip_add(container_name, ip, interface):
+def container_ip_add(container_id, ip, interface):
     """
     Add an IP address to an existing Calico networked container.
 
-    :param container_name: The name of the container.
+    :param container_id: The namespace path or container_id of the container.
     :param ip: The IP to add
     :param interface: The name of the interface in the container.
 
@@ -296,22 +320,30 @@ def container_ip_add(container_name, ip, interface):
 
     pool = get_pool_or_exit(address)
 
-    info = get_container_info_or_exit(container_name)
-    container_id = info["Id"]
+    if container_id.startswith("/") and os.path.exists(container_id):
+        # The ID is a path. Don't do any docker lookups
+        workload_id = escape_etcd(container_id)
+        namespace_path = container_id
+        orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+    else:
+        info = get_container_info_or_exit(container_id)
+        workload_id = info["Id"]
+        namespace_path = "/proc/%s/ns/net" % info["State"]["Pid"]
+        orchestrator_id = DOCKER_ORCHESTRATOR_ID
 
-    # Check the container is actually running.
-    if not info["State"]["Running"]:
-        print "%s is not currently running." % container_name
-        sys.exit(1)
+        # Check the container is actually running.
+        if not info["State"]["Running"]:
+            print "%s is not currently running." % container_id
+            sys.exit(1)
 
     # Check that the container is already networked
     try:
         endpoint = client.get_endpoint(hostname=hostname,
-                                       orchestrator_id=ORCHESTRATOR_ID,
-                                       workload_id=container_id)
+                                       orchestrator_id=orchestrator_id,
+                                       workload_id=workload_id)
     except KeyError:
         print "Failed to add IP address to container.\n"
-        print_container_not_in_calico_msg(container_name)
+        print_container_not_in_calico_msg(container_id)
         sys.exit(1)
 
     # From here, this method starts having side effects. If something
@@ -332,8 +364,7 @@ def container_ip_add(container_name, ip, interface):
         sys.exit(1)
 
     try:
-        container_pid = info["State"]["Pid"]
-        netns.add_ip_to_ns_veth(container_pid, address, interface)
+        netns.add_ip_to_ns_veth(namespace_path, address, interface)
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
         if address.version == 4:
@@ -347,11 +378,11 @@ def container_ip_add(container_name, ip, interface):
     print "IP %s added to %s" % (ip, container_id)
 
 
-def container_ip_remove(container_name, ip, interface):
+def container_ip_remove(container_id, ip, interface):
     """
     Add an IP address to an existing Calico networked container.
 
-    :param container_name: The name of the container.
+    :param container_id: The namespace path or container_id of the container.
     :param ip: The IP to add
     :param interface: The name of the interface in the container.
 
@@ -363,20 +394,27 @@ def container_ip_remove(container_name, ip, interface):
     enforce_root()
 
     pool = get_pool_or_exit(address)
+    if container_id.startswith("/") and os.path.exists(container_id):
+        # The ID is a path. Don't do any docker lookups
+        workload_id = escape_etcd(container_id)
+        namespace_path = container_id
+        orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+    else:
+        info = get_container_info_or_exit(container_id)
+        workload_id = info["Id"]
+        namespace_path = "/proc/%s/ns/net" % info["State"]["Pid"]
+        orchestrator_id = DOCKER_ORCHESTRATOR_ID
 
-    info = get_container_info_or_exit(container_name)
-    container_id = info["Id"]
-
-    # Check the container is actually running.
-    if not info["State"]["Running"]:
-        print "%s is not currently running." % container_name
-        sys.exit(1)
+        # Check the container is actually running.
+        if not info["State"]["Running"]:
+            print "%s is not currently running." % container_id
+            sys.exit(1)
 
     # Check that the container is already networked
     try:
         endpoint = client.get_endpoint(hostname=hostname,
-                                       orchestrator_id=ORCHESTRATOR_ID,
-                                       workload_id=container_id)
+                                       orchestrator_id=orchestrator_id,
+                                       workload_id=workload_id)
         if address.version == 4:
             nets = endpoint.ipv4_nets
         else:
@@ -398,8 +436,7 @@ def container_ip_remove(container_name, ip, interface):
         sys.exit(1)
 
     try:
-        container_pid = info["State"]["Pid"]
-        netns.remove_ip_from_ns_veth(container_pid, address, interface)
+        netns.remove_ip_from_ns_veth(namespace_path, address, interface)
 
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
@@ -407,7 +444,7 @@ def container_ip_remove(container_name, ip, interface):
 
     client.unassign_address(pool, ip)
 
-    print "IP %s removed from %s" % (ip, container_name)
+    print "IP %s removed from %s" % (ip, container_id)
 
 
 def get_pool_or_exit(ip):
@@ -442,15 +479,21 @@ def print_container_not_in_calico_msg(container_name):
                     "to the Calico network.")
 
 
-def get_container_id(container_name):
+def get_workload_id(container_id):
     """
-    Get the full container ID from a partial ID or name.
+    Get the a workload ID from either a namespace path or a partial Docker
+    ID or Docker name.
 
-    :param container_name: The partial ID or name of the container.
-    :return: The container ID as a string.
+    :param container_id: The namespace or Docker ID/Name.
+    :return: The workload ID as a string.
     """
-    info = get_container_info_or_exit(container_name)
-    return info["Id"]
+    if container_id.startswith("/") and os.path.exists(container_id):
+        # The ID is a path. Don't do any docker lookups
+        workload_id = escape_etcd(container_id)
+    else:
+        info = get_container_info_or_exit(container_id)
+        workload_id = info["Id"]
+    return workload_id
 
 
 def get_container_info_or_exit(container_name):

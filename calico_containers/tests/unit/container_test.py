@@ -71,7 +71,7 @@ class TestContainer(unittest.TestCase):
         m_get_container_info_or_exit.assert_called_once_with('container1')
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
-            orchestrator_id=utils.ORCHESTRATOR_ID,
+            orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
         m_get_pool_or_exit.assert_called_once_with(IPAddress('1.1.1.1'))
@@ -159,7 +159,6 @@ class TestContainer(unittest.TestCase):
         # Assert only expected calls were made
         self.assertTrue(m_enforce_root.called)
         self.assertTrue(m_get_container_info_or_exit.called)
-        self.assertTrue(m_client.get_endpoint.called)
         self.assertFalse(m_get_pool_or_exit.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -224,7 +223,7 @@ class TestContainer(unittest.TestCase):
         self.assertFalse(m_netns.create_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_container_id', autospec=True)
+    @patch('calico_ctl.container.get_workload_id', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
     def test_container_remove(self, m_netns, m_client,  m_get_container_id,
@@ -254,16 +253,16 @@ class TestContainer(unittest.TestCase):
         m_get_container_id.assert_called_once_with('container1')
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
-            orchestrator_id=utils.ORCHESTRATOR_ID,
+            orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
         self.assertEqual(m_client.unassign_address.call_count, 1)
         m_netns.remove_veth.assert_called_once_with("eth1234")
         m_client.remove_workload.assert_called_once_with(
-            utils.hostname, utils.ORCHESTRATOR_ID, 666)
+            utils.hostname, utils.DOCKER_ORCHESTRATOR_ID, 666)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_container_id', autospec=True)
+    @patch('calico_ctl.container.get_workload_id', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     def test_container_remove_no_endpoint(
             self, m_client, m_get_container_id, m_enforce_root):
@@ -287,7 +286,7 @@ class TestContainer(unittest.TestCase):
 
     @patch('pycalico.netns.remove_veth')
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_container_id', autospec=True)
+    @patch('calico_ctl.container.get_workload_id', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     def test_container_remove_veth_error(self, m_client, m_get_container_id,
                                          m_enforce_root, m_remove_veth):
@@ -319,7 +318,7 @@ class TestContainer(unittest.TestCase):
         m_get_container_id.assert_called_once_with("container1")
         m_client.get_endpoint.assert_called_once_with(
                                          hostname=utils.hostname,
-                                         orchestrator_id=utils.ORCHESTRATOR_ID,
+                                         orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
                                          workload_id=52)
         m_client.get_ip_pools.assert_called_once_with(4)
         self.assertFalse(m_client.remove_workload.called)
@@ -362,14 +361,14 @@ class TestContainer(unittest.TestCase):
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
-            orchestrator_id=utils.ORCHESTRATOR_ID,
+            orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
         m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.add_ip_to_ns_veth.assert_called_once_with(
-            'Pid_info', ip_addr, interface
+            '/proc/Pid_info/ns/net', ip_addr, interface
         )
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -410,14 +409,14 @@ class TestContainer(unittest.TestCase):
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
-            orchestrator_id=utils.ORCHESTRATOR_ID,
+            orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
         m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
         m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.add_ip_to_ns_veth.assert_called_once_with(
-            'Pid_info', ip_addr, interface
+            '/proc/Pid_info/ns/net', ip_addr, interface
         )
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -704,12 +703,12 @@ class TestContainer(unittest.TestCase):
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
-            orchestrator_id=utils.ORCHESTRATOR_ID,
+            orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.remove_ip_from_ns_veth.assert_called_once_with(
-            'Pid_info',
+            '/proc/Pid_info/ns/net',
             IPAddress(ip),
             interface
         )
@@ -751,12 +750,12 @@ class TestContainer(unittest.TestCase):
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
-            orchestrator_id=utils.ORCHESTRATOR_ID,
+            orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.remove_ip_from_ns_veth.assert_called_once_with(
-            'Pid_info',
+            '/proc/Pid_info/ns/net',
             IPAddress(ip),
             interface
         )

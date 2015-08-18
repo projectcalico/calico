@@ -13,11 +13,6 @@ apt-get install -qy \
         libffi-dev \
         libssl-dev
 
-# Install Felix and python-etcd from the Metaswitch github repos.
-pip install git+https://github.com/projectcalico/python-etcd.git
-pip install git+https://github.com/projectcalico/calico.git@1.0.0
-pip install git+https://github.com/projectcalico/libcalico.git@v0.1.1
-
 # Install Confd
 curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd
 chmod +x confd
