@@ -80,16 +80,18 @@ Ubuntu 14.04
 First, upgrade packaged components::
 
     apt-get update
-    apt-get install dnsmasq-base nova-api-metadata neutron-dhcp-agent neutron-common python-etcd calico-compute
+    apt-get install dnsmasq-base nova-api-metadata neutron-dhcp-agent python-etcd calico-compute nova-compute
 
 Then, restart Felix to ensure that it picks up any changes::
 
     service calico-felix restart
 
-Finally, if dnsmasq was updated, kill it (`pkill dnsmasq`) and restart the DHCP
-agent (`service neutron-dhcp-agent restart`).  This is required due to an upstream
-problem: oslo-rootwrap can't kill a process when the binary has been updated since
-it started running.
+Finally, if dnsmasq was upgraded, kill it and restart the DHCP
+agent.  This is required due to an upstream problem: oslo-rootwrap can't kill a
+process when the binary has been updated since it started running::
+
+    pkill dnsmasq
+    service neutron-dhcp-agent restart
 
 Red Hat 7
 ^^^^^^^^^
@@ -103,12 +105,14 @@ First, upgrade python-etcd::
 
 Then, update the relevant components::
 
-    yum update dnsmasq openstack-nova-api openstack-neutron calico-compute
+    yum update dnsmasq openstack-nova-api openstack-neutron calico-compute openstack-nova-compute
 
-Finally, if dnsmasq was updated, kill it (`pkill dnsmasq`) and restart the DHCP
-agent (`service neutron-dhcp-agent restart`).  This is required due to an upstream
-problem: oslo-rootwrap can't kill a process when the binary has been updated since
-it started running.
+Finally, if dnsmasq was upgraded, kill it and restart the DHCP agent.  This is
+required due to an upstream problem: oslo-rootwrap can't kill a process when
+the binary has been updated since it started running::
+
+    pkill dnsmasq
+    service neutron-dhcp-agent-restart
 
 3: Upgrade control software
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -122,7 +126,7 @@ Ubuntu 14.04
 First, update packaged components::
 
     apt-get update
-    apt-get install python-etcd calico-control
+    apt-get install python-etcd etcd calico-control neutron-server
 
 Then, restart Neutron to ensure that it picks up any changes::
 
@@ -140,4 +144,4 @@ First, upgrade python-etcd::
 
 Then, update the relevant components::
 
-    yum update calico-control
+    yum update calico-control openstack-neutron
