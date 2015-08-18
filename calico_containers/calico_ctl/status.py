@@ -72,14 +72,14 @@ def pprint_bird_protocols(version):
         bird_cmd = docker_client.exec_create("calico-node",
                                     ["/bin/bash", "-c",
                                      "echo show protocols | "
-                                     "birdc -s /etc/service/bird/bird.ctl"])
+                                     "birdcl -s /etc/service/bird/bird.ctl"])
         results = docker_client.exec_start(bird_cmd)
         ip_sep = "."
     else:
         bird6_cmd = docker_client.exec_create("calico-node",
                                     ["/bin/bash", "-c",
                                      "echo show protocols | "
-                                     "birdc6 -s "
+                                     "birdcl -s "
                                      "/etc/service/bird6/bird6.ctl"])
         results = docker_client.exec_start(bird6_cmd)
         ip_sep = ":"
