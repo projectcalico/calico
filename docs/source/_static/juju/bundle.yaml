@@ -9,7 +9,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "neutron-calico":
-      charm: "cs:~cory-benfield/trusty/neutron-calico-10"
+      charm: "cs:~project-calico/trusty/neutron-calico-0"
       num_units: 0
       annotations:
         "gui-x": "832.4871538385408"
@@ -59,7 +59,7 @@ envExport:
         "gui-x": "1120.2440237671067"
         "gui-y": "544.8983810601128"
     bird:
-      charm: "cs:~cory-benfield/trusty/bird-5"
+      charm: "cs:~project-calico/trusty/bird-0"
       num_units: 1
       annotations:
         "gui-x": "1145.8587980101852"
@@ -67,7 +67,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "nova-cloud-controller":
-      charm: "cs:~cory-benfield/trusty/nova-cloud-controller-10"
+      charm: "cs:~project-calico/trusty/nova-cloud-controller-0"
       num_units: 1
       options:
         "network-manager": Neutron
@@ -77,7 +77,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "neutron-api":
-      charm: "cs:~cory-benfield/trusty/neutron-api-14"
+      charm: "cs:~project-calico/trusty/neutron-api-0"
       num_units: 1
       options:
         "neutron-plugin": Calico
@@ -86,7 +86,7 @@ envExport:
         "gui-x": "946.0883464963425"
         "gui-y": "717.904666996588"
     "nova-compute":
-      charm: "cs:~cory-benfield/trusty/nova-compute-6"
+      charm: "cs:~project-calico/trusty/nova-compute-0"
       num_units: 2
       annotations:
         "gui-x": "605.289700869386"
