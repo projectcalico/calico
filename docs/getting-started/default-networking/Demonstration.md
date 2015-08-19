@@ -82,14 +82,14 @@ a profile to an endpoint run the following commands.
 
 On calico-01:
     
-    calicoctl container profile append PROF_A_C_E
-    calicoctl container profile append PROF_B
-    calicoctl container profile append PROF_A_C_E
+    calicoctl container workload-A profile append PROF_A_C_E
+    calicoctl container workload-B profile append PROF_B
+    calicoctl container workload-C profile append PROF_A_C_E
 
 On calico-02:
 
-    calicoctl container profile append PROF_D
-    calicoctl container profile append PROF_A_C_E
+    calicoctl container workload-D profile append PROF_D
+    calicoctl container workload-E profile append PROF_A_C_E
 
 *Note that whilst the `calicoctl endpoint commands` can be run on any Calico 
  node, the `calicoctl container` commands will only work on the Calico node 
