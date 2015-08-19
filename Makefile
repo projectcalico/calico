@@ -23,7 +23,7 @@ dist/calico_rkt: rktbuild.created
 	-v `pwd`/calico_rkt:/code/calico_rkt \
 	-v `pwd`/dist:/code/dist \
 	-e PYTHONPATH=/code/calico_rkt \
-	calico/rkt-build pyinstaller calico_rkt/plugin.py -a -F -s --clean
+	calico/rkt-build pyinstaller calico_rkt/calico_rkt.py -a -F -s --clean
 
 ut: dist/calico_rkt
 	docker run --rm -v `pwd`/calico_rkt:/code/calico_rkt \

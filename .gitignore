@@ -1,0 +1,8 @@
+build
+dist
+venv
+env
+.idea
+*.pyc
+*~
+*.created
