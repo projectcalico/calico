@@ -1,3 +1,8 @@
-*.pyc
+build
 dist
-.idea/*
+venv
+env
+.idea
+*.pyc
+*~
+*.created
