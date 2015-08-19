@@ -27,7 +27,10 @@ import socket
 import weakref
 
 # OpenStack imports.
-from oslo.config import cfg
+try:
+    from oslo.config import cfg
+except ImportError:
+    from oslo_config import cfg
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
