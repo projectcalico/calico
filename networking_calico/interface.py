@@ -1,0 +1,116 @@
+# Copyright 2015 Metaswitch Networks
+# All Rights Reserved.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
+import netaddr
+
+from neutron.agent.linux import interface
+from neutron.agent.linux import ip_lib
+from neutron.common import exceptions
+from neutron.i18n import _LE
+from oslo_log import log as logging
+
+
+LOG = logging.getLogger(__name__)
+
+
+class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
+    """Driver for DHCP service for routed virtual interfaces."""
+
+    DEV_NAME_PREFIX = 'ns-'
+
+    def __init__(self, conf):
+        super(RoutedInterfaceDriver, self).__init__(conf)
+
+        # Require use_namespaces to be False.  Routed networking does
+        # not use namespaces.
+        if self.conf.use_namespaces:
+            raise exceptions.InvalidConfigurationOption(
+                opt_name='use_namespaces',
+                opt_value='True'
+            )
+
+    @property
+    def use_gateway_ips(self):
+        # Routed networking does not bridge across compute hosts or
+        # network nodes, so the DHCP port can use the gateway IP
+        # address of each subnet for which it is handing out
+        # addresses, instead of requiring a fresh Neutron-allocated IP
+        # address.
+        return True
+
+    def plug_new(self, network_id, port_id, device_name, mac_address,
+                 bridge=None, namespace=None, prefix=None):
+        """Plugin the interface."""
+        ip = ip_lib.IPWrapper()
+
+        # Create dummy interface (in the default namespace).
+        ns_dummy = ip.add_dummy(device_name)
+        ns_dummy.link.set_address(mac_address)
+
+        if self.conf.network_device_mtu:
+            ns_dummy.link.set_mtu(self.conf.network_device_mtu)
+
+        ns_dummy.link.set_up()
+
+    def init_l3(self, device_name, ip_cidrs, namespace=None,
+                preserve_ips=[], gateway=None, extra_subnets=[]):
+        """L3 initialization for RoutedInterfaceDriver.
+
+        Extend LinuxInterfaceDriver.init_l3 to remove the subnet
+        route(s) that Linux automatically creates.
+        """
+        super(RoutedInterfaceDriver, self).init_l3(device_name,
+                                                   ip_cidrs,
+                                                   namespace,
+                                                   preserve_ips,
+                                                   gateway,
+                                                   extra_subnets)
+        device = ip_lib.IPDevice(device_name,
+                                 namespace=namespace)
+        device.set_log_fail_as_error(False)
+        for ip_cidr in ip_cidrs:
+            LOG.debug("Remove subnet route for cidr %s" % ip_cidr)
+            net = netaddr.IPNetwork(ip_cidr)
+            LOG.debug("=> real cidr %s" % net.cidr)
+            try:
+                device.route.delete_onlink_route(net.cidr)
+            except RuntimeError:
+                LOG.debug("Subnet route %s did not exist" % net.cidr)
+
+    def unplug(self, device_name, bridge=None, namespace=None, prefix=None):
+        """Unplug the interface."""
+        device = ip_lib.IPDevice(device_name, namespace)
+        try:
+            device.link.delete()
+            LOG.debug("Unplugged interface '%s'", device_name)
+        except RuntimeError:
+            LOG.error(_LE("Failed unplugging interface '%s'"),
+                      device_name)
+
+    def dnsmasq_bind_options(self, device_name):
+        # The DHCP port and VM TAP interfaces are not bridged, so
+        # change the dnsmasq invocation as follows.
+        #   --interface=tap* # to listen on all TAP interfaces
+        #   --bind-dynamic instead of --bind-interfaces, to
+        #     automatically start listening on new TAP
+        #     interfaces as they appear
+        #   --bridge-interface=%s,tap* # to treat all TAP
+        #     interfaces as aliases of the DHCP port.
+        return [
+            '--bind-dynamic',
+            '--interface=%s' % device_name,
+            '--interface=tap*',
+            '--bridge-interface=%s,tap*' % device_name,
+        ]
