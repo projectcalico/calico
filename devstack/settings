@@ -1,0 +1,69 @@
+#                                                                      -*-sh-*-
+# Devstack settings that are wanted when using Calico
+# ===================================================
+
+# Disable services that Devstack starts by default, but that we don't
+# need for Calico networking demonstration: 'dstat' is a rolling
+# display of memory and CPU usage by the various OpenStack services
+# and agents; 'tempest' is OpenStack's high level testing framework;
+# and 'n-net' is Nova networking.
+disable_service dstat
+disable_service tempest
+disable_service n-net
+
+# Enable services that Devstack doesn't enable by default, but that we
+# _do_ want for Calico demonstration: 'q-svc' is the Neutron server;
+# 'q-dhcp' means the Neutron DHCP agent; and 'n-api-meta' is the Nova
+# metadata API service.
+enable_service q-svc
+enable_service q-dhcp
+enable_service n-api-meta
+
+# When we later launch Felix (Calico's agent), we do that as a service
+# named 'calico', and that only works if Devstack thinks that 'calico'
+# is enabled.  So do that here.
+enable_service calico
+
+# Calico uses vanilla OpenStack except for four Neutron changes that
+# are currently proposed and pending review on Gerrit.  So for Neutron
+# we point to Calico's forked Neutron repository on GitHub, and
+# specifically to a branch that contains a merge of those pending
+# changes into a recent master.
+NEUTRON_REPO=https://github.com/Metaswitch/calico-neutron.git
+NEUTRON_BRANCH=dhcp-for-routed-ifs
+
+# When Neutron is enabled, Devstack does agent-related installations,
+# configurations and service startups as directed by the value of
+# Q_AGENT.  Devstack doesn't actually include any code for the
+# 'calico' value, but the point here is that we want to avoid running
+# code for any of the agents that Devstack _does_ have code for, such
+# as openvswitch and linuxbridge.  So all we're doing here is setting
+# a value that Devstack will not recognize.
+Q_AGENT=calico
+
+# The following variables specify what will go into ml2_conf.ini for
+# the type_drivers, mechanism_drivers and tenant_network_types
+# settings.  For Calico networking we want to use the 'calico'
+# mechanism driver and the 'local' network type.
+Q_ML2_PLUGIN_TYPE_DRIVERS=local
+Q_ML2_PLUGIN_MECHANISM_DRIVERS=calico
+Q_ML2_TENANT_NETWORK_TYPE=local
+
+# Calico does not use namespaces.
+Q_USE_NAMESPACE=False
+
+# Setting ENABLED_TENANT_TUNNELS to False is needed to prevent
+# Devstack's ML2 setup from defaulting to setup (Q_TUNNEL_TYPES) for
+# GRE tunneling.  Setting ENABLED_TENANT_VLANS isn't strictly needed,
+# but we do it for consistency as it seems to form a pair with
+# ENABLED_TENANT_TUNNELS.
+ENABLE_TENANT_TUNNELS=False
+ENABLE_TENANT_VLANS=False
+
+# Devstack normally creates some initial Neutron networks for VMs to
+# attach to.  But it can't easily be made to do this in the way that
+# Calico wants, i.e. shared and with a 'local' network_type but no
+# segmentation ID.  So we tell Devstack not to create those initial
+# networks, and instead document the correct (for Calico) 'neutron
+# net-create' and 'neutron subnet-create' invocations in README.rst.
+NEUTRON_CREATE_INITIAL_NETWORKS=False

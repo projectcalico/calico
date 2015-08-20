@@ -1,0 +1,157 @@
+
+# Devstack plugin code for Calico
+# ===============================
+
+function install_configure_etcd {
+
+    # Install etcd from package sources (=> our PPA).
+    install_package etcd
+
+    # Stop the etcd service:
+    sudo service etcd stop || true
+
+    # Delete any existing etcd database:
+    sudo rm -rf /var/lib/etcd/*
+
+    # Mount a RAM disk at /var/lib/etcd:
+    sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+
+    # Add the following to the bottom of /etc/fstab so that the RAM
+    # disk gets reinstated at boot time:
+    # tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
+
+    IP=`hostname -I | awk '{print $1}'`
+
+    # Edit /etc/init/etcd.conf: Find the line which begins exec
+    # /usr/bin/etcd and edit it, substituting for <controller_fqdn>
+    # and <controller_ip> appropriately.
+    sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --name=\"$HOSTNAME\" \
+  --advertise-client-urls=\"http:\/\/$IP:2379,http:\/\/$IP:4001\" \
+  --listen-client-urls=\"http:\/\/0.0.0.0:2379,http:\/\/0.0.0.0:4001\" \
+  --listen-peer-urls \"http:\/\/0.0.0.0:2380\" \
+  --initial-advertise-peer-urls \"http:\/\/$IP:2380\" \
+  --initial-cluster-token \"$TOKEN\" \
+  --initial-cluster \"$HOSTNAME=http:\/\/$IP:2380\" \
+  --initial-cluster-state \"new\"/" /etc/init/etcd.conf
+
+    # Start the etcd service:
+    sudo service etcd start
+}
+
+mode=$1				# stack, unstack or clean
+phase=$2			# pre-install, install, post-config or extra
+
+if is_service_enabled calico; then
+    case $mode in
+
+	stack)
+	    # Called by stack.sh four times for different phases of
+	    # its run.
+	    echo Calico plugin: stack
+
+	    case $phase in
+
+		pre-install)
+		    # Called after system (OS) setup is complete and
+		    # before project source is installed.
+		    echo Calico plugin: pre-install
+
+		    # Add Calico PPA as a package source.
+		    sudo apt-add-repository -y ppa:project-calico/kilo-testing
+		    REPOS_UPDATED=False
+
+		    ;;
+
+		install)
+		    # Called after the layer 1 and 2 projects source
+		    # and their dependencies have been installed.
+		    echo Calico plugin: install
+
+		    # Upgrade dnsmasq.
+		    install_package dnsmasq-base dnsmasq-utils
+
+		    # Install ipset.
+		    install_package ipset
+
+		    # Install and configure etcd.
+		    install_configure_etcd
+
+		    # Install the core Calico code.
+		    CALICO_DIR=${DEST}/calico
+		    git_clone ${CALICO_REPO:-https://github.com/projectcalico/calico.git} $CALICO_DIR ${CALICO_BRANCH:-routed}
+		    cd $CALICO_DIR
+		    pip_install -I .
+
+		    # Install networking-calico.
+		    pushd ../networking-calico
+		    pip_install -I .
+		    popd
+
+		    # Also install python-etcd from the Calico project's GitHub.
+		    pip_install -I git+git://github.com/projectcalico/python-etcd.git@nj-relax-urllib3-cap
+
+		    ;;
+
+		post-config)
+		    # Called after the layer 1 and 2 services have
+		    # been configured. All configuration files for
+		    # enabled services should exist at this point.
+		    echo Calico plugin: post-config
+
+
+		    # Update qemu configuration (shouldn't be anything
+		    # in there so safe to blow away)
+		    sudo sh -c "cat > /etc/libvirt/qemu.conf" << EOF
+user = "root"
+group = "root"
+cgroup_device_acl = [
+    "/dev/null", "/dev/full", "/dev/zero",
+    "/dev/random", "/dev/urandom",
+    "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
+    "/dev/rtc", "/dev/hpet", "/dev/net/tun",
+]
+EOF
+
+		    # Do DHCP-related configurations.
+		    iniset $NEUTRON_CONF DEFAULT dhcp_agents_per_network 9999
+		    iniset $Q_DHCP_CONF_FILE DEFAULT dhcp_agent_manager neutron.agent.dhcp_agent.DhcpAgentWithStateReport
+		    iniset $Q_DHCP_CONF_FILE DEFAULT interface_driver networking_calico.agent.linux.interface.RoutedInterfaceDriver
+
+		    ;;
+
+		extra)
+		    # Called near the end after layer 1 and 2 services
+		    # have been started.
+		    echo Calico plugin: extra
+
+		    # Run Felix and tail its log file.
+		    run_process calico "sudo /usr/local/bin/calico-felix"
+		    tail_log calico-log "/var/log/calico/felix.log"
+
+		    ;;
+
+		*)
+		    echo Calico plugin: unexpected phase $phase
+		    ;;
+
+	    esac
+	    ;;
+
+	unstack)
+	    # Called by unstack.sh before other services are shut
+	    # down.
+	    echo Calico plugin: unstack
+	    ;;
+
+	clean)
+	    # Called by clean.sh before other services are cleaned,
+	    # but after unstack.sh has been called.
+	    echo Calico plugin: clean
+	    ;;
+
+	*)
+	    echo Calico plugin: unexpected mode $mode
+	    ;;
+
+    esac
+fi
