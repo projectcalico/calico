@@ -6,4 +6,4 @@ gunicorn
 subprocess32
 git+https://github.com/projectcalico/python-etcd.git
 git+https://github.com/projectcalico/calico.git@1.0.0
-git+https://github.com/projectcalico/libcalico.git@v0.1.2
+git+https://github.com/projectcalico/libcalico.git@v0.1.4

@@ -202,7 +202,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes,
 
     # Get IP address of host, if none was specified
     if not ip:
-        ips = get_host_ips(exclude=["docker0"])
+        ips = get_host_ips(exclude=["$docker0.*"])
         try:
             ip = ips.pop()
         except IndexError:
