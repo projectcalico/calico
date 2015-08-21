@@ -159,12 +159,12 @@ def container_add(container_id, ip, interface):
         # The ID is a path. Don't do any docker lookups
         workload_id = escape_etcd(container_id)
         orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
-        namespace_path = container_id
+        namespace = netns.Namespace(container_id)
     else:
         info = get_container_info_or_exit(container_id)
         workload_id = info["Id"]
         orchestrator_id = DOCKER_ORCHESTRATOR_ID
-        namespace_path = "/proc/%s/ns/net" % info["State"]["Pid"]
+        namespace = netns.PidNamespace(info["State"]["Pid"])
 
         # Check the container is actually running.
         if not info["State"]["Running"]:
@@ -232,12 +232,12 @@ def container_add(container_id, ip, interface):
     # Create the veth, move into the container namespace, add the IP and
     # set up the default routes.
     netns.create_veth(ep.name, ep.temp_interface_name)
-    netns.move_veth_into_ns(namespace_path, ep.temp_interface_name, interface)
-    netns.add_ip_to_ns_veth(namespace_path, ip, interface)
-    netns.add_ns_default_route(namespace_path, next_hop, interface)
+    netns.move_veth_into_ns(namespace, ep.temp_interface_name, interface)
+    netns.add_ip_to_ns_veth(namespace, ip, interface)
+    netns.add_ns_default_route(namespace, next_hop, interface)
 
     # Grab the MAC assigned to the veth in the namespace.
-    ep.mac = netns.get_ns_veth_mac(namespace_path, interface)
+    ep.mac = netns.get_ns_veth_mac(namespace, interface)
 
     # Register the endpoint with Felix.
     client.set_endpoint(ep)
@@ -323,12 +323,12 @@ def container_ip_add(container_id, ip, interface):
     if container_id.startswith("/") and os.path.exists(container_id):
         # The ID is a path. Don't do any docker lookups
         workload_id = escape_etcd(container_id)
-        namespace_path = container_id
+        namespace = netns.Namespace(container_id)
         orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
     else:
         info = get_container_info_or_exit(container_id)
         workload_id = info["Id"]
-        namespace_path = "/proc/%s/ns/net" % info["State"]["Pid"]
+        namespace = netns.PidNamespace(info["State"]["Pid"])
         orchestrator_id = DOCKER_ORCHESTRATOR_ID
 
         # Check the container is actually running.
@@ -364,7 +364,7 @@ def container_ip_add(container_id, ip, interface):
         sys.exit(1)
 
     try:
-        netns.add_ip_to_ns_veth(namespace_path, address, interface)
+        netns.add_ip_to_ns_veth(namespace, address, interface)
     except CalledProcessError:
         print "Error updating networking in container. Aborting."
         if address.version == 4:
@@ -397,12 +397,12 @@ def container_ip_remove(container_id, ip, interface):
     if container_id.startswith("/") and os.path.exists(container_id):
         # The ID is a path. Don't do any docker lookups
         workload_id = escape_etcd(container_id)
-        namespace_path = container_id
+        namespace = netns.Namespace(container_id)
         orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
     else:
         info = get_container_info_or_exit(container_id)
         workload_id = info["Id"]
-        namespace_path = "/proc/%s/ns/net" % info["State"]["Pid"]
+        namespace = netns.PidNamespace(info["State"]["Pid"])
         orchestrator_id = DOCKER_ORCHESTRATOR_ID
 
         # Check the container is actually running.
@@ -436,7 +436,7 @@ def container_ip_remove(container_id, ip, interface):
         sys.exit(1)
 
     try:
-        netns.remove_ip_from_ns_veth(namespace_path, address, interface)
+        netns.remove_ip_from_ns_veth(namespace, address, interface)
 
     except CalledProcessError:
         print "Error updating networking in container. Aborting."

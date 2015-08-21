@@ -345,6 +345,8 @@ class TestContainer(unittest.TestCase):
         }
         m_endpoint = Mock()
         m_client.get_endpoint.return_value = m_endpoint
+        m_namespace = Mock()
+        m_netns.PidNamespace.return_value = m_namespace
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -367,9 +369,10 @@ class TestContainer(unittest.TestCase):
         m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
-        m_netns.add_ip_to_ns_veth.assert_called_once_with(
-            '/proc/Pid_info/ns/net', ip_addr, interface
-        )
+        m_netns.PidNamespace.assert_called_once_with("Pid_info")
+        m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
+                                                          ip_addr,
+                                                          interface)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
@@ -393,6 +396,8 @@ class TestContainer(unittest.TestCase):
         }
         m_endpoint = Mock()
         m_client.get_endpoint.return_value = m_endpoint
+        m_namespace = Mock()
+        m_netns.PidNamespace.return_value = m_namespace
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -415,9 +420,10 @@ class TestContainer(unittest.TestCase):
         m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
         m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
-        m_netns.add_ip_to_ns_veth.assert_called_once_with(
-            '/proc/Pid_info/ns/net', ip_addr, interface
-        )
+        m_netns.PidNamespace.assert_called_once_with("Pid_info")
+        m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
+                                                          ip_addr,
+                                                          interface)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
@@ -688,6 +694,8 @@ class TestContainer(unittest.TestCase):
         m_endpoint = Mock(spec=Endpoint)
         m_endpoint.ipv4_nets = ipv4_nets
         m_client.get_endpoint.return_value = m_endpoint
+        m_namespace = Mock()
+        m_netns.PidNamespace.return_value = m_namespace
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -707,11 +715,10 @@ class TestContainer(unittest.TestCase):
             workload_id=666
         )
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
-        m_netns.remove_ip_from_ns_veth.assert_called_once_with(
-            '/proc/Pid_info/ns/net',
-            IPAddress(ip),
-            interface
-        )
+        m_netns.PidNamespace.assert_called_once_with("Pid_info")
+        m_netns.remove_ip_from_ns_veth.assert_called_once_with(m_namespace,
+                                                               IPAddress(ip),
+                                                               interface)
         m_client.unassign_address.assert_called_once_with('pool', ip)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -735,6 +742,8 @@ class TestContainer(unittest.TestCase):
         m_endpoint = Mock(spec=Endpoint)
         m_endpoint.ipv6_nets = ipv6_nets
         m_client.get_endpoint.return_value = m_endpoint
+        m_namespace = Mock()
+        m_netns.PidNamespace.return_value = m_namespace
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -754,11 +763,10 @@ class TestContainer(unittest.TestCase):
             workload_id=666
         )
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
-        m_netns.remove_ip_from_ns_veth.assert_called_once_with(
-            '/proc/Pid_info/ns/net',
-            IPAddress(ip),
-            interface
-        )
+        m_netns.PidNamespace.assert_called_once_with("Pid_info")
+        m_netns.remove_ip_from_ns_veth.assert_called_once_with(m_namespace,
+                                                               IPAddress(ip),
+                                                               interface)
         m_client.unassign_address.assert_called_once_with('pool', ip)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
