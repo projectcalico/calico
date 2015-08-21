@@ -5,9 +5,9 @@ This tutorial is a continuation of the main
 you have the following hosts with IPv4 addresses configured.  Adjust the
 instructions accordingly.
 
-| hostname  | IP address   |		
-|-----------|--------------|		
-| calico-01 | 172.17.8.101 |		
+| hostname  | IP address   |
+|-----------|--------------|
+| calico-01 | 172.17.8.101 |
 | calico-02 | 172.17.8.102 |
 
 To connect your containers with IPv6, first make sure your Docker hosts each 
@@ -32,15 +32,15 @@ v6 routing.
 
 On calico-01
 
-    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
+    sudo calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
 
 On calico-02
 
-    calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d7::2 --libnetwork
+    sudo calicoctl node --ip=172.17.8.102 --ip6=fd80:24e2:f998:72d7::2 --libnetwork
 
 Then, you can start containers with IPv6 connectivity. By default, Calico is 
 configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 
-(`calicoctl pool add` to change this).
+(use `calicoctl pool add` to change this).
 
 On calico-01
 
@@ -53,7 +53,7 @@ Then get the IPv6 address of workload-F
 Note that we have used `ubuntu` instead of `busybox`.  Busybox doesn't support 
 IPv6 versions of network tools like ping.
 
-One calico-02
+On calico-02
 
     docker run --publish-service srvG.net4.calico --name workload-G -tid ubuntu
 

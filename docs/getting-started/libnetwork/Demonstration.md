@@ -82,5 +82,5 @@ the host.
 For example:
 
     calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
-    
+
 See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.

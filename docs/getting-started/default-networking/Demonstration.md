@@ -111,3 +111,15 @@ Also check that A cannot ping B (192.168.0.2) or D (192.168.0.4):
 
     docker exec workload-A ping -c 4 192.168.0.2
     docker exec workload-A ping -c 4 192.168.0.4
+
+## IPv6 (Optional)
+
+IPv6 networking is also supported.  If you are using IPv6 address spaces as
+well, start your Calico node passing in both the IPv4 and IPv6 addresses of
+the host.
+
+For example:
+
+    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
+
+See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.
