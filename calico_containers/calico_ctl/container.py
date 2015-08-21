@@ -443,7 +443,7 @@ def container_ip_remove(container_id, ip, interface):
         print "Error updating networking in container. Aborting."
         sys.exit(1)
 
-    client.unassign_address(pool, ip)
+    client.unassign_address(pool, address)
 
     print "IP %s removed from %s" % (ip, container_id)
 
