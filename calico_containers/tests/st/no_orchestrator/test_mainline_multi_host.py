@@ -29,28 +29,28 @@ class TestNoOrchestratorMultiHost(TestBase):
 
             # Use standard docker bridge networking for one and --net=none
             # for the other
-            node1 = host1.create_workload("node1")
-            node2 = host2.create_workload("node2", network=NET_NONE)
+            workload1 = host1.create_workload("workload1")
+            workload2 = host2.create_workload("workload2", network=NET_NONE)
 
             # Add the nodes to Calico networking.
-            host1.calicoctl("container add %s 192.168.1.1" % node1)
-            host2.calicoctl("container add %s 192.168.1.2" % node2)
+            host1.calicoctl("container add %s 192.168.1.1" % workload1)
+            host2.calicoctl("container add %s 192.168.1.2" % workload2)
 
             # Now add the profiles - one using set and one using append
-            host1.calicoctl("container %s profile set TEST_GROUP" % node1)
-            host2.calicoctl("container %s profile append TEST_GROUP" % node2)
+            host1.calicoctl("container %s profile set TEST_GROUP" % workload1)
+            host2.calicoctl("container %s profile append TEST_GROUP" % workload2)
 
             # TODO - assert on output of endpoint show and endpoint profile
             # show commands.
 
             # Check it works
-            node1.assert_can_ping("192.168.1.2", retries=3)
-            node2.assert_can_ping("192.168.1.1", retries=3)
+            workload1.assert_can_ping("192.168.1.2", retries=3)
+            workload2.assert_can_ping("192.168.1.1", retries=3)
 
             # Test the teardown commands
             host1.calicoctl("profile remove TEST_GROUP")
-            host1.calicoctl("container remove %s" % node1)
-            host2.calicoctl("container remove %s" % node2)
+            host1.calicoctl("container remove %s" % workload1)
+            host2.calicoctl("container remove %s" % workload2)
             host1.calicoctl("pool remove 192.168.0.0/16")
             host1.calicoctl("node stop")
             host2.calicoctl("node stop")

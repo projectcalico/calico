@@ -33,14 +33,14 @@ class TestContainerToHost(TestBase):
             host.calicoctl("profile add TEST")
 
             # Use standard docker bridge networking.
-            node1 = host.create_workload("node1")
+            workload1 = host.create_workload("workload1")
 
             # Add the nodes to Calico networking.
-            host.calicoctl("container add %s 192.168.100.1" % node1)
+            host.calicoctl("container add %s 192.168.100.1" % workload1)
 
             # Now add the profiles.
-            host.calicoctl("container %s profile set TEST" % node1)
+            host.calicoctl("container %s profile set TEST" % workload1)
 
             # Check it works.  Note that the profile allows all outgoing
             # traffic by default, and conntrack should allow the reply.
-            node1.assert_can_ping(host.ip, retries=10)
+            workload1.assert_can_ping(host.ip, retries=10)

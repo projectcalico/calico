@@ -82,6 +82,7 @@ def container(arguments):
                 info = get_container_info_or_exit(container_id)
                 workload_id = info["Id"]
                 orchestrator_id = DOCKER_ORCHESTRATOR_ID
+
         if arguments.get("ip"):
             if arguments.get("add"):
                 container_ip_add(arguments.get("<CONTAINER>"),
@@ -98,13 +99,13 @@ def container(arguments):
                                   arguments.get("--interface"))
                 if arguments.get("remove"):
                     container_remove(arguments.get("<CONTAINER>"))
-        if arguments.get("endpoint"):
+        elif arguments.get("endpoint"):
             endpoint.endpoint_show(hostname,
                                    orchestrator_id,
                                    workload_id,
                                    None,
                                    True)
-        if arguments.get("profile"):
+        elif arguments.get("profile"):
             if arguments.get("append"):
                 endpoint.endpoint_profile_append(hostname,
                                                  orchestrator_id,
