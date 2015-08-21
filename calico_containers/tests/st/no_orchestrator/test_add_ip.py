@@ -33,7 +33,6 @@ class TestAddIp(TestBase):
         """
         pass
 
-    @skip("Needs rewrite")
     def test_add_ip(self):
         """
         Test adding multiple IPs per workload.
@@ -42,65 +41,68 @@ class TestAddIp(TestBase):
         # TODO - add IPv6 testing here too
         with DockerHost('host') as host:
             # host.execute("docker run --net=calico:test -tid"
-            #              " --name=node1 busybox")
+            #              " --name=workload1 busybox")
             # ip11 = host.execute("docker inspect --format "
             #                     "'{{ .NetworkSettings.IPAddress }}' "
-            #                     "node1").rstrip()
+            #                     "workload1").rstrip()
             ip11 = "192.168.1.1"
             ip12 = "192.168.1.2"
             ip21 = "192.168.2.1"
             ip22 = "192.168.2.2"
             ip31 = "192.168.3.1"
 
-            node1 = host.create_workload("node1")
-            host.calicoctl("container add %s %s" % (node1, ip11))
-            node2 = host.create_workload("node2")
+            workload1 = host.create_workload("workload1")
+            host.calicoctl("container add %s %s" % (workload1, ip11))
+            workload2 = host.create_workload("workload2")
             host.calicoctl("container add %s %s --interface=hello" %
-                           (node2, ip12))
+                           (workload2, ip12))
 
             host.calicoctl("profile add TEST_GROUP")
-            host.calicoctl("profile TEST_GROUP member add %s" % node1)
-            host.calicoctl("profile TEST_GROUP member add %s" % node2)
+            host.calicoctl("container %s profile set TEST_GROUP " % workload1)
+            host.calicoctl("container %s profile set TEST_GROUP " % workload2)
 
-            node1.assert_can_ping(ip12, retries=3)
+            workload1.assert_can_ping(ip12, retries=3)
 
-            # Add two more addresses to node1 and one more to node2
-            host.calicoctl("container node1 ip add %s" % ip21)
-            host.calicoctl("container node1 ip add %s" % ip31)
+            # Add two more addresses to workload1 and one more to workload2
+            host.calicoctl("container %s ip add %s" % (workload1, ip21))
+            host.calicoctl("container %s ip add %s" % (workload1, ip31))
 
             host.calicoctl("container %s ip add %s --interface=hello" %
-                           (node2, ip22))
+                           (workload2, ip22))
 
-            node1.assert_can_ping(ip22)
-            node2.assert_can_ping(ip11)
-            node2.assert_can_ping(ip21)
-            node2.assert_can_ping(ip31)
+            workload1.assert_can_ping(ip22)
+            workload2.assert_can_ping(ip11)
+            workload2.assert_can_ping(ip21)
+            workload2.assert_can_ping(ip31)
 
+            #TODO Need to allow containers to be re-added to Calico networking
+            """
             # Now stop and restart node 1 and node 2.
-            host.execute("docker stop %s" % node1)
-            host.execute("docker stop %s" % node2)
-            host.execute("docker start %s" % node1)
-            host.execute("docker start %s" % node2)
+            host.execute("docker stop %s" % workload1)
+            host.execute("docker stop %s" % workload2)
+            host.execute("docker start %s" % workload1)
+            host.execute("docker start %s" % workload2)
 
             # Test pings between the IPs.
-            node1.assert_can_ping(ip12, retries=3)
-            node1.assert_can_ping(ip22)
-            node2.assert_can_ping(ip11)
-            node2.assert_can_ping(ip21)
-            node2.assert_can_ping(ip31)
+            workload1.assert_can_ping(ip12, retries=10)
+            workload1.assert_can_ping(ip22)
+            workload2.assert_can_ping(ip11)
+            workload2.assert_can_ping(ip21)
+            workload2.assert_can_ping(ip31)
 
             # Now remove and check can't ping the removed addresses.
-            host.calicoctl("container %s ip remove %s" % (node1, ip21))
+            host.calicoctl("container %s ip remove %s" % (workload1, ip21))
             host.calicoctl("container %s ip remove %s --interface=hello" %
-                           (node2, ip22))
-            node1.assert_can_ping(ip12)
-            node2.assert_can_ping(ip11)
+                           (workload2, ip22))
+            workload1.assert_can_ping(ip12)
+            workload2.assert_can_ping(ip11)
             with self.assertRaises(CalledProcessError):
-                node1.assert_can_ping(ip22)
+                workload1.assert_can_ping(ip22)
             with self.assertRaises(CalledProcessError):
-                node2.assert_can_ping(ip21)
-            node2.assert_can_ping(ip31)
+                workload2.assert_can_ping(ip21)
+            workload2.assert_can_ping(ip31)
 
             # Check that we can't remove addresses twice
             with self.assertRaises(CalledProcessError):
-                host.calicoctl("container %s ip remove %s" % (node1, ip21))
+                host.calicoctl("container %s ip remove %s" % (workload1, ip21))
+            """
