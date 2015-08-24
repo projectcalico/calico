@@ -11,7 +11,9 @@ The [Calico Kubernetes plugin](https://github.com/projectcalico/calico-docker/bl
 ### Declaring Policy
 To enforce a policy rule to your pod, add a `projectcalico.org/policy` key to the annotations section of your pod's metadata. This `projectcalico.org/policy` key should map to a single string which defines network behavior. Programming policy follows a simple syntax that can specify any combination of label*, protocol, source/dest ports, and source/dest net. The syntax for this can be seen below.
 
->*Note: Multiple labels per rule are unsupported in the current release of the plugin.
+>Note: Versions of `calico-kubernetes` before v0.2.0 use the annotation key `policy` in place of the latest namespaced annotation key `projectcalico.org/policy`
+
+>*Multiple labels per rule are unsupported in the current release of the plugin.
 
 ##### Policy Syntax
 ```
