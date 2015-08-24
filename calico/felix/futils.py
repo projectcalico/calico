@@ -100,13 +100,40 @@ def call_silent(args):
 
 
 class SpawnedProcess(Popen):
+    """
+    Version of gevent's Popen implementation that uses posix_spawn
+    instead of fork().
+
+    This is much more efficient in a large process because it avoids
+    the overhead of copying the memory-management tables, which
+    blocks the entire process.
+    """
+
     def _execute_child(self, args, executable, preexec_fn, close_fds,
                        cwd, env, universal_newlines,
                        startupinfo, creationflags, shell,
                        p2cread, p2cwrite,
                        c2pread, c2pwrite,
                        errread, errwrite):
-        """Execute program (POSIX version)"""
+        """
+        Executes the program using posix_spawn().
+
+        This is based on the method from the superclass but the
+        posix_spawn API forces a number of changes.  In particular:
+
+        * When using fork() FDs are manipulated in the child process
+          after the fork, but before the program is exec()ed.  With
+          posix_spawn() this is done by passing a data-structure to
+          the posix_spawn() call, which describes the FD manipulations
+          to perform.
+
+        * The fork() version waits until after the fork before
+          unsetting the non-blocking flag on the FDs that the child
+          has inherited.  In the posix_spawn() version, we cannot
+          do that after the fork so we dup the FDs in advance and
+          unset the flag on the duped FD, which we then pass to the
+          child.
+        """
 
         if preexec_fn is not None:
             raise NotImplementedError("preexec_fn not supported")
@@ -138,8 +165,12 @@ class SpawnedProcess(Popen):
 
         self._loop.install_sigchld()
 
+        # The FileActions object is an ordered list of FD operations for
+        # posix_spawn to do in the child process before it execs the new
+        # program.
         file_actions = FileActions()
-        # Close parent's pipe ends
+
+        # In the child, close parent's pipe ends.
         if p2cwrite is not None:
             file_actions.add_close(p2cwrite)
         if c2pread is not None:
@@ -147,9 +178,8 @@ class SpawnedProcess(Popen):
         if errread is not None:
             file_actions.add_close(errread)
 
-        # When duping fds, if there arises a situation
-        # where one of the fds is either 0, 1 or 2, it
-        # is possible that it is overwritten (#12607).
+        # When duping fds, if there arises a situation where one of the fds
+        # is either 0, 1 or 2, it is possible that it is overwritten (#12607).
         fds_to_close_in_parent = []
         if c2pwrite == 0:
             c2pwrite = os.dup(c2pwrite)
@@ -158,27 +188,26 @@ class SpawnedProcess(Popen):
             errwrite = os.dup(errwrite)
             fds_to_close_in_parent.append(errwrite)
 
-        # Dup fds for child
-        def _dup2(a, b):
-            if a is None:
-                a = b
+        # Dup stdin/out/err FDs in child.
+        def _dup2(dup_from, dup_to):
+            if dup_from is None:
+                # Pass through the existing FD.
+                dup_from = dup_to
             # Need to take a dup so we can remove the non-blocking flag
-            a_dup = os.dup(a)
-            log.debug("Duped %s as %s", a, a_dup)
+            a_dup = os.dup(dup_from)
+            log.debug("Duped %s as %s", dup_from, a_dup)
             fds_to_close_in_parent.append(a_dup)
             self._remove_nonblock_flag(a_dup)
-            file_actions.add_dup2(a_dup, b)
+            file_actions.add_dup2(a_dup, dup_to)
         _dup2(p2cread, 0)
         _dup2(c2pwrite, 1)
         _dup2(errwrite, 2)
 
-        # Close pipe fds.  Make sure we don't close the
-        # same fd more than once, or standard fds.
-        closed = set([None])
-        for fd in [p2cread, c2pwrite, errwrite]:
-            if fd not in closed and fd > 2:
+        # Close pipe fds in the child.  Make sure we don't close the same fd
+        # more than once, or standard fds.
+        for fd in set([p2cread, c2pwrite, errwrite]):
+            if fd > 2:
                 file_actions.add_close(fd)
-                closed.add(fd)
 
         gc_was_enabled = gc.isenabled()
         # FIXME Does this bug apply to posix_spawn version?
@@ -200,13 +229,14 @@ class SpawnedProcess(Popen):
             for fd in fds_to_close_in_parent:
                 os.close(fd)
 
-        # Parent
+        # Capture the SIGCHILD.
         self._watcher = self._loop.child(self.pid)
         self._watcher.start(self._on_child, self._watcher)
 
         if gc_was_enabled:
             gc.enable()
 
+        # Close the Child's pipe ends in the parent.
         if p2cread is not None and p2cwrite is not None:
             os.close(p2cread)
         if c2pwrite is not None and c2pread is not None:
