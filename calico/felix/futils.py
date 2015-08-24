@@ -24,6 +24,7 @@ Felix utilities.
 import collections
 import functools
 import hashlib
+import inspect
 import logging
 import os
 from types import StringTypes
@@ -34,6 +35,7 @@ from gevent import subprocess
 from gevent.subprocess import Popen
 import tempfile
 import time
+import pkg_resources
 from posix_spawn import posix_spawnp, FileActions
 
 try:
@@ -99,6 +101,9 @@ def call_silent(args):
         return e.retcode
 
 
+gevent_version = pkg_resources.get_distribution("gevent").parsed_version
+
+
 class SpawnedProcess(Popen):
     """
     Version of gevent's Popen implementation that uses posix_spawn
@@ -109,12 +114,44 @@ class SpawnedProcess(Popen):
     blocks the entire process.
     """
 
-    def _execute_child(self, args, executable, preexec_fn, close_fds,
-                       cwd, env, universal_newlines,
-                       startupinfo, creationflags, shell,
-                       p2cread, p2cwrite,
-                       c2pread, c2pwrite,
-                       errread, errwrite):
+    if gevent_version < pkg_resources.parse_version("1.1a1"):
+        # gevent 1.0.
+        def _execute_child(self, args, executable, preexec_fn, close_fds,
+                           cwd, env, universal_newlines,
+                           startupinfo, creationflags, shell,
+                           p2cread, p2cwrite,
+                           c2pread, c2pwrite,
+                           errread, errwrite):
+            self.__execute_child(args, executable, preexec_fn, close_fds,
+                                 cwd, env, universal_newlines,
+                                 startupinfo, creationflags, shell,
+                                 p2cread, p2cwrite,
+                                 c2pread, c2pwrite,
+                                 errread, errwrite)
+    else:
+        # gevent 1.1 changed the API slightly.
+        def _execute_child(self, args, executable, preexec_fn, close_fds,
+                           pass_fds, cwd, env, universal_newlines,
+                           startupinfo, creationflags, shell,
+                           p2cread, p2cwrite,
+                           c2pread, c2pwrite,
+                           errread, errwrite,
+                           restore_signals, start_new_session):
+            assert not pass_fds
+            assert not start_new_session
+            self.__execute_child(args, executable, preexec_fn, close_fds,
+                                 cwd, env, universal_newlines,
+                                 startupinfo, creationflags, shell,
+                                 p2cread, p2cwrite,
+                                 c2pread, c2pwrite,
+                                 errread, errwrite)
+
+    def __execute_child(self, args, executable, preexec_fn, close_fds,
+                        cwd, env, universal_newlines,
+                        startupinfo, creationflags, shell,
+                        p2cread, p2cwrite,
+                        c2pread, c2pwrite,
+                        errread, errwrite):
         """
         Executes the program using posix_spawn().
 
@@ -243,6 +280,15 @@ class SpawnedProcess(Popen):
             os.close(c2pwrite)
         if errwrite is not None and errread is not None:
             os.close(errwrite)
+
+
+# Check that our Popen subclass correctly overrides the superclass method, in
+# case upstream change the API.
+_popen_exc_args = inspect.getargspec(Popen._execute_child)
+_our_exc_args = inspect.getargspec(SpawnedProcess._execute_child)
+assert _popen_exc_args == _our_exc_args, "SpawnedProcess._execute_child " \
+                                         "does not correctly override " \
+                                         "Popen._execute_child"
 
 
 def check_call(args, input_str=None):
