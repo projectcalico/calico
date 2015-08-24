@@ -198,6 +198,13 @@ please get in touch with us and we'll be happy to help you through the process.
         cd python-etcd-master
         python setup.py install
 
+5. Install python-posix-spawn::
+
+        curl -L https://github.com/projectcalico/python-posix-spawn/releases/download/v0.2.post6/posix-spawn-0.2.post6.tar.gz -o posix-spawn.tar.gz
+        tar xvf posix-spawn.tar.gz
+        cd posix-spawn-0.2.post6
+        python setup.py install
+
 Etcd Proxy Install
 ------------------
 
