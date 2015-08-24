@@ -12,6 +12,7 @@ Depends:
  bird,
  calico-common (= ${binary:Version}),
  calico-felix (= ${binary:Version}),
+ python-posix-spawn,
  neutron-dhcp-agent,
  iptables-persistent,
  ${misc:Depends},

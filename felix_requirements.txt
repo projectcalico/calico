@@ -2,3 +2,4 @@ gevent
 greenlet
 netaddr
 python-etcd>=0.3.3-calico-2
+posix-spawn>=0.2.post6

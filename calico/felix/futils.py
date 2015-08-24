@@ -24,13 +24,19 @@ Felix utilities.
 import collections
 import functools
 import hashlib
+import inspect
 import logging
 import os
 from types import StringTypes
+import types
+import gc
 import gevent.lock
 from gevent import subprocess
+from gevent.subprocess import Popen
 import tempfile
 import time
+import pkg_resources
+from posix_spawn import posix_spawnp, FileActions
 
 try:
     import resource
@@ -95,6 +101,196 @@ def call_silent(args):
         return e.retcode
 
 
+gevent_version = pkg_resources.get_distribution("gevent").parsed_version
+
+
+class SpawnedProcess(Popen):
+    """
+    Version of gevent's Popen implementation that uses posix_spawn
+    instead of fork().
+
+    This is much more efficient in a large process because it avoids
+    the overhead of copying the memory-management tables, which
+    blocks the entire process.
+    """
+
+    if gevent_version < pkg_resources.parse_version("1.1a1"):
+        # gevent 1.0.
+        def _execute_child(self, args, executable, preexec_fn, close_fds,
+                           cwd, env, universal_newlines,
+                           startupinfo, creationflags, shell,
+                           p2cread, p2cwrite,
+                           c2pread, c2pwrite,
+                           errread, errwrite):
+            self.__execute_child(args, executable, preexec_fn, close_fds,
+                                 cwd, env, universal_newlines,
+                                 startupinfo, creationflags, shell,
+                                 p2cread, p2cwrite,
+                                 c2pread, c2pwrite,
+                                 errread, errwrite)
+    else:
+        # gevent 1.1 changed the API slightly.
+        def _execute_child(self, args, executable, preexec_fn, close_fds,
+                           pass_fds, cwd, env, universal_newlines,
+                           startupinfo, creationflags, shell,
+                           p2cread, p2cwrite,
+                           c2pread, c2pwrite,
+                           errread, errwrite,
+                           restore_signals, start_new_session):
+            assert not pass_fds
+            assert not start_new_session
+            self.__execute_child(args, executable, preexec_fn, close_fds,
+                                 cwd, env, universal_newlines,
+                                 startupinfo, creationflags, shell,
+                                 p2cread, p2cwrite,
+                                 c2pread, c2pwrite,
+                                 errread, errwrite)
+
+    def __execute_child(self, args, executable, preexec_fn, close_fds,
+                        cwd, env, universal_newlines,
+                        startupinfo, creationflags, shell,
+                        p2cread, p2cwrite,
+                        c2pread, c2pwrite,
+                        errread, errwrite):
+        """
+        Executes the program using posix_spawn().
+
+        This is based on the method from the superclass but the
+        posix_spawn API forces a number of changes.  In particular:
+
+        * When using fork() FDs are manipulated in the child process
+          after the fork, but before the program is exec()ed.  With
+          posix_spawn() this is done by passing a data-structure to
+          the posix_spawn() call, which describes the FD manipulations
+          to perform.
+
+        * The fork() version waits until after the fork before
+          unsetting the non-blocking flag on the FDs that the child
+          has inherited.  In the posix_spawn() version, we cannot
+          do that after the fork so we dup the FDs in advance and
+          unset the flag on the duped FD, which we then pass to the
+          child.
+        """
+
+        if preexec_fn is not None:
+            raise NotImplementedError("preexec_fn not supported")
+        if close_fds:
+            raise NotImplementedError("close_fds not implemented")
+        if cwd:
+            raise NotImplementedError("cwd not implemented")
+        if universal_newlines:
+            raise NotImplementedError()
+        assert startupinfo is None and creationflags == 0
+
+        log.debug("Pipes: p2c %s, %s; c2p %s, %s; err %s, %s",
+                  p2cread, p2cwrite,
+                  c2pread, c2pwrite,
+                  errread, errwrite)
+
+        if isinstance(args, types.StringTypes):
+            args = [args]
+        else:
+            args = [a.encode("ascii") for a in args]
+
+        if shell:
+            args = ["/bin/sh", "-c"] + args
+            if executable:
+                args[0] = executable
+
+        if executable is None:
+            executable = args[0]
+
+        self._loop.install_sigchld()
+
+        # The FileActions object is an ordered list of FD operations for
+        # posix_spawn to do in the child process before it execs the new
+        # program.
+        file_actions = FileActions()
+
+        # In the child, close parent's pipe ends.
+        if p2cwrite is not None:
+            file_actions.add_close(p2cwrite)
+        if c2pread is not None:
+            file_actions.add_close(c2pread)
+        if errread is not None:
+            file_actions.add_close(errread)
+
+        # When duping fds, if there arises a situation where one of the fds
+        # is either 0, 1 or 2, it is possible that it is overwritten (#12607).
+        fds_to_close_in_parent = []
+        if c2pwrite == 0:
+            c2pwrite = os.dup(c2pwrite)
+            fds_to_close_in_parent.append(c2pwrite)
+        if errwrite == 0 or errwrite == 1:
+            errwrite = os.dup(errwrite)
+            fds_to_close_in_parent.append(errwrite)
+
+        # Dup stdin/out/err FDs in child.
+        def _dup2(dup_from, dup_to):
+            if dup_from is None:
+                # Pass through the existing FD.
+                dup_from = dup_to
+            # Need to take a dup so we can remove the non-blocking flag
+            a_dup = os.dup(dup_from)
+            log.debug("Duped %s as %s", dup_from, a_dup)
+            fds_to_close_in_parent.append(a_dup)
+            self._remove_nonblock_flag(a_dup)
+            file_actions.add_dup2(a_dup, dup_to)
+        _dup2(p2cread, 0)
+        _dup2(c2pwrite, 1)
+        _dup2(errwrite, 2)
+
+        # Close pipe fds in the child.  Make sure we don't close the same fd
+        # more than once, or standard fds.
+        for fd in set([p2cread, c2pwrite, errwrite]):
+            if fd > 2:
+                file_actions.add_close(fd)
+
+        gc_was_enabled = gc.isenabled()
+        # FIXME Does this bug apply to posix_spawn version?
+        try:
+            # Disable gc to avoid bug where gc -> file_dealloc ->
+            # write to stderr -> hang.  http://bugs.python.org/issue1336
+            gc.disable()
+            self.pid = posix_spawnp(
+                executable,
+                args,
+                file_actions=file_actions,
+                env=env,
+            )
+        except:
+            if gc_was_enabled:
+                gc.enable()
+            raise
+        finally:
+            for fd in fds_to_close_in_parent:
+                os.close(fd)
+
+        # Capture the SIGCHILD.
+        self._watcher = self._loop.child(self.pid)
+        self._watcher.start(self._on_child, self._watcher)
+
+        if gc_was_enabled:
+            gc.enable()
+
+        # Close the Child's pipe ends in the parent.
+        if p2cread is not None and p2cwrite is not None:
+            os.close(p2cread)
+        if c2pwrite is not None and c2pread is not None:
+            os.close(c2pwrite)
+        if errwrite is not None and errread is not None:
+            os.close(errwrite)
+
+
+# Check that our Popen subclass correctly overrides the superclass method, in
+# case upstream change the API.
+_popen_exc_args = inspect.getargspec(Popen._execute_child)
+_our_exc_args = inspect.getargspec(SpawnedProcess._execute_child)
+assert _popen_exc_args == _our_exc_args, "SpawnedProcess._execute_child " \
+                                         "does not correctly override " \
+                                         "Popen._execute_child"
+
+
 def check_call(args, input_str=None):
     """
     Substitute for the subprocess.check_call function. It has the following
@@ -116,10 +312,10 @@ def check_call(args, input_str=None):
     stdin = subprocess.PIPE if input_str is not None else None
 
     with _call_semaphore:
-        proc = subprocess.Popen(args,
-                                stdin=stdin,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+        proc = SpawnedProcess(args,
+                              stdin=stdin,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate(input=input_str)
 
     retcode = proc.returncode
