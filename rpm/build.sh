@@ -23,7 +23,7 @@ dobuild () {
 
     # Clone or update the repository from Github.
     cd ~/rpmbuild
-    [ -d $repo ] || git clone https://github.com/Metaswitch/${repo}.git
+    [ -d $repo ] || git clone https://github.com/projectcalico/${repo}.git
     cd $repo
     git fetch origin
     git reset --hard origin/rpm
