@@ -1,7 +1,6 @@
 .PHONY: all binary ut clean
 
-BUILD_DIR=build_calico_rkt
-BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
+BUILD_FILES=Dockerfile requirements.txt
 
 default: all
 all: test
@@ -10,7 +9,7 @@ test: ut
 
 # Build a new docker image to be used by binary or tests
 rktbuild.created: $(BUILD_FILES)
-	cd $(BUILD_DIR); docker build -t calico/rkt-build .
+	docker build -t calico/rkt-build .
 	touch rktbuild.created
 
 dist/calico_rkt: rktbuild.created
