@@ -5,5 +5,6 @@ flask
 gunicorn
 subprocess32
 git+https://github.com/projectcalico/python-etcd.git
-git+https://github.com/projectcalico/calico.git@1.0.0
-git+https://github.com/projectcalico/libcalico.git@v0.1.4
+git+https://github.com/projectcalico/python-posix-spawn.git@smc-debianize#egg=posix-spawn
+git+https://github.com/projectcalico/calico.git
+git+https://github.com/projectcalico/libcalico.git

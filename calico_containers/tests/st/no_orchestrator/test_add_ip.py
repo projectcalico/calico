@@ -33,18 +33,13 @@ class TestAddIp(TestBase):
         """
         pass
 
-    def test_add_ip(self):
+    def test_add_remove_ip(self):
         """
-        Test adding multiple IPs per workload.
+        Test adding and removing multiple IPs per workload.
         """
         # TODO - split this up into multiple tests
         # TODO - add IPv6 testing here too
         with DockerHost('host') as host:
-            # host.execute("docker run --net=calico:test -tid"
-            #              " --name=workload1 busybox")
-            # ip11 = host.execute("docker inspect --format "
-            #                     "'{{ .NetworkSettings.IPAddress }}' "
-            #                     "workload1").rstrip()
             ip11 = "192.168.1.1"
             ip12 = "192.168.1.2"
             ip21 = "192.168.2.1"
@@ -75,13 +70,26 @@ class TestAddIp(TestBase):
             workload2.assert_can_ping(ip21)
             workload2.assert_can_ping(ip31)
 
-            #TODO Need to allow containers to be re-added to Calico networking
-            """
             # Now stop and restart node 1 and node 2.
             host.execute("docker stop %s" % workload1)
             host.execute("docker stop %s" % workload2)
             host.execute("docker start %s" % workload1)
             host.execute("docker start %s" % workload2)
+
+            # With default networking, after a container is stopped it is
+            # necessary to add it back into Calico networking.  Remove the
+            # containers from Calico networking and then add them back in.
+            host.calicoctl("container remove %s" % workload1)
+            host.calicoctl("container remove %s" % workload2)
+            host.calicoctl("container add %s %s" % (workload1, ip11))
+            host.calicoctl("container add %s %s --interface=hello" %
+                           (workload2, ip12))
+            host.calicoctl("container %s profile set TEST_GROUP " % workload1)
+            host.calicoctl("container %s profile set TEST_GROUP " % workload2)
+            host.calicoctl("container %s ip add %s" % (workload1, ip21))
+            host.calicoctl("container %s ip add %s" % (workload1, ip31))
+            host.calicoctl("container %s ip add %s --interface=hello" %
+                           (workload2, ip22))
 
             # Test pings between the IPs.
             workload1.assert_can_ping(ip12, retries=10)
@@ -96,13 +104,10 @@ class TestAddIp(TestBase):
                            (workload2, ip22))
             workload1.assert_can_ping(ip12)
             workload2.assert_can_ping(ip11)
-            with self.assertRaises(CalledProcessError):
-                workload1.assert_can_ping(ip22)
-            with self.assertRaises(CalledProcessError):
-                workload2.assert_can_ping(ip21)
+            workload1.assert_cant_ping(ip22, retries=3)
+            workload2.assert_cant_ping(ip21, retries=3)
             workload2.assert_can_ping(ip31)
 
             # Check that we can't remove addresses twice
             with self.assertRaises(CalledProcessError):
                 host.calicoctl("container %s ip remove %s" % (workload1, ip21))
-            """

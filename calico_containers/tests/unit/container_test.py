@@ -719,7 +719,8 @@ class TestContainer(unittest.TestCase):
         m_netns.remove_ip_from_ns_veth.assert_called_once_with(m_namespace,
                                                                IPAddress(ip),
                                                                interface)
-        m_client.unassign_address.assert_called_once_with('pool', ip)
+        m_client.unassign_address.assert_called_once_with('pool',
+                                                          IPAddress(ip))
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
@@ -767,7 +768,8 @@ class TestContainer(unittest.TestCase):
         m_netns.remove_ip_from_ns_veth.assert_called_once_with(m_namespace,
                                                                IPAddress(ip),
                                                                interface)
-        m_client.unassign_address.assert_called_once_with('pool', ip)
+        m_client.unassign_address.assert_called_once_with('pool',
+                                                          IPAddress(ip))
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
