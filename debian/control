@@ -12,7 +12,6 @@ Depends:
  bird,
  calico-common (= ${binary:Version}),
  calico-felix (= ${binary:Version}),
- python-posix-spawn,
  neutron-dhcp-agent,
  iptables-persistent,
  ${misc:Depends},
@@ -75,6 +74,7 @@ Depends:
  python-netaddr,
  python-gevent,
  python-etcd (>= 0.3.3-1calico0.15),
+ python-posix-spawn,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
