@@ -113,7 +113,6 @@ class TestIptablesUpdater(BaseTestCase):
         self.ipt.rewrite_chains(
             {"foo": ["--append foo --jump bar"]},
             {"foo": set(["bar"])},
-            suppress_upd_log=True,
             async=True,
             callback=cb,
         )

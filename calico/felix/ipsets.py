@@ -109,6 +109,7 @@ class IpsetManager(ReferenceManager):
             if self._is_starting_or_live(tag_id):
                 self._update_active_ipset(tag_id)
             self._maybe_yield()
+        _log.info("Sent updates to %s updated tags", len(self._dirty_tags))
         self._dirty_tags.clear()
 
     @property
@@ -424,10 +425,8 @@ class IpsetManager(ReferenceManager):
         operation.  It also avoid wasted effort if tags are flapping.
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
-        _log.info("Finishing batch, sending updates to any dirty tags..")
         self._update_dirty_active_ipsets()
         self._force_reprogram = False
-        _log.info("Finished sending updates to dirty tags.")
 
 
 class EndpointData(object):
