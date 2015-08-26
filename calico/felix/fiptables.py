@@ -201,8 +201,7 @@ class IptablesUpdater(Actor):
 
     @actor_message()
     def rewrite_chains(self, update_calls_by_chain,
-                       dependent_chains, callback=None,
-                       suppress_upd_log=False):
+                       dependent_chains, callback=None):
         """
         Atomically apply a set of updates to the table.
 
@@ -217,12 +216,9 @@ class IptablesUpdater(Actor):
         """
         # We actually apply the changes in _finish_msg_batch().  Index the
         # changes by table and chain.
-        if suppress_upd_log:
-            _log.info("Iptables update to %s chains",
-                      len(update_calls_by_chain))
-        else:
-            _log.info("Iptables update: %s", update_calls_by_chain)
-            _log.info("Iptables deps: %s", dependent_chains)
+        _log.info("iptables update to chains %s", update_calls_by_chain.keys())
+        _log.debug("iptables update: %s", update_calls_by_chain)
+        _log.debug("iptables deps: %s", dependent_chains)
         self._stats.increment("Chain rewrites")
         for chain, updates in update_calls_by_chain.iteritems():
             # TODO: double-check whether this flush is needed.
