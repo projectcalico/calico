@@ -38,10 +38,13 @@ HOSTNAME = socket.gethostname()
 NETNS_ROOT = '/var/lib/rkt/pods/run'
 
 _log = logging.getLogger(__name__)
-_datastore_client = IPAMClient()
+datastore_client = IPAMClient()
 
 
 def calico_rkt(args):
+    """
+    Orchestrate top level function
+    """
     if args['command'] == 'ADD':
         create(args)
     elif args['command'] == 'DEL':
@@ -59,19 +62,22 @@ def create(args):
     _log.info('Configuring pod %s' % container_id)
     netns_path = '%s/%s/%s' % (NETNS_ROOT, container_id, netns)
 
-    try:
-        endpoint, ip = _create_calico_endpoint(container_id=container_id,
-                                               netns_path=netns_path,
-                                               interface=interface,
-                                               subnet=subnet)
+    endpoint = _create_calico_endpoint(container_id=container_id,
+                                           netns_path=netns_path,
+                                           interface=interface,
+                                           subnet=subnet)
 
-        _set_profile_on_endpoint(endpoint=endpoint,
-                                 profile_name=net_name,
-                                 ip=ip)
-    except CalledProcessError as e:
-        _log.error('Error code %d creating pod networking: %s\n%s' % (
-            e.returncode, e.output, e))
-        sys.exit(1)
+    _set_profile_on_endpoint(endpoint=endpoint,
+                             profile_name=net_name)
+
+    dump = json.dumps(
+        {
+            "ip4": {
+                "ip": "%s" % endpoint.ipv4_nets.copy().pop()
+            }
+        })
+    _log.info('Dumping info to rkt: %s' % dump)
+    print(dump)
 
     _log.info('Finished Creating pod %s' % container_id)
 
@@ -89,15 +95,13 @@ def delete(args):
                       container_id=container_id)
 
     # Delete profile if only member
-    if _datastore_client.profile_exists(net_name) and \
-       len(_datastore_client.get_profile_members(net_name)) < 1:
+    if datastore_client.profile_exists(net_name) and \
+       len(datastore_client.get_profile_members(net_name)) < 1:
         try:
-            _log.info(
-                "Profile %s has no members, removing from datastore" % net_name)
-            _datastore_client.remove_profile(net_name)
+            _log.info("Profile %s has no members, removing from datastore" % net_name)
+            datastore_client.remove_profile(net_name)
         except:
-            _log.error(
-                "Cannot remove profile %s: Profile cannot be found." % container_id)
+            _log.error("Cannot remove profile %s: Profile cannot be found." % container_id)
             sys.exit(1)
 
 
@@ -109,18 +113,17 @@ def _create_calico_endpoint(container_id, netns_path, interface, subnet):
     _log.info('Configuring Calico networking.')
 
     try:
-        _ = _datastore_client.get_endpoint(hostname=HOSTNAME,
-                                           orchestrator_id=ORCHESTRATOR_ID,
-                                           workload_id=container_id)
+        _ = datastore_client.get_endpoint(hostname=HOSTNAME,
+                                          orchestrator_id=ORCHESTRATOR_ID,
+                                          workload_id=container_id)
     except KeyError:
         # Calico doesn't know about this container.  Continue.
         pass
     else:
-        _log.error(
-            "This container has already been configured with Calico Networking.")
+        _log.error("This container has already been configured with Calico Networking.")
         sys.exit(1)
 
-    endpoint, ip = _container_add(hostname=HOSTNAME,
+    endpoint = _container_add(hostname=HOSTNAME,
                                   orchestrator_id=ORCHESTRATOR_ID,
                                   container_id=container_id,
                                   netns_path=netns_path,
@@ -128,7 +131,7 @@ def _create_calico_endpoint(container_id, netns_path, interface, subnet):
                                   subnet=subnet)
 
     _log.info('Finished configuring network interface')
-    return endpoint, ip
+    return endpoint
 
 
 def _container_add(hostname, orchestrator_id, container_id, netns_path, interface, subnet):
@@ -136,26 +139,24 @@ def _container_add(hostname, orchestrator_id, container_id, netns_path, interfac
     Add a container to Calico networking
     Return Endpoint object and newly allocated IP
     """
-    # Allocate and Assign ip address through IPAM _datastore_client
-    pool = _generate_pool(subnet)
-    ip = _allocate_ip(pool)
+    # Allocate and Assign ip address through datastore_client
+    pool, ip = _assign_to_pool(subnet)
 
     # Create Endpoint object
     try:
-        ep = _datastore_client.create_endpoint(HOSTNAME, ORCHESTRATOR_ID,
-                                               container_id, [ip])
+        ep = datastore_client.create_endpoint(HOSTNAME, ORCHESTRATOR_ID,
+                                              container_id, [ip])
     except AddrFormatError:
         _log.error("This node is not configured for IPv%d. Unassigning IP "
                    "address %s then exiting." % ip.version, ip)
-        _datastore_client.unassign_address(pool, ip)
+        datastore_client.unassign_address(pool, ip)
         sys.exit(1)
 
     # Create the veth, move into the container namespace, add the IP and
     # set up the default routes.
     ep.mac = ep.provision_veth(Namespace(netns_path), interface)
-    _datastore_client.set_endpoint(ep)
-
-    return ep, ip
+    datastore_client.set_endpoint(ep)
+    return ep
 
 
 def _container_remove(hostname, orchestrator_id, container_id):
@@ -164,64 +165,63 @@ def _container_remove(hostname, orchestrator_id, container_id):
     """
     # Find the endpoint ID. We need this to find any ACL rules
     try:
-        endpoint = _datastore_client.get_endpoint(hostname=hostname,
-                                                  orchestrator_id=orchestrator_id,
-                                                  workload_id=container_id)
+        endpoint = datastore_client.get_endpoint(hostname=hostname,
+                                                 orchestrator_id=orchestrator_id,
+                                                 workload_id=container_id)
     except KeyError:
-        _log.error(
-            "Container %s doesn't contain any endpoints" % container_id)
+        _log.error("Container %s doesn't contain any endpoints" % container_id)
         sys.exit(1)
 
     # Remove any IP address assignments that this endpoint has
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
         assert(net.size == 1)
-        _datastore_client.unassign_address(None, net.ip)
+        datastore_client.unassign_address(None, net.ip)
 
     # Remove the endpoint
     netns.remove_veth(endpoint.name)
 
     # Remove the container from the datastore.
-    _datastore_client.remove_workload(hostname=hostname,
-                                      orchestrator_id=orchestrator_id,
-                                      workload_id=container_id)
+    datastore_client.remove_workload(hostname=hostname,
+                                     orchestrator_id=orchestrator_id,
+                                     workload_id=container_id)
 
     _log.info("Removed Calico interface from %s" % container_id)
 
 
-def _set_profile_on_endpoint(endpoint, profile_name, ip):
+def _set_profile_on_endpoint(endpoint, profile_name):
     """
     Configure the calico profile to the endpoint
     """
     _log.info('Configuring Pod Profile: %s' % profile_name)
 
-    if _datastore_client.profile_exists(profile_name):
-        _log.info(
-            "Profile with name %s already exists, applying to endpoint." % (profile_name))
+    if datastore_client.profile_exists(profile_name):
+        _log.info("Profile %s already exists, applying to endpoint." % (profile_name))
 
     else:
         _log.info("Creating profile %s." % (profile_name))
-        _datastore_client.create_profile(profile_name)
-        # _apply_default_rules(profile_name)
+        datastore_client.create_profile(profile_name)
+        # _assign_default_rules(profile_name)
 
     # Also set the profile for the workload.
-    _datastore_client.set_profiles_on_endpoint(profile_names=[profile_name],
-                                               endpoint_id=endpoint.endpoint_id)
-
-    dump = json.dumps(
-        {
-            "ip4": {
-                "ip": "%s/24" % ip
-            }
-        })
-    print(dump)
+    datastore_client.set_profiles_on_endpoint(profile_names=[profile_name],
+                                              endpoint_id=endpoint.endpoint_id)
 
 
-def _create_default_rules(profile):
+def _assign_default_rules(profile_name):
     """
-    Create a json dict of allow all rules for calico profiles
+    Generate a new profile rule list and update the datastore_client
+    :param profile_name: The profile to update
+    :type profile_name: string
+    :return:
     """
+    try:
+        profile = datastore_client.get_profile(profile_name)
+    except:
+        _log.error("Could not apply rules. Profile not found: %s, exiting" % profile_name)
+        sys.exit(1)
+
     rules_dict = {
-        "id": profile,
+        "id": profile_name,
         "inbound_rules": [
             {
                 "action": "allow",
@@ -233,55 +233,30 @@ def _create_default_rules(profile):
             },
         ],
     }
+
     rules_json = json.dumps(rules_dict, indent=2)
-    rules = Rules.from_json(rules_json)
-    return rules
+    profile_rules = Rules.from_json(rules_json)
+
+    datastore_client.profile_update_rules(profile)
+    _log.info("Finished applying default rules.")
 
 
-def _apply_default_rules(profile_name):
+def _assign_to_pool(subnet):
     """
-    Generate a new profile rule list and update the _datastore_client
-    :param profile_name: The profile to update
-    :type profile_name: string
-    :return:
-    """
-    try:
-        profile = _datastore_client.get_profile(profile_name)
-    except:
-        _log.error(
-            "Could not apply rules. Profile not found: %s, exiting" % profile_name)
-        sys.exit(1)
-
-    profile.rules = _create_default_rules(profile_name)
-    _datastore_client.profile_update_rules(profile)
-    _log.info("Finished applying rules.")
-
-
-def _generate_pool(subnet):
-    """
-    Take Input subnet (global), create IP pool in datastore
-    Will complete silently if it exists
-    return IPPool  object of subnet pool
+    Take subnet (str), create IP pool in datastore if none exists.
+    Allocate next available IP in pool
+    return IPPool, IPAddress
     """
     pool = IPPool(subnet)
     version = IPNetwork(subnet).version
-
-    _datastore_client.add_ip_pool(version, pool)
-    _log.info("Using Pool %s" % pool)
-
-    return pool
-
-
-def _allocate_ip(pool):
-    """
-    Determine next available IP for given pool and assign it
-    :param IPPool or IPNetwork pool: The pool to get assignments for.
-    :return: The next avail address from the pool
-    :rtype IPAddress object
-    """
+    datastore_client.add_ip_pool(version, pool)
     candidate = SequentialAssignment().allocate(pool)
+    candidate = IPAddress(candidate)
+
+    _log.info("Using Pool %s" % pool)
     _log.info("Using IP %s" % candidate)
-    return IPAddress(candidate)
+
+    return pool, candidate
 
 
 def validate_args(env, conf):
@@ -375,7 +350,7 @@ if __name__ == '__main__':
     hdlr.setFormatter(formatter)
     _log.addHandler(hdlr)
     _log.setLevel(logging.INFO)
-    
+
     # Environment
     env = os.environ.copy()
 
