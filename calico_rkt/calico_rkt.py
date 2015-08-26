@@ -52,7 +52,9 @@ def calico_rkt(args):
 
 
 def create(args):
-    """"Handle rkt pod-create event."""
+    """"
+    Handle rkt pod-create event.
+    """
     container_id = args['container_id']
     netns = args['netns']
     interface = args['interface']
@@ -83,7 +85,9 @@ def create(args):
 
 
 def delete(args):
-    """Cleanup after a pod."""
+    """
+    Cleanup after a pod.
+    """
     container_id = args['container_id']
     net_name = args['name']
 
@@ -174,7 +178,7 @@ def _container_remove(hostname, orchestrator_id, container_id):
 
     # Remove any IP address assignments that this endpoint has
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
-        assert(net.size == 1)
+        assert net.size == 1, "Net Size of endpoint's ip' is not 1. %s" % net
         datastore_client.unassign_address(None, net.ip)
 
     # Remove the endpoint
@@ -194,11 +198,8 @@ def _set_profile_on_endpoint(endpoint, profile_name):
     """
     _log.info('Configuring Pod Profile: %s' % profile_name)
 
-    if datastore_client.profile_exists(profile_name):
-        _log.info("Profile %s already exists, applying to endpoint." % (profile_name))
-
-    else:
-        _log.info("Creating profile %s." % (profile_name))
+    if not datastore_client.profile_exists(profile_name):
+        _log.info("Creating new profile %s." % (profile_name))
         datastore_client.create_profile(profile_name)
         # _assign_default_rules(profile_name)
 

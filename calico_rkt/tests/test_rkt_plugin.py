@@ -82,11 +82,13 @@ class RktPluginTest(unittest.TestCase):
            autospec=True)
     def test_create(self, m_set_profile, m_create_ep, m_client):
 
-        ip_ = '1.2.3.4/24'
+        ip_ = '1.2.3.4/32'
         path_ = '%s/%s/%s' % (NETNS_ROOT, ARGS['container_id'], ARGS['netns'])
 
         mock_ep = Mock()
-        m_create_ep.return_value = mock_ep, ip_
+        mock_ep.ipv4_nets = set()
+        mock_ep.ipv4_nets.add(ip_)
+        m_create_ep.return_value = mock_ep
 
         calico_rkt.create(ARGS)
 
@@ -96,7 +98,6 @@ class RktPluginTest(unittest.TestCase):
                                             subnet=ARGS['subnet'])
         m_set_profile.assert_called_once_with(endpoint=mock_ep,
                                               profile_name="test")
-
 
     @patch('calico_rkt.HOSTNAME',
            autospec=True)
