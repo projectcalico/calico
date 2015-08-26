@@ -2,23 +2,38 @@
 
 ## `sudo docker run` and environment variables.
 
-If you use `sudo` for commands like `docker run`, remember that your environment variables will not be transferred to the `sudo` environment.  You can set environment variables for `sudo` commands like this.
+If you use `sudo` for commands like `docker run`, remember that your environment 
+variables will not be transferred to the `sudo` environment.  You can set environment 
+variables for `sudo` commands like this.
 
     sudo DOCKER_HOST=localhost:2377 docker run -td -e CALICO_IP=192.168.100.1 busybox
 
 ## Ubuntu (or GNOME) NetworkManager
 
-Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before attempting to use Calico networking.
+Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before 
+attempting to use Calico networking.
 
-NetworkManager manipulates the routing table for interfaces in the default network namespace where Calico veth pairs are anchored for connections to containers.  This can interfere with the Calico agent's ability to route correctly. 
+NetworkManager manipulates the routing table for interfaces in the default network 
+namespace where Calico veth pairs are anchored for connections to containers.  
+This can interfere with the Calico agent's ability to route correctly.
+
+You can configure interfaces in the `/etc/network/interfaces` file if the 
+NetworkManager removes your host's interfaces. See the debian 
+[NetworkConfiguration](https://wiki.debian.org/NetworkConfiguration) 
+guide for more information.
 
 ## etcd.EtcdException: No more machines in the cluster
 
-If you see this exception, it means `calicoctl` can't communicate with your etcd cluster.  Ensure etcd is up and listening on `localhost:4001`
+If you see this exception, it means `calicoctl` can't communicate with your etcd 
+cluster.  Ensure etcd is up and listening on `localhost:4001`
 
 ## Basic checks
-Running `ip route` shows what routes have been programmed. Routes from other hosts should show that they are programmed by bird.
+Running `ip route` shows what routes have been programmed. Routes from other hosts 
+should show that they are programmed by bird.
 
-If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS image is out of date.  Use `vagrant box update` to pull the new version.  I recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
+If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS 
+image is out of date.  Use `vagrant box update` to pull the new version.  I 
+recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 
-If you hit issues, please raise tickets. Diags can be collected with the `sudo ./calicoctl diags` command.
+If you hit issues, please raise tickets. Diags can be collected with the 
+`sudo ./calicoctl diags` command.
