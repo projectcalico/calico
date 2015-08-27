@@ -44,6 +44,8 @@ datastore_client = IPAMClient()
 def calico_rkt(args):
     """
     Orchestrate top level function
+
+    :param args: dict of values to pass to other functions (see: validate_args)
     """
     if args['command'] == 'ADD':
         create(args)
@@ -54,6 +56,9 @@ def calico_rkt(args):
 def create(args):
     """"
     Handle rkt pod-create event.
+    Print allocated IP as json to STDOUT (req for rkt)
+
+    :param args: dict of values to pass to other functions (see: validate_args)
     """
     container_id = args['container_id']
     netns = args['netns']
@@ -65,9 +70,9 @@ def create(args):
     netns_path = '%s/%s/%s' % (NETNS_ROOT, container_id, netns)
 
     endpoint = _create_calico_endpoint(container_id=container_id,
-                                           netns_path=netns_path,
-                                           interface=interface,
-                                           subnet=subnet)
+                                       netns_path=netns_path,
+                                       interface=interface,
+                                       subnet=subnet)
 
     _set_profile_on_endpoint(endpoint=endpoint,
                              profile_name=net_name)
@@ -87,6 +92,8 @@ def create(args):
 def delete(args):
     """
     Cleanup after a pod.
+
+    :param args: dict of values to pass to other functions (see: validate_args)
     """
     container_id = args['container_id']
     net_name = args['name']
@@ -113,6 +120,12 @@ def _create_calico_endpoint(container_id, netns_path, interface, subnet):
     """
     Configure the Calico interface for a pod.
     Return Endpoint and IP
+
+    :param container_id (str):
+    :param netns_path (str): namespace path
+    :param interface (str): iface to use
+    :param subnet (str): Subnet to allocate IP to
+    :rtype Endpoint: Endpoint created
     """
     _log.info('Configuring Calico networking.')
 
@@ -128,11 +141,11 @@ def _create_calico_endpoint(container_id, netns_path, interface, subnet):
         sys.exit(1)
 
     endpoint = _container_add(hostname=HOSTNAME,
-                                  orchestrator_id=ORCHESTRATOR_ID,
-                                  container_id=container_id,
-                                  netns_path=netns_path,
-                                  interface=interface,
-                                  subnet=subnet)
+                              orchestrator_id=ORCHESTRATOR_ID,
+                              container_id=container_id,
+                              netns_path=netns_path,
+                              interface=interface,
+                              subnet=subnet)
 
     _log.info('Finished configuring network interface')
     return endpoint
@@ -142,6 +155,14 @@ def _container_add(hostname, orchestrator_id, container_id, netns_path, interfac
     """
     Add a container to Calico networking
     Return Endpoint object and newly allocated IP
+
+    :param hostname (str): Host for enndpoint allocation
+    :param orchestrator_id (str): Specifies orchestrator ('rkt')
+    :param container_id (str):
+    :param netns_path (str): namespace path
+    :param interface (str): iface to use
+    :param subnet (str): Subnet to allocate IP to
+    :rtype Endpoint: Endpoint created
     """
     # Allocate and Assign ip address through datastore_client
     pool, ip = _assign_to_pool(subnet)
@@ -166,6 +187,10 @@ def _container_add(hostname, orchestrator_id, container_id, netns_path, interfac
 def _container_remove(hostname, orchestrator_id, container_id):
     """
     Remove the indicated container on this host from Calico networking
+
+    :param hostname (str): Host for enndpoint allocation
+    :param orchestrator_id (str): Specifies orchestrator ('rkt')
+    :param container_id (str):
     """
     # Find the endpoint ID. We need this to find any ACL rules
     try:
@@ -195,6 +220,9 @@ def _container_remove(hostname, orchestrator_id, container_id):
 def _set_profile_on_endpoint(endpoint, profile_name):
     """
     Configure the calico profile to the endpoint
+
+    :param endpoint (Endpoint obj): Endpoint to set profile on
+    :param profile_name (str): Profile name to add to endpoint
     """
     _log.info('Configuring Pod Profile: %s' % profile_name)
 
@@ -246,7 +274,9 @@ def _assign_to_pool(subnet):
     """
     Take subnet (str), create IP pool in datastore if none exists.
     Allocate next available IP in pool
-    return IPPool, IPAddress
+
+    :param subnet (str): Subnet to create pool from
+    :rtype: (IPPool, IPAddress)
     """
     pool = IPPool(subnet)
     version = IPNetwork(subnet).version
@@ -262,11 +292,11 @@ def _assign_to_pool(subnet):
 
 def validate_args(env, conf):
     """
-    Validate and itemize environment and stdin args
+    Validate and organize environment and stdin args
 
     ENV =   {
                 'CNI_IFNAME': 'eth0',                   req [default: 'eth0']
-                'CNI_ARGS': '',                     
+                'CNI_ARGS': '',
                 'CNI_COMMAND': 'ADD',                   req
                 'CNI_PATH': '.../.../...',
                 'CNI_NETNS': 'netns',                   req [default: 'netns']
@@ -274,9 +304,9 @@ def validate_args(env, conf):
             }
     CONF =  {
                 "name": "test",                         req
-                "type": "calico", 
+                "type": "calico",
                 "ipam": {
-                    "type": "host-local",
+                    "type": "calico-ipam",
                     "subnet": "10.22.0.0/16",           req
                     "routes": [{"dst": "0.0.0.0/0"}],   optional (unsupported)
                     "range-start": ""                   optional (unsupported)
@@ -290,6 +320,10 @@ def validate_args(env, conf):
                 'name': CONF['name']
                 'subnet': CONF['ipam']['subnet']
     }
+
+    :param env (dict): Environment variables from CNI.
+    :param conf (dict): STDIN arguments converted to json dict
+    :rtype dict:
     """
     _log.debug('Environment: %s' % env)
     _log.debug('Config: %s' % conf)

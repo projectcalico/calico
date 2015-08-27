@@ -25,7 +25,7 @@ sudo mv -f ./calico_rkt /usr/lib/rkt/plugins/net/calico
     "name": "example_net",
     "type": "calico",
     "ipam": {
-        "type": "host-local",
+        "type": "calico-ipam",
         "subnet": "10.1.0.0/16",
     }
 }
