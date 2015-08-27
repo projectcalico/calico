@@ -9,6 +9,7 @@
 # This version should match the version of calicotl installed in the cloud
 # config files.
 calico_docker_ver = "v0.6.0"
+calico_libnetwork_ver = "v0.1.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2
@@ -50,7 +51,7 @@ Vagrant.configure("2") do |config|
 
       # Pre-load the calico/node image.  This slows down the vagrant up
       # command, but speeds up the actual demonstration.
-      host.vm.provision :docker, images: ["calico/node:#{calico_docker_ver}", "busybox:latest"]
+      host.vm.provision :docker, images: ["calico/node-libnetwork:#{calico_libnetwork_ver}", "busybox:latest"]
 
       # Use a different cloud-init on the first server.
       if i == 1
