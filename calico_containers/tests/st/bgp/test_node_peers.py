@@ -16,7 +16,8 @@ import re
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import (DockerHost, CommandExecError)
+from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.workload import NET_NONE
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       LARGE_AS_NUM)
 from tests.st.utils.utils import check_bird_status
@@ -39,45 +40,21 @@ TODO - rework BGP tests.
 """
 
 
-class TestBGP(TestBase):
-
-    def test_defaults(self):
-        """
-        Test default BGP configuration commands.
-        """
-        with DockerHost('host', start_calico=False, dind=False) as host:
-            # Check default AS command
-            self.assertEquals(host.calicoctl("bgp default-node-as"), "64511")
-            host.calicoctl("bgp default-node-as 12345")
-            self.assertEquals(host.calicoctl("bgp default-node-as"), "12345")
-            with self.assertRaises(CommandExecError):
-                host.calicoctl("bgp default-node-as 99999999999999999999999")
-            with self.assertRaises(CommandExecError):
-                host.calicoctl("bgp default-node-as abcde")
-
-            # Check BGP mesh command
-            self.assertEquals(host.calicoctl("bgp node-mesh"), "on")
-            host.calicoctl("bgp node-mesh off")
-            self.assertEquals(host.calicoctl("bgp node-mesh"), "off")
-            host.calicoctl("bgp node-mesh on")
-            self.assertEquals(host.calicoctl("bgp node-mesh"), "on")
+class TestNodePeers(TestBase):
 
     @attr('slow')
-    def test_as_num(self):
+    def test_node_peers(self):
         """
-        Test using different AS number for the node-to-node mesh.
+        Test per-node BGP peer configuration.
 
-        We run a multi-host test for this as we need to set up real BGP peers.
+        Test by turning off the mesh and configuring the mesh as
+        a set of per node peers.
         """
         with DockerHost('host1', start_calico=False) as host1, \
              DockerHost('host2', start_calico=False) as host2:
 
-            # Set the default AS number.
-            host1.calicoctl("bgp default-node-as %s" % LARGE_AS_NUM)
-
-            # Start host1 using the inherited AS, and host2 using a specified
-            # AS (same as default).
-            host1.start_calico_node()
+            # Start both hosts using specific AS numbers.
+            host1.start_calico_node(as_num=LARGE_AS_NUM)
             host2.start_calico_node(as_num=LARGE_AS_NUM)
 
             # Create a profile to associate with both workloads
@@ -85,8 +62,10 @@ class TestBGP(TestBase):
 
             # Create the network on host1, but it should be usable from all
             # hosts.
-            workload_host1 = host1.create_workload("workload1")
-            workload_host2 = host2.create_workload("workload2")
+            workload_host1 = host1.create_workload("workload1",
+                                                   network=NET_NONE)
+            workload_host2 = host2.create_workload("workload2",
+                                                   network=NET_NONE)
 
             # Add the workloads to Calico networking
             host1.calicoctl("container add %s %s" % (workload_host1,
@@ -101,6 +80,19 @@ class TestBGP(TestBase):
             # Allow network to converge
             workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
 
+            # Turn the node-to-node mesh off and wait for connectivity to drop.
+            host1.calicoctl("bgp node-mesh off")
+            workload_host1.assert_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10)
+
+            # Configure per-node peers to explicitly set up a mesh.
+            host1.calicoctl("node bgp peer add %s as %s" % (host2.ip,
+                                                            LARGE_AS_NUM))
+            host2.calicoctl("node bgp peer add %s as %s" % (host1.ip,
+                                                            LARGE_AS_NUM))
+
+            # Allow network to converge
+            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
+
             # Check connectivity in both directions
             self.assert_ip_connectivity(workload_list=[workload_host1,
                                                        workload_host2],
@@ -108,6 +100,5 @@ class TestBGP(TestBase):
                                                       DEFAULT_IPV4_ADDR_2])
 
             # Check the BGP status on each host.
-            check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
-            check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
-
+            check_bird_status(host1, [("node specific", host2.ip, "Established")])
+            check_bird_status(host2, [("node specific", host1.ip, "Established")])
