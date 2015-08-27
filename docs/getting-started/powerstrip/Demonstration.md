@@ -15,10 +15,7 @@ Once you have your cluster up and running, start calico on both nodes.
 
 On both calico-01 and calico-02:
 
-    sudo calicoctl node --ip=`ip route get 8.8.8.8 | head -1 | cut -d' ' -f8`
-
-
-This command starts a Calico container.  The `--ip` parameter here calls a command that gets the ip address of your host regardless of the Calico environment you have set up.
+    sudo calicoctl node --ip=<host_ip>
 
 After running the command on each host, check the containers are running:
 
@@ -97,14 +94,14 @@ a profile to an endpoint run the following commands.
 
 On calico-01:
     
-    calicoctl container workload-A profile append PROF_A_C_E
-    calicoctl container workload-B profile append PROF_B
-    calicoctl container workload-C profile append PROF_A_C_E
+    calicoctl endpoint $(calicoctl container workload-A endpoint-id show) profile append PROF_A_C_E
+    calicoctl endpoint $(calicoctl container workload-B endpoint-id show) profile append PROF_B
+    calicoctl endpoint $(calicoctl container workload-C endpoint-id show) profile append PROF_A_C_E
 
 On calico-02:
 
-    calicoctl container workload-D profile append PROF_D
-    calicoctl container workload-E profile append PROF_A_C_E
+    calicoctl endpoint $(calicoctl container workload-D endpoint-id show) profile append PROF_D
+    calicoctl endpoint $(calicoctl container workload-E endpoint-id show) profile append PROF_A_C_E
 
 *Note that whilst the `calicoctl endpoint commands` can be run on any Calico 
  node, the `calicoctl container` commands will only work on the Calico node 
