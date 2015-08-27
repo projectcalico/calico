@@ -63,6 +63,7 @@ class TestDiags(unittest.TestCase):
         m_datastore_data.get_subtree.return_value = [m_child_1, m_child_2]
         m_datastore_client.etcd_client.read.return_value = m_datastore_data
         m_DatastoreClient.return_value = m_datastore_client
+        m_open.return_value = Mock()
 
         # Set up arguments
         log_dir = '/log/dir'
@@ -79,27 +80,14 @@ class TestDiags(unittest.TestCase):
         m_os_mkdir.assert_called_once_with(diags_dir)
         m_open.assert_has_calls([
             call(diags_dir + '/date', 'w'),
-            call().__enter__().write('DATE=%s' % date_today),
             call(diags_dir + '/hostname', 'w'),
-            call().__enter__().write('hostname'),
             call(diags_dir + '/netstat', 'w'),
-            call().__enter__().writelines(m_sh_command_return()),
             call(diags_dir + '/route', 'w'),
-            call().__enter__().write('route --numeric\n'),
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().write('ip route\n'),
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().write('ip -6 route\n'),
-            call().__enter__().writelines(m_sh_command_return()),
             call(diags_dir + '/iptables', 'w'),
-            call().__enter__().writelines(m_sh_command_return()),
             call(diags_dir + '/ipset', 'w'),
-            call().__enter__().writelines(m_sh_command_return()),
-            call(diags_dir + '/etcd_calico', 'w'),
-            call().__enter__().write('dir?, key, value\n'),
-            call().__enter__().write('DIR,  666,\n'),
-            call().__enter__().write('FILE, 555, 999\n')
+            call(diags_dir + '/etcd_calico', 'w')
         ], any_order=True)
+        self.assertEqual(m_open.return_value.close.call_count, 7)
         m_sh_command.assert_has_calls([
             call('netstat'),
             call()(all=True, numeric=True),
@@ -152,6 +140,7 @@ class TestDiags(unittest.TestCase):
         m_datastore_client.etcd_client = Mock(spec=Client)
         m_datastore_client.etcd_client.read.side_effect = EtcdException
         m_DatastoreClient.return_value = m_datastore_client
+        m_open.return_value = Mock()
 
         # Set up arguments
         log_dir = '/log/dir'
@@ -166,14 +155,18 @@ class TestDiags(unittest.TestCase):
             ["docker", "exec", "calico-node", "pkill", "-SIGUSR1", "felix"])
         m_open.assert_has_calls([
             call(diags_dir + '/date', 'w'),
-            call().__enter__().write('DATE=%s' % date_today),
             call(diags_dir + '/hostname', 'w'),
-            call().__enter__().write('hostname'),
             call(diags_dir + '/netstat', 'w'),
             call(diags_dir + '/route', 'w'),
             call(diags_dir + '/iptables', 'w'),
             call(diags_dir + '/ipset', 'w'),
+            call(diags_dir + '/etcd_calico', 'w')
         ], any_order=True)
+        m_open.return_value.write.assert_has_calls([
+            call().__enter__().write('hostname'),
+            call().__enter__().write('DATE=%s' % date_today)
+        ], any_order=True)
+        self.assertEqual(m_open.return_value.close.call_count, 7)
         self.assertNotIn([
             call().__enter__().writelines(m_sh_command_return()),
             call().__enter__().write('route --numeric\n'),
