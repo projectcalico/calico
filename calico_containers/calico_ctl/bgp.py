@@ -36,7 +36,7 @@ from prettytable import PrettyTable
 
 from connectors import client
 from utils import get_container_ipv_from_arguments
-from utils import validate_ip
+from utils import validate_ip, validate_asn, convert_asn_to_asplain
 
 
 def validate_arguments(arguments):
@@ -54,12 +54,9 @@ def validate_arguments(arguments):
                     validate_ip(arguments["<PEER_IP>"], 4) or \
                     validate_ip(arguments["<PEER_IP>"], 6)
     asnum_ok = True
-    if arguments.get("<AS_NUM>"):
-        try:
-            asnum = int(arguments["<AS_NUM>"])
-            asnum_ok = 0 <= asnum <= 4294967295
-        except ValueError:
-            asnum_ok = False
+    asnum = arguments.get("<AS_NUM>")
+    if asnum:
+        asnum_ok = validate_asn(asnum)
 
     # Print error messages
     if not peer_ip_ok:
@@ -83,10 +80,12 @@ def bgp(arguments):
     validate_arguments(arguments)
 
     ip_version = get_container_ipv_from_arguments(arguments)
+    as_num = convert_asn_to_asplain(arguments.get("<AS_NUM>"))
+
     if arguments.get("peer"):
         if arguments.get("add"):
             bgp_peer_add(arguments.get("<PEER_IP>"), ip_version,
-                         arguments.get("<AS_NUM>"))
+                         as_num)
         elif arguments.get("remove"):
             bgp_peer_remove(arguments.get("<PEER_IP>"), ip_version)
         elif arguments.get("show"):
@@ -103,7 +102,7 @@ def bgp(arguments):
             show_bgp_node_mesh()
     elif arguments.get("default-node-as"):
         if arguments.get("<AS_NUM>"):
-            set_default_node_as(arguments.get("<AS_NUM>"))
+            set_default_node_as(as_num)
         else:
             show_default_node_as()
 

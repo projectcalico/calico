@@ -133,7 +133,15 @@ class TestNode(unittest.TestCase):
         ({'--ip':'127.a.0.1'}, True),
         ({'--ip':'aa:bb::cc'}, True),
         ({'--ip':'127.0.0.1', '--ip6':'127.0.0.1'}, True),
-        ({'--ip':'127.0.0.1', '--ip6':'aa:bb::zz'}, True)
+        ({'--ip':'127.0.0.1', '--ip6':'aa:bb::zz'}, True),
+        ({'<AS_NUM>': None} , False),
+        ({'<AS_NUM>': '65535.65535'} , False),
+        ({'<AS_NUM>': '0.65535'} , False),
+        ({'<AS_NUM>': '1000000'} , False),
+        ({'<AS_NUM>': '65535'} , False),
+        ({'<AS_NUM>': '65536.0'} , True),
+        ({'<AS_NUM>': '65535.65536'} , True),
+        ({'<AS_NUM>': '65535.'} , True)
     ])
     def test_validate_arguments(self, case, sys_exit_called):
         """

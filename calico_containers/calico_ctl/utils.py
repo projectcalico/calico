@@ -179,3 +179,37 @@ def validate_hostname_port(hostname_port):
         return False
     else:
         return 1 <= port <= 65535
+
+def validate_asn(asn):
+    """
+    Validate the format of a 2-byte or 4-byte autonomous system number
+
+    :param asn: User input of AS number
+    :return: Boolean: True if valid format, False if invalid format
+    """
+    try:
+        if "." in str(asn):
+            left_asn, right_asn = str(asn).split(".")
+            asn_ok = (0 <= int(left_asn) <= 65535) and \
+                     (0 <= int(right_asn) <= 65535)
+        else:
+            asn_ok = 0 <= int(asn) <= 4294967295
+    except ValueError:
+        asn_ok = False
+
+    return asn_ok
+
+def convert_asn_to_asplain(asn):
+    """
+    Convert AS number to plain, decimal representation.
+    If AS number is not in dot notation return the argument unmodified.
+    Call validate_asn before this function to ensure AS number is valid.
+
+    :param asn: AS number in either dot or plain notation
+    :return: AS number in plain notation
+    """
+    if "." in str(asn):
+        left_asn, right_asn = str(asn).split(".")
+        asn = 65536*int(left_asn)+int(right_asn)
+
+    return asn

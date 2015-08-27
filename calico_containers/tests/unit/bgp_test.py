@@ -31,7 +31,14 @@ class TestBgp(unittest.TestCase):
         ({'<AS_NUM>':9}, False),
         ({'<AS_NUM>':'9'}, False),
         ({'<AS_NUM>':'nine'}, True),
-        ({'show':1, '--ipv4':1}, False)
+        ({'show':1, '--ipv4':1}, False),
+        ({'<AS_NUM>': '65535.65535'} , False),
+        ({'<AS_NUM>': '0.65535'} , False),
+        ({'<AS_NUM>': '1000000'} , False),
+        ({'<AS_NUM>': '65535'} , False),
+        ({'<AS_NUM>': '65536.0'} , True),
+        ({'<AS_NUM>': '65535.65536'} , True),
+        ({'<AS_NUM>': '65535.'} , True)
     ])
     def test_validate_arguments(self, case, sys_exit_called):
         """

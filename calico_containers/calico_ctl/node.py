@@ -62,7 +62,7 @@ from utils import DOCKER_ORCHESTRATOR_ID
 from utils import hostname
 from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
-from utils import validate_ip
+from utils import validate_ip, validate_asn, convert_asn_to_asplain
 from checksystem import check_system
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
@@ -107,12 +107,9 @@ def validate_arguments(arguments):
                  validate_ip(arguments["<PEER_IP>"], 6)
 
     asnum_ok = True
-    if arguments.get("<AS_NUM>") or arguments.get("--as"):
-        try:
-            asnum = int(arguments["<AS_NUM>"] or arguments["--as"])
-            asnum_ok = 0 <= asnum <= 4294967295
-        except ValueError:
-            asnum_ok = False
+    asnum = arguments.get("<AS_NUM>") or arguments.get("--as")
+    if asnum:
+        asnum_ok = validate_asn(asnum)
 
     detach_ok = True
     if arguments.get("<DETACH>") or arguments.get("--detach"):
@@ -146,12 +143,14 @@ def node(arguments):
     """
     validate_arguments(arguments)
 
+    as_num = convert_asn_to_asplain(arguments.get("<AS_NUM>") or arguments.get("--as"))
+
     if arguments.get("bgp"):
         if arguments.get("peer"):
             ip_version = get_container_ipv_from_arguments(arguments)
             if arguments.get("add"):
                 node_bgppeer_add(arguments.get("<PEER_IP>"), ip_version,
-                                 arguments.get("<AS_NUM>"))
+                                 as_num)
             elif arguments.get("remove"):
                 node_bgppeer_remove(arguments.get("<PEER_IP>"), ip_version)
             elif arguments.get("show"):
@@ -169,7 +168,7 @@ def node(arguments):
                    node_image=arguments.get('--node-image'),
                    log_dir=arguments.get("--log-dir"),
                    ip6=arguments.get("--ip6"),
-                   as_num=arguments.get("--as"),
+                   as_num=as_num,
                    detach=detach,
                    kubernetes=arguments.get("--kubernetes"),
                    libnetwork=arguments.get("--libnetwork"))
