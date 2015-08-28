@@ -28,6 +28,7 @@ from datetime import datetime
 import tarfile
 import socket
 import tempfile
+import traceback
 import subprocess
 
 from etcd import EtcdException
@@ -58,16 +59,16 @@ def save_diags(log_dir):
     print("Using temp dir: %s" % temp_dir)
 
     # Write date to file
-    with open(os.path.join(temp_diags_dir, 'date'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'date') as f:
         f.write("DATE=%s" % datetime.strftime(datetime.today(),
                                               "%Y-%m-%d_%H-%M-%S"))
 
     # Write hostname to file
-    with open(os.path.join(temp_diags_dir, 'hostname'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'hostname') as f:
         f.write("%s" % socket.gethostname())
 
     # Write netstat output to file
-    with open(os.path.join(temp_diags_dir, 'netstat'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'netstat') as f:
         try:
             print("Dumping netstat output")
             netstat = sh.Command._create("netstat")
@@ -79,18 +80,20 @@ def save_diags(log_dir):
                 numeric=True))
 
         except sh.CommandNotFound as e:
-            print "Missing command: %s" % e.message
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
 
     # Write routes
     print("Dumping routes")
-    with open(os.path.join(temp_diags_dir, 'route'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'route') as f:
         try:
             route = sh.Command._create("route")
             f.write("route --numeric\n")
             f.writelines(route(numeric=True))
             f.write('\n')
         except sh.CommandNotFound as e:
-            print "Missing command: %s" % e.message
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
 
         try:
             ip = sh.Command._create("ip")
@@ -102,29 +105,33 @@ def save_diags(log_dir):
             f.writelines(ip("-6", "route"))
             f.write('\n')
         except sh.CommandNotFound as e:
-            print "Missing command: %s" % e.message
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
 
     # Dump iptables
-    with open(os.path.join(temp_diags_dir, 'iptables'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'iptables') as f:
         try:
             iptables_save = sh.Command._create("iptables-save")
             print("Dumping iptables")
             f.writelines(iptables_save())
         except sh.CommandNotFound as e:
-            print "Missing command: %s" % e.message
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
 
     # Dump ipset list
     # TODO: ipset might not be installed on the host. But we don't want to
     # gather the diags in the container because it might not be running...
-    with open(os.path.join(temp_diags_dir, 'ipset'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'ipset') as f:
         try:
             ipset = sh.Command._create("ipset")
             print("Dumping ipset")
             f.writelines(ipset("list"))
         except sh.CommandNotFound as e:
-            print "Missing command: %s" % e.message
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
         except sh.ErrorReturnCode_1 as e:
-            print "Error running ipset. Maybe you need to run as root."
+            print "  - Error running ipset. Maybe you need to run as root."
+            f.writelines("Error running ipset: %s\n" % e)
 
     # Ask Felix to dump stats to its log file - ignore errors as the
     # calico-node might not be running
@@ -141,11 +148,11 @@ def save_diags(log_dir):
 
     print("Dumping datastore")
     # TODO: May want to move this into datastore.py as a dump-calico function
-    try:
-        datastore_client = DatastoreClient()
-        datastore_data = datastore_client.etcd_client.read("/calico",
-                                                           recursive=True)
-        with open(os.path.join(temp_diags_dir, 'etcd_calico'), 'w') as f:
+    with DiagsErrorWriter(temp_diags_dir, 'etcd_calico') as f:
+        try:
+            datastore_client = DatastoreClient()
+            datastore_data = datastore_client.etcd_client.read("/calico",
+                                                               recursive=True)
             f.write("dir?, key, value\n")
             # TODO: python-etcd bug: Leaves show up twice in get_subtree().
             for child in datastore_data.get_subtree():
@@ -153,8 +160,9 @@ def save_diags(log_dir):
                     f.write("DIR,  %s,\n" % child.key)
                 else:
                     f.write("FILE, %s, %s\n" % (child.key, child.value))
-    except EtcdException:
-        print "Unable to dump etcd datastore"
+        except EtcdException, e:
+            print "Unable to dump etcd datastore"
+            f.write("Unable to dump etcd datastore: %s" % e)
 
     # Create tar.
     tar_filename = datetime.strftime(datetime.today(),
@@ -170,3 +178,50 @@ def save_diags(log_dir):
                     "similar.  For example:")
     print("  curl --upload-file %s https://transfer.sh/%s" %
              (full_tar_path, os.path.basename(full_tar_path)))
+
+
+class DiagsErrorWriter(object):
+    """
+    Context manager used to handle error handling when writing diagnostics.
+    In the event of an exception being thrown within the context manager, the
+    details of the exception are written to file and the exception is
+    swallowed.  This allows the diagnostics to retrieve as much information as
+    possible.
+    """
+
+    def __init__(self, temp_dir, filename):
+        self.temp_dir = temp_dir
+        self.filename = filename
+        self.file = None
+
+    def __enter__(self):
+        """
+        Open the diags file for writing, and return the file object.
+        :return: The file object.
+        """
+        self.file = open(os.path.join(self.temp_dir, self.filename), "w")
+        return self.file
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Close the diagnostics file and if an error occurred, write that into
+        the file.
+        :param exc_type: The exception type, or None.
+        :param exc_val: The exception instance, or None.
+        :param exc_tb: The exception traceback, or None.
+        :return: False for KeyboardInterrupt exceptions, or no exceptions,
+                 True for all other exceptions (exception is traced in file).
+        """
+        if exc_type is KeyboardInterrupt:
+            rc = False
+        elif exc_type is None:
+            rc = False
+        else:
+            print "  - Error gathering diagnostics"
+            self.file.write("\nError gathering diagnostics\n")
+            self.file.write("Exception: %s(%s)\n" % (exc_type, exc_val))
+            traceback.print_tb(exc_tb, None, self.file)
+            rc = True
+
+        self.file.close()
+        return rc
