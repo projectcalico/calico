@@ -24,14 +24,6 @@ enable_service n-api-meta
 # is enabled.  So do that here.
 enable_service calico
 
-# Calico uses vanilla OpenStack except for four Neutron changes that
-# are currently proposed and pending review on Gerrit.  So for Neutron
-# we point to Calico's forked Neutron repository on GitHub, and
-# specifically to a branch that contains a merge of those pending
-# changes into a recent master.
-NEUTRON_REPO=https://github.com/Metaswitch/calico-neutron.git
-NEUTRON_BRANCH=dhcp-for-routed-ifs
-
 # When Neutron is enabled, Devstack does agent-related installations,
 # configurations and service startups as directed by the value of
 # Q_AGENT.  Devstack doesn't actually include any code for the
