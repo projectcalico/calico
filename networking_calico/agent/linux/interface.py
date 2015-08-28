@@ -99,18 +99,6 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
             LOG.error(_LE("Failed unplugging interface '%s'"),
                       device_name)
 
-    def dnsmasq_bind_options(self, device_name):
-        # The DHCP port and VM TAP interfaces are not bridged, so
-        # change the dnsmasq invocation as follows.
-        #   --interface=tap* # to listen on all TAP interfaces
-        #   --bind-dynamic instead of --bind-interfaces, to
-        #     automatically start listening on new TAP
-        #     interfaces as they appear
-        #   --bridge-interface=%s,tap* # to treat all TAP
-        #     interfaces as aliases of the DHCP port.
-        return [
-            '--bind-dynamic',
-            '--interface=%s' % device_name,
-            '--interface=tap*',
-            '--bridge-interface=%s,tap*' % device_name,
-        ]
+    @property
+    def bridged(self):
+        return False
