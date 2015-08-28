@@ -9,7 +9,7 @@ envExport:
       to:
         - "rabbitmq-server=0"
     "neutron-calico":
-      charm: "cs:~project-calico/trusty/neutron-calico-2"
+      charm: "cs:~project-calico/trusty/neutron-calico-4"
       num_units: 0
       annotations:
         "gui-x": "832.4871538385408"
