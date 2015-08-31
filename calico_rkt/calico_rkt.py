@@ -203,7 +203,7 @@ def _container_remove(hostname, orchestrator_id, container_id):
 
     # Remove any IP address assignments that this endpoint has
     for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
-        assert net.size == 1, "Net Size of endpoint's ip' is not 1. %s" % net
+        assert net.size == 1, "Only 1 address allowed per endpoint. Found in network: %s" % net
         datastore_client.unassign_address(None, net.ip)
 
     # Remove the endpoint
