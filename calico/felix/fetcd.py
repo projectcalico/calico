@@ -494,7 +494,7 @@ class _EtcdWatcher(gevent.Greenlet):
         response = None
         while not response:
             if self.resync_after_current_poll:
-                _log.debug("Told to resync, aborting poll.")
+                _log.warning("Told to resync, aborting poll.")
                 self.resync_after_current_poll = False
                 raise ResyncRequired()
 
@@ -568,6 +568,7 @@ class _EtcdWatcher(gevent.Greenlet):
         Force a resync.
         :raises ResyncRequired: always.
         """
+        _log.warning("Resync triggered due to change to %s", response.key)
         raise ResyncRequired()
 
     def on_ready_flag_set(self, response):

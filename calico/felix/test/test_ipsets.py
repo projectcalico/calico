@@ -24,8 +24,8 @@ import logging
 from mock import *
 from calico.datamodel_v1 import EndpointId
 from calico.felix.futils import IPV4, FailedSystemCall
-from calico.felix.ipsets import (EndpointData,  IpsetManager, TagIpset,
-                                 EMPTY_ENDPOINT_DATA, Ipset)
+from calico.felix.ipsets import (EndpointData,  IpsetManager, IpsetActor,
+                                 TagIpset, EMPTY_ENDPOINT_DATA, Ipset)
 from calico.felix.refcount import CREATED
 from calico.felix.test.base import BaseTestCase
 
@@ -485,13 +485,62 @@ class TestEndpointData(BaseTestCase):
         self.assertFalse(hasattr(EP_DATA_1_1, "__dict__"))
 
 
+class TestIpsetActor(BaseTestCase):
+    def setUp(self):
+        super(TestIpsetActor, self).setUp()
+        self.ipset = Mock(spec=Ipset)
+        self.actor = IpsetActor(self.ipset)
+
+    def test_sync_to_ipset(self):
+        members1 = set(["1.2.3.4", "2.3.4.5"])
+        members2 = set(["10.1.2.3"])
+        members3 = set(["9.9.9.9"])
+
+        # Cause a full update - first time.
+        self.actor.members = members1
+        self.actor._sync_to_ipset()
+        self.ipset.replace_members.assert_called_once_with(members1)
+        self.assertFalse(self.ipset.update_members.called)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertEqual(self.actor.members, members1)
+        self.ipset.reset_mock()
+
+        # Calls update_member
+        self.actor.members = members2
+        self.actor._sync_to_ipset()
+        self.assertFalse(self.ipset.replace_members.called)
+        self.ipset.update_members.assert_called_once_with(members1, members2)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertEqual(self.actor.members, members2)
+        self.ipset.reset_mock()
+
+        # Does nothing - already in correct state
+        self.actor.members = members2
+        self.actor._sync_to_ipset()
+        self.assertFalse(self.ipset.replace_members.called)
+        self.assertFalse(self.ipset.update_members.called)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertEqual(self.actor.members, members2)
+        self.ipset.reset_mock()
+
+        # Cause a full update - forced.
+        self.actor._force_reprogram = True
+        self.actor.members = members3
+        self.actor._sync_to_ipset()
+        self.ipset.replace_members.assert_called_once_with(members3)
+        self.assertFalse(self.ipset.update_members.called)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertEqual(self.actor.members, members3)
+        self.ipset.reset_mock()
+
+
 class TestIpset(BaseTestCase):
     def setUp(self):
         super(TestIpset, self).setUp()
         self.ipset = Ipset("foo", "foo-tmp", "inet")
 
     @patch("calico.felix.futils.check_call", autospec=True)
-    def test_mainline(self, m_check_call):
+    def test_replace_members(self, m_check_call):
         self.ipset.replace_members(set(["10.0.0.1"]))
         m_check_call.assert_called_once_with(
             ["ipset", "restore"],
@@ -503,6 +552,53 @@ class TestIpset(BaseTestCase):
                       'destroy foo-tmp\n'
                       'COMMIT\n'
         )
+
+    @patch("calico.felix.futils.check_call", autospec=True)
+    def test_update_members(self, m_check_call):
+        old = set(["10.0.0.2"])
+        new = set(["10.0.0.1", "10.0.0.2"])
+        self.ipset.update_members(old, new)
+
+        old = set(["10.0.0.1", "10.0.0.2"])
+        new = set(["10.0.0.1", "1.2.3.4"])
+
+        self.ipset.update_members(old, new)
+
+        calls = [call(["ipset", "restore"],
+                      input_str='add foo 10.0.0.1\nCOMMIT\n'),
+                 call(["ipset", "restore"],
+                      input_str='del foo 10.0.0.2\n'
+                                 'add foo 1.2.3.4\n'
+                                 'COMMIT\n')]
+
+        self.assertEqual(m_check_call.call_count, 2)
+        m_check_call.assert_has_calls(calls)
+
+    @patch("calico.felix.futils.check_call", autospec=True,
+           side_effect=iter([
+               FailedSystemCall("Blah", [], None, None, "err"),
+               None]))
+    def test_update_members_err(self, m_check_call):
+        # First call to update_members will fail, leading to a retry.
+        old = set(["10.0.0.2"])
+        new = set(["10.0.0.1"])
+        self.ipset.update_members(old, new)
+
+        calls = [call(["ipset", "restore"],
+                      input_str='del foo 10.0.0.2\n'
+                                'add foo 10.0.0.1\n'
+                                'COMMIT\n'),
+                 call(["ipset", "restore"],
+                      input_str='create foo hash:ip family inet --exist\n'
+                                'create foo-tmp hash:ip family inet --exist\n'
+                                'flush foo-tmp\n'
+                                'add foo-tmp 10.0.0.1\n'
+                                'swap foo foo-tmp\n'
+                                'destroy foo-tmp\n'
+                                'COMMIT\n')]
+
+        self.assertEqual(m_check_call.call_count, 2)
+        m_check_call.assert_has_calls(calls)
 
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_ensure_exists(self, m_check_call):
