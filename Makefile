@@ -1,10 +1,9 @@
 .PHONY: all binary ut clean
 
-BUILD_DIR=build_calico_rkt
 BUILD_FILES=Dockerfile requirements.txt
 
 default: all
-all: binary test
+all: test
 binary: dist/calico_rkt
 test: ut
 
@@ -29,8 +28,8 @@ ut: dist/calico_rkt
 	docker run --rm -v `pwd`/calico_rkt:/code/calico_rkt \
 	-v `pwd`/nose.cfg:/code/nose.cfg \
 	calico/rkt-build bash -c \
-	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	PYTHONPATH=/code/calico_rkt nosetests calico_rkt/tests -c nose.cfg'
+	'>/dev/null 2>&1 & PYTHONPATH=/code/calico_rkt \
+	nosetests calico_rkt/tests -c nose.cfg'
 
 clean:
 	-rm -f *.created

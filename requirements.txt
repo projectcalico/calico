@@ -1,5 +1,5 @@
 PyInstaller==2.1
-git+https://github.com/Symmetric/libcalico.git@pat-netns-path
+git+https://github.com/projectcalico/libcalico@v0.1.3
 nose==1.3.1
 nose-timer
 nose-parameterized
