@@ -76,15 +76,18 @@ if is_service_enabled calico; then
 		    # Install and configure etcd.
 		    install_configure_etcd
 
+		    # Install posix-spawn.
+		    pip_install git+https://github.com/projectcalico/python-posix-spawn.git@1f74fbedb569d4e45f11e9e32d3dca74623f432c#egg=posix-spawn
+
 		    # Install the core Calico code.
 		    CALICO_DIR=${DEST}/calico
 		    git_clone ${CALICO_REPO:-https://github.com/projectcalico/calico.git} $CALICO_DIR ${CALICO_BRANCH:-routed}
 		    cd $CALICO_DIR
-		    pip_install -I .
+		    pip_install .
 
 		    # Install networking-calico.
 		    pushd ../networking-calico
-		    pip_install -I .
+		    pip_install .
 		    popd
 
 		    # Also install python-etcd from the Calico project's GitHub.
