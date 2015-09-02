@@ -48,33 +48,30 @@ This builds `calicoctl` command line tool in the `dist/` directory.
 ## The Calico Docker test suites and test environment
 
 There are two test suites used to validate Calico Docker function - unit tests and system tests.  In addition to the
-tests, there are makefile targets to spin up an instance of etcd and Consul - useful for test deployments.
+tests, there are makefile targets to spin up an instance of etcd  - useful for test deployments.
 
 If you are developing Calico Docker code that you would like to contribute upstream, please ensure at a minimum that
 the unit tests and system tests successfully run, and, preferably, ensure new functionality is unit tested and system
 tested where necessary.  We aim to keep improving our total code and path coverage with each check-in.
 
-### Spinning up an instance of etcd and Consul
+### Spinning up an instance of etcd
 
-The supplied Makefile includes targets for spinning up a single instance of and etcd server and a Consul server.  This
+The supplied Makefile includes targets for spinning up a single instance of and etcd server.  This
 is useful if you want to do any local testing.
 
 From the root directory of the checked out repository, run
 
     make run-etcd
 
-or
 
-    make run-consul
-
-This starts an etcd or Consul server bound to a local IP address (automatically determined).  If you have multiple local IP
+This starts an etcd bound to a local IP address (automatically determined).  If you have multiple local IP
 addresses and wish to explicitly select an IP address to bind to, set the environment variable LOCAL_IP_ENV with the
 correct IP address.  For example:
 
     LOCAL_IP_ENV=192.168.0.23 make run-etcd
 
 If you are using the system test makefile target to run the system test, it automatically spins up an instance of 
-etcd and Consul so it is not necessary to explicitly run these commands.
+etcd so it is not necessary to explicitly run these commands.
 
 ### Running the unit tests
 
@@ -103,7 +100,7 @@ Both ST suites utilize Docker's [libnetwork network driver](https://github.com/d
 Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7
 release.
 
-Both STs start a Consul server and etcd server bound to a local IP address (automatically determined).  If you have
+Both STs start an etcd server bound to a local IP address (automatically determined).  If you have
 multiple local IP addresses and wish to explicitly select an IP address to bind to, set the environment variable
 LOCAL_IP_ENV with the correct IP address.  For example:
 
@@ -121,8 +118,7 @@ From the root directory of the checked out repository, run
 
     sudo make st
 
-The full ST suite builds the calicoctl binary and calico/node docker image.  It starts containers running etcd and
-Consul, and then runs all of the tests defined in tests/st, using the built calicoctl and calico/node to run the tests.
+The full ST suite builds the calicoctl binary and calico/node docker image.  It starts a container running etcd, and then runs all of the tests defined in tests/st, using the built calicoctl and calico/node to run the tests.
 
 #### The fast ST suite
 
@@ -131,7 +127,7 @@ From the root directory of the checked out repository, run
     sudo make fast-st
 
 Unlike the full ST suite, the fast ST suite does not build the calicoctl binary - instead it runs calicoctl directly
-from the python interpreter.  It starts containers running etcd and Consul, and then runs all of the tests defined in
+from the python interpreter.  It starts a container running etcd, and then runs all of the tests defined in
 tests/st that do not have the "slow" attribute assigned to them.
 
 #### Running a subset of system tests
