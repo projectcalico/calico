@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes] [--libnetwork]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes] [--rkt] [--libnetwork]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
@@ -38,6 +38,7 @@ Options:
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
   --kubernetes              Download and install the kubernetes plugin.
+  --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
 """
 import sys
@@ -74,6 +75,11 @@ KUBERNETES_PLUGIN_VERSION = 'v0.1.0'
 KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes' % KUBERNETES_PLUGIN_VERSION
 KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
 KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
+
+RKT_PLUGIN_VERSION = 'v0.1.0'
+RKT_BINARY_URL = 'https://github.com/projectcalico/calico-rkt/releases/download/%s/calico_rkt' % RKT_PLUGIN_VERSION
+RKT_PLUGIN_DIR = '/usr/lib/rkt/plugins/net/'
+RKT_PLUGIN_DIR_BACKUP = '/etc/rkt-plugins/calico/'
 
 CALICO_DEFAULT_IMAGE = "calico/node:latest"
 LIBNETWORK_IMAGE = 'calico/node-libnetwork:latest'
@@ -171,10 +177,11 @@ def node(arguments):
                    as_num=as_num,
                    detach=detach,
                    kubernetes=arguments.get("--kubernetes"),
+                   rkt=arguments.get("--rkt"),
                    libnetwork=arguments.get("--libnetwork"))
 
 
-def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes,
+def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
                libnetwork):
     """
     Create the calico-node container and establish Calico networking on this
@@ -188,6 +195,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes,
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
     :param kubernetes: True to install the kubernetes plugin, False otherwise.
+    :param rkt: True to install the rkt plugin, False otherwise.
     :param libnetwork: True to use the calico/node-libnetwork image as the node
     image, False otherwise.
     :return:  None.
@@ -221,10 +229,19 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes,
     if kubernetes:
         try:
             # Attempt to install to the default kubernetes directory
-            install_kubernetes(KUBERNETES_PLUGIN_DIR)
+            install_plugin(KUBERNETES_PLUGIN_DIR, KUBERNETES_BINARY_URL)
         except OSError:
             # Use the backup directory
-            install_kubernetes(KUBERNETES_PLUGIN_DIR_BACKUP)
+            install_plugin(KUBERNETES_PLUGIN_DIR_BACKUP, KUBERNETES_BINARY_URL)
+
+    # Install rkt plugin
+    if rkt:
+        try:
+            # Attempt to install to the default rkt directory
+            install_plugin(RKT_PLUGIN_DIR, RKT_BINARY_URL)
+        except OSError:
+            # Use the backup directory
+            install_plugin(RKT_PLUGIN_DIR_BACKUP, RKT_BINARY_URL)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools(4)
@@ -417,11 +434,11 @@ def warn_if_hostname_conflict(ip):
         else:
             if current_ipv4 != "" and current_ipv4 != ip:
                 print_paragraph("WARNING: Hostname '%s' is already in use "
-                    "with IP address %s. Calico requires each compute host to "
-                    "have a unique hostname. If this is your first time "
-                    "running 'calicoctl node' on this host, ensure that " \
-                    "another host is not already using the " \
-                    "same hostname."  % (hostname, ip))
+                                "with IP address %s. Calico requires each compute host to "
+                                "have a unique hostname. If this is your first time "
+                                "running 'calicoctl node' on this host, ensure that "
+                                "another host is not already using the "
+                                "same hostname." % (hostname, ip))
 
 
 def _find_or_pull_node_image(image_name):
@@ -487,26 +504,27 @@ def _attach_and_stream(container):
         docker_client.stop(container)
 
 
-def install_kubernetes(kubernetes_plugin_dir):
+def install_plugin(plugin_dir, binary_url):
     """
-    Downloads the kubernetes plugin to the specified directory.
-    :param kubernetes_plugin_dir: Desired download location for the plugin.
+    Downloads a plugin to the specified directory.
+    :param plugin_dir: Desired download destination for the plugin.
+    :param binary_url: Download the plugin from this url.
     :return: Nothing
     """
-    if not os.path.exists(kubernetes_plugin_dir):
-        os.makedirs(kubernetes_plugin_dir)
-    kubernetes_binary_path = kubernetes_plugin_dir + 'calico'
+    if not os.path.exists(plugin_dir):
+        os.makedirs(plugin_dir)
+    binary_path = plugin_dir + 'calico'
     try:
-        urllib.urlretrieve(KUBERNETES_BINARY_URL, kubernetes_binary_path)
+        urllib.urlretrieve(binary_url, binary_path)
     except IOError:
-        print "ERROR: Couldn't download the Kubernetes plugin"
+        print "ERROR: Couldn't download the plugin from %s" % binary_url
         sys.exit(1)
     else:
         # Download successful - change permissions to allow execution.
         try:
-            st = os.stat(kubernetes_binary_path)
+            st = os.stat(binary_path)
             executable_permissions = st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-            os.chmod(kubernetes_binary_path, executable_permissions)
+            os.chmod(binary_path, executable_permissions)
         except OSError:
-            print "ERROR: Unable to set permissions on Kubernetes plugin"
+            print "ERROR: Unable to set permissions on plugin %s" % binary_path
             sys.exit(1)
