@@ -330,6 +330,11 @@ class InterfaceWatcher(Actor):
                           socket.NETLINK_ROUTE)
         s.bind((os.getpid(), RTMGRP_LINK))
 
+        # A dict that remembers the detailed flags of an interface
+        # when we last signalled it as being up.  We use this to avoid
+        # sending duplicate interface_update signals.
+        if_last_flags = {}
+
         while True:
             # Get the next set of data.
             data = s.recv(65535)
@@ -349,9 +354,9 @@ class InterfaceWatcher(Actor):
                                      futils.hex(hdr))
             _log.debug("Netlink message type %s len %s", msg_type, msg_len)
 
-            if msg_type in [RTM_NEWLINK]:
-                # A new interface.  Read the struct ifinfomsg, which
-                # is 16 bytes.
+            if msg_type in [RTM_NEWLINK, RTM_DELLINK]:
+                # A new or removed interface.  Read the struct
+                # ifinfomsg, which is 16 bytes.
                 hdr = data[:16]
                 data = data[16:]
                 _, _, _, index, flags, _ = struct.unpack("=BBHiII", hdr)
@@ -390,14 +395,26 @@ class InterfaceWatcher(Actor):
                         operstate, = struct.unpack("=B", rta_data[:1])
                         _log.debug("IFLA_OPERSTATE: %s", operstate)
 
-                # We only care about notifying when a new interface is
-                # usable, which - according to
-                # https://www.kernel.org/doc/Documentation/networking/
-                # operstates.txt - is fully conveyed by the operstate.
-                # (When an interface goes away, it automatically takes
-                # its routes with it.)
-                if ifname and operstate == IF_OPER_UP:
+                if (ifname and
+                    msg_type == RTM_DELLINK and
+                    ifname in if_last_flags):
+                    # An interface that we've previously signalled is
+                    # being deleted, so remove our record of it.
+                    del if_last_flags[ifname]
+
+                if (ifname and
+                    msg_type == RTM_NEWLINK and
+                    operstate == IF_OPER_UP and
+                    (ifname not in if_last_flags or
+                     if_last_flags[ifname] != flags)):
+                    # We only care about notifying when a new
+                    # interface is usable, which - according to
+                    # https://www.kernel.org/doc/Documentation/networking/
+                    # operstates.txt - is fully conveyed by the
+                    # operstate.  (When an interface goes away, it
+                    # automatically takes its routes with it.)
                     _log.debug("New network interface : %s %x", ifname, flags)
+                    if_last_flags[ifname] = flags
                     self.update_splitter.on_interface_update(ifname,
                                                              async=True)
 
