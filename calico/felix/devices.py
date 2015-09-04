@@ -396,10 +396,11 @@ class InterfaceWatcher(Actor):
                         _log.debug("IFLA_OPERSTATE: %s", operstate)
 
                 if (ifname and
-                    msg_type == RTM_DELLINK and
-                    ifname in if_last_flags):
+                    ifname in if_last_flags and
+                    (msg_type == RTM_DELLINK or operstate != IF_OPER_UP)):
                     # An interface that we've previously signalled is
-                    # being deleted, so remove our record of it.
+                    # being deleted or oper down, so remove our record
+                    # of it.
                     del if_last_flags[ifname]
 
                 if (ifname and
