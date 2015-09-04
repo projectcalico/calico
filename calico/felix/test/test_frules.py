@@ -31,55 +31,67 @@ from calico.felix.test.base import BaseTestCase
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_MARK = ('--append chain-foo --match comment '
-                '--comment "Mark as not matched" --jump MARK --set-mark 1')
+DEFAULT_MARK = '--append chain-foo --jump MARK --set-mark 1'
+
+DEFAULT_UNMARK = (
+    '--append chain-foo '
+    '--match comment --comment "No match, fall through to next profile" '
+    '--jump MARK --set-mark 0'
+)
+
 RULES_TESTS = [
     ([{"src_net": "10.0.0.0/8"},], 4,
-     ["--append chain-foo --source 10.0.0.0/8 --jump RETURN",
-      DEFAULT_MARK]),
+     [DEFAULT_MARK,
+      "--append chain-foo --source 10.0.0.0/8 --jump RETURN",
+      DEFAULT_UNMARK]),
 
     ([{"protocol": "icmp",
        "src_net": "10.0.0.0/8",
        "icmp_type": 7,
        "icmp_code": 123},], 4,
-     ["--append chain-foo --protocol icmp --source 10.0.0.0/8 "
+     [DEFAULT_MARK,
+      "--append chain-foo --protocol icmp --source 10.0.0.0/8 "
       "--match icmp --icmp-type 7/123 "
       "--jump RETURN",
-      DEFAULT_MARK]),
+      DEFAULT_UNMARK]),
 
     ([{"protocol": "icmp",
        "src_net": "10.0.0.0/8",
        "icmp_type": 7},], 4,
-     ["--append chain-foo --protocol icmp --source 10.0.0.0/8 "
+     [DEFAULT_MARK,
+      "--append chain-foo --protocol icmp --source 10.0.0.0/8 "
       "--match icmp --icmp-type 7 "
       "--jump RETURN",
-      DEFAULT_MARK]),
+      DEFAULT_UNMARK]),
 
     ([{"protocol": "icmpv6",
        "src_net": "1234::beef",
        "icmp_type": 7},], 6,
-     ["--append chain-foo --protocol icmpv6 --source 1234::beef "
+     [DEFAULT_MARK,
+      "--append chain-foo --protocol icmpv6 --source 1234::beef "
       "--match icmp6 --icmpv6-type 7 "
       "--jump RETURN",
-      DEFAULT_MARK]),
+      DEFAULT_UNMARK]),
 
     ([{"protocol": "tcp",
        "src_tag": "tag-foo",
        "src_ports": ["0:12", 13]}], 4,
-     ["--append chain-foo --protocol tcp "
+     [DEFAULT_MARK,
+      "--append chain-foo --protocol tcp "
       "--match set --match-set ipset-foo src "
       "--match multiport --source-ports 0:12,13 --jump RETURN",
-      DEFAULT_MARK]),
+      DEFAULT_UNMARK]),
 
     ([{"protocol": "tcp",
        "src_ports": [0, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}], 4,
-     ["--append chain-foo --protocol tcp "
+     [DEFAULT_MARK,
+      "--append chain-foo --protocol tcp "
       "--match multiport --source-ports 0,2:3,4,5,6,7,8,9,10,11,12,13,14,15 "
       "--jump RETURN",
       "--append chain-foo --protocol tcp "
       "--match multiport --source-ports 16,17 "
       "--jump RETURN",
-      DEFAULT_MARK]),
+      DEFAULT_UNMARK]),
 ]
 
 IP_SET_MAPPING = {
@@ -216,9 +228,15 @@ class TestRules(BaseTestCase):
 
         m_v4_upd = Mock(spec=IptablesUpdater)
         m_v6_upd = Mock(spec=IptablesUpdater)
+        m_v6_raw_upd = Mock(spec=IptablesUpdater)
         m_v4_nat_upd = Mock(spec=IptablesUpdater)
 
-        frules.install_global_rules(m_config, m_v4_upd, m_v6_upd, m_v4_nat_upd)
+        frules.install_global_rules(m_config, m_v4_upd, m_v6_upd, m_v4_nat_upd,
+                                    m_v6_raw_upd)
+
+        m_v6_raw_upd.ensure_rule_inserted.assert_called_once_with(
+            'PREROUTING --in-interface tap+ --match rpfilter --invert -j DROP'
+        )
 
         m_ipset.ensure_exists.assert_called_once_with()
         self.assertEqual(

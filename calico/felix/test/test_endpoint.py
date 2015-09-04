@@ -273,3 +273,76 @@ class TestLocalEndpoint(BaseTestCase):
                                                            iface,
                                                            data['mac'],
                                                            reset_arp=False)
+
+
+class TestEndpoint(BaseTestCase):
+    def test_get_endpoint_rules(self):
+        to_pfx = '--append felix-to-abcd'
+        from_pfx = '--append felix-from-abcd'
+        expected_result = (
+            {
+                'felix-from-abcd': 
+                [
+                    # Always start with a 0 MARK.
+                    from_pfx + ' --jump MARK --set-mark 0',
+                    # From chain polices the MAC address.
+                    from_pfx + ' --match mac ! --mac-source aa:22:33:44:55:66 '
+                               '--jump DROP --match comment --comment '
+                               '"Incorrect source MAC"',
+
+                    # Jump to the first profile.
+                    from_pfx + ' --jump felix-p-prof-1-o',
+                    # Short-circuit: return if the first profile matched.
+                    from_pfx + ' --match mark --mark 1/1 --match comment '
+                               '--comment "Profile accepted packet" '
+                               '--jump RETURN',
+
+                    # Jump to second profile.
+                    from_pfx + ' --jump felix-p-prof-2-o',
+                    # Return if the second profile matched.
+                    from_pfx + ' --match mark --mark 1/1 --match comment '
+                               '--comment "Profile accepted packet" '
+                               '--jump RETURN',
+
+                    # Drop the packet if nothing matched.
+                    from_pfx + ' --jump DROP -m comment --comment '
+                               '"Default DROP if no match (endpoint e1):"'
+                ],
+                'felix-to-abcd': 
+                [
+                    # Always start with a 0 MARK.
+                    to_pfx + ' --jump MARK --set-mark 0',
+
+                    # Jump to first profile and return iff it matched.
+                    to_pfx + ' --jump felix-p-prof-1-i',
+                    to_pfx + ' --match mark --mark 1/1 --match comment '
+                             '--comment "Profile accepted packet" '
+                             '--jump RETURN',
+
+                    # Jump to second profile and return iff it matched.
+                    to_pfx + ' --jump felix-p-prof-2-i',
+                    to_pfx + ' --match mark --mark 1/1 --match comment '
+                             '--comment "Profile accepted packet" '
+                             '--jump RETURN',
+
+                    # Drop anything that doesn't match.
+                    to_pfx + ' --jump DROP -m comment --comment '
+                             '"Default DROP if no match (endpoint e1):"'
+                ]
+            },
+            {
+                # From chain depends on the outbound profiles.
+                'felix-from-abcd': set(['felix-p-prof-1-o',
+                                        'felix-p-prof-2-o']),
+                # To chain depends on the inbound profiles.
+                'felix-to-abcd': set(['felix-p-prof-1-i',
+                                      'felix-p-prof-2-i'])
+            }
+        )
+        result = endpoint._get_endpoint_rules("e1", "abcd",
+                                              "aa:22:33:44:55:66",
+                                              ["prof-1", "prof-2"])
+
+        # Log the whole diff if the comparison fails.
+        self.maxDiff = None
+        self.assertEqual(result, expected_result)

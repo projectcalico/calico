@@ -50,6 +50,7 @@ class TestBasic(BaseTestCase):
         else:
             sys.modules['etcd'] = self._real_etcd
 
+    @mock.patch("calico.felix.devices.check_kernel_config", autospec=True)
     @mock.patch("calico.felix.devices.interface_up",
                 return_value=False, autospec=True)
     @mock.patch("calico.felix.devices.interface_exists",
@@ -58,15 +59,18 @@ class TestBasic(BaseTestCase):
     @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
     @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
+    @mock.patch("calico.felix.felix.UpdateSplitter", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
     @mock.patch("calico.felix.felix.MasqueradeManager", autospec=True)
     @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())
     def test_main_greenlet(self, m_iwait, m_MasqueradeManager,
-                           m_IptablesUpdater, m_start, m_load,
+                           m_IptablesUpdater, m_UpdateSplitter,
+                           m_start, m_load,
                            m_ipset_4, m_check_call, m_iface_exists,
-                           m_iface_up):
+                           m_iface_up, m_check_kernel_config):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
+        m_UpdateSplitter.return_value.greenlet = mock.Mock()
         m_config = mock.Mock(spec=config.Config)
         m_config.HOSTNAME = "myhost"
         m_config.IFACE_PREFIX = "tap"
@@ -81,3 +85,16 @@ class TestBasic(BaseTestCase):
         m_load.assert_called_once_with(async=False)
         m_iface_exists.assert_called_once_with("tunl0")
         m_iface_up.assert_called_once_with("tunl0")
+        m_check_kernel_config.assert_called_once_with()
+
+        # Check all IptablesUpdaters get passed to the splitter, which handles
+        # cleanup.
+        _, args, _ = m_UpdateSplitter.mock_calls[0]
+        updaters = args[4]  # List of IptablesUpdaters should be the 5th arg.
+        # But check that it contains what we expect.
+        self.assertEqual(updaters[0], m_IptablesUpdater.return_value)
+        num_ipt_upds = len([c for c in m_IptablesUpdater.mock_calls
+                            if c[0] == ""])
+        self.assertEqual(len(updaters), num_ipt_upds,
+                         "Number of IptablesUpdaters passed to UpdateSplitter"
+                         "not the same as number that were created.")
