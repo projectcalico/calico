@@ -235,7 +235,8 @@ class TestRules(BaseTestCase):
                                     m_v6_raw_upd)
 
         m_v6_raw_upd.ensure_rule_inserted.assert_called_once_with(
-            'PREROUTING --in-interface tap+ --match rpfilter --invert -j DROP'
+            'PREROUTING --in-interface tap+ --match rpfilter --invert -j DROP',
+            async=False,
         )
 
         m_ipset.ensure_exists.assert_called_once_with()

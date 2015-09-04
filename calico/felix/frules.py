@@ -200,7 +200,8 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # (For IPv4, this is controlled by a per-interface sysctl.)
     v6_raw_updater.ensure_rule_inserted(
         "PREROUTING --in-interface %s --match rpfilter --invert -j DROP" %
-        iface_match
+        iface_match,
+        async=False,
     )
 
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
