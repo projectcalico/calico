@@ -343,14 +343,9 @@ class LocalEndpoint(RefCountedActor):
             self._dirty = False
 
     def _update_chains(self):
-        updates, deps = _get_endpoint_rules(
-            self.combined_id.endpoint,
-            self._suffix,
-            self.ip_version,
-            self.endpoint.get("ipv%s_nets" % self.ip_version, []),
-            self.endpoint["mac"],
-            self.endpoint["profile_ids"]
-        )
+        updates, deps = _get_endpoint_rules(self.combined_id.endpoint,
+                                            self._suffix, self.endpoint["mac"],
+                                            self.endpoint["profile_ids"])
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
         except FailedSystemCall:
@@ -431,75 +426,63 @@ class LocalEndpoint(RefCountedActor):
                  self._iface_name or "unknown"))
 
 
-def _get_endpoint_rules(endpoint_id, suffix, ip_version, local_ips, mac,
-                        profile_ids):
+def _get_endpoint_rules(endpoint_id, suffix, mac, profile_ids):
     to_chain_name, from_chain_name = chain_names(suffix)
 
-    # First build the chain that manages packets to the interface.
-    # Common chain prefixes.
-    to_chain = []
-
-    # Jump to each profile in turn.  The profile will do one of the
-    # following:
-    # * DROP the packet; in which case we won't see it again.
-    # * RETURN without MARKing the packet; indicates that the packet was
-    #   accepted.
-    # * RETURN with a mark on the packet, indicates reaching the end
-    #   of the chain.
-    to_deps = set()
-    for profile_id in profile_ids:
-        profile_in_chain = profile_to_chain_name("inbound", profile_id)
-        to_deps.add(profile_in_chain)
-        to_chain.append("--append %s --jump MARK --set-mark 0" %
-                        to_chain_name)
-        to_chain.append("--append %s --jump %s" %
-                        (to_chain_name, profile_in_chain))
-        to_chain.append('--append %s --match mark ! --mark 1/1 '
-                        '--match comment --comment "No mark means profile '
-                        'accepted packet" --jump RETURN' % to_chain_name)
-
-    # Default drop rule.
-    to_chain.append(commented_drop_fragment(to_chain_name,
-                                            "Endpoint %s:" % endpoint_id))
-
-    # Now the chain that manages packets from the interface...
-    from_chain = []
-
-    # Combined anti-spoofing and jump to profile rules.  The only way to
-    # get to a profile chain is to have the correct IP and MAC address.
-    from_deps = set()
-    for profile_id in profile_ids:
-        profile_out_chain = profile_to_chain_name("outbound", profile_id)
-        from_deps.add(profile_out_chain)
-        from_chain.append("--append %s --jump MARK --set-mark 0" %
-                          from_chain_name)
-        for ip in local_ips:
-            if "/" in ip:
-                cidr = ip
-            else:
-                cidr = "%s/32" % ip if ip_version == 4 else "%s/128" % ip
-            # Jump to each profile in turn.  The profile will do one of the
-            # following:
-            # * DROP the packet; in which case we won't see it again.
-            # * RETURN without MARKing the packet; indicates that the packet
-            #   was accepted.
-            # * RETURN with a mark on the packet, indicates reaching the end
-            #   of the chain.
-            from_chain.append("--append %s --src %s --match mac "
-                              "--mac-source %s --jump %s" %
-                              (from_chain_name, cidr, mac.upper(),
-                               profile_out_chain))
-        from_chain.append('--append %s --match mark ! --mark 1/1 '
-                          '--match comment --comment "No mark means profile '
-                          'accepted packet" --jump RETURN' %
-                          from_chain_name)
-
-    # Final default DROP if no profile RETURNed or no MAC matched.
-    drop_frag = commented_drop_fragment(from_chain_name,
-                                        "Default DROP if no match (endpoint %s):" %
-                                        endpoint_id)
-    from_chain.append(drop_frag)
+    to_chain, to_deps = _build_to_or_from_chain(
+        endpoint_id,
+        profile_ids,
+        to_chain_name,
+        "inbound"
+    )
+    from_chain, from_deps = _build_to_or_from_chain(
+        endpoint_id,
+        profile_ids,
+        from_chain_name,
+        "outbound",
+        expected_mac=mac,
+    )
 
     updates = {to_chain_name: to_chain, from_chain_name: from_chain}
     deps = {to_chain_name: to_deps, from_chain_name: from_deps}
     return updates, deps
+
+
+def _build_to_or_from_chain(endpoint_id, profile_ids, chain_name,
+                            direction, expected_mac=None):
+    # Ensure the MARK is set to 0 when we start so that unmatched packets will
+    # be dropped.
+    chain = [
+        "--append %s --jump MARK --set-mark 0" % chain_name
+    ]
+    if expected_mac:
+        _log.debug("Policing source MAC: %s", expected_mac)
+        chain.append('--append %s --match mac ! --mac-source %s --jump DROP '
+                     '--match comment --comment "Incorrect source MAC"' %
+                     (chain_name, expected_mac))
+    # Jump to each profile in turn.  The profile will do one of the
+    # following:
+    # * DROP the packet; in which case we won't see it again.
+    # * RETURN the packet with MARK==1, indicating it accepted the packet. In
+    #   which case, we RETURN and skip further profiles.
+    # * RETURN the packet with MARK==0, indicating it did not match the packet.
+    #   In which case, we carry on and process the next profile.
+    deps = set()
+    for profile_id in profile_ids:
+        profile_chain = profile_to_chain_name(direction, profile_id)
+        deps.add(profile_chain)
+        chain.append("--append %s --jump %s" % (chain_name, profile_chain))
+        # If the profile accepted the packet, it sets MARK==1.  Immediately
+        # RETURN the packet to signal that it's been accepted.
+        chain.append('--append %s --match mark --mark 1/1 '
+                     '--match comment --comment "Profile accepted packet" '
+                     '--jump RETURN' % chain_name)
+
+    # Default drop rule.
+    chain.append(
+        commented_drop_fragment(
+            chain_name,
+            "Default DROP if no match (endpoint %s):" % endpoint_id
+        )
+    )
+    return chain, deps

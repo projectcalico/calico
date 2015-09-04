@@ -33,6 +33,7 @@ import signal
 import gevent
 
 from calico import common
+from calico.felix import devices
 from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
@@ -66,6 +67,9 @@ def _main_greenlet(config):
         config_loaded = etcd_api.load_config(async=False)
         config_loaded.wait()
 
+        # Check for any incorrect kernel configuration that would break Calico.
+        devices.check_kernel_config()
+
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
         v4_filter_updater = IptablesUpdater("filter", ip_version=4,
@@ -81,6 +85,7 @@ def _main_greenlet(config):
                                         v4_dispatch_chains,
                                         v4_rules_manager)
 
+        v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
         v6_filter_updater = IptablesUpdater("filter", ip_version=6,
                                             config=config)
         v6_ipset_mgr = IpsetManager(IPV6)
@@ -98,6 +103,7 @@ def _main_greenlet(config):
                                          [v4_ep_manager, v6_ep_manager],
                                          [v4_filter_updater,
                                           v6_filter_updater,
+                                          v6_raw_updater,
                                           v4_nat_updater],
                                          v4_masq_manager)
         iface_watcher = InterfaceWatcher(update_splitter)
@@ -114,6 +120,7 @@ def _main_greenlet(config):
         v4_dispatch_chains.start()
         v4_ep_manager.start()
 
+        v6_raw_updater.start()
         v6_filter_updater.start()
         v6_ipset_mgr.start()
         v6_rules_manager.start()
@@ -135,6 +142,7 @@ def _main_greenlet(config):
             v4_dispatch_chains,
             v4_ep_manager,
 
+            v6_raw_updater,
             v6_filter_updater,
             v6_ipset_mgr,
             v6_rules_manager,
@@ -150,7 +158,7 @@ def _main_greenlet(config):
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
         install_global_rules(config, v4_filter_updater, v6_filter_updater,
-                             v4_nat_updater)
+                             v4_nat_updater, v6_raw_updater)
 
         # Start polling for updates. These kicks make the actors poll
         # indefinitely.

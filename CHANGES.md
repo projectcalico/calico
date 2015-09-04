@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Explicitly use and enable the kernel's reverse path filtering function,
+  remove our iptables anti-spoofing rules, which were not as robust.
+
 ## 1.0.0
 
 - Add support for setting MTU on IP-in-IP device.

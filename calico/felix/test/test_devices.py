@@ -49,6 +49,26 @@ class TestDevices(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def test_check_kernel_config(self):
+        with mock.patch("calico.felix.devices._read_proc_sys",
+                        autospec=True, return_value="1") as m_read_proc_sys:
+            devices.check_kernel_config()
+
+    def test_check_kernel_config_bad_rp_filter(self):
+        with mock.patch("calico.felix.devices._read_proc_sys",
+                        autospec=True, return_value="2") as m_read_proc_sys:
+            self.assertRaises(devices.BadKernelConfig,
+                              devices.check_kernel_config)
+
+    def test_read_proc_sys(self):
+        m_open = mock.mock_open(read_data="1\n")
+        with mock.patch('__builtin__.open', m_open, create=True):
+            result = devices._read_proc_sys("/proc/sys/foo/bar")
+        calls = [mock.call('/proc/sys/foo/bar', 'rb'),
+                 M_ENTER, mock.call().read(), M_CLEAN_EXIT]
+        m_open.assert_has_calls(calls)
+        self.assertEqual(result, "1")
+
     def test_interface_exists(self):
         tap = "tap" + str(uuid.uuid4())[:11]
 
@@ -282,7 +302,9 @@ class TestDevices(unittest.TestCase):
         tap = "tap" + str(uuid.uuid4())[:11]
         with mock.patch('__builtin__.open', m_open, create=True):
             devices.configure_interface_ipv4(tap)
-        calls = [mock.call('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb'),
+        calls = [mock.call('/proc/sys/net/ipv4/conf/%s/rp_filter' % tap, 'wb'),
+                 M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,
+                 mock.call('/proc/sys/net/ipv4/conf/%s/route_localnet' % tap, 'wb'),
                  M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,
                  mock.call('/proc/sys/net/ipv4/conf/%s/proxy_arp' % tap, 'wb'),
                  M_ENTER, mock.call().write('1'), M_CLEAN_EXIT,

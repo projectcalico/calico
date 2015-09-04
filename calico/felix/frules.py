@@ -16,7 +16,107 @@
 felix.frules
 ~~~~~~~~~~~~
 
-Felix rule management, including iptables and ipsets.
+Functions for generating iptables rules.  This covers our top-level
+chains as well as low-level conversion from our datamodel rules to
+iptables format.
+
+iptables background
+~~~~~~~~~~~~~~~~~~~
+
+iptables configuration is split into multiple tables, which each support
+different types of rules.  Each table contains multiple chains, which
+are sequences of rules.  At certain points in packet processing the
+packet is handed to one of the always-present kernel chains in a
+particular table.  The kernel chains have default behaviours but they
+can be modified to add or remove rules, including inserting a jump to
+another chain.
+
+Felix is mainly concerned with the "filter" table, which is used for
+imposing policy rules.  There are multiple kernel chains in the filter
+table.  After the routing decision has been made, packets enter
+
+* the INPUT chain if they are destined for the host itself
+* the OUTPUT chain if they are being sent by the host itself
+* the FORWARD chain if they are to be forwarded between two interfaces.
+
+Note: packets that are being forwarded do not traverse the INPUT or
+OUTPUT chains at all.  INPUT and OUTPUT are only used for packets that
+the host itself is to receive/send.
+
+Packet paths
+~~~~~~~~~~~~
+
+There are a number of possible paths through the filter chains that we
+care about:
+
+* Packets from a local workload to another local workload traverse the
+  FORWARD chain only.  Felix must ensure that those packets have *both*
+  the outbound policy of the sending workload and the inbound policy
+  of the receiving workload applied.
+
+* Packets from a local workload to a remote address traverse the FORWARD
+  chain only.  Felix must ensure that those packets have the outbound
+  policy of the local workload applied.
+
+* Packets from a remote address to a local workload traverse the FORWARD
+  chain only.  Felix must apply the inbound policy of the local workload.
+
+* Packets from a local workload to the host itself traverse the INPUT
+  chain.  Felix must apply the outbound policy of the workload.
+
+Chain structure
+~~~~~~~~~~~~~~~
+
+Rather than adding many rules to the kernel chains, which are a shared
+resource (and hence difficult to unpick), Felix creates its own delegate
+chain for each kernel chain and inserts a single jump rule into the
+kernel chain:
+
+* INPUT -> felix-INPUT
+* FORWARD -> felix-FORWARD
+
+The top-level felix-XXX chains are static and configured at start-of-day.
+
+The felix-FORWARD chain sends packet that arrive from a local workload to
+the felix-FROM-ENDPOINT chain, which applies inbound policy.  Packets that
+are denied by policy are dropped immediately.  However, accepted packets
+are returned to the felix-FORWARD chain in case they need to be processed
+further.  felix-FORWARD then directs packets that are going to local
+endpoints to the felix-TO-ENDPOINT chain, which applies inbound policy.
+Similarly, felix-TO-ENDPOINT either drops or returns the packet.  Finally,
+if both the FROM-ENDPOINT and TO-ENDPOINT chains allow the packet,
+felix-FORWARD accepts the packet and allows it through.
+
+The felix-INPUT sends packets from local workloads to the (shared)
+felix-FROM-ENDPOINT chain, which applies outbound policy.  Then it
+(optionally) accepts packets that are returned.
+
+Since workloads come and go, the TO/FROM-ENDPOINT chains are dynamic and
+consist of dispatch tables based on device name.  Those chains are managed
+by dispatch.py.
+
+The dispatch chains direct packets to per-endpoint ("felix-to/from")
+chains, which are responsible for policing IP addresses.  Those chains are
+managed by endpoint.py.  Since the actual policy rules can be shared by
+multiple endpoints, we put each set of policy rules in its own chain and
+the per-endpoint chains send packets to the relevant policy
+(felix-p-xxx-i/o) chains in turn.  Policy profile chains are managed by
+profilerules.py.
+
+Since an endpoint may be in multiple profiles and we execute the policy
+chains of those profiles in sequence, the policy chains need to
+communicate three different "return values"; for this we use the packet
+MARK:
+
+* Packet was matched by a deny rule.  In this case the packet is immediately
+  dropped.
+* Packet was matched by an allow rule.  In this case the packet is returned
+  with MARK==1.  The calling chain can then return the packet to its caller
+  for further processing.
+* Packet was not matched at all.  In this case, the packet is returned with
+  MARK==0.  The calling chain can then send the packet through the next
+  profile chain.
+
 """
 import logging
 import itertools
@@ -63,7 +163,7 @@ def profile_to_chain_name(inbound_or_outbound, profile_id):
 
 
 def install_global_rules(config, v4_filter_updater, v6_filter_updater,
-                         v4_nat_updater):
+                         v4_nat_updater, v6_raw_updater):
     """
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change (such as the rules that send all
@@ -96,6 +196,13 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             _log.info("Tunnel device wasn't up; enabling.")
             futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
 
+    # Ensure that Calico-controlled IPv6 hosts cannot spoof their IP addresses.
+    # (For IPv4, this is controlled by a per-interface sysctl.)
+    v6_raw_updater.ensure_rule_inserted(
+        "PREROUTING --in-interface %s --match rpfilter --invert -j DROP" %
+        iface_match
+    )
+
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
     nat_pr = []
     if config.METADATA_IP is not None:
@@ -112,9 +219,8 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     v4_nat_updater.ensure_rule_inserted(
         "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
 
-    # Now the filter table. This needs to have calico-filter-FORWARD and
-    # calico-filter-INPUT chains, which we must create before adding any
-    # rules that send to them.
+    # Now the filter table. This needs to have felix-FORWARD and felix-INPUT
+    # chains, which we must create before adding any rules that send to them.
     for iptables_updater, hosts_set in [(v4_filter_updater, HOSTS_IPSET_V4),
                                         # FIXME support IP-in-IP for IPv6.
                                         (v6_filter_updater, None)]:
@@ -169,7 +275,21 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
 def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
                                  on_allow="ACCEPT", on_deny="DROP",
                                  comment_tag=None):
-    fragments = []
+    """
+    Convert our JSON representation of a list of rules into iptables
+    fragments.
+
+    :returns list[str] a list of fragments.
+    """
+    # Start by marking all packets.
+    # * If we hit an allow rule, we'll return with the mark still set, to
+    #   indicate that we matched.
+    # * If we hit a deny rule, we'll drop the packet immediately.
+    # * If we reach the end of the chain, we'll un-mark the packet again to
+    #   indicate no match.
+    fragments = [
+        '--append %s --jump MARK --set-mark 1' % chain_name
+    ]
     for r in rules:
         rule_version = r.get('ip_version')
         if rule_version is None or rule_version == ip_version:
@@ -178,15 +298,21 @@ def rules_to_chain_rewrite_lines(chain_name, rules, ip_version, tag_to_ipset,
                                                         tag_to_ipset,
                                                         on_allow=on_allow,
                                                         on_deny=on_deny))
-    # If we get to the end of the chain without a match, we mark the packet
-    # to let the caller know that we haven't accepted the packet.
-    fragments.append('--append %s --match comment '
-                     '--comment "Mark as not matched" '
-                     '--jump MARK --set-mark 1' % chain_name)
+
+    # If we get to the end of the chain without a match, we remove the mark
+    # again to indicate that the packet wasn't matched.
+    fragments.append(
+        '--append %s '
+        '--match comment --comment "No match, fall through to next profile" '
+        '--jump MARK --set-mark 0' % chain_name
+    )
     return fragments
 
 
 def commented_drop_fragment(chain_name, comment):
+    """
+    :return str: a DROP rule fragment with a comment attached.
+    """
     comment = comment[:255]  # Limit imposed by iptables.
     assert re.match(r'[\w: ]{,255}', comment), "Invalid comment %r" % comment
     return ('--append %s --jump DROP -m comment --comment "%s"' %

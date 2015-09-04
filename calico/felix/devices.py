@@ -33,6 +33,28 @@ from calico.felix.futils import FailedSystemCall
 _log = logging.getLogger(__name__)
 
 
+def check_kernel_config():
+    """
+    Checks the kernel configuration for problems that would break our
+    security guarantees, for example.
+
+    :raises BadKernelConfig if a problem is detected.
+    """
+
+    # To prevent workloads from spoofing their IP addresses, we need to set the
+    # per-interface rp_filter setting to 1, which enables strict RPF checking.
+    # Verify that the kernel's global setting won't override our per-interface
+    # setting with an insecure value.
+    ps_name = "/proc/sys/net/ipv4/conf/all/rp_filter"
+    rp_filter = int(_read_proc_sys(ps_name))
+    if rp_filter > 1:
+        _log.critical("Kernel's RPF check is set to 'loose'.  This would "
+                      "allow endpoints to spoof their IP address.  Calico "
+                      "requires net.ipv4.conf.all.rp_filter to be set to "
+                      "0 or 1.")
+        raise BadKernelConfig("net.ipv4.conf.all.rp_filter set to 'loose'")
+
+
 def interface_exists(interface):
     """
     Checks if an interface exists.
@@ -97,21 +119,20 @@ def configure_interface_ipv4(if_name):
     Configure the various proc file system parameters for the interface for
     IPv4.
 
-    Specifically, allow packets from controlled interfaces to be directed to
-    localhost, and enable proxy ARP.
+    Specifically,
+      - Allow packets from controlled interfaces to be directed to localhost
+      - Enable proxy ARP
+      - Enable the kernel's RPF check.
 
     :param if_name: The name of the interface to configure.
     :returns: None
     """
-    with open('/proc/sys/net/ipv4/conf/%s/route_localnet' % if_name,
-              'wb') as f:
-        f.write('1')
-
-    with open("/proc/sys/net/ipv4/conf/%s/proxy_arp" % if_name, 'wb') as f:
-        f.write('1')
-
-    with open("/proc/sys/net/ipv4/neigh/%s/proxy_delay" % if_name, 'wb') as f:
-        f.write('0')
+    # Enable the kernel's RPF check, which ensures that a VM cannot spoof
+    # its IP address.
+    _write_proc_sys('/proc/sys/net/ipv4/conf/%s/rp_filter' % if_name, 1)
+    _write_proc_sys('/proc/sys/net/ipv4/conf/%s/route_localnet' % if_name, 1)
+    _write_proc_sys("/proc/sys/net/ipv4/conf/%s/proxy_arp" % if_name, 1)
+    _write_proc_sys("/proc/sys/net/ipv4/neigh/%s/proxy_delay" % if_name, 0)
 
 
 def configure_interface_ipv6(if_name, proxy_target):
@@ -126,13 +147,22 @@ def configure_interface_ipv6(if_name, proxy_target):
     :returns: None
     :raises: FailedSystemCall
     """
-    with open("/proc/sys/net/ipv6/conf/%s/proxy_ndp" % if_name, 'wb') as f:
-        f.write('1')
+    _write_proc_sys("/proc/sys/net/ipv6/conf/%s/proxy_ndp" % if_name, 1)
 
     # Allows None if no IPv6 proxy target is required.
     if proxy_target:
         futils.check_call(["ip", "-6", "neigh", "add",
                            "proxy", str(proxy_target), "dev", if_name])
+
+
+def _read_proc_sys(name):
+    with open(name, "rb") as f:
+        return f.read().strip()
+
+
+def _write_proc_sys(name, value):
+    with open(name, "wb") as f:
+        f.write(str(value))
 
 
 def add_route(ip_type, ip, interface, mac):
@@ -358,3 +388,7 @@ class InterfaceWatcher(Actor):
                     else:
                         _log.debug("Network interface has gone away : %s",
                                    rta_data)
+
+
+class BadKernelConfig(Exception):
+    pass
