@@ -299,6 +299,8 @@ RTM_NEWLINK = 16
 RTM_DELLINK = 17
 
 IFLA_IFNAME = 3
+IFLA_OPERSTATE = 16
+IF_OPER_UP = 6
 
 
 class RTNetlinkError(Exception):
@@ -328,6 +330,11 @@ class InterfaceWatcher(Actor):
                           socket.NETLINK_ROUTE)
         s.bind((os.getpid(), RTMGRP_LINK))
 
+        # A dict that remembers the detailed flags of an interface
+        # when we last signalled it as being up.  We use this to avoid
+        # sending duplicate interface_update signals.
+        if_last_flags = {}
+
         while True:
             # Get the next set of data.
             data = s.recv(65535)
@@ -345,49 +352,72 @@ class InterfaceWatcher(Actor):
                 # process down.
                 raise RTNetlinkError("Netlink error message, header : %s",
                                      futils.hex(hdr))
+            _log.debug("Netlink message type %s len %s", msg_type, msg_len)
 
-            # Now 16 bytes of netlink header.
-            hdr = data[:16]
-            data = data[16:]
-            family, _, if_type, index, flags, change = struct.unpack("=BBHiII",
-                                                                     hdr)
+            if msg_type in [RTM_NEWLINK, RTM_DELLINK]:
+                # A new or removed interface.  Read the struct
+                # ifinfomsg, which is 16 bytes.
+                hdr = data[:16]
+                data = data[16:]
+                _, _, _, index, flags, _ = struct.unpack("=BBHiII", hdr)
+                _log.debug("Interface index %s flags %x", index, flags)
 
-            # Bytes left is the message length minus the two headers of 16
-            # bytes each.
-            remaining = msg_len - 32
+                # Bytes left is the message length minus the two headers of 16
+                # bytes each.
+                remaining = msg_len - 32
 
-            while remaining:
-                # The data content is an array of RTA objects, each of which
-                # has a 4 byte header and some data.
-                rta_len, rta_type = struct.unpack("=HH", data[:4])
+                # Loop through attributes, looking for the pieces of
+                # information that we need.
+                ifname = None
+                operstate = None
+                while remaining:
+                    # The data content is an array of RTA objects, each of
+                    # which has a 4 byte header and some data.
+                    rta_len, rta_type = struct.unpack("=HH", data[:4])
 
-                # This check comes from RTA_OK, and terminates a string of
-                # routing attributes.
-                if rta_len < 4:
-                    break
+                    # This check comes from RTA_OK, and terminates a string of
+                    # routing attributes.
+                    if rta_len < 4:
+                        break
 
-                rta_data = data[4:rta_len]
+                    rta_data = data[4:rta_len]
 
-                # Remove the RTA object from the data. The length to jump is
-                # the rta_len rounded up to the nearest 4 byte boundary.
-                increment = int((rta_len + 3) / 4) * 4
-                data = data[increment:]
-                remaining -= increment
+                    # Remove the RTA object from the data. The length to jump
+                    # is the rta_len rounded up to the nearest 4 byte boundary.
+                    increment = int((rta_len + 3) / 4) * 4
+                    data = data[increment:]
+                    remaining -= increment
 
-                if rta_type == IFLA_IFNAME:
-                    # We only really care about NEWLINK messages; if an
-                    # interface goes away, we don't need to care (since it
-                    # takes its routes with it, and the interface will
-                    # presumably go away too). We do log though, just in case.
-                    rta_data = rta_data[:-1]
-                    if msg_type == RTM_NEWLINK:
-                        _log.debug("Detected new network interface : %s",
-                                   rta_data)
-                        self.update_splitter.on_interface_update(rta_data,
-                                                                 async=True)
-                    else:
-                        _log.debug("Network interface has gone away : %s",
-                                   rta_data)
+                    if rta_type == IFLA_IFNAME:
+                        ifname = rta_data[:-1]
+                        _log.debug("IFLA_IFNAME: %s", ifname)
+                    elif rta_type == IFLA_OPERSTATE:
+                        operstate, = struct.unpack("=B", rta_data[:1])
+                        _log.debug("IFLA_OPERSTATE: %s", operstate)
+
+                if (ifname and
+                    ifname in if_last_flags and
+                    (msg_type == RTM_DELLINK or operstate != IF_OPER_UP)):
+                    # An interface that we've previously signalled is
+                    # being deleted or oper down, so remove our record
+                    # of it.
+                    del if_last_flags[ifname]
+
+                if (ifname and
+                    msg_type == RTM_NEWLINK and
+                    operstate == IF_OPER_UP and
+                    (ifname not in if_last_flags or
+                     if_last_flags[ifname] != flags)):
+                    # We only care about notifying when a new
+                    # interface is usable, which - according to
+                    # https://www.kernel.org/doc/Documentation/networking/
+                    # operstates.txt - is fully conveyed by the
+                    # operstate.  (When an interface goes away, it
+                    # automatically takes its routes with it.)
+                    _log.debug("New network interface : %s %x", ifname, flags)
+                    if_last_flags[ifname] = flags
+                    self.update_splitter.on_interface_update(ifname,
+                                                             async=True)
 
 
 class BadKernelConfig(Exception):
