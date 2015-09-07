@@ -81,7 +81,7 @@ if is_service_enabled calico; then
 
 		    # Install the core Calico code.
 		    CALICO_DIR=${DEST}/calico
-		    git_clone ${CALICO_REPO:-https://github.com/projectcalico/calico.git} $CALICO_DIR ${CALICO_BRANCH:-routed}
+		    git_clone ${CALICO_REPO:-https://github.com/projectcalico/calico.git} $CALICO_DIR ${CALICO_BRANCH:-master}
 		    cd $CALICO_DIR
 		    pip_install .
 
