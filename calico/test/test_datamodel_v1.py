@@ -86,3 +86,31 @@ class TestDatamodel(unittest.TestCase):
             get_profile_id_for_profile_dir("/calico/foo"), None)
         self.assertEquals(
             get_profile_id_for_profile_dir("/calico/v1/policy/profile/prof1/rules"), None)
+
+
+class TestEndpointId(unittest.TestCase):
+
+    def test_equality(self):
+        ep_id = EndpointId("localhost", "orchestrator", "workload", "endpoint")
+        self.assertTrue(ep_id == ep_id)
+        self.assertFalse(ep_id != ep_id)
+
+        self.assertFalse(ep_id == "not an endpoint id")
+        self.assertFalse(ep_id == 42)
+
+        bad_host_ep_id = EndpointId("notlocalhost", "orchestrator",
+                                    "workload", "endpoint")
+        self.assertFalse(ep_id == bad_host_ep_id)
+
+        bad_orchestrator_ep_id = EndpointId("hostname", "notanorchestrator",
+                                            "workload", "endpoint")
+        self.assertFalse(ep_id == bad_orchestrator_ep_id)
+
+        bad_workload_ep_id = EndpointId("hostname", "orchestrator",
+                                        "notworkload", "endpoint")
+        self.assertFalse(ep_id == bad_workload_ep_id)
+
+        bad_endpoint_ep_id = EndpointId("hostname", "orchestrator",
+                                        "workload", "notanendpoint")
+        self.assertFalse(ep_id == bad_endpoint_ep_id)
+        self.assertTrue(ep_id != bad_endpoint_ep_id)
