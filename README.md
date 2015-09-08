@@ -1,3 +1,4 @@
+[![Coverage Status](https://coveralls.io/repos/projectcalico/calico/badge.svg?branch=HEAD&service=github)](https://coveralls.io/github/projectcalico/calico?branch=HEAD)
 # Project Calico
 
 Project Calico represents a new approach to virtual networking, based on the
