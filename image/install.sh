@@ -14,7 +14,7 @@ apt-get install -qy \
         libssl-dev
 
 # Install Confd
-curl -L https://www.github.com/kelseyhightower/confd/releases/download/v0.9.0/confd-0.9.0-linux-amd64 -o confd
+curl -L https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd -o confd
 chmod +x confd
 
 pip install -r /pycalico/requirements.txt
