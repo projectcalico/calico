@@ -198,13 +198,6 @@ please get in touch with us and we'll be happy to help you through the process.
         cd python-etcd-master
         python setup.py install
 
-5. Install python-posix-spawn::
-
-        curl -L https://github.com/projectcalico/python-posix-spawn/releases/download/v0.2.post6/posix-spawn-0.2.post6.tar.gz -o posix-spawn.tar.gz
-        tar xvf posix-spawn.tar.gz
-        cd posix-spawn-0.2.post6
-        python setup.py install
-
 Etcd Proxy Install
 ------------------
 
@@ -465,13 +458,20 @@ On each compute node, perform the following steps:
 
         yum install -y bird bird6
 
-10. Install the ``calico-compute`` package:
+10. Install python-posix-spawn::
+
+        curl -L https://github.com/projectcalico/python-posix-spawn/releases/download/v0.2.post7/posix-spawn-0.2.post7.tar.gz -o posix-spawn.tar.gz
+        tar xvf posix-spawn.tar.gz
+        cd posix-spawn-0.2.post7
+        python setup.py install
+
+11. Install the ``calico-compute`` package:
 
     ::
 
         yum install calico-compute
 
-11. Configure BIRD. By default Calico assumes that you'll be deploying a
+12. Configure BIRD. By default Calico assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's
@@ -520,11 +520,11 @@ On each compute node, perform the following steps:
          chkconfig bird on
          chkconfig bird6 on
 
-12. Create the ``/etc/calico/felix.cfg`` file by copying
+13. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
     used, but see :doc:`configuration` for more details.
 
-13. Restart the Felix service:
+14. Restart the Felix service:
 
     ::
 
