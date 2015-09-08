@@ -255,8 +255,11 @@ class _EtcdWatcher(gevent.Greenlet):
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
-        # Configuration keys.  If these change, by default, we'll die and
-        # let the init daemon restart us.
+        # Configuration keys.  If any of these is changed or set a resync is
+        # done, including a full reload of configuration. If any field has
+        # actually changed (as opposed to being reset to the same value or
+        # explicitly set to the default, say), Felix terminates allowing the
+        # init daemon to restart it.
         reg(CONFIG_PARAM_KEY,
             on_set=self._resync,
             on_del=self._resync)
