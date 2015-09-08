@@ -1,9 +1,12 @@
 # Changelog
 
-## 1.0.1
+## 1.1.0
 
+- Improve the documentation about upgrading a Calico/OpenStack system.
+- Fix compatibility with latest OpenStack code (oslo_config).
+- Use posix_spawn to improve Felix's performance under heavy load.
 - Explicitly use and enable the kernel's reverse path filtering function,
-  remove our iptables anti-spoofing rules, which were not as robust.
+  and remove our iptables anti-spoofing rules, which were not as robust.
 
 ## 1.0.0
 

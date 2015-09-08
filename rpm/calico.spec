@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.0.0
+Version:        1.1.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -209,6 +209,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Sep 08 2015 Neil Jerram <Neil.Jerram@metaswitch.com> 1.1.0
+  - Improve the documentation about upgrading a Calico/OpenStack system.
+  - Fix compatibility with latest OpenStack code (oslo_config).
+  - Use posix_spawn to improve Felix's performance under heavy load.
+  - Explicitly use and enable the kernel's reverse path filtering
+    function, and remove our iptables anti-spoofing rules, which were not
+    as robust.
+
 * Fri Aug 14 2015 Matt Dupre <matt@projectcalico.org> 1.0.0-1
   - Calico version 1.0.0 release
 

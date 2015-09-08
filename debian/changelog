@@ -1,9 +1,13 @@
-calico (1.0.1~rc1) trusty; urgency=medium
+calico (1.1.0-1) trusty; urgency=low
 
-  * Replace fork() with posix_spawn() for significant performance improvement
-    in felix.
+  * Improve the documentation about upgrading a Calico/OpenStack system.
+  * Fix compatibility with latest OpenStack code (oslo_config).
+  * Use posix_spawn to improve Felix's performance under heavy load.
+  * Explicitly use and enable the kernel's reverse path filtering
+    function, and remove our iptables anti-spoofing rules, which were not
+    as robust.
 
- -- Shaun Crampton <shaun@projectcalico.org>  Tue, 25 Aug 2015 15:59:00 +0100
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Tue, 08 Sep 2015 11:46:51 +0100
 
 calico (1.0.0-1) trusty; urgency=medium
 
