@@ -1,6 +1,6 @@
 # Calico with Docker default networking
 
-This demonstration uses Dockers standard networking infrastructure, requiring you to explicitly add a created container into a Calico network.
+This demonstration uses Docker's standard networking infrastructure, requiring you to explicitly add a created container into a Calico network.
 
 ## Environment
 This demonstration makes some assumptions about the environment you have.
@@ -65,7 +65,7 @@ On calico-02
     sudo calicoctl container add workload-E 192.168.0.5
     
 Once the containers have Calico networking added, they gain a new network 
-interface the the assigned IP address. At this point, the containers have not 
+interface: the assigned IP address. At this point, the containers have not 
 been added to any policy profiles so they won't be able to communicate with 
 any other containers.
 
@@ -75,7 +75,7 @@ Create some profiles (this can be done on either host)
     calicoctl profile add PROF_B
     calicoctl profile add PROF_D
 
-When each container is added to calico, an "endpoint" is registered for each 
+When each container is added to Calico, an "endpoint" is registered for each 
 container's interface. Containers are only allowed to communicate with one 
 another when both of their endpoints are assigned the same profile. To assign 
 a profile to an endpoint run the following commands.
