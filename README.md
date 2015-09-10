@@ -16,6 +16,7 @@ The CoreOS [documentation](https://github.com/coreos/rkt/blob/master/Documentati
 
 * Running `calicoctl node` with the `--rkt` flag will start the calico/node process and automatically install the plugin for you. Alternatively you can download the [plugin binary](https://github.com/projectcalico/calico-rkt/releases/) yourself and move it to the rkt plugin directory.
 ```
+chmod +x calico_rkt
 sudo mv -f ./calico_rkt /usr/lib/rkt/plugins/net/calico
 ```
 
@@ -37,7 +38,7 @@ To build the Calico Networking Plugin for rkt locally, clone this repository and
     "type": "calico",
     "ipam": {
         "type": "calico-ipam",
-        "subnet": "10.1.0.0/16",
+        "subnet": "10.1.0.0/16"
     }
 }
 ```
