@@ -6,8 +6,6 @@ envExport:
       annotations:
         "gui-x": "1045.973572253264"
         "gui-y": "544.8983810601128"
-      to:
-        - "rabbitmq-server=0"
     "neutron-calico":
       charm: "cs:~project-calico/trusty/neutron-calico-4"
       num_units: 0
@@ -32,8 +30,6 @@ envExport:
       annotations:
         "gui-x": "646.4326692255784"
         "gui-y": "544.8983810601128"
-      to:
-        - "rabbitmq-server=0"
     glance:
       charm: "cs:trusty/glance-22"
       num_units: 1
@@ -74,8 +70,6 @@ envExport:
       annotations:
         "gui-x": "1045.973572253264"
         "gui-y": "198.88580918716224"
-      to:
-        - "rabbitmq-server=0"
     "neutron-api":
       charm: "cs:~project-calico/trusty/neutron-api-2"
       num_units: 1
