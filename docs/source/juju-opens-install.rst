@@ -22,6 +22,9 @@ environment using `any of the standard methods`_. This will get you a simple
 OpenStack deployment with two compute nodes, which you can then easily scale
 out by adding more instances of the ``nova-compute`` charm.
 
+The default admin password for the deployment is "openstack" - you may wish to
+update this in the bundle (search for the keystone "admin-password" option).
+
 For more detailed information, please see `this blog post`_ on the Calico blog.
 
 .. _Juju Charms: https://jujucharms.com/

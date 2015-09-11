@@ -30,6 +30,8 @@ envExport:
       annotations:
         "gui-x": "646.4326692255784"
         "gui-y": "544.8983810601128"
+      options:
+        "admin-password": "openstack"
     glance:
       charm: "cs:trusty/glance-22"
       num_units: 1
