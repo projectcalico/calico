@@ -1,5 +1,7 @@
 # Changelog
 
+- Performance enhancements to ipset manipulation.
+
 ## 1.1.0
 
 - Improve the documentation about upgrading a Calico/OpenStack system.

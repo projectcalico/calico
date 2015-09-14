@@ -500,7 +500,7 @@ class IpsetActor(Actor):
         self._ipset = ipset
         # Members - which entries should be in the ipset.
         self.members = set()
-        # Members which really are in the ipset.
+        # Members which really are in the ipset. None means "don't know yet"
         self.programmed_members = None
         self._force_reprogram = False
         self.stopped = False
@@ -544,12 +544,16 @@ class IpsetActor(Actor):
             self._force_reprogram = False
 
     def _sync_to_ipset(self):
-        _log.info("Rewriting %s with %d members.", self, len(self.members))
         _log.debug("Setting ipset %s to %s", self, self.members)
-        # Defer to our helper.
-        self._ipset.replace_members(self.members)
-        # We have got the set into the correct state.
-        self.programmed_members = self.members.copy()
+        # Defer to our helper to actually make the changes.
+        if self._force_reprogram or self.programmed_members is None:
+            self._ipset.replace_members(self.members)
+            self.programmed_members = self.members.copy()
+        elif self.members != self.programmed_members:
+            self._ipset.update_members(self.programmed_members, self.members)
+            self.programmed_members = self.members.copy()
+        else:
+            _log.debug("Set already in correct state")
 
     def __str__(self):
         return (
@@ -661,6 +665,24 @@ class Ipset(object):
         input_lines = [self._create_cmd(self.set_name)]
         self._exec_and_commit(input_lines)
 
+    def update_members(self, old_members, new_members):
+        """
+        Update the ipset with changes to members. The set must exist.
+        """
+        try:
+            input_lines = ["del %s %s" % (self.set_name, m)
+                           for m in (old_members - new_members)]
+            input_lines += ["add %s %s" % (self.set_name, m)
+                            for m in (new_members - old_members)]
+            _log.info("Making %d changes (new size %d) to ipset %s",
+                      len(input_lines), len(new_members), self.set_name)
+            self._exec_and_commit(input_lines)
+        except FailedSystemCall as err:
+            # An error; log it and try nuking the ipset to continue.
+            _log.error("Failed to update ipset %s (%s) - retrying",
+                       self.set_name, err.stderr)
+            self.replace_members(new_members)
+
     def replace_members(self, members):
         """
         Atomically rewrites the ipset with the new members.
@@ -671,6 +693,7 @@ class Ipset(object):
         # The only operation that we're sure is atomic is swapping two ipsets
         # so we build up the complete set of members in a temporary ipset,
         # swap it into place and then delete the old ipset.
+        _log.info("Rewriting ipset %s with %d members", self, len(members))
         input_lines = [
             # Ensure both the main set and the temporary set exist.
             self._create_cmd(self.set_name),
