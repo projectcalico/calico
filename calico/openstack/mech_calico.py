@@ -38,6 +38,7 @@ from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from neutron import context as ctx
 from neutron import manager
+from oslo.config import cfg
 
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
@@ -49,9 +50,11 @@ except ImportError:  # Kilo
 
 # Calico imports.
 import etcd
+from calico.etcdutils import ACTION_MAPPING
+from calico.datamodel_v1 import FELIX_STATUS_DIR, hostname_from_status_key
 from calico.openstack.t_etcd import (
-    CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags
-)
+    CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags,
+    CalicoEtcdWatcher)
 
 LOG = log.getLogger(__name__)
 
@@ -150,10 +153,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Initialize fields for the database object and transport.  We will
         # initialize these properly when we first need them.
         self.db = None
+        self._db_context = None
         self.transport = None
+        self._etcd_watcher = None
+        self._etcd_watcher_thread = None
         self._my_pid = None
         self._periodic_resync_greenlet = None
         self._epoch = 0
+        self.in_resync = False
 
         # Tell the monkeypatch where we are.
         global mech_driver
@@ -196,14 +203,53 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         self._my_pid = current_pid
 
-        # Start our resynchronization process.  Just in case we ever get two
-        # threads running, use an epoch counter to tell the old thread to die.
+        # Start our resynchronization process and status updating. Just in
+        # case we ever get two same threads running, use an epoch counter to
+        # tell the old thread to die.
         # This is defensive: our greenlets don't actually seem to get forked
         # with the process.
         # We deliberately do this last, to ensure that all of the setup above
         # is complete before we start running.
         self._epoch += 1
         eventlet.spawn(self.periodic_resync_thread, self._epoch)
+        eventlet.spawn(self._status_updating_thread, self._epoch)
+
+    def _status_updating_thread(self, expected_epoch):
+        """
+        This method acts as a status updates handler logic for the
+        Calico mechanism driver. Watches for felix updates in etcd
+        and passes info to Neutron database.
+        """
+        LOG.info("Handle status updating thread started.")
+        self._db_context = ctx.get_admin_context()
+
+        while self._epoch == expected_epoch:
+            # Only handle updates if we are the master node.
+            if self.transport.is_master:
+                if self._etcd_watcher is None:
+                    self._etcd_watcher = CalicoEtcdWatcher(self)
+                    self._etcd_watcher_thread = eventlet.spawn(
+                        self._etcd_watcher.loop
+                    )
+                elif not self._etcd_watcher_thread:
+                    LOG.error("%s died", self._etcd_watcher)
+                    self._etcd_watcher.stop()
+                    self._etcd_watcher = None
+            else:
+                if self._etcd_watcher is not None:
+                    LOG.warning("No longer the master, stopping etcd watcher")
+                    self._etcd_watcher.stop()
+                    self._etcd_watcher = None
+                # Short sleep interval before we check if we've become
+                # the master.
+                eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+        else:
+            LOG.warning("Unexpected: epoch changed. "
+                        "Handling status updates thread exiting.")
+
+    def on_felix_alive(self, felix_hostname, new):
+        agent_state = felix_agent_state(felix_hostname, start_flag=new)
+        self.db.create_or_update_agent(self._db_context, agent_state)
 
     def _get_db(self):
         if not self.db:
@@ -1038,3 +1084,18 @@ def profiles_match(etcd_profile, neutron_profile):
         (etcd_rules == neutron_group_rules) and
         (etcd_tags == neutron_group_tags)
     )
+
+
+def felix_agent_state(hostname, start_flag=False):
+    """
+    :param bool start_flag: True if this is a new felix, that is starting up.
+           false if this is a refresh of an existing felix.
+    :returns dict: agent status dict appropriate for inserting into Neutron DB.
+    """
+    state = {'agent_type': AGENT_TYPE_FELIX,
+             'binary': 'felix-calico-agent',
+             'host': hostname,
+             'topic': constants.L2_AGENT_TOPIC}
+    if start_flag:
+        state['start_flag'] = True  # TODO (SMC) Double check the docs to make sure we understand this flag
+    return state

@@ -26,11 +26,17 @@ import re
 import socket
 import weakref
 
+from socket import timeout as SocketTimeout
+from urllib3.exceptions import ReadTimeoutError
+
 # OpenStack imports.
+from calico.etcdutils import EtcdWatcher
+
 try:
     from oslo.config import cfg
 except ImportError:
     from oslo_config import cfg
+from neutron import context as ctx
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
@@ -45,12 +51,14 @@ from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_endpoint, PROFILE_DIR, RULES_KEY_RE,
                                  key_for_profile, key_for_profile_rules,
                                  key_for_profile_tags, key_for_config,
-                                 NEUTRON_ELECTION_KEY)
+                                 NEUTRON_ELECTION_KEY, FELIX_STATUS_DIR,
+                                 hostname_from_status_key,
+                                 hostname_from_uptime_key)
 from calico.election import Elector
 
 
 # The node hostname is used as the default identity for leader election
-hostname = socket.gethostname()
+_hostname = socket.gethostname()
 
 # The amount of time in seconds to wait for etcd responses.
 ETCD_TIMEOUT = 5
@@ -61,7 +69,7 @@ calico_opts = [
                help="The hostname or IP of the etcd node/proxy"),
     cfg.IntOpt('etcd_port', default=4001,
                help="The port to use for the etcd node/proxy"),
-    cfg.StrOpt('elector_name', default=hostname,
+    cfg.StrOpt('elector_name', default=_hostname,
                help="A unique name to identify this node in leader election"),
 ]
 cfg.CONF.register_opts(calico_opts, 'calico')
@@ -124,8 +132,10 @@ class CalicoTransportEtcd(object):
         # alive.
         self.driver = weakref.proxy(driver)
 
-        # Prepare client for accessing etcd data.
+        # Prepare clients for accessing etcd data.
         self.client = None
+        self.status_client = None
+        self.next_etcd_index = 0
 
         # Elector, for performing leader election.
         self.elector = None
@@ -525,6 +535,49 @@ class CalicoTransportEtcd(object):
     def stop(self):
         LOG.info("Stopping transport %s", self)
         self.elector.stop()
+    
+    
+class CalicoEtcdWatcher(EtcdWatcher):
+    """
+    An EtcdWatcher that watches our status-reporting subtree.
+
+    Responsible for parsing the events and passing the updates to the
+    mechanism driver.
+
+    We deliberately do not share an etcd client with the transport.
+    The reason is that, if we share a client then managing the lifecycle
+    of the client becomes an awkward shared responsibility (complicated
+    by the EtcdClusterIdChanged exception, which is only thrown once).
+    """
+    
+    def __init__(self, calico_driver):
+        super(CalicoEtcdWatcher, self).__init__(cfg.CONF.calico.etcd_host +
+                                                ":" +
+                                                cfg.CONF.calico.etcd_port,
+                                                FELIX_STATUS_DIR)
+        self.calico_driver = calico_driver
+
+        # Register for felix uptime updates.
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/uptime",
+                           on_set=self._on_uptime_set)
+
+    def _on_snapshot_loaded(self, etcd_snapshot_response):
+        """
+        Called whenever a snapshot is loaded from etcd.
+
+        Updates the driver with the current state.
+        """
+        for etcd_node in etcd_snapshot_response.leaves():
+            key = etcd_node.key
+            felix_hostname = hostname_from_uptime_key(key)
+            if felix_hostname:
+                self.calico_driver.on_felix_alive(felix_hostname, new=False)
+
+    def _on_uptime_set(self, response, hostname):
+        """
+        Called when a felix uptime report is inserted/updated.
+        """
+        self.calico_driver.on_felix_alive(hostname)
 
 
 def _neutron_rule_to_etcd_rule(rule):
