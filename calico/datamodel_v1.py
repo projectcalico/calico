@@ -32,13 +32,20 @@ _log = logging.getLogger(__name__)
 # All Calico data is stored under this path.
 ROOT_DIR = "/calico"
 
+# Current versions
+FELIX_VERSION = "/v1"
+OPENSTACK_VERSION = "/v1"
+
 # OpenStack data is stored under this path.
 OPENSTACK_DIR = ROOT_DIR + "/openstack"
-OPENSTACK_VERSION_DIR = OPENSTACK_DIR + "/v1"
+OPENSTACK_VERSION_DIR = OPENSTACK_DIR + OPENSTACK_VERSION
+
+# Status data and reporting
+FELIX_STATUS_DIR = ROOT_DIR + "/felix" + FELIX_VERSION + "/host"
 
 # Data that flows from orchestrator to felix is stored under a versioned
 # sub-tree.
-VERSION_DIR = ROOT_DIR + "/v1"
+VERSION_DIR = ROOT_DIR + FELIX_VERSION
 # Global ready flag.  Stores 'true' or 'false'.
 READY_KEY = VERSION_DIR + "/Ready"
 # Global config (directory).
@@ -81,6 +88,18 @@ def dir_for_per_host_config(hostname):
     return dir_for_host(hostname) + "/config"
 
 
+def dir_for_felix_status(hostname):
+    return FELIX_STATUS_DIR + "/%s" % hostname
+
+
+def key_for_status(hostname):
+    return dir_for_felix_status(hostname) + "/last_reported_status"
+
+
+def key_for_uptime(hostname):
+    return dir_for_felix_status(hostname) + "/uptime"
+
+
 def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
     return (HOST_DIR + "/%s/workload/%s/%s/endpoint/%s" %
             (host, orchestrator, workload_id, endpoint_id))
@@ -112,6 +131,37 @@ def get_profile_id_for_profile_dir(key):
         return None
     prefix, final_node = key.rsplit("/", 1)
     return final_node if prefix == PROFILE_DIR else None
+
+
+def hostname_from_status_key(key):
+    """
+    Get hostname from a status key (or None if this is not a status key).
+
+    :param: key for felix status
+            expected key format: FELIX_STATUS_DIR/<hostname>/
+                                           <some path or not>/<actual key name>
+    """
+    if not key.startswith(FELIX_STATUS_DIR):
+        return False
+    in_host_dir = key[len(FELIX_STATUS_DIR + '/'):]
+    path = in_host_dir.split('/', 1)
+    hostname = path[0]
+    return hostname
+
+
+def hostname_from_uptime_key(key):
+    """
+    Get hostname from a felix uptime key (or None if this is not an uptime
+    key).
+
+    :param: key for felix status
+            expected key format: FELIX_STATUS_DIR/<hostname>/
+                                           <some path or not>/<actual key name>
+    """
+    if not key.endswith("/uptime"):
+        return False
+    else:
+        return hostname_from_status_key(key)
 
 
 class EndpointId(object):

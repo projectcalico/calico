@@ -461,3 +461,64 @@ class TestEtcdWatcher(BaseTestCase):
         m_response.action = action
         m_response.value = value
         self.watcher.dispatcher.handle_event(m_response)
+
+
+class TestEtcdReporting(BaseTestCase):
+    def setUp(self):
+        super(TestEtcdReporting, self).setUp()
+        self.m_config = Mock()
+        self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.ETCD_ADDR = "localhost:4001"
+        self.m_config.HOSTNAME = "hostname"
+        self.m_config.RESYNC_INTERVAL = 0
+        self.m_config.REPORTING_INTERVAL_SECS = 1
+        self.m_config.REPORTING_TTL_SECS = 10
+        self.m_hosts_ipset = Mock(spec=IpsetActor)
+        with patch("gevent.spawn", autospec=True):
+            with patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True):
+                with patch("calico.felix.fetcd.monotonic_time",
+                           return_value=100):
+                    self.api = EtcdAPI(self.m_config, self.m_hosts_ipset)
+
+    @patch("gevent.sleep", autospec=True)
+    def test_reporting_loop_mainline(self, m_sleep):
+        """
+        Test the mainline function of the status reporting loop.
+
+        It should repeatedly call the _update_felix_status method,
+        retrying on various exceptions.
+        """
+        with patch.object(self.api, "_update_felix_status") as m_update:
+            m_update.side_effect = [EtcdException, None, RuntimeError]
+            self.assertRaises(RuntimeError,
+                              self.api._periodically_report_status)
+        self.assertEqual(m_update.mock_calls,
+                         [call(10)] * 3)
+
+        retry_call, jittered_call = m_sleep.mock_calls
+        self.assertEqual(retry_call, call(5))
+        _, (delay,), _ = jittered_call
+        self.assertTrue(delay >= 1)
+        self.assertTrue(delay <= 1.1005)
+
+    def test_reporting_loop_disabled(self):
+        self.m_config.REPORTING_INTERVAL_SECS = 0
+        with patch.object(self.api, "_update_felix_status") as m_update:
+            m_update.side_effect = RuntimeError
+            self.api._periodically_report_status()
+
+    @patch("datetime.datetime", autospec=True)
+    @patch("calico.felix.fetcd.monotonic_time", return_value=200)
+    def test_update_felix_status(self, m_monotime, m_datetime):
+        m_datetime.utcnow.return_value = datetime(2015, 9, 10, 2, 1, 53, 1234)
+        with patch.object(self.api.client, "set") as m_set:
+            self.api._update_felix_status(10)
+        # Should write two keys into etcd, one with a TTL and another with
+        # richer status.
+        self.assertEqual(m_set.mock_calls, [
+            call("/calico/felix/v1/host/hostname/last_reported_status",
+                 JSONString({"uptime": 100, "time": "2015-09-10T02:01:53Z"})),
+            call("/calico/felix/v1/host/hostname/uptime", '100', ttl=10),
+        ])
+
+

@@ -81,6 +81,8 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.IFACE_PREFIX, "blah")
             self.assertEqual(config.METADATA_PORT, 123)
             self.assertEqual(config.METADATA_IP, "1.2.3.4")
+            self.assertEqual(config.REPORTING_INTERVAL_SECS, 0)
+            self.assertEqual(config.REPORTING_TTL_SECS, 0)
 
     def test_invalid_port(self):
         data = { "felix_invalid_port.cfg": "Invalid port in field",
@@ -208,25 +210,33 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.IFACE_PREFIX, "whatever")
             self.assertEqual(config.METADATA_PORT, 246)
             self.assertEqual(config.METADATA_IP, "1.2.3.4")
+            self.assertEqual(config.REPORTING_INTERVAL_SECS, 5)
+            self.assertEqual(config.REPORTING_TTL_SECS, 11)
 
     def test_env_var_override(self):
         """
-        Test environment variables override config options,
+        Test environment variables override config options.
         """
         with mock.patch.dict("os.environ", {"FELIX_ETCDADDR": "9.9.9.9:1234",
-                                            "FELIX_METADATAPORT": "999"}):
+                                            "FELIX_METADATAPORT": "999",
+                                            "FELIX_REPORTINGTTLSECS": "30",
+                                            "FELIX_REPORTINGINTERVALSECS": "10"}):
             with mock.patch('calico.common.complete_logging'):
                 config = Config("calico/felix/test/data/felix_section.cfg")
 
         host_dict = { "InterfacePrefix": "blah",
                       "StartupCleanupDelay": "42",
                       "MetadataAddr": "4.3.2.1",
-                      "MetadataPort": "123" }
+                      "MetadataPort": "123",
+                      "ReportingIntervalSecs": "17",
+                      "ReportingTTLSecs": "20"}
 
         global_dict = { "InterfacePrefix": "blah",
                         "StartupCleanupDelay": "99",
                         "MetadataAddr": "5.4.3.2",
-                        "MetadataPort": "123" }
+                        "MetadataPort": "123",
+                        "ReportingIntervalSecs": "13",
+                        "ReportingTTLSecs": "25"}
         with mock.patch('calico.common.complete_logging'):
             config.report_etcd_config(host_dict, global_dict)
 
@@ -237,6 +247,8 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.METADATA_PORT, 999)
         self.assertEqual(config.METADATA_IP, "1.2.3.4")
         self.assertEqual(config.STARTUP_CLEANUP_DELAY, 42)
+        self.assertEqual(config.REPORTING_INTERVAL_SECS, 10)
+        self.assertEqual(config.REPORTING_TTL_SECS, 30)
 
     def test_ip_in_ip_enabled(self):
         test_values = [
@@ -274,3 +286,116 @@ class TestConfig(unittest.TestCase):
                                      "Field was not a valid Boolean"
                                      ".*IpInIpEnabled"):
             config.report_etcd_config({}, cfg_dict)
+
+    def test_reporting_ttl_not_int(self):
+        """
+        Test exception is raised if status report ttl has invalid (non-integer) value.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingTTLSecs": "NaN"}
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Field was not integer.*"):
+            config.report_etcd_config({}, cfg_dict)
+
+    def test_reporting_interval_not_int(self):
+        """
+        Test exception is rased ifstatus reporting interval has invalid (non-integer) value.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": "NaN"}
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Field was not integer.*"):
+            config.report_etcd_config({}, cfg_dict)
+
+    def test_negative_reporting_interval(self):
+        """
+        Test that status reporting is disabled if interval time is negative.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": -42,
+                     "ReportingTTLSecs": 7 }
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.REPORTING_INTERVAL_SECS, 0)
+        self.assertEqual(config.REPORTING_TTL_SECS, 0)
+
+    def test_default_ttl(self):
+        """
+        Test that ttl is set to 2.5 times interval for default ttl.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": "21" }
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.REPORTING_TTL_SECS, 52)
+
+    def test_valid_interval_and_ttl(self):
+        """
+        Test valid reporting parameters are not chaned.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": 42,
+                     "ReportingTTLSecs": 47}
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.REPORTING_INTERVAL_SECS, 42)
+        self.assertEqual(config.REPORTING_TTL_SECS, 47)
+
+    def test_reporting_ttl_less_than_interval(self):
+        """
+        Test that exception is raised when status reporting ttl is less than interval.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": 47,
+                     "ReportingTTLSecs": 4 }
+
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.REPORTING_INTERVAL_SECS, 47)
+        self.assertEqual(config.REPORTING_TTL_SECS, 117)
+
+    def test_reporting_interval_and_ttl_zero(self):
+        """
+        Test that zero reporting interval and ttl are passed correctly.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": 0,
+                     "ReportingTTLSecs": 0}
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.REPORTING_INTERVAL_SECS, 0)
+        self.assertEqual(config.REPORTING_TTL_SECS, 0)
+
+    def test_reporting_float(self):
+        """
+        Test that float reporting interval and ttl values are rounded down to integer.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "ReportingIntervalSecs": 21.75,
+                     "ReportingTTLSecs": 63.248}
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.REPORTING_INTERVAL_SECS, 21)
+        self.assertEqual(config.REPORTING_TTL_SECS, 63)

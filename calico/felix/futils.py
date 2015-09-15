@@ -30,6 +30,7 @@ import os
 from types import StringTypes
 import types
 import gc
+import datetime
 import gevent.lock
 from gevent import subprocess
 from gevent.subprocess import Popen
@@ -500,3 +501,12 @@ def intern_list(l):
             item = intern(item.encode("utf8"))
         out.append(item)
     return out
+
+
+def iso_utc_timestamp():
+    """
+    :return: Current (wall clock) UTC timestamp in ISO-8601 "Z" format.
+    """
+    time_now = datetime.datetime.utcnow()
+    time_formatted = time_now.replace(microsecond=0).isoformat() + 'Z'
+    return time_formatted
