@@ -1,18 +1,20 @@
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+from datetime import datetime
 import json
-
 import logging
-from etcd import EtcdResult
+
+from etcd import EtcdResult, EtcdException
 import etcd
 from gevent.event import Event
 from mock import Mock, call, patch, ANY
+
 from calico.datamodel_v1 import EndpointId
 from calico.felix.config import Config
 from calico.felix.ipsets import IpsetActor
-from calico.felix.fetcd import _EtcdWatcher, ResyncRequired, EtcdAPI, \
-    die_and_restart
+from calico.felix.fetcd import (_FelixEtcdWatcher, ResyncRequired, EtcdAPI,
+    die_and_restart)
 from calico.felix.splitter import UpdateSplitter
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, JSONString
 
 _log = logging.getLogger(__name__)
 
@@ -40,13 +42,16 @@ RULES_STR = json.dumps(RULES)
 TAGS = ["a", "b"]
 TAGS_STR = json.dumps(TAGS)
 
+ETCD_ADDRESS = 'localhost:4001'
+
 
 class TestEtcdAPI(BaseTestCase):
 
-    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
     @patch("gevent.spawn", autospec=True)
     def test_create(self, m_spawn, m_etcd_watcher):
         m_config = Mock(spec=Config)
+        m_config.ETCD_ADDR = ETCD_ADDRESS
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
         m_etcd_watcher.assert_has_calls([
@@ -58,13 +63,14 @@ class TestEtcdAPI(BaseTestCase):
             call(api._periodically_resync).link_exception(api._on_worker_died)
         ])
 
-    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
     @patch("gevent.spawn", autospec=True)
     @patch("gevent.sleep", autospec=True)
     def test_periodic_resync_mainline(self, m_sleep, m_spawn, m_etcd_watcher):
         m_configured = Mock(spec=Event)
         m_etcd_watcher.return_value.configured = m_configured
         m_config = Mock(spec=Config)
+        m_config.ETCD_ADDR = ETCD_ADDRESS
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
         m_config.RESYNC_INTERVAL = 10
@@ -77,12 +83,13 @@ class TestEtcdAPI(BaseTestCase):
         self.assertTrue(sleep_time >= 10)
         self.assertTrue(sleep_time <= 12)
 
-    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
     @patch("gevent.spawn", autospec=True)
     @patch("gevent.sleep", autospec=True)
     def test_periodic_resync_disabled(self, m_sleep, m_spawn, m_etcd_watcher):
         m_etcd_watcher.return_value.configured = Mock(spec=Event)
         m_config = Mock(spec=Config)
+        m_config.ETCD_ADDR = ETCD_ADDRESS
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
         m_config.RESYNC_INTERVAL = 0
@@ -90,10 +97,11 @@ class TestEtcdAPI(BaseTestCase):
             m_force_resync.side_effect = Exception()
             api._periodically_resync()
 
-    @patch("calico.felix.fetcd._EtcdWatcher", autospec=True)
+    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
     @patch("gevent.spawn", autospec=True)
     def test_force_resync(self, m_spawn, m_etcd_watcher):
         m_config = Mock(spec=Config)
+        m_config.ETCD_ADDR = ETCD_ADDRESS
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
         api.force_resync(async=True)
@@ -105,15 +113,16 @@ class ExpectedException(Exception):
     pass
 
 
-class TestExcdWatcher(BaseTestCase):
+class TestEtcdWatcher(BaseTestCase):
 
     def setUp(self):
-        super(TestExcdWatcher, self).setUp()
+        super(TestEtcdWatcher, self).setUp()
         self.m_config = Mock()
         self.m_config.HOSTNAME = "hostname"
         self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.ETCD_ADDR = ETCD_ADDRESS
         self.m_hosts_ipset = Mock(spec=IpsetActor)
-        self.watcher = _EtcdWatcher(self.m_config, self.m_hosts_ipset)
+        self.watcher = _FelixEtcdWatcher(self.m_config, self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
         self.client = Mock(spec=etcd.Client)
@@ -176,7 +185,9 @@ class TestExcdWatcher(BaseTestCase):
 
     def test_resync_flag(self):
         self.watcher.resync_after_current_poll = True
-        self.assertRaises(ResyncRequired, self.watcher._wait_for_etcd_event)
+        self.watcher.next_etcd_index = 1
+        self.assertRaises(ResyncRequired,
+                          self.watcher.wait_for_etcd_event)
         self.assertFalse(self.watcher.resync_after_current_poll)
 
     def test_ready_flag_set(self):
@@ -325,7 +336,7 @@ class TestExcdWatcher(BaseTestCase):
 
     def test_per_profile_del(self):
         """
-        Test profile deletion triggers dleetion for tags and rules.
+        Test profile deletion triggers deletion for tags and rules.
         """
         self.dispatch("/calico/v1/policy/profile/profA", action="delete")
         self.m_splitter.on_tags_update.assert_called_once_with("profA", None,

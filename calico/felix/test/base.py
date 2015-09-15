@@ -1,4 +1,5 @@
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+import json
 
 import logging
 import sys
@@ -34,3 +35,28 @@ class BaseTestCase(unittest.TestCase):
             actor.greenlet = gevent.getcurrent()
             while not actor._event_queue.empty():
                 actor._step()
+
+
+class JSONString(object):
+    """
+    An object that compares equal to a string if it contains equivalent
+    JSON to the dict passed to its initializer.
+    """
+
+    def __init__(self, json_obj):
+        self.json_obj = json_obj
+
+    def __eq__(self, other):
+        other_as_obj = None
+        try:
+            other_as_obj = json.loads(other)
+        except (ValueError, KeyError):
+            return False
+        if other_as_obj == self.json_obj:
+            return True
+        else:
+            _log.error("JSON didn't match %s != %s",
+                       self.json_obj, other_as_obj)
+
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.json_obj)
