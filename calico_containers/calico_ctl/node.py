@@ -421,7 +421,7 @@ def warn_if_hostname_conflict(ip):
     """
     # If there's already a calico-node container on this host, they're probably
     # just re-running node to update one of the ip addresses, so skip..
-    if len(docker_client.containers(filters={'name': 'calico-node'})) == 0:
+    if not docker_client.containers(filters={'name': 'calico-node'}):
         # Otherwise, check if another host with the same hostname
         # is already configured
         try:
