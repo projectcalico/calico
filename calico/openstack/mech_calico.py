@@ -220,7 +220,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Calico mechanism driver. Watches for felix updates in etcd
         and passes info to Neutron database.
         """
-        LOG.info("Handle status updating thread started.")
+        LOG.info("Status updating thread started.")
         self._db_context = ctx.get_admin_context()
 
         while self._epoch == expected_epoch:

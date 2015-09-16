@@ -155,7 +155,8 @@ class EtcdAPI(EtcdClientOwner, Actor):
 
         :return: Does not return, unless reporting disabled.
         """
-        _log.info("Started status reporting thread.")
+        _log.info("Started status reporting thread. Waiting for config.")
+        self._watcher.configured.wait()
         ttl = self._config.REPORTING_TTL_SECS
         interval = self._config.REPORTING_INTERVAL_SECS
         _log.debug("Reporting interval: %s, TTL: %s", interval, ttl)
@@ -206,6 +207,8 @@ class EtcdAPI(EtcdClientOwner, Actor):
         status_value = json.dumps(status)
         uptime_value = str(uptime)
 
+        _log.debug("Reporting felix status/uptime (%.1fs) using hostname %s",
+                   uptime, self._config.HOSTNAME)
         status_key = key_for_status(self._config.HOSTNAME)
         self.client.set(status_key, status_value)
 
