@@ -81,8 +81,8 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.IFACE_PREFIX, "blah")
             self.assertEqual(config.METADATA_PORT, 123)
             self.assertEqual(config.METADATA_IP, "1.2.3.4")
-            self.assertEqual(config.REPORTING_INTERVAL_SECS, 0)
-            self.assertEqual(config.REPORTING_TTL_SECS, 0)
+            self.assertEqual(config.REPORTING_INTERVAL_SECS, 30)
+            self.assertEqual(config.REPORTING_TTL_SECS, 90)
 
     def test_invalid_port(self):
         data = { "felix_invalid_port.cfg": "Invalid port in field",
@@ -328,12 +328,16 @@ class TestConfig(unittest.TestCase):
 
     def test_default_ttl(self):
         """
-        Test that ttl is set to 2.5 times interval for default ttl.
+        Test that ttl is defaulted to at least 2.5 times the reporting
+        interval.
         """
         with mock.patch('calico.common.complete_logging'):
             config = Config("calico/felix/test/data/felix_missing.cfg")
-        cfg_dict = { "InterfacePrefix": "blah",
-                     "ReportingIntervalSecs": "21" }
+        cfg_dict = {
+            "InterfacePrefix": "blah",
+            "ReportingIntervalSecs": "21",
+            "ReportingTTLSecs": "21",
+        }
         with mock.patch('calico.common.complete_logging'):
             config.report_etcd_config({}, cfg_dict)
 
@@ -341,7 +345,7 @@ class TestConfig(unittest.TestCase):
 
     def test_valid_interval_and_ttl(self):
         """
-        Test valid reporting parameters are not chaned.
+        Test valid reporting parameters are not changed.
         """
         with mock.patch('calico.common.complete_logging'):
             config = Config("calico/felix/test/data/felix_missing.cfg")

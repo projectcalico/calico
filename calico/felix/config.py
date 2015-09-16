@@ -199,10 +199,10 @@ class Config(object):
                            value_is_int=True)
         self.add_parameter("ReportingIntervalSecs",
                            "Status reporting interval in seconds",
-                           0, value_is_int=True)
+                           30, value_is_int=True)
         self.add_parameter("ReportingTTLSecs",
                            "Status report time to live in seconds",
-                           0, value_is_int=True)
+                           90, value_is_int=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
