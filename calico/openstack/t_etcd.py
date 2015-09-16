@@ -551,10 +551,13 @@ class CalicoEtcdWatcher(EtcdWatcher):
     """
     
     def __init__(self, calico_driver):
-        super(CalicoEtcdWatcher, self).__init__(cfg.CONF.calico.etcd_host +
-                                                ":" +
-                                                cfg.CONF.calico.etcd_port,
-                                                FELIX_STATUS_DIR)
+        host = cfg.CONF.calico.etcd_host
+        port = cfg.CONF.calico.etcd_port
+        LOG.info("CalicoEtcdWatcher created for %s:%s", host, port)
+        super(CalicoEtcdWatcher, self).__init__(
+            "%s:%s" % (host, port),
+            FELIX_STATUS_DIR
+        )
         self.calico_driver = calico_driver
 
         # Register for felix uptime updates.
@@ -567,7 +570,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
         Updates the driver with the current state.
         """
-        for etcd_node in etcd_snapshot_response.leaves():
+        for etcd_node in etcd_snapshot_response.leaves:
             key = etcd_node.key
             felix_hostname = hostname_from_uptime_key(key)
             if felix_hostname:
@@ -577,7 +580,8 @@ class CalicoEtcdWatcher(EtcdWatcher):
         """
         Called when a felix uptime report is inserted/updated.
         """
-        self.calico_driver.on_felix_alive(hostname)
+        felix_is_new = response.prev_node is None
+        self.calico_driver.on_felix_alive(hostname, felix_is_new)
 
 
 def _neutron_rule_to_etcd_rule(rule):

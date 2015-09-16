@@ -10,6 +10,7 @@ import time
 from urllib3 import Timeout
 import urllib3.exceptions
 from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
+from calico.logutils import logging_exceptions
 from calico.datamodel_v1 import READY_KEY
 
 _log = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class PathDispatcher(object):
         self.handler_root = {}
 
     def register(self, path, on_set=None, on_del=None):
+        _log.info("Registering path %s set=%s del=%s", path, on_set, on_del)
         parts = path.strip("/").split("/")
         node = self.handler_root
         for part in parts:
@@ -136,7 +138,9 @@ class EtcdWatcher(EtcdClientOwner):
 
         self.dispatcher = PathDispatcher()
 
+    @logging_exceptions(_log)
     def loop(self):
+        _log.info("Started %s loop", self)
         while not self._stopped:
             try:
                 _log.info("Reconnecting and loading snapshot from etcd...")

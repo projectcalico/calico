@@ -38,7 +38,6 @@ from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from neutron import context as ctx
 from neutron import manager
-from oslo.config import cfg
 
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
@@ -50,8 +49,7 @@ except ImportError:  # Kilo
 
 # Calico imports.
 import etcd
-from calico.etcdutils import ACTION_MAPPING
-from calico.datamodel_v1 import FELIX_STATUS_DIR, hostname_from_status_key
+from calico.logutils import logging_exceptions
 from calico.openstack.t_etcd import (
     CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags,
     CalicoEtcdWatcher)
@@ -60,7 +58,8 @@ LOG = log.getLogger(__name__)
 
 # An OpenStack agent type name for Felix, the Calico agent component in the new
 # architecture.
-AGENT_TYPE_FELIX = 'Felix (Calico agent)'
+AGENT_TYPE_FELIX = 'Calico per-host agent (felix)'
+AGENT_ID_FELIX = 'calico-felix'
 
 # The interval between period resyncs, in seconds.
 # TODO: Increase this to a longer interval for product code.
@@ -158,7 +157,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._etcd_watcher = None
         self._etcd_watcher_thread = None
         self._my_pid = None
-        self._periodic_resync_greenlet = None
         self._epoch = 0
         self.in_resync = False
 
@@ -214,6 +212,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         eventlet.spawn(self.periodic_resync_thread, self._epoch)
         eventlet.spawn(self._status_updating_thread, self._epoch)
 
+    @logging_exceptions(LOG)
     def _status_updating_thread(self, expected_epoch):
         """
         This method acts as a status updates handler logic for the
@@ -227,22 +226,26 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Only handle updates if we are the master node.
             if self.transport.is_master:
                 if self._etcd_watcher is None:
+                    LOG.info("Became the master, starting CalicoEtcdWatcher")
                     self._etcd_watcher = CalicoEtcdWatcher(self)
                     self._etcd_watcher_thread = eventlet.spawn(
                         self._etcd_watcher.loop
                     )
+                    LOG.info("Started %s as %s",
+                             self._etcd_watcher, self._etcd_watcher_thread)
                 elif not self._etcd_watcher_thread:
-                    LOG.error("%s died", self._etcd_watcher)
+                    LOG.error("CalicoEtcdWatcher %s died", self._etcd_watcher)
                     self._etcd_watcher.stop()
                     self._etcd_watcher = None
             else:
                 if self._etcd_watcher is not None:
-                    LOG.warning("No longer the master, stopping etcd watcher")
+                    LOG.warning("No longer the master, stopping "
+                                "CalicoEtcdWatcher")
                     self._etcd_watcher.stop()
                     self._etcd_watcher = None
                 # Short sleep interval before we check if we've become
                 # the master.
-                eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+            eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
         else:
             LOG.warning("Unexpected: epoch changed. "
                         "Handling status updates thread exiting.")
@@ -926,19 +929,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
 
-    def felix_status(self, hostname, up, start_flag):
-        # Get a DB context for this processing.
-        db_context = ctx.get_admin_context()
-
-        if up:
-            agent_state = {'agent_type': AGENT_TYPE_FELIX,
-                           'binary': '',
-                           'host': hostname,
-                           'topic': constants.L2_AGENT_TOPIC}
-            if start_flag:
-                agent_state['start_flag'] = True
-            self.db.create_or_update_agent(db_context, agent_state)
-
     def get_security_groups_for_port(self, context, port):
         """
         Checks which security groups apply for a given port.
@@ -1093,7 +1083,7 @@ def felix_agent_state(hostname, start_flag=False):
     :returns dict: agent status dict appropriate for inserting into Neutron DB.
     """
     state = {'agent_type': AGENT_TYPE_FELIX,
-             'binary': 'felix-calico-agent',
+             'binary': AGENT_ID_FELIX,
              'host': hostname,
              'topic': constants.L2_AGENT_TOPIC}
     if start_flag:
