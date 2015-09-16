@@ -5,7 +5,7 @@ import logging
 import re
 import etcd
 from socket import timeout as SocketTimeout
-import gevent
+import time
 
 from urllib3 import Timeout
 import urllib3.exceptions
@@ -197,7 +197,7 @@ class EtcdWatcher(EtcdClientOwner):
                 ready = True
             else:
                 _log.info("etcd not ready.  Will retry.")
-                gevent.sleep(retry_delay)
+                time.sleep(retry_delay)
                 continue
 
     def load_initial_dump(self):
@@ -275,7 +275,7 @@ class EtcdWatcher(EtcdClientOwner):
                 # message:
                 msg = (e.message or "unknown").lower()
                 # Limit our retry rate in case etcd is down.
-                gevent.sleep(1)
+                time.sleep(1)
                 if "no more machines" in msg:
                     # This error comes from python-etcd when it can't
                     # connect to any servers.  When we retry, it should
