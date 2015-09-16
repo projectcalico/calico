@@ -144,7 +144,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def __init__(self):
         super(CalicoMechanismDriver, self).__init__(
-            constants.AGENT_TYPE_DHCP,
+            AGENT_TYPE_FELIX,
             'tap',
             {'port_filter': True,
              'mac_address': '00:61:fe:ed:ca:fe'})
@@ -262,6 +262,22 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Update the reference to ourselves.
             global mech_driver
             mech_driver = self
+
+    def bind_port(self, context):
+        """
+        Checks that the DHCP agent is alive on the host and then defers
+        to the superclass, which will check that felix is alive and then
+        call back into our check_segment_for_agent() method, which does
+        further checks.
+        """
+        for agent in context.host_agents(constants.AGENT_TYPE_DHCP):
+            LOG.debug("Checking agent: %s", agent)
+            if agent["alive"]:
+                break
+        else:
+            LOG.warning("No live DHCP agents on host")
+            return
+        return super(CalicoMechanismDriver, self).bind_port(context)
 
     def check_segment_for_agent(self, segment, agent):
         LOG.debug("Checking segment %s with agent %s" % (segment, agent))
@@ -871,7 +887,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         Atomically delete profiles that are in etcd, but shouldn't be.
 
-        :param missing_group_ids: An iterable of profile objects to be
+        :param profiles_to_delete: An iterable of profile objects to be
             deleted.
         :returns: Nothing.
         """
