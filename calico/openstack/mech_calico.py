@@ -1087,5 +1087,7 @@ def felix_agent_state(hostname, start_flag=False):
              'host': hostname,
              'topic': constants.L2_AGENT_TOPIC}
     if start_flag:
-        state['start_flag'] = True  # TODO (SMC) Double check the docs to make sure we understand this flag
+        # Felix has told us that it has only just started, report that to
+        # neutron, which will use it to reset its view of the uptime.
+        state['start_flag'] = True
     return state
