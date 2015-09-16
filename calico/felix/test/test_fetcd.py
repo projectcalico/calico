@@ -479,6 +479,7 @@ class TestEtcdReporting(BaseTestCase):
                 with patch("calico.felix.fetcd.monotonic_time",
                            return_value=100):
                     self.api = EtcdAPI(self.m_config, self.m_hosts_ipset)
+        self.api._watcher.configured = Mock()
 
     @patch("gevent.sleep", autospec=True)
     def test_reporting_loop_mainline(self, m_sleep):
@@ -513,12 +514,26 @@ class TestEtcdReporting(BaseTestCase):
         m_datetime.utcnow.return_value = datetime(2015, 9, 10, 2, 1, 53, 1234)
         with patch.object(self.api.client, "set") as m_set:
             self.api._update_felix_status(10)
+            self.api._update_felix_status(10)
         # Should write two keys into etcd, one with a TTL and another with
         # richer status.
         self.assertEqual(m_set.mock_calls, [
             call("/calico/felix/v1/host/hostname/last_reported_status",
-                 JSONString({"uptime": 100, "time": "2015-09-10T02:01:53Z"})),
-            call("/calico/felix/v1/host/hostname/uptime", '100', ttl=10),
+                 JSONString({"uptime": 100,
+                             "time": "2015-09-10T02:01:53Z",
+                             "first_update": True})),
+            call("/calico/felix/v1/host/hostname/status",
+                 JSONString({"uptime": 100,
+                             "time": "2015-09-10T02:01:53Z",
+                             "first_update": True}), ttl=10),
+            call("/calico/felix/v1/host/hostname/last_reported_status",
+                 JSONString({"uptime": 100,
+                             "time": "2015-09-10T02:01:53Z",
+                             "first_update": False})),
+            call("/calico/felix/v1/host/hostname/status",
+                 JSONString({"uptime": 100,
+                             "time": "2015-09-10T02:01:53Z",
+                             "first_update": False}), ttl=10),
         ])
 
 

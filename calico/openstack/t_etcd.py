@@ -52,8 +52,7 @@ from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_profile, key_for_profile_rules,
                                  key_for_profile_tags, key_for_config,
                                  NEUTRON_ELECTION_KEY, FELIX_STATUS_DIR,
-                                 hostname_from_status_key,
-                                 hostname_from_uptime_key)
+                                 hostname_from_status_key)
 from calico.election import Elector
 
 
@@ -561,8 +560,8 @@ class CalicoEtcdWatcher(EtcdWatcher):
         self.calico_driver = calico_driver
 
         # Register for felix uptime updates.
-        self.register_path(FELIX_STATUS_DIR + "/<hostname>/uptime",
-                           on_set=self._on_uptime_set)
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/status",
+                           on_set=self._on_status_set)
 
     def _on_snapshot_loaded(self, etcd_snapshot_response):
         """
@@ -572,16 +571,26 @@ class CalicoEtcdWatcher(EtcdWatcher):
         """
         for etcd_node in etcd_snapshot_response.leaves:
             key = etcd_node.key
-            felix_hostname = hostname_from_uptime_key(key)
+            felix_hostname = hostname_from_status_key(key)
             if felix_hostname:
-                self.calico_driver.on_felix_alive(felix_hostname, new=False)
+                # Defer to the code for handling an event.
+                self._on_status_set(etcd_node, felix_hostname)
 
-    def _on_uptime_set(self, response, hostname):
+    def _on_status_set(self, response, hostname):
         """
         Called when a felix uptime report is inserted/updated.
         """
-        felix_is_new = response.prev_node is None
-        self.calico_driver.on_felix_alive(hostname, felix_is_new)
+        try:
+            value = json.loads(response.value)
+            new = value.get("first_update")
+        except (ValueError, TypeError):
+            LOG.warning("Bad JSON data for key %s: %s",
+                        response.key, response.value)
+        else:
+            self.calico_driver.on_felix_alive(
+                hostname,
+                new=new,
+            )
 
 
 def _neutron_rule_to_etcd_rule(rule):

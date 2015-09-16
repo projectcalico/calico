@@ -92,12 +92,12 @@ def dir_for_felix_status(hostname):
     return FELIX_STATUS_DIR + "/%s" % hostname
 
 
-def key_for_status(hostname):
+def key_for_last_status(hostname):
     return dir_for_felix_status(hostname) + "/last_reported_status"
 
 
-def key_for_uptime(hostname):
-    return dir_for_felix_status(hostname) + "/uptime"
+def key_for_status(hostname):
+    return dir_for_felix_status(hostname) + "/status"
 
 
 def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
@@ -147,21 +147,6 @@ def hostname_from_status_key(key):
     path = in_host_dir.split('/', 1)
     hostname = path[0]
     return hostname
-
-
-def hostname_from_uptime_key(key):
-    """
-    Get hostname from a felix uptime key (or None if this is not an uptime
-    key).
-
-    :param: key for felix status
-            expected key format: FELIX_STATUS_DIR/<hostname>/
-                                           <some path or not>/<actual key name>
-    """
-    if not key.endswith("/uptime"):
-        return False
-    else:
-        return hostname_from_status_key(key)
 
 
 class EndpointId(object):

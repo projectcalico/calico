@@ -793,8 +793,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """
         # Add arbitrary status keys to accumulated etcd db
         self.etcd_data[FELIX_STATUS_DIR + "/vm_47/status"] = {"time": "2015-08-14T10:37:54"}
-        self.etcd_data[FELIX_STATUS_DIR + "/vm_47/uptime"] = 12
-        self.etcd_data[FELIX_STATUS_DIR + "/machine_123/uptime"] = 17
+        self.etcd_data[FELIX_STATUS_DIR + "/vm_47/status"] = 12
+        self.etcd_data[FELIX_STATUS_DIR + "/machine_123/status"] = 17
         self.etcd_data[FELIX_STATUS_DIR + "/VMachine/status"] = {"time": "1994-06-09T05:13:18"}
 
         expected_calls = [mock.call(None, TestIfAgentState(host="vm_47",
@@ -825,7 +825,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         create_or_update_agent = self.driver.db.create_or_update_agent
 
         # Test status creation
-        status_create = FakeResponse(key=FELIX_STATUS_DIR+"/VM_1/uptime",
+        status_create = FakeResponse(key=FELIX_STATUS_DIR+"/VM_1/status",
                                      newKey=True)
         self.driver._handle_status_update(status_create)
         create_agent_state = TestIfAgentState(host="VM_1", start_flag=True)
@@ -834,7 +834,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         create_or_update_agent.reset_mock()
 
         # Test status update
-        status_update = FakeResponse(key=FELIX_STATUS_DIR+"/VM_2/uptime")
+        status_update = FakeResponse(key=FELIX_STATUS_DIR+"/VM_2/status")
         self.driver._handle_status_update(status_update)
         update_agent_state = TestIfAgentState(host="VM_2", start_flag=False)
         create_or_update_agent.assert_called_once(self.driver._db_context,
@@ -842,19 +842,19 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         create_or_update_agent.reset_mock()
 
         # Test deleted status
-        status_delete = FakeResponse(key=FELIX_STATUS_DIR+"/VM_3/uptime",
+        status_delete = FakeResponse(key=FELIX_STATUS_DIR+"/VM_3/status",
                                      action="delete")
         self.driver._handle_status_update(status_delete)
         self.assertFalse(create_or_update_agent.called)
 
         # Test expired status
-        status_expire = FakeResponse(key=FELIX_STATUS_DIR+"/VM_4/uptime",
+        status_expire = FakeResponse(key=FELIX_STATUS_DIR+"/VM_4/status",
                                      action="expire")
         self.driver._handle_status_update(status_expire)
         self.assertFalse(create_or_update_agent.called)
 
         # Test not-uptime status
-        status_not_uptime = FakeResponse(key=FELIX_STATUS_DIR+"/VM_5/not_uptime")
+        status_not_uptime = FakeResponse(key=FELIX_STATUS_DIR+"/VM_5/not_status")
         self.driver._handle_status_update(status_not_uptime)
         self.assertFalse(create_or_update_agent.called)
 

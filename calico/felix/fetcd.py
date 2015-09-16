@@ -43,7 +43,7 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  dir_for_per_host_config,
                                  PROFILE_DIR, HOST_DIR, EndpointId, POLICY_DIR,
                                  HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE,
-                                 key_for_status, key_for_uptime)
+                                 key_for_last_status, key_for_status)
 from calico.etcdutils import (
     EtcdClientOwner, EtcdWatcher, ResyncRequired
 )
@@ -120,6 +120,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         self._resync_greenlet.link_exception(self._on_worker_died)
 
         # Start up a reporting greenlet.
+        self.done_first_status_report = False
         self._status_reporting_greenlet = gevent.spawn(
             self._periodically_report_status
         )
@@ -202,18 +203,18 @@ class EtcdAPI(EtcdClientOwner, Actor):
         status = {
             "time": time_formatted,
             "uptime": uptime,
+            "first_update": not self.done_first_status_report,
         }
 
         status_value = json.dumps(status)
-        uptime_value = str(uptime)
 
         _log.debug("Reporting felix status/uptime (%.1fs) using hostname %s",
                    uptime, self._config.HOSTNAME)
-        status_key = key_for_status(self._config.HOSTNAME)
+        status_key = key_for_last_status(self._config.HOSTNAME)
         self.client.set(status_key, status_value)
-
-        uptime_key = key_for_uptime(self._config.HOSTNAME)
-        self.client.set(uptime_key, uptime_value, ttl=ttl)
+        status_key = key_for_status(self._config.HOSTNAME)
+        self.client.set(status_key, status_value, ttl=ttl)
+        self.done_first_status_report = True
 
     @actor_message()
     def load_config(self):
