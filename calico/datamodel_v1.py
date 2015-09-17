@@ -142,7 +142,7 @@ def hostname_from_status_key(key):
                                            <some path or not>/<actual key name>
     """
     if not key.startswith(FELIX_STATUS_DIR):
-        return False
+        return None
     in_host_dir = key[len(FELIX_STATUS_DIR + '/'):]
     path = in_host_dir.split('/', 1)
     hostname = path[0]

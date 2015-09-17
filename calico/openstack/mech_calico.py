@@ -1095,7 +1095,7 @@ def profiles_match(etcd_profile, neutron_profile):
 def felix_agent_state(hostname, start_flag=False):
     """
     :param bool start_flag: True if this is a new felix, that is starting up.
-           false if this is a refresh of an existing felix.
+           False if this is a refresh of an existing felix.
     :returns dict: agent status dict appropriate for inserting into Neutron DB.
     """
     state = {'agent_type': AGENT_TYPE_FELIX,

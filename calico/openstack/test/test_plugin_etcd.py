@@ -814,9 +814,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.driver.db.create_or_update_agent.assert_has_calls(expected_calls,
                                                                any_order=True)
 
-        # Reset database
-        self.etcd_data = []
-
     def test_status_response_handling(self):
         """
         Test that status update handling.

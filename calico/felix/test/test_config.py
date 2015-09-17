@@ -301,7 +301,7 @@ class TestConfig(unittest.TestCase):
 
     def test_reporting_interval_not_int(self):
         """
-        Test exception is rased ifstatus reporting interval has invalid (non-integer) value.
+        Test exception is raised if status reporting interval is invalid.
         """
         with mock.patch('calico.common.complete_logging'):
             config = Config("calico/felix/test/data/felix_missing.cfg")
@@ -357,22 +357,6 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.REPORTING_INTERVAL_SECS, 42)
         self.assertEqual(config.REPORTING_TTL_SECS, 47)
-
-    def test_reporting_ttl_less_than_interval(self):
-        """
-        Test that exception is raised when status reporting ttl is less than interval.
-        """
-        with mock.patch('calico.common.complete_logging'):
-            config = Config("calico/felix/test/data/felix_missing.cfg")
-        cfg_dict = { "InterfacePrefix": "blah",
-                     "ReportingIntervalSecs": 47,
-                     "ReportingTTLSecs": 4 }
-
-        with mock.patch('calico.common.complete_logging'):
-            config.report_etcd_config({}, cfg_dict)
-
-        self.assertEqual(config.REPORTING_INTERVAL_SECS, 47)
-        self.assertEqual(config.REPORTING_TTL_SECS, 117)
 
     def test_reporting_interval_and_ttl_zero(self):
         """
