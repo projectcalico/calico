@@ -49,15 +49,17 @@ except ImportError:  # Kilo
 
 # Calico imports.
 import etcd
+from calico.logutils import logging_exceptions
 from calico.openstack.t_etcd import (
-    CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags
-)
+    CalicoTransportEtcd, port_etcd_data, profile_rules, profile_tags,
+    CalicoEtcdWatcher)
 
 LOG = log.getLogger(__name__)
 
 # An OpenStack agent type name for Felix, the Calico agent component in the new
 # architecture.
-AGENT_TYPE_FELIX = 'Felix (Calico agent)'
+AGENT_TYPE_FELIX = 'Calico per-host agent (felix)'
+AGENT_ID_FELIX = 'calico-felix'
 
 # The interval between period resyncs, in seconds.
 # TODO: Increase this to a longer interval for product code.
@@ -142,7 +144,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def __init__(self):
         super(CalicoMechanismDriver, self).__init__(
-            constants.AGENT_TYPE_DHCP,
+            AGENT_TYPE_FELIX,
             'tap',
             {'port_filter': True,
              'mac_address': '00:61:fe:ed:ca:fe'})
@@ -150,10 +152,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Initialize fields for the database object and transport.  We will
         # initialize these properly when we first need them.
         self.db = None
+        self._db_context = None
         self.transport = None
+        self._etcd_watcher = None
+        self._etcd_watcher_thread = None
         self._my_pid = None
-        self._periodic_resync_greenlet = None
         self._epoch = 0
+        self.in_resync = False
 
         # Tell the monkeypatch where we are.
         global mech_driver
@@ -185,6 +190,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # (Re)init the DB.
         self.db = None
         self._get_db()
+        self._db_context = ctx.get_admin_context()
 
         # Use Etcd-based transport.
         if self.transport:
@@ -196,14 +202,56 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         self._my_pid = current_pid
 
-        # Start our resynchronization process.  Just in case we ever get two
-        # threads running, use an epoch counter to tell the old thread to die.
+        # Start our resynchronization process and status updating. Just in
+        # case we ever get two same threads running, use an epoch counter to
+        # tell the old thread to die.
         # This is defensive: our greenlets don't actually seem to get forked
         # with the process.
         # We deliberately do this last, to ensure that all of the setup above
         # is complete before we start running.
         self._epoch += 1
         eventlet.spawn(self.periodic_resync_thread, self._epoch)
+        eventlet.spawn(self._status_updating_thread, self._epoch)
+
+    @logging_exceptions(LOG)
+    def _status_updating_thread(self, expected_epoch):
+        """
+        This method acts as a status updates handler logic for the
+        Calico mechanism driver. Watches for felix updates in etcd
+        and passes info to Neutron database.
+        """
+        LOG.info("Status updating thread started.")
+        while self._epoch == expected_epoch:
+            # Only handle updates if we are the master node.
+            if self.transport.is_master:
+                if self._etcd_watcher is None:
+                    LOG.info("Became the master, starting CalicoEtcdWatcher")
+                    self._etcd_watcher = CalicoEtcdWatcher(self)
+                    self._etcd_watcher_thread = eventlet.spawn(
+                        self._etcd_watcher.loop
+                    )
+                    LOG.info("Started %s as %s",
+                             self._etcd_watcher, self._etcd_watcher_thread)
+                elif not self._etcd_watcher_thread:
+                    LOG.error("CalicoEtcdWatcher %s died", self._etcd_watcher)
+                    self._etcd_watcher.stop()
+                    self._etcd_watcher = None
+            else:
+                if self._etcd_watcher is not None:
+                    LOG.warning("No longer the master, stopping "
+                                "CalicoEtcdWatcher")
+                    self._etcd_watcher.stop()
+                    self._etcd_watcher = None
+                # Short sleep interval before we check if we've become
+                # the master.
+            eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+        else:
+            LOG.warning("Unexpected: epoch changed. "
+                        "Handling status updates thread exiting.")
+
+    def on_felix_alive(self, felix_hostname, new):
+        agent_state = felix_agent_state(felix_hostname, start_flag=new)
+        self.db.create_or_update_agent(self._db_context, agent_state)
 
     def _get_db(self):
         if not self.db:
@@ -213,6 +261,22 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Update the reference to ourselves.
             global mech_driver
             mech_driver = self
+
+    def bind_port(self, context):
+        """
+        Checks that the DHCP agent is alive on the host and then defers
+        to the superclass, which will check that felix is alive and then
+        call back into our check_segment_for_agent() method, which does
+        further checks.
+        """
+        for agent in context.host_agents(constants.AGENT_TYPE_DHCP):
+            LOG.debug("Checking agent: %s", agent)
+            if agent["alive"]:
+                break
+        else:
+            LOG.warning("No live DHCP agents on host")
+            return
+        return super(CalicoMechanismDriver, self).bind_port(context)
 
     def check_segment_for_agent(self, segment, agent):
         LOG.debug("Checking segment %s with agent %s" % (segment, agent))
@@ -822,7 +886,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         Atomically delete profiles that are in etcd, but shouldn't be.
 
-        :param missing_group_ids: An iterable of profile objects to be
+        :param profiles_to_delete: An iterable of profile objects to be
             deleted.
         :returns: Nothing.
         """
@@ -879,19 +943,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
-
-    def felix_status(self, hostname, up, start_flag):
-        # Get a DB context for this processing.
-        db_context = ctx.get_admin_context()
-
-        if up:
-            agent_state = {'agent_type': AGENT_TYPE_FELIX,
-                           'binary': '',
-                           'host': hostname,
-                           'topic': constants.L2_AGENT_TOPIC}
-            if start_flag:
-                agent_state['start_flag'] = True
-            self.db.create_or_update_agent(db_context, agent_state)
 
     def get_security_groups_for_port(self, context, port):
         """
@@ -1038,3 +1089,20 @@ def profiles_match(etcd_profile, neutron_profile):
         (etcd_rules == neutron_group_rules) and
         (etcd_tags == neutron_group_tags)
     )
+
+
+def felix_agent_state(hostname, start_flag=False):
+    """
+    :param bool start_flag: True if this is a new felix, that is starting up.
+           False if this is a refresh of an existing felix.
+    :returns dict: agent status dict appropriate for inserting into Neutron DB.
+    """
+    state = {'agent_type': AGENT_TYPE_FELIX,
+             'binary': AGENT_ID_FELIX,
+             'host': hostname,
+             'topic': constants.L2_AGENT_TOPIC}
+    if start_flag:
+        # Felix has told us that it has only just started, report that to
+        # neutron, which will use it to reset its view of the uptime.
+        state['start_flag'] = True
+    return state

@@ -188,6 +188,7 @@ class GreenletFilter(logging.Filter):
         record.tid = greenlet_id()
         return True
 
+
 def default_logging():
     """
     Sets up the Calico default logging, with default severities.

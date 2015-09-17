@@ -19,7 +19,6 @@ felix.felix
 
 The main logic for Felix.
 """
-
 # Monkey-patch before we do anything else...
 from gevent import monkey
 monkey.patch_all()
