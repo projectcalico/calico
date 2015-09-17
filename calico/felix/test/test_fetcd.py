@@ -508,7 +508,7 @@ class TestEtcdReporting(BaseTestCase):
             m_update.side_effect = RuntimeError
             self.api._periodically_report_status()
 
-    @patch("datetime.datetime", autospec=True)
+    @patch("calico.felix.futils.datetime", autospec=True)
     @patch("calico.felix.fetcd.monotonic_time", return_value=200)
     def test_update_felix_status(self, m_monotime, m_datetime):
         m_datetime.utcnow.return_value = datetime(2015, 9, 10, 2, 1, 53, 1234)
