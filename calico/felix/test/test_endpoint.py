@@ -20,6 +20,7 @@ Tests of endpoint module.
 """
 import logging
 from calico.felix.endpoint import EndpointManager
+from calico.felix.fetcd import EtcdAPI
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.futils import FailedSystemCall
@@ -47,6 +48,7 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_dispatch_chains = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_manager = Mock(spec=EndpointManager)
+        self.m_etcd_api = Mock(spec=EtcdAPI)
 
     def get_local_endpoint(self, combined_id, ip_type):
         local_endpoint = endpoint.LocalEndpoint(self.m_config,
@@ -54,7 +56,8 @@ class TestLocalEndpoint(BaseTestCase):
                                                 ip_type,
                                                 self.m_iptables_updater,
                                                 self.m_dispatch_chains,
-                                                self.m_rules_mgr)
+                                                self.m_rules_mgr,
+                                                self.m_etcd_api)
         local_endpoint._manager = self.m_manager
         return local_endpoint
 

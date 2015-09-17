@@ -39,7 +39,8 @@ class EndpointManager(ReferenceManager):
     def __init__(self, config, ip_type,
                  iptables_updater,
                  dispatch_chains,
-                 rules_manager):
+                 rules_manager,
+                 datastore_api):
         super(EndpointManager, self).__init__(qualifier=ip_type)
 
         # Configuration and version to use
@@ -51,6 +52,7 @@ class EndpointManager(ReferenceManager):
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
+        self.datastore_api = datastore_api
 
         # All endpoint dicts that are on this host.
         self.endpoints_by_id = {}
@@ -70,7 +72,8 @@ class EndpointManager(ReferenceManager):
                              self.ip_type,
                              self.iptables_updater,
                              self.dispatch_chains,
-                             self.rules_mgr)
+                             self.rules_mgr,
+                             self.datastore_api)
 
     def _on_object_started(self, endpoint_id, obj):
         """
@@ -169,7 +172,7 @@ class EndpointManager(ReferenceManager):
 class LocalEndpoint(RefCountedActor):
 
     def __init__(self, config, combined_id, ip_type, iptables_updater,
-                 dispatch_chains, rules_manager):
+                 dispatch_chains, rules_manager, datastore_api):
         """
         Controls a single local endpoint.
 
@@ -195,6 +198,7 @@ class LocalEndpoint(RefCountedActor):
 
         self.rules_ref_helper = RefHelper(self, rules_manager,
                                           self._on_profiles_ready)
+        self.datastore_api = datastore_api
 
         self._pending_endpoint = None
         self._endpoint_update_pending = False
@@ -267,6 +271,11 @@ class LocalEndpoint(RefCountedActor):
         # Defer the processing to _finish_msg_batch.
         self._unreferenced = True
 
+    def _start_msg_batch(self, batch):
+        self._in_sync_at_start_of_batch = (self._iptables_in_sync and
+                                           self._device_in_sync)
+        return super(LocalEndpoint, self)._start_msg_batch(batch)
+
     def _finish_msg_batch(self, batch, results):
         if self._cleaned_up:
             # We could just ignore this but it suggests that the
@@ -314,6 +323,25 @@ class LocalEndpoint(RefCountedActor):
             self.dispatch_chains.on_endpoint_added(self._iface_name,
                                                    async=True)
             self._added_to_dispatch_chains = True
+
+        in_sync_at_end_of_batch = (self._iptables_in_sync and
+                                   self._device_in_sync)
+
+        if self._unreferenced or (self._in_sync_at_start_of_batch !=
+                                  in_sync_at_end_of_batch):
+            if self._unreferenced:
+                _log.debug("Unreferenced, reporting status = None")
+                status = None
+            else:
+                _log.debug("Endpoint oper state changed to %s",
+                           "up" if in_sync_at_end_of_batch else "down")
+                status = {"status": "up" if in_sync_at_end_of_batch
+                                    else "down"}
+            self.datastore_api.on_endpoint_status_changed(
+                self._id,
+                status,
+                async=True,
+            )
 
     def _apply_endpoint_update(self):
         pending_endpoint = self._pending_endpoint

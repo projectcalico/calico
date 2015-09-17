@@ -135,7 +135,10 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_config.IFACE_PREFIX = "tap"
         self.m_config.ETCD_ADDR = ETCD_ADDRESS
         self.m_hosts_ipset = Mock(spec=IpsetActor)
-        self.watcher = _FelixEtcdWatcher(self.m_config, self.m_hosts_ipset)
+        self.m_api = Mock(spec=EtcdAPI)
+        self.watcher = _FelixEtcdWatcher(self.m_config,
+                                         self.m_api,
+                                         self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
         self.client = Mock()
