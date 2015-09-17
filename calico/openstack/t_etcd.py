@@ -26,9 +26,6 @@ import re
 import socket
 import weakref
 
-from socket import timeout as SocketTimeout
-from urllib3.exceptions import ReadTimeoutError
-
 # OpenStack imports.
 from calico.etcdutils import EtcdWatcher
 
@@ -36,7 +33,6 @@ try:
     from oslo.config import cfg
 except ImportError:
     from oslo_config import cfg
-from neutron import context as ctx
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
@@ -131,10 +127,8 @@ class CalicoTransportEtcd(object):
         # alive.
         self.driver = weakref.proxy(driver)
 
-        # Prepare clients for accessing etcd data.
+        # Prepare client for accessing etcd data.
         self.client = None
-        self.status_client = None
-        self.next_etcd_index = 0
 
         # Elector, for performing leader election.
         self.elector = None
@@ -534,8 +528,8 @@ class CalicoTransportEtcd(object):
     def stop(self):
         LOG.info("Stopping transport %s", self)
         self.elector.stop()
-    
-    
+
+
 class CalicoEtcdWatcher(EtcdWatcher):
     """
     An EtcdWatcher that watches our status-reporting subtree.
@@ -548,7 +542,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
     of the client becomes an awkward shared responsibility (complicated
     by the EtcdClusterIdChanged exception, which is only thrown once).
     """
-    
+
     def __init__(self, calico_driver):
         host = cfg.CONF.calico.etcd_host
         port = cfg.CONF.calico.etcd_port
@@ -582,7 +576,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
         """
         try:
             value = json.loads(response.value)
-            new = value.get("first_update")
+            new = bool(value.get("first_update"))
         except (ValueError, TypeError):
             LOG.warning("Bad JSON data for key %s: %s",
                         response.key, response.value)

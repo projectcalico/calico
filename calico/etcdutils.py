@@ -247,8 +247,7 @@ class EtcdWatcher(EtcdClientOwner):
                                             waitIndex=self.next_etcd_index,
                                             recursive=True,
                                             timeout=Timeout(connect=10,
-                                                            read=90),
-                                            check_cluster_uuid=True)
+                                                            read=90))
                 _log.debug("etcd response: %r", response)
             except (ReadTimeoutError, SocketTimeout) as e:
                 # This is expected when we're doing a poll and nothing

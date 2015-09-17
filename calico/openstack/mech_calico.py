@@ -190,6 +190,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # (Re)init the DB.
         self.db = None
         self._get_db()
+        self._db_context = ctx.get_admin_context()
 
         # Use Etcd-based transport.
         if self.transport:
@@ -220,8 +221,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         and passes info to Neutron database.
         """
         LOG.info("Status updating thread started.")
-        self._db_context = ctx.get_admin_context()
-
         while self._epoch == expected_epoch:
             # Only handle updates if we are the master node.
             if self.transport.is_master:

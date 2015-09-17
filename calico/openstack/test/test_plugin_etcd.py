@@ -23,12 +23,13 @@ import eventlet
 import json
 import mock
 import unittest
-from calico import common
-from calico.datamodel_v1 import FELIX_STATUS_DIR
 
 import calico.openstack.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
+
+from calico import common
+from calico.datamodel_v1 import FELIX_STATUS_DIR
 from socket import timeout as SocketTimeout
 from urllib3.exceptions import ReadTimeoutError
 
@@ -56,6 +57,46 @@ lib.m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
 
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
+    """
+    Tests for the Calico mechanism driver.  This covers the mainline
+    function and the periodic resync thread.
+    """
+
+    def setUp(self):
+        """
+        Setup before each test case.
+        """
+        # Do common plugin test setup.
+        super(TestPluginEtcd, self).setUp()
+
+        # Start with an empty etcd database.
+        self.etcd_data = {}
+
+        # Mock out the status updating thread.  These tests were originally
+        # written before that was added and they do not support the interleaved
+        # requests from the status thread.  The status-reporting thread is
+        # tested separately.
+        self.driver._status_updating_thread = mock.Mock(
+            spec=self.driver._status_updating_thread
+        )
+
+        # Mock out config.
+        lib.m_oslo.config.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_oslo.config.cfg.CONF.calico.etcd_port = 4001
+
+        # Hook the (mock) etcd client.
+        self.client = lib.m_etcd.Client()
+        self.client.read.side_effect = self.etcd_read
+        self.client.write.side_effect = self.check_etcd_write
+        self.client.delete.side_effect = self.check_etcd_delete
+
+        # Start with an empty set of recent writes and deletes.
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        # Reset the counter for when we'll reset the etcd database.
+        self.reset_etcd_after = None
+        self.assert_etcd_writes_deletes = True
 
     def maybe_reset_etcd(self):
         if self.reset_etcd_after is not None:
@@ -109,7 +150,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.assertEqual(self.recent_deletes, expected)
         self.recent_deletes = set()
 
-    def etcd_read(self, key, wait=False, waitIndex=None, recursive=False, timeout=None):
+    def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
+                  timeout=None):
         """
         Read from the accumulated etcd database.
         """
@@ -143,6 +185,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         if recursive:
             # Also see if this key has any children, and read those.
             read_result.children = []
+            read_result.leaves = []
             keylen = len(key) + 1
             for k in self.etcd_data.keys():
                 if k[:keylen] == key + '/':
@@ -150,6 +193,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                     child.key = k
                     child.value = self.etcd_data[k]
                     read_result.children.append(child)
+                    read_result.leaves.append(child)
             if read_result.value is None and read_result.children == []:
                 raise lib.m_etcd.EtcdKeyNotFound(self.etcd_data)
             # Actual direct children of the dir in etcd response.
@@ -163,29 +207,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         return read_result
 
-    def setUp(self):
-        """Setup before each test case.
-        """
-        # Start with an empty etcd database.
-        self.etcd_data = {}
-
-        # Do common plugin test setup.
-        super(TestPluginEtcd, self).setUp()
-
-        # Hook the (mock) etcd client.
-        self.client = lib.m_etcd.Client()
-        self.client.read.side_effect = self.etcd_read
-        self.client.write.side_effect = self.check_etcd_write
-        self.client.delete.side_effect = self.check_etcd_delete
-
-        # Start with an empty set of recent writes and deletes.
-        self.recent_writes = {}
-        self.recent_deletes = set()
-
-        # Reset the counter for when we'll reset the etcd database.
-        self.reset_etcd_after = None
-        self.assert_etcd_writes_deletes = True
-
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data.
         """
@@ -196,21 +217,21 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites(
             {'/calico/v1/config/InterfacePrefix': 'tap',
              '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/SGID-default/rules':
-                {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "dst_net": "0.0.0.0/0",
+             '/calico/v1/policy/profile/SGID-default/rules':
+                 {"outbound_rules": [{"dst_ports": ["1:65535"],
+                                      "dst_net": "0.0.0.0/0",
+                                      "ip_version": 4},
+                                     {"dst_ports": ["1:65535"],
+                                      "dst_net": "::/0",
+                                      "ip_version": 6}],
+                  "inbound_rules": [{"dst_ports": ["1:65535"],
+                                     "src_tag": "SGID-default",
                                      "ip_version": 4},
                                     {"dst_ports": ["1:65535"],
-                                     "dst_net": "::/0",
-                                     "ip_version": 6}],
-                 "inbound_rules": [{"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
-                ["SGID-default"]
+                                     "src_tag": "SGID-default",
+                                     "ip_version": 6}]},
+             '/calico/v1/policy/profile/SGID-default/tags':
+                 ["SGID-default"]
         })
 
     def test_etcd_reset(self):
@@ -787,136 +808,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertFalse(self.driver._register_initial_felixes.called)
         self.assertFalse(self.driver._handle_status_update.called)
 
-    def test_status_subtree_read(self):
-        """
-        Test that initial read through etcd status subtree notices felixes.
-        """
-        # Add arbitrary status keys to accumulated etcd db
-        self.etcd_data[FELIX_STATUS_DIR + "/vm_47/status"] = {"time": "2015-08-14T10:37:54"}
-        self.etcd_data[FELIX_STATUS_DIR + "/vm_47/status"] = 12
-        self.etcd_data[FELIX_STATUS_DIR + "/machine_123/status"] = 17
-        self.etcd_data[FELIX_STATUS_DIR + "/VMachine/status"] = {"time": "1994-06-09T05:13:18"}
-
-        expected_calls = [mock.call(None, TestIfAgentState(host="vm_47",
-                                                           start_flag=True,
-                                                           agent_type=mech_calico.AGENT_TYPE_FELIX,
-                                                           binary='felix-calico-agent')),
-                          mock.call(None, TestIfAgentState(host="machine_123",
-                                                           start_flag=True,
-                                                           agent_type=mech_calico.AGENT_TYPE_FELIX,
-                                                           binary='felix-calico-agent'))]
-
-        self.driver.db = mock.Mock()
-        self.driver.transport = mock.Mock()
-        self.driver.transport.status_client = self.client
-        # Read through status subtree.
-        self.driver._register_initial_felixes()
-        self.driver.db.create_or_update_agent.assert_has_calls(expected_calls,
-                                                               any_order=True)
-
-    def test_status_response_handling(self):
-        """
-        Test that status update handling.
-        """
-        self.driver.db = mock.Mock()
-        create_or_update_agent = self.driver.db.create_or_update_agent
-
-        # Test status creation
-        status_create = FakeResponse(key=FELIX_STATUS_DIR+"/VM_1/status",
-                                     newKey=True)
-        self.driver._handle_status_update(status_create)
-        create_agent_state = TestIfAgentState(host="VM_1", start_flag=True)
-        create_or_update_agent.assert_called_once(self.driver._db_context,
-                                                  create_agent_state)
-        create_or_update_agent.reset_mock()
-
-        # Test status update
-        status_update = FakeResponse(key=FELIX_STATUS_DIR+"/VM_2/status")
-        self.driver._handle_status_update(status_update)
-        update_agent_state = TestIfAgentState(host="VM_2", start_flag=False)
-        create_or_update_agent.assert_called_once(self.driver._db_context,
-                                                  update_agent_state)
-        create_or_update_agent.reset_mock()
-
-        # Test deleted status
-        status_delete = FakeResponse(key=FELIX_STATUS_DIR+"/VM_3/status",
-                                     action="delete")
-        self.driver._handle_status_update(status_delete)
-        self.assertFalse(create_or_update_agent.called)
-
-        # Test expired status
-        status_expire = FakeResponse(key=FELIX_STATUS_DIR+"/VM_4/status",
-                                     action="expire")
-        self.driver._handle_status_update(status_expire)
-        self.assertFalse(create_or_update_agent.called)
-
-        # Test not-uptime status
-        status_not_uptime = FakeResponse(key=FELIX_STATUS_DIR+"/VM_5/not_status")
-        self.driver._handle_status_update(status_not_uptime)
-        self.assertFalse(create_or_update_agent.called)
-
-    def test_etcd_index_increases_on_reads(self):
-        """
-        Test that index value is tracked when watching for status update.
-        """
-        self.driver.transport = mock.Mock()
-        self.driver._handle_status_update = mock.Mock()
-
-        lib.m_etcd.Client = lambda *args, **kwargs : self.client
-
-        self.simulated_time_advance(31)
-
-        old_etcd_index = self.driver.transport._next_etcd_index
-        for new_update in xrange(15):
-            self.give_way()
-            self.simulated_time_advance(31)
-            self.assertNotEqual(old_etcd_index,
-                                self.driver.transport.next_etcd_index,
-                                "etcd_index tracking error.")
-            old_etcd_index = self.driver.transport.next_etcd_index
-
-    def test_status_update_exceptions(self):
-        """
-        Test that exceptions causes reconnect/resync.
-        """
-        lib.m_etcd.Client = lambda *args, **kwargs : mock.Mock() #self.client
-        self.driver.transport = t_etcd.CalicoTransportEtcd(self.driver)
-
-        # Test ReadTimeoutError
-        self.driver._handle_status_update = mock.Mock(side_effect=ReadTimeoutError('pool', 'url', 'Test ReadTimeoutError'))
-        self.driver.transport.resync_status_tree = mock.Mock()
-        # Poll - ReadTimeoutError is raised as side effect
-        self.driver.transport._poll_and_handle_felix_updates(self.driver._epoch)
-        self.assertFalse(self.driver.transport.resync_status_tree.called)
-
-        # Test SocketTimeout
-        self.driver._handle_status_update = mock.Mock(side_effect=SocketTimeout('Test SocketTimeout'))
-        self.driver.transport.resync_status_tree = mock.Mock()
-        # Poll - SocketTimeout is raised as as side effect
-        self.driver.transport._poll_and_handle_felix_updates(self.driver._epoch)
-        self.assertFalse(self.driver.transport.resync_status_tree.called)
-
-        # Test EtcdClusterIdChanged
-        self.driver._handle_status_update = mock.Mock(side_effect=EtcdClusterIdChanged("Test EtcdClusterIdChanged"))
-        self.driver.transport.resync_status_tree = mock.Mock()
-        # Poll - EtcdClusterIdChanged is raised as side effect
-        self.driver.transport._poll_and_handle_felix_updates(self.driver._epoch)
-        self.assertTrue(self.driver.transport.resync_status_tree.called)
-
-        # Test EtcdEventIndexCleared
-        self.driver._handle_status_update = mock.Mock(side_effect=EtcdEventIndexCleared("Test EtcdEventIndexCleared"))
-        self.driver.transport.resync_status_tree = mock.Mock()
-        # Poll - EtcdEventIndexCleared is raised as side effect
-        self.driver.transport._poll_and_handle_felix_updates(self.driver._epoch)
-        self.assertTrue(self.driver.transport.resync_status_tree.called)
-
-        # Test general exception
-        self.driver._handle_status_update = mock.Mock(side_effect=[Exception("Test general exception")])
-        self.driver.transport.resync_status_tree = mock.Mock()
-        # Poll - ReadTimeoutError is raised as side effect
-        self.driver.transport._poll_and_handle_felix_updates(self.driver._epoch)
-        self.assertFalse(self.driver.transport.resync_status_tree.called)
-
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(etcd_rule, exp_etcd_rule)
@@ -931,6 +822,132 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         common.validate_rules("profile_id", rules)
 
 
+class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
+    """
+    Tests of the driver's status reporting function.
+    """
+    def setUp(self):
+        super(TestDriverStatusReporting, self).setUp()
+        self.driver.transport = mock.Mock(spec=t_etcd.CalicoTransportEtcd)
+
+        # Mock out config.
+        lib.m_oslo.config.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_oslo.config.cfg.CONF.calico.etcd_port = 4001
+
+    def test_felix_agent_state(self):
+        self.assertEqual(
+            mech_calico.felix_agent_state("host", True),
+            {
+                "agent_type": "Calico per-host agent (felix)",
+                "binary": "calico-felix",
+                "host": "host",
+                "start_flag": True,
+                'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+            }
+        )
+        self.assertEqual(
+            mech_calico.felix_agent_state("host2", False),
+            {
+                "agent_type": "Calico per-host agent (felix)",
+                "binary": "calico-felix",
+                "host": "host2",
+                'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+            }
+        )
+
+    def test_status_thread_epoch(self):
+        self.driver._epoch = 2
+        self.driver._status_updating_thread(1)
+
+    @mock.patch("calico.openstack.mech_calico.CalicoEtcdWatcher",
+                autospec=True)
+    def test_status_thread_mainline(self, m_CalicoEtcdWatcher):
+        self.driver.transport.is_master = True
+        count = [0]
+
+        def maybe_end_loop(*args, **kwargs):
+            if count[0] == 2:
+                # Thread dies, should be restarted.
+                self.driver._etcd_watcher_thread = False
+            if count[0] == 4:
+                # After a few loops, stop being the master...
+                self.driver.transport.is_master = False
+            if count[0] > 6:
+                # Then terminate the loop after a few more...
+                self.driver._epoch += 1
+            count[0] += 1
+
+        with mock.patch("eventlet.spawn") as m_spawn:
+            with mock.patch("eventlet.sleep") as m_sleep:
+                m_sleep.side_effect = maybe_end_loop
+                self.driver._status_updating_thread(0)
+        m_watcher = m_CalicoEtcdWatcher.return_value
+        self.assertEqual(
+            [c for c in m_spawn.mock_calls if c[0] == ""],
+            [
+                mock.call(m_watcher.loop),
+                mock.call(m_watcher.loop),
+            ]
+        )
+        self.assertEqual(len(m_watcher.stop.mock_calls), 2)
+        self.assertEqual(self.driver._etcd_watcher, None)
+
+    def test_on_felix_alive(self):
+        self.driver._get_db()
+        self.driver._db_context = mock.Mock()
+        self.driver.on_felix_alive("hostfoo", True)
+        self.db.create_or_update_agent.assert_called_once_with(
+            self.driver._db_context,
+            {
+                "agent_type": "Calico per-host agent (felix)",
+                "binary": "calico-felix",
+                "host": "hostfoo",
+                "start_flag": True,
+                'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+            }
+        )
+
+    def test_bind_port_coverage(self):
+        context = mock.Mock()
+        context.host_agents.return_value = [
+            {"alive": False}
+        ]
+        self.driver.bind_port(context)
+
+
+class TestCalicoEtcdWatcher(unittest.TestCase):
+    def setUp(self):
+        # Mock out config.
+        lib.m_oslo.config.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_oslo.config.cfg.CONF.calico.etcd_port = 4001
+        self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
+        self.watcher = t_etcd.CalicoEtcdWatcher(self.driver)
+
+    def test_snapshot(self):
+        m_response = mock.Mock()
+        m_node_to_ignore = mock.Mock()
+        m_node_to_ignore.key = "/calico/felix/v1/host/hostname/last_reported_status"
+        m_node_to_ignore.value = '{"uptime": 10, "first_update": true}'
+        m_status_node = mock.Mock()
+        m_status_node.key = "/calico/felix/v1/host/hostname/status"
+        m_status_node.value = '{"uptime": 10, "first_update": true}'
+        m_response.leaves = [
+            m_node_to_ignore,
+            m_status_node,
+        ]
+        self.watcher._on_snapshot_loaded(m_response)
+        self.driver.on_felix_alive.assert_called_once_with("hostname",
+                                                           new=True)
+
+    def test_status_bad_json(self):
+        for value in ["{", 10, "foo"]:
+            m_response = mock.Mock()
+            m_response.key = "/calico/felix/v1/host/hostname/status"
+            m_response.value = value
+            self.watcher._on_status_set(m_response, "foo")
+        self.assertFalse(self.driver.on_felix_alive.called)
+
+
 def _neutron_rule_from_dict(overrides):
     rule = {
         "ethertype": "IPv4",
@@ -943,45 +960,3 @@ def _neutron_rule_from_dict(overrides):
     }
     rule.update(overrides)
     return rule
-
-class TestIfAgentState(object):
-    """
-    Class to help decide if object is agent_state
-
-    :param: kwargs for agent attributes.
-    """
-    def __init__(self, agent_type=None, binary=None, host=None, topic=None, start_flag=None):
-        self.agent_type = agent_type
-        self.binary = binary
-        self.host = host
-        self.topic = topic
-        self.start_flag = start_flag
-    def __eq__(self, other):
-        if type(other) != dict:
-            return False
-        if self.agent_type != None and other["agent_type"] != self.agent_type:
-            return False
-        if self.binary != None and other["binary"] != self.binary:
-            return False
-        if self.host != None and other["host"] != self.host:
-            return False
-        if self.topic != None and other["topic"] != self.topic:
-            return False
-        if self.start_flag and not other.get("start_flag"):
-            return False
-        if self.start_flag == False and other.get("start_flag"):
-            return False
-        return  True
-
-class FakeResponse(object):
-    """
-    Class to simulate an etcd response.
-
-    :param: kwargs for response attributes
-    """
-    def __init__(self, action=None, key="/", newKey=False, **kwargs):
-        self.action = action
-        self.key = key
-        self.newKey = newKey
-        for key, value in kwargs.iteritems():
-            self.key = value
