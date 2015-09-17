@@ -2,8 +2,8 @@
 
 ## 1.2.0
 
-- Add liveness reporting to felix.  Felix now reports its liveness into
-  etcd and the neutron driver copies that information to the neutron DB.
+- Add liveness reporting to Felix.  Felix now reports its liveness into
+  etcd and the neutron driver copies that information to the Neutron DB.
 - Performance enhancements to ipset manipulation.
 
 ## 1.1.0
