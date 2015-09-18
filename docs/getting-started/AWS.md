@@ -18,11 +18,13 @@ For more information, see Amazon's [Installing the AWS Command Line Interface][i
 Run the AWS configure command, which will prompt you to set your User keys.
 ```
 aws configure
->  AWS Access Key ID: <User Access Key>
->  AWS Secret Access Key: <User Secret Access Key>
->  Default region name: us-west-2
->  Default output format: <json, text, or table>
+#>  AWS Access Key ID: <User Access Key>
+#>  AWS Secret Access Key: <User Secret Access Key>
+#>  Default region name: <Region Name, eg. us-west-2>
+#>  Default output format: <json, text, or table>
 ```
+Note: Your <Region Name> can be found on the front page of the EC2 dashboard under the "Service Health" text.
+
 Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 
 commands.  This can be set in the Services>IAM>Users User configuration page of the web console.
 For more information on configuration and keys, see Amazon's 
@@ -32,6 +34,70 @@ For more information on configuration and keys, see Amazon's
 Before you can use Calico to network your containers, you first need to configure AWS to allow your hosts to talk to 
 each other.
 
+A Virtual Private Cloud (VPC) is required on AWS in order to configure Calico networking on EC2. Your AWS account should have a default VPC that instances 
+automatically attach to when they are created. 
+
+To check if you have a default VPC, run the following command, then save VPC ID as an environment variable to use later.
+```
+aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"
+
+# Save VpcId from output as environment variable (without quotes)
+VPC_ID=<VpcId>
+```
+
+If you do not have a default VPC or you would like to create a VPC specifically for your hosts that have Calico-networked containers, follow 
+the instructions below.
+
+### Creating an AWS VPC
+> NOTE: This step is only required if you do not have a default VPC or if you would like 
+> to create a new VPC explicitly for your Calico hosts.  Skip to Configuring Key Pair and 
+> Security Group if this does not apply to you.
+
+For SSH purposes on AWS, you will need to configure a Subnet, Internet Gateway, and Route Table on the VPC.
+
+Create the VPC to use as the network for your hosts.  Set a `VPC_ID` environment variable to 
+make things a bit easier, replacing `<VpcId>` with the `VpcId` value returned from the command:
+```
+aws ec2 create-vpc --cidr-block 172.35.0.0/24
+VPC_ID=<VpcId>
+```
+
+Create a subnet for your hosts, then save a `SUBNET_ID` environment variable, replacing `<SubnetId>` with the `SubnetId` output value of the command.
+```
+aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 172.35.0.0/24
+SUBNET_ID=<SubnetId>
+```
+
+Modify the Subnet to auto-assign public ip addresses:
+```
+aws ec2 modify-subnet-attribute --subnet-id $SUBNET_ID --map-public-ip-on-launch
+```
+
+Create an Internet Gateway.  Save the `InternetGatewayId` value as an environment variable.
+```
+aws ec2 create-internet-gateway
+GATEWAY_ID=<InternetGatewayId>
+```
+
+Attach the gateway to the VPC.
+```
+aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway $GATEWAY_ID
+```
+
+Create a Route Table on the VPC. Save the `RouteTableId` as an environment variable.
+```
+aws ec2 create-route-table --vpc-id $VPC_ID
+ROUTE_TABLE_ID=<RouteTableId>
+```
+
+Associate the route table with the Subnet and add a route to the Internet.
+```
+aws ec2 associate-route-table --subnet-id $SUBNET_ID --route-table-id $ROUTE_TABLE_ID
+aws ec2 create-route --route-table-id $ROUTE_TABLE_ID --destination-cidr-block 0.0.0.0/0 \
+  --gateway-id $GATEWAY_ID
+```
+
+### Configuring Key Pair and Security Group
 Create a Key Pair to use for ssh access to the instances. The following command will generate a key for you.
 ```
 aws ec2 create-key-pair --key-name mykey --output text
@@ -43,27 +109,25 @@ Copy the output into a new file called mykey.pem.  The file should include ```--
 chmod 400 mykey.pem
 ```
 
-A Security Group is required on the instances to control allowed traffic.  Create a security group that allows all 
-traffic between instances within the group but only SSH access from the internet.
+A Security Group is required on the instances to control allowed traffic.  Save the `GroupId` output from the first command as an environment variable.
 ```
 # Create Security Group 
-aws ec2 create-security-group \
-  --group-name MySG \
-  --description MySecurityGroup
+aws ec2 create-security-group --group-name MySG \
+  --description MySecurityGroup --vpc-id $VPC_ID
 
-# Allow SSH traffic to hosts in the security group 
-aws ec2 authorize-security-group-ingress \
-  --group-name MySG \
-  --protocol tcp \
-  --port 22 \
-  --cidr 0.0.0.0/0
+# Save environment variable of GroupId
+SECURITY_GROUP_ID=<GroupId>
+```
 
-# Allow hosts in the security group to communicate with each other
-aws ec2 authorize-security-group-ingress \
-  --group-name MySG \
-  --protocol all \
-  --port all \
-  --source-group MySG
+Allow SSH from the internet and allow all traffic between instances within the group.
+```
+# Allow SSH access
+aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
+  --protocol tcp --port 22 --cidr 0.0.0.0/0
+
+# Allow all traffic within the VPC
+aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
+  --source-group $SECURITY_GROUP_ID  --protocol all --port all
 ```
 
 ## Spinning up the VMs
@@ -76,42 +140,48 @@ default Docker networking.  Select the appropriate cloud-config based on the dem
 - [User Data for libnetwork](libnetwork/cloud-config)
 - [User Data for Powerstrip](powerstrip/cloud-config)
   
-A different file is used for the two servers.    
+A different file is used for the two servers.
 - For the first server, use the `user-data-first`
 - For the second server, use the `user-data-others`
 
 Copy these files onto your machine.
 
+Before running the commands, note the following:
+-  The `ami-########` represents the CoreOS stable HVM image type for the `us-west-2` region. 
+If you are using a region other than `us-west-2`, replace the image name with the correct CoreOS stable HVM image 
+from the [CoreOS image list](https://coreos.com/os/docs/latest/booting-on-ec2.html) for your zone. 
+Use `aws ec2 describe-availability-zones` to display your region if you do not remember.
+-  It may take a couple of minutes for AWS to boot the machines after creating them.
+
 For the first server run:
 
 ```
 aws ec2 run-instances \
-  --image-id ami-29734819 \
-  --instance-type t1.micro \
+  --image-id ami-99bfada9 \
+  --instance-type t2.micro \
   --key-name mykey \
-  --security-groups MySG \
+  --security-group-ids $SECURITY_GROUP_ID \
   --user-data file://<PATH_TO_CLOUD_CONFIG>/user-data-first
+#  --subnet $SUBNET_ID 
+#  Include the subnet param above if using a non-default VPC
 ```
 
-replacing <PATH_TO_CLOUD_CONFIG> with the appropriate directory containing the cloud config.
+replacing `<PATH_TO_CLOUD_CONFIG>` with the appropriate directory containing the cloud config.
 
-Find the PrivateIpAddress value of the first server by checking the output of this command.  Open your `user-data-others` file and replace the instances of `172.17.8.101` with this private IP address.
+Find the PrivateIpAddress value of the first server by checking the output of this command.  
+Open your `user-data-others` file and replace the instances of `172.17.8.101` with this private IP address.
 
-Now, for the second server run:
-
+After making this change, for the second server run:
 ```
 aws ec2 run-instances \
-  --image-id ami-29734819 \
-  --instance-type t1.micro \
+  --image-id ami-99bfada9 \
+  --instance-type t2.micro \
   --key-name mykey \
-  --security-groups MySG \
+  --security-group-ids $SECURITY_GROUP_ID \
   --user-data file://<PATH_TO_CLOUD_CONFIG>/user-data-others
+#  --subnet $SUBNET_ID 
+#  Include the subnet param above if using a non-default VPC
 ```
-
-Notes:
--  The "ami-########" represents the CoreOS alpha image type.
--  It may take a couple of minutes for AWS to boot the machines after creating them.
-
 
 ## Set up the IP Pool before running the demo
 Run the following commands to SSH into each node and set up the IP pool
