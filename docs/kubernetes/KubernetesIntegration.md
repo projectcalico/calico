@@ -3,7 +3,7 @@
 This guide will describe the configuration required to use the Calico network plugin in your Kubernetes deployment.
 
 ## Setting Up Your Environment 
-   The Calico network plugin looks for three environment variables. If one is not set, it will assume a default value. If you need to override the defaults, you must set these variables in the environment of the _kubelet_ process. 
+   The Calico network plugin looks for five environment variables. If one is not set, it will assume a default value. If you need to override the defaults, you must set these variables in the environment of the _kubelet_ process.
 
 * #####ETCD_AUTHORITY
    By default, the Calico network plugin will assume that the etcd datastore is located at `<MASTER_IP>:6666`. Setting the `ETCD_AUTHORITY` variable in your environment will direct Calico to the correct IP if your cluster is set up differently.
@@ -13,6 +13,12 @@ This guide will describe the configuration required to use the Calico network pl
 
 * #####KUBE_API_ROOT
    The `KUBE_API_ROOT` environment variable specifies where the Kubernetes API resources are located, defaulting to the `<MASTER_IP>:8080/api/v1/`
+
+* #####DEFAULT_POLICY (added in calico-kubernetes v0.2.0)
+   The `DEFAULT_POLICY` environment variable applies [security policy](http://docs.projectcalico.org/en/latest/security-model.html) to a set of pods. The default policy in the Calico network plugin is `allow`, which allows all incoming and outgoing traffic to and from a pod. Alternately, you may also indicate `ns_isolation`, which will only allow incoming traffic from pods of the same namespace and allow all outgoing traffic.
+
+* #####CALICO_IPAM (added in calico-kubernetes v0.2.0)
+   The `CALICO_IPAM` environment variable gives the option to utilize Calico IP Address Management (IPAM). When set to `true`, Calico will automatically assign pods an IP address that is unique in the cluster. By default, `CALICO_IPAM` is set to `false`, and pods utilize the IP address assigned by Docker.
 
 ## Configuring Nodes
 
