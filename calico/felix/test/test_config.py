@@ -97,6 +97,11 @@ class TestConfig(unittest.TestCase):
                                          data[filename]):
                 config = Config("calico/felix/test/data/%s" % filename)
 
+    def test_invalid_chain(self):
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Invalid field value"):
+            config = Config("calico/felix/test/data/felix_invalid_chain.cfg")
+
     def test_no_logfile(self):
         # Logging to file can be excluded by explicitly saying "none" -
         # but if in etcd config the file is still created.

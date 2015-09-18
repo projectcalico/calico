@@ -296,6 +296,9 @@ class TestCommon(unittest.TestCase):
                         "abcd:0:eff::")
         self.assertTrue(common.canonicalise_ip("::", 6), "::")
 
+        self.assertIsNone(common.canonicalise_ip(None, 4))
+        self.assertIsNone(common.canonicalise_ip(None, 6))
+
     def test_validate_endpoint(self):
         combined_id = EndpointId("host", "orchestrator",
                                  "workload", "valid_name-ok.")
