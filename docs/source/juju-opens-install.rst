@@ -28,6 +28,6 @@ update this in the bundle (search for the keystone "admin-password" option).
 For more detailed information, please see `this blog post`_ on the Calico blog.
 
 .. _Juju Charms: https://jujucharms.com/
-.. _this bundle file: https://raw.githubusercontent.com/projectcalico/calico/master/docs/source/_static/juju/bundle.yaml
+.. _this bundle file: https://raw.githubusercontent.com/projectcalico/calico/master/docs/source/_static/juju/icehouse.yaml
 .. _any of the standard methods: https://jujucharms.com/docs/1.20/charms-bundles
 .. _this blog post: http://www.projectcalico.org/exploring-juju/
