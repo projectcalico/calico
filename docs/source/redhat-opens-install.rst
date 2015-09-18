@@ -460,6 +460,7 @@ On each compute node, perform the following steps:
 
 10. Install python-posix-spawn::
 
+        yum install -y gcc libffi-devel
         curl -L https://github.com/projectcalico/python-posix-spawn/releases/download/v0.2.post7/posix-spawn-0.2.post7.tar.gz -o posix-spawn.tar.gz
         tar xvf posix-spawn.tar.gz
         cd posix-spawn-0.2.post7
