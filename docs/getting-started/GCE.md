@@ -3,6 +3,12 @@ Calico is designed to provide high performance massively scalable virtual networ
 can also run Calico within a public cloud such as Google Compute Engine (GCE). The following instructions show how to 
 network containers using Calico routing and the Calico security model on GCE.
 
+>NOTE: When running Calico on GCE, the `calico/node` docker image for default-networking must be `v0.6.0` or later. 
+>You can do this by running `docker pull calico/node:<version>` where `<version>` is the release you would like to use 
+>(such as `v0.6.0`) or `latest`.  You could alternatively [build the `calico/node` image 
+>locally](https://github.com/projectcalico/calico-docker/blob/master/docs/Building.md), which saves the image in docker as 
+>`calico/node:latest`.  Following the instructions below will automatically use `v0.6.0` or later.
+
 ## Getting started with GCE
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see 
 [the CoreOS on GCE documentation][coreos-gce].
@@ -41,12 +47,11 @@ gcloud compute firewall-rules list
 ## Spinning up the VMs
 Create the VMs by passing in a cloud-init file.
 
-There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or the 
+There are two demonstration options depending on whether you are running with libnetwork or the 
 default Docker networking.  Select the appropriate cloud-config based on the demonstration option.
 
 - [User Data for Docker default networking](default-networking/cloud-config) 
 - [User Data for libnetwork](libnetwork/cloud-config)  
-- [User Data for Powerstrip](powerstrip/cloud-config)
   
 A different file is used for the two servers.    
 - For the first server, use the `user-data-first`
@@ -88,12 +93,11 @@ calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
 
 # Running the demonstration
-You can now run through the standard Calico demonstration.  There are three demonstration options depending on 
-whether you are running with libnetwork, Powerstrip or the default Docker networking.
+You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
+whether you are running with libnetwork or the default Docker networking.
 
 - [demonstration with Docker default networking](default-networking/Demonstration.md) 
 - [demonstration with libnetwork](libnetwork/Demonstration.md) 
-- [demonstration with Powerstrip](powerstrip/Demonstration.md)
 
 ## (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in GCE can be exposed to the internet.  Since the containers have IP 
