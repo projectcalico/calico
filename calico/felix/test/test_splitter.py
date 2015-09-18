@@ -257,3 +257,26 @@ class TestUpdateSplitter(BaseTestCase):
             mgr.on_endpoint_update.assertCalledOnceWith(
                 endpoint, endpoint_object, async=True
             )
+
+    def test_on_ipam_pool_updated(self):
+        """
+        Test that the on_ipam_pool_update message propagates correctly
+        """
+        s = self.get_splitter()
+        pool_id = "foo"
+        pool = {"cidr": "10/16", "masquerade": False}
+
+        s.ipv4_masq_manager.apply_snapshot({"foo": {"cidr": "10.0.0.0/16",
+                                                    "masquerade": True},
+                                            "bar": {"cidr": "10.1.0.0/16",
+                                                    "masquerade": False}},
+                                           async=True)
+
+        # Apply the IPAM pool update
+        s.on_ipam_pool_update(pool_id, pool, async=True)
+        self.step_actor(s)
+
+        # Confirm that the pool update propagates
+        self.masq_manager.on_ipam_pool_updated.assertCalledOnceWith(
+            pool_id, pool, async=True
+        )
