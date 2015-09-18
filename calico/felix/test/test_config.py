@@ -97,10 +97,10 @@ class TestConfig(unittest.TestCase):
                                          data[filename]):
                 config = Config("calico/felix/test/data/%s" % filename)
 
-    def test_invalid_chain(self):
+    def test_invalid_action(self):
         with self.assertRaisesRegexp(ConfigException,
                                      "Invalid field value"):
-            config = Config("calico/felix/test/data/felix_invalid_chain.cfg")
+            config = Config("calico/felix/test/data/felix_invalid_action.cfg")
 
     def test_no_logfile(self):
         # Logging to file can be excluded by explicitly saying "none" -
