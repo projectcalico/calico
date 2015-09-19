@@ -46,7 +46,7 @@ class BaseTestCase(unittest.TestCase):
         # actor_message's asserts.
         with mock.patch.object(actor, "greenlet"):
             actor.greenlet = gevent.getcurrent()
-            while not actor._event_queue.empty():
+            while actor._event_queue:
                 actor._step()
 
 

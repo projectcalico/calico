@@ -105,11 +105,9 @@ import logging
 import os
 import sys
 import traceback
-import uuid
 import weakref
 
 from gevent.event import AsyncResult
-from gevent.queue import Queue
 from calico.felix import futils
 from calico.felix.futils import StatCounter
 
@@ -134,7 +132,8 @@ class Actor(object):
     """Number of calls to self._maybe_yield before it yields"""
 
     def __init__(self, qualifier=None):
-        self._event_queue = Queue()
+        self._event_queue = []
+        self._scheduled = True
         self.greenlet = gevent.Greenlet(self._loop)
         self._op_count = 0
         self._current_msg = None
@@ -152,6 +151,12 @@ class Actor(object):
         # Can't use str(self) yet, it might not be ready until subclass
         # constructed.
         _log.info("%s created.", self.name)
+
+    def maybe_schedule(self, caller):
+        loop = gevent.get_hub().loop
+        if not self._scheduled:
+            self._scheduled = True
+            loop.run_callback(self.greenlet.switch, caller)
 
     def start(self):
         assert not self.greenlet, "Already running"
@@ -183,8 +188,14 @@ class Actor(object):
         It also has the beneficial side effect of introducing a new local
         scope so that our variables die before we block next time.
         """
-        # Block waiting for work.
-        msg = self._event_queue.get()
+        hub = gevent.get_hub()
+        while not self._event_queue:
+            # Block waiting for work.
+            self._scheduled = False
+            caller = hub.switch()
+            assert self._scheduled, ("%s switched to from %s but scheduled "
+                                     "set to False." % (self, caller))
+        msg = self._event_queue.pop(0)
 
         batch = [msg]
         batches = []
@@ -192,10 +203,10 @@ class Actor(object):
         if not msg.needs_own_batch:
             # Try to pull some more work off the queue to combine into a
             # batch.
-            while not self._event_queue.empty():
+            while self._event_queue:
                 # We're the only ones getting from the queue so this should
                 # never fail.
-                msg = self._event_queue.get_nowait()
+                msg = self._event_queue.pop(0)
                 if msg.needs_own_batch:
                     if batch:
                         batches.append(batch)
@@ -221,7 +232,7 @@ class Actor(object):
             for msg in batch:
                 _log.debug("Message %s recd by %s from %s, queue length %d",
                            msg, msg.recipient, msg.caller,
-                           self._event_queue.qsize())
+                           len(self._event_queue))
                 self._current_msg = msg
                 actor_storage.msg_uuid = msg.uuid
                 actor_storage.msg_name = msg.name
@@ -364,7 +375,7 @@ class Actor(object):
     def __str__(self):
         return self.__class__.__name__ + "<%s,queue_len=%s,live=%s,msg=%s>" % (
             self.qualifier,
-            self._event_queue.qsize(),
+            len(self._event_queue),
             bool(self.greenlet),
             self._current_msg
         )
@@ -384,10 +395,16 @@ def wait_and_check(async_results):
         r.get()
 
 
+next_message_id = 0
+
+
 class Message(object):
     """
     Message passed to an actor.
     """
+    __slots__ = ("uuid", "method", "results", "caller", "name",
+                 "needs_own_batch", "recipient")
+
     def __init__(self, msg_id,  method, results, caller_path, recipient,
                  needs_own_batch):
         self.uuid = msg_id
@@ -429,18 +446,25 @@ def actor_message(needs_own_batch=False):
 
         @functools.wraps(fn)
         def queue_fn(self, *args, **kwargs):
-            # Get call information for logging purposes.
-            calling_file, line_no, func, _ = traceback.extract_stack()[-2]
-            calling_file = os.path.basename(calling_file)
-            calling_path = "%s:%s:%s" % (calling_file, line_no, func)
-            try:
-                caller_name = "%s.%s" % (actor_storage.class_name,
-                                         actor_storage.msg_name)
-                caller = "%s (processing %s)" % (actor_storage.name,
-                                                 actor_storage.msg_uuid)
-            except AttributeError:
-                caller_name = calling_path
-                caller = calling_path
+            # Calculating the calling information is expensive, so only do it
+            # if debug is enabled.
+            caller = "<disabled>"
+            caller_name = "<disabled>"
+            calling_path = "<disabled>"
+
+            if _log.isEnabledFor(logging.DEBUG):
+                # Get call information for logging purposes.
+                calling_file, line_no, func, _ = traceback.extract_stack()[-2]
+                calling_file = os.path.basename(calling_file)
+                calling_path = "%s:%s:%s" % (calling_file, line_no, func)
+                try:
+                    caller_name = "%s.%s" % (actor_storage.class_name,
+                                             actor_storage.msg_name)
+                    caller = "%s (processing %s)" % (actor_storage.name,
+                                                     actor_storage.msg_uuid)
+                except AttributeError:
+                    caller_name = calling_path
+                    caller = calling_path
 
             # Figure out our arguments.
             async_set = "async" in kwargs
@@ -462,10 +486,17 @@ def actor_message(needs_own_batch=False):
                      method_name,
                      self.__class__.__name__)
                 )
+                pass
 
             # async must be specified, unless on the same actor.
-            assert async_set, "All cross-actor event calls must specify async arg."
-            msg_id = uuid.uuid4().hex[:12]
+            assert async_set, "Cross-actor event calls must specify async arg."
+
+            # Allocate a message ID.  We rely on there being no yield point
+            # here for thread safety.
+            global next_message_id
+            msg_id = next_message_id
+            next_message_id += 1
+
             if not on_same_greenlet and not async:
                 _stats.increment("Blocking calls started")
                 _log.debug("BLOCKING CALL: [%s] %s -> %s", msg_id,
@@ -479,8 +510,9 @@ def actor_message(needs_own_batch=False):
                           needs_own_batch=needs_own_batch)
 
             _log.debug("Message %s sent by %s to %s, queue length %d",
-                       msg, caller, self.name, self._event_queue.qsize())
-            self._event_queue.put(msg, block=False)
+                       msg, caller, self.name, len(self._event_queue))
+            self._event_queue.append(msg)
+            self.maybe_schedule(caller)
             if async:
                 return result
             else:
@@ -615,3 +647,60 @@ def _exit(rc):
     This function is mainly here to be mocked out in UTs.
     """
     os._exit(rc)  # pragma nocover
+
+
+if __name__ == "__main__":
+    from calico.monotonic import monotonic_time
+    print "Running actor perf test"
+
+    class MessageChainActor(Actor):
+        def __init__(self, set_done=False):
+            super(MessageChainActor, self).__init__()
+            self.children = []
+            self.set_done = set_done
+
+        @actor_message()
+        def pass_message_on(self, message):
+            if not self.children and message and self.set_done:
+                print "Time:", monotonic_time() - start_time
+                done.set()
+            for c in self.children:
+                gevent.sleep(0.01)
+                c.pass_message_on(message, async=True)
+
+    root = MessageChainActor()
+    sink = MessageChainActor()
+    sink.start()
+    root.start()
+    node = root
+    for x in xrange(10000):
+        child = MessageChainActor()
+        child.start()
+        node.children.append(child)
+        node.children.append(sink)
+        node = child
+    node.set_done = True
+    from gevent.event import Event
+    done = Event()
+    start_time = monotonic_time()
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.0001)
+    root.pass_message_on("", async=True)
+    gevent.sleep(0.01)
+    root.pass_message_on("Foobar", async=True)
+    done.wait()
+    print next_message_id

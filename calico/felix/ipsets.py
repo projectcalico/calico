@@ -586,7 +586,7 @@ class IpsetActor(Actor):
             self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s,"
                                       "name=%s>" %
             (
-                self._event_queue.qsize(),
+                len(self._event_queue),
                 bool(self.greenlet),
                 self._current_msg,
                 self.name,
@@ -641,7 +641,7 @@ class TagIpset(IpsetActor, RefCountedActor):
             self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s,"
                                       "name=%s,id=%s>" %
             (
-                self._event_queue.qsize(),
+                len(self._event_queue),
                 bool(self.greenlet),
                 self._current_msg,
                 self.name,
