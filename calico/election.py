@@ -24,11 +24,8 @@ from greenlet import GreenletExit
 import random
 import etcd
 import eventlet
-from httplib import HTTPException
 import logging
-from socket import timeout as SocketTimeout
 from urllib3 import Timeout
-from urllib3.exceptions import HTTPError
 
 import os
 
@@ -122,10 +119,7 @@ class Elector(object):
             _log.debug("Try to become the master - key not found")
             self._become_master()
             assert False, "_become_master() should not return."
-        except (SocketTimeout,
-                HTTPError,
-                HTTPException,
-                etcd.EtcdException) as e:
+        except etcd.EtcdException as e:
             # Something bad and unexpected. Log and reconnect.
             self._log_exception("read current master", e)
             return
@@ -150,10 +144,7 @@ class Elector(object):
                 # without us getting the delete action, but safer to handle it.
                 _log.warning("Implausible vanished key - become master")
                 self._become_master()
-            except (SocketTimeout,
-                    HTTPError,
-                    HTTPException,
-                    etcd.EtcdException) as e:
+            except etcd.EtcdException as e:
                 # Something bad and unexpected. Log and reconnect.
                 self._log_exception("wait for master change", e)
                 return
@@ -220,8 +211,7 @@ class Elector(object):
         if isinstance(exc, etcd.EtcdClusterIdChanged):
             _log.warning("etcd cluster ID changed while trying to %s, "
                          "the etcd cluster may have been rebuilt.", failed_to)
-        elif isinstance(exc, (etcd.EtcdException, HTTPError, HTTPException,
-                              SocketTimeout)):
+        elif isinstance(exc, etcd.EtcdException):
             # Expected errors (with good messages): timeouts and connection
             # failures.  Don't log stack traces to avoid cluttering the log.
             _log.warning("Failed to %s - key %s: %r", failed_to,

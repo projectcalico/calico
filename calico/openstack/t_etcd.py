@@ -20,7 +20,6 @@
 # Standard Python library imports.
 from collections import namedtuple
 import functools
-import httplib
 import json
 import re
 import socket
@@ -42,7 +41,6 @@ except ImportError:  # Kilo
 # Calico imports.
 from eventlet.semaphore import Semaphore
 import etcd
-import urllib3.exceptions
 from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_endpoint, PROFILE_DIR, RULES_KEY_RE,
                                  key_for_profile, key_for_profile_rules,
@@ -107,10 +105,7 @@ def _handling_etcd_exceptions(fn):
     def wrapped(self, *args, **kwargs):
         try:
             return fn(self, *args, **kwargs)
-        except (etcd.EtcdException,
-                urllib3.exceptions.HTTPError,
-                httplib.HTTPException,
-                socket.error):
+        except etcd.EtcdException:
             LOG.exception("Request to etcd failed. This will cause the "
                           "current API call to fail.")
             self._on_etcd_request_failed()

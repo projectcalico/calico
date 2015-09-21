@@ -1,15 +1,14 @@
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
-import httplib
 
 import logging
 import re
 import etcd
+from etcd import EtcdConnectionFailed
 from socket import timeout as SocketTimeout
 import time
 
 from urllib3 import Timeout
-import urllib3.exceptions
-from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
+from urllib3.exceptions import ReadTimeoutError
 from calico.logutils import logging_exceptions
 from calico.datamodel_v1 import READY_KEY
 
@@ -163,12 +162,7 @@ class EtcdWatcher(EtcdClientOwner):
                             self.dispatcher.handle_event(response)
                 except ResyncRequired:
                     _log.info("Polling aborted, doing resync.")
-            except (ReadTimeoutError,
-                    SocketTimeout,
-                    ConnectTimeoutError,
-                    urllib3.exceptions.HTTPError,
-                    httplib.HTTPException,
-                    etcd.EtcdException) as e:
+            except etcd.EtcdException as e:
                 # Most likely a timeout or other error in the pre-resync;
                 # start over.  These exceptions have good semantic error text
                 # so the stack trace would just add log spam.
@@ -249,51 +243,34 @@ class EtcdWatcher(EtcdClientOwner):
                                             timeout=Timeout(connect=10,
                                                             read=90))
                 _log.debug("etcd response: %r", response)
-            except (ReadTimeoutError, SocketTimeout) as e:
-                # This is expected when we're doing a poll and nothing
-                # happened. socket timeout doesn't seem to be caught by
-                # urllib3 1.7.1.  Simply reconnect.
-                _log.debug("Read from etcd timed out (%r), retrying.", e)
-                # Force a reconnect to ensure urllib3 doesn't recycle the
-                # connection.  (We were seeing this with urllib3 1.7.1.)
-                self.reconnect()
-            except (ConnectTimeoutError,
-                    urllib3.exceptions.HTTPError,
-                    httplib.HTTPException) as e:
-                # We don't log out the stack trace here because it can spam the
-                # logs heavily if the requests keep failing.  The errors are
-                # very descriptive anyway.
-                _log.warning("Low-level HTTP error, reconnecting to "
-                             "etcd: %r.", e)
-                self.reconnect()
-
+            except EtcdConnectionFailed as e:
+                if isinstance(e.cause, (ReadTimeoutError, SocketTimeout)):
+                    # This is expected when we're doing a poll and nothing
+                    # happened. socket timeout doesn't seem to be caught by
+                    # urllib3 1.7.1.  Simply reconnect.
+                    _log.debug("Read from etcd timed out (%r), retrying.", e)
+                    # Force a reconnect to ensure urllib3 doesn't recycle the
+                    # connection.  (We were seeing this with urllib3 1.7.1.)
+                    self.reconnect()
+                else:
+                    # We don't log out the stack trace here because it can
+                    # spam the logs heavily if the requests keep failing.
+                    # The errors are very descriptive anyway.
+                    _log.warning("Connection to etcd failed: %r.", e)
+                    self.reconnect()
             except (etcd.EtcdClusterIdChanged,
                     etcd.EtcdEventIndexCleared) as e:
                 _log.warning("Out of sync with etcd (%r).  Reconnecting "
                              "for full sync.", e)
                 raise ResyncRequired()
             except etcd.EtcdException as e:
-                # Sadly, python-etcd doesn't have a dedicated exception
-                # for the "no more machines in cluster" error. Parse the
-                # message:
-                msg = (e.message or "unknown").lower()
-                # Limit our retry rate in case etcd is down.
+                # Assume any other errors are fatal to our poll and
+                # do a full resync.  Limit our retry rate in case etcd is down.
                 time.sleep(1)
-                if "no more machines" in msg:
-                    # This error comes from python-etcd when it can't
-                    # connect to any servers.  When we retry, it should
-                    # reconnect.
-                    # TODO: We should probably limit retries here and die
-                    # That'd recover from errors caused by resource
-                    # exhaustion/leaks.
-                    _log.error("Connection to etcd failed, will retry.")
-                else:
-                    # Assume any other errors are fatal to our poll and
-                    # do a full resync.
-                    _log.exception("Unknown etcd error %r; doing resync.",
-                                   e.message)
-                    self.reconnect()
-                    raise ResyncRequired()
+                _log.exception("Unknown etcd error %r; doing resync.",
+                               e.message)
+                self.reconnect()
+                raise ResyncRequired()
             except:
                 _log.exception("Unexpected exception during etcd poll")
                 raise

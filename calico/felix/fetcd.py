@@ -23,8 +23,6 @@ from collections import defaultdict
 import functools
 import os
 import random
-from socket import timeout as SocketTimeout
-import httplib
 import json
 import logging
 from calico.monotonic import monotonic_time
@@ -33,8 +31,6 @@ from etcd import EtcdException, EtcdKeyNotFound
 import gevent
 import sys
 from gevent.event import Event
-import urllib3.exceptions
-from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError
 
 from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
@@ -169,12 +165,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         while True:
             try:
                 self._update_felix_status(ttl)
-            except (ReadTimeoutError,
-                    SocketTimeout,
-                    ConnectTimeoutError,
-                    urllib3.exceptions.HTTPError,
-                    httplib.HTTPException,
-                    EtcdException) as e:
+            except EtcdException as e:
                 # Sadly, we can get exceptions from any one of the layers
                 # below python-etcd or from python-etcd itself.  Catch them
                 # all and keep trying...
