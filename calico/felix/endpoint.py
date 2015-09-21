@@ -184,20 +184,21 @@ class LocalEndpoint(RefCountedActor):
         assert isinstance(dispatch_chains, DispatchChains)
         assert isinstance(rules_manager, RulesManager)
 
-        self.combined_id = combined_id
-
         self.config = config
+
+        self.combined_id = combined_id
         self.ip_type = ip_type
-        self.ip_version = futils.IP_TYPE_TO_VERSION[ip_type]
-        if self.ip_type == IPV4:
-            self.nets_key = "ipv4_nets"
-        else:
-            self.nets_key = "ipv6_nets"
+
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
+
         self.rules_ref_helper = RefHelper(self, rules_manager,
                                           self._on_profiles_ready)
+
+        self._pending_endpoint = None
+        self._endpoint_update_pending = False
+        self._mac_changed = False
 
         # Will be filled in as we learn about the OS interface and the
         # endpoint config.
@@ -206,78 +207,40 @@ class LocalEndpoint(RefCountedActor):
         self._iface_name = None
         self._suffix = None
 
-        # Track whether the last attempt to program the dataplane succeeded.
-        # We'll force a reprogram next time we get a kick.
-        self._failed = False
-        # And whether we've received an update since last time we programmed.
-        self._dirty = False
+        # Keep track of which dependencies we're missing.
+        self._missing_deps = self._calculate_missing_deps()
+
+        # Track the success/failure of our dataplane programming.
+        self._iptables_in_sync = False
+        self._device_in_sync = False
+
+        # One-way flags to indicate that we should clean up/have cleaned up.
+        self._unreferenced = False
+        self._added_to_dispatch_chains = False
+        self._cleaned_up = False
+
+    @property
+    def nets_key(self):
+        if self.ip_type == IPV4:
+            return "ipv4_nets"
+        else:
+            return "ipv6_nets"
 
     @actor_message()
     def on_endpoint_update(self, endpoint, force_reprogram=False):
         """
         Called when this endpoint has received an update.
-        :param dict[str] endpoint: endpoint parameter dictionary.
+        :param dict[str]|NoneType endpoint: endpoint parameter dictionary.
         """
         _log.info("%s updated: %s", self, endpoint)
-        mac_changed = False
+        assert not self._unreferenced, "Update after being unreferenced"
 
-        if not endpoint and not self.endpoint:
-            # First time we have been called, but it's a delete! Maybe some
-            # odd timing window, but we have nothing to tidy up.
-            return
-
-        if endpoint and endpoint['mac'] != self._mac:
-            # Either we have not seen this MAC before, or it has changed.
-            self._mac = endpoint['mac']
-            mac_changed = True
-
-        if endpoint and not self.endpoint:
-            # This is the first time we have seen the endpoint, so extract the
-            # interface name and endpoint ID.
-            self._iface_name = endpoint["name"]
-            self._suffix = interface_to_suffix(self.config,
-                                               self._iface_name)
-
-        was_ready = self._ready
-
-        # Activate the required profile IDs (and deactivate any that we no
-        # longer need).
-        if endpoint:
-            new_profile_ids = set(endpoint["profile_ids"])
-        else:
-            new_profile_ids = set()
-        # Note: we don't actually need to wait for the activation to finish
-        # due to the dependency management in the iptables layer.
-        self.rules_ref_helper.replace_all(new_profile_ids)
-
-        if endpoint != self.endpoint or force_reprogram:
-            self._dirty = True
-
-        # Store off the endpoint we were passed.
-        self.endpoint = endpoint
-
-        if endpoint:
-            # Configure the network interface; may fail if not there yet (in
-            # which case we'll just do it when the interface comes up).
-            self._configure_interface(mac_changed)
-        else:
-            # Remove the network programming.
-            self._deconfigure_interface()
-
-        self._maybe_update(was_ready)
-        _log.debug("%s finished processing update", self)
-
-    @actor_message()
-    def on_unreferenced(self):
-        """
-        Overrides RefCountedActor:on_unreferenced.
-        """
-        _log.info("%s now unreferenced, cleaning up", self)
-        assert not self._ready, "Should be deleted before being unreffed."
-        # Removing all profile refs should have been done already but be
-        # defensive.
-        self.rules_ref_helper.discard_all()
-        self._notify_cleanup_complete()
+        # Store off the update, to be handled in _finish_msg_batch.
+        self._pending_endpoint = endpoint
+        self._endpoint_update_pending = True
+        if force_reprogram:
+            self._iptables_in_sync = False
+            self._device_in_sync = False
 
     @actor_message()
     def on_interface_update(self):
@@ -285,10 +248,132 @@ class LocalEndpoint(RefCountedActor):
         Actor event to report that the interface is either up or changed.
         """
         _log.info("Endpoint %s received interface kick", self.combined_id)
-        self._configure_interface()
 
-    @property
-    def _missing_deps(self):
+        # Use a flag so that we coalesce any duplicate updates in
+        # _finish_msg_batch.
+        self._device_in_sync = False
+
+    @actor_message()
+    def on_unreferenced(self):
+        """
+        Overrides RefCountedActor:on_unreferenced.
+        """
+        _log.info("%s now unreferenced, cleaning up", self)
+
+        # We should be deleted before being unreferenced.
+        assert self.endpoint is None or (self._pending_endpoint is None and
+                                         self._endpoint_update_pending)
+
+        # Defer the processing to _finish_msg_batch.
+        self._unreferenced = True
+
+    def _finish_msg_batch(self, batch, results):
+        if self._cleaned_up:
+            # We could just ignore this but it suggests that the
+            # EndpointManager is bugged.
+            raise AssertionError(
+                "Unexpected update to %s (%s) after being unreferenced" %
+                (self, self.__dict__)
+            )
+
+        if self._endpoint_update_pending:
+            # Copy the pending update into our data structures.  May work out
+            # that iptables or the device is now out of sync.
+            _log.debug("Endpoint update pending: %s", self._pending_endpoint)
+            self._apply_endpoint_update()
+
+        if not self._iptables_in_sync:
+            # Try to update iptables, if successful, will set the
+            # _iptables_in_sync flag.
+            _log.debug("iptables is out-of-sync, trying to update it")
+            self._maybe_update_iptables()
+
+        if not self._device_in_sync and self._iface_name:
+            # Try to update the device configuration.  If successful, will set
+            # the _device_in_sync flag.
+            if self.endpoint:
+                # Endpoint is supposed to be live, try to configure it.
+                _log.debug("Device is out-of-sync, trying to configure it")
+                self._configure_interface()
+            else:
+                # We've been deleted, de-configure the interface.
+                _log.debug("Device is out-of-sync, trying to de-configure it")
+                self._deconfigure_interface()
+
+        if self._unreferenced:
+            # Endpoint is being removed, clean up...
+            _log.debug("Cleaning up after endpoint unreferenced")
+            self.dispatch_chains.on_endpoint_removed(self._iface_name,
+                                                     async=True)
+            self.rules_ref_helper.discard_all()
+            self._notify_cleanup_complete()
+            self._cleaned_up = True
+        elif not self._added_to_dispatch_chains:
+            # This must be the first batch, add ourself to the dispatch chains.
+            _log.debug("Adding endpoint to dispatch chain")
+            self.dispatch_chains.on_endpoint_added(self._iface_name,
+                                                   async=True)
+            self._added_to_dispatch_chains = True
+
+    def _apply_endpoint_update(self):
+        pending_endpoint = self._pending_endpoint
+        if pending_endpoint == self.endpoint:
+            _log.debug("Endpoint hasn't changed, nothing to do")
+            return
+
+        if pending_endpoint:
+            # Update/create.
+            if pending_endpoint['mac'] != self._mac:
+                # Either we have not seen this MAC before, or it has changed.
+                _log.debug("Endpoint MAC changed to %s",
+                           pending_endpoint["mac"])
+                self._mac = pending_endpoint['mac']
+                self._mac_changed = True
+                # MAC change requires refresh of iptables rules and ARP table.
+                self._iptables_in_sync = False
+                self._device_in_sync = False
+
+            if self.endpoint is None:
+                # This is the first time we have seen the endpoint, so extract
+                # the interface name and endpoint ID.
+                self._iface_name = pending_endpoint["name"]
+                self._suffix = interface_to_suffix(self.config,
+                                                   self._iface_name)
+                _log.debug("Learned interface name/suffix: %s/%s",
+                           self._iface_name, self._suffix)
+                # First time through, need to program everything.
+                self._iptables_in_sync = False
+                self._device_in_sync = False
+
+            # Check if the profile ID or IP addresses have changed, requiring
+            # a refresh of the dataplane.
+            profile_ids = set(pending_endpoint.get("profile_ids", []))
+            if profile_ids != self.rules_ref_helper.required_refs:
+                # Profile ID update required iptables update but not device
+                # update.
+                _log.debug("Profile IDs changed, need to update iptables")
+                self._iptables_in_sync = False
+            if (self.endpoint and
+                    (self.endpoint[self.nets_key] !=
+                     pending_endpoint[self.nets_key])):
+                # IP addresses have changed, need to update the routing table.
+                _log.debug("IP addresses changed, need to update routing")
+                self._device_in_sync = False
+        else:
+            # Delete of the endpoint.  Need to resync everything.
+            profile_ids = set()
+            self._iptables_in_sync = False
+            self._device_in_sync = False
+
+        # Note: we don't actually need to wait for the activation to finish
+        # due to the dependency management in the iptables layer.
+        self.rules_ref_helper.replace_all(profile_ids)
+
+        self.endpoint = pending_endpoint
+        self._endpoint_update_pending = False
+        self._pending_endpoint = None
+
+    def _calculate_missing_deps(self):
         """
         Returns a list of missing dependencies.
         """
@@ -301,57 +386,43 @@ class LocalEndpoint(RefCountedActor):
             missing_deps.append("profile")
         return missing_deps
 
-    @property
-    def _ready(self):
-        """
-        Returns whether this LocalEndpoint has any dependencies preventing it
-        programming its rules.
-        """
-        return not self._missing_deps
-
-    def _maybe_update(self, was_ready):
+    def _maybe_update_iptables(self):
         """
         Update the relevant programming for this endpoint.
-
-        :param bool was_ready: Whether this endpoint has already been
-                               successfully configured.
         """
-        is_ready = self._ready
-        if not is_ready:
-            _log.debug("%s not ready, waiting on %s", self, self._missing_deps)
-        if self._failed or self._dirty or is_ready != was_ready:
-            ifce_name = self._iface_name
-            if is_ready:
-                # We've got all the info and everything is active.
-                if self._failed:
-                    _log.warn("Retrying programming after a failure")
-                self._failed = False  # Ready to try again...
-                _log.info("%s became ready to program.", self)
-                self._update_chains()
-                self.dispatch_chains.on_endpoint_added(
-                    self._iface_name, async=True)
-            else:
-                # We were active but now we're not, withdraw the dispatch rule
-                # and our chain.  We must do this to allow iptables to remove
-                # the profile chain.
-                _log.info("%s became unready.", self)
-                self._failed = False  # Don't care any more.
+        old_missing_deps = self._missing_deps
+        self._missing_deps = self._calculate_missing_deps()
 
-                self.dispatch_chains.on_endpoint_removed(ifce_name,
-                                                         async=True)
-                self._remove_chains()
-            self._dirty = False
+        if not self._missing_deps:
+            # We have all the dependencies we need to do the programming and
+            # the caller has already worked out that iptables needs refreshing.
+            _log.info("%s became ready to program.", self)
+            self._update_chains()
+        elif not old_missing_deps and self._missing_deps:
+            # We were active but now we're not, withdraw the dispatch rule
+            # and our chain.  We must do this to allow iptables to remove
+            # the profile chain when we're being deleted.
+            _log.debug("%s not ready, waiting on %s", self, self._missing_deps)
+            _log.info("%s not ready.", self)
+            self._remove_chains()
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(self.combined_id.endpoint,
-                                            self._suffix, self.endpoint["mac"],
+                                            self._suffix,
+                                            self._mac,
                                             self.endpoint["profile_ids"])
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
         except FailedSystemCall:
             _log.exception("Failed to program chains for %s. Removing.", self)
-            self._failed = True
-            self._remove_chains()
+            try:
+                self.iptables_updater.delete_chains(chain_names(self._suffix),
+                                                    async=False)
+            except FailedSystemCall:
+                _log.exception("Failed to remove chains after original "
+                               "failure")
+        else:
+            self._iptables_in_sync = True
 
     def _remove_chains(self):
         try:
@@ -359,9 +430,10 @@ class LocalEndpoint(RefCountedActor):
                                                 async=True)
         except FailedSystemCall:
             _log.exception("Failed to delete chains for %s", self)
-            self._failed = True
+        else:
+            self._iptables_in_sync = True
 
-    def _configure_interface(self, mac_changed=True):
+    def _configure_interface(self):
         """
         Applies sysctls and routes to the interface.
 
@@ -373,7 +445,7 @@ class LocalEndpoint(RefCountedActor):
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)
-                reset_arp = mac_changed
+                reset_arp = self._mac_changed
             else:
                 ipv6_gw = self.endpoint.get("ipv6_gateway", None)
                 devices.configure_interface_ipv6(self._iface_name, ipv6_gw)
@@ -398,6 +470,9 @@ class LocalEndpoint(RefCountedActor):
                 # Interface flapped back up after we failed?
                 _log.warning("Failed to configure interface %s for %s",
                              self._iface_name, self.combined_id)
+        else:
+            _log.info("Interface %s configured", self._iface_name)
+            self._device_in_sync = True
 
     def _deconfigure_interface(self):
         """
@@ -411,9 +486,12 @@ class LocalEndpoint(RefCountedActor):
                 _log.debug("Interface %s for %s deleted",
                            self._iface_name, self.combined_id)
             else:
-                # An error deleting the rules. Log and continue.
-                _log.exception("Cannot delete rules for interface %s for %s",
+                # An error deleting the routes. Log and continue.
+                _log.exception("Cannot delete routes for interface %s for %s",
                                self._iface_name, self.combined_id)
+        else:
+            _log.info("Interface %s deconfigured", self._iface_name)
+            self._device_in_sync = True
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.
@@ -421,7 +499,7 @@ class LocalEndpoint(RefCountedActor):
                   self.combined_id)
 
     def __str__(self):
-        return ("Endpoint<%s,id=%s,iface=%s>" %
+        return ("LocalEndpoint<%s,id=%s,iface=%s>" %
                 (self.ip_type, self.combined_id,
                  self._iface_name or "unknown"))
 
