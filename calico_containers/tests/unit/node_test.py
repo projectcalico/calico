@@ -156,7 +156,6 @@ class TestNode(unittest.TestCase):
 
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
-    @patch('os.getenv', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
@@ -171,7 +170,7 @@ class TestNode(unittest.TestCase):
                         m_find_or_pull_node_image, m_docker,
                         m_docker_client, m_client, m_install_plugin,
                         m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                        m_get_host_ips, m_check_system, m_os_getenv,
+                        m_get_host_ips, m_check_system,
                         m_os_makedirs, m_os_path_exists):
         """
         Test that the node_start function behaves as expected by mocking
@@ -182,7 +181,6 @@ class TestNode(unittest.TestCase):
         ip_1 = '1.1.1.1'
         ip_2 = '2.2.2.2'
         m_get_host_ips.return_value = [ip_1, ip_2]
-        m_os_getenv.side_effect = iter(['1.1.1.1:80', ""])
         m_docker.utils.create_host_config.return_value = 'host_config'
         container = {'Id': 666}
         m_docker_client.create_container.return_value = container
@@ -207,9 +205,9 @@ class TestNode(unittest.TestCase):
             "HOSTNAME=%s" % node.hostname,
             "IP=%s" % ip_2,
             "IP6=%s" % ip6,
-            "ETCD_AUTHORITY=1.1.1.1:80",  # etcd host:port
-            "FELIX_ETCDADDR=1.1.1.1:80",  # etcd host:port
-            "POLICY_ONLY_CALICO=",
+            "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
+            "FELIX_ETCDADDR=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
+            "CALICO_NETWORKING=%s" % node.CALICO_NETWORKING_DEFAULT,
         ]
         binds = {
             "/proc":
@@ -246,11 +244,6 @@ class TestNode(unittest.TestCase):
         m_docker_client.remove_container.assert_called_once_with(
             'calico-node', force=True
         )
-
-        getenv_calls = [call(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT),
-                        call(node.POLICY_ONLY_ENV, "")]
-        m_os_getenv.assert_has_calls(getenv_calls)
-
         m_docker.utils.create_host_config.assert_called_once_with(
             privileged=True,
             restart_policy={"Name": "Always"},
