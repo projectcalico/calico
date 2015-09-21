@@ -357,6 +357,7 @@ class LocalEndpoint(RefCountedActor):
                     (self.endpoint[self.nets_key] !=
                      pending_endpoint[self.nets_key])):
                 # IP addresses have changed, need to update the routing table.
+                _log.debug("IP addresses changed, need to update routing")
                 self._device_in_sync = False
         else:
             # Delete of the endpoint.  Need to resync everything.

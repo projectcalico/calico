@@ -315,6 +315,59 @@ class TestLocalEndpoint(BaseTestCase):
                     self.step_actor(local_ep)
                     self.assertFalse(local_ep._device_in_sync)
 
+    def test_profile_id_update_triggers_iptables(self):
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+
+        ips = ["10.0.0.1"]
+        iface = "tapabcdef"
+        mac = stub_utils.get_mac()
+        data = {'endpoint': "endpoint_id", 'mac': mac,
+                'name': iface, 'ipv4_nets': ips, 'profile_ids': ["prof1"]}
+        local_ep._pending_endpoint = data.copy()
+
+        # First update with endpoint not yet set, should trigger full sync.
+        local_ep._apply_endpoint_update()
+        self.assertEqual(local_ep.endpoint, data)
+        self.assertFalse(local_ep._iptables_in_sync)
+        self.assertFalse(local_ep._device_in_sync)
+
+        local_ep._iptables_in_sync = True
+        local_ep._device_in_sync = True
+
+        # No-op update
+        local_ep._pending_endpoint = data.copy()
+        local_ep._apply_endpoint_update()
+        self.assertTrue(local_ep._iptables_in_sync)
+        self.assertTrue(local_ep._device_in_sync)
+
+        # Profiles update.  Should update iptables.
+        data = {'endpoint': "endpoint_id", 'mac': mac,
+                'name': iface, 'ipv4_nets': ips, 'profile_ids': ["prof2"]}
+        local_ep._pending_endpoint = data.copy()
+        local_ep._apply_endpoint_update()
+        self.assertFalse(local_ep._iptables_in_sync)
+        local_ep._iptables_in_sync = True
+        self.assertTrue(local_ep._device_in_sync)
+
+        # IP update.  Should update routing.
+        data = {'endpoint': "endpoint_id", 'mac': mac,
+                'name': iface, 'ipv4_nets': ["10.0.0.2"],
+                'profile_ids': ["prof2"]}
+        local_ep._pending_endpoint = data.copy()
+        local_ep._apply_endpoint_update()
+        self.assertTrue(local_ep._iptables_in_sync)
+        self.assertFalse(local_ep._device_in_sync)
+        local_ep._device_in_sync = True
+
+        # Delete, should update everything.
+        local_ep._pending_endpoint = None
+        local_ep._apply_endpoint_update()
+        self.assertFalse(local_ep._iptables_in_sync)
+        self.assertFalse(local_ep._device_in_sync)
+
 
 class TestEndpoint(BaseTestCase):
     def test_get_endpoint_rules(self):
