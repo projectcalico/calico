@@ -257,6 +257,8 @@ class EtcdWatcher(EtcdClientOwner):
                     # spam the logs heavily if the requests keep failing.
                     # The errors are very descriptive anyway.
                     _log.warning("Connection to etcd failed: %r.", e)
+                    # Limit our retry rate in case etcd is down.
+                    time.sleep(1)
                     self.reconnect()
             except (etcd.EtcdClusterIdChanged,
                     etcd.EtcdEventIndexCleared) as e:
@@ -265,10 +267,11 @@ class EtcdWatcher(EtcdClientOwner):
                 raise ResyncRequired()
             except etcd.EtcdException as e:
                 # Assume any other errors are fatal to our poll and
-                # do a full resync.  Limit our retry rate in case etcd is down.
-                time.sleep(1)
+                # do a full resync.
                 _log.exception("Unknown etcd error %r; doing resync.",
                                e.message)
+                # Limit our retry rate in case etcd is down.
+                time.sleep(1)
                 self.reconnect()
                 raise ResyncRequired()
             except:
