@@ -46,7 +46,8 @@ from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_profile, key_for_profile_rules,
                                  key_for_profile_tags, key_for_config,
                                  NEUTRON_ELECTION_KEY, FELIX_STATUS_DIR,
-                                 hostname_from_status_key)
+                                 hostname_from_status_key,
+                                 get_endpoint_id_from_key)
 from calico.election import Elector
 
 
@@ -572,10 +573,19 @@ class CalicoEtcdWatcher(EtcdWatcher):
         """
         for etcd_node in etcd_snapshot_response.leaves:
             key = etcd_node.key
+            endpoint_id = get_endpoint_id_from_key(key)
+            if endpoint_id:
+                # Endpoint status, report it.
+                self._on_ep_set(etcd_node,
+                                hostname=endpoint_id.host,
+                                workload=endpoint_id.workload,
+                                endpoint=endpoint_id.endpoint,)
+                continue
             felix_hostname = hostname_from_status_key(key)
             if felix_hostname:
                 # Defer to the code for handling an event.
                 self._on_status_set(etcd_node, felix_hostname)
+                continue
 
     def _on_status_set(self, response, hostname):
         """
