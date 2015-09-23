@@ -20,6 +20,9 @@ felix.endpoint
 Endpoint management.
 """
 import logging
+from calico.datamodel_v1 import (
+    ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR
+)
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
@@ -217,6 +220,7 @@ class LocalEndpoint(RefCountedActor):
         # Track the success/failure of our dataplane programming.
         self._iptables_in_sync = False
         self._device_in_sync = False
+        self._last_status = None
 
         # One-way flags to indicate that we should clean up/have cleaned up.
         self._unreferenced = False
@@ -271,11 +275,6 @@ class LocalEndpoint(RefCountedActor):
         # Defer the processing to _finish_msg_batch.
         self._unreferenced = True
 
-    def _start_msg_batch(self, batch):
-        self._in_sync_at_start_of_batch = (self._iptables_in_sync and
-                                           self._device_in_sync)
-        return super(LocalEndpoint, self)._start_msg_batch(batch)
-
     def _finish_msg_batch(self, batch, results):
         if self._cleaned_up:
             # We could just ignore this but it suggests that the
@@ -324,24 +323,33 @@ class LocalEndpoint(RefCountedActor):
                                                    async=True)
             self._added_to_dispatch_chains = True
 
-        in_sync_at_end_of_batch = (self._iptables_in_sync and
-                                   self._device_in_sync)
+        # If changed, report our status back to the datastore.
+        self._maybe_update_status()
 
-        if self._unreferenced or (self._in_sync_at_start_of_batch !=
-                                  in_sync_at_end_of_batch):
+    def _maybe_update_status(self):
+        # Work out what status we should report back to the orchestrator.
+        if self._missing_deps:
+            # We're not ready yet, say we're down.
+            status = ENDPOINT_STATUS_DOWN
+        elif self._iptables_in_sync and self._device_in_sync:
+            # We're in-sync and have all our dependencies, we're up.
+            status = ENDPOINT_STATUS_UP
+        else:
+            # We have our dependencies but we're not in sync, must be an error.
+            status = ENDPOINT_STATUS_ERROR
+        if self._unreferenced or status != self._last_status:
             if self._unreferenced:
                 _log.debug("Unreferenced, reporting status = None")
-                status = None
+                status_dict = None
             else:
-                _log.debug("Endpoint oper state changed to %s",
-                           "up" if in_sync_at_end_of_batch else "down")
-                status = {"status": "up" if in_sync_at_end_of_batch
-                                    else "down"}
+                _log.debug("Endpoint oper state changed to %s", status)
+                status_dict = {"status": status}
             self.datastore_api.on_endpoint_status_changed(
                 self._id,
-                status,
+                status_dict,
                 async=True,
             )
+            self._last_status = status
 
     def _apply_endpoint_update(self):
         pending_endpoint = self._pending_endpoint

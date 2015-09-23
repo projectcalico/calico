@@ -80,6 +80,10 @@ HOST_IP_KEY_RE = re.compile(r'^' + HOST_DIR +
 IPAM_V4_CIDR_KEY_RE = re.compile(r'^' + VERSION_DIR +
                                  r'/ipam/v4/pool/(?P<encoded_cidr>[^/]+)')
 
+ENDPOINT_STATUS_UP = "up"
+ENDPOINT_STATUS_DOWN = "down"
+ENDPOINT_STATUS_ERROR = "error"
+
 
 def dir_for_host(hostname):
     return HOST_DIR+ "/%s" % hostname
