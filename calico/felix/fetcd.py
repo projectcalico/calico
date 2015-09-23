@@ -571,17 +571,21 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                                              async=True)
 
     def clean_up_endpoint_statuses(self, our_endpoints_ids):
-        response = self.client.read([FELIX_STATUS_DIR,
-                                     self._config.HOSTNAME,
-                                     "workload"],
-                                    recursive=True)
-        for node in response.leaves:
-            combined_id = get_endpoint_id_from_key(node.key)
-            if combined_id and combined_id not in our_endpoints_ids:
-                _log.debug("Endpoint %s removed by resync, marking status key "
-                           "for cleanup",
-                           combined_id)
-                self._etcd_api.mark_endpoint_dirty(combined_id)
+        try:
+            response = self.client.read("/".join([FELIX_STATUS_DIR,
+                                                  self._config.HOSTNAME,
+                                                  "workload"]),
+                                        recursive=True)
+        except EtcdKeyNotFound:
+            _log.info("No endpoint statuses found, nothing to clean up")
+        else:
+            for node in response.leaves:
+                combined_id = get_endpoint_id_from_key(node.key)
+                if combined_id and combined_id not in our_endpoints_ids:
+                    _log.debug("Endpoint %s removed by resync, marking "
+                               "status key for cleanup",
+                               combined_id)
+                    self._etcd_api.mark_endpoint_dirty(combined_id)
 
     def _resync(self, response, **kwargs):
         """
