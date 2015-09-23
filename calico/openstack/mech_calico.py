@@ -41,6 +41,8 @@ from neutron import manager
 
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
+from calico.datamodel_v1 import ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, \
+    ENDPOINT_STATUS_ERROR
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
@@ -60,6 +62,13 @@ LOG = log.getLogger(__name__)
 # architecture.
 AGENT_TYPE_FELIX = 'Calico per-host agent (felix)'
 AGENT_ID_FELIX = 'calico-felix'
+
+# Mapping from our endpoint status to neutron's port status.
+PORT_STATUS_MAPPING = {
+    ENDPOINT_STATUS_UP: constants.PORT_STATUS_ACTIVE,
+    ENDPOINT_STATUS_DOWN: constants.PORT_STATUS_DOWN,
+    ENDPOINT_STATUS_ERROR: constants.PORT_STATUS_ERROR,
+}
 
 # The interval between period resyncs, in seconds.
 # TODO: Increase this to a longer interval for product code.
@@ -253,6 +262,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         agent_state = felix_agent_state(felix_hostname, start_flag=new)
         self.db.create_or_update_agent(self._db_context, agent_state)
 
+    def on_port_status_changed(self, hostname, port_id, status):
+        if status:
+            port_status = PORT_STATUS_MAPPING.get(status.get("status"),
+                                                  constants.PORT_STATUS_ERROR)
+        else:
+            port_status = constants.PORT_STATUS_DOWN
+        self.db.update_port_status(self._db_context,
+                                   port_id,
+                                   port_status)
+
     def _get_db(self):
         if not self.db:
             self.db = manager.NeutronManager.get_plugin()
@@ -381,11 +400,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for profile in profiles:
                 self.transport.write_profile_to_etcd(profile)
 
-            # Update Neutron that we succeeded.
-            self.db.update_port_status(context._plugin_context,
-                                       port['id'],
-                                       constants.PORT_STATUS_ACTIVE)
-
     @retry_on_cluster_id_change
     @requires_state
     def update_port_postcommit(self, context):
@@ -513,11 +527,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for profile in profiles:
             self.transport.write_profile_to_etcd(profile)
 
-        # Update Neutron that we succeeded.
-        self.db.update_port_status(context._plugin_context,
-                                   port['id'],
-                                   constants.PORT_STATUS_ACTIVE)
-
     def _icehouse_migration_step(self, context, port, original):
         """
         This is called when migrating on Icehouse. Here, we basically just
@@ -562,11 +571,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                 for profile in profiles:
                     self.transport.write_profile_to_etcd(profile)
-
-                # Update Neutron that we succeeded.
-                self.db.update_port_status(context._plugin_context,
-                                           port['id'],
-                                           constants.PORT_STATUS_ACTIVE)
         else:
             # Port unbound, attempt to delete.
             LOG.info("Port disabled, attempting delete if needed.")

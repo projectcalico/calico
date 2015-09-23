@@ -328,14 +328,17 @@ class LocalEndpoint(RefCountedActor):
 
     def _maybe_update_status(self):
         # Work out what status we should report back to the orchestrator.
-        if self._missing_deps:
+        if self._missing_deps or not self._device_in_sync:
             # We're not ready yet, say we're down.
+            # FIXME: device not being in sync could be an error
             status = ENDPOINT_STATUS_DOWN
         elif self._iptables_in_sync and self._device_in_sync:
             # We're in-sync and have all our dependencies, we're up.
             status = ENDPOINT_STATUS_UP
         else:
             # We have our dependencies but we're not in sync, must be an error.
+            _log.warning("Failed to bring iptables into sync, endpoint is"
+                         "in error.")
             status = ENDPOINT_STATUS_ERROR
         if self._unreferenced or status != self._last_status:
             if self._unreferenced:

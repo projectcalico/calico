@@ -558,6 +558,11 @@ class CalicoEtcdWatcher(EtcdWatcher):
         # Register for felix uptime updates.
         self.register_path(FELIX_STATUS_DIR + "/<hostname>/status",
                            on_set=self._on_status_set)
+        # Register for per-port status updates.
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload/openstack/"
+                                              "<workload>/endpoint/<endpoint>",
+                           on_set=self._on_ep_set,
+                           on_del=self._on_ep_delete)
 
     def _on_snapshot_loaded(self, etcd_snapshot_response):
         """
@@ -587,6 +592,29 @@ class CalicoEtcdWatcher(EtcdWatcher):
                 hostname,
                 new=new,
             )
+
+    def _on_ep_set(self, response, hostname, workload, endpoint):
+        try:
+            status = json.loads(response.value)
+        except (ValueError, TypeError):
+            LOG.warning("Bad JSON data for key %s: %s",
+                        response.key, response.value)
+        else:
+            LOG.debug("Port %s/%s/%s updated to status %s",
+                      hostname, workload, endpoint, status)
+            self.calico_driver.on_port_status_changed(
+                hostname,
+                endpoint,
+                status,
+            )
+
+    def _on_ep_delete(self, response, hostname, workload, endpoint):
+        LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
+        self.calico_driver.on_port_status_changed(
+            hostname,
+            endpoint,
+            None,
+        )
 
 
 def _neutron_rule_to_etcd_rule(rule):

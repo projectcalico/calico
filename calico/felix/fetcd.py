@@ -235,9 +235,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
 
     def write_endpoint_status_to_etcd(self, ep_id, status):
         if status:
-            self.client.set("/".join([FELIX_STATUS_DIR,
-                                      self._config.HOSTNAME,
-                                      "workload"]),
+            self.client.set(ep_id.path_for_status,
                             json.dumps(status))
         else:
             try:
