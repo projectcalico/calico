@@ -30,8 +30,6 @@ import calico.openstack.t_etcd as t_etcd
 
 from calico import common
 from calico.datamodel_v1 import FELIX_STATUS_DIR
-from socket import timeout as SocketTimeout
-from urllib3.exceptions import ReadTimeoutError
 
 
 class EtcdException(Exception):
@@ -157,7 +155,8 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """
         self.maybe_reset_etcd()
 
-        # Slow down reading from etcd status subtree to allow threads to run more often
+        # Slow down reading from etcd status subtree to allow threads to run
+        # more often
         if wait and key == FELIX_STATUS_DIR:
             eventlet.sleep(30)
             self.driver.db.create_or_update_agent = mock.Mock()

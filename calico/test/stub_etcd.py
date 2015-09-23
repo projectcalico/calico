@@ -34,6 +34,9 @@ class EtcdKeyNotFound(EtcdException):
 class EtcdClusterIdChanged(EtcdException):
     pass
 
+class EtcdConnectionFailed(EtcdException):
+    pass
+
 class EtcdEventIndexCleared(EtcdException):
     pass
 

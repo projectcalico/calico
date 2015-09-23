@@ -3,6 +3,8 @@
 - Add liveness reporting to Felix.  Felix now reports its liveness into
   etcd and the neutron driver copies that information to the Neutron DB.
 - Performance enhancements to ipset manipulation.
+- Rev python-etcd dependency to 0.4.1.  Our patched python-etcd version
+  (which contains additional patches) is still required.
 
 ## 1.1.0
 

@@ -25,19 +25,14 @@ import logging
 import mock
 import sys
 
+import calico.test.stub_etcd as stub_etcd
+import calico.election as election
+
 if sys.version_info < (2, 7):
     import unittest2 as unittest
 else:
     import unittest
 
-import calico.test.stub_etcd as stub_etcd
-from calico.test.stub_etcd import NoMoreResults
-import calico.election as election
-
-from httplib import HTTPException
-from socket import timeout as SocketTimeout
-from urllib3 import Timeout
-from urllib3.exceptions import ReadTimeoutError, ConnectTimeoutError, HTTPError
 
 log = logging.getLogger(__name__)
 
@@ -69,12 +64,14 @@ class TestElection(unittest.TestCase):
         # Test that not elected using defaults.
         with self.assertRaises(ValueError):
             client = stub_etcd.Client()
-            elector = election.Elector(client, "test_basic", "/bloop", interval=-1, ttl=15)
+            elector = election.Elector(client, "test_basic", "/bloop",
+                                       interval=-1, ttl=15)
             self.assertFalse(elector.master())
 
         with self.assertRaises(ValueError):
             client = stub_etcd.Client()
-            elector = election.Elector(client, "test_basic", "/bloop", interval=10, ttl=5)
+            elector = election.Elector(client, "test_basic", "/bloop",
+                                       interval=10, ttl=5)
             self.assertFalse(elector.master())
 
     def _wait_and_stop(self, client, elector):
@@ -156,11 +153,7 @@ class TestElection(unittest.TestCase):
 
         client = stub_etcd.Client()
         client.add_read_exception(stub_etcd.EtcdException())
-        client.add_read_exception(ReadTimeoutError("pool", "url", "message"))
-        client.add_read_exception(SocketTimeout())
-        client.add_read_exception(ConnectTimeoutError())
-        client.add_read_exception(HTTPError())
-        client.add_read_exception(HTTPException())
+        client.add_read_exception(stub_etcd.EtcdConnectionFailed())
         client.add_read_exception(stub_etcd.EtcdClusterIdChanged())
         client.add_read_exception(stub_etcd.EtcdEventIndexCleared())
         elector = election.Elector(client, "test_basic", "/bloop", interval=5, ttl=15)
@@ -173,20 +166,13 @@ class TestElection(unittest.TestCase):
         client.add_read_result(key="/bloop", value="value")
         client.add_read_exception(stub_etcd.EtcdException())
         client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(ReadTimeoutError("pool", "url", "message"))
-        client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(SocketTimeout())
-        client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(ConnectTimeoutError())
-        client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(HTTPError())
-        client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(HTTPException())
+        client.add_read_exception(stub_etcd.EtcdConnectionFailed())
         client.add_read_result(key="/bloop", value="value")
         client.add_read_exception(stub_etcd.EtcdClusterIdChanged())
         client.add_read_result(key="/bloop", value="value")
         client.add_read_exception(stub_etcd.EtcdEventIndexCleared())
-        elector = election.Elector(client, "test_basic", "/bloop", interval=5, ttl=15)
+        elector = election.Elector(client, "test_basic", "/bloop",
+                                   interval=5, ttl=15)
         self._wait_and_stop(client, elector)
 
     def test_master_failure(self):
