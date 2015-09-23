@@ -1,12 +1,12 @@
 ==========================
-Devstack plugin for Calico
+DevStack plugin for Calico
 ==========================
 
-1. Download devstack
+1. Download DevStack as usual.
 
-2. Add to your devstack local.conf file::
+2. Add to your DevStack local.conf file::
 
-     enable_plugin calico https://git.openstack.org/openstack/networking-calico
+    enable_plugin calico https://git.openstack.org/openstack/networking-calico
 
 3. Run ``stack.sh``
 
@@ -15,6 +15,11 @@ Devstack plugin for Calico
     . openrc admin admin
     neutron net-create --shared --provider:network_type local calico
     neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0/24
+
+4. Ensure that IPv4 and IPv6 forwarding are enabled::
+
+   sysctl -w net.ipv4.ip_forward=1
+   sysctl -w net.ipv6.conf.all.forwarding=1
 
 5. Launch instances attached to the 'calico' network.
 
