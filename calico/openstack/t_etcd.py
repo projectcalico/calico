@@ -105,9 +105,16 @@ def _handling_etcd_exceptions(fn):
     def wrapped(self, *args, **kwargs):
         try:
             return fn(self, *args, **kwargs)
+        except (etcd.EtcdCompareFailed,
+                etcd.EtcdKeyError,
+                etcd.EtcdValueError) as e:
+            # The caller should be expecting this, re-raise it.
+            LOG.warning("Expected etcd error, re-raising: %r", e)
+            raise
         except etcd.EtcdException:
-            LOG.exception("Request to etcd failed. This will cause the "
-                          "current API call to fail.")
+            # Other exceptions we can't be sure about, so be defensive and
+            # reconnect.
+            LOG.exception("Request to etcd failed, refreshing our connection.")
             self._on_etcd_request_failed()
             raise
     return wrapped

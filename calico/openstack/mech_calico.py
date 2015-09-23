@@ -808,7 +808,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     self.transport.write_port_to_etcd(
                         port, prev_index=endpoint.modified_index
                     )
-                except ValueError:
+                except etcd.EtcdCompareFailed:
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
@@ -893,7 +893,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for profile in profiles_to_delete:
             try:
                 self.transport.atomic_delete_profile(profile)
-            except (ValueError, etcd.EtcdKeyNotFound):
+            except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
@@ -935,7 +935,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         prev_rules_index=etcd_profile.rules_modified_index,
                         prev_tags_index=etcd_profile.tags_modified_index,
                     )
-                except ValueError:
+                except etcd.EtcdCompareFailed:
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
