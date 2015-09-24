@@ -497,40 +497,59 @@ class TestIpsetActor(BaseTestCase):
         members3 = set(["9.9.9.9"])
 
         # Cause a full update - first time.
+        _log.debug("Initial resync of ipset will happen")
         self.actor.members = members1
         self.actor._sync_to_ipset()
         self.ipset.replace_members.assert_called_once_with(members1)
         self.assertFalse(self.ipset.update_members.called)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
         self.assertEqual(self.actor.members, members1)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertFalse(self.actor._force_reprogram)
         self.ipset.reset_mock()
 
-        # Calls update_member
+        # Calls update_members
+        _log.debug("Call to update_members should happen")
+        self.actor.programmed_members = members1
         self.actor.members = members2
         self.actor._sync_to_ipset()
         self.assertFalse(self.ipset.replace_members.called)
         self.ipset.update_members.assert_called_once_with(members1, members2)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
         self.assertEqual(self.actor.members, members2)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertFalse(self.actor._force_reprogram)
         self.ipset.reset_mock()
 
         # Does nothing - already in correct state
+        _log.debug("Already in correct state (programmed_members matches)")
+        self.actor.programmed_members = members2
         self.actor.members = members2
         self.actor._sync_to_ipset()
         self.assertFalse(self.ipset.replace_members.called)
         self.assertFalse(self.ipset.update_members.called)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
         self.assertEqual(self.actor.members, members2)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertFalse(self.actor._force_reprogram)
         self.ipset.reset_mock()
 
         # Cause a full update - forced.
+        _log.debug("Force a full ipset update")
         self.actor._force_reprogram = True
         self.actor.members = members3
         self.actor._sync_to_ipset()
         self.ipset.replace_members.assert_called_once_with(members3)
         self.assertFalse(self.ipset.update_members.called)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
         self.assertEqual(self.actor.members, members3)
+        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertFalse(self.actor._force_reprogram)
+        self.ipset.reset_mock()
+
+        # Cause an assert - programmed_members is None, but no resync required.
+        _log.debug("Force a full ipset update")
+        self.actor._force_reprogram = False
+        self.actor.members = members3
+        self.actor.programmed_members = None
+        with self.assertRaises(AssertionError):
+            self.actor._sync_to_ipset()
         self.ipset.reset_mock()
 
 
