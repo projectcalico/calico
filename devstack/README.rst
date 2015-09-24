@@ -2,28 +2,68 @@
 DevStack plugin for Calico
 ==========================
 
-1. Download DevStack as usual.
+Welcome to networking-calico's DevStack plugin!  The following
+instructions explain how to set up a single or multiple node
+DevStack/Calico system, and then how to see Calico connectivity in
+action.
 
-2. Add to your DevStack local.conf file::
+
+Single (or first) node setup
+----------------------------
+
+To prepare a single node DevStack/Calico system, that is with all
+controller and compute functions running on the same node:
+
+#. Download DevStack as usual.
+
+#. Add to your DevStack local.conf file::
 
     enable_plugin calico https://git.openstack.org/openstack/networking-calico
 
-3. Run ``stack.sh``
+#. Run ``stack.sh``
 
-4. Create a shared, routed network with an IPv4 subnet::
+#. Create a shared, routed network with an IPv4 subnet::
 
     . openrc admin admin
     neutron net-create --shared --provider:network_type local calico
     neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0/24
 
-4. Ensure that IPv4 and IPv6 forwarding are enabled::
+#. Ensure that IPv4 and IPv6 forwarding are enabled::
 
-   sysctl -w net.ipv4.ip_forward=1
-   sysctl -w net.ipv6.conf.all.forwarding=1
+    sysctl -w net.ipv4.ip_forward=1
+    sysctl -w net.ipv6.conf.all.forwarding=1
 
-5. Launch instances attached to the 'calico' network.
 
-6. Use ``ip route`` to observe per-instance routes created by the Calico agent.
+Multi-node setup
+----------------
 
-7. Log into each instance (e.g. through Horizon console) and verify
+This plugin also supports additional compute-only nodes.  So, in the
+system as a whole, there can then be:
+
+- one node with both controller and compute function
+
+- any number of additional nodes with just compute function.
+
+The first node should be prepared as described above.  Then, for each
+additional compute node:
+
+- set and export the SERVICE_HOST environment variable, to the name of
+  the controller node; for example::
+
+    export SERVICE_HOST=calico-vm18
+
+- follow the steps above, except for the network and subnet creations,
+  to install and set up DevStack with Calico on that node.
+
+
+Demonstrating Calico connectivity
+---------------------------------
+
+Then, to see Calico connectivity in action:
+
+#. Launch instances attached to the 'calico' network.
+
+#. Use ``ip route`` to observe per-instance routes created by the Calico agent.
+
+#. Log into each instance (e.g. through Horizon console) and verify
    that it can ping the others.
