@@ -242,7 +242,7 @@ class Actor(object):
                     actor_storage.msg_name = None
             try:
                 # Give subclass a chance to post-process the batch.
-                _log.debug("Finishing message batch")
+                _log.debug("Finishing message batch of length %s", len(batch))
                 actor_storage.msg_name = "<finish batch>"
                 self._finish_msg_batch(batch, results)
             except SplitBatchAndRetry:
@@ -260,6 +260,8 @@ class Actor(object):
                 _log.exception("_finish_msg_batch failed.")
                 results = [(None, e)] * len(results)
                 _stats.increment("_finish_msg_batch() exception")
+            else:
+                _log.debug("Finished message batch successfully")
             finally:
                 actor_storage.msg_name = None
 

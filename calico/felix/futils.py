@@ -305,7 +305,7 @@ def check_call(args, input_str=None):
     :raises FailedSystemCall: if the return code of the subprocess is non-zero.
     :raises OSError: if, for example, there is a read error on stdout/err.
     """
-    log.debug("Calling out to system : %s.  %s/%s concurrent calls",
+    log.debug("Calling out to system: %s.  %s/%s concurrent calls",
               args,
               MAX_CONCURRENT_CALLS - _call_semaphore.counter,
               MAX_CONCURRENT_CALLS)
@@ -320,6 +320,7 @@ def check_call(args, input_str=None):
         stdout, stderr = proc.communicate(input=input_str)
 
     retcode = proc.returncode
+    log.debug("Process finished with RC=%s: %s.", retcode, args)
     if retcode:
         raise FailedSystemCall("Failed system call",
                                args, retcode, stdout, stderr, input=input_str)
