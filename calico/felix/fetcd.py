@@ -180,9 +180,6 @@ class EtcdAPI(EtcdClientOwner, Actor):
             try:
                 self._update_felix_status(ttl)
             except EtcdException as e:
-                # Sadly, we can get exceptions from any one of the layers
-                # below python-etcd or from python-etcd itself.  Catch them
-                # all and keep trying...
                 _log.warning("Error when trying to check into etcd (%r), "
                              "retrying after %s seconds.", e, RETRY_DELAY)
                 self.reconnect()
