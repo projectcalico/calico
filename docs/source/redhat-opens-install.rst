@@ -59,6 +59,10 @@ Instructions for installing OpenStack on RHEL can be found here --
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+If you're using CentOS, check the yum priorities plugin is installed:
+
+    yum install yum-plugin-priorities
+
 As well as the repositories for OpenStack and EPEL
 (https://fedoraproject.org/wiki/EPEL) -- which you will have already
 configured as part of the previous step -- you will need to configure the
