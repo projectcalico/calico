@@ -193,9 +193,9 @@ please get in touch with us and we'll be happy to help you through the process.
 
 4. Install python-etcd::
 
-        curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        curl -L https://github.com/projectcalico/python-etcd/archive/0.3.3-calico-2.tar.gz -o python-etcd.tar.gz
         tar xvf python-etcd.tar.gz
-        cd python-etcd-master
+        cd python-etcd-0.3.3-calico-2
         python setup.py install
 
 Etcd Proxy Install
@@ -263,9 +263,9 @@ running the etcd database itself (both control and compute nodes).
 
 4. Install python-etcd::
 
-        curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
+        curl -L https://github.com/projectcalico/python-etcd/archive/0.3.3-calico-2.tar.gz -o python-etcd.tar.gz
         tar xvf python-etcd.tar.gz
-        cd python-etcd-master
+        cd python-etcd-0.3.3-calico-2
         python setup.py install
 
 .. _control-node:
