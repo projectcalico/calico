@@ -1,3 +1,14 @@
+calico (1.2.0~pre.1~dev.1) trusty; urgency=low
+
+  * Internal testing release.
+  * Add liveness reporting to Felix.  Felix now reports its liveness into
+    etcd and the neutron driver copies that information to the Neutron DB.
+  * Performance enhancements to ipset manipulation.
+  * Rev python-etcd dependency to 0.4.1.  Our patched python-etcd version
+    (which contains additional patches) is still required.
+
+ -- Shaun Crampton <shaun@projectcalico.org>  Fri, 25 Sep 2015 14:40:00 +0100
+
 calico (1.1.0-1) trusty; urgency=low
 
   * Improve the documentation about upgrading a Calico/OpenStack system.
