@@ -69,7 +69,8 @@ from checksystem import check_system
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
-POLICY_ONLY_ENV = "POLICY_ONLY_CALICO"
+CALICO_NETWORKING_ENV = "CALICO_NETWORKING"
+CALICO_NETWORKING_DEFAULT = "true"
 
 KUBERNETES_PLUGIN_VERSION = 'v0.2.0'
 KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes' % KUBERNETES_PLUGIN_VERSION
@@ -202,6 +203,8 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     """
     # Print warnings for any known system issues before continuing
     check_system(fix=False, quit_if_error=False)
+    calico_networking = os.getenv(CALICO_NETWORKING_ENV, CALICO_NETWORKING_DEFAULT)
+
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):
@@ -276,7 +279,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
         "IP6=%s" % (ip6 or ""),
         "ETCD_AUTHORITY=%s" % etcd_authority,  # etcd host:port
         "FELIX_ETCDADDR=%s" % etcd_authority,  # etcd host:port
-        "POLICY_ONLY_CALICO=%s" % os.getenv(POLICY_ONLY_ENV, ""),
+        "CALICO_NETWORKING=%s" % calico_networking
     ]
 
     binds = {
