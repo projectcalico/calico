@@ -12,7 +12,7 @@ This guide will describe the configuration required to use the Calico network pl
    This plugin requires access to the `calicoctl` binary. If your binary is not located at `/usr/bin/calicoctl`, set the `CALICOCTL_PATH` environment variable to the correct path.
 
 * #####KUBE_API_ROOT
-   The `KUBE_API_ROOT` environment variable specifies where the Kubernetes API resources are located, defaulting to the `<MASTER_IP>:8080/api/v1/`
+   The `KUBE_API_ROOT` environment variable specifies the URL for the root of the Kubernetes API. The transport must be included. This variable defaults to `http://kubernetes-master:8080/api/v1/`.
 
 * #####DEFAULT_POLICY (added in calico-kubernetes v0.2.0)
    The `DEFAULT_POLICY` environment variable applies [security policy](http://docs.projectcalico.org/en/latest/security-model.html) to a set of pods. The default policy in the Calico network plugin is `allow`, which allows all incoming and outgoing traffic to and from a pod. Alternately, you may also indicate `ns_isolation`, which will only allow incoming traffic from pods of the same namespace and allow all outgoing traffic.
