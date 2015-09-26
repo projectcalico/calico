@@ -1,6 +1,6 @@
 [![Build Status](https://semaphoreci.com/api/v1/projects/9d7d365d-19cb-4699-8c84-b76da25ae271/473490/badge.svg)](https://semaphoreci.com/calico/calico-docker--5)
 [![Circle CI](https://circleci.com/gh/projectcalico/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/projectcalico/calico-docker/tree/master) [![Coverage Status](https://coveralls.io/repos/projectcalico/calico-docker/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico-docker?branch=master)
-[![Slack Status](https://projectcalico-slackin.herokuapp.com/badge.svg)](https://projectcalico-slackin.herokuapp.com)
+[![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
 # Calico on Docker
 As well as providing networking for OpenStack VMs, Calico can provide
 networking for containers in a Docker environment.  Each container gets its 
@@ -16,7 +16,7 @@ We welcome questions/comments/feedback (and pull requests).
 
 * [Announcement Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-announce_lists.projectcalico.org)
 * [Technical Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
-* [Slack Calico Users Channel](https://projectcalico-slackin.herokuapp.com)
+* [Slack Calico Users Channel](https://calicousers-slackin.herokuapp.com)
 * IRC - [#calico][irc]
 * For Calico-on-Docker specific issues, please [raise issues][raise-issues] on 
 Github.
