@@ -16,6 +16,7 @@ We welcome questions/comments/feedback (and pull requests).
 
 * [Announcement Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-announce_lists.projectcalico.org)
 * [Technical Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
+* [Slack Calico Users Channel](https://murmuring-stream-1598.herokuapp.com)
 * IRC - [#calico][irc]
 * For Calico-on-Docker specific issues, please [raise issues][raise-issues] on 
 Github.
