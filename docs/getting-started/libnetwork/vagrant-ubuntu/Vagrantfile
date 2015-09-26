@@ -3,7 +3,7 @@
 
 # The version of calico to install
 calico_docker_ver = "v0.7.0"
-calico_libnetwork_ver = "v0.1.0"
+calico_libnetwork_ver = "v0.3.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2

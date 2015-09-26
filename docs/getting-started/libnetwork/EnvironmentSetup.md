@@ -110,7 +110,7 @@ You can optionally preload this image to avoid the delay when you run
 `calicoctl node --libnetwork` the first time.  For example, to pull the latest 
 released version, run
 
-    docker pull calico/node-libnetwork:v0.1.0
+    docker pull calico/node-libnetwork:v0.3.0
 
 ## Final checks
 
