@@ -579,6 +579,9 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             for node in response.leaves:
                 combined_id = get_endpoint_id_from_key(node.key)
                 if combined_id and combined_id not in our_endpoints_ids:
+                    # We found an endpoint in our status reporting tree that
+                    # wasn't in the main tree.  Mark it as dirty so the status
+                    # reporting thread will clean it up.
                     _log.debug("Endpoint %s removed by resync, marking "
                                "status key for cleanup",
                                combined_id)

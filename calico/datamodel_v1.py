@@ -86,7 +86,7 @@ ENDPOINT_STATUS_ERROR = "error"
 
 
 def dir_for_host(hostname):
-    return HOST_DIR+ "/%s" % hostname
+    return HOST_DIR + "/%s" % hostname
 
 
 def dir_for_per_host_config(hostname):
