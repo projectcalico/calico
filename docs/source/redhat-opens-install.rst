@@ -59,7 +59,7 @@ Instructions for installing OpenStack on RHEL can be found here --
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you're using CentOS, check the yum priorities plugin is installed:
+If you're using CentOS, check the yum priorities plugin is installed::
 
     yum install yum-plugin-priorities
 
