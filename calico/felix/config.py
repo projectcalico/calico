@@ -262,7 +262,7 @@ class Config(object):
         self.IP_IN_IP_MTU = self.parameters["IpInIpMtu"].value
         self.REPORTING_INTERVAL_SECS = self.parameters["ReportingIntervalSecs"].value
         self.REPORTING_TTL_SECS = self.parameters["ReportingTTLSecs"].value
-        self.REPORT_ENPOINT_STATUS = \
+        self.REPORT_ENDPOINT_STATUS = \
             self.parameters["EndpointReportingEnabled"].value
         self.ENDPOINT_REPORT_DELAY = \
             self.parameters["EndpointReportingDelaySecs"].value
