@@ -19,39 +19,17 @@ openstack.test.test_plugin_etcd
 Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
 import copy
-import eventlet
 import json
-import mock
 import unittest
 
-import calico.openstack.test.lib as lib
+import eventlet
+import mock
+
+import calico.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
-
 from calico import common
 from calico.datamodel_v1 import FELIX_STATUS_DIR
-
-
-class EtcdException(Exception):
-    pass
-
-
-class EtcdKeyNotFound(EtcdException):
-    pass
-
-
-class EtcdClusterIdChanged(EtcdException):
-    pass
-
-
-class EtcdEventIndexCleared(EtcdException):
-    pass
-
-
-lib.m_etcd.EtcdException = EtcdException
-lib.m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
-lib.m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
-lib.m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
 
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
@@ -135,7 +113,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             try:
                 del self.etcd_data[key]
             except KeyError:
-                raise EtcdKeyNotFound()
+                raise lib.EtcdKeyNotFound()
             self.recent_deletes.add(key)
 
     def assertEtcdWrites(self, expected):

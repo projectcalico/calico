@@ -21,9 +21,9 @@ Tests for etcd utility function.
 
 import logging
 import types
-from etcd import EtcdResult
-from mock import Mock
-from calico.etcdutils import PathDispatcher
+import etcd
+from mock import Mock, patch, call
+from calico.etcdutils import PathDispatcher, EtcdWatcher
 
 from calico.felix.test.base import BaseTestCase
 
@@ -68,7 +68,7 @@ class _TestPathDispatcherBase(BaseTestCase):
             exp_handler = key
         if isinstance(exp_handler, types.StringTypes):
             exp_handler = exp_handler.strip("/")
-        m_response = Mock(spec=EtcdResult)
+        m_response = Mock(spec=etcd.EtcdResult)
         m_response.key = key
         m_response.action = self.action
         self.dispatcher.handle_event(m_response)
@@ -122,7 +122,7 @@ class _TestPathDispatcherBase(BaseTestCase):
         self.assert_handled("/foo", exp_handler=None)
 
     def test_cover_no_match(self):
-        m_result = Mock(spec=EtcdResult)
+        m_result = Mock(spec=etcd.EtcdResult)
         m_result.key = "/a"
         m_result.action = "unknown"
         self.dispatcher.handle_event(m_result)
@@ -165,3 +165,29 @@ class TestDispatcherCaD(_TestPathDispatcherBase):
 class TestDispatcherExpire(_TestPathDispatcherBase):
     action = "expire"
     expected_handlers = "delete"
+
+
+class TestEtcdWatcher(BaseTestCase):
+    def setUp(self):
+        super(TestEtcdWatcher, self).setUp()
+        with patch("calico.etcdutils.EtcdWatcher.reconnect") as m_reconnect:
+            self.watcher = EtcdWatcher("foobar:4001", "/calico")
+        self.m_client = Mock()
+        self.watcher.client = self.m_client
+
+    def test_load_initial_dump(self):
+        m_response = Mock(spec=etcd.EtcdResult)
+        m_response.etcd_index = 10000
+        self.m_client.read.side_effect = [
+            etcd.EtcdKeyNotFound(),
+            m_response
+        ]
+        with patch("time.sleep") as m_sleep:
+            self.assertEqual(self.watcher.load_initial_dump(), m_response)
+
+        m_sleep.assert_called_once_with(1)
+        self.m_client.read.assert_has_calls([
+            call("/calico", recursive=True),
+            call("/calico", recursive=True),
+        ])
+        self.assertEqual(self.watcher.next_etcd_index, 10001)
