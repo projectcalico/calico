@@ -92,10 +92,20 @@ class EtcdEventIndexCleared(EtcdException):
     pass
 
 
+class EtcdValueError(EtcdException):
+    pass
+
+
+class EtcdDirNotEmpty(EtcdValueError):
+    pass
+
+
 m_etcd.EtcdException = EtcdException
 m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
 m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
 m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
+m_etcd.EtcdValueError = EtcdValueError
+m_etcd.EtcdDirNotEmpty = EtcdDirNotEmpty
 
 
 # Define a stub class, that we will use as the base class for

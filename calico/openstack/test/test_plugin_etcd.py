@@ -193,6 +193,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(31)
         self.assertEtcdWrites(
             {'/calico/v1/config/InterfacePrefix': 'tap',
+             '/calico/v1/config/EndpointReportingEnabled': True,
              '/calico/v1/Ready': True,
              '/calico/v1/policy/profile/SGID-default/rules':
                  {"outbound_rules": [{"dst_ports": ["1:65535"],
@@ -229,6 +230,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(31)
         expected_writes = {
             '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/config/EndpointReportingEnabled': True,
             '/calico/v1/Ready': True,
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
@@ -318,7 +320,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
-        self.check_update_port_status_called(context)
 
         # Migrate port1 to a different host.
         context._port = lib.port1.copy()
@@ -338,7 +339,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
-        self.check_update_port_status_called(context)
 
         # Now resync again, moving self.osdb_ports to move port 1 back to the
         # old host felix-host-1.  The effect will be as though we've
@@ -392,7 +392,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
-        self.check_update_port_status_called(context)
         self.osdb_ports = [lib.port1, lib.port2, context._port]
 
         # Create a new security group.
@@ -527,8 +526,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
-        self.check_update_port_status_called(context)
-
 
         # Resync with all latest data - expect no etcd writes or deletes.
         print "\nResync with existing etcd data\n"

@@ -115,6 +115,7 @@ class TestEtcdAPI(BaseTestCase):
     def test_force_resync(self, m_spawn, m_etcd_watcher):
         m_config = Mock(spec=Config)
         m_config.ETCD_ADDR = ETCD_ADDRESS
+        m_config.REPORT_ENDPOINT_STATUS = False
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
         api.force_resync(async=True)

@@ -44,6 +44,7 @@ class TestLocalEndpoint(BaseTestCase):
         super(TestLocalEndpoint, self).setUp()
         self.m_config = Mock(spec=config.Config)
         self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.REPORT_ENDPOINT_STATUS = False
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch_chains = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
