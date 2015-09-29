@@ -57,11 +57,11 @@ class IpsetManager(ReferenceManager):
         # endpoints, we need to track which endpoints reference an IP.  When
         # we find the set of endpoints with an IP is empty, we remove the
         # ip from the tag.
-        # ip_owners_by_tag[tag][ip][profile_id] = set([combined_id,
-        #                                              combined_id2, ...])
+        # ip_owners_by_tag[tag][ip] = set([(profile_id, combined_id),
+        #                                  (profile_id, combined_id2), ...]) |
+        #                             (profile_id, combined_id)
         # Here "combined_id" is an EndpointId object.
-        self.ip_owners_by_tag = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(set)))
+        self.ip_owners_by_tag = defaultdict(lambda: defaultdict(lambda: None))
 
         # Set of EndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
@@ -364,8 +364,18 @@ class IpsetManager(ReferenceManager):
         :param str ip_address: IP address to add
         """
         ip_added = not bool(self.ip_owners_by_tag[tag_id][ip_address])
-        ep_ids = self.ip_owners_by_tag[tag_id][ip_address][profile_id]
-        ep_ids.add(endpoint_id)
+        owners = self.ip_owners_by_tag[tag_id][ip_address]
+        new_mapping = (profile_id, endpoint_id)
+        if not owners:
+            self.ip_owners_by_tag[tag_id][ip_address] = new_mapping
+        elif isinstance(owners, set):
+            owners.add(new_mapping)
+        else:
+            self.ip_owners_by_tag[tag_id][ip_address] = set([
+                owners,
+                new_mapping
+            ])
+
         if ip_added:
             self._dirty_tags.add(tag_id)
 
@@ -380,15 +390,26 @@ class IpsetManager(ReferenceManager):
         :param EndpointId endpoint_id: ID of the endpoint
         :param str ip_address: IP address to remove
         """
-        ep_ids = self.ip_owners_by_tag[tag_id][ip_address][profile_id]
-        ep_ids.discard(endpoint_id)
-        if not ep_ids:
-            del self.ip_owners_by_tag[tag_id][ip_address][profile_id]
-            if not self.ip_owners_by_tag[tag_id][ip_address]:
-                del self.ip_owners_by_tag[tag_id][ip_address]
-                self._dirty_tags.add(tag_id)
+        owners = self.ip_owners_by_tag[tag_id][ip_address]
+        removed_mapping = (profile_id, endpoint_id)
+        if owners == removed_mapping:
+            # This was the sole owner of the IP in the tag, remove it.
+            _log.debug("%s was sole owner of IP %s, IP no longer in tag",
+                       removed_mapping, ip_address)
+            del self.ip_owners_by_tag[tag_id][ip_address]
             if not self.ip_owners_by_tag[tag_id]:
+                _log.debug("Tag %s now empty, removing", tag_id)
                 del self.ip_owners_by_tag[tag_id]
+            self._dirty_tags.add(tag_id)
+        elif isinstance(owners, set):
+            assert len(owners) != 1, ("ip_owners_by_tag entry should never "
+                                      "be a set with 1 entry")
+            _log.debug("Tag %s still contains IP %s", tag_id, ip_address)
+            owners.discard(removed_mapping)
+            if len(owners) == 1:
+                _log.debug("IP %s now only has one owner, replacing set with "
+                           "single tuple", ip_address)
+                self.ip_owners_by_tag[tag_id][ip_address] = owners.pop()
 
     def _add_profile_index(self, prof_ids, endpoint_id):
         """

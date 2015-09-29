@@ -5,6 +5,8 @@
 - Performance enhancements to ipset manipulation.
 - Rev python-etcd dependency to 0.4.1.  Our patched python-etcd version
   (which contains additional patches) is still required.
+- Reduce occupancy of Felix's tag resolution index in the common case
+  where IP addresses only have a single owner.
 
 ## 1.1.0
 

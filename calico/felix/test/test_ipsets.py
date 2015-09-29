@@ -21,6 +21,7 @@ Unit tests for the IpsetManager.
 from collections import defaultdict
 
 import logging
+from pprint import pformat
 from mock import *
 from calico.datamodel_v1 import EndpointId
 from calico.felix.futils import IPV4, FailedSystemCall
@@ -123,11 +124,7 @@ class TestIpsetManager(BaseTestCase):
         })
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1
-                    ])
-                }
+                "10.0.0.1": ("prof1", EP_ID_1_1),
             }
         })
 
@@ -142,16 +139,8 @@ class TestIpsetManager(BaseTestCase):
 
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
-                "10.0.0.2": {
-                    "prof1": set([
-                        EP_ID_1_1
-                    ])
-                },
-                "10.0.0.3": {
-                    "prof1": set([
-                        EP_ID_1_1
-                    ])
-                }
+                "10.0.0.2": ("prof1", EP_ID_1_1),
+                "10.0.0.3": ("prof1", EP_ID_1_1),
             }
         })
 
@@ -166,18 +155,10 @@ class TestIpsetManager(BaseTestCase):
         self.step_mgr()
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1
-                    ])
-                }
+                "10.0.0.1": ("prof1", EP_ID_1_1),
             },
             "tag2": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1
-                    ])
-                }
+                "10.0.0.1": ("prof1", EP_ID_1_1),
             }
         })
         self.assertEqual(self.mgr.tags_by_prof_id, {"prof1": ["tag1", "tag2"]})
@@ -187,11 +168,7 @@ class TestIpsetManager(BaseTestCase):
         self.step_mgr()
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag2": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1
-                    ])
-                }
+                "10.0.0.1": ("prof1", EP_ID_1_1),
             }
         })
 
@@ -217,11 +194,7 @@ class TestIpsetManager(BaseTestCase):
 
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag3": {
-                "10.0.0.3": {
-                    "prof3": set([
-                        EP_ID_1_1
-                    ])
-                }
+                "10.0.0.3": ("prof3", EP_ID_1_1)
             }
         })
         self.assertEqual(self.mgr.endpoint_ids_by_profile_id, {
@@ -269,12 +242,10 @@ class TestIpsetManager(BaseTestCase):
         })
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1,
-                        EP_ID_2_1,
-                    ])
-                }
+                "10.0.0.1": set([
+                    ("prof1", EP_ID_1_1),
+                    ("prof1", EP_ID_2_1),
+                ])
             }
         })
 
@@ -283,22 +254,14 @@ class TestIpsetManager(BaseTestCase):
         self.step_mgr()
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1,
-                        EP_ID_2_1,
-                    ]),
-                    "prof2": set([
-                        EP_ID_1_1,
-                    ])
-                }
+                "10.0.0.1": set([
+                    ("prof1", EP_ID_1_1),
+                    ("prof1", EP_ID_2_1),
+                    ("prof2", EP_ID_1_1),
+                ])
             },
             "tag2": {
-                "10.0.0.1": {
-                    "prof2": set([
-                        EP_ID_1_1,
-                    ])
-                }
+                "10.0.0.1": ("prof2", EP_ID_1_1),
             },
         })
 
@@ -310,21 +273,13 @@ class TestIpsetManager(BaseTestCase):
         })
         self.assertEqual(self.mgr.ip_owners_by_tag, {
             "tag1": {
-                "10.0.0.1": {
-                    "prof1": set([
-                        EP_ID_1_1,
-                    ]),
-                    "prof2": set([
-                        EP_ID_1_1,
-                    ])
-                }
+                "10.0.0.1": set([
+                    ("prof1", EP_ID_1_1),
+                    ("prof2", EP_ID_1_1),
+                ])
             },
             "tag2": {
-                "10.0.0.1": {
-                    "prof2": set([
-                        EP_ID_1_1,
-                    ])
-                }
+                "10.0.0.1": ("prof2", EP_ID_1_1),
             },
         })
 
@@ -332,7 +287,9 @@ class TestIpsetManager(BaseTestCase):
         self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
         self.step_mgr()
         self.assertEqual(self.mgr.endpoint_data_by_ep_id, {})
-        self.assertEqual(self.mgr.ip_owners_by_tag, {})
+        self.assertEqual(self.mgr.ip_owners_by_tag, {},
+                         "ip_owners_by_tag should be empty, not %s" %
+                         pformat(self.mgr.ip_owners_by_tag))
 
     def on_ref_acquired(self, tag_id, ipset):
         self.acquired_refs[tag_id] = ipset
