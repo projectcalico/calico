@@ -340,7 +340,8 @@ class LocalEndpoint(RefCountedActor):
             _log.warning("Failed to bring iptables into sync, endpoint is"
                          "in error.")
             status = ENDPOINT_STATUS_ERROR
-        if self._unreferenced or status != self._last_status:
+        if (self.config.REPORT_ENDPOINT_STATUS and
+                (self._unreferenced or status != self._last_status)):
             if self._unreferenced:
                 _log.debug("Unreferenced, reporting status = None")
                 status_dict = None

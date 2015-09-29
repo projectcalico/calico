@@ -268,10 +268,13 @@ class CalicoTransportEtcd(object):
         # First read the config values, so as to avoid unnecessary
         # writes.
         prefix = None
+        reporting_enabled = None
         ready = None
         iface_pfx_key = key_for_config('InterfacePrefix')
+        reporting_key = key_for_config('EndpointReportingEnabled')
         try:
             prefix = self.client.read(iface_pfx_key).value
+            reporting_enabled = self.client.read(reporting_key).value
             ready = self.client.read(READY_KEY).value
         except etcd.EtcdKeyNotFound:
             LOG.info('%s values are missing', CONFIG_DIR)
@@ -280,6 +283,9 @@ class CalicoTransportEtcd(object):
         if prefix != 'tap':
             LOG.info('%s -> tap', iface_pfx_key)
             self.client.write(iface_pfx_key, 'tap')
+        if reporting_enabled != "true":
+            LOG.info('%s -> true', reporting_enabled)
+            self.client.write(reporting_key, 'true')
         if ready != 'true':
             # TODO Set this flag only once we're really ready!
             LOG.info('%s -> true', READY_KEY)

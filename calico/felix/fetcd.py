@@ -195,6 +195,9 @@ class EtcdAPI(EtcdClientOwner, Actor):
         _log.info("Started per-endpoint status reporting thread. Waiting for "
                   "config.")
         self._watcher.configured.wait()
+        if not self._config.REPORT_ENDPOINT_STATUS:
+            _log.info("Endpoint status reporting disabled.")
+            return
         while True:
             # Wait for some work to do, then clear the flag ready for next
             # time.  There is no race here with someone else setting the flag
@@ -228,6 +231,10 @@ class EtcdAPI(EtcdClientOwner, Actor):
                              (0.9 + (random.random() * 0.2)))
 
     def mark_endpoint_dirty(self, ep_id):
+        if not self._config.REPORT_ENDPOINT_STATUS:
+            _log.debug("Endpoint status reporting disabled, ignoring.")
+            return
+        _log.debug("Marking endpoint %s dirty, needs resync", ep_id)
         with self._endpoint_status_lock:
             self._dirty_endpoints.add(ep_id)
             self._endpoint_status_work_to_do.set()
@@ -303,14 +310,18 @@ class EtcdAPI(EtcdClientOwner, Actor):
         _log.info("Forcing a resync with etcd.  Reason: %s.", reason)
         self._watcher.resync_after_current_poll = True
 
-        _log.info("Endpoint status reporting enabled, marking existing "
-                  "endpoints as dirty so they'll be resynced.")
-        ep_ids = self._endpoint_status.keys()  # Avoid race with update.
-        for ep_id in ep_ids:
-            self.mark_endpoint_dirty(ep_id)
+        if self._config.REPORT_ENDPOINT_STATUS:
+            _log.info("Endpoint status reporting enabled, marking existing "
+                      "endpoints as dirty so they'll be resynced.")
+            ep_ids = self._endpoint_status.keys()  # Avoid race with update.
+            for ep_id in ep_ids:
+                self.mark_endpoint_dirty(ep_id)
 
     @actor_message()
     def on_endpoint_status_changed(self, endpoint_id, status):
+        if not self._config.REPORT_ENDPOINT_STATUS:
+            _log.debug("Endpoint status reporting disabled, ignoring report.")
+            return
         # We directly update the shared data-structure, which is safe as long
         # as the reporting thread only does exact reads (and not iteration,
         # say).
@@ -587,6 +598,10 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         :param set our_endpoints_ids: Set of endpoint IDs for endpoints on
                this host.
         """
+        if not self._config.REPORT_ENDPOINT_STATUS:
+            _log.debug("Endpoint status reporting disabled, ignoring.")
+            return
+
         our_host_dir = "/".join([FELIX_STATUS_DIR, self._config.HOSTNAME,
                                  "workload"])
         try:

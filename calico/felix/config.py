@@ -203,6 +203,13 @@ class Config(object):
         self.add_parameter("ReportingTTLSecs",
                            "Status report time to live in seconds",
                            90, value_is_int=True)
+        self.add_parameter("EndpointReportingEnabled",
+                           "Whether Felix should report per-endpoint status "
+                           "into etcd",
+                           False, value_is_bool=True)
+        self.add_parameter("EndpointReportingDelaySecs",
+                           "Minimum delay between per-endpoint status reports",
+                           1, value_is_int=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
@@ -255,6 +262,10 @@ class Config(object):
         self.IP_IN_IP_MTU = self.parameters["IpInIpMtu"].value
         self.REPORTING_INTERVAL_SECS = self.parameters["ReportingIntervalSecs"].value
         self.REPORTING_TTL_SECS = self.parameters["ReportingTTLSecs"].value
+        self.REPORT_ENPOINT_STATUS = \
+            self.parameters["EndpointReportingEnabled"].value
+        self.ENDPOINT_REPORT_DELAY = \
+            self.parameters["EndpointReportingDelaySecs"].value
 
         self._validate_cfg(final=final)
 
@@ -405,6 +416,10 @@ class Config(object):
                 self.REPORTING_TTL_SECS == 0):
             log.warning("Reporting TTL set to %s.", self.REPORTING_TTL_SECS)
             self.REPORTING_TTL_SECS = self.REPORTING_INTERVAL_SECS * 5/2
+
+        if self.ENDPOINT_REPORT_DELAY < 0:
+            log.warning("Endpoint status delay is negative, defaulting to 1.")
+            self.ENDPOINT_REPORT_DELAY = 1
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more
