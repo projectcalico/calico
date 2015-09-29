@@ -7,7 +7,6 @@ from calico.felix.refcount import ReferenceManager, RefCountedActor, \
 from calico.felix.test.base import BaseTestCase
 from calico.felix.test.test_actor import ActorForTesting
 from gevent.event import AsyncResult
-import mock
 
 _log = logging.getLogger(__name__)
 

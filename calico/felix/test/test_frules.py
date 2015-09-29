@@ -19,7 +19,7 @@ felix.test.test_frules
 Tests of iptables rules generation function.
 """
 import logging
-from mock import Mock, patch, call, ANY
+from mock import Mock, patch, call
 from calico.felix import frules
 from calico.felix.config import Config
 from calico.felix.fiptables import IptablesUpdater

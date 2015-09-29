@@ -23,10 +23,8 @@ import gevent
 from calico.felix import config
 import mock
 import sys
-import time
 
 import calico.felix.test.stub_etcd as stub_etcd
-import calico.felix.futils as futils
 import calico.felix.felix as felix
 from calico.felix.test.base import BaseTestCase
 

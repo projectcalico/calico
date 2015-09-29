@@ -35,7 +35,6 @@ import gevent.lock
 from gevent import subprocess
 from gevent.subprocess import Popen
 import tempfile
-import time
 import pkg_resources
 from posix_spawn import posix_spawnp, FileActions
 

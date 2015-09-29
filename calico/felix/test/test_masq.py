@@ -18,8 +18,6 @@ felix.test.test_masq
 
 Unit tests for the MasqueradeManager.
 """
-from collections import defaultdict
-
 import logging
 from mock import *
 from calico.felix.fiptables import IptablesUpdater
