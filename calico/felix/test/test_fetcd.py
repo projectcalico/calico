@@ -115,12 +115,63 @@ class TestEtcdAPI(BaseTestCase):
     def test_force_resync(self, m_spawn, m_etcd_watcher):
         m_config = Mock(spec=Config)
         m_config.ETCD_ADDR = ETCD_ADDRESS
+        m_config.REPORT_ENDPOINT_STATUS = True
+        m_hosts_ipset = Mock(spec=IpsetActor)
+        api = EtcdAPI(m_config, m_hosts_ipset)
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        api._endpoint_status[endpoint_id] = {}
+        with patch.object(api, "mark_endpoint_dirty") as m_dirty:
+            api.force_resync(async=True)
+            self.step_actor(api)
+        m_dirty.assert_called_once_with(endpoint_id)
+        self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
+
+    def test_on_endpoint_status_changed(self):
+        m_config = Mock(spec=Config)
+        m_config.ETCD_ADDR = ETCD_ADDRESS
+        m_config.HOSTNAME = "hostname"
+        m_config.REPORT_ENDPOINT_STATUS = True
+        m_hosts_ipset = Mock(spec=IpsetActor)
+        api = EtcdAPI(m_config, m_hosts_ipset)
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        endpoint_id2 = EndpointId("foo", "bar", "baz", "boff")
+
+        with patch.object(api, "mark_endpoint_dirty") as m_dirty:
+            api.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+                                           async=True)
+            api.on_endpoint_status_changed(endpoint_id2, None, async=True)
+            self.step_actor(api)
+
+        self.assertEqual(
+            m_dirty.mock_calls,
+            [
+                call(endpoint_id),
+                call(endpoint_id2),
+            ]
+        )
+        self.assertEqual(
+            api._endpoint_status,
+            {
+                endpoint_id: {"status": "up"}
+            }
+        )
+
+    def test_on_endpoint_status_changed_disabled(self):
+        m_config = Mock(spec=Config)
+        m_config.ETCD_ADDR = ETCD_ADDRESS
+        m_config.HOSTNAME = "hostname"
         m_config.REPORT_ENDPOINT_STATUS = False
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
-        api.force_resync(async=True)
-        self.step_actor(api)
-        self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+
+        with patch.object(api, "mark_endpoint_dirty") as m_dirty:
+            api.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+                                           async=True)
+            self.step_actor(api)
+
+        self.assertFalse(m_dirty.called)
+        self.assertEqual(api._endpoint_status, {})
 
 
 class ExpectedException(Exception):
@@ -199,6 +250,43 @@ class TestEtcdWatcher(BaseTestCase):
         # Third call, should detect the config change and die.
         self.watcher._load_config()
         m_die.assert_called_once_with()
+
+    def test_on_snapshot_loaded(self):
+        m_response = Mock()
+
+        endpoint_on_host = Mock()
+        endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
+                                "orch/wlid/endpoint/epid")
+        endpoint_on_host.value = ENDPOINT_STR
+
+        bad_endpoint_on_host = Mock()
+        bad_endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
+                                    "orch/wlid/endpoint/epid2")
+        bad_endpoint_on_host.value = ENDPOINT_STR[:10]
+
+        endpoint_not_on_host = Mock()
+        endpoint_not_on_host.key = ("/calico/v1/host/other/workload/"
+                                    "orch/wlid/endpoint/epid")
+        endpoint_not_on_host.value = ENDPOINT_STR
+
+        still_ready = Mock()
+        still_ready.key = ("/calico/v1/Ready")
+        still_ready.value = "true"
+
+        m_response.children = [
+            endpoint_on_host,
+            bad_endpoint_on_host,
+            endpoint_not_on_host,
+            still_ready,
+        ]
+        with patch.object(self.watcher,
+                          "clean_up_endpoint_statuses") as m_clean:
+            self.watcher._on_snapshot_loaded(m_response)
+
+        # Cleanup should only get the endpoints on our host.
+        m_clean.assert_called_once_with(
+            set([EndpointId("hostname", "orch", "wlid", "epid")])
+        )
 
     def test_resync_flag(self):
         self.watcher.resync_after_current_poll = True
@@ -479,6 +567,47 @@ class TestEtcdWatcher(BaseTestCase):
         m_response.value = value
         self.watcher.dispatcher.handle_event(m_response)
 
+    def test_clean_up_endpoint_status(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        ep_id = EndpointId("hostname",
+                           "openstack",
+                           "workloadid",
+                           "endpointid")
+
+        empty_dir = Mock()
+        empty_dir.key = ("/calico/felix/v1/host/hostname/workload/"
+                         "openstack/foobar")
+        empty_dir.dir = True
+
+        missing_ep = Mock()
+        missing_ep.key = ("/calico/felix/v1/host/hostname/workload/"
+                          "openstack/aworkload/endpoint/anendpoint")
+
+        self.client.read.return_value.leaves = [
+            empty_dir,
+            missing_ep,
+        ]
+        self.watcher.clean_up_endpoint_statuses(set([ep_id]))
+
+        # Missing endpoint should have been marked for cleanup.
+        self.m_api.mark_endpoint_dirty.assert_called_once_with(
+            EndpointId("hostname",
+                       "openstack",
+                       "aworkload",
+                       "anendpoint")
+        )
+
+    def test_clean_up_endpoint_status_not_found(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.client.read.side_effect = etcd.EtcdKeyNotFound()
+        self.watcher.clean_up_endpoint_statuses(set())
+        self.assertFalse(self.m_api.mark_endpoint_dirty.called)
+
+    def test_clean_up_endpoint_status_disabled(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = False
+        self.client.read.side_effect = self.failureException
+        self.watcher.clean_up_endpoint_statuses(set())
+
 
 class TestEtcdReporting(BaseTestCase):
     def setUp(self):
@@ -552,5 +681,79 @@ class TestEtcdReporting(BaseTestCase):
                              "time": "2015-09-10T02:01:53Z",
                              "first_update": False}), ttl=10),
         ])
+
+
+class TestPerPortReporting(BaseTestCase):
+    def setUp(self):
+        super(TestPerPortReporting, self).setUp()
+        self.m_config = Mock()
+        self.m_config.ENDPOINT_REPORT_DELAY = 1
+        self.m_config.ETCD_ADDR = "localhost:4001"
+        self.m_config.HOSTNAME = "hostname"
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.m_hosts_ipset = Mock(spec=IpsetActor)
+        with patch("gevent.spawn", autospec=True):
+            with patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True):
+                with patch("calico.felix.fetcd.monotonic_time",
+                           return_value=100):
+                    self.api = EtcdAPI(self.m_config, self.m_hosts_ipset)
+        self.api._watcher.configured = Mock()
+        self.m_client = Mock()
+        self.api.client = self.m_client
+
+    @patch("gevent.sleep")
+    def test_report_endpoint_status(self, m_sleep):
+        # Let the loop run just this many times...
+        m_sleep.side_effect = [
+            None,
+            RuntimeError(),
+        ]
+        # This endpoint exists, should trigger a set to etcd.
+        endpoint_boff = EndpointId("foo", "bar", "baz", "boff")
+        self.api._endpoint_status[endpoint_boff] = {"status": "up"}
+        self.api.mark_endpoint_dirty(endpoint_boff)
+        # this one is missing, should trigger a delete.
+        self.api.mark_endpoint_dirty(EndpointId("foo", "bar", "baz", "biff"))
+        # Marking it dirty should set the event.
+        self.assertTrue(self.api._endpoint_status_work_to_do.is_set())
+        # For coverage...
+        self.m_client.delete.side_effect = etcd.EtcdKeyNotFound()
+
+        # Actually run the loop:
+        self.assertRaises(RuntimeError, self.api._report_endpoint_status)
+
+        # Running the loop should clear it.
+        self.assertFalse(self.api._endpoint_status_work_to_do.is_set())
+
+        # Check the results...
+        self.m_client.delete.assert_called_once_with(
+            '/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff'
+        )
+        self.m_client.set.assert_called_once_with(
+            '/calico/felix/v1/host/foo/workload/bar/baz/endpoint/boff',
+            '{"status": "up"}'
+        )
+
+    @patch("gevent.sleep")
+    def test_report_endpoint_status_error(self, m_sleep):
+        # Let the loop run just once
+        m_sleep.side_effect = RuntimeError()
+        # this one is missing, should trigger a delete.
+        ep_id = EndpointId("foo", "bar", "baz", "biff")
+        self.api.mark_endpoint_dirty(ep_id)
+        with patch.object(self.api, "write_endpoint_status_to_etcd",
+                          side_effect=etcd.EtcdException()):
+            self.assertRaises(RuntimeError, self.api._report_endpoint_status)
+        self.assertTrue(ep_id in self.api._dirty_endpoints)
+
+    @patch("gevent.sleep")
+    def test_report_endpoint_status_disabled(self, m_sleep):
+        # Let the loop run just once
+        m_sleep.side_effect = RuntimeError()
+        self.m_config.REPORT_ENDPOINT_STATUS = False
+        ep_id = EndpointId("foo", "bar", "baz", "biff")
+        self.api.mark_endpoint_dirty(ep_id)
+        self.assertFalse(ep_id in self.api._dirty_endpoints)
+        self.api._report_endpoint_status()
 
 
