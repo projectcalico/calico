@@ -158,7 +158,7 @@ def hostname_from_status_key(key):
 
     :param: key for felix status
             expected key format: FELIX_STATUS_DIR/<hostname>/
-                                           <some path or not>/<actual key name>
+                                                      <some path or not>/status
     """
     if not key.startswith(FELIX_STATUS_DIR) or not key.endswith("/status"):
         return None

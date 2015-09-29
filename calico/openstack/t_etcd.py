@@ -595,20 +595,40 @@ class CalicoEtcdWatcher(EtcdWatcher):
         Updates the driver with the current state.
         """
         endpoints_by_host = defaultdict(set)
+        hosts_with_live_felix = set()
+
+        # First pass: find all the Felixes that are alive.
         for etcd_node in etcd_snapshot_response.leaves:
             key = etcd_node.key
-            endpoint_id = get_endpoint_id_from_key(key)
-            if endpoint_id:
-                endpoints_by_host[endpoint_id.host].add(endpoint_id)
-                self._on_ep_set(etcd_node,
-                                hostname=endpoint_id.host,
-                                workload=endpoint_id.workload,
-                                endpoint=endpoint_id.endpoint,)
-                continue
             felix_hostname = hostname_from_status_key(key)
             if felix_hostname:
                 # Defer to the code for handling an event.
+                hosts_with_live_felix.add(felix_hostname)
                 self._on_status_set(etcd_node, felix_hostname)
+                continue
+
+        # Second pass: find all the endpoints associated with a live Felix.
+        for etcd_node in etcd_snapshot_response.leaves:
+            key = etcd_node.key
+            endpoint_id = get_endpoint_id_from_key(key)
+            if endpoint_id and endpoint_id.host:
+                if endpoint_id.host in hosts_with_live_felix:
+                    LOG.debug("Endpoint %s is on a host with a live Felix.",
+                              endpoint_id)
+                    self._report_status(
+                        endpoints_by_host,
+                        endpoint_id,
+                        etcd_node.value
+                    )
+                else:
+                    LOG.debug("Endpoint %s is not on a host with live Felix;"
+                              "marking it down.",
+                              endpoint_id)
+                    self.calico_driver.on_port_status_changed(
+                        endpoint_id.host,
+                        endpoint_id.endpoint,
+                        None,
+                    )
                 continue
 
         # Find any removed endpoints.
@@ -642,29 +662,60 @@ class CalicoEtcdWatcher(EtcdWatcher):
                 new=new,
             )
 
-    def _on_ep_set(self, response, hostname, workload, endpoint):
-        endpoint_id = get_endpoint_id_from_key(response.key)
-        try:
-            status = json.loads(response.value)
-        except (ValueError, TypeError):
-            LOG.warning("Bad JSON data for key %s: %s",
-                        response.key, response.value)
-            status = None  # Report as error
-            self._endpoints_by_host[hostname].discard(endpoint_id)
-            if not self._endpoints_by_host[hostname]:
-                del self._endpoints_by_host[hostname]
-        else:
-            self._endpoints_by_host[hostname].add(endpoint_id)
+    def _on_status_del(self, response, hostname):
+        """
+        Called when Felix's status key expires.  Implies felix is dead.
+        """
+        LOG.error("Felix on host %s failed to check in.  Marking the "
+                  "ports it was managing as in-error.")
+        for endpoint_id in self._endpoints_by_host[hostname]:
+            # Flag all the ports as being in error.  They're no longer
+            # receiving security updates.
+            self.calico_driver.on_port_status_changed(
+                hostname,
+                endpoint_id.endpoint,
+                None,
+            )
+        # Then discard our cache of endpoints.  If felix comes back up, it will
+        # repopulate.
+        self._endpoints_by_host.pop(hostname)
 
-        LOG.debug("Port %s/%s/%s updated to status %s",
-                  hostname, workload, endpoint, status)
+    def _on_ep_set(self, response, hostname, workload, endpoint):
+        """
+        Called when the status key for a particular endpoint is updated.
+
+        Reports the status to the driver and caches the existence of the
+        endpoint.
+        """
+        self._report_status(self._endpoints_by_host,
+                            get_endpoint_id_from_key(response.key),
+                            response.value)
+
+    def _report_status(self, endpoints_by_host, endpoint_id, raw_json):
+        try:
+            status = json.loads(raw_json)
+        except (ValueError, TypeError):
+            LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
+            status = None  # Report as error
+            endpoints_by_host[endpoint_id.host].discard(endpoint_id)
+            if not endpoints_by_host[endpoint_id.host]:
+                del endpoints_by_host[endpoint_id.host]
+        else:
+            endpoints_by_host[endpoint_id.host].add(endpoint_id)
+        LOG.debug("Port %s updated to status %s", endpoint_id, status)
         self.calico_driver.on_port_status_changed(
-            hostname,
-            endpoint,
+            endpoint_id.host,
+            endpoint_id.endpoint,
             status,
         )
 
     def _on_ep_delete(self, response, hostname, workload, endpoint):
+        """
+        Called when the status key for an endpoint is deleted.
+
+        This typically means the endpoint has been deleted.  Reports
+        the deletion to the driver.
+        """
         LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
         endpoint_id = get_endpoint_id_from_key(response.key)
         self._endpoints_by_host[hostname].discard(endpoint_id)
@@ -677,8 +728,13 @@ class CalicoEtcdWatcher(EtcdWatcher):
         )
 
     def _on_per_host_dir_delete(self, response, hostname, workload=None):
+        """
+        Called when one the the directories that may contain endpoint
+        statuses is deleted.  Cleans up either the specific workload
+        or the whole host.
+        """
         LOG.info("One of the per-host directories for host %s, workload "
-                 "%s deleted", hostname, workload)
+                 "%s deleted.", hostname, workload)
         endpoints_on_host = self._endpoints_by_host[hostname]
         for endpoint_id in [ep_id for ep_id in endpoints_on_host if
                             workload is None or workload == ep_id.workload]:
