@@ -43,8 +43,8 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  key_for_last_status, key_for_status,
                                  FELIX_STATUS_DIR, get_endpoint_id_from_key)
 from calico.etcdutils import (
-    EtcdClientOwner, EtcdWatcher, ResyncRequired
-)
+    EtcdClientOwner, EtcdWatcher, ResyncRequired,
+    delete_empty_parents)
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
                                  iso_utc_timestamp)
@@ -223,7 +223,9 @@ class EtcdAPI(EtcdClientOwner, Actor):
                     # batch ensures that we try to update all of the dirty
                     # endpoints before we do any retries, ensuring fairness.
                     self.mark_endpoint_dirty(ep_id)
-                gevent.sleep(1 + random.random())  # Rate-limit writes to etcd
+                # Rate-limit our writes, with jitter.
+                gevent.sleep(self._config.ENDPOINT_REPORT_DELAY *
+                             (0.9 + (random.random() * 0.2)))
 
     def mark_endpoint_dirty(self, ep_id):
         with self._endpoint_status_lock:
@@ -232,9 +234,11 @@ class EtcdAPI(EtcdClientOwner, Actor):
 
     def write_endpoint_status_to_etcd(self, ep_id, status):
         if status:
+            _log.debug("Writing endpoint status %s = %s", ep_id, status)
             self.client.set(ep_id.path_for_status,
                             json.dumps(status))
         else:
+            _log.debug("Removing endpoint status %s", ep_id)
             try:
                 self.client.delete(ep_id.path_for_status)
             except EtcdKeyNotFound:
@@ -292,12 +296,18 @@ class EtcdAPI(EtcdClientOwner, Actor):
     @actor_message()
     def force_resync(self, reason="unknown"):
         """
-        Force a resync from etcd after the current poll completes.
+        Force a resync with etcd after the current poll completes.
 
         :param str reason: Optional reason to log out.
         """
-        _log.info("Forcing a resync from etcd.  Reason: %s.", reason)
+        _log.info("Forcing a resync with etcd.  Reason: %s.", reason)
         self._watcher.resync_after_current_poll = True
+
+        _log.info("Endpoint status reporting enabled, marking existing "
+                  "endpoints as dirty so they'll be resynced.")
+        ep_ids = self._endpoint_status.keys()  # Avoid race with update.
+        for ep_id in ep_ids:
+            self.mark_endpoint_dirty(ep_id)
 
     @actor_message()
     def on_endpoint_status_changed(self, endpoint_id, status):
@@ -305,8 +315,10 @@ class EtcdAPI(EtcdClientOwner, Actor):
         # as the reporting thread only does exact reads (and not iteration,
         # say).
         if status:
+            _log.debug("Endpoint status %s now %s", endpoint_id, status)
             self._endpoint_status[endpoint_id] = status
         else:
+            _log.debug("Removing endpoint status %s", endpoint_id)
             self._endpoint_status.pop(endpoint_id, None)
         # Then we wake up the reporting thread.
         self.mark_endpoint_dirty(endpoint_id)
@@ -568,10 +580,18 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                                              async=True)
 
     def clean_up_endpoint_statuses(self, our_endpoints_ids):
+        """
+        Mark any endpoint status reports for non-existent endpoints
+        for cleanup.
+
+        :param set our_endpoints_ids: Set of endpoint IDs for endpoints on
+               this host.
+        """
+        our_host_dir = "/".join([FELIX_STATUS_DIR, self._config.HOSTNAME,
+                                 "workload"])
         try:
-            response = self.client.read("/".join([FELIX_STATUS_DIR,
-                                                  self._config.HOSTNAME,
-                                                  "workload"]),
+            # Grab all the existing status reports.
+            response = self.client.read(our_host_dir,
                                         recursive=True)
         except EtcdKeyNotFound:
             _log.info("No endpoint statuses found, nothing to clean up")
@@ -586,6 +606,13 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                                "status key for cleanup",
                                combined_id)
                     self._etcd_api.mark_endpoint_dirty(combined_id)
+                elif node.dir:
+                    # This leaf is an empty directory, try to clean it up.
+                    # This is safe even if another thread is adding keys back
+                    # into the directory.
+                    _log.debug("Found empty directory %s, cleaning up",
+                               node.key)
+                    delete_empty_parents(self.client, node.key, our_host_dir)
 
     def _resync(self, response, **kwargs):
         """
