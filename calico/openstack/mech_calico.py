@@ -267,7 +267,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port_status = PORT_STATUS_MAPPING.get(status.get("status"),
                                                   constants.PORT_STATUS_ERROR)
         else:
-            port_status = constants.PORT_STATUS_DOWN
+            # Report deletion as error.  Either the port has genuinely been
+            # deleted, in which case this update is ignored by
+            # update_port_status or the port still exists but we disagree,
+            # which is an error.
+            port_status = constants.PORT_STATUS_ERROR
         self.db.update_port_status(self._db_context,
                                    port_id,
                                    port_status)
