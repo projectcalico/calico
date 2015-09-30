@@ -372,6 +372,59 @@ class TestLocalEndpoint(BaseTestCase):
         self.assertFalse(local_ep._iptables_in_sync)
         self.assertFalse(local_ep._device_in_sync)
 
+    def test_maybe_update_status_missing_deps(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+        local_ep._maybe_update_status()
+        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+            combined_id, {'status': 'down'}, async=True
+        )
+
+    def test_maybe_update_status_iptables_failure(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+        local_ep._missing_deps = []
+        local_ep._iptables_in_sync = False
+        local_ep._device_in_sync = True
+        local_ep._device_has_been_in_sync = True
+        local_ep._maybe_update_status()
+        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+            combined_id, {'status': 'error'}, async=True
+        )
+
+    def test_maybe_update_status_iptables_up(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+        local_ep._missing_deps = []
+        local_ep._iptables_in_sync = True
+        local_ep._device_in_sync = True
+        local_ep._device_has_been_in_sync = True
+        local_ep._maybe_update_status()
+        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+            combined_id, {'status': 'up'}, async=True
+        )
+
+    def test_maybe_update_status_iptables_unreferenced(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+        local_ep.on_unreferenced(async=True)
+        self.step_actor(local_ep)
+        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+            combined_id, None, async=True
+        )
+
 
 class TestEndpoint(BaseTestCase):
     def test_get_endpoint_rules(self):

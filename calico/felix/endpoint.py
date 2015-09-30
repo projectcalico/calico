@@ -357,7 +357,7 @@ class LocalEndpoint(RefCountedActor):
                 _log.debug("Endpoint oper state changed to %s", status)
                 status_dict = {"status": status}
             self.datastore_api.on_endpoint_status_changed(
-                self._id,
+                self.combined_id,
                 status_dict,
                 async=True,
             )
