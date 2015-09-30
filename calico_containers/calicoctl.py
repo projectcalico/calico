@@ -28,6 +28,7 @@ Usage: calicoctl <command> [<args>...]
     endpoint          Configure the endpoints assigned to existing containers
     pool              Configure ip-pools
     bgp               Configure global bgp
+    ipam              Configure IP address management
     checksystem       Check for incompatibilities on the host system
     diags             Save diagnostic information
     version           Display the version of calicoctl
@@ -53,6 +54,7 @@ import calico_ctl.status
 import calico_ctl.diags
 import calico_ctl.version
 import calico_ctl.config
+import calico_ctl.ipam
 from calico_ctl.utils import print_paragraph
 
 
