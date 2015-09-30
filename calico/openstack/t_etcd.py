@@ -611,7 +611,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
         for etcd_node in etcd_snapshot_response.leaves:
             key = etcd_node.key
             endpoint_id = get_endpoint_id_from_key(key)
-            if endpoint_id and endpoint_id.host:
+            if endpoint_id:
                 if endpoint_id.host in hosts_with_live_felix:
                     LOG.debug("Endpoint %s is on a host with a live Felix.",
                               endpoint_id)
@@ -639,7 +639,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
                 LOG.debug("Endpoint %s removed by resync.")
                 self.calico_driver.on_port_status_changed(
                     host,
-                    endpoint_id.workload,
+                    endpoint_id.endpoint,
                     None,
                 )
 
@@ -687,8 +687,13 @@ class CalicoEtcdWatcher(EtcdWatcher):
         Reports the status to the driver and caches the existence of the
         endpoint.
         """
+        ep_id = get_endpoint_id_from_key(response.key)
+        if not ep_id:
+            LOG.error("Failed to extract endpoint ID from: %s.  Ignoring "
+                      "update!", response.key)
+            return
         self._report_status(self._endpoints_by_host,
-                            get_endpoint_id_from_key(response.key),
+                            ep_id,
                             response.value)
 
     def _report_status(self, endpoints_by_host, endpoint_id, raw_json):

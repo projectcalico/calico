@@ -899,19 +899,56 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
 
     def test_snapshot(self):
         m_response = mock.Mock()
+
         m_node_to_ignore = mock.Mock()
         m_node_to_ignore.key = "/calico/felix/v1/host/hostname/last_reported_status"
         m_node_to_ignore.value = '{"uptime": 10, "first_update": true}'
+
         m_status_node = mock.Mock()
         m_status_node.key = "/calico/felix/v1/host/hostname/status"
         m_status_node.value = '{"uptime": 10, "first_update": true}'
+
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint/ep1"
+        m_port_status_node.value = '{"status": "up"}'
+
+        m_port_status_node_ignored = mock.Mock()
+        m_port_status_node_ignored.key = "/calico/felix/v1/host/unknown/" \
+                                         "workload/openstack/wlid/endpoint/ep2"
+        m_port_status_node_ignored.value = '{"status": "up"}'
+
+        m_response.leaves = [
+            m_node_to_ignore,
+            m_status_node,
+            m_port_status_node,
+            m_port_status_node_ignored,
+        ]
+
+        self.watcher._on_snapshot_loaded(m_response)
+        self.driver.on_felix_alive.assert_called_once_with("hostname",
+                                                           new=True)
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", {"status": "up"}),
+                mock.call("unknown", "ep2", None),
+            ]
+        )
+
+        # Snapshot 2: should figure out that an endpoint has been removed.
         m_response.leaves = [
             m_node_to_ignore,
             m_status_node,
         ]
+        self.driver.on_port_status_changed.reset_mock()
         self.watcher._on_snapshot_loaded(m_response)
-        self.driver.on_felix_alive.assert_called_once_with("hostname",
-                                                           new=True)
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", None),
+            ]
+        )
 
     def test_status_bad_json(self):
         for value in ["{", 10, "foo"]:
@@ -920,6 +957,27 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
             m_response.value = value
             self.watcher._on_status_set(m_response, "foo")
         self.assertFalse(self.driver.on_felix_alive.called)
+
+    def test_felix_status_expiry(self):
+        # Put an endpoint in the cache to find later...
+        m_response = mock.Mock()
+        m_response.key = "/calico/felix/v1/host/hostname/workload/" \
+                         "openstack/wlid/endpoint/epid"
+        m_response.value = '{"status": "up"}'
+        self.watcher._on_ep_set(m_response, "hostname", "wlid", "epid")
+
+        # Then note that felix is down.
+        m_response = mock.Mock()
+        m_response.key = "/calico/felix/v1/host/hostname/status"
+        self.watcher._on_status_del(m_response, "hostname")
+
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "epid", {"status": "up"}),
+                mock.call("hostname", "epid", None),
+            ]
+        )
 
 
 def _neutron_rule_from_dict(overrides):
