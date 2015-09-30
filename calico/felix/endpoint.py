@@ -220,6 +220,7 @@ class LocalEndpoint(RefCountedActor):
         # Track the success/failure of our dataplane programming.
         self._iptables_in_sync = False
         self._device_in_sync = False
+        self._device_has_been_in_sync = False
         self._last_status = None
 
         # One-way flags to indicate that we should clean up/have cleaned up.
@@ -330,13 +331,20 @@ class LocalEndpoint(RefCountedActor):
         # Work out what status we should report back to the orchestrator.
         if self._missing_deps or not self._device_in_sync:
             # We're not ready yet, say we're down.
-            # FIXME: device not being in sync could be an error
-            status = ENDPOINT_STATUS_DOWN
-        elif self._iptables_in_sync and self._device_in_sync:
-            # We're in-sync and have all our dependencies, we're up.
+            if self._device_has_been_in_sync:
+                _log.debug("Device out of sync but we've seen it up before, "
+                           "mark as error.")
+                status = ENDPOINT_STATUS_ERROR
+            else:
+                _log.debug("Device out of sync but we've never seen up "
+                           "before, assuming it's down.")
+                status = ENDPOINT_STATUS_DOWN
+        elif self._iptables_in_sync:
+            # We're in-sync and we have all our dependencies, we're up.
+            _log.debug("In sync, with all dependencies, endpoint is up.")
             status = ENDPOINT_STATUS_UP
         else:
-            # We have our dependencies but we're not in sync, must be an error.
+            # iptables out of sync, that is definitely and error.
             _log.warning("Failed to bring iptables into sync, endpoint is"
                          "in error.")
             status = ENDPOINT_STATUS_ERROR
@@ -513,6 +521,7 @@ class LocalEndpoint(RefCountedActor):
         else:
             _log.info("Interface %s configured", self._iface_name)
             self._device_in_sync = True
+            self._device_has_been_in_sync = True
 
     def _deconfigure_interface(self):
         """
@@ -532,6 +541,7 @@ class LocalEndpoint(RefCountedActor):
         else:
             _log.info("Interface %s deconfigured", self._iface_name)
             self._device_in_sync = True
+            self._device_has_been_in_sync = True
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.
