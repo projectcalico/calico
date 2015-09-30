@@ -7,6 +7,8 @@
   (which contains additional patches) is still required.
 - Reduce occupancy of Felix's tag resolution index in the common case
   where IP addresses only have a single owner.
+- Felix now sets the default.rp_filter sysctl to ensure that endpoints
+  come up with the Kernel's RPF check enabled by default.
 
 ## 1.1.0
 
