@@ -41,7 +41,8 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  PROFILE_DIR, HOST_DIR, EndpointId, POLICY_DIR,
                                  HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE,
                                  key_for_last_status, key_for_status,
-                                 FELIX_STATUS_DIR, get_endpoint_id_from_key)
+                                 FELIX_STATUS_DIR, get_endpoint_id_from_key,
+                                 dir_for_felix_status)
 from calico.etcdutils import (
     EtcdClientOwner, EtcdWatcher, ResyncRequired,
     delete_empty_parents)
@@ -240,17 +241,24 @@ class EtcdAPI(EtcdClientOwner, Actor):
             self._endpoint_status_work_to_do.set()
 
     def write_endpoint_status_to_etcd(self, ep_id, status):
+        status_key = ep_id.path_for_status
         if status:
             _log.debug("Writing endpoint status %s = %s", ep_id, status)
-            self.client.set(ep_id.path_for_status,
+            self.client.set(status_key,
                             json.dumps(status))
         else:
             _log.debug("Removing endpoint status %s", ep_id)
             try:
-                self.client.delete(ep_id.path_for_status)
+                self.client.delete(status_key)
             except EtcdKeyNotFound:
                 _log.debug("Tried to delete %s but it was already gone",
-                           ep_id.path_for_status)
+                           status_key)
+            # Clean up any now-empty parent directories.
+            delete_empty_parents(
+                self.client,
+                status_key.rsplit("/", 1)[0],  # Snip off final path segment.
+                dir_for_felix_status(self._config.HOSTNAME)
+            )
 
     def _update_felix_status(self, ttl):
         """

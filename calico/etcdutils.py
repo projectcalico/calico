@@ -341,7 +341,8 @@ def delete_empty_parents(client, child_key, root_key, timeout=DEFAULT_TIMEOUT):
     path_segments = child_key.strip("/").split("/")
     root_path_segments = root_key.strip("/").split("/")
     if path_segments[:len(root_path_segments)] != root_path_segments:
-        raise ValueError("child_key must start with root key")
+        raise ValueError("child_key %r must start with root key %r" %
+                         (child_key, root_key))
     for num_seg_to_strip in xrange(len(path_segments) -
                                    len(root_path_segments)):
         key_segments = path_segments[:len(path_segments) - num_seg_to_strip]

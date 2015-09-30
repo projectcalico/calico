@@ -709,11 +709,11 @@ class TestPerPortReporting(BaseTestCase):
             RuntimeError(),
         ]
         # This endpoint exists, should trigger a set to etcd.
-        endpoint_boff = EndpointId("foo", "bar", "baz", "boff")
+        endpoint_boff = EndpointId("hostname", "bar", "baz", "boff")
         self.api._endpoint_status[endpoint_boff] = {"status": "up"}
         self.api.mark_endpoint_dirty(endpoint_boff)
         # this one is missing, should trigger a delete.
-        self.api.mark_endpoint_dirty(EndpointId("foo", "bar", "baz", "biff"))
+        self.api.mark_endpoint_dirty(EndpointId("hostname", "bar", "baz", "biff"))
         # Marking it dirty should set the event.
         self.assertTrue(self.api._endpoint_status_work_to_do.is_set())
         # For coverage...
@@ -726,11 +726,26 @@ class TestPerPortReporting(BaseTestCase):
         self.assertFalse(self.api._endpoint_status_work_to_do.is_set())
 
         # Check the results...
-        self.m_client.delete.assert_called_once_with(
-            '/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff'
+        self.maxDiff = 10000
+        self.assertEqual(
+            self.m_client.delete.mock_calls,
+            [
+                call('/calico/felix/v1/host/hostname/'
+                     'workload/bar/baz/endpoint/biff'),
+                call('calico/felix/v1/host/hostname/'
+                     'workload/bar/baz/endpoint',
+                     dir=True, timeout=5),
+                call('calico/felix/v1/host/hostname/workload/bar/baz',
+                     dir=True, timeout=5),
+                call('calico/felix/v1/host/hostname/workload/bar',
+                     dir=True, timeout=5),
+                call('calico/felix/v1/host/hostname/workload',
+                     dir=True, timeout=5),
+            ],
+            msg="Incorrect mock calls: %s" % self.m_client.delete.mock_calls
         )
         self.m_client.set.assert_called_once_with(
-            '/calico/felix/v1/host/foo/workload/bar/baz/endpoint/boff',
+            '/calico/felix/v1/host/hostname/workload/bar/baz/endpoint/boff',
             '{"status": "up"}'
         )
 
