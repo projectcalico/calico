@@ -736,6 +736,17 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'icmp_type': 123,
             'icmp_code': 100,
         })
+        # Numeric type.
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
+            "ethertype": "IPv4",
+            "protocol": 123,
+            "direction": "egress",
+            "remote_group_id": "foobar",
+        }), {
+            'ip_version': 4,
+            'protocol': 123,
+            'dst_tag': "foobar"
+        })
         # Type and code, IPv6.
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv6",
@@ -964,6 +975,28 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
                 mock.call("hostname", "ep1", None),
             ]
         )
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+
+    def test_endpoint_status_add_bad_json(self):
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint/ep1"
+        m_port_status_node.value = '{"status": "up"'
+        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", None),
+            ]
+        )
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+
+    def test_endpoint_status_add_bad_id(self):
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint"
+        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         self.assertEqual(self.watcher._endpoints_by_host, {})
 
     def test_on_per_host_dir_delete(self):
