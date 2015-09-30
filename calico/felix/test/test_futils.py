@@ -20,9 +20,7 @@ Test Felix utils.
 """
 import logging
 import mock
-import os
 import sys
-import uuid
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest

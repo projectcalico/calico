@@ -20,11 +20,9 @@ Common code for Neutron driver UT.
 """
 import eventlet
 import eventlet.queue
-from eventlet.support import greenlets as greenlet
 import inspect
 import mock
 import sys
-import traceback
 
 sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()

@@ -23,7 +23,6 @@ from collections import namedtuple
 import eventlet
 import logging
 import mock
-import os
 import sys
 
 if sys.version_info < (2, 7):

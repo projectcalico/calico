@@ -20,7 +20,6 @@ Test data model key calculations etc.
 """
 
 import logging
-import mock
 import unittest
 
 from calico.datamodel_v1 import *

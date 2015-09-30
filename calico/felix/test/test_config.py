@@ -19,7 +19,6 @@ felix.test.test_config
 Top level tests for Felix configuration.
 """
 
-from collections import namedtuple
 import logging
 import re
 import mock

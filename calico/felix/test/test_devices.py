@@ -20,7 +20,6 @@ Test the device handling code.
 """
 import logging
 import mock
-import os
 import sys
 import uuid
 from contextlib import nested
