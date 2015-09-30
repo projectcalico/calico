@@ -567,7 +567,8 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
         # Register for felix uptime updates.
         self.register_path(FELIX_STATUS_DIR + "/<hostname>/status",
-                           on_set=self._on_status_set)
+                           on_set=self._on_status_set,
+                           on_del=self._on_status_del)
         # Register for per-port status updates.
         self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload/openstack/"
                                               "<workload>/endpoint/<endpoint>",
