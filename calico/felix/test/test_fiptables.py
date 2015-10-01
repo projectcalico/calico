@@ -175,6 +175,7 @@ class TestIptablesUpdater(BaseTestCase):
 
         # IptablesUpdater hears about some chains before the cleanup.  These
         # partially overlap with the ones that are already there.
+        self.ipt._load_chain_names_from_iptables(async=True)
         self.ipt.rewrite_chains(
             {"felix-foo": ["--append felix-foo --jump felix-bar",
                            "--append felix-foo --jump felix-baz",
@@ -232,6 +233,56 @@ class TestIptablesUpdater(BaseTestCase):
             "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
             # felix-biff deleted, even though it was referenced by felix-baz
             # before.
+        })
+
+    def test_delete_during_grace_period(self):
+        """
+        Test explicit deletion of a referenced chain during the grace period.
+
+        The chain _should_ be stubbed out.
+        """
+        # Simulate a felix restart where the chains we're about to manipulate
+        # already exist.
+        self.stub.apply_iptables_restore("""
+        *filter
+        # These are left-over felix chains.  Some depend on each other.  They
+        # can only be cleaned up in the correct order.
+        :felix-foo - [0:0]
+        :felix-bar -
+        :felix-baz -
+        --append felix-foo --src 10.0.0.1/32 --jump felix-bar
+        --append felix-bar --src 10.0.0.2/32 --jump DROP
+        --append felix-baz --src 10.0.0.3/32 --jump DROP
+        """.splitlines())
+        self.ipt._load_chain_names_from_iptables(async=True)
+
+        # IptablesUpdater hears about all the chains before the cleanup.
+        # Chains have dependencies.
+        self.ipt.rewrite_chains(
+            {"felix-foo": ["--append felix-foo --jump felix-bar",],
+             "felix-bar": ["--append felix-bar --jump ACCEPT"],
+             "felix-baz": ["--append felix-baz --jump ACCEPT"]},
+            {"felix-foo": set(["felix-bar"]),
+             "felix-bar": set(),
+             "felix-baz": set()},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+
+        # Dataplane should now have all the new chains in place.
+        self.stub.assert_chain_contents({
+            "felix-foo": ["--append felix-foo --jump felix-bar"],
+            "felix-bar": ["--append felix-bar --jump ACCEPT"],
+            "felix-baz": ["--append felix-baz --jump ACCEPT"],
+        })
+
+        # Then delete bar and baz.  The former should be stubbed because it
+        # is required by chain foo.  The latter should be deleted.
+        self.ipt.delete_chains(["felix-bar", "felix-baz"], async=True)
+        self.step_actor(self.ipt)
+        self.stub.assert_chain_contents({
+            "felix-foo": ["--append felix-foo --jump felix-bar"],
+            "felix-bar": [MISSING_CHAIN_DROP % "felix-bar"],
         })
 
     def test_cleanup_bad_read_back(self):

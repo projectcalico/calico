@@ -612,30 +612,41 @@ class IptablesUpdater(Actor):
         #
         # The chains are created if they don't exist.
         input_lines = []
-        affected_chains = self._txn.affected_chains
-        for chain in affected_chains:
-            if (self._grace_period_finished or
-                    chain not in self._chains_in_dataplane or
-                    chain not in self._txn.chains_to_stub_out):
-                # We're going to rewrite or delete this chain below, mark it
-                # for creation/flush.
-                input_lines.append(":%s -" % chain)
+        # Track the chains that we decide we need to touch so that we can
+        # prepend the appropriate iptables header for each chain.
+        modified_chains = set()
+        # Generate rules to stub out chains.  We stub chains out if they're
+        # referenced by another chain but they're not present for some reason.
         for chain in self._txn.chains_to_stub_out:
             if (self._grace_period_finished or
+                    chain in self._txn.explicit_deletes or
                     chain not in self._chains_in_dataplane):
-                # After graceful restart completes, we stub out all chains;
-                # during the graceful restart, we reuse any existing chains
-                # that happen to be there.
+                # During graceful restart, we only stub out chains if
+                # * the chain is genuinely missing from the dataplane, or
+                # * we were told to delete the chain explicitly (but decided
+                #   we couldn't because it was still referenced), implying
+                #   that we now know the state of that chain and we should not
+                #   wait for the end of graceful restart to clean it up.
+                modified_chains.add(chain)
                 input_lines.extend(_stub_drop_rules(chain))
+
+        # Generate rules to stub out chains that we're about to delete, just
+        # in case the delete fails later on.  Stubbing it out also stops it
+        # from referencing other chains, accidentally keeping them alive.
         for chain in self._txn.chains_to_delete:
-            # Explicitly told to delete this chain.  Rather than delete it
-            # outright, we stub it out first.  Then, if the delete fails
-            # due to the chain still being referenced, at least the chain is
-            # "safe".  Stubbing it out also stops it from referencing other
-            # chains, accidentally keeping them alive.
+            modified_chains.add(chain)
             input_lines.extend(_stub_drop_rules(chain))
+
+        # Now add the actual chain updates.
         for chain, chain_updates in self._txn.updates.iteritems():
+            modified_chains.add(chain)
             input_lines.extend(chain_updates)
+
+        # Finally, prepend the input with instructions that do an idempotent
+        # create-and-flush operation for the chains that we need to create or
+        # rewrite.
+        input_lines[:0] = [":%s -" % chain for chain in modified_chains]
+
         if not input_lines:
             raise NothingToDo
         return ["*%s" % self.table] + input_lines + ["COMMIT"]
@@ -769,7 +780,7 @@ class _Transaction(object):
 
         # Deltas.
         self.updates = {}
-        self._deletes = set()
+        self.explicit_deletes = set()
 
         # New state.  These will be copied back to the IptablesUpdater
         # if the transaction succeeds.
@@ -796,7 +807,7 @@ class _Transaction(object):
         # Clean up dependency index.
         self._update_deps(chain, set())
         # Mark for deletion.
-        self._deletes.add(chain)
+        self.explicit_deletes.add(chain)
         # Remove any now-stale rewrite state.
         self.updates.pop(chain, None)
         self.prog_chains.pop(chain, None)
@@ -814,7 +825,7 @@ class _Transaction(object):
         # Clean up reverse dependency index.
         self._update_deps(chain, dependencies)
         # Remove any deletion, if present.
-        self._deletes.discard(chain)
+        self.explicit_deletes.discard(chain)
         # Store off the update.
         self.updates[chain] = updates
         self.prog_chains[chain] = updates
@@ -898,7 +909,7 @@ class _Transaction(object):
         """
         if self._chains_to_delete is None:
             # We'd like to get rid of these chains if we can.
-            chains_we_dont_want = self._deletes | self.already_stubbed
+            chains_we_dont_want = self.explicit_deletes | self.already_stubbed
             _log.debug("Chains we'd like to delete: %s", chains_we_dont_want)
             # But we need to keep the chains that are explicitly programmed
             # or referenced.
