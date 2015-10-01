@@ -668,7 +668,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
         Called when Felix's status key expires.  Implies felix is dead.
         """
         LOG.error("Felix on host %s failed to check in.  Marking the "
-                  "ports it was managing as in-error.")
+                  "ports it was managing as in-error.", hostname)
         for endpoint_id in self._endpoints_by_host[hostname]:
             # Flag all the ports as being in error.  They're no longer
             # receiving security updates.
