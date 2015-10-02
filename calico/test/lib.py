@@ -76,6 +76,28 @@ port3 = {'binding:vif_type': 'tap',
          'status': 'ACTIVE'}
 
 
+class EtcdException(Exception):
+    pass
+
+
+class EtcdKeyNotFound(EtcdException):
+    pass
+
+
+class EtcdClusterIdChanged(EtcdException):
+    pass
+
+
+class EtcdEventIndexCleared(EtcdException):
+    pass
+
+
+m_etcd.EtcdException = EtcdException
+m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
+m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
+m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
+
+
 # Define a stub class, that we will use as the base class for
 # CalicoMechanismDriver.
 class DriverBase(object):

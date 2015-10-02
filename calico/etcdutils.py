@@ -3,7 +3,6 @@
 import logging
 import re
 import etcd
-from etcd import EtcdConnectionFailed
 from socket import timeout as SocketTimeout
 import time
 
@@ -168,6 +167,7 @@ class EtcdWatcher(EtcdClientOwner):
                 # so the stack trace would just add log spam.
                 _log.error("Unexpected IO or etcd error, triggering "
                            "resync with etcd: %r.", e)
+                time.sleep(1)  # Prevent tight loop due to unexpected error.
         _log.info("%s.loop() stopped due to self.stop == True", self)
 
     def register_path(self, *args, **kwargs):
@@ -207,7 +207,19 @@ class EtcdWatcher(EtcdClientOwner):
 
         :return: The etcd response object.
         """
-        initial_dump = self.client.read(self.key_to_poll, recursive=True)
+        initial_dump = None
+        while not initial_dump:
+            try:
+                initial_dump = self.client.read(self.key_to_poll,
+                                                recursive=True)
+            except etcd.EtcdKeyNotFound:
+                # Avoid tight-loop if the whole directory doesn't exist yet.
+                if self._stopped:
+                    _log.info("Stopped: aborting load of initial dump.")
+                    raise
+                _log.info("Waiting for etcd directory '%s' to exist...",
+                          self.key_to_poll)
+                time.sleep(1)
 
         # The etcd_index is the high-water-mark for the snapshot, record that
         # we want to poll starting at the next index.
@@ -243,7 +255,7 @@ class EtcdWatcher(EtcdClientOwner):
                                             timeout=Timeout(connect=10,
                                                             read=90))
                 _log.debug("etcd response: %r", response)
-            except EtcdConnectionFailed as e:
+            except etcd.EtcdConnectionFailed as e:
                 if isinstance(e.cause, (ReadTimeoutError, SocketTimeout)):
                     # This is expected when we're doing a poll and nothing
                     # happened. socket timeout doesn't seem to be caught by

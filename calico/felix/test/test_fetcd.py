@@ -138,7 +138,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.watcher = _FelixEtcdWatcher(self.m_config, self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
-        self.client = Mock(spec=etcd.Client)
+        self.client = Mock()
         self.watcher.client = self.client
 
     @patch("gevent.sleep", autospec=True)
