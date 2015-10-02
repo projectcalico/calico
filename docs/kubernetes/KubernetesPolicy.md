@@ -3,7 +3,7 @@ The [Calico Kubernetes plugin](https://github.com/projectcalico/calico-docker/bl
 
 ## Prerequisites
 * A Kubernetes Deployment
-    - To implement service policy, you will need a build of Kubernetes after [`kubernetes/kubernetes@b8dc963`](https://github.com/kubernetes/kubernetes/commit/b8dc963512326bcf7186026830b0dcbceecbcc80).
+    - To implement service policy, you will need a build of the Kubernetes `kube-proxy` after [`kubernetes/kubernetes@c45747b`](https://github.com/kubernetes/kubernetes/commit/c45747bfad303c99c202e33ce8d470a1d2d4fcc4).
     - Make sure you have configured your kube-proxy using the `--legacy-userspace-proxy=false` option.
 * [v0.1.0+](https://github.com/projectcalico/calico-kubernetes/releases) of the Calico Kubernetes Plugin
     - For more information on how to integrate Calico into your Kubernetes Deployment, view our [integration doc](KubernetesIntegration.md).
