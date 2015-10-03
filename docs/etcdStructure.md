@@ -129,7 +129,7 @@ where each entry in the inbound/outbound list is a rule object:
 The IP pool configuration stored at
 
         /calico/v1/ipam/v4/pool/<CIDR> and
-        /calico/v1/ipma/v6/pool/<CIDR>
+        /calico/v1/ipam/v6/pool/<CIDR>
 
 is a JSON blob in this form:
 
@@ -172,14 +172,18 @@ specific to the host.
 The configuration for the global BGP peers is stored at
 
 	/calico/v1/config/bgp_peer_v4/<BGP peer IPv4 address>
+
 and
+
 	/calico/v1/config/bgp_peer_v6/<BGP peer IPv6 address>
 
 
 The configuration for the host node specific BGP peers is stored at
 
 	/calico/v1/host/<hostname>/bgp_peer_v4/<BGP peer IPv4 address>
+
 and
+
 	/calico/v1/host/<hostname>/bgp_peer_v6/<BGP peer IPv6 address>
 
 In all cases, the data is a JSON blob in the form:
