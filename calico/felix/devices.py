@@ -417,11 +417,14 @@ class InterfaceWatcher(Actor):
                         _log.debug("IFLA_OPERSTATE: %s", operstate)
 
                 if (ifname and
-                    ifname in if_last_flags and
-                    (msg_type == RTM_DELLINK or operstate != IF_OPER_UP)):
+                        ifname in if_last_flags and
+                        (msg_type == RTM_DELLINK or operstate != IF_OPER_UP)):
                     # An interface that we've previously signalled is
                     # being deleted or oper down, so remove our record
                     # of it.
+                    self.update_splitter.on_interface_update(ifname,
+                                                             iface_up=False,
+                                                             async=True)
                     del if_last_flags[ifname]
 
                 if (ifname and
@@ -438,6 +441,7 @@ class InterfaceWatcher(Actor):
                     _log.debug("New network interface : %s %x", ifname, flags)
                     if_last_flags[ifname] = flags
                     self.update_splitter.on_interface_update(ifname,
+                                                             iface_up=True,
                                                              async=True)
 
 

@@ -151,7 +151,7 @@ class EndpointManager(ReferenceManager):
                 self.get_and_incref(endpoint_id)
 
     @actor_message()
-    def on_interface_update(self, name):
+    def on_interface_update(self, name, iface_up):
         """
         Called when an interface is created or changes state.
 
@@ -169,7 +169,7 @@ class EndpointManager(ReferenceManager):
             if self._is_starting_or_live(endpoint_id):
                 # LocalEndpoint is running, so tell it about the change.
                 ep = self.objects_by_id[endpoint_id]
-                ep.on_interface_update(async=True)
+                ep.on_interface_update(iface_up, async=True)
 
 
 class LocalEndpoint(RefCountedActor):
@@ -220,6 +220,7 @@ class LocalEndpoint(RefCountedActor):
         # Track the success/failure of our dataplane programming.
         self._iptables_in_sync = False
         self._device_in_sync = False
+        self._device_is_up = None  # Unknown
         self._device_has_been_in_sync = False
         self._last_status = None
 
@@ -252,15 +253,17 @@ class LocalEndpoint(RefCountedActor):
             self._device_in_sync = False
 
     @actor_message()
-    def on_interface_update(self):
+    def on_interface_update(self, iface_up):
         """
         Actor event to report that the interface is either up or changed.
         """
-        _log.info("Endpoint %s received interface kick", self.combined_id)
+        _log.info("Endpoint %s received interface kick: %s",
+                  self.combined_id, iface_up)
 
         # Use a flag so that we coalesce any duplicate updates in
         # _finish_msg_batch.
         self._device_in_sync = False
+        self._device_is_up = iface_up
 
     @actor_message()
     def on_unreferenced(self):
@@ -285,12 +288,14 @@ class LocalEndpoint(RefCountedActor):
                 (self, self.__dict__)
             )
 
+        self._missing_deps_at_start_of_batch = self._missing_deps
         if self._endpoint_update_pending:
             # Copy the pending update into our data structures.  May work out
             # that iptables or the device is now out of sync.
             _log.debug("Endpoint update pending: %s", self._pending_endpoint)
             self._apply_endpoint_update()
 
+        self._missing_deps = self._calculate_missing_deps()
         if not self._iptables_in_sync:
             # Try to update iptables, if successful, will set the
             # _iptables_in_sync flag.
@@ -300,13 +305,14 @@ class LocalEndpoint(RefCountedActor):
         if not self._device_in_sync and self._iface_name:
             # Try to update the device configuration.  If successful, will set
             # the _device_in_sync flag.
-            if self.endpoint:
+            if self.endpoint and not self._missing_deps:
                 # Endpoint is supposed to be live, try to configure it.
                 _log.debug("Device is out-of-sync, trying to configure it")
                 self._configure_interface()
             else:
                 # We've been deleted, de-configure the interface.
-                _log.debug("Device is out-of-sync, trying to de-configure it")
+                _log.debug("Device is out-of-sync, trying to de-configure it, "
+                           "missing deps: %s", self._missing_deps)
                 self._deconfigure_interface()
 
         if self._unreferenced:
@@ -340,11 +346,15 @@ class LocalEndpoint(RefCountedActor):
                            "before, assuming it's down.")
                 status = ENDPOINT_STATUS_DOWN
         elif self._iptables_in_sync:
-            # We're in-sync and we have all our dependencies, we're up.
-            _log.debug("In sync, with all dependencies, endpoint is up.")
-            status = ENDPOINT_STATUS_UP
+            # All our programming has succeeded, report the oper-state of the
+            # interface.
+            up = self._device_is_up and self.endpoint["state"] == "active"
+            status = ENDPOINT_STATUS_UP if up else ENDPOINT_STATUS_DOWN
+            _log.debug("In sync, with all dependencies, reporting endpoint "
+                       "oper status directly: %s", status)
         else:
-            # iptables out of sync, that is definitely and error.
+            # We have our dependencies but iptables out of sync, that is
+            # definitely and error.
             _log.warning("Failed to bring iptables into sync, endpoint is"
                          "in error.")
             status = ENDPOINT_STATUS_ERROR
@@ -392,6 +402,10 @@ class LocalEndpoint(RefCountedActor):
                 # First time through, need to program everything.
                 self._iptables_in_sync = False
                 self._device_in_sync = False
+                if self._device_is_up is None:
+                    _log.debug("Learned interface name, checking if device "
+                               "is up.")
+                    self._device_is_up = devices.interface_up(self._iface_name)
 
             # Check if the profile ID or IP addresses have changed, requiring
             # a refresh of the dataplane.
@@ -401,12 +415,21 @@ class LocalEndpoint(RefCountedActor):
                 # update.
                 _log.debug("Profile IDs changed, need to update iptables")
                 self._iptables_in_sync = False
-            if (self.endpoint and
-                    (self.endpoint[self.nets_key] !=
-                     pending_endpoint[self.nets_key])):
-                # IP addresses have changed, need to update the routing table.
-                _log.debug("IP addresses changed, need to update routing")
-                self._device_in_sync = False
+
+            # Check for changes to values that require a device update.
+            if self.endpoint:
+                if self.endpoint.get("state") != pending_endpoint.get("state"):
+                    _log.debug("Desired interface state updated.")
+                    self._device_in_sync = False
+                if (self.endpoint[self.nets_key] !=
+                        pending_endpoint[self.nets_key]):
+                    # IP addresses have changed, need to update the routing
+                    # table.
+                    _log.debug("IP addresses changed, need to update routing")
+                    self._device_in_sync = False
+
+            self._missing_deps = self._calculate_missing_deps()
+
         else:
             # Delete of the endpoint.  Need to resync everything.
             profile_ids = set()
@@ -428,8 +451,6 @@ class LocalEndpoint(RefCountedActor):
         missing_deps = []
         if not self.endpoint:
             missing_deps.append("endpoint")
-        elif self.endpoint.get("state", "active") != "active":
-            missing_deps.append("endpoint active")
         elif not self.endpoint.get("profile_ids"):
             missing_deps.append("profile")
         return missing_deps
@@ -438,15 +459,12 @@ class LocalEndpoint(RefCountedActor):
         """
         Update the relevant programming for this endpoint.
         """
-        old_missing_deps = self._missing_deps
-        self._missing_deps = self._calculate_missing_deps()
-
         if not self._missing_deps:
             # We have all the dependencies we need to do the programming and
             # the caller has already worked out that iptables needs refreshing.
             _log.info("%s became ready to program.", self)
             self._update_chains()
-        elif not old_missing_deps and self._missing_deps:
+        elif not self._missing_deps_at_start_of_batch and self._missing_deps:
             # We were active but now we're not, withdraw the dispatch rule
             # and our chain.  We must do this to allow iptables to remove
             # the profile chain when we're being deleted.
