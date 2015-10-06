@@ -370,6 +370,7 @@ class LocalEndpoint(RefCountedActor):
                 status_dict = {"status": status}
             self.status_reporter.on_endpoint_status_changed(
                 self.combined_id,
+                self.ip_type,
                 status_dict,
                 async=True,
             )

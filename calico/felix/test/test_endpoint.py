@@ -418,7 +418,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
-            combined_id, {'status': 'down'}, async=True
+            combined_id, futils.IPV4, {'status': 'down'}, async=True
         )
 
     def test_maybe_update_status_iptables_failure(self):
@@ -433,7 +433,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
-            combined_id, {'status': 'error'}, async=True
+            combined_id, futils.IPV4, {'status': 'error'}, async=True
         )
 
     def test_maybe_update_status_iptables_up(self):
@@ -450,7 +450,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
-            combined_id, {'status': 'up'}, async=True
+            combined_id, futils.IPV4, {'status': 'up'}, async=True
         )
 
     def test_maybe_update_status_iptables_unreferenced(self):
@@ -462,7 +462,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep.on_unreferenced(async=True)
         self.step_actor(local_ep)
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
-            combined_id, None, async=True
+            combined_id, futils.IPV4, None, async=True
         )
 
 

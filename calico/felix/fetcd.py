@@ -41,13 +41,14 @@ from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
                                  HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE,
                                  key_for_last_status, key_for_status,
                                  FELIX_STATUS_DIR, get_endpoint_id_from_key,
-                                 dir_for_felix_status)
+                                 dir_for_felix_status, ENDPOINT_STATUS_ERROR,
+                                 ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP)
 from calico.etcdutils import (
     EtcdClientOwner, EtcdWatcher, ResyncRequired,
     delete_empty_parents)
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
-                                 iso_utc_timestamp)
+                                 iso_utc_timestamp, IPV4, IPV6)
 
 _log = logging.getLogger(__name__)
 
@@ -705,7 +706,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
     def __init__(self, config):
         super(EtcdStatusReporter, self).__init__(config.ETCD_ADDR)
         self._config = config
-        self._endpoint_status = {}
+        self._endpoint_status = {IPV4: {}, IPV6: {}}
 
         # Two sets of dirty endpoints. The "older" set is the set of dirty
         # endpoints that the actor is updating. The "newer" set is the set of
@@ -719,11 +720,11 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         self._reporting_allowed = True
 
     @actor_message()
-    def on_endpoint_status_changed(self, endpoint_id, status):
+    def on_endpoint_status_changed(self, endpoint_id, ip_type, status):
         if status is not None:
-            self._endpoint_status[endpoint_id] = status
+            self._endpoint_status[ip_type][endpoint_id] = status
         else:
-            self._endpoint_status.pop(endpoint_id, None)
+            self._endpoint_status[ip_type].pop(endpoint_id, None)
         self._mark_endpoint_dirty(endpoint_id)
 
     @actor_message()
@@ -759,7 +760,8 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         if not self._config.REPORT_ENDPOINT_STATUS:
             _log.error("StatusReporter called even though status reporting "
                        "disabled.  Ignoring.")
-            self._endpoint_status = {}
+            self._endpoint_status[IPV4].clear()
+            self._endpoint_status[IPV6].clear()
             self._newer_dirty_endpoints.clear()
             self._older_dirty_endpoints.clear()
             return
@@ -773,7 +775,9 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
                 self._newer_dirty_endpoints = set()
             if self._older_dirty_endpoints:
                 ep_id = self._older_dirty_endpoints.pop()
-                status = self._endpoint_status.get(ep_id)
+                status_v4 = self._endpoint_status[IPV4].get(ep_id)
+                status_v6 = self._endpoint_status[IPV6].get(ep_id)
+                status = combine_statuses(status_v4, status_v6)
                 try:
                     self._write_endpoint_status_to_etcd(ep_id, status)
                 except EtcdException:
@@ -818,6 +822,27 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
                 status_key.rsplit("/", 1)[0],  # Snip off final path segment.
                 dir_for_felix_status(self._config.HOSTNAME)
             )
+
+
+def combine_statuses(status_a, status_b):
+    """
+    Combines a pair of status reports for the same interface.
+
+    If one status is None, the other is returned.  Otherwise, the worst
+    status wins.
+    """
+    if not status_a:
+        return status_b
+    if not status_b:
+        return status_a
+    a = status_a["status"]
+    b = status_b["status"]
+    if a == ENDPOINT_STATUS_ERROR or b == ENDPOINT_STATUS_ERROR:
+        return {"status": ENDPOINT_STATUS_ERROR}
+    elif a == ENDPOINT_STATUS_DOWN or b == ENDPOINT_STATUS_DOWN:
+        return {"status": ENDPOINT_STATUS_DOWN}
+    else:
+        return {"status": ENDPOINT_STATUS_UP}
 
 
 def die_and_restart():

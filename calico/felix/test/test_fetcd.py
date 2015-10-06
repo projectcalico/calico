@@ -23,9 +23,10 @@ from mock import Mock, call, patch, ANY
 
 from calico.datamodel_v1 import EndpointId
 from calico.felix.config import Config
+from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
 from calico.felix.fetcd import (_FelixEtcdWatcher, ResyncRequired, EtcdAPI,
-    die_and_restart, EtcdStatusReporter)
+    die_and_restart, EtcdStatusReporter, combine_statuses)
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase, JSONString
 
@@ -654,12 +655,13 @@ class TestEtcdStatusReporter(BaseTestCase):
         # Send in an endpoint status update.
         endpoint_id = EndpointId("foo", "bar", "baz", "biff")
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
-            self.rep.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+            self.rep.on_endpoint_status_changed(endpoint_id, IPV4,
+                                                {"status": "up"},
                                                 async=True)
             self.step_actor(self.rep)
         # Should record the status.
         self.assertEqual(
-            self.rep._endpoint_status,
+            self.rep._endpoint_status[IPV4],
             {
                 endpoint_id: {"status": "up"}
             }
@@ -682,6 +684,7 @@ class TestEtcdStatusReporter(BaseTestCase):
         self.m_client.reset_mock()
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
             self.rep.on_endpoint_status_changed(endpoint_id,
+                                                IPV4,
                                                 None,
                                                 async=True)
             self.step_actor(self.rep)
@@ -721,7 +724,7 @@ class TestEtcdStatusReporter(BaseTestCase):
         self.assertTrue(self.rep._timer_scheduled)
         self.assertFalse(self.rep._reporting_allowed)
         # Cache should be cleaned up.
-        self.assertEqual(self.rep._endpoint_status, {})
+        self.assertEqual(self.rep._endpoint_status[IPV4], {})
         # Nothing queued.
         self.assertEqual(self.rep._newer_dirty_endpoints, set())
         self.assertEqual(self.rep._older_dirty_endpoints, set())
@@ -731,7 +734,9 @@ class TestEtcdStatusReporter(BaseTestCase):
         endpoint_id = EndpointId("foo", "bar", "baz", "biff")
         self.m_client.set.side_effect = EtcdException()
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
-            self.rep.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+            self.rep.on_endpoint_status_changed(endpoint_id,
+                                                IPV4,
+                                                {"status": "up"},
                                                 async=True)
             self.step_actor(self.rep)
         # Should do the write.
@@ -749,11 +754,60 @@ class TestEtcdStatusReporter(BaseTestCase):
         endpoint_id = EndpointId("foo", "bar", "baz", "biff")
 
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
-            self.rep.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+            self.rep.on_endpoint_status_changed(endpoint_id,
+                                                IPV4,
+                                                {"status": "up"},
                                                 async=True)
             self.step_actor(self.rep)
         self.assertFalse(m_spawn.called)
-        self.assertEqual(self.rep._endpoint_status, {})
+        self.assertEqual(self.rep._endpoint_status[IPV4], {})
         # Nothing queued.
         self.assertEqual(self.rep._newer_dirty_endpoints, set())
         self.assertEqual(self.rep._older_dirty_endpoints, set())
+
+    def test_on_endpoint_status_v4_v6(self):
+        # Send in endpoint status updates for v4 and v6.
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id, IPV4,
+                                                {"status": "up"},
+                                                async=True)
+            self.rep.on_endpoint_status_changed(endpoint_id, IPV6,
+                                                {"status": "down"},
+                                                async=True)
+            self.step_actor(self.rep)
+        # Should record the status.
+        self.assertEqual(
+            self.rep._endpoint_status,
+            {
+                IPV4: {endpoint_id: {"status": "up"}},
+                IPV6: {endpoint_id: {"status": "down"}},
+            }
+        )
+        # And do a write.
+        self.assertEqual(
+            self.m_client.set.mock_calls,
+            [call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff",
+                  JSONString({"status": "down"}))]
+        )
+
+    def test_combine_statuses(self):
+        """
+        Test the "truth table" for combining status reports.
+        """
+        self.assert_combined_status(None, None, None)
+        self.assert_combined_status({"status": "up"}, None, {"status": "up"})
+        self.assert_combined_status({"status": "up"}, {"status": "up"},
+                                    {"status": "up"})
+        self.assert_combined_status({"status": "down"}, {"status": "up"},
+                                    {"status": "down"})
+        self.assert_combined_status({"status": "error"}, {"status": "up"},
+                                    {"status": "error"})
+
+    def assert_combined_status(self, a, b, expected):
+        # Should be symmetric so check the arguments both ways round.
+        for lhs, rhs in [(a, b), (b, a)]:
+            result = combine_statuses(lhs, rhs)
+            self.assertEqual(result, expected,
+                             "Expected %r and %r to combine to %s but got %r" %
+                             (lhs, rhs, expected, result))
