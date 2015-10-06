@@ -103,6 +103,7 @@ import gevent
 import gevent.local
 import logging
 import os
+import random
 import sys
 import traceback
 import weakref
@@ -395,7 +396,8 @@ def wait_and_check(async_results):
         r.get()
 
 
-next_message_id = 0
+# Start with a random offset to make the log easier to grep.
+next_message_id = random.randint(0, sys.maxint)
 
 
 class Message(object):
@@ -494,8 +496,11 @@ def actor_message(needs_own_batch=False):
             # Allocate a message ID.  We rely on there being no yield point
             # here for thread safety.
             global next_message_id
-            msg_id = next_message_id
-            next_message_id += 1
+            msg_id = "M%016x" % next_message_id
+            if next_message_id == sys.maxint:
+                next_message_id = 0
+            else:
+                next_message_id += 1
 
             if not on_same_greenlet and not async:
                 _stats.increment("Blocking calls started")

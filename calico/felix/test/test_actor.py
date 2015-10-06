@@ -22,7 +22,7 @@ Tests of the Actor framework.
 import logging
 import itertools
 import gc
-from contextlib import nested
+import sys
 
 from gevent.event import AsyncResult
 import mock
@@ -210,6 +210,23 @@ class TestActor(BaseTestCase):
 
     def test_wait_and_check_no_input(self):
         actor.wait_and_check([])
+
+    def test_wrap_msg_id(self):
+        with mock.patch("calico.felix.actor.next_message_id"):
+            with mock.patch("calico.felix.actor.Message", autospec=True) as m_msg:
+                actor.next_message_id = sys.maxint
+                self._actor.do_a(async=True)
+                self._actor.do_a(async=True)
+
+        self.assertEqual(
+            [c for c in m_msg.mock_calls if c[0] == ""],
+            [
+                mock.call("M" + hex(sys.maxint)[2:], mock.ANY, mock.ANY,
+                          mock.ANY, mock.ANY, needs_own_batch=mock.ANY),
+                mock.call("M0000000000000000", mock.ANY, mock.ANY,
+                          mock.ANY, mock.ANY, needs_own_batch=mock.ANY),
+            ]
+        )
 
 
 class TestExceptionTracking(BaseTestCase):
