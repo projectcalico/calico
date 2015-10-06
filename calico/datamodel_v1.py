@@ -65,7 +65,8 @@ RULES_KEY_RE = re.compile(
 # "profile_id".
 TAGS_KEY_RE = re.compile(
     r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/tags')
-# Regex to match endpoints, captures "hostname" and "endpoint_id".
+# Regex to match endpoints, captures "hostname" and "endpoint_id".  Works for
+# endpoint configuration and endpoint status paths.
 ENDPOINT_KEY_RE = re.compile(
     r'^(?:' + HOST_DIR + r'|' + FELIX_STATUS_DIR + r')'
     r'/(?P<hostname>[^/]+)/'
