@@ -48,16 +48,21 @@ class TestDevices(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_check_kernel_config(self):
+    def test_configure_global_kernel_config(self):
         with mock.patch("calico.felix.devices._read_proc_sys",
                         autospec=True, return_value="1") as m_read_proc_sys:
-            devices.check_kernel_config()
+            with mock.patch("calico.felix.devices._write_proc_sys",
+                            autospec=True) as m_write_proc_sys:
+                devices.configure_global_kernel_config()
+        m_write_proc_sys.assert_called_once_with(
+            "/proc/sys/net/ipv4/conf/default/rp_filter", "1"
+        )
 
-    def test_check_kernel_config_bad_rp_filter(self):
+    def test_configure_global_kernel_config_bad_rp_filter(self):
         with mock.patch("calico.felix.devices._read_proc_sys",
                         autospec=True, return_value="2") as m_read_proc_sys:
             self.assertRaises(devices.BadKernelConfig,
-                              devices.check_kernel_config)
+                              devices.configure_global_kernel_config)
 
     def test_read_proc_sys(self):
         m_open = mock.mock_open(read_data="1\n")

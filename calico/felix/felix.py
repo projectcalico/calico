@@ -66,8 +66,9 @@ def _main_greenlet(config):
         config_loaded = etcd_api.load_config(async=False)
         config_loaded.wait()
 
-        # Check for any incorrect kernel configuration that would break Calico.
-        devices.check_kernel_config()
+        # Ensure the Kernel's global options are correctly configured for
+        # Calico.
+        devices.configure_global_kernel_config()
 
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")

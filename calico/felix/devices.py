@@ -33,18 +33,34 @@ from calico.felix.futils import FailedSystemCall
 _log = logging.getLogger(__name__)
 
 
-def check_kernel_config():
+def configure_global_kernel_config():
     """
-    Checks the kernel configuration for problems that would break our
-    security guarantees, for example.
+    Configures the global kernel config.  In particular, sets the flags
+    that we rely on to ensure security, such as the kernel's RPF check.
 
     :raises BadKernelConfig if a problem is detected.
     """
 
-    # To prevent workloads from spoofing their IP addresses, we need to set the
-    # per-interface rp_filter setting to 1, which enables strict RPF checking.
-    # Verify that the kernel's global setting won't override our per-interface
-    # setting with an insecure value.
+    # For IPv4, we rely on the kernel's reverse path filtering to prevent
+    # workloads from spoofing their IP addresses.
+    #
+    # The RPF check for a particular interface is controlled by several
+    # sysctls:
+    #
+    # - ipv4.conf.all.rp_filter is a global override
+    # - ipv4.conf.default.rp_filter controls the value that is set on a newly
+    #   created interface
+    # - ipv4.conf.<interface>.rp_filter controls a particular interface.
+    #
+    # The algorithm for combining the global override and per-interface values
+    # is to take the *numeric* maximum between the two.  The values are:
+    # 0=off, 1=strict, 2=loose.  "loose" is not suitable for Calico since it
+    # would allow workloads to spoof packets from other workloads on the same
+    # host.  Hence, we need the global override to be <=1 or it would override
+    # the per-interface setting to "strict" that we require.
+    #
+    # We bail out rather than simply setting it because setting 2, "loose",
+    # is unusual and it is likely to have been set deliberately.
     ps_name = "/proc/sys/net/ipv4/conf/all/rp_filter"
     rp_filter = int(_read_proc_sys(ps_name))
     if rp_filter > 1:
@@ -53,6 +69,11 @@ def check_kernel_config():
                       "requires net.ipv4.conf.all.rp_filter to be set to "
                       "0 or 1.")
         raise BadKernelConfig("net.ipv4.conf.all.rp_filter set to 'loose'")
+
+    # Make sure the default for new interfaces is set to strict checking so
+    # that there's no race when a new interface is added and felix hasn't
+    # configured it yet.
+    _write_proc_sys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
 
 
 def interface_exists(interface):
