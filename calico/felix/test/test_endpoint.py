@@ -21,7 +21,7 @@ Tests of endpoint module.
 from contextlib import nested
 import logging
 from calico.felix.endpoint import EndpointManager
-from calico.felix.fetcd import EtcdAPI
+from calico.felix.fetcd import EtcdAPI, EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.futils import FailedSystemCall
@@ -50,7 +50,7 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_dispatch_chains = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_manager = Mock(spec=EndpointManager)
-        self.m_etcd_api = Mock(spec=EtcdAPI)
+        self.m_status_rep = Mock(spec=EtcdStatusReporter)
 
     def get_local_endpoint(self, combined_id, ip_type):
         local_endpoint = endpoint.LocalEndpoint(self.m_config,
@@ -59,7 +59,7 @@ class TestLocalEndpoint(BaseTestCase):
                                                 self.m_iptables_updater,
                                                 self.m_dispatch_chains,
                                                 self.m_rules_mgr,
-                                                self.m_etcd_api)
+                                                self.m_status_rep)
         local_endpoint._manager = self.m_manager
         return local_endpoint
 
@@ -417,7 +417,7 @@ class TestLocalEndpoint(BaseTestCase):
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep._maybe_update_status()
-        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+        self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, {'status': 'down'}, async=True
         )
 
@@ -432,7 +432,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._device_in_sync = True
         local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
-        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+        self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, {'status': 'error'}, async=True
         )
 
@@ -449,7 +449,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._device_in_sync = True
         local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
-        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+        self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, {'status': 'up'}, async=True
         )
 
@@ -461,7 +461,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.on_unreferenced(async=True)
         self.step_actor(local_ep)
-        self.m_etcd_api.on_endpoint_status_changed.assert_called_once_with(
+        self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, None, async=True
         )
 

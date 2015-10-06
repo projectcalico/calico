@@ -31,7 +31,6 @@ from etcd import EtcdException, EtcdKeyNotFound
 import gevent
 import sys
 from gevent.event import Event
-from gevent.lock import Semaphore
 
 from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
@@ -108,9 +107,15 @@ class EtcdAPI(EtcdClientOwner, Actor):
         # in order to report uptime to etcd.
         self._start_time = monotonic_time()
 
+        # Create an Actor to report per-endpoint status into etcd.
+        self.status_reporter = EtcdStatusReporter(config)
+
         # Start up the main etcd-watching greenlet.  It will wait for an
         # event from us before doing anything.
-        self._watcher = _FelixEtcdWatcher(config, self, hosts_ipset)
+        self._watcher = _FelixEtcdWatcher(config,
+                                          self,
+                                          self.status_reporter,
+                                          hosts_ipset)
         self._watcher.link(self._on_worker_died)
         self._watcher.start()
 
@@ -125,17 +130,9 @@ class EtcdAPI(EtcdClientOwner, Actor):
         )
         self._status_reporting_greenlet.link_exception(self._on_worker_died)
 
-        # Start up a greenlet to report per-endpoint status into etcd.
-        self._endpoint_status = {}
-        self._dirty_endpoints = set()
-        self._endpoint_status_lock = Semaphore()
-        self._endpoint_status_work_to_do = Event()
-        self._per_endpoint_reporting_greenlet = gevent.spawn(
-            self._report_endpoint_status
-        )
-        self._per_endpoint_reporting_greenlet.link_exception(
-            self._on_worker_died
-        )
+        # Start the status reporter.
+        self.status_reporter.start()
+        self.status_reporter.greenlet.link(self._on_worker_died)
 
     @logging_exceptions
     def _periodically_resync(self):
@@ -190,75 +187,6 @@ class EtcdAPI(EtcdClientOwner, Actor):
                 jitter = random.random() * 0.1 * interval
                 sleep_time = interval + jitter
                 gevent.sleep(sleep_time)
-
-    @logging_exceptions
-    def _report_endpoint_status(self):
-        _log.info("Started per-endpoint status reporting thread. Waiting for "
-                  "config.")
-        self._watcher.configured.wait()
-        if not self._config.REPORT_ENDPOINT_STATUS:
-            _log.info("Endpoint status reporting disabled.")
-            return
-        while True:
-            # Wait for some work to do, then clear the flag ready for next
-            # time.  There is no race here with someone else setting the flag
-            # again because the flag is only set after the shared data
-            # structure is updated and we don't read it until after we've
-            # cleared the flag.
-            self._endpoint_status_work_to_do.wait()
-            self._endpoint_status_work_to_do.clear()
-            with self._endpoint_status_lock:
-                # This lock is probably not required in gevent due to lack of
-                # yield points in this code.  It is required in normal python,
-                # since, otherwise, _mark_endpoint_dirty could dereference
-                # self._dirty_endpoints, then get de-scheduled and
-                # subsequently write to the set after we start iterating over
-                # it.
-                dirty_endpoints = self._dirty_endpoints
-                self._dirty_endpoints = set()
-            for ep_id in dirty_endpoints:
-                status = self._endpoint_status.get(ep_id)
-                try:
-                    self.write_endpoint_status_to_etcd(ep_id, status)
-                except EtcdException:
-                    _log.error("Failed to report status for %s, will retry",
-                               ep_id)
-                    # Add it into the next dirty set.  Retrying in the next
-                    # batch ensures that we try to update all of the dirty
-                    # endpoints before we do any retries, ensuring fairness.
-                    self.mark_endpoint_dirty(ep_id)
-                # Rate-limit our writes, with jitter.
-                gevent.sleep(self._config.ENDPOINT_REPORT_DELAY *
-                             (0.9 + (random.random() * 0.2)))
-
-    def mark_endpoint_dirty(self, ep_id):
-        if not self._config.REPORT_ENDPOINT_STATUS:
-            _log.debug("Endpoint status reporting disabled, ignoring.")
-            return
-        _log.debug("Marking endpoint %s dirty, needs resync", ep_id)
-        with self._endpoint_status_lock:
-            self._dirty_endpoints.add(ep_id)
-            self._endpoint_status_work_to_do.set()
-
-    def write_endpoint_status_to_etcd(self, ep_id, status):
-        status_key = ep_id.path_for_status
-        if status:
-            _log.debug("Writing endpoint status %s = %s", ep_id, status)
-            self.client.set(status_key,
-                            json.dumps(status))
-        else:
-            _log.debug("Removing endpoint status %s", ep_id)
-            try:
-                self.client.delete(status_key)
-            except EtcdKeyNotFound:
-                _log.debug("Tried to delete %s but it was already gone",
-                           status_key)
-            # Clean up any now-empty parent directories.
-            delete_empty_parents(
-                self.client,
-                status_key.rsplit("/", 1)[0],  # Snip off final path segment.
-                dir_for_felix_status(self._config.HOSTNAME)
-            )
 
     def _update_felix_status(self, ttl):
         """
@@ -321,26 +249,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         if self._config.REPORT_ENDPOINT_STATUS:
             _log.info("Endpoint status reporting enabled, marking existing "
                       "endpoints as dirty so they'll be resynced.")
-            ep_ids = self._endpoint_status.keys()  # Avoid race with update.
-            for ep_id in ep_ids:
-                self.mark_endpoint_dirty(ep_id)
-
-    @actor_message()
-    def on_endpoint_status_changed(self, endpoint_id, status):
-        if not self._config.REPORT_ENDPOINT_STATUS:
-            _log.debug("Endpoint status reporting disabled, ignoring report.")
-            return
-        # We directly update the shared data-structure, which is safe as long
-        # as the reporting thread only does exact reads (and not iteration,
-        # say).
-        if status:
-            _log.debug("Endpoint status %s now %s", endpoint_id, status)
-            self._endpoint_status[endpoint_id] = status
-        else:
-            _log.debug("Removing endpoint status %s", endpoint_id)
-            self._endpoint_status.pop(endpoint_id, None)
-        # Then we wake up the reporting thread.
-        self.mark_endpoint_dirty(endpoint_id)
+            self.status_reporter.resync(async=True)
 
     def _on_worker_died(self, watch_greenlet):
         """
@@ -369,10 +278,11 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
     This greenlet is expected to be managed by the EtcdAPI Actor.
     """
 
-    def __init__(self, config, etcd_api, hosts_ipset):
+    def __init__(self, config, etcd_api, status_reporter, hosts_ipset):
         super(_FelixEtcdWatcher, self).__init__(config.ETCD_ADDR, VERSION_DIR)
         self._config = config
         self._etcd_api = etcd_api
+        self._status_reporter = status_reporter
         self.hosts_ipset = hosts_ipset
 
         # Keep track of the config loaded from etcd so we can spot if it
@@ -628,7 +538,8 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                     _log.debug("Endpoint %s removed by resync, marking "
                                "status key for cleanup",
                                combined_id)
-                    self._etcd_api.mark_endpoint_dirty(combined_id)
+                    self._status_reporter.mark_endpoint_dirty(combined_id,
+                                                              async=True)
                 elif node.dir:
                     # This leaf is an empty directory, try to clean it up.
                     # This is safe even if another thread is adding keys back
@@ -783,6 +694,130 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 self.endpoint_ids_per_host[hostname].discard(endpoint_id)
         if not self.endpoint_ids_per_host[hostname]:
             del self.endpoint_ids_per_host[hostname]
+
+
+class EtcdStatusReporter(EtcdClientOwner, Actor):
+    """
+    Actor that manages and rate-limits the queue of status reports to
+    etcd.
+    """
+
+    def __init__(self, config):
+        super(EtcdStatusReporter, self).__init__(config.ETCD_ADDR)
+        self._config = config
+        self._endpoint_status = {}
+
+        # Two sets of dirty endpoints. The "older" set is the set of dirty
+        # endpoints that the actor is updating. The "newer" set is the set of
+        # dirty endpoints that should be done afterwards, and is kept
+        # separate to avoid pathological conditions where the actor never
+        # finishes the set.
+        self._newer_dirty_endpoints = set()
+        self._older_dirty_endpoints = set()
+
+        self._timer_scheduled = False
+        self._reporting_allowed = True
+
+    @actor_message()
+    def on_endpoint_status_changed(self, endpoint_id, status):
+        if status is not None:
+            self._endpoint_status[endpoint_id] = status
+        else:
+            self._endpoint_status.pop(endpoint_id, None)
+        self._mark_endpoint_dirty(endpoint_id)
+
+    @actor_message()
+    def resync(self):
+        """
+        Triggers a rewrite of all endpoint statuses.
+        """
+        for ep_id in self._endpoint_status.iterkeys():
+            self._mark_endpoint_dirty(ep_id)
+
+    @actor_message()
+    def _on_timer_pop(self):
+        _log.debug("Timer popped, uncorking rate limit")
+        self._timer_scheduled = False
+        self._reporting_allowed = True
+
+    @actor_message()
+    def mark_endpoint_dirty(self, endpoint_id):
+        self._mark_endpoint_dirty(endpoint_id)
+
+    def _mark_endpoint_dirty(self, endpoint_id):
+        if endpoint_id in self._older_dirty_endpoints:
+            # Optimization: if the endpoint is already queued up in
+            # _older_dirty_endpoints then there's no point in queueing it up a
+            # second time in _newer_dirty_endpoints.
+            _log.debug("Endpoint %s already marked dirty", endpoint_id)
+            return
+        else:
+            _log.debug("Marking endpoint %s dirty", endpoint_id)
+            self._newer_dirty_endpoints.add(endpoint_id)
+
+    def _finish_msg_batch(self, batch, results):
+        if not self._config.REPORT_ENDPOINT_STATUS:
+            _log.error("StatusReporter called even though status reporting "
+                       "disabled.  Ignoring.")
+            self._endpoint_status = {}
+            self._newer_dirty_endpoints.clear()
+            self._older_dirty_endpoints.clear()
+            return
+        if self._reporting_allowed:
+            # We're not rate limited, go ahead and do a write to etcd.
+            _log.debug("Status reporting is allowed by rate limit.")
+            if not self._older_dirty_endpoints and self._newer_dirty_endpoints:
+                _log.debug("_older_dirty_endpoints empty, promoting"
+                           "_newer_dirty_endpoints")
+                self._older_dirty_endpoints = self._newer_dirty_endpoints
+                self._newer_dirty_endpoints = set()
+            if self._older_dirty_endpoints:
+                ep_id = self._older_dirty_endpoints.pop()
+                status = self._endpoint_status.get(ep_id)
+                try:
+                    self._write_endpoint_status_to_etcd(ep_id, status)
+                except EtcdException:
+                    _log.error("Failed to report status for %s, will retry",
+                               ep_id)
+                    # Add it into the next dirty set.  Retrying in the next
+                    # batch ensures that we try to update all of the dirty
+                    # endpoints before we do any retries, ensuring fairness.
+                    self._newer_dirty_endpoints.add(ep_id)
+                # Reset the rate limit flag.
+                self._reporting_allowed = False
+
+        if not self._timer_scheduled and not self._reporting_allowed:
+            # Schedule a timer to stop our rate limiting.
+            timeout = self._config.ENDPOINT_REPORT_DELAY
+            timeout *= 0.9 + (random.random() * 0.2)  # Jitter by +/- 10%.
+            gevent.spawn_later(timeout,
+                               self._on_timer_pop,
+                               async=True)
+            self._timer_scheduled = True
+
+    def _write_endpoint_status_to_etcd(self, ep_id, status):
+        """
+        Try to actually write the status dict into etcd or delete the key
+        if it is no longer needed.
+        """
+        status_key = ep_id.path_for_status
+        if status:
+            _log.debug("Writing endpoint status %s = %s", ep_id, status)
+            self.client.set(status_key,
+                            json.dumps(status))
+        else:
+            _log.debug("Removing endpoint status %s", ep_id)
+            try:
+                self.client.delete(status_key)
+            except EtcdKeyNotFound:
+                _log.debug("Tried to delete %s but it was already gone",
+                           status_key)
+            # Clean up any now-empty parent directories.
+            delete_empty_parents(
+                self.client,
+                status_key.rsplit("/", 1)[0],  # Snip off final path segment.
+                dir_for_felix_status(self._config.HOSTNAME)
+            )
 
 
 def die_and_restart():

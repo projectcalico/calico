@@ -84,7 +84,7 @@ def _main_greenlet(config):
                                         v4_filter_updater,
                                         v4_dispatch_chains,
                                         v4_rules_manager,
-                                        etcd_api)
+                                        etcd_api.status_reporter)
 
         v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
         v6_filter_updater = IptablesUpdater("filter", ip_version=6,
@@ -97,7 +97,7 @@ def _main_greenlet(config):
                                         v6_filter_updater,
                                         v6_dispatch_chains,
                                         v6_rules_manager,
-                                        etcd_api)
+                                        etcd_api.status_reporter)
 
         update_splitter = UpdateSplitter(config,
                                          [v4_ipset_mgr, v6_ipset_mgr],

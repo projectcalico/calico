@@ -43,7 +43,7 @@ class EndpointManager(ReferenceManager):
                  iptables_updater,
                  dispatch_chains,
                  rules_manager,
-                 datastore_api):
+                 status_reporter):
         super(EndpointManager, self).__init__(qualifier=ip_type)
 
         # Configuration and version to use
@@ -55,7 +55,7 @@ class EndpointManager(ReferenceManager):
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
-        self.datastore_api = datastore_api
+        self.status_reporter = status_reporter
 
         # All endpoint dicts that are on this host.
         self.endpoints_by_id = {}
@@ -76,7 +76,7 @@ class EndpointManager(ReferenceManager):
                              self.iptables_updater,
                              self.dispatch_chains,
                              self.rules_mgr,
-                             self.datastore_api)
+                             self.status_reporter)
 
     def _on_object_started(self, endpoint_id, obj):
         """
@@ -175,7 +175,7 @@ class EndpointManager(ReferenceManager):
 class LocalEndpoint(RefCountedActor):
 
     def __init__(self, config, combined_id, ip_type, iptables_updater,
-                 dispatch_chains, rules_manager, datastore_api):
+                 dispatch_chains, rules_manager, status_reporter):
         """
         Controls a single local endpoint.
 
@@ -201,7 +201,7 @@ class LocalEndpoint(RefCountedActor):
 
         self.rules_ref_helper = RefHelper(self, rules_manager,
                                           self._on_profiles_ready)
-        self.datastore_api = datastore_api
+        self.status_reporter = status_reporter
 
         self._pending_endpoint = None
         self._endpoint_update_pending = False
@@ -366,7 +366,7 @@ class LocalEndpoint(RefCountedActor):
             else:
                 _log.debug("Endpoint oper state changed to %s", status)
                 status_dict = {"status": status}
-            self.datastore_api.on_endpoint_status_changed(
+            self.status_reporter.on_endpoint_status_changed(
                 self.combined_id,
                 status_dict,
                 async=True,

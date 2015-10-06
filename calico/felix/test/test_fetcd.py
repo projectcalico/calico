@@ -25,7 +25,7 @@ from calico.datamodel_v1 import EndpointId
 from calico.felix.config import Config
 from calico.felix.ipsets import IpsetActor
 from calico.felix.fetcd import (_FelixEtcdWatcher, ResyncRequired, EtcdAPI,
-    die_and_restart)
+    die_and_restart, EtcdStatusReporter)
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase, JSONString
 
@@ -119,59 +119,11 @@ class TestEtcdAPI(BaseTestCase):
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
         endpoint_id = EndpointId("foo", "bar", "baz", "biff")
-        api._endpoint_status[endpoint_id] = {}
-        with patch.object(api, "mark_endpoint_dirty") as m_dirty:
+        with patch.object(api, "status_reporter") as m_status_rep:
             api.force_resync(async=True)
             self.step_actor(api)
-        m_dirty.assert_called_once_with(endpoint_id)
+        m_status_rep.resync.assert_called_once_with(async=True)
         self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
-
-    def test_on_endpoint_status_changed(self):
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_config.HOSTNAME = "hostname"
-        m_config.REPORT_ENDPOINT_STATUS = True
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
-        endpoint_id2 = EndpointId("foo", "bar", "baz", "boff")
-
-        with patch.object(api, "mark_endpoint_dirty") as m_dirty:
-            api.on_endpoint_status_changed(endpoint_id, {"status": "up"},
-                                           async=True)
-            api.on_endpoint_status_changed(endpoint_id2, None, async=True)
-            self.step_actor(api)
-
-        self.assertEqual(
-            m_dirty.mock_calls,
-            [
-                call(endpoint_id),
-                call(endpoint_id2),
-            ]
-        )
-        self.assertEqual(
-            api._endpoint_status,
-            {
-                endpoint_id: {"status": "up"}
-            }
-        )
-
-    def test_on_endpoint_status_changed_disabled(self):
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_config.HOSTNAME = "hostname"
-        m_config.REPORT_ENDPOINT_STATUS = False
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
-
-        with patch.object(api, "mark_endpoint_dirty") as m_dirty:
-            api.on_endpoint_status_changed(endpoint_id, {"status": "up"},
-                                           async=True)
-            self.step_actor(api)
-
-        self.assertFalse(m_dirty.called)
-        self.assertEqual(api._endpoint_status, {})
 
 
 class ExpectedException(Exception):
@@ -188,8 +140,10 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_config.ETCD_ADDR = ETCD_ADDRESS
         self.m_hosts_ipset = Mock(spec=IpsetActor)
         self.m_api = Mock(spec=EtcdAPI)
+        self.m_status_rep = Mock(spec=EtcdStatusReporter)
         self.watcher = _FelixEtcdWatcher(self.m_config,
                                          self.m_api,
+                                         self.m_status_rep,
                                          self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
@@ -590,18 +544,19 @@ class TestEtcdWatcher(BaseTestCase):
         self.watcher.clean_up_endpoint_statuses(set([ep_id]))
 
         # Missing endpoint should have been marked for cleanup.
-        self.m_api.mark_endpoint_dirty.assert_called_once_with(
+        self.m_status_rep.mark_endpoint_dirty.assert_called_once_with(
             EndpointId("hostname",
                        "openstack",
                        "aworkload",
-                       "anendpoint")
+                       "anendpoint"),
+            async=True
         )
 
     def test_clean_up_endpoint_status_not_found(self):
         self.m_config.REPORT_ENDPOINT_STATUS = True
         self.client.read.side_effect = etcd.EtcdKeyNotFound()
         self.watcher.clean_up_endpoint_statuses(set())
-        self.assertFalse(self.m_api.mark_endpoint_dirty.called)
+        self.assertFalse(self.m_status_rep.mark_endpoint_dirty.called)
 
     def test_clean_up_endpoint_status_disabled(self):
         self.m_config.REPORT_ENDPOINT_STATUS = False
@@ -683,92 +638,118 @@ class TestEtcdReporting(BaseTestCase):
         ])
 
 
-class TestPerPortReporting(BaseTestCase):
+class TestEtcdStatusReporter(BaseTestCase):
     def setUp(self):
-        super(TestPerPortReporting, self).setUp()
-        self.m_config = Mock()
-        self.m_config.ENDPOINT_REPORT_DELAY = 1
-        self.m_config.ETCD_ADDR = "localhost:4001"
-        self.m_config.HOSTNAME = "hostname"
+        super(TestEtcdStatusReporter, self).setUp()
+        self.m_config = Mock(spec=Config)
+        self.m_config.ETCD_ADDR = ETCD_ADDRESS
+        self.m_config.HOSTNAME = "foo"
         self.m_config.REPORT_ENDPOINT_STATUS = True
-        self.m_hosts_ipset = Mock(spec=IpsetActor)
-        with patch("gevent.spawn", autospec=True):
-            with patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True):
-                with patch("calico.felix.fetcd.monotonic_time",
-                           return_value=100):
-                    self.api = EtcdAPI(self.m_config, self.m_hosts_ipset)
-        self.api._watcher.configured = Mock()
+        self.m_config.ENDPOINT_REPORT_DELAY = 1
         self.m_client = Mock()
-        self.api.client = self.m_client
+        self.rep = EtcdStatusReporter(self.m_config)
+        self.rep.client = self.m_client
 
-    @patch("gevent.sleep")
-    def test_report_endpoint_status(self, m_sleep):
-        # Let the loop run just this many times...
-        m_sleep.side_effect = [
-            None,
-            RuntimeError(),
-        ]
-        # This endpoint exists, should trigger a set to etcd.
-        endpoint_boff = EndpointId("hostname", "bar", "baz", "boff")
-        self.api._endpoint_status[endpoint_boff] = {"status": "up"}
-        self.api.mark_endpoint_dirty(endpoint_boff)
-        # this one is missing, should trigger a delete.
-        self.api.mark_endpoint_dirty(EndpointId("hostname", "bar", "baz", "biff"))
-        # Marking it dirty should set the event.
-        self.assertTrue(self.api._endpoint_status_work_to_do.is_set())
-        # For coverage...
-        self.m_client.delete.side_effect = etcd.EtcdKeyNotFound()
+    def test_on_endpoint_status_mainline(self):
+        # Send in an endpoint status update.
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+                                                async=True)
+            self.step_actor(self.rep)
+        # Should record the status.
+        self.assertEqual(
+            self.rep._endpoint_status,
+            {
+                endpoint_id: {"status": "up"}
+            }
+        )
+        # And do a write.
+        self.assertEqual(
+            self.m_client.set.mock_calls,
+            [call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff",
+                  JSONString({"status": "up"}))]
+        )
+        # Since we did a write, the rate limit timer should be scheduled.
+        self.assertEqual(
+            m_spawn.mock_calls,
+            [call(ANY, self.rep._on_timer_pop, async=True)]
+        )
+        self.assertTrue(self.rep._timer_scheduled)
+        self.assertFalse(self.rep._reporting_allowed)
 
-        # Actually run the loop:
-        self.assertRaises(RuntimeError, self.api._report_endpoint_status)
+        # Send in another update, shouldn't get written until we pop the timer.
+        self.m_client.reset_mock()
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id,
+                                                None,
+                                                async=True)
+            self.step_actor(self.rep)
+        self.assertFalse(self.m_client.set.called)
+        # Timer already scheduled, shouldn't get rescheduled.
+        self.assertFalse(m_spawn.called)
 
-        # Running the loop should clear it.
-        self.assertFalse(self.api._endpoint_status_work_to_do.is_set())
-
-        # Check the results...
+        # Pop the timer, should trigger write and reschedule.
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep._on_timer_pop(async=True)
+            self.step_actor(self.rep)
         self.maxDiff = 10000
         self.assertEqual(
             self.m_client.delete.mock_calls,
             [
-                call('/calico/felix/v1/host/hostname/'
-                     'workload/bar/baz/endpoint/biff'),
-                call('calico/felix/v1/host/hostname/'
-                     'workload/bar/baz/endpoint',
+                call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/"
+                     "biff"),
+                call("calico/felix/v1/host/foo/workload/bar/baz/endpoint",
                      dir=True, timeout=5),
-                call('calico/felix/v1/host/hostname/workload/bar/baz',
+                call("calico/felix/v1/host/foo/workload/bar/baz",
                      dir=True, timeout=5),
-                call('calico/felix/v1/host/hostname/workload/bar',
+                call("calico/felix/v1/host/foo/workload/bar",
                      dir=True, timeout=5),
-                call('calico/felix/v1/host/hostname/workload',
+                call("calico/felix/v1/host/foo/workload",
                      dir=True, timeout=5),
-            ],
-            msg="Incorrect mock calls: %s" % self.m_client.delete.mock_calls
+             ]
         )
-        self.m_client.set.assert_called_once_with(
-            '/calico/felix/v1/host/hostname/workload/bar/baz/endpoint/boff',
-            '{"status": "up"}'
+        # Rate limit timer should be scheduled.
+        self.assertEqual(
+            m_spawn.mock_calls,
+            [call(ANY, self.rep._on_timer_pop, async=True)]
         )
+        self.assertTrue(self.rep._timer_scheduled)
+        self.assertFalse(self.rep._reporting_allowed)
+        # Cache should be cleaned up.
+        self.assertEqual(self.rep._endpoint_status, {})
+        # Nothing queued.
+        self.assertEqual(self.rep._newer_dirty_endpoints, set())
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
 
-    @patch("gevent.sleep")
-    def test_report_endpoint_status_error(self, m_sleep):
-        # Let the loop run just once
-        m_sleep.side_effect = RuntimeError()
-        # this one is missing, should trigger a delete.
-        ep_id = EndpointId("foo", "bar", "baz", "biff")
-        self.api.mark_endpoint_dirty(ep_id)
-        with patch.object(self.api, "write_endpoint_status_to_etcd",
-                          side_effect=etcd.EtcdException()):
-            self.assertRaises(RuntimeError, self.api._report_endpoint_status)
-        self.assertTrue(ep_id in self.api._dirty_endpoints)
+    def test_on_endpoint_status_failure(self):
+        # Send in an endpoint status update.
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        self.m_client.set.side_effect = EtcdException()
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+                                                async=True)
+            self.step_actor(self.rep)
+        # Should do the write.
+        self.assertEqual(
+            self.m_client.set.mock_calls,
+            [call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff",
+                  JSONString({"status": "up"}))]
+        )
+        # But endpoint should be re-queued in the newer set.
+        self.assertEqual(self.rep._newer_dirty_endpoints, set([endpoint_id]))
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
 
-    @patch("gevent.sleep")
-    def test_report_endpoint_status_disabled(self, m_sleep):
-        # Let the loop run just once
-        m_sleep.side_effect = RuntimeError()
+    def test_on_endpoint_status_changed_disabled(self):
         self.m_config.REPORT_ENDPOINT_STATUS = False
-        ep_id = EndpointId("foo", "bar", "baz", "biff")
-        self.api.mark_endpoint_dirty(ep_id)
-        self.assertFalse(ep_id in self.api._dirty_endpoints)
-        self.api._report_endpoint_status()
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
 
-
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id, {"status": "up"},
+                                                async=True)
+            self.step_actor(self.rep)
+        self.assertFalse(m_spawn.called)
+        self.assertEqual(self.rep._endpoint_status, {})
+        # Nothing queued.
+        self.assertEqual(self.rep._newer_dirty_endpoints, set())
+        self.assertEqual(self.rep._older_dirty_endpoints, set())

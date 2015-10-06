@@ -749,7 +749,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
             self.calico_driver.on_port_status_changed(
                 hostname,
                 endpoint_id.endpoint,
-                None,
+                None
             )
         if not endpoints_on_host:
             del self._endpoints_by_host[hostname]

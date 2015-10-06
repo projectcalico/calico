@@ -5,7 +5,7 @@
   If Felix is down on a host, Neutron will not try to schedule a VM on 
   that host.
 - Add endpoint status reporting to Felix.  Felix now reports the state of 
-  endpoints into etcd so that the OpenStack plugin can reprort this 
+  endpoints into etcd so that the OpenStack plugin can report this 
   information into Neutron.  If Felix fails to configure a port, this now
   causes VM creation to fail.
 - Performance enhancements to ipset manipulation.
