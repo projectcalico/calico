@@ -7,13 +7,20 @@ Usage:
   calicoctl container remove <CONTAINER>
 
 Description:
-  Add or remove containers to calico networking, manage their IP addresses and profiles.
+  Add or remove containers to Calico networking, manage their IP addresses and profiles.
   All these commands must be run on the host that contains the container.
 
 Options:
+  <IP>                     The IP address desired. If "ipv4", "ipv6", or a CIDR
+                           is given, then Calico will attempt to automatically
+                           assign an available IPv4 address, IPv6 address, or
+                           IP from any Pool matching the provided CIDR,
+                           respectively. NOTE: When a CIDR is passed, it must
+                           exactly match an existing Calico pool.
   --interface=<INTERFACE>  The name to give to the interface in the container
                            [default: eth1]
 """
+
 import os
 import sys
 import uuid
@@ -25,7 +32,7 @@ from subprocess import CalledProcessError
 from netaddr import IPAddress, IPNetwork
 from calico_ctl import endpoint
 from pycalico import netns
-from pycalico.datastore_datatypes import Endpoint
+from pycalico.datastore_datatypes import IPPool, Endpoint
 
 from connectors import client
 from connectors import docker_client
@@ -33,8 +40,26 @@ from utils import hostname, DOCKER_ORCHESTRATOR_ID, NAMESPACE_ORCHESTRATOR_ID, \
     escape_etcd
 from utils import enforce_root
 from utils import print_paragraph
+from utils import validate_cidr
 from utils import validate_ip
 
+
+def assign_any(v4_count, v6_count, pool=(None, None)):
+    """
+    Reserve <count> IP(s) from the datastore to be applied to a container
+
+    :param arguments: v4_count = Count of IPv4 addresses
+                      v6_count = Count of IPv6 addresses
+                      pool = tuple(<IPv4 cidr>, <IPv6 cidr>)
+    :return: tuple(list(IPv4 IPAddresses), list(IPv6 IPAddresses))
+    """
+    v4_list, v6_list = client.auto_assign_ips(v4_count, v6_count, None, {},
+                                              pool=pool)
+    if not any((v4_list, v6_list)):
+        sys.exit("Failed to allocate any IPs (requested {0} IPv4s and {1} IPv6s). "
+                 "Pools are likely exhausted.".format(v4_count, v6_count))
+
+    return (v4_list, v6_list)
 
 def validate_arguments(arguments):
     """
@@ -48,15 +73,33 @@ def validate_arguments(arguments):
     :param arguments: Docopt processed arguments
     """
     # Validate IP
-    container_ip_ok = arguments.get("<IP>") is None or \
-                        validate_ip(arguments["<IP>"], 4) or \
-                        validate_ip(arguments["<IP>"], 6)
+    requested_ip = arguments.get("<IP>")
+    if not (requested_ip is None or
+            validate_ip(requested_ip, 4) or
+            validate_ip(requested_ip, 6) or
+            validate_cidr(requested_ip) or
+            requested_ip.lower() in ('ipv4', 'ipv6')):
+        sys.exit('Invalid IP address specified. Argument must be an IP, '
+                 'a cidr, "ipv4" or "ipv6". '
+                 '"{0}" was given'.format(requested_ip))
 
-    # Print error message and exit if not valid argument
-    if not container_ip_ok:
-        print "Invalid IP address specified."
-        sys.exit(1)
+    # Validate POOL
+    if requested_ip is not None and '/' in requested_ip:
+        try:
+            requested_pool = IPNetwork(requested_ip)
+        except TypeError:
+            sys.exit('Invalid cidr specified for desired pool. '
+                     '"{0}" was given."'.format(pool))
 
+        try:
+            pool = client.get_ip_pool_config(requested_pool.version,
+                                             requested_pool)
+        except KeyError:
+            sys.exit('Invalid cidr specified for desired pool. '
+                     'No pool found for "{0}"'.format(requested_pool))
+
+
+    # Validate PROFILE
     endpoint.validate_arguments(arguments)
 
 def container(arguments):
@@ -156,6 +199,7 @@ def container_add(container_id, ip, interface):
     # The netns manipulations must be done as root.
     enforce_root()
 
+    # TODO: This section is redundant in container_add_ip and elsewhere
     if container_id.startswith("/") and os.path.exists(container_id):
         # The ID is a path. Don't do any docker lookups
         workload_id = escape_etcd(container_id)
@@ -195,10 +239,7 @@ def container_add(container_id, ip, interface):
               container_id
         sys.exit(1)
 
-    # Check the IP is in the allocation pool.  If it isn't, BIRD won't export
-    # it.
-    ip = IPAddress(ip)
-    pool = get_pool_or_exit(ip)
+    ip, pool = get_ip_and_pool(ip)
 
     # The next hop IPs for this host are stored in etcd.
     next_hops = client.get_default_next_hops(hostname)
@@ -206,11 +247,10 @@ def container_add(container_id, ip, interface):
         next_hops[ip.version]
     except KeyError:
         print "This node is not configured for IPv%d." % ip.version
-        sys.exit(1)
-
-    # Assign the IP
-    if not client.assign_address(pool, ip):
-        print "IP address is already assigned in pool %s " % pool
+        unallocated_ips = client.release_ips({ip})
+        if unallocated_ips:
+            print ("Error during cleanup. {0} was already unallocated."
+                  ).format(unallocated_ips)
         sys.exit(1)
 
     # Get the next hop for the IP address.
@@ -244,6 +284,7 @@ def container_add(container_id, ip, interface):
     client.set_endpoint(ep)
 
     # Let the caller know what endpoint was created.
+    print "IP %s added to %s" % (str(ip), container_id)
     return ep
 
 
@@ -285,9 +326,9 @@ def container_remove(container_id):
         pools = client.get_ip_pools(ip.version)
         for pool in pools:
             if ip in pool:
-                # Ignore failure to unassign address, since we're not
+                # Ignore failure to release_ips, since we're not
                 # enforcing assignments strictly in datastore.py.
-                client.unassign_address(pool, ip)
+                client.release_ips({ip})
 
     try:
         # Remove the interface if it exists
@@ -314,12 +355,9 @@ def container_ip_add(container_id, ip, interface):
 
     :return: None
     """
-    address = IPAddress(ip)
 
     # The netns manipulations must be done as root.
     enforce_root()
-
-    pool = get_pool_or_exit(address)
 
     if container_id.startswith("/") and os.path.exists(container_id):
         # The ID is a path. Don't do any docker lookups
@@ -349,9 +387,7 @@ def container_ip_add(container_id, ip, interface):
 
     # From here, this method starts having side effects. If something
     # fails then at least try to leave the system in a clean state.
-    if not client.assign_address(pool, address):
-        print "IP address is already assigned in pool %s " % pool
-        sys.exit(1)
+    address, pool = get_ip_and_pool(ip)
 
     try:
         if address.version == 4:
@@ -360,7 +396,7 @@ def container_ip_add(container_id, ip, interface):
             endpoint.ipv6_nets.add(IPNetwork(address))
         client.update_endpoint(endpoint)
     except (KeyError, ValueError):
-        client.unassign_address(pool, ip)
+        client.release_ips({address})
         print "Error updating datastore. Aborting."
         sys.exit(1)
 
@@ -373,10 +409,10 @@ def container_ip_add(container_id, ip, interface):
         else:
             endpoint.ipv6_nets.remove(IPNetwork(address))
         client.update_endpoint(endpoint)
-        client.unassign_address(pool, ip)
+        client.release_ips({address})
         sys.exit(1)
 
-    print "IP %s added to %s" % (ip, container_id)
+    print "IP %s added to %s" % (str(address), container_id)
 
 
 def container_ip_remove(container_id, ip, interface):
@@ -443,9 +479,40 @@ def container_ip_remove(container_id, ip, interface):
         print "Error updating networking in container. Aborting."
         sys.exit(1)
 
-    client.unassign_address(pool, address)
+    client.release_ips({address})
 
     print "IP %s removed from %s" % (ip, container_id)
+
+
+def get_ip_and_pool(ip):
+    if ip.lower() in ("ipv4", "ipv6"):
+        if '4' in ip:
+            result = assign_any(1, 0)
+            ip = result[0][0]
+        else:
+            result = assign_any(0, 1)
+            ip = result[1][0]
+        pool = get_pool_or_exit(ip)
+    elif ip is not None and '/' in ip:
+        pool = IPPool(ip)
+        if IPNetwork(ip).version == 4:
+            result = assign_any(1, 0, pool=(pool, None))
+            ip = result[0][0]
+        else:
+            result = assign_any(0, 1, pool=(None, pool))
+            ip = result[1][0]
+    else:
+        # Check the IP is in the allocation pool.  If it isn't, BIRD won't
+        # export it.
+        ip = IPAddress(ip)
+        pool = get_pool_or_exit(ip)
+
+        # Assign the IP
+        if not client.assign_address(pool, ip):
+            print "IP address is already assigned in pool %s " % pool
+            sys.exit(1)
+
+    return (ip, pool)
 
 
 def get_pool_or_exit(ip):

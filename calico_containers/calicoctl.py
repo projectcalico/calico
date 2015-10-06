@@ -110,6 +110,6 @@ if __name__ == '__main__':
         print_paragraph(e.message)
         sys.exit(1)
     except BaseException as e:
-        print "Unexpected error executing command.\n"
+        print "{0}: {1}\n".format(type(e).__name__, e)
         traceback.print_exc()
         sys.exit(1)
