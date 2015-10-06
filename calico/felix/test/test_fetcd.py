@@ -714,6 +714,10 @@ class TestEtcdStatusReporter(BaseTestCase):
             m_spawn.mock_calls,
             [call(ANY, self.rep._on_timer_pop, async=True)]
         )
+        spawn_delay = m_spawn.call_args[0][0]
+        self.assertTrue(spawn_delay >= 0.89999)
+        self.assertTrue(spawn_delay <= 1.10001)
+
         self.assertTrue(self.rep._timer_scheduled)
         self.assertFalse(self.rep._reporting_allowed)
         # Cache should be cleaned up.

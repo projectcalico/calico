@@ -735,7 +735,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
     def _on_per_host_dir_delete(self, response, hostname, workload=None):
         """
-        Called when one the the directories that may contain endpoint
+        Called when one of the directories that may contain endpoint
         statuses is deleted.  Cleans up either the specific workload
         or the whole host.
         """
