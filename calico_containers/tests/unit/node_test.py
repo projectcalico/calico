@@ -22,8 +22,7 @@ from docker.errors import APIError
 from docker import Client as DockerClient
 from mock import patch, Mock, call
 from nose_parameterized import parameterized
-from pycalico.datastore import (ETCD_AUTHORITY_ENV,
-                                ETCD_AUTHORITY_DEFAULT)
+from pycalico.datastore import ETCD_AUTHORITY_DEFAULT
 
 from calico_ctl import node
 
@@ -219,11 +218,6 @@ class TestNode(unittest.TestCase):
                 {
                     "bind": "/var/log/calico",
                     "ro": False
-                },
-            "/run/docker/plugins":
-                {
-                    "bind": "/usr/share/docker/plugins",
-                    "ro": False
                 }
         }
 
@@ -258,8 +252,7 @@ class TestNode(unittest.TestCase):
             environment=environment,
             host_config='host_config',
             volumes=['/proc_host',
-                     '/var/log/calico',
-                     '/usr/share/docker/plugins']
+                     '/var/log/calico']
         )
         m_docker_client.start.assert_called_once_with(container)
         m_attach_and_stream.assert_called_once_with(container)
@@ -462,95 +455,6 @@ class TestNode(unittest.TestCase):
             call(6, node.DEFAULT_IPV6_POOL)
         ])
 
-    @patch('calico_ctl.node.LIBNETWORK_IMAGE', autospec=True)
-    @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
-    @patch('os.path.exists', autospec=True)
-    @patch('os.makedirs', autospec=True)
-    @patch('calico_ctl.node.check_system', autospec=True)
-    @patch('calico_ctl.node.get_host_ips', autospec=True)
-    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
-    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
-    @patch('calico_ctl.node.client', autospec=True)
-    @patch('calico_ctl.node.docker_client', autospec=True)
-    def test_node_start_use_libnetwork(self, m_docker_client, m_client,
-                                       m_install_plugin, m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                                       m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists,
-                                       m_find_or_pull_node_image, m_LIBNETWORK_IMAGE):
-        """
-        Test that the libnetwork image is used when libnetwork flag is True.
-        """
-        # Set up mock objects
-        m_client.get_ip_pools.return_value = []
-
-        # Set up arguments
-        node_image = False
-        log_dir = './log_dir'
-        ip = ''
-        ip6 = 'aa:bb::zz'
-        as_num = ''
-        detach = False
-        kubernetes = False
-        rkt = False
-        libnetwork = True
-
-        # Call method under test
-        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
-                        kubernetes, rkt, libnetwork)
-
-        # Assert
-        m_client.add_ip_pool.assert_has_calls([
-            call(4, node.DEFAULT_IPV4_POOL),
-            call(6, node.DEFAULT_IPV6_POOL)
-        ])
-        self.assertFalse(m_install_plugin.called)
-        m_find_or_pull_node_image.assert_called_once_with(m_LIBNETWORK_IMAGE)
-
-    @patch('calico_ctl.node.CALICO_DEFAULT_IMAGE', autospec=True)
-    @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
-    @patch('os.path.exists', autospec=True)
-    @patch('os.makedirs', autospec=True)
-    @patch('calico_ctl.node.check_system', autospec=True)
-    @patch('calico_ctl.node.get_host_ips', autospec=True)
-    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
-    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
-    @patch('calico_ctl.node.client', autospec=True)
-    @patch('calico_ctl.node.docker_client', autospec=True)
-    def test_node_start_no_node_no_libnetwork(self, m_docker_client, m_client,
-                                              m_install_plugin, m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                                              m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists,
-                                              m_find_or_pull_node_image, m_CALICO_DEFAULT_IMAGE):
-        """
-        Test default node image is used in node_start when no image is
-        specified and the libnetwork param is not used.
-        """
-        # Set up mock objects
-        m_client.get_ip_pools.return_value = []
-
-        # Set up arguments
-        node_image = False
-        log_dir = './log_dir'
-        ip = ''
-        ip6 = 'aa:bb::zz'
-        as_num = ''
-        detach = False
-        kubernetes = False
-        rkt = False
-        libnetwork = False
-
-        # Call method under test
-        node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
-                        kubernetes, rkt, libnetwork)
-
-        # Assert
-        m_client.add_ip_pool.assert_has_calls([
-            call(4, node.DEFAULT_IPV4_POOL),
-            call(6, node.DEFAULT_IPV6_POOL)
-        ])
-        self.assertFalse(m_install_plugin.called)
-        m_find_or_pull_node_image.assert_called_once_with(m_CALICO_DEFAULT_IMAGE)
-
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_stop(self, m_docker_client, m_client):
@@ -563,7 +467,8 @@ class TestNode(unittest.TestCase):
 
         # Assert
         m_client.remove_host.assert_called_once_with(node.hostname)
-        m_docker_client.stop.assert_called_once_with('calico-node')
+        m_docker_client.stop.assert_has_calls([call('calico-node'),
+                                               call('calico-libnetwork')])
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
