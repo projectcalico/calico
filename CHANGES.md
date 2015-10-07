@@ -9,6 +9,7 @@
   where IP addresses only have a single owner.
 - Felix now sets the default.rp_filter sysctl to ensure that endpoints
   come up with the Kernel's RPF check enabled by default.
+- Optimize Felix's actor framework to reduce message-passing overhead.
 
 ## 1.1.0
 

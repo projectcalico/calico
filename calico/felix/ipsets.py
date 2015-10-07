@@ -581,18 +581,6 @@ class IpsetActor(Actor):
         self.programmed_members = self.members
         self._force_reprogram = False
 
-    def __str__(self):
-        return (
-            self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s,"
-                                      "name=%s>" %
-            (
-                len(self._event_queue),
-                bool(self.greenlet),
-                self._current_msg,
-                self.name,
-            )
-        )
-
 
 class TagIpset(IpsetActor, RefCountedActor):
     """
@@ -635,19 +623,6 @@ class TagIpset(IpsetActor, RefCountedActor):
             _log.debug("TagIpset _finish_msg_batch notifying ready")
             self.notified_ready = True
             self._notify_ready()
-
-    def __str__(self):
-        return (
-            self.__class__.__name__ + "<queue_len=%s,live=%s,msg=%s,"
-                                      "name=%s,id=%s>" %
-            (
-                len(self._event_queue),
-                bool(self.greenlet),
-                self._current_msg,
-                self.name,
-                self._id,
-            )
-        )
 
 
 class Ipset(object):

@@ -134,14 +134,22 @@ class Actor(object):
 
     def __init__(self, qualifier=None):
         self._event_queue = []
+
+        # Set to True when the main loop is actively processing the input
+        # queue or has been scheduled to do so.  Set to False when the loop
+        # runs out of work and switches to the Hub to wait for more.
         self._scheduled = True
+        # Cache the gevent Hub and main loop.
+        self._gevent_hub = gevent.get_hub()
+        self._gevent_loop = self._gevent_hub.loop
+
         self.greenlet = gevent.Greenlet(self._loop)
         self._op_count = 0
         self._current_msg = None
         self.started = False
 
         # Message being processed; purely for logging.
-        self.msg_uuid = None
+        self.msg_id = None
 
         # Logging parameters
         self.qualifier = qualifier
@@ -154,10 +162,46 @@ class Actor(object):
         _log.info("%s created.", self.name)
 
     def maybe_schedule(self, caller):
-        loop = gevent.get_hub().loop
+        """
+        Schedule this Actor to run iff it is not already running/scheduled.
+
+        :param str caller: A (debug) tag to pass to the greenlet to identify
+               the caller
+        """
+        # This method uses very low-level gevent APIs for performance, it is
+        # partially cribbed from gevent's Waiter class, which is a simple
+        # application of the low-level APIs.
+
+        _log.debug("Checking whether we need to schedule %s", self)
+        # We use the lack of yield points in this code to ensure that no-one
+        # changes self._scheduled between the next two lines.  Do not add
+        # logging between the test and set of self._scheduled.
         if not self._scheduled:
             self._scheduled = True
-            loop.run_callback(self.greenlet.switch, caller)
+            # We can't switch directly to the Actor's greenlet because that
+            # prevents gevent from doing its scheduling.  Instead, we ask the
+            # gevent event loop to switch to the greenlet.
+            self._gevent_loop.run_callback(self._switch, caller)
+            _log.debug("Scheduled %s", self)
+
+    def _switch(self, value):
+        """
+        Switch to this Actor's greenlet, handling errors via the Hub's
+        handle_error method.
+
+        This should only be called from the gevent Hub.
+        """
+        # This method uses very low-level gevent APIs for performance, it is
+        # partially cribbed from gevent's Waiter class, which is a simple
+        # application of the low-level APIs.
+
+        # WARNING: this method is called from the gevent Hub, it cannot use
+        # logging because logging can do IO, which is illegal from the Hub.
+        switch = self.greenlet.switch
+        try:
+            self.greenlet.switch(value)
+        except:
+            self._gevent_hub.handle_error(switch, *sys.exc_info())
 
     def start(self):
         assert not self.greenlet, "Already running"
@@ -172,7 +216,7 @@ class Actor(object):
         """
         actor_storage.class_name = self.__class__.__name__
         actor_storage.name = self.name
-        actor_storage.msg_uuid = None
+        actor_storage.msg_id = None
 
         try:
             while True:
@@ -191,10 +235,14 @@ class Actor(object):
         """
         hub = gevent.get_hub()
         while not self._event_queue:
-            # Block waiting for work.
+            # We've run out of work to process, note that fact and then switch
+            # to the Hub to allow something else to run.  actor_message will
+            # wake us up when there's more work to do.
             self._scheduled = False
             caller = hub.switch()
-            assert self._scheduled, ("%s switched to from %s but scheduled "
+            # Before actor_message switches to us, it should set _scheduled
+            # back to True.
+            assert self._scheduled, ("Switched to %s from %s but _scheduled "
                                      "set to False." % (self, caller))
         msg = self._event_queue.pop(0)
 
@@ -235,7 +283,7 @@ class Actor(object):
                            msg, msg.recipient, msg.caller,
                            len(self._event_queue))
                 self._current_msg = msg
-                actor_storage.msg_uuid = msg.uuid
+                actor_storage.msg_id = msg.msg_id
                 actor_storage.msg_name = msg.name
                 try:
                     # Actually execute the per-message method and record its
@@ -250,7 +298,7 @@ class Actor(object):
                     _stats.increment("Messages executed OK")
                 finally:
                     self._current_msg = None
-                    actor_storage.msg_uuid = None
+                    actor_storage.msg_id = None
                     actor_storage.msg_name = None
             try:
                 # Give subclass a chance to post-process the batch.
@@ -404,12 +452,12 @@ class Message(object):
     """
     Message passed to an actor.
     """
-    __slots__ = ("uuid", "method", "results", "caller", "name",
+    __slots__ = ("msg_id", "method", "results", "caller", "name",
                  "needs_own_batch", "recipient")
 
     def __init__(self, msg_id,  method, results, caller_path, recipient,
                  needs_own_batch):
-        self.uuid = msg_id
+        self.msg_id = msg_id
         self.method = method
         self.results = results
         self.caller = caller_path
@@ -419,7 +467,7 @@ class Message(object):
         _stats.increment("Messages created")
 
     def __str__(self):
-        data = ("%s (%s)" % (self.uuid, self.name))
+        data = ("%s (%s)" % (self.msg_id, self.name))
         return data
 
 
@@ -463,7 +511,7 @@ def actor_message(needs_own_batch=False):
                     caller_name = "%s.%s" % (actor_storage.class_name,
                                              actor_storage.msg_name)
                     caller = "%s (processing %s)" % (actor_storage.name,
-                                                     actor_storage.msg_uuid)
+                                                     actor_storage.msg_id)
                 except AttributeError:
                     caller_name = calling_path
                     caller = calling_path
@@ -488,7 +536,6 @@ def actor_message(needs_own_batch=False):
                      method_name,
                      self.__class__.__name__)
                 )
-                pass
 
             # async must be specified, unless on the same actor.
             assert async_set, "Cross-actor event calls must specify async arg."
@@ -652,60 +699,3 @@ def _exit(rc):
     This function is mainly here to be mocked out in UTs.
     """
     os._exit(rc)  # pragma nocover
-
-
-if __name__ == "__main__":
-    from calico.monotonic import monotonic_time
-    print "Running actor perf test"
-
-    class MessageChainActor(Actor):
-        def __init__(self, set_done=False):
-            super(MessageChainActor, self).__init__()
-            self.children = []
-            self.set_done = set_done
-
-        @actor_message()
-        def pass_message_on(self, message):
-            if not self.children and message and self.set_done:
-                print "Time:", monotonic_time() - start_time
-                done.set()
-            for c in self.children:
-                gevent.sleep(0.01)
-                c.pass_message_on(message, async=True)
-
-    root = MessageChainActor()
-    sink = MessageChainActor()
-    sink.start()
-    root.start()
-    node = root
-    for x in xrange(10000):
-        child = MessageChainActor()
-        child.start()
-        node.children.append(child)
-        node.children.append(sink)
-        node = child
-    node.set_done = True
-    from gevent.event import Event
-    done = Event()
-    start_time = monotonic_time()
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.0001)
-    root.pass_message_on("", async=True)
-    gevent.sleep(0.01)
-    root.pass_message_on("Foobar", async=True)
-    done.wait()
-    print next_message_id
