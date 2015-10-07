@@ -2,8 +2,9 @@
 # vi: set ft=ruby :
 
 # The version of calico to install
-calico_docker_ver = "v0.7.0"
-calico_libnetwork_ver = "v0.3.0"
+calicoctl_ver = "v0.8.0"
+calico_node_ver = calicoctl_ver
+calico_libnetwork_ver = "v0.5.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2
@@ -39,52 +40,38 @@ Vagrant.configure(2) do |config|
       # The docker provisioner installs docker.
       host.vm.provision :docker, images: [
           "busybox:latest",
-          "calico/node-libnetwork:#{calico_libnetwork_ver}"
+          "calico/node-libnetwork:#{calico_libnetwork_ver}",
+          "calico/node:#{calico_node_ver}"
       ]
 
-      # Replace docker with known good version.
+      # Replace docker with the latest master build
       host.vm.provision :shell, inline: "stop docker", :privileged => true
-      # The version number v0.5.4 is explicitly set here because it is the latest Docker
-      # binary we have stored that is stable and usable by Ubuntu.
-      # DO NOT CHANGE THIS VERSION, unless you explicitly and successfully test a new
-      # Docker binary with the Ubuntu vagrant libnetwork demonstration.
-      host.vm.provision :shell, inline: "wget -qO /usr/bin/docker https://github.com/projectcalico/calico-docker/releases/download/v0.5.4/docker", :privileged => true
+      host.vm.provision :shell, inline: "wget -qO /usr/bin/docker https://master.dockerproject.org/linux/amd64/docker", :privileged => true
 
-      # Docker uses Consul for clustering. Install just on the first host.
+      # Calico uses etcd for calico and docker clustering. Install it on the first host only.
       if i == 1
         # Download consul and start.
         host.vm.provision :shell, inline: <<-SHELL
-          sudo apt-get install -y unzip
-          curl -L --silent https://dl.bintray.com/mitchellh/consul/0.5.2_linux_amd64.zip -o consul.zip
-          unzip consul.zip
-          chmod +x consul
-          nohup ./consul agent -server -bootstrap-expect 1 -data-dir /tmp/consul -client #{primary_ip} > consul.log &
+          # sudo apt-get install -y unzip
+          curl -L --silent https://github.com/coreos/etcd/releases/download/v2.2.0/etcd-v2.2.0-linux-amd64.tar.gz -o etcd-v2.2.0-linux-amd64.tar.gz
+          tar xzvf etcd-v2.2.0-linux-amd64.tar.gz
+          nohup etcd-v2.2.0-linux-amd64/etcd --addr=#{primary_ip}:4001 > etcd.log &
         SHELL
       end
 
       # Set Docker to use consul for multihost.
-      host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "DOCKER_OPTS=\"--kv-store=consul:#{primary_ip}:8500\"" > /etc/default/docker'|
+      host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "DOCKER_OPTS=\"--cluster-store=etcd://#{primary_ip}:4001\"" > /etc/default/docker'|
 
       # Restart docker.
       host.vm.provision :shell, inline: "sudo start docker"
 
       # download calicoctl.
-      host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/#{calico_docker_ver}/calicoctl", :privileged => true
+      host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/#{calicoctl_ver}/calicoctl", :privileged => true
 
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
 
       # Ensure that the iptables kernel modules are loaded etc...
       host.vm.provision :shell, inline: "sudo calicoctl checksystem --fix"
-
-      # Calico uses etcd for clustering. Install it on the first host only.
-      if i == 1
-        host.vm.provision :docker do |d|
-          d.run "quay.io/coreos/etcd",
-            args: "--net=host",
-            cmd: "--advertise-client-urls http://#{primary_ip}:4001 "\
-                 "--listen-client-urls http://0.0.0.0:4001 "
-        end
-      end
 
       # Ensure the vagrant and root users get the ETCD_AUTHORITY environment.
       host.vm.provision :shell, inline: %Q|echo 'export ETCD_AUTHORITY="#{primary_ip}:4001"' >> /home/vagrant/.profile|

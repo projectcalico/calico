@@ -31,7 +31,7 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps -a
     CONTAINER ID        IMAGE                    COMMAND                CREATED             STATUS              PORTS                                            NAMES
-    39de206f7499        calico/node:v0.7.0   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
+    39de206f7499        calico/node:v0.8.0   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
 
 ## Networking containers.
 
@@ -120,6 +120,6 @@ the host.
 
 For example:
 
-    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
+    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1
 
 See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.

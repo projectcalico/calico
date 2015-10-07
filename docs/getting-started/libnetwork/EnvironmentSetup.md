@@ -37,9 +37,9 @@ The servers also need:
 - A specific Docker release to be running - since the Calico agent is packaged
 as a Docker container, and the libnetwork features required are currently
 only available in an experimental release.
-- A consul server used for clustering Docker.
+- A consul server used for clustering Docker
 - An Etcd cluster - which Calico uses for coordinating state between the nodes.
-- The `calicoctl` to be placed in the `$PATH`.
+- The `calicoctl` binary to be placed in the system `$PATH`.
 
 ## Requirements
 
@@ -50,35 +50,19 @@ We recommend configuring the hosts with the hostname `calico-01` and
 `calico-02`.  The demonstration will refer to these hostnames.
 
 They must have the following software installed:
-- The experimental release of [Docker](#experimental-docker)
+- [Docker 1.9 or greater](#Docker)
 - etcd installed and available on each node: [etcd documentation][etcd]
 - `ipset`, `iptables`, and `ip6tables` kernel modules.
-- A [consul server](#consul) running on calico-01
 
-### Consul
+### Docker
 
-To install consul, download and unzip the consul binary and give it executable
-permissions.  For example:
-
-    wget https://dl.bintray.com/mitchellh/consul/0.5.2_linux_amd64.zip -O consul.zip
-    unzip -o consul.zip
-    rm consul.zip
-    chmod +x consul
-
-You can start consul using the following:
-
-    ./consul agent -server -bootstrap-expect 1 -data-dir /tmp/consul -client <IPV4>
-    
-where <IPV4> is replaced with your appropriate IPv4 address.  This address 
-should be accessible by both servers.
-
-### Experimental Docker
-
-Follow the instructions for installing the 
-[experimental channel of Docker][experimental-docker-git].
+Follow the instructions for installing
+[Docker][docker].
  
-Docker's experimental channel is still moving fast and some of its 
-features are not yet fully stable.
+A version of 1.9 or greater is required.  At the current time, the 1.9 release
+is finishing development, however you can download the binaries from the
+overnight builds of the master branch (1.9.dev) from
+https://master.dockerproject.org/linux/amd64
 
 ### Docker permissions
 
@@ -96,9 +80,9 @@ If you prefer not to do this you can still run the demo but remember to run
 
 Get the calicoctl binary onto each host.  You can download a specific 
 [release][calico-releases] from github.  
-For example, to retrieve the latest v0.7.0 release, on each host run
+For example, to retrieve the latest v0.8.0 release, on each host run
 
-	wget https://github.com/projectcalico/calico-docker/releases/download/v0.7.0/calicoctl
+	wget https://github.com/projectcalico/calico-docker/releases/download/v0.8.0/calicoctl
 	chmod +x calicoctl
 	
 This binary should be placed in your `$PATH` so it can be run from any
@@ -110,7 +94,7 @@ You can optionally preload this image to avoid the delay when you run
 `calicoctl node --libnetwork` the first time.  For example, to pull the latest 
 released version, run
 
-    docker pull calico/node-libnetwork:v0.3.0
+    docker pull calico/node-libnetwork:v0.5.0
 
 ## Final checks
 
@@ -120,17 +104,17 @@ you'll need to adjust the demonstration instructions accordingly.
 Check that the hosts have IP addresses assigned, and that your hosts can ping
 one another.
 
-Check that you are running with the experimental version of Docker.
+Check that you are running with a suitable version of Docker.
 
     docker version
    
-It should indicate a version of 1.8.0 and experimental.
+It should indicate a version of 1.9 or greater.
 
 You should also verify each host can access etcd.  The following will return 
-an error if etcd is not available.
+the current etcd version if etcd is available.
 
-    etcdctl ls /
+    curl -L http://127.0.0.1:4001/version
     
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-docker/releases/
-[experimental-docker-git]: https://github.com/docker/docker/tree/master/experimental
+[docker]: https://docs.docker.com/installation/

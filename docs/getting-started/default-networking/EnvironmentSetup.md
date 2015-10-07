@@ -68,9 +68,9 @@ If you prefer not to do this you can still run the demo but remember to run
 
 Get the calicoctl binary onto each host.  You can download a specific 
 [release][calico-releases] from github.  
-For example, to retrieve the latest v0.7.0 release, on each host run
+For example, to retrieve the latest v0.8.0 release, on each host run
 
-	wget https://github.com/projectcalico/calico-docker/releases/download/v0.7.0/calicoctl
+	wget https://github.com/projectcalico/calico-docker/releases/download/v0.8.0/calicoctl
 	chmod +x calicoctl
 	
 This binary should be placed in your `$PATH` so it can be run from any
@@ -83,7 +83,7 @@ run `calicoctl node` the first time.  Select the same version of the Calico
 Docker image as you selected above.  For example, to pull the latest released 
 version
 
-    docker pull calico/node:v0.7.0
+    docker pull calico/node:v0.8.0
 
 ## Final checks
 
@@ -94,9 +94,9 @@ Check that the hosts have IP addresses assigned, and that your hosts can ping
 one another.
 
 You should also verify each host can access etcd.  The following will return 
-an error if etcd is not available.
+the current etcd version if etcd is available.
 
-    etcdctl ls /
+    curl -L http://127.0.0.1:4001/version
     
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-docker/releases/

@@ -95,9 +95,9 @@ Check that the hosts have IP addresses assigned, and that your hosts can ping
 one another.
 
 You should also verify each host can access etcd.  The following will return 
-an error if etcd is not available.
+the current etcd version if etcd is available.
 
-    etcdctl ls /
+    curl -L http://127.0.0.1:4001/version
     
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-docker/releases/

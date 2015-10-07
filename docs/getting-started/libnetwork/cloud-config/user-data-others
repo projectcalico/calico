@@ -22,7 +22,7 @@ coreos:
       Type=oneshot
       ExecStart=/home/core/add_path.sh
       ExecStart=/home/core/get_calicoctl.sh
-  - name: download-experimental.service
+  - name: download-latest.service
     command: start
     content: |-
       [Unit]
@@ -33,7 +33,8 @@ coreos:
       [Service]
       RemainAfterExit=yes
       Type=oneshot
-      ExecStart=/home/core/get_experimental_docker.sh
+      ExecStart=/home/core/get_latest_docker.sh
+      ExecStart=/home/core/docker.sh
   - name: docker.service
     command: restart
     content: |-
@@ -47,7 +48,7 @@ coreos:
       MountFlags=slave
       LimitNOFILE=1048576
       LimitNPROC=1048576
-      ExecStart=/opt/bin/docker --kv-store=consul:172.17.8.101:8500 --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
+      ExecStart=/opt/bin/docker --cluster-store=etcd://172.17.8.101:4001 --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
       ExecStartPost=/opt/bin/calicoctl checksystem --fix
       RestartSec=10
       Restart=always
@@ -67,22 +68,18 @@ write_files:
     echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
     echo 'export ETCD_AUTHORITY="172.17.8.101:4001"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_AUTHORITY"' >>/etc/sudoers.d/etcd
-- path: /home/core/get_experimental_docker.sh
+- path: /home/core/get_latest_docker.sh
   permissions: 777
   owner: root
   content: |
     #!/usr/bin/bash -e
     cd /opt/bin
-    # The version number v0.5.3 is explicitly set here because it is the latest Docker
-    # binary we have stored that is statically linked and usable by CoreOS.
-    # DO NOT CHANGE THIS VERSION, unless you explicitly and successfully test a new
-    # Docker binary with the CoreOS vagrant libnetwork demonstration.
-    wget https://github.com/projectcalico/calico-docker/releases/download/v0.5.3/docker
+    wget https://master.dockerproject.org/linux/amd64/docker
     chmod +x ./docker
 - path: /home/core/get_calicoctl.sh
   permissions: 777
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/v0.7.0/calicoctl
+    wget -O /opt/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/v0.8.0/calicoctl
     chmod +x /opt/bin/calicoctl

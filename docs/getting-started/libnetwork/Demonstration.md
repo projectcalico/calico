@@ -1,5 +1,7 @@
 # Calico as a libnetwork plugin.
-This demonstration uses Docker's native [libnetwork network driver](https://github.com/docker/libnetwork), available in the Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.8 release. Docker's experimental channel is still moving fast and some of its features are not yet fully stable, so we recommend using a known, working version of the experimental docker binary from calico-docker release [0.5.3](https://github.com/projectcalico/calico-docker/releases/tag/v0.5.3) (July 21) or [0.5.4](https://github.com/projectcalico/calico-docker/releases/tag/v0.5.4) (August 5, optimized for 64-bit Ubuntu).
+This demonstration uses Docker's native 
+[libnetwork network driver](https://github.com/docker/libnetwork), available 
+from Docker 1.9 release and above.
 
 ## Environment
 This demonstration makes some assumptions about the environment you have. See 
@@ -27,47 +29,81 @@ This will start a container on each host. Check they are running
 
 You should see output like this on each node
 
-    vagrant@calico-01:~$ docker ps -a
-    CONTAINER ID        IMAGE                    COMMAND                CREATED             STATUS              PORTS                                            NAMES
-    39de206f7499        calico/node-libnetwork   "/sbin/my_init"        2 minutes ago       Up 2 minutes                                                         calico-node
-
+    vagrant@calico-01:~$ docker ps
+    CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
+    eec9ebbfb486        calico/node-libnetwork:v0.5.0   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
+    ffe6cb403e9b        calico/node:v0.8.0              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
 
 ## Creating networked endpoints
 
-The experimental channel version of Docker introduces a new flag to 
-`docker run` to network containers:  `--publish-service <service>.<network>.<driver>`.
+As of Docker 1.9, the integration of Docker with libnetwork introduces a new
+mechanism to provide networking for Docker containers.
 
- * `<service>` is the name by which you want the container to be known on the network.
- * `<network>` is the name of the network to join.  Containers on different networks cannot communicate with each other.
- * `<driver>` is the name of the network driver to use.  Calico's driver is called `calico`.
+The new command `docker network` can be used to create a logical network.  
+A new flag is introduced to `docker run` to join a container to a particular 
+network:  `--net <network>`.
 
-So let's go ahead and start a few containers on each host.
+So let's go ahead and create some networks and start a few containers 
+on each host spread between these networks.
+
+On either host, create three networks:
+
+    docker network create --driver=calico --subnet=192.168.0.0/24 net1
+    docker network create --driver=calico --subnet=192.168.1.0/24 net2
+    docker network create --driver=calico --subnet=192.168.2.0/24 net3
+    
+Note that we use the Calico driver `calico`.  This driver is run within 
+the calico-node container.  We explicitly choose an IP Pool for each network
+rather than using the default selections - this is to avoid potential conflicts
+with the default NAT IP assignment used by VirtualBox.  Depending on your
+specific environment, you may need to choose different IP Pool CIDRs.
 
 On calico-01
 
-    docker run --publish-service srvA.net1.calico --name workload-A -tid busybox
-    docker run --publish-service srvB.net2.calico --name workload-B -tid busybox
-    docker run --publish-service srvC.net1.calico --name workload-C -tid busybox
+    docker run --net net1 --name workload-A -tid busybox
+    docker run --net net2 --name workload-B -tid busybox
+    docker run --net net1 --name workload-C -tid busybox
 
 On calico-02
 
-    docker run --publish-service srvD.net3.calico --name workload-D -tid busybox
-    docker run --publish-service srvE.net1.calico --name workload-E -tid busybox
+    docker run --net net3 --name workload-D -tid busybox
+    docker run --net net1 --name workload-E -tid busybox
 
 By default, networks are configured so that their members can communicate with 
 one another, but workloads in other networks cannot reach them.  A, C and E are
- all in the same network so should be able to ping each other.  B and D are in 
- their own networks so shouldn't be able to ping anyone else.
+all in the same network so should be able to ping each other.  B and D are in 
+their own networks so shouldn't be able to ping anyone else.
     
-On calico-01 check that A can ping C and E.
+On calico-01 check that A can ping C and E.  You can use either the IP address
+or the name for containers within the same network.
 
-    docker exec workload-A ping -c 4 srvC
-    docker exec workload-A ping -c 4 srvE
+    docker exec workload-A ping -c 4 `docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-C`
+    docker exec workload-A ping -c 4 workload-E.net1
 
-Also check that A cannot ping B or D
+Also check that A cannot ping B or D.  This is slightly trickier because the
+hostnames for different networks will not be added to the host configuration of
+the container - so we need to determine the IP addresses assigned to containers
+B and D.
 
-    docker exec workload-A ping -c 4 srvB
-    docker exec workload-A ping -c 4 srvD
+On calico-01 run
+
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-B
+    
+this returns the IP address of workload-B.
+    
+On calico-02 run
+
+    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-D
+    
+This returns the IP address of workload-D.
+
+On calico-01 run
+
+    docker exec workload-A ping -c 4 <IP address of B>
+    docker exec workload-A ping -c 4 <IP address of D>
+
+replacing the `<...>` with the appropriate IP address for B and D.  These pings
+will fail.
 
 To see the list of networks, use
 
@@ -75,12 +111,4 @@ To see the list of networks, use
 
 ## IPv6 (Optional)
 
-IPv6 networking is also supported.  If you are using IPv6 address spaces as
-well, start your Calico node passing in both the IPv4 and IPv6 addresses of
-the host.
-
-For example:
-
-    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
-
-See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.
+IPv6 networking is not yet supported for Calico networking with libnetwork.
