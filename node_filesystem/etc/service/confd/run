@@ -1,3 +1,6 @@
 #!/bin/sh
 exec 2>&1
+sed "s/HOSTNAME/$HOSTNAME/" /conf.d/bird_aggr.toml.template > /conf.d/bird_aggr.toml
+sed "s/HOSTNAME/$HOSTNAME/" /conf.d/bird6_aggr.toml.template > /conf.d/bird6_aggr.toml
 exec /confd -confdir=/ -interval=5 -watch --log-level=debug -node ${ETCD_AUTHORITY}
+
