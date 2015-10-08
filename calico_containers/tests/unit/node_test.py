@@ -209,11 +209,6 @@ class TestNode(unittest.TestCase):
             "CALICO_NETWORKING=%s" % node.CALICO_NETWORKING_DEFAULT,
         ]
         binds = {
-            "/proc":
-                {
-                    "bind": "/proc_host",
-                    "ro": False
-                },
             log_dir:
                 {
                     "bind": "/var/log/calico",
@@ -251,8 +246,7 @@ class TestNode(unittest.TestCase):
             detach=True,
             environment=environment,
             host_config='host_config',
-            volumes=['/proc_host',
-                     '/var/log/calico']
+            volumes=['/var/log/calico']
         )
         m_docker_client.start.assert_called_once_with(container)
         m_attach_and_stream.assert_called_once_with(container)
