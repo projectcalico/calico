@@ -126,8 +126,7 @@ def validate_arguments(arguments):
     if arguments.get("<DETACH>") or arguments.get("--detach"):
         detach_ok = arguments.get("--detach") in ["true", "false"]
 
-    detach_libnetwork_ok = (not detach_ok or
-                            arguments.get("--detach") == "true" or
+    detach_libnetwork_ok = (arguments.get("--detach") == "true" or
                             not arguments.get("--libnetwork"))
 
     # Print error message
@@ -315,11 +314,6 @@ def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
     ]
 
     binds = {
-        "/proc":
-            {
-                "bind": "/proc_host",
-                "ro": False
-            },
         log_dir:
             {
                 "bind": "/var/log/calico",
@@ -340,8 +334,7 @@ def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
         detach=True,
         environment=environment,
         host_config=host_config,
-        volumes=["/proc_host",
-                 "/var/log/calico"])
+        volumes=["/var/log/calico"])
     cid = container["Id"]
 
     docker_client.start(container)
@@ -373,11 +366,6 @@ def _start_libnetwork_container(etcd_authority, log_dir, libnetwork_image):
     ]
 
     binds = {
-        log_dir:
-            {
-                "bind": "/var/log/calico",
-                "ro": False
-            },
         "/run/docker/plugins":
             {
                 "bind": "/usr/share/docker/plugins",
@@ -397,8 +385,7 @@ def _start_libnetwork_container(etcd_authority, log_dir, libnetwork_image):
         detach=True,
         environment=environment,
         host_config=host_config,
-        volumes=["/var/log/calico",
-                 "/usr/share/docker/plugins"])
+        volumes=["/usr/share/docker/plugins"])
     cid = container["Id"]
 
     docker_client.start(container)
