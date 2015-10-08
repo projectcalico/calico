@@ -195,33 +195,40 @@ class LocalEndpoint(RefCountedActor):
         self.combined_id = combined_id
         self.ip_type = ip_type
 
+        # Other actors we need to talk to.
         self.iptables_updater = iptables_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
-
-        self.rules_ref_helper = RefHelper(self, rules_manager,
-                                          self._on_profiles_ready)
         self.status_reporter = status_reporter
 
+        # Helper for acquiring/releasing profiles.
+        self.rules_ref_helper = RefHelper(self, rules_manager,
+                                          self._on_profiles_ready)
+
+        # Per-batch state.
         self._pending_endpoint = None
         self._endpoint_update_pending = False
         self._mac_changed = False
 
+        # Current endpoint data.
+        self.endpoint = None
+
         # Will be filled in as we learn about the OS interface and the
         # endpoint config.
-        self.endpoint = None
         self._mac = None
         self._iface_name = None
         self._suffix = None
 
-        # Keep track of which dependencies we're missing.
-        self._missing_deps = self._calculate_missing_deps()
-
         # Track the success/failure of our dataplane programming.
+        self._chains_programmed = False
         self._iptables_in_sync = False
         self._device_in_sync = False
-        self._device_is_up = None  # Unknown
         self._device_has_been_in_sync = False
+
+        # Oper-state of the Linux interface.
+        self._device_is_up = None  # Unknown
+
+        # Our last status report.  Used for de-dupe.
         self._last_status = None
 
         # One-way flags to indicate that we should clean up/have cleaned up.
@@ -235,6 +242,12 @@ class LocalEndpoint(RefCountedActor):
             return "ipv4_nets"
         else:
             return "ipv6_nets"
+
+    @property
+    def _admin_up(self):
+        return (not self._unreferenced and
+                self.endpoint and
+                self.endpoint.get("state") == "active")
 
     @actor_message()
     def on_endpoint_update(self, endpoint, force_reprogram=False):
@@ -288,31 +301,35 @@ class LocalEndpoint(RefCountedActor):
                 (self, self.__dict__)
             )
 
-        self._missing_deps_at_start_of_batch = self._missing_deps
         if self._endpoint_update_pending:
             # Copy the pending update into our data structures.  May work out
             # that iptables or the device is now out of sync.
             _log.debug("Endpoint update pending: %s", self._pending_endpoint)
             self._apply_endpoint_update()
 
-        self._missing_deps = self._calculate_missing_deps()
         if not self._iptables_in_sync:
             # Try to update iptables, if successful, will set the
             # _iptables_in_sync flag.
             _log.debug("iptables is out-of-sync, trying to update it")
-            self._maybe_update_iptables()
+            if self._admin_up:
+                _log.info("%s is 'active', (re)programming chains.", self)
+                self._update_chains()
+            elif self._chains_programmed:
+                # No longer active but our chains are still in place.  Remove
+                # them.
+                _log.info("%s is not 'active', removing chains.", self)
+                self._remove_chains()
 
         if not self._device_in_sync and self._iface_name:
             # Try to update the device configuration.  If successful, will set
             # the _device_in_sync flag.
-            if self.endpoint and not self._missing_deps:
+            if self._admin_up:
                 # Endpoint is supposed to be live, try to configure it.
                 _log.debug("Device is out-of-sync, trying to configure it")
                 self._configure_interface()
             else:
                 # We've been deleted, de-configure the interface.
-                _log.debug("Device is out-of-sync, trying to de-configure it, "
-                           "missing deps: %s", self._missing_deps)
+                _log.debug("Device is out-of-sync, trying to de-configure it")
                 self._deconfigure_interface()
 
         if self._unreferenced:
@@ -323,7 +340,7 @@ class LocalEndpoint(RefCountedActor):
             self.rules_ref_helper.discard_all()
             self._notify_cleanup_complete()
             self._cleaned_up = True
-        elif not self._added_to_dispatch_chains:
+        elif not self._added_to_dispatch_chains and self._iface_name:
             # This must be the first batch, add ourself to the dispatch chains.
             _log.debug("Adding endpoint to dispatch chain")
             self.dispatch_chains.on_endpoint_added(self._iface_name,
@@ -337,9 +354,22 @@ class LocalEndpoint(RefCountedActor):
         if not self.config.REPORT_ENDPOINT_STATUS:
             _log.debug("Status reporting disabled. Not reporting status.")
             return
-        # Work out what status we should report back to the orchestrator.
-        if self._missing_deps or not self._device_in_sync:
-            # We're not ready yet, say we're down.
+
+        if (self._device_is_up and
+                self._iptables_in_sync and
+                self._device_in_sync and
+                self._admin_up):
+            _log.debug("In sync and device is up.  Reporting status as up.")
+            status = ENDPOINT_STATUS_UP
+        elif not self.endpoint:
+            _log.debug("No endpoint data (yet), reporting status as down.")
+            status = ENDPOINT_STATUS_DOWN
+        elif not self._iptables_in_sync:
+            _log.warning("iptables not in sync, reporting error.")
+            status = ENDPOINT_STATUS_ERROR
+        elif not self._device_in_sync:
+            # Avoid reporting an error on the first programming attempt, which
+            # may fail as the interface is coming up.
             if self._device_has_been_in_sync:
                 _log.debug("Device out of sync but we've seen it up before, "
                            "mark as error.")
@@ -348,19 +378,11 @@ class LocalEndpoint(RefCountedActor):
                 _log.debug("Device out of sync but we've never seen up "
                            "before, assuming it's down.")
                 status = ENDPOINT_STATUS_DOWN
-        elif self._iptables_in_sync:
-            # All our programming has succeeded, report the oper-state of the
-            # interface.
-            up = self._device_is_up and self.endpoint["state"] == "active"
-            status = ENDPOINT_STATUS_UP if up else ENDPOINT_STATUS_DOWN
-            _log.debug("In sync, with all dependencies, reporting endpoint "
-                       "oper status directly: %s", status)
         else:
-            # We have our dependencies but iptables out of sync, that is
-            # definitely and error.
-            _log.warning("Failed to bring iptables into sync, endpoint is"
-                         "in error.")
-            status = ENDPOINT_STATUS_ERROR
+            # Either we're admin down and in sync or the device is oper-down.
+            _log.debug("Interface is oper-down.  Reporting status as down.")
+            status = ENDPOINT_STATUS_DOWN
+
         if self._unreferenced or status != self._last_status:
             if self._unreferenced:
                 _log.debug("Unreferenced, reporting status = None")
@@ -430,9 +452,6 @@ class LocalEndpoint(RefCountedActor):
                     # table.
                     _log.debug("IP addresses changed, need to update routing")
                     self._device_in_sync = False
-
-            self._missing_deps = self._calculate_missing_deps()
-
         else:
             # Delete of the endpoint.  Need to resync everything.
             profile_ids = set()
@@ -446,34 +465,6 @@ class LocalEndpoint(RefCountedActor):
         self.endpoint = pending_endpoint
         self._endpoint_update_pending = False
         self._pending_endpoint = None
-
-    def _calculate_missing_deps(self):
-        """
-        Returns a list of missing dependencies.
-        """
-        missing_deps = []
-        if not self.endpoint:
-            missing_deps.append("endpoint")
-        elif not self.endpoint.get("profile_ids"):
-            missing_deps.append("profile")
-        return missing_deps
-
-    def _maybe_update_iptables(self):
-        """
-        Update the relevant programming for this endpoint.
-        """
-        if not self._missing_deps:
-            # We have all the dependencies we need to do the programming and
-            # the caller has already worked out that iptables needs refreshing.
-            _log.info("%s became ready to program.", self)
-            self._update_chains()
-        elif not self._missing_deps_at_start_of_batch and self._missing_deps:
-            # We were active but now we're not, withdraw the dispatch rule
-            # and our chain.  We must do this to allow iptables to remove
-            # the profile chain when we're being deleted.
-            _log.debug("%s not ready, waiting on %s", self, self._missing_deps)
-            _log.info("%s not ready.", self)
-            self._remove_chains()
 
     def _update_chains(self):
         updates, deps = _get_endpoint_rules(self.combined_id.endpoint,
@@ -492,6 +483,7 @@ class LocalEndpoint(RefCountedActor):
                                "failure")
         else:
             self._iptables_in_sync = True
+            self._chains_programmed = True
 
     def _remove_chains(self):
         try:
@@ -501,6 +493,7 @@ class LocalEndpoint(RefCountedActor):
             _log.exception("Failed to delete chains for %s", self)
         else:
             self._iptables_in_sync = True
+            self._chains_programmed = False
 
     def _configure_interface(self):
         """
