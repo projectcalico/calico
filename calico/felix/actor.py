@@ -133,7 +133,7 @@ class Actor(object):
     """Number of calls to self._maybe_yield before it yields"""
 
     def __init__(self, qualifier=None):
-        self._event_queue = []
+        self._event_queue = collections.deque()
 
         # Set to True when the main loop is actively processing the input
         # queue or has been scheduled to do so.  Set to False when the loop
@@ -244,7 +244,7 @@ class Actor(object):
             # back to True.
             assert self._scheduled, ("Switched to %s from %s but _scheduled "
                                      "set to False." % (self, caller))
-        msg = self._event_queue.pop(0)
+        msg = self._event_queue.popleft()
 
         batch = [msg]
         batches = []
@@ -255,7 +255,7 @@ class Actor(object):
             while self._event_queue:
                 # We're the only ones getting from the queue so this should
                 # never fail.
-                msg = self._event_queue.pop(0)
+                msg = self._event_queue.popleft()
                 if msg.needs_own_batch:
                     if batch:
                         batches.append(batch)
