@@ -247,6 +247,10 @@ def complete_logging(logfile=None,
     This function must only be called once, after
     :meth:`default_logging() <calico.common.default_logging>`
     has been called.
+
+    The xyz_level parameters may be a valid logging level DEBUG/INFO/... or
+    None to disable that log entirely.  Note: the config module supports
+    using the string "none" in the configuration to disable logging.
     """
     root_logger = logging.getLogger()
 
