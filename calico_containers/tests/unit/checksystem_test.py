@@ -23,7 +23,7 @@ from calico_ctl.checksystem import check_system
 class TestCheckSystem(unittest.TestCase):
 
     @patch("calico_ctl.checksystem.sh.Command", autospec=True)
-    def test_check_mod_ipip(self, m_command):
+    def test_check_mod_xt_set(self, m_command):
 
         # Mock out sh.Command._create
         m_modprobe = Mock(Command)
@@ -39,7 +39,7 @@ class TestCheckSystem(unittest.TestCase):
         m_command._create = _create
 
         def m_module_loaded(module):
-            return module == "xt_set"
+            return False
 
         with patch("calico_ctl.checksystem.module_loaded", m_module_loaded):
             result = _check_kernel_modules(False)
@@ -57,7 +57,7 @@ class TestCheckSystem(unittest.TestCase):
 
             # Fix = true should attempt to fix with modprobe.
             self.assertTrue(result)
-            m_modprobe.assert_called_once_with("ipip")
+            m_modprobe.assert_called_once_with("xt_set")
             m_ip6tables.assert_called_once_with("-L")
 
             # Reset mocks
@@ -65,11 +65,11 @@ class TestCheckSystem(unittest.TestCase):
             m_ip6tables.reset_mock()
 
             # Fix = true, but modprobe fails.
-            m_modprobe.side_effect = ErrorReturnCode("modprobe ipip", "", "")
+            m_modprobe.side_effect = ErrorReturnCode("modprobe xt_set", "", "")
             result = _check_kernel_modules(True)
 
             self.assertFalse(result)
-            m_modprobe.assert_called_once_with("ipip")
+            m_modprobe.assert_called_once_with("xt_set")
             m_ip6tables.assert_called_once_with("-L")
 
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)

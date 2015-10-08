@@ -117,7 +117,7 @@ def _check_kernel_modules(fix):
                                  "module. Load with `modprobe ip6_tables`"
             system_ok = False
 
-    for module in ["xt_set", "ipip"]:
+    for module in ["xt_set"]:
         if not module_loaded(module):
             if fix:
                 try:
