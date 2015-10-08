@@ -247,6 +247,10 @@ def complete_logging(logfile=None,
     This function must only be called once, after
     :meth:`default_logging() <calico.common.default_logging>`
     has been called.
+
+    The xyz_level parameters may be a valid logging level DEBUG/INFO/... or
+    None to disable that log entirely.  Note: the config module supports
+    using the string "none" in the configuration to disable logging.
     """
     root_logger = logging.getLogger()
 
@@ -281,6 +285,15 @@ def complete_logging(logfile=None,
             file_handler.setLevel(file_level)
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
+
+    # Optimization: disable all logging below the minimum level that we care
+    # about.  The global "disable" setting is the first thing that gets checked
+    # in the logging framework so it's the fastest way to disable logging.
+    levels = [file_level, syslog_level, stream_level]
+    # Map None to something greater than the highest logging level.
+    levels = [l if l is not None else logging.CRITICAL + 1 for l in levels]
+    min_log_level = min(levels)
+    logging.disable(min_log_level - 1)
 
     _log.info("Logging initialized")
 
