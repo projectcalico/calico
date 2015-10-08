@@ -349,7 +349,7 @@ class TestDevices(unittest.TestCase):
 
     def test_interface_up1(self):
         """
-        Test that the interface_up returns True when an interface is up.
+        Test that interface_up returns True when an interface is up.
         """
         tap = "tap" + str(uuid.uuid4())[:11]
 
@@ -366,9 +366,9 @@ class TestDevices(unittest.TestCase):
             self.assertTrue(file_handle.read.called)
             self.assertTrue(is_up)
 
-    def test_interface_interface_up2(self):
+    def test_interface_up2(self):
         """
-        Test that the interface_up returns False when an interface is down.
+        Test that interface_up returns False when an interface is down.
         """
         tap = "tap" + str(uuid.uuid4())[:11]
 
@@ -383,6 +383,17 @@ class TestDevices(unittest.TestCase):
                 '/sys/class/net/%s/flags' % tap, 'r'
             )
             self.assertTrue(file_handle.read.called)
+            self.assertFalse(is_up)
+
+    def test_interface_up3(self):
+        """
+        Test that interface_up returns False if it cannot read the flag.
+        """
+        tap = "tap" + str(uuid.uuid4())[:11]
+
+        with mock.patch('__builtin__.open') as open_mock:
+            open_mock.side_effect = IOError
+            is_up = devices.interface_up(tap)
             self.assertFalse(is_up)
 
     @mock.patch("calico.felix.futils.check_call", autospec=True)
