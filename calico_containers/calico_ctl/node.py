@@ -13,24 +13,28 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes] [--rkt] [--libnetwork]
+  calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
+    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>]
+    [--kubernetes] [--rkt]
+    [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
   calicoctl node bgp peer show [--ipv4 | --ipv6]
 
 Description:
-  Configure the main calico/node container as well as default BGP information
+  Configure the Calico node containers as well as default BGP information
   for this node.
 
 Options:
-  --force                   Stop the node process even if it has active endpoints.
+  --force                   Stop the node process even if it has active
+                            endpoints.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
-                                      container. Default is calico/node:latest.
-                                      Default for Calico with libnetwork is
-                                      calico/node-libnetwork:latest.
+                            container. [default: calico/node:latest]
   --detach=<DETACH>         Set "true" to run Calico service as detached,
-                            "false" to run in the foreground. [default: true]
+                            "false" to run in the foreground.  When using
+                            libnetwork, this may not be set to "false".
+                            [default: true]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
@@ -40,6 +44,9 @@ Options:
   --kubernetes              Download and install the kubernetes plugin.
   --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
+  --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
+                            Calico's libnetwork driver.
+                            [default: calico/node-libnetwork:latest]
 """
 import sys
 import os
@@ -82,9 +89,6 @@ RKT_BINARY_URL = 'https://github.com/projectcalico/calico-rkt/releases/download/
 RKT_PLUGIN_DIR = '/usr/lib/rkt/plugins/net/'
 RKT_PLUGIN_DIR_BACKUP = '/etc/rkt-plugins/calico/'
 
-CALICO_DEFAULT_IMAGE = "calico/node:latest"
-LIBNETWORK_IMAGE = 'calico/node-libnetwork:latest'
-
 
 def validate_arguments(arguments):
     """
@@ -122,6 +126,9 @@ def validate_arguments(arguments):
     if arguments.get("<DETACH>") or arguments.get("--detach"):
         detach_ok = arguments.get("--detach") in ["true", "false"]
 
+    detach_libnetwork_ok = (arguments.get("--detach") == "true" or
+                            not arguments.get("--libnetwork"))
+
     # Print error message
     if not ip_ok:
         print "Invalid IPv4 address specified with --ip argument."
@@ -133,10 +140,12 @@ def validate_arguments(arguments):
         print "Invalid AS Number specified."
     if not detach_ok:
         print "Valid values for --detach are 'true' and 'false'"
+    if not detach_libnetwork_ok:
+        print "The only valid value for --detach is 'true' when using libnetwork"
 
     # Exit if not valid argument
     if not (ip_ok and ip6_ok and container_ip_ok and peer_ip_ok and asnum_ok
-            and detach_ok):
+            and detach_ok and detach_libnetwork_ok):
         sys.exit(1)
 
 
@@ -171,6 +180,9 @@ def node(arguments):
     else:
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
+
+        libnetwork_image = None if not arguments.get("--libnetwork") \
+                                else arguments.get("--libnetwork-image")
         node_start(ip=arguments.get("--ip"),
                    node_image=arguments.get('--node-image'),
                    log_dir=arguments.get("--log-dir"),
@@ -179,11 +191,11 @@ def node(arguments):
                    detach=detach,
                    kubernetes=arguments.get("--kubernetes"),
                    rkt=arguments.get("--rkt"),
-                   libnetwork=arguments.get("--libnetwork"))
+                   libnetwork_image=libnetwork_image)
 
 
 def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
-               libnetwork):
+               libnetwork_image):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -197,14 +209,12 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     attached.
     :param kubernetes: True to install the kubernetes plugin, False otherwise.
     :param rkt: True to install the rkt plugin, False otherwise.
-    :param libnetwork: True to use the calico/node-libnetwork image as the node
-    image, False otherwise.
+    :param libnetwork_image: The name of the Calico libnetwork driver image to
+    use.  None, if not using libnetwork.
     :return:  None.
     """
     # Print warnings for any known system issues before continuing
     check_system(fix=False, quit_if_error=False)
-    calico_networking = os.getenv(CALICO_NETWORKING_ENV, CALICO_NETWORKING_DEFAULT)
-
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):
@@ -259,12 +269,6 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     client.ensure_global_config()
     client.create_host(hostname, ip, ip6, as_num)
 
-    try:
-        docker_client.remove_container("calico-node", force=True)
-    except docker.errors.APIError as err:
-        if err.response.status_code != 404:
-            raise
-
     # Always try to convert the address(hostname) to an IP. This is a noop if
     # the address is already an IP address.  Note that the format of the authority
     # string has already been validated.
@@ -272,6 +276,33 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     etcd_authority_address, etcd_authority_port = etcd_authority.split(':')
     etcd_authority = '%s:%s' % (socket.gethostbyname(etcd_authority_address),
                                 etcd_authority_port)
+
+    _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach)
+    if libnetwork_image:
+        _start_libnetwork_container(etcd_authority, libnetwork_image)
+
+
+def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
+    """
+    Start the main Calico node container.
+
+    :param ip:  The IPv4 address of the host.
+    :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param etcd_authority: The etcd authority string.
+    :param log_dir:  The log directory to use.
+    :param node_image:  The calico-node image to use.
+    :param detach: True to run in Docker's "detached" mode, False to run
+    attached.
+    :return: None.
+    """
+    calico_networking = os.getenv(CALICO_NETWORKING_ENV,
+                                  CALICO_NETWORKING_DEFAULT)
+
+    try:
+        docker_client.remove_container("calico-node", force=True)
+    except docker.errors.APIError as err:
+        if err.response.status_code != 404:
+            raise
 
     environment = [
         "HOSTNAME=%s" % hostname,
@@ -283,19 +314,9 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     ]
 
     binds = {
-        "/proc":
-            {
-                "bind": "/proc_host",
-                "ro": False
-            },
         log_dir:
             {
                 "bind": "/var/log/calico",
-                "ro": False
-            },
-        "/run/docker/plugins":
-            {
-                "bind": "/usr/share/docker/plugins",
                 "ro": False
             }
     }
@@ -306,11 +327,6 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
         network_mode="host",
         binds=binds)
 
-    if not node_image:
-        # Use the calico/node-libnetwork image if the libnetwork flag was
-        # passed in.  Otherwise, use the default calico/node image.
-        node_image = LIBNETWORK_IMAGE if libnetwork else CALICO_DEFAULT_IMAGE
-
     _find_or_pull_node_image(node_image)
     container = docker_client.create_container(
         node_image,
@@ -318,33 +334,86 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
         detach=True,
         environment=environment,
         host_config=host_config,
-        volumes=["/proc_host",
-                 "/var/log/calico",
-                 "/usr/share/docker/plugins"])
+        volumes=["/var/log/calico"])
     cid = container["Id"]
 
     docker_client.start(container)
-
     print "Calico node is running with id: %s" % cid
 
     if not detach:
         _attach_and_stream(container)
 
 
-def node_stop(force):
-    if force or len(client.get_endpoints(hostname=hostname,
-                                         orchestrator_id=DOCKER_ORCHESTRATOR_ID)) == 0:
-        client.remove_host(hostname)
-        try:
-            docker_client.stop("calico-node")
-        except docker.errors.APIError as err:
-            if err.response.status_code != 404:
-                raise
+def _start_libnetwork_container(etcd_authority, libnetwork_image):
+    """
+    Start the libnetwork driver container.
 
-        print "Node stopped and all configuration removed"
-    else:
-        print "Current host has active endpoints so can't be stopped." + \
+    :param etcd_authority: The etcd authority string.
+    :param log_dir:  The log directory to use.
+    :param libnetwork_image: The name of the Calico libnetwork driver image to
+    use.  None, if not using libnetwork.
+    :return:  None
+    """
+    try:
+        docker_client.remove_container("calico-libnetwork", force=True)
+    except docker.errors.APIError as err:
+        if err.response.status_code != 404:
+            raise
+
+    environment = [
+        "HOSTNAME=%s" % hostname,
+        "ETCD_AUTHORITY=%s" % etcd_authority   # etcd host:port
+    ]
+
+    binds = {
+        "/run/docker/plugins":
+            {
+                "bind": "/run/docker/plugins",
+                "ro": False
+            }
+    }
+
+    host_config = docker.utils.create_host_config(
+        privileged=True, # Needed since the plugin does "ip link" commands.
+        restart_policy={"Name": "Always"},
+        network_mode="host",
+        binds=binds)
+
+    _find_or_pull_node_image(libnetwork_image)
+    container = docker_client.create_container(
+        libnetwork_image,
+        name="calico-libnetwork",
+        detach=True,
+        environment=environment,
+        host_config=host_config,
+        volumes=["/run/docker/plugins"])
+    cid = container["Id"]
+
+    docker_client.start(container)
+    print "Calico libnetwork driver is running with id: %s" % cid
+
+
+def node_stop(force):
+    num_endpoints = len(client.get_endpoints(hostname=hostname,
+                                             orchestrator_id=DOCKER_ORCHESTRATOR_ID))
+    if num_endpoints and not force:
+        print "Current host has active endpoints so can't be stopped." \
               " Force with --force"
+        return
+
+    client.remove_host(hostname)
+    try:
+        docker_client.stop("calico-node")
+    except docker.errors.APIError as err:
+        if err.response.status_code != 404:
+            raise
+    try:
+        docker_client.stop("calico-libnetwork")
+    except docker.errors.APIError as err:
+        if err.response.status_code != 404:
+            raise
+
+    print "Node stopped and all configuration removed"
 
 
 def node_bgppeer_add(ip, version, as_num):
