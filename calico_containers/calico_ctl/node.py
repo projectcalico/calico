@@ -279,7 +279,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
 
     _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach)
     if libnetwork_image:
-        _start_libnetwork_container(etcd_authority, log_dir, libnetwork_image)
+        _start_libnetwork_container(etcd_authority, libnetwork_image)
 
 
 def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
@@ -344,7 +344,7 @@ def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
         _attach_and_stream(container)
 
 
-def _start_libnetwork_container(etcd_authority, log_dir, libnetwork_image):
+def _start_libnetwork_container(etcd_authority, libnetwork_image):
     """
     Start the libnetwork driver container.
 
@@ -368,14 +368,15 @@ def _start_libnetwork_container(etcd_authority, log_dir, libnetwork_image):
     binds = {
         "/run/docker/plugins":
             {
-                "bind": "/usr/share/docker/plugins",
+                "bind": "/run/docker/plugins",
                 "ro": False
             }
     }
 
     host_config = docker.utils.create_host_config(
-        privileged=True,
+        privileged=True, # Needed since the plugin does "ip link" commands.
         restart_policy={"Name": "Always"},
+        network_mode="host",
         binds=binds)
 
     _find_or_pull_node_image(libnetwork_image)
@@ -385,7 +386,7 @@ def _start_libnetwork_container(etcd_authority, log_dir, libnetwork_image):
         detach=True,
         environment=environment,
         host_config=host_config,
-        volumes=["/usr/share/docker/plugins"])
+        volumes=["/run/docker/plugins"])
     cid = container["Id"]
 
     docker_client.start(container)
