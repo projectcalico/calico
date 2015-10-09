@@ -46,8 +46,10 @@ from calico.datamodel_v1 import ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, \
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
+    from neutron.openstack.common.db import exception as db_exc
 except ImportError:  # Kilo
     from oslo_log import log
+    from oslo_db import exception as db_exc
 
 # Calico imports.
 import etcd
@@ -272,9 +274,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # update_port_status or the port still exists but we disagree,
             # which is an error.
             port_status = constants.PORT_STATUS_ERROR
-        self.db.update_port_status(self._db_context,
-                                   port_id,
-                                   port_status)
+
+        try:
+            self.db.update_port_status(self._db_context,
+                                       port_id,
+                                       port_status)
+        except db_exc.DBError as e:
+            # This occurs if the port is deleted out from under us.
+            LOG.warning('Port status update failed: %r; retrying', e)
+            try:
+                self.db.update_port_status(self._db_context,
+                                           port_id,
+                                           port_status)
+            except db_exc.DBError:
+                LOG.exception("Port status update failed after retry. Giving "
+                              "up.")
 
     def _get_db(self):
         if not self.db:

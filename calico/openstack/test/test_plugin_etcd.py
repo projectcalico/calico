@@ -900,6 +900,28 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         ]
         self.driver.bind_port(context)
 
+    def test_on_port_status_changed(self):
+        self.driver._get_db()
+        self.driver._db_context = mock.Mock()
+        self.db.update_port_status.side_effect = [lib.DBError(), None]
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "up"})
+
+        self.db.update_port_status.side_effect = [lib.DBError(), lib.DBError()]
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           None)
+        self.assertEqual(
+            self.db.update_port_status.mock_calls,
+            [mock.call(self.driver._db_context,
+                       "port_id",
+                       lib.m_constants.PORT_STATUS_ACTIVE)] * 2 +
+            [mock.call(self.driver._db_context,
+                       "port_id",
+                       lib.m_constants.PORT_STATUS_ERROR)] * 2
+        )
+
 
 class TestCalicoEtcdWatcher(unittest.TestCase):
     def setUp(self):

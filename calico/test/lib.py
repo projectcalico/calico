@@ -27,10 +27,14 @@ import sys
 sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()
 sys.modules['neutron.common'] = m_neutron.common
+sys.modules['neutron.common.constants'] = m_constants = m_neutron.common.constants
 sys.modules['neutron.common.exceptions'] = m_neutron.common.exceptions
 sys.modules['neutron.db'] = m_neutron.db
 sys.modules['neutron.openstack'] = m_neutron.openstack
 sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
+sys.modules['neutron.openstack.common.db'] = m_neutron.openstack.common.db
+sys.modules['neutron.openstack.common.db.exception'] = \
+    m_neutron.openstack.common.db.exception
 sys.modules['neutron.plugins'] = m_neutron.plugins
 sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
@@ -106,6 +110,13 @@ m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
 m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
 m_etcd.EtcdValueError = EtcdValueError
 m_etcd.EtcdDirNotEmpty = EtcdDirNotEmpty
+
+
+class DBError(Exception):
+    pass
+
+
+m_neutron.openstack.common.db.exception.DBError = DBError
 
 
 # Define a stub class, that we will use as the base class for
