@@ -446,6 +446,7 @@ class LocalEndpoint(RefCountedActor):
                 if self.endpoint.get("state") != pending_endpoint.get("state"):
                     _log.debug("Desired interface state updated.")
                     self._device_in_sync = False
+                    self._iptables_in_sync = False
                 if (self.endpoint[self.nets_key] !=
                         pending_endpoint[self.nets_key]):
                     # IP addresses have changed, need to update the routing

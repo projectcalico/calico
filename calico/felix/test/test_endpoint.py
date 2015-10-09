@@ -371,17 +371,19 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._pending_endpoint = data.copy()
         local_ep._pending_endpoint["state"] = "inactive"
         local_ep._apply_endpoint_update()
-        self.assertTrue(local_ep._iptables_in_sync)
+        self.assertFalse(local_ep._iptables_in_sync)
         self.assertFalse(local_ep._device_in_sync)
         local_ep._device_in_sync = True
+        local_ep._iptables_in_sync = True
 
         # Set the state back again...
         local_ep._pending_endpoint = data.copy()
         local_ep._pending_endpoint["state"] = "active"
         local_ep._apply_endpoint_update()
-        self.assertTrue(local_ep._iptables_in_sync)
+        self.assertFalse(local_ep._iptables_in_sync)
         self.assertFalse(local_ep._device_in_sync)
         local_ep._device_in_sync = True
+        local_ep._iptables_in_sync = True
 
         # Profiles update.  Should update iptables.
         data = {'endpoint': "endpoint_id", 'mac': mac,
