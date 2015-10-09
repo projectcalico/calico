@@ -20,11 +20,6 @@ sudo mv calico-etcd.manifest /etc/kubernetes/manifests/
 ```
 After a short delay, the kubelet on your master will automatically create a container for the new etcd which can be accessed on port 6666 of your master.
 
-### Reconfiguring the Kubernetes API and services
-For now, our plugin does not support token authentication for API access. While we implement more advanced security features, you will have to configure your `kube-apiserver` on the master to use an `insecure-bind-address` and an `insecure-port`. 
-* The `kube-up` script will implement a secure apiserver by default. To change this you will need to access the `/etc/kubernetes/manifests/kube-apiserver.manifest` file. In the `ExecStart` section, add `--insecure-bind-address=<PRIVATE_IPV4>` and `--insecure-port=8080`.
-* You may also have to reconfigure the `kube-controller-manager` and `kube-scheduler` manifests to point to the insecure private IP instead of the secure `127.0.0.1` loopback address.
-
 ## Running `calico-node`
 On each of your AWS Instances, perform the following steps.
 
@@ -57,12 +52,44 @@ sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl pool add 192.168.0.0/16
 ```
 
 ### Configure the Kubelet
-To start using the Calico Network Plugin, we will need to modify the existing kubelet process on each of your nodes. First, you will need to create a `network-environment` file with the following contents: 
+To start using the Calico Network Plugin, we will need to modify the existing kubelet process on each of your nodes.
+
+#### Authentication for the API Server
+
+In default configurations, the apiserver requires authentication to access its resources. The Calico plugin supports tokens from Kubernetes Service Accounts.
+
+On a fresh cluster, there will be a single default service token for the cluster. You can extract the token with the following command:
+
 ```
-KUBERNETES_MASTER=<MASTER_PRIVATE_IPV4>:8080
+TOKEN=$(kubectl describe secret default-token | grep token: | cut -f 2)
+```
+
+For stronger security, you can create a new Service Account specifically for Calico, and use that account's token:
+
+```
+kubectl create -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico
+EOF
+TOKEN=$(kubectl describe secret calico-token | grep token: | cut -f 2)
+```
+
+#### Per node config
+
+First, you will need to create a `network-environment` file with the following contents:
+```
 ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666
-KUBE_API_ROOT=http://<MASTER_PRIVATE_IPV4>:8080/api/v1/
+KUBE_API_ROOT=https://<MASTER_PRIVATE_IPV4>:443/api/v1/
+KUBE_AUTH_TOKEN=<TOKEN>
 CALICO_IPAM=true
+```
+
+If you're not using https on your API Server, use this insecure API path instead:
+
+```
+KUBE_API_ROOT=http://<MASTER_PRIVATE_IPV4>:8080/api/v1/
 ```
 
 In your kubelet service config file (`/lib/systemd/system/kubelet.service`), add the following line ust before the `ExecStart`.
@@ -76,6 +103,8 @@ Restart the kubelet.
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
+
+@@@TODO: Add section on `ip rule` config; required for inter-node connectivity due to RPF (see https://github.com/projectcalico/calico-kubernetes/issues/52).
 
 Now you are ready to begin using Calico Networking!
 
