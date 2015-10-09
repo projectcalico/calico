@@ -791,6 +791,24 @@ class TestEtcdStatusReporter(BaseTestCase):
                   JSONString({"status": "down"}))]
         )
 
+    def test_resync(self):
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        self.rep.on_endpoint_status_changed(endpoint_id, IPV4, {"status": "up"}, async=True)
+        endpoint_id_2 = EndpointId("foo", "bar", "baz", "boff")
+        self.rep.on_endpoint_status_changed(endpoint_id_2, IPV6, {"status": "up"}, async=True)
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.step_actor(self.rep)
+            self.rep._on_timer_pop(async=True)
+            self.step_actor(self.rep)
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+        self.assertEqual(self.rep._newer_dirty_endpoints, set())
+
+        self.rep.resync(async=True)
+        self.step_actor(self.rep)
+
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+        self.assertEqual(self.rep._newer_dirty_endpoints, set([endpoint_id, endpoint_id_2]))
+
     def test_combine_statuses(self):
         """
         Test the "truth table" for combining status reports.

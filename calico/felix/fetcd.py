@@ -721,6 +721,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
 
     @actor_message()
     def on_endpoint_status_changed(self, endpoint_id, ip_type, status):
+        assert isinstance(endpoint_id, EndpointId)
         if status is not None:
             self._endpoint_status[ip_type][endpoint_id] = status
         else:
@@ -732,8 +733,9 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         """
         Triggers a rewrite of all endpoint statuses.
         """
-        for ep_id in self._endpoint_status.iterkeys():
-            self._mark_endpoint_dirty(ep_id)
+        for statuses in self._endpoint_status.itervalues():
+            for ep_id in statuses.iterkeys():
+                self._mark_endpoint_dirty(ep_id)
 
     @actor_message()
     def _on_timer_pop(self):
@@ -746,6 +748,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         self._mark_endpoint_dirty(endpoint_id)
 
     def _mark_endpoint_dirty(self, endpoint_id):
+        assert isinstance(endpoint_id, EndpointId)
         if endpoint_id in self._older_dirty_endpoints:
             # Optimization: if the endpoint is already queued up in
             # _older_dirty_endpoints then there's no point in queueing it up a
