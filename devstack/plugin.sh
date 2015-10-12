@@ -91,7 +91,7 @@ if is_service_enabled calico; then
 		    popd
 
 		    # Also install python-etcd from the Calico project's GitHub.
-		    pip_install -I git+git://github.com/projectcalico/python-etcd.git@nj-relax-urllib3-cap
+		    pip_install -I git+git://github.com/projectcalico/python-etcd.git
 
 		    ;;
 
