@@ -11,8 +11,6 @@ sh==1.11
 coveralls
 prettytable==0.7.2
 netaddr==0.7.15
-flask
-gunicorn
 subprocess32
 git+https://github.com/projectcalico/python-etcd.git
 git+https://github.com/projectcalico/libcalico.git
