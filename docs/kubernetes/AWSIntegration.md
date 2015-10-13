@@ -9,7 +9,6 @@ This guide will walk you through how to use Calico Networking with an existing A
     - SSH in with the following command `ssh -i </path/to/key> ubuntu@<PUBLIC_IP>`
 
 ## Preparing your master services
-### Setting up Calico's etcd backend
 On your master, download our etcd manifest
 ```
 wget https://raw.githubusercontent.com/projectcalico/calico-kubernetes-coreos-demo/ah3-config-update/manifests/calico-etcd.manifest
@@ -51,10 +50,10 @@ Set up an IP pool with IP-in-IP enabled. This is a  [necessary step](https://git
 sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
 
-### Configure the Kubelet
+## Configure the Kubelet
 To start using the Calico Network Plugin, we will need to modify the existing kubelet process on each of your nodes.
 
-#### Authentication for the API Server
+### Authentication for the API Server
 
 In default configurations, the apiserver requires authentication to access its resources. The Calico plugin supports tokens from Kubernetes Service Accounts.
 
@@ -76,7 +75,7 @@ EOF
 TOKEN=$(kubectl describe secret calico-token | grep token: | cut -f 2)
 ```
 
-#### Per node config
+### Per node config
 
 First, you will need to create a `network-environment` file with the following contents:
 ```
@@ -104,7 +103,18 @@ sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 ```
 
-@@@TODO: Add section on `ip rule` config; required for inter-node connectivity due to RPF (see https://github.com/projectcalico/calico-kubernetes/issues/52).
+### Node connectivity workaround
+
+As a temporary workaround to issue https://github.com/projectcalico/calico-docker/issues/426, the following manual steps must be run on each node:
+
+```
+mkdir -p /etc/iproute2
+echo '8    docker' >> /etc/iproute2/rt_tables
+ip rule add from <Calico pool CIDR> table docker
+ip route add <nodes subnet> table docker dev tunl0
+```
+
+Where <Calico pool CIDR> is the CIDR assigned to the Calico IP pool, in this example `192.168.0.0/16`, and <nodes subnet> is the network that the node interfaces are on (e.g. the eth0 subnet). Note that the <nodes subnet> and <Calico pool CIDR> may not overlap; the node IPs must be in a different CIDR than the container IP range.
 
 Now you are ready to begin using Calico Networking!
 
