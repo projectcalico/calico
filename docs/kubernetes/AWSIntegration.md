@@ -41,13 +41,13 @@ sudo mv calico_kubernetes /usr/libexec/kubernetes/kubelet-plugins/net/exec/calic
 
 * Run Calico Node
 ```
+sudo modprobe ipip
 sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl node
 ```
 Set up an IP pool with IP-in-IP enabled. This is a  [necessary step](https://github.com/projectcalico/calico-docker/blob/20adfd2b7640af9d85c4af76916e043286691452/docs/FAQ.md#can-i-run-calico-in-a-public-cloud-environment) in any public cloud environment.
 > Note: You only need to call `pool add` once per cluster.
 
 ```
-sudo modprobe ipip
 sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
 
@@ -128,7 +128,7 @@ spec:
 ```
 Create the pod with `kubectl create -f busybox.yaml`
 
-And check it's Calico endpoint with `calicoctl endpoint show --detailed`
+And check it's Calico endpoint with `ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl endpoint show --detailed`
 
 For more information on configuring Calico for Kubernetes, see our [Kubernetes Integration docs](KubernetesIntegration.md).
 
