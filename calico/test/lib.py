@@ -41,6 +41,9 @@ sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['neutron.plugins.ml2.rpc'] = m_neutron.plugins.ml2.rpc
 sys.modules['oslo'] = m_oslo = mock.Mock()
 sys.modules['oslo.config'] = m_oslo.config
+sys.modules['sqlalchemy'] = m_sqlalchemy = mock.Mock()
+sys.modules['sqlalchemy.orm'] = m_sqlalchemy.orm
+sys.modules['sqlalchemy.orm.exc'] = m_sqlalchemy.orm.exc
 
 port1 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
@@ -117,6 +120,13 @@ class DBError(Exception):
 
 
 m_neutron.openstack.common.db.exception.DBError = DBError
+
+
+class NoResultFound(Exception):
+    pass
+
+
+m_sqlalchemy.orm.exc.NoResultFound = NoResultFound
 
 
 # Define a stub class, that we will use as the base class for

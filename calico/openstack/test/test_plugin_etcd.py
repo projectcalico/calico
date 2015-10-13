@@ -922,6 +922,19 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                        "port_id",
                        lib.m_constants.PORT_STATUS_ERROR)]
         )
+        self.db.update_port_status.reset_mock()
+
+    def test_on_port_status_changed_not_found(self):
+        self.driver._get_db()
+        self.driver._db_context = mock.Mock()
+        self.driver._db_context.session = mock.MagicMock()
+        self.driver._db_context.session.query.side_effect = lib.NoResultFound()
+        self.db.update_port_status.side_effect = RuntimeError()
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "up"})
+        self.assertEqual(self.db.update_port_status.mock_calls, [])
+        self.db.update_port_status.reset_mock()
 
 
 class TestCalicoEtcdWatcher(unittest.TestCase):
