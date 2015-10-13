@@ -46,10 +46,20 @@ from calico.datamodel_v1 import ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, \
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
-    from neutron.openstack.common.db import exception as db_exc
 except ImportError:  # Kilo
     from oslo_log import log
-    from oslo_db import exception as db_exc
+
+try:
+    # Icehouse.
+    from neutron.openstack.common.db import exception as db_exc
+except ImportError:
+    try:
+        # Juno.
+        from oslo.db import exception as db_exc
+    except ImportError:
+        # Latest.
+        from oslo_db import exception as db_exc
+
 
 # Calico imports.
 import etcd
