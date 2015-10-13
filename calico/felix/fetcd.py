@@ -733,6 +733,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         """
         Triggers a rewrite of all endpoint statuses.
         """
+        # Loop over IPv4 and IPv6 statuses.
         for statuses in self._endpoint_status.itervalues():
             for ep_id in statuses.iterkeys():
                 self._mark_endpoint_dirty(ep_id)

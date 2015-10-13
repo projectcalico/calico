@@ -29,7 +29,8 @@ import eventlet
 
 from collections import namedtuple
 from functools import wraps
-from sqlalchemy.orm import exc
+from sqlalchemy.orm import exc as orm_exc
+from sqlalchemy import exc as sa_exc
 
 # OpenStack imports.
 from neutron.common import constants
@@ -301,13 +302,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                             with_lockmode("update").
                             filter(models_v2.Port.id.startswith(port_id)).
                             one())
-                except exc.NoResultFound:
+                except orm_exc.NoResultFound:
                     LOG.info("Port %s not found, nothing to do", port_id)
                 else:
                     self.db.update_port_status(self._db_context,
                                                port_id,
                                                port_status)
-        except db_exc.DBError:
+        except (db_exc.DBError,
+                sa_exc.SQLAlchemyError):
             LOG.exception("Failed to update port status for %s. Giving up.",
                           port_id)
 
