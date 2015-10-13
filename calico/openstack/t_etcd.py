@@ -739,12 +739,14 @@ class CalicoEtcdWatcher(EtcdWatcher):
         statuses is deleted.  Cleans up either the specific workload
         or the whole host.
         """
-        LOG.info("One of the per-host directories for host %s, workload "
-                 "%s deleted.", hostname, workload)
+        LOG.debug("One of the per-host directories for host %s, workload "
+                  "%s deleted.", hostname, workload)
         endpoints_on_host = self._endpoints_by_host[hostname]
         for endpoint_id in [ep_id for ep_id in endpoints_on_host if
                             workload is None or workload == ep_id.workload]:
-            LOG.info("Status report for %s deleted", endpoint_id)
+            LOG.info("Directory containing status report for %s deleted;"
+                     "updating port status",
+                     endpoint_id)
             endpoints_on_host.discard(endpoint_id)
             self.calico_driver.on_port_status_changed(
                 hostname,
