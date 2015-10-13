@@ -903,12 +903,13 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     def test_on_port_status_changed(self):
         self.driver._get_db()
         self.driver._db_context = mock.Mock()
-        self.db.update_port_status.side_effect = [lib.DBError(), None]
+        self.driver._db_context.session = mock.MagicMock()
+        self.db.update_port_status.side_effect = lib.DBError()
         self.driver.on_port_status_changed("host",
                                            "port_id",
                                            {"status": "up"})
 
-        self.db.update_port_status.side_effect = [lib.DBError(), lib.DBError()]
+        self.db.update_port_status.side_effect = None
         self.driver.on_port_status_changed("host",
                                            "port_id",
                                            None)
@@ -916,10 +917,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.db.update_port_status.mock_calls,
             [mock.call(self.driver._db_context,
                        "port_id",
-                       lib.m_constants.PORT_STATUS_ACTIVE)] * 2 +
-            [mock.call(self.driver._db_context,
+                       lib.m_constants.PORT_STATUS_ACTIVE),
+             mock.call(self.driver._db_context,
                        "port_id",
-                       lib.m_constants.PORT_STATUS_ERROR)] * 2
+                       lib.m_constants.PORT_STATUS_ERROR)]
         )
 
 
