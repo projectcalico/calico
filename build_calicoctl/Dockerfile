@@ -11,20 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# This image is based on the "main" calico/node image. It shares many of the
-# dependencies which makes it a good base for an image used for building and
-# unit testing
 FROM debian:wheezy
 
 WORKDIR /code/
 
 RUN apt-get update && \
-    apt-get install -qy curl python-dev python-pip git libffi-dev libssl-dev procps
-
-# Make an etcd available as some UTs rely on it.
-RUN curl -L  https://www.github.com/coreos/etcd/releases/download/v2.0.10/etcd-v2.0.10-linux-amd64.tar.gz -o /tmp/etcd.tar.gz
-RUN tar -zxvf /tmp/etcd.tar.gz -C /tmp --strip-components=1
+    apt-get install -qy python-dev python-pip git libffi-dev libssl-dev procps
 
 # Install the python packages needed for running UTs and building calicoctl.
 # Git is installed to allow pip installation from a github repo and also so
