@@ -114,7 +114,7 @@ ip rule add from <Calico pool CIDR> table docker
 ip route add <nodes subnet> table docker dev tunl0
 ```
 
-Where <Calico pool CIDR> is the CIDR assigned to the Calico IP pool, in this example `192.168.0.0/16`, and <nodes subnet> is the network that the node interfaces are on (e.g. the eth0 subnet). Note that the <nodes subnet> and <Calico pool CIDR> may not overlap; the node IPs must be in a different CIDR than the container IP range.
+Where `<Calico pool CIDR>` is the CIDR assigned to the Calico IP pool, in this example `192.168.0.0/16`, and `<nodes subnet>` is the network that the node interfaces are on (e.g. the eth0 subnet). Note that the `<nodes subnet>` and `<Calico pool CIDR>` may not overlap; the node IPs must be in a different CIDR than the container IP range.
 
 Now you are ready to begin using Calico Networking!
 
