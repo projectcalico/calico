@@ -29,6 +29,7 @@ import eventlet
 
 from collections import namedtuple
 from functools import wraps
+from sqlalchemy.orm import exc
 
 # OpenStack imports.
 from neutron.common import constants
@@ -284,21 +285,26 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # update_port_status or the port still exists but we disagree,
             # which is an error.
             port_status = constants.PORT_STATUS_ERROR
-
-        try:
-            self.db.update_port_status(self._db_context,
-                                       port_id,
-                                       port_status)
-        except db_exc.DBError as e:
-            # This occurs if the port is deleted out from under us.
-            LOG.warning('Port status update failed: %r; retrying', e)
+        LOG.info("Updating port %s status to %s", port_id, port_status)
+        session = self._db_context.session
+        with session.begin(subtransactions=True):
+            # Lock the port for update.  This avoids a race when the port is
+            # being deleted: felix reports the status via this method but
+            # neutron is concurrently deleting the port from the DB.
+            # update_port_status() does a read of the port to check it exists
+            # before it updates it; that test passes but then the port gets
+            # deleted out from under it before it updates the port.
             try:
+                port = (session.query(models_v2.Port).
+                        with_lockmode("update").
+                        filter(models_v2.Port.id.startswith(port_id)).
+                        one())
+            except exc.NoResultFound:
+                LOG.info("Port %s not found, nothing to do", port_id)
+            else:
                 self.db.update_port_status(self._db_context,
                                            port_id,
                                            port_status)
-            except db_exc.DBError:
-                LOG.exception("Port status update failed after retry. Giving "
-                              "up.")
 
     def _get_db(self):
         if not self.db:
