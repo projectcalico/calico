@@ -9,13 +9,13 @@ envExport:
       options:
         "openstack-origin": "cloud:trusty-kilo"
     "neutron-calico":
-      charm: "cs:~project-calico/trusty/neutron-calico-5"
+      charm: "cs:~project-calico/trusty/neutron-calico-6"
       num_units: 0
       annotations:
         "gui-x": "832.4871538385408"
         "gui-y": "175.1290576399046"
       options:
-        "calico-origin": "ppa:project-calico/kilo"
+        "openstack-origin": "cloud:trusty-kilo"
     mysql:
       charm: "cs:trusty/mysql-12"
       num_units: 1
@@ -88,7 +88,6 @@ envExport:
         "neutron-plugin": Calico
         "neutron-security-groups": true
         "openstack-origin": "cloud:trusty-kilo"
-        "calico-origin": "ppa:project-calico/kilo"
       annotations:
         "gui-x": "946.0883464963425"
         "gui-y": "717.904666996588"
