@@ -8,6 +8,7 @@ else
 fi
 
 BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird.conf.template
+BIRD_CONF_PEER_TEMPLATE=/usr/share/calico/bird/calico-bird-peer.conf.template
 
 # Require 3 arguments.
 [ $# -eq 3 ] || cat <<EOF
@@ -30,13 +31,20 @@ my_ip_address=$1
 rr_ip_address=$2
 as_number=$3
 
-# Generate BIRD config file.
+# Generate peer-independent BIRD config.
 mkdir -p $(dirname $BIRD_CONF)
 sed -e "
 s/@MY_IP_ADDRESS@/$my_ip_address/;
-s/@RR_IP_ADDRESS@/$rr_ip_address/;
-s/@AS_NUMBER@/$as_number/;
 " < $BIRD_CONF_TEMPLATE > $BIRD_CONF
+
+# Generate config to peer with route reflector.
+sed -e "
+s/@ID@/N1/;
+s/@DESCRIPTION@/Connection to BGP route reflector/;
+s/@MY_IP_ADDRESS@/$my_ip_address/;
+s/@PEER_IP_ADDRESS@/$rr_ip_address/;
+s/@AS_NUMBER@/$as_number/;
+" < $BIRD_CONF_PEER_TEMPLATE >> $BIRD_CONF
 
 echo BIRD configuration generated at $BIRD_CONF
 
