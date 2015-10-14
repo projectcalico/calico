@@ -18,7 +18,7 @@ where
   <my-ip-address> is the external IP address of the local machine
   <rr-ip-address> is the IP address of the route reflector that
       the local BIRD should peer with
-  <as-number> is the BGP AS number that the route relector is using.
+  <as-number> is the BGP AS number that the route reflector is using.
 
 Please specify exactly these 3 required arguments.
 
