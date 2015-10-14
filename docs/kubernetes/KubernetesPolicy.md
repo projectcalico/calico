@@ -1,5 +1,5 @@
 # Programming Calico Policy in Kubernetes
-The Calico Plugin for Kubernetes allows you to specify networking policy in the Kubernetes API using pod annotations. 
+The Calico plugin for Kubernetes allows you to specify networking policy in the Kubernetes API using pod annotations. 
 
 ## Prerequisites
 * A Kubernetes Deployment
