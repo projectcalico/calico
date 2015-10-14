@@ -26,11 +26,11 @@ Options:
            or the value is not recognized as valid.
 
 Valid configuration:
-  Command         | <NAME>  | <VALUE>s
-------------------+---------+-----------------------------------------
-  config felix    | logging | none debug info warning error critical
-  config bgp      | logging | none debug info
-  config node bgp | logging | none debug info
+  Command         | <NAME>   | <VALUE>s
+------------------+----------+-----------------------------------------
+  config felix    | loglevel | none debug info warning error critical
+  config bgp      | loglevel | none debug info
+  config node bgp | loglevel | none debug info
 
 Warnings:
   -  Changing the global BGP logging levels using the `calicoctl config bgp`
