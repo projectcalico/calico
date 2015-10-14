@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2014, 2015 Metaswitch Networks
-# All Rights Reserved.
+# Copyright (c) 2014, 2015 Metaswitch Networks.  All Rights Reserved.
+# Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -32,6 +32,7 @@ from types import StringTypes
 import netaddr
 import netaddr.core
 from netaddr.strategy import eui48
+from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
 
 _log = logging.getLogger(__name__)
 
@@ -291,6 +292,13 @@ class ValidationFailed(Exception):
     pass
 
 
+def nat_key(ip_type):
+    if ip_type in [IPV4, IP_TYPE_TO_VERSION[IPV4]]:
+        return "ipv4_nat"
+    else:
+        return "ipv6_nat"
+
+
 def validate_endpoint(config, combined_id, endpoint):
     """
     Ensures that the supplied endpoint is valid. Once this routine has returned
@@ -362,7 +370,7 @@ def validate_endpoint(config, combined_id, endpoint):
             canonical_nws = []
             nets_list = endpoint.get(nets, [])
             if not isinstance(nets_list, list):
-                issues.append("%s should be a list" % nets)
+                issues.append("%s should be a list." % nets)
             else:
                 for ip in nets_list:
                     if not validate_cidr(ip, version):
@@ -372,6 +380,44 @@ def validate_endpoint(config, combined_id, endpoint):
                     else:
                         canonical_nws.append(canonicalise_cidr(ip, version))
                 endpoint[nets] = canonical_nws
+
+        n_key = nat_key(version)
+        nat_maps = endpoint.get(n_key, None)
+        if nat_maps is not None:
+            if isinstance(nat_maps, list):
+                canonical_nm = []
+                for nat_map in nat_maps:
+                    canonical = {}
+                    for t in "int", "ext":
+                        canonical[t] = None
+                        ip = nat_map.get("%s_ip" % t, None)
+                        if ip:
+                            if validate_ip_addr(ip, version):
+                                canonical[t] = canonicalise_ip(ip, version)
+                            else:
+                                issues.append("%s_ip (%r) is not a valid IPv%d"
+                                              " address." % (t, ip, version))
+                        else:
+                            issues.append("%s_ip was not specified a %s entry."
+                                          % (t, n_key))
+                    if canonical["int"] and canonical["ext"]:
+                        canonical_nm.append({"int_ip": canonical["int"],
+                                             "ext_ip": canonical["ext"]})
+                endpoint[n_key] = canonical_nm
+
+                for nat_map in canonical_nm:
+                    if version == 4:
+                        nm = "/32"
+                    else:
+                        nm = "/128"
+                    int_ip_nm = nat_map["int_ip"] + nm
+                    # At this point these have all been canonicalized, so we
+                    # should be able to do a strict string comparison.
+                    if int_ip_nm not in endpoint[nets]:
+                        issues.append("int_ip %s is not listed in %s." %
+                                      (int_ip_nm, nets))
+            else:
+                issues.append("%s should be a list." % n_key)
 
         gw_key = "ipv%d_gateway" % version
         try:

@@ -81,8 +81,16 @@ The object stored is a JSON blob with the following structure:
       "name": "<name of linux interface>",
       "mac": "<MAC of the interface>",
       "profile_ids": ["<profile_id>", …],
+      "ipv4_nat": [
+        {"int_ip": "198.51.100.17", "ext_ip": "192.168.0.1"},
+        …
+      ],
       "ipv4_nets": [
         "198.51.100.17/32",
+        …
+      ],
+      "ipv6_nat": [
+        {"int_ip": "2001:db8::19", "ext_ip": "2001::2"},
         …
       ],
       "ipv6_nets": [
@@ -110,12 +118,26 @@ The various properties in this object have the following meanings:
   this endpoint. Each profile is applied to packets in the order that they
   appear in this list.
 
+``ipv4_nat``
+  a list of 1:1 NAT mappings to apply to the endpoint.  Inbound connections to
+  ext_ip will be forwarded to int_ip.  Connections initiated from int_ip will
+  not have their source address changed, except when an endpoint attempts to
+  connect one of its own ext_ips.  Each int_ip must be associated with the
+  same endpoint via ipv4_nets.
+
 ``ipv4_nets``
   a list of IPv4 subnets allocated to this endpoint. IPv4 packets will only be
   allowed to leave this interface if they come from an address in one of these
   subnets.
 
   .. note:: Currently only /32 subnets are supported.
+
+``ipv6_nat``
+  a list of 1:1 NAT mappings to apply to the endpoint.  Inbound connections to
+  ext_ip will be forwarded to int_ip.  Connections initiated from int_ip will
+  not have their source address changed, except when an endpoint attempts to
+  connect one of its own ext_ips.  Each int_ip must be associated with the
+  same endpoint via ipv6_nets.
 
 ``ipv6_nets``
   a list of IPv6 subnets allocated to this endpoint. IPv6 packets will only be

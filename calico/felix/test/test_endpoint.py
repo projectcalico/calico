@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2014, 2015 Metaswitch Networks
+# Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,6 +27,7 @@ from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.futils import FailedSystemCall
 from calico.felix.profilerules import RulesManager
+from calico.felix.fipmanager import FloatingIPManager
 
 import mock
 from mock import Mock
@@ -51,10 +53,11 @@ class TestEndpointManager(BaseTestCase):
         self.m_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
+        self.m_fip_manager = Mock(spec=FloatingIPManager)
         self.m_status_reporter = Mock(spec=EtcdStatusReporter)
         self.mgr = EndpointManager(self.config, "IPv4", self.m_updater,
                                    self.m_dispatch, self.m_rules_mgr,
-                                   self.m_status_reporter)
+                                   self.m_fip_manager, self.m_status_reporter)
         self.mgr.get_and_incref = Mock()
         self.mgr.decref = Mock()
 
@@ -175,6 +178,7 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_dispatch_chains = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_manager = Mock(spec=EndpointManager)
+        self.m_fip_manager = Mock(spec=FloatingIPManager)
         self.m_status_rep = Mock(spec=EtcdStatusReporter)
 
     def get_local_endpoint(self, combined_id, ip_type):
@@ -184,6 +188,7 @@ class TestLocalEndpoint(BaseTestCase):
                                                 self.m_iptables_updater,
                                                 self.m_dispatch_chains,
                                                 self.m_rules_mgr,
+                                                self.m_fip_manager,
                                                 self.m_status_rep)
         local_endpoint._manager = self.m_manager
         return local_endpoint
@@ -255,6 +260,26 @@ class TestLocalEndpoint(BaseTestCase):
                                                      iface,
                                                      data['mac'],
                                                      reset_arp=True)
+
+        # Change the nat mappings, causing an iptables and route refresh.
+        data = data.copy()
+        ips.append('5.6.7.8')
+        data['ipv4_nat'] = [
+            {
+                'int_ip': '1.2.3.4',
+                'ext_ip': '5.6.7.8'
+            }
+        ]
+        with nested(
+                mock.patch('calico.felix.devices.set_routes'),
+                mock.patch('calico.felix.devices.configure_interface_ipv4'),
+                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains'),
+        ) as [m_set_routes, _m_conf, _m_up_c]:
+            local_ep.on_endpoint_update(data, async=True)
+            self.step_actor(local_ep)
+            m_set_routes.assert_called_once_with(ip_type, set(ips), iface,
+                                                 data['mac'], reset_arp=True)
+            local_ep._update_chains.assert_called_once_with()
 
         # Send empty data, which deletes the endpoint.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
@@ -333,6 +358,26 @@ class TestLocalEndpoint(BaseTestCase):
                                                      iface,
                                                      data['mac'],
                                                      reset_arp=False)
+
+        # Change the nat mappings, causing an iptables and route refresh.
+        data = data.copy()
+        ips.append('2001::abce')
+        data['ipv6_nat'] = [
+            {
+                'int_ip': '2001::abcd',
+                'ext_ip': '2001::abce'
+            }
+        ]
+        with nested(
+                mock.patch('calico.felix.devices.set_routes'),
+                mock.patch('calico.felix.devices.configure_interface_ipv6'),
+                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains'),
+        ) as [m_set_routes, _m_conf, _m_up_c]:
+            local_ep.on_endpoint_update(data, async=True)
+            self.step_actor(local_ep)
+            m_set_routes.assert_called_once_with(ip_type, set(ips), iface,
+                                                 data['mac'], reset_arp=False)
+            local_ep._update_chains.assert_called_once_with()
 
         # Send empty data, which deletes the endpoint.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
