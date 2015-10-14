@@ -7,8 +7,9 @@ else
     BIRD_CONF=/etc/bird/bird.conf
 fi
 
-BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird.conf.template
-BIRD_CONF_PEER_TEMPLATE=/usr/share/calico/bird/calico-bird-peer.conf.template
+TEMPLATE_DIR=${TEMPLATE_DIR:-/usr/share/calico/bird}
+BIRD_CONF_TEMPLATE=${TEMPLATE_DIR}/calico-bird.conf.template
+BIRD_CONF_PEER_TEMPLATE=${TEMPLATE_DIR}/calico-bird-peer.conf.template
 
 # Require at least 3 arguments.
 [ $# -ge 2 ] || cat <<EOF
