@@ -11,7 +11,7 @@ BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird.conf.template
 BIRD_CONF_PEER_TEMPLATE=/usr/share/calico/bird/calico-bird-peer.conf.template
 
 # Require at least 3 arguments.
-[ $# -ge 3 ] || cat <<EOF
+[ $# -ge 2 ] || cat <<EOF
 
 Usage: $0 <my-ip-address> <as-number> <peer-ip-address> ...
 
@@ -22,7 +22,7 @@ where
       the local BIRD should peer with.
 
 EOF
-[ $# -eq 3 ] || exit -1
+[ $# -ge 2 ] || exit -1
 
 # Name the arguments.
 my_ip_address=$1
