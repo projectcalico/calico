@@ -1,6 +1,6 @@
 
 # Peer with route reflector.
-protocol bgp @ID@ {
+protocol bgp '@ID@' {
   description "@DESCRIPTION@";
   local as @AS_NUMBER@;
   neighbor @PEER_IP_ADDRESS@ as @AS_NUMBER@;
