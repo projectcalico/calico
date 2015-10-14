@@ -1,0 +1,9 @@
+[template]
+src = "bird6.cfg.{{if (json (getv "/node_mesh")).enabled}}mesh{{else}}no-mesh{{end}}.template"
+dest = "/config/bird6.cfg"
+prefix = "/calico/bgp/v1"
+keys = [
+    {{if (json (getv "/node_mesh")).enabled}}"/host"{{else}}"/host/{{getenv "HOSTNAME"}}"{{end}},
+    "/global"
+]
+reload_cmd = "pkill -HUP bird || true"
