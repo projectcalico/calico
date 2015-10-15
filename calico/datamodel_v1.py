@@ -65,9 +65,10 @@ RULES_KEY_RE = re.compile(
 # "profile_id".
 TAGS_KEY_RE = re.compile(
     r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/tags')
-# Regex to match endpoints, captures "hostname" and "endpoint_id".
+# Regex to match endpoints, captures "hostname" and "endpoint_id".  Works for
+# endpoint configuration and endpoint status paths.
 ENDPOINT_KEY_RE = re.compile(
-    r'^' + HOST_DIR +
+    r'^(?:' + HOST_DIR + r'|' + FELIX_STATUS_DIR + r')'
     r'/(?P<hostname>[^/]+)/'
     r'workload/'
     r'(?P<orchestrator>[^/]+)/'
@@ -80,8 +81,13 @@ HOST_IP_KEY_RE = re.compile(r'^' + HOST_DIR +
 IPAM_V4_CIDR_KEY_RE = re.compile(r'^' + VERSION_DIR +
                                  r'/ipam/v4/pool/(?P<encoded_cidr>[^/]+)')
 
+ENDPOINT_STATUS_UP = "up"
+ENDPOINT_STATUS_DOWN = "down"
+ENDPOINT_STATUS_ERROR = "error"
+
+
 def dir_for_host(hostname):
-    return HOST_DIR+ "/%s" % hostname
+    return HOST_DIR + "/%s" % hostname
 
 
 def dir_for_per_host_config(hostname):
@@ -133,13 +139,27 @@ def get_profile_id_for_profile_dir(key):
     return final_node if prefix == PROFILE_DIR else None
 
 
+def get_endpoint_id_from_key(key):
+    m = ENDPOINT_KEY_RE.match(key)
+    if m:
+        # Got an endpoint.
+        host = m.group("hostname")
+        orch = m.group("orchestrator")
+        workload_id = m.group("workload_id")
+        endpoint_id = m.group("endpoint_id")
+        combined_id = EndpointId(host, orch, workload_id, endpoint_id)
+        return combined_id
+    else:
+        return None
+
+
 def hostname_from_status_key(key):
     """
     Get hostname from a status key (or None if this is not a status key).
 
     :param: key for felix status
             expected key format: FELIX_STATUS_DIR/<hostname>/
-                                           <some path or not>/<actual key name>
+                                                      <some path or not>/status
     """
     if not key.startswith(FELIX_STATUS_DIR) or not key.endswith("/status"):
         return None
@@ -160,6 +180,12 @@ class EndpointId(object):
         self.orchestrator = intern(orchestrator.encode("utf8"))
         self.workload = intern(workload.encode("utf8"))
         self.endpoint = intern(endpoint.encode("utf8"))
+
+    @property
+    def path_for_status(self):
+        return "/".join([FELIX_STATUS_DIR, self.host,
+                         "workload", self.orchestrator, self.workload,
+                         "endpoint", self.endpoint])
 
     def __str__(self):
         return self.__class__.__name__ + ("<%s>" % self.endpoint)

@@ -18,7 +18,7 @@
 # Etcd-based transport for the Calico/OpenStack Plugin.
 
 # Standard Python library imports.
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import functools
 import json
 import re
@@ -26,8 +26,6 @@ import socket
 import weakref
 
 # OpenStack imports.
-from calico.etcdutils import EtcdWatcher
-
 try:
     from oslo.config import cfg
 except ImportError:
@@ -46,7 +44,9 @@ from calico.datamodel_v1 import (READY_KEY, CONFIG_DIR, TAGS_KEY_RE, HOST_DIR,
                                  key_for_profile, key_for_profile_rules,
                                  key_for_profile_tags, key_for_config,
                                  NEUTRON_ELECTION_KEY, FELIX_STATUS_DIR,
-                                 hostname_from_status_key)
+                                 hostname_from_status_key,
+                                 get_endpoint_id_from_key)
+from calico.etcdutils import EtcdWatcher, ResyncRequired
 from calico.election import Elector
 
 
@@ -267,10 +267,13 @@ class CalicoTransportEtcd(object):
         # First read the config values, so as to avoid unnecessary
         # writes.
         prefix = None
+        reporting_enabled = None
         ready = None
         iface_pfx_key = key_for_config('InterfacePrefix')
+        reporting_key = key_for_config('EndpointReportingEnabled')
         try:
             prefix = self.client.read(iface_pfx_key).value
+            reporting_enabled = self.client.read(reporting_key).value
             ready = self.client.read(READY_KEY).value
         except etcd.EtcdKeyNotFound:
             LOG.info('%s values are missing', CONFIG_DIR)
@@ -279,6 +282,9 @@ class CalicoTransportEtcd(object):
         if prefix != 'tap':
             LOG.info('%s -> tap', iface_pfx_key)
             self.client.write(iface_pfx_key, 'tap')
+        if reporting_enabled != "true":
+            LOG.info('%s -> true', reporting_enabled)
+            self.client.write(reporting_key, 'true')
         if ready != 'true':
             # TODO Set this flag only once we're really ready!
             LOG.info('%s -> true', READY_KEY)
@@ -555,9 +561,33 @@ class CalicoEtcdWatcher(EtcdWatcher):
         )
         self.calico_driver = calico_driver
 
+        # Track the set of endpoints that are on each host so we can generate
+        # deletes for parent dirs being deleted.
+        self._endpoints_by_host = defaultdict(set)
+
         # Register for felix uptime updates.
         self.register_path(FELIX_STATUS_DIR + "/<hostname>/status",
-                           on_set=self._on_status_set)
+                           on_set=self._on_status_set,
+                           on_del=self._on_status_del)
+        # Register for per-port status updates.
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload/openstack/"
+                                              "<workload>/endpoint/<endpoint>",
+                           on_set=self._on_ep_set,
+                           on_del=self._on_ep_delete)
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload/openstack/"
+                                              "<workload>/endpoint",
+                           on_del=self._on_per_host_dir_delete)
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload/openstack/"
+                                              "<workload>",
+                           on_del=self._on_per_host_dir_delete)
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload/openstack",
+                           on_del=self._on_per_host_dir_delete)
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>/workload",
+                           on_del=self._on_per_host_dir_delete)
+        self.register_path(FELIX_STATUS_DIR + "/<hostname>",
+                           on_del=self._on_per_host_dir_delete)
+        self.register_path(FELIX_STATUS_DIR,
+                           on_del=self._force_resync)
 
     def _on_snapshot_loaded(self, etcd_snapshot_response):
         """
@@ -565,12 +595,57 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
         Updates the driver with the current state.
         """
+        endpoints_by_host = defaultdict(set)
+        hosts_with_live_felix = set()
+
+        # First pass: find all the Felixes that are alive.
         for etcd_node in etcd_snapshot_response.leaves:
             key = etcd_node.key
             felix_hostname = hostname_from_status_key(key)
             if felix_hostname:
                 # Defer to the code for handling an event.
+                hosts_with_live_felix.add(felix_hostname)
                 self._on_status_set(etcd_node, felix_hostname)
+                continue
+
+        # Second pass: find all the endpoints associated with a live Felix.
+        for etcd_node in etcd_snapshot_response.leaves:
+            key = etcd_node.key
+            endpoint_id = get_endpoint_id_from_key(key)
+            if endpoint_id:
+                if endpoint_id.host in hosts_with_live_felix:
+                    LOG.debug("Endpoint %s is on a host with a live Felix.",
+                              endpoint_id)
+                    self._report_status(
+                        endpoints_by_host,
+                        endpoint_id,
+                        etcd_node.value
+                    )
+                else:
+                    LOG.debug("Endpoint %s is not on a host with live Felix;"
+                              "marking it down.",
+                              endpoint_id)
+                    self.calico_driver.on_port_status_changed(
+                        endpoint_id.host,
+                        endpoint_id.endpoint,
+                        None,
+                    )
+                continue
+
+        # Find any removed endpoints.
+        for host, endpoints in self._endpoints_by_host.iteritems():
+            current_endpoints = endpoints_by_host.get(host, set())
+            removed_endpoints = endpoints - current_endpoints
+            for endpoint_id in removed_endpoints:
+                LOG.debug("Endpoint %s removed by resync.")
+                self.calico_driver.on_port_status_changed(
+                    host,
+                    endpoint_id.endpoint,
+                    None,
+                )
+
+        # Swap in the newly-loaded state.
+        self._endpoints_by_host = endpoints_by_host
 
     def _on_status_set(self, response, hostname):
         """
@@ -587,6 +662,104 @@ class CalicoEtcdWatcher(EtcdWatcher):
                 hostname,
                 new=new,
             )
+
+    def _on_status_del(self, response, hostname):
+        """
+        Called when Felix's status key expires.  Implies felix is dead.
+        """
+        LOG.error("Felix on host %s failed to check in.  Marking the "
+                  "ports it was managing as in-error.", hostname)
+        for endpoint_id in self._endpoints_by_host[hostname]:
+            # Flag all the ports as being in error.  They're no longer
+            # receiving security updates.
+            self.calico_driver.on_port_status_changed(
+                hostname,
+                endpoint_id.endpoint,
+                None,
+            )
+        # Then discard our cache of endpoints.  If felix comes back up, it will
+        # repopulate.
+        self._endpoints_by_host.pop(hostname)
+
+    def _on_ep_set(self, response, hostname, workload, endpoint):
+        """
+        Called when the status key for a particular endpoint is updated.
+
+        Reports the status to the driver and caches the existence of the
+        endpoint.
+        """
+        ep_id = get_endpoint_id_from_key(response.key)
+        if not ep_id:
+            LOG.error("Failed to extract endpoint ID from: %s.  Ignoring "
+                      "update!", response.key)
+            return
+        self._report_status(self._endpoints_by_host,
+                            ep_id,
+                            response.value)
+
+    def _report_status(self, endpoints_by_host, endpoint_id, raw_json):
+        try:
+            status = json.loads(raw_json)
+        except (ValueError, TypeError):
+            LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
+            status = None  # Report as error
+            endpoints_by_host[endpoint_id.host].discard(endpoint_id)
+            if not endpoints_by_host[endpoint_id.host]:
+                del endpoints_by_host[endpoint_id.host]
+        else:
+            endpoints_by_host[endpoint_id.host].add(endpoint_id)
+        LOG.debug("Port %s updated to status %s", endpoint_id, status)
+        self.calico_driver.on_port_status_changed(
+            endpoint_id.host,
+            endpoint_id.endpoint,
+            status,
+        )
+
+    def _on_ep_delete(self, response, hostname, workload, endpoint):
+        """
+        Called when the status key for an endpoint is deleted.
+
+        This typically means the endpoint has been deleted.  Reports
+        the deletion to the driver.
+        """
+        LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
+        endpoint_id = get_endpoint_id_from_key(response.key)
+        self._endpoints_by_host[hostname].discard(endpoint_id)
+        if not self._endpoints_by_host[hostname]:
+            del self._endpoints_by_host[hostname]
+        self.calico_driver.on_port_status_changed(
+            hostname,
+            endpoint,
+            None,
+        )
+
+    def _on_per_host_dir_delete(self, response, hostname, workload=None):
+        """
+        Called when one of the directories that may contain endpoint
+        statuses is deleted.  Cleans up either the specific workload
+        or the whole host.
+        """
+        LOG.debug("One of the per-host directories for host %s, workload "
+                  "%s deleted.", hostname, workload)
+        endpoints_on_host = self._endpoints_by_host[hostname]
+        for endpoint_id in [ep_id for ep_id in endpoints_on_host if
+                            workload is None or workload == ep_id.workload]:
+            LOG.info("Directory containing status report for %s deleted;"
+                     "updating port status",
+                     endpoint_id)
+            endpoints_on_host.discard(endpoint_id)
+            self.calico_driver.on_port_status_changed(
+                hostname,
+                endpoint_id.endpoint,
+                None
+            )
+        if not endpoints_on_host:
+            del self._endpoints_by_host[hostname]
+
+    def _force_resync(self, response, **kwargs):
+        LOG.warning("Forcing a resync due to %s to key %s",
+                    response.action, response.key)
+        raise ResyncRequired()
 
 
 def _neutron_rule_to_etcd_rule(rule):

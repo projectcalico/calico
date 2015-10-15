@@ -229,7 +229,7 @@ class TestUpdateSplitter(BaseTestCase):
         interface = 'tapABCDEF'
 
         # Apply the interface update
-        s.on_interface_update(interface, async=True)
+        s.on_interface_update(interface, iface_up=True, async=True)
         self.step_actor(s)
 
         # Confirm that the interface update propagates.

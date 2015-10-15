@@ -27,6 +27,9 @@ ACTION_MAPPING = {
 }
 
 
+DEFAULT_TIMEOUT = 5
+
+
 class PathDispatcher(object):
     def __init__(self):
         self.handler_root = {}
@@ -320,6 +323,45 @@ class EtcdWatcher(EtcdClientOwner):
         :param etcd_snapshot_response: Etcd response containing a complete dump.
         """
         pass
+
+
+def delete_empty_parents(client, child_dir, root_key, timeout=DEFAULT_TIMEOUT):
+    """
+    Attempts to delete child_dir and any empty parent directories.
+
+    Makes a best effort.  If any of the deletes fail, gives up.  This
+    method is safe, even if another client is writing to the directory (the
+    delete will fail if the directory becomes non-empty).
+
+    :param client: EtcdClient
+    :param child_dir: Key to delete, along with its parents, should be a
+           directory.
+    :param root_key: Prefix of child_key to stop at.  Will not be deleted.
+    :param timeout: Timeout to use on the etcd delete operation.
+    """
+    _log.debug("Deleting empty directories from %s down to %s", child_dir,
+               root_key)
+    path_segments = child_dir.strip("/").split("/")
+    root_path_segments = root_key.strip("/").split("/")
+    if path_segments[:len(root_path_segments)] != root_path_segments:
+        raise ValueError("child_key %r must start with root key %r" %
+                         (child_dir, root_key))
+    for num_seg_to_strip in xrange(len(path_segments) -
+                                   len(root_path_segments)):
+        key_segments = path_segments[:len(path_segments) - num_seg_to_strip]
+        key_to_delete = "/".join(key_segments)
+        try:
+            client.delete(key_to_delete, dir=True, timeout=timeout)
+        except etcd.EtcdKeyNotFound:
+            _log.debug("Key %s already deleted", key_to_delete)
+            continue
+        except etcd.EtcdDirNotEmpty:
+            _log.debug("Directory %s not empty, giving up", key_to_delete)
+            break
+        except etcd.EtcdException as e:
+            _log.warning("Failed to delete %s (%r), skipping.",
+                         key_to_delete, e)
+            break
 
 
 class ResyncRequired(Exception):

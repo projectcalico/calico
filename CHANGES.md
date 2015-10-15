@@ -2,6 +2,12 @@
 
 - Add liveness reporting to Felix.  Felix now reports its liveness into
   etcd and the neutron driver copies that information to the Neutron DB.
+  If Felix is down on a host, Neutron will not try to schedule a VM on 
+  that host.
+- Add endpoint status reporting to Felix.  Felix now reports the state of 
+  endpoints into etcd so that the OpenStack plugin can report this 
+  information into Neutron.  If Felix fails to configure a port, this now
+  causes VM creation to fail.
 - Performance enhancements to ipset manipulation.
 - Rev python-etcd dependency to 0.4.1.  Our patched python-etcd version
   (which contains additional patches) is still required.

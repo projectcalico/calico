@@ -23,7 +23,7 @@ import logging
 import types
 import etcd
 from mock import Mock, patch, call
-from calico.etcdutils import PathDispatcher, EtcdWatcher
+from calico.etcdutils import PathDispatcher, EtcdWatcher, delete_empty_parents
 
 from calico.felix.test.base import BaseTestCase
 
@@ -31,6 +31,67 @@ _log = logging.getLogger(__name__)
 
 
 SAME_AS_KEY = object()
+
+
+class TestEtcdutils(BaseTestCase):
+    def test_delete_empty_parents_mainline(self):
+        m_client = Mock()
+        m_client.delete = Mock()
+        delete_empty_parents(m_client, "/foo/bar/baz/biff", "/foo")
+        self.assertEqual(
+            m_client.delete.mock_calls,
+            [
+                call("foo/bar/baz/biff", dir=True, timeout=5),
+                call("foo/bar/baz", dir=True, timeout=5),
+                call("foo/bar", dir=True, timeout=5),
+            ]
+        )
+
+    def test_delete_empty_parents_not_empty(self):
+        m_client = Mock()
+        m_client.delete = Mock()
+        m_client.delete.side_effect = [
+            None,
+            etcd.EtcdDirNotEmpty(),
+        ]
+        delete_empty_parents(m_client, "/foo/bar/baz/biff", "/foo")
+        self.assertEqual(
+            m_client.delete.mock_calls,
+            [
+                call("foo/bar/baz/biff", dir=True, timeout=5),
+                call("foo/bar/baz", dir=True, timeout=5),
+            ]
+        )
+
+    def test_delete_empty_parents_not_found(self):
+        m_client = Mock()
+        m_client.delete = Mock()
+        m_client.delete.side_effect = [
+            None,
+            etcd.EtcdKeyNotFound(),
+            None
+        ]
+        delete_empty_parents(m_client, "/foo/bar/baz/biff", "/foo")
+        self.assertEqual(
+            m_client.delete.mock_calls,
+            [
+                call("foo/bar/baz/biff", dir=True, timeout=5),
+                call("foo/bar/baz", dir=True, timeout=5),
+                call("foo/bar", dir=True, timeout=5),
+            ]
+        )
+
+    def test_delete_empty_parents_other_exception(self):
+        m_client = Mock()
+        m_client.delete = Mock()
+        m_client.delete.side_effect = etcd.EtcdValueError()
+        delete_empty_parents(m_client, "/foo/bar/baz/biff", "/foo")
+        self.assertEqual(
+            m_client.delete.mock_calls,
+            [
+                call("foo/bar/baz/biff", dir=True, timeout=5),
+            ]
+        )
 
 
 class _TestPathDispatcherBase(BaseTestCase):

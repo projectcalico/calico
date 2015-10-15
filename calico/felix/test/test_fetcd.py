@@ -23,9 +23,10 @@ from mock import Mock, call, patch, ANY
 
 from calico.datamodel_v1 import EndpointId
 from calico.felix.config import Config
+from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
 from calico.felix.fetcd import (_FelixEtcdWatcher, ResyncRequired, EtcdAPI,
-    die_and_restart)
+    die_and_restart, EtcdStatusReporter, combine_statuses)
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase, JSONString
 
@@ -115,10 +116,14 @@ class TestEtcdAPI(BaseTestCase):
     def test_force_resync(self, m_spawn, m_etcd_watcher):
         m_config = Mock(spec=Config)
         m_config.ETCD_ADDR = ETCD_ADDRESS
+        m_config.REPORT_ENDPOINT_STATUS = True
         m_hosts_ipset = Mock(spec=IpsetActor)
         api = EtcdAPI(m_config, m_hosts_ipset)
-        api.force_resync(async=True)
-        self.step_actor(api)
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        with patch.object(api, "status_reporter") as m_status_rep:
+            api.force_resync(async=True)
+            self.step_actor(api)
+        m_status_rep.resync.assert_called_once_with(async=True)
         self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
 
 
@@ -135,7 +140,12 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_config.IFACE_PREFIX = "tap"
         self.m_config.ETCD_ADDR = ETCD_ADDRESS
         self.m_hosts_ipset = Mock(spec=IpsetActor)
-        self.watcher = _FelixEtcdWatcher(self.m_config, self.m_hosts_ipset)
+        self.m_api = Mock(spec=EtcdAPI)
+        self.m_status_rep = Mock(spec=EtcdStatusReporter)
+        self.watcher = _FelixEtcdWatcher(self.m_config,
+                                         self.m_api,
+                                         self.m_status_rep,
+                                         self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
         self.client = Mock()
@@ -195,6 +205,43 @@ class TestEtcdWatcher(BaseTestCase):
         # Third call, should detect the config change and die.
         self.watcher._load_config()
         m_die.assert_called_once_with()
+
+    def test_on_snapshot_loaded(self):
+        m_response = Mock()
+
+        endpoint_on_host = Mock()
+        endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
+                                "orch/wlid/endpoint/epid")
+        endpoint_on_host.value = ENDPOINT_STR
+
+        bad_endpoint_on_host = Mock()
+        bad_endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
+                                    "orch/wlid/endpoint/epid2")
+        bad_endpoint_on_host.value = ENDPOINT_STR[:10]
+
+        endpoint_not_on_host = Mock()
+        endpoint_not_on_host.key = ("/calico/v1/host/other/workload/"
+                                    "orch/wlid/endpoint/epid")
+        endpoint_not_on_host.value = ENDPOINT_STR
+
+        still_ready = Mock()
+        still_ready.key = ("/calico/v1/Ready")
+        still_ready.value = "true"
+
+        m_response.children = [
+            endpoint_on_host,
+            bad_endpoint_on_host,
+            endpoint_not_on_host,
+            still_ready,
+        ]
+        with patch.object(self.watcher,
+                          "clean_up_endpoint_statuses") as m_clean:
+            self.watcher._on_snapshot_loaded(m_response)
+
+        # Cleanup should only get the endpoints on our host.
+        m_clean.assert_called_once_with(
+            set([EndpointId("hostname", "orch", "wlid", "epid")])
+        )
 
     def test_resync_flag(self):
         self.watcher.resync_after_current_poll = True
@@ -475,6 +522,48 @@ class TestEtcdWatcher(BaseTestCase):
         m_response.value = value
         self.watcher.dispatcher.handle_event(m_response)
 
+    def test_clean_up_endpoint_status(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        ep_id = EndpointId("hostname",
+                           "openstack",
+                           "workloadid",
+                           "endpointid")
+
+        empty_dir = Mock()
+        empty_dir.key = ("/calico/felix/v1/host/hostname/workload/"
+                         "openstack/foobar")
+        empty_dir.dir = True
+
+        missing_ep = Mock()
+        missing_ep.key = ("/calico/felix/v1/host/hostname/workload/"
+                          "openstack/aworkload/endpoint/anendpoint")
+
+        self.client.read.return_value.leaves = [
+            empty_dir,
+            missing_ep,
+        ]
+        self.watcher.clean_up_endpoint_statuses(set([ep_id]))
+
+        # Missing endpoint should have been marked for cleanup.
+        self.m_status_rep.mark_endpoint_dirty.assert_called_once_with(
+            EndpointId("hostname",
+                       "openstack",
+                       "aworkload",
+                       "anendpoint"),
+            async=True
+        )
+
+    def test_clean_up_endpoint_status_not_found(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.client.read.side_effect = etcd.EtcdKeyNotFound()
+        self.watcher.clean_up_endpoint_statuses(set())
+        self.assertFalse(self.m_status_rep.mark_endpoint_dirty.called)
+
+    def test_clean_up_endpoint_status_disabled(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = False
+        self.client.read.side_effect = self.failureException
+        self.watcher.clean_up_endpoint_statuses(set())
+
 
 class TestEtcdReporting(BaseTestCase):
     def setUp(self):
@@ -550,3 +639,193 @@ class TestEtcdReporting(BaseTestCase):
         ])
 
 
+class TestEtcdStatusReporter(BaseTestCase):
+    def setUp(self):
+        super(TestEtcdStatusReporter, self).setUp()
+        self.m_config = Mock(spec=Config)
+        self.m_config.ETCD_ADDR = ETCD_ADDRESS
+        self.m_config.HOSTNAME = "foo"
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.m_config.ENDPOINT_REPORT_DELAY = 1
+        self.m_client = Mock()
+        self.rep = EtcdStatusReporter(self.m_config)
+        self.rep.client = self.m_client
+
+    def test_on_endpoint_status_mainline(self):
+        # Send in an endpoint status update.
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id, IPV4,
+                                                {"status": "up"},
+                                                async=True)
+            self.step_actor(self.rep)
+        # Should record the status.
+        self.assertEqual(
+            self.rep._endpoint_status[IPV4],
+            {
+                endpoint_id: {"status": "up"}
+            }
+        )
+        # And do a write.
+        self.assertEqual(
+            self.m_client.set.mock_calls,
+            [call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff",
+                  JSONString({"status": "up"}))]
+        )
+        # Since we did a write, the rate limit timer should be scheduled.
+        self.assertEqual(
+            m_spawn.mock_calls,
+            [call(ANY, self.rep._on_timer_pop, async=True)]
+        )
+        self.assertTrue(self.rep._timer_scheduled)
+        self.assertFalse(self.rep._reporting_allowed)
+
+        # Send in another update, shouldn't get written until we pop the timer.
+        self.m_client.reset_mock()
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id,
+                                                IPV4,
+                                                None,
+                                                async=True)
+            self.step_actor(self.rep)
+        self.assertFalse(self.m_client.set.called)
+        # Timer already scheduled, shouldn't get rescheduled.
+        self.assertFalse(m_spawn.called)
+
+        # Pop the timer, should trigger write and reschedule.
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep._on_timer_pop(async=True)
+            self.step_actor(self.rep)
+        self.maxDiff = 10000
+        self.assertEqual(
+            self.m_client.delete.mock_calls,
+            [
+                call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/"
+                     "biff"),
+                call("calico/felix/v1/host/foo/workload/bar/baz/endpoint",
+                     dir=True, timeout=5),
+                call("calico/felix/v1/host/foo/workload/bar/baz",
+                     dir=True, timeout=5),
+                call("calico/felix/v1/host/foo/workload/bar",
+                     dir=True, timeout=5),
+                call("calico/felix/v1/host/foo/workload",
+                     dir=True, timeout=5),
+             ]
+        )
+        # Rate limit timer should be scheduled.
+        self.assertEqual(
+            m_spawn.mock_calls,
+            [call(ANY, self.rep._on_timer_pop, async=True)]
+        )
+        spawn_delay = m_spawn.call_args[0][0]
+        self.assertTrue(spawn_delay >= 0.89999)
+        self.assertTrue(spawn_delay <= 1.10001)
+
+        self.assertTrue(self.rep._timer_scheduled)
+        self.assertFalse(self.rep._reporting_allowed)
+        # Cache should be cleaned up.
+        self.assertEqual(self.rep._endpoint_status[IPV4], {})
+        # Nothing queued.
+        self.assertEqual(self.rep._newer_dirty_endpoints, set())
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+
+    def test_on_endpoint_status_failure(self):
+        # Send in an endpoint status update.
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        self.m_client.set.side_effect = EtcdException()
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id,
+                                                IPV4,
+                                                {"status": "up"},
+                                                async=True)
+            self.step_actor(self.rep)
+        # Should do the write.
+        self.assertEqual(
+            self.m_client.set.mock_calls,
+            [call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff",
+                  JSONString({"status": "up"}))]
+        )
+        # But endpoint should be re-queued in the newer set.
+        self.assertEqual(self.rep._newer_dirty_endpoints, set([endpoint_id]))
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+
+    def test_on_endpoint_status_changed_disabled(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = False
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id,
+                                                IPV4,
+                                                {"status": "up"},
+                                                async=True)
+            self.step_actor(self.rep)
+        self.assertFalse(m_spawn.called)
+        self.assertEqual(self.rep._endpoint_status[IPV4], {})
+        # Nothing queued.
+        self.assertEqual(self.rep._newer_dirty_endpoints, set())
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+
+    def test_on_endpoint_status_v4_v6(self):
+        # Send in endpoint status updates for v4 and v6.
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.rep.on_endpoint_status_changed(endpoint_id, IPV4,
+                                                {"status": "up"},
+                                                async=True)
+            self.rep.on_endpoint_status_changed(endpoint_id, IPV6,
+                                                {"status": "down"},
+                                                async=True)
+            self.step_actor(self.rep)
+        # Should record the status.
+        self.assertEqual(
+            self.rep._endpoint_status,
+            {
+                IPV4: {endpoint_id: {"status": "up"}},
+                IPV6: {endpoint_id: {"status": "down"}},
+            }
+        )
+        # And do a write.
+        self.assertEqual(
+            self.m_client.set.mock_calls,
+            [call("/calico/felix/v1/host/foo/workload/bar/baz/endpoint/biff",
+                  JSONString({"status": "down"}))]
+        )
+
+    def test_resync(self):
+        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        self.rep.on_endpoint_status_changed(endpoint_id, IPV4, {"status": "up"}, async=True)
+        endpoint_id_2 = EndpointId("foo", "bar", "baz", "boff")
+        self.rep.on_endpoint_status_changed(endpoint_id_2, IPV6, {"status": "up"}, async=True)
+        with patch("gevent.spawn_later", autospec=True) as m_spawn:
+            self.step_actor(self.rep)
+            self.rep._on_timer_pop(async=True)
+            self.step_actor(self.rep)
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+        self.assertEqual(self.rep._newer_dirty_endpoints, set())
+
+        self.rep.resync(async=True)
+        self.step_actor(self.rep)
+
+        self.assertEqual(self.rep._older_dirty_endpoints, set())
+        self.assertEqual(self.rep._newer_dirty_endpoints, set([endpoint_id, endpoint_id_2]))
+
+    def test_combine_statuses(self):
+        """
+        Test the "truth table" for combining status reports.
+        """
+        self.assert_combined_status(None, None, None)
+        self.assert_combined_status({"status": "up"}, None, {"status": "up"})
+        self.assert_combined_status({"status": "up"}, {"status": "up"},
+                                    {"status": "up"})
+        self.assert_combined_status({"status": "down"}, {"status": "up"},
+                                    {"status": "down"})
+        self.assert_combined_status({"status": "error"}, {"status": "up"},
+                                    {"status": "error"})
+
+    def assert_combined_status(self, a, b, expected):
+        # Should be symmetric so check the arguments both ways round.
+        for lhs, rhs in [(a, b), (b, a)]:
+            result = combine_statuses(lhs, rhs)
+            self.assertEqual(result, expected,
+                             "Expected %r and %r to combine to %s but got %r" %
+                             (lhs, rhs, expected, result))

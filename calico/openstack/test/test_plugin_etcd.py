@@ -25,11 +25,12 @@ import unittest
 import eventlet
 import mock
 
+from calico.etcdutils import ResyncRequired
 import calico.test.lib as lib
 import calico.openstack.mech_calico as mech_calico
 import calico.openstack.t_etcd as t_etcd
 from calico import common
-from calico.datamodel_v1 import FELIX_STATUS_DIR
+from calico.datamodel_v1 import FELIX_STATUS_DIR, EndpointId
 
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
@@ -193,6 +194,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(31)
         self.assertEtcdWrites(
             {'/calico/v1/config/InterfacePrefix': 'tap',
+             '/calico/v1/config/EndpointReportingEnabled': True,
              '/calico/v1/Ready': True,
              '/calico/v1/policy/profile/SGID-default/rules':
                  {"outbound_rules": [{"dst_ports": ["1:65535"],
@@ -229,6 +231,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(31)
         expected_writes = {
             '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/config/EndpointReportingEnabled': True,
             '/calico/v1/Ready': True,
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
@@ -318,7 +321,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
-        self.check_update_port_status_called(context)
 
         # Migrate port1 to a different host.
         context._port = lib.port1.copy()
@@ -338,7 +340,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/openstack/instance-1/endpoint/DEADBEEF-1234-5678']))
-        self.check_update_port_status_called(context)
 
         # Now resync again, moving self.osdb_ports to move port 1 back to the
         # old host felix-host-1.  The effect will be as though we've
@@ -392,7 +393,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
-        self.check_update_port_status_called(context)
         self.osdb_ports = [lib.port1, lib.port2, context._port]
 
         # Create a new security group.
@@ -527,8 +527,6 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
-        self.check_update_port_status_called(context)
-
 
         # Resync with all latest data - expect no etcd writes or deletes.
         print "\nResync with existing etcd data\n"
@@ -738,6 +736,17 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'icmp_type': 123,
             'icmp_code': 100,
         })
+        # Numeric type.
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
+            "ethertype": "IPv4",
+            "protocol": 123,
+            "direction": "egress",
+            "remote_group_id": "foobar",
+        }), {
+            'ip_version': 4,
+            'protocol': 123,
+            'dst_tag': "foobar"
+        })
         # Type and code, IPv6.
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv6",
@@ -891,6 +900,42 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         ]
         self.driver.bind_port(context)
 
+    def test_on_port_status_changed(self):
+        self.driver._get_db()
+        self.driver._db_context = mock.Mock()
+        self.driver._db_context.session = mock.MagicMock()
+        self.db.update_port_status.side_effect = lib.DBError()
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "up"})
+
+        self.db.update_port_status.side_effect = None
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           None)
+        self.assertEqual(
+            self.db.update_port_status.mock_calls,
+            [mock.call(self.driver._db_context,
+                       "port_id",
+                       lib.m_constants.PORT_STATUS_ACTIVE),
+             mock.call(self.driver._db_context,
+                       "port_id",
+                       lib.m_constants.PORT_STATUS_ERROR)]
+        )
+        self.db.update_port_status.reset_mock()
+
+    def test_on_port_status_changed_not_found(self):
+        self.driver._get_db()
+        self.driver._db_context = mock.Mock()
+        self.driver._db_context.session = mock.MagicMock()
+        self.driver._db_context.session.query.side_effect = lib.NoResultFound()
+        self.db.update_port_status.side_effect = RuntimeError()
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "up"})
+        self.assertEqual(self.db.update_port_status.mock_calls, [])
+        self.db.update_port_status.reset_mock()
+
 
 class TestCalicoEtcdWatcher(unittest.TestCase):
     def setUp(self):
@@ -902,19 +947,137 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
 
     def test_snapshot(self):
         m_response = mock.Mock()
+
         m_node_to_ignore = mock.Mock()
         m_node_to_ignore.key = "/calico/felix/v1/host/hostname/last_reported_status"
         m_node_to_ignore.value = '{"uptime": 10, "first_update": true}'
+
         m_status_node = mock.Mock()
         m_status_node.key = "/calico/felix/v1/host/hostname/status"
         m_status_node.value = '{"uptime": 10, "first_update": true}'
+
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint/ep1"
+        m_port_status_node.value = '{"status": "up"}'
+
+        m_port_status_node_ignored = mock.Mock()
+        m_port_status_node_ignored.key = "/calico/felix/v1/host/unknown/" \
+                                         "workload/openstack/wlid/endpoint/ep2"
+        m_port_status_node_ignored.value = '{"status": "up"}'
+
+        m_response.leaves = [
+            m_node_to_ignore,
+            m_status_node,
+            m_port_status_node,
+            m_port_status_node_ignored,
+        ]
+
+        self.watcher._on_snapshot_loaded(m_response)
+        self.driver.on_felix_alive.assert_called_once_with("hostname",
+                                                           new=True)
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", {"status": "up"}),
+                mock.call("unknown", "ep2", None),
+            ]
+        )
+
+        # Snapshot 2: should figure out that an endpoint has been removed.
         m_response.leaves = [
             m_node_to_ignore,
             m_status_node,
         ]
+        self.driver.on_port_status_changed.reset_mock()
         self.watcher._on_snapshot_loaded(m_response)
-        self.driver.on_felix_alive.assert_called_once_with("hostname",
-                                                           new=True)
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", None),
+            ]
+        )
+
+    def test_endpoint_status_add_delete(self):
+        m_port_status_node = self._add_test_endpoint()
+        m_port_status_node.action = "delete"
+        self.watcher._on_ep_delete(m_port_status_node,
+                                   "hostname", "wlid", "ep1")
+
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", {"status": "up"}),
+                mock.call("hostname", "ep1", None),
+            ]
+        )
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+
+    def test_endpoint_status_add_bad_json(self):
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint/ep1"
+        m_port_status_node.value = '{"status": "up"'
+        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", None),
+            ]
+        )
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+
+    def test_endpoint_status_add_bad_id(self):
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint"
+        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+
+    def test_on_per_host_dir_delete(self):
+        self._add_test_endpoint()
+
+        # Then delete its workload directory
+        self.watcher._on_per_host_dir_delete(mock.Mock(), "hostname")
+        # And one we didn't know about
+        self.watcher._on_per_host_dir_delete(mock.Mock(), "other")
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", {"status": "up"}),
+                mock.call("hostname", "ep1", None),
+            ]
+        )
+
+    def test_on_per_workload_dir_delete(self):
+        self._add_test_endpoint()
+
+        # Then delete its workload directory
+        self.watcher._on_per_host_dir_delete(mock.Mock(), "hostname", "wlid")
+        # And one we didn't know about
+        self.watcher._on_per_host_dir_delete(mock.Mock(), "other", "wlid")
+        self.assertEqual(self.watcher._endpoints_by_host, {})
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "ep1", {"status": "up"}),
+                mock.call("hostname", "ep1", None),
+            ]
+        )
+
+    def _add_test_endpoint(self):
+        # Add a workload to be deleted
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+                                 "openstack/wlid/endpoint/ep1"
+        m_port_status_node.value = '{"status": "up"}'
+        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        ep_id = EndpointId("hostname", "openstack", "wlid", "ep1")
+        self.assertEqual(self.watcher._endpoints_by_host,
+                         {"hostname": set([ep_id])})
+        return m_port_status_node
 
     def test_status_bad_json(self):
         for value in ["{", 10, "foo"]:
@@ -923,6 +1086,34 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
             m_response.value = value
             self.watcher._on_status_set(m_response, "foo")
         self.assertFalse(self.driver.on_felix_alive.called)
+
+    def test_felix_status_expiry(self):
+        # Put an endpoint in the cache to find later...
+        m_response = mock.Mock()
+        m_response.key = "/calico/felix/v1/host/hostname/workload/" \
+                         "openstack/wlid/endpoint/epid"
+        m_response.value = '{"status": "up"}'
+        self.watcher._on_ep_set(m_response, "hostname", "wlid", "epid")
+
+        # Then note that felix is down.
+        m_response = mock.Mock()
+        m_response.key = "/calico/felix/v1/host/hostname/status"
+        self.watcher._on_status_del(m_response, "hostname")
+
+        self.assertEqual(
+            self.driver.on_port_status_changed.mock_calls,
+            [
+                mock.call("hostname", "epid", {"status": "up"}),
+                mock.call("hostname", "epid", None),
+            ]
+        )
+
+    def test_force_resync(self):
+        m_response = mock.Mock()
+        m_response.action = "delete"
+        m_response.key = "/calico/felix/v1/host/"
+        self.assertRaises(ResyncRequired, self.watcher._force_resync,
+                          m_response, foo="bar")
 
 
 def _neutron_rule_from_dict(overrides):

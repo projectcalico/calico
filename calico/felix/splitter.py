@@ -144,7 +144,7 @@ class UpdateSplitter(Actor):
             ipset_mgr.on_tags_update(profile_id, tags, async=True)
 
     @actor_message()
-    def on_interface_update(self, name):
+    def on_interface_update(self, name, iface_up):
         """
         Called when an interface state has changed.
 
@@ -152,7 +152,7 @@ class UpdateSplitter(Actor):
         """
         _log.info("Interface %s state changed", name)
         for endpoint_mgr in self.endpoint_mgrs:
-            endpoint_mgr.on_interface_update(name, async=True)
+            endpoint_mgr.on_interface_update(name, iface_up, async=True)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
