@@ -2,27 +2,47 @@
 # Devstack settings that are wanted when using Calico
 # ===================================================
 
-# Disable services that Devstack starts by default, but that we don't
-# need for Calico networking demonstration: 'dstat' is a rolling
-# display of memory and CPU usage by the various OpenStack services
-# and agents; 'tempest' is OpenStack's high level testing framework;
-# and 'n-net' is Nova networking.
-disable_service dstat
-disable_service tempest
-disable_service n-net
+# If SERVICE_HOST is not the local host name, we will prepare a
+# compute-only node.
+if [ x$SERVICE_HOST != x$HOSTNAME ]; then
+    CALICO_COMPUTE_ONLY=true
+    MYSQL_HOST=${MYSQL_HOST:-$SERVICE_HOST}
+    RABBIT_HOST=${RABBIT_HOST:-$SERVICE_HOST}
+else
+    CALICO_COMPUTE_ONLY=false
+fi
 
-# Enable services that Devstack doesn't enable by default, but that we
-# _do_ want for Calico demonstration: 'q-svc' is the Neutron server;
-# 'q-dhcp' means the Neutron DHCP agent; and 'n-api-meta' is the Nova
-# metadata API service.
-enable_service q-svc
-enable_service q-dhcp
-enable_service n-api-meta
+if $CALICO_COMPUTE_ONLY; then
+    # Explicitly enable the services that we need for compute only.
+    ENABLED_SERVICES=n-cpu,neutron,q-dhcp,n-api-meta,calico,calico-bird
+else
+    # Disable services that Devstack starts by default, but that we
+    # don't need for Calico networking demonstration: 'dstat' is a
+    # rolling display of memory and CPU usage by the various OpenStack
+    # services and agents; 'tempest' is OpenStack's high level testing
+    # framework; and 'n-net' is Nova networking.
+    disable_service dstat
+    disable_service tempest
+    disable_service n-net
 
-# When we later launch Felix (Calico's agent), we do that as a service
-# named 'calico', and that only works if Devstack thinks that 'calico'
-# is enabled.  So do that here.
-enable_service calico
+    # Enable services that Devstack doesn't enable by default, but
+    # that we _do_ want for Calico demonstration: 'q-svc' is the
+    # Neutron server; 'q-dhcp' means the Neutron DHCP agent; and
+    # 'n-api-meta' is the Nova metadata API service.
+    enable_service q-svc
+    enable_service q-dhcp
+    enable_service n-api-meta
+
+    # When we later launch Felix (Calico's agent), we do that as a
+    # service named 'calico', and that only works if Devstack thinks
+    # that 'calico' is enabled.  So do that here.
+    enable_service calico
+
+    # 'calico-bird' is an additional service that automatically
+    # generates and maintains correct full mesh BIRD config, in a
+    # multi-node Calico/DevStack cluster.
+    enable_service calico-bird
+fi
 
 # When Neutron is enabled, Devstack does agent-related installations,
 # configurations and service startups as directed by the value of
