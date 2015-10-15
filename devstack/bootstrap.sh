@@ -113,3 +113,10 @@ EOF
 
 # Stack!
 ./stack.sh
+
+# If we're on the controller node, create a Calico network.
+if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
+    . openrc admin admin
+    neutron net-create --shared --provider:network_type local calico
+    neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0/24
+fi
