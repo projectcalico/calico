@@ -7,6 +7,14 @@ instructions explain how to set up a single or multiple node
 DevStack/Calico system, and then how to see Calico connectivity in
 action.
 
+.. note:: networking-calico includes a shell script that implements
+          the following setup instructions, at
+          https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh.
+          You are welcome to use it, but we recommend that you read
+          the following description first anyway, and briefly review
+          the script's code, so that you will understand what the
+          script does.
+
 
 Single (or first) node setup
 ----------------------------
