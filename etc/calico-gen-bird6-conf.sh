@@ -18,7 +18,7 @@ where
   <my-ipv6-address> is the external IPv6 address of the local machine
   <rr-ipv6-address> is the IPv6 address of the route reflector that
       the local BIRD6 should peer with
-  <as-number> is the BGP AS number that the route relector is using.
+  <as-number> is the BGP AS number that the route reflector is using.
 
 Please specify exactly these 4 required arguments.
 

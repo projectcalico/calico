@@ -40,17 +40,3 @@ protocol direct {
    debug all;
    interface "-dummy0", "dummy1", "eth*", "em*", "en*", "br-mgmt";
 }
-
-# Peer with route reflector.
-protocol bgp N1 {
-  description "Connection to BGP route reflector";
-  local as @AS_NUMBER@;
-  neighbor @RR_IP_ADDRESS@ as @AS_NUMBER@;
-  multihop;
-  import all;
-  graceful restart;
-  export filter export_bgp;
-  next hop self;    # Disable next hop processing and always advertise our
-                    # local address as nexthop
-  source address @MY_IP_ADDRESS@;  # The local address we use for the TCP connection
-}
