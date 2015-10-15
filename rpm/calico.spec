@@ -187,6 +187,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 /usr/bin/calico-gen-bird-conf.sh
 /usr/bin/calico-gen-bird6-conf.sh
+/usr/bin/calico-gen-bird-mesh-conf.sh
 /usr/share/calico/bird/*
 %doc
 
