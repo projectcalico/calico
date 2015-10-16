@@ -26,6 +26,7 @@ import random
 import json
 import logging
 import socket
+import subprocess
 import msgpack
 import time
 from calico.monotonic import monotonic_time
@@ -404,8 +405,11 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 print "Bound socket"
                 update_socket.listen(1)
                 print "Marked socket for listen"
-                os.chmod("/tmp/felix.sck", 0777)
-                print "Chmodded socket"
+
+                subprocess.Popen([sys.executable,
+                                  "-m",
+                                  "calico.etcddriver"])
+
                 update_conn, _ = update_socket.accept()
                 print "Accepted connection on socket"
                 receive_count = 0
