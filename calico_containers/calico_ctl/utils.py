@@ -22,6 +22,7 @@ import re
 from netaddr.core import AddrFormatError
 
 DOCKER_VERSION = "1.16"
+DOCKER_LIBNETWORK_VERSION = "1.21"
 DOCKER_ORCHESTRATOR_ID = "docker"
 NAMESPACE_ORCHESTRATOR_ID = "namespace"
 hostname = socket.gethostname()

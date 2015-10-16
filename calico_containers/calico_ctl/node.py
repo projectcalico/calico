@@ -214,7 +214,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     :return:  None.
     """
     # Print warnings for any known system issues before continuing
-    check_system(fix=False, quit_if_error=False)
+    check_system(fix=False, quit_if_error=False, libnetwork=libnetwork_image)
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):
