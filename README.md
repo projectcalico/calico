@@ -89,13 +89,11 @@ This is compatible with all Docker versions from 1.6 onwards.
 #### Docker with libnetwork
 
 Docker's native [libnetwork network driver][libnetwork] is available in the 
-Docker [experimental channel][docker-experimental] alongside the Docker 1.7 
-release. Docker's experimental channel is still moving fast and some of its 
-features are not yet fully stable.
+Docker 1.9 release currently underoing development.
 
 Setup of the libnetwork environment is a little more involved since it requires
-the experimental Docker version, and a separate datastore used for Docker 
-clustering.
+the current master (1.9.dev) builds of Docker, and the use of etcd as a
+datastore for Docker clustering.
 
 #### Docker with Powerstrip
 
@@ -111,7 +109,6 @@ For more information on what you can do with Calico, please visit the
 [powerstrip]: https://github.com/ClusterHQ/powerstrip
 [libnetwork]: https://github.com/docker/libnetwork
 [raise-issues]: https://github.com/projectcalico/calico-docker/issues/new
-[docker-experimental]: https://github.com/docker/docker/tree/master/experimental
 [irc]: http://webchat.freenode.net?randomnick=1&channels=%23calico&uio=d4
 [project-calico]: http://www.projectcalico.org
 [etcd]: https://github.com/coreos/etcd
