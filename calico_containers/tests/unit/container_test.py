@@ -234,16 +234,13 @@ class TestContainer(unittest.TestCase):
         self.assertFalse(m_netns.create_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_workload_id', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
-    def test_container_remove(self, m_netns, m_client,  m_get_container_id,
-                              m_enforce_root):
+    def test_container_remove(self, m_netns, m_client, m_enforce_root):
         """
         Test for container_remove of calicoctl container command
         """
         # Set up mock objects
-        m_get_container_id.return_value = 666
         ipv4_nets = set()
         ipv4_nets.add(IPNetwork(IPAddress('1.1.1.1')))
         ipv6_nets = set()
@@ -252,87 +249,77 @@ class TestContainer(unittest.TestCase):
         m_endpoint.ipv6_nets = ipv6_nets
         m_endpoint.endpoint_id = 12
         m_endpoint.name = "eth1234"
-        ippool = IPPool('1.1.1.1/24')
-        m_client.get_endpoint.return_value = m_endpoint
-        m_client.get_ip_pools.return_value = [ippool]
+        m_client.get_endpoints.return_value = [m_endpoint]
 
         # Call method under test
         container.container_remove('container1')
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_get_container_id.assert_called_once_with('container1')
-        m_client.get_endpoint.assert_called_once_with(
+        m_client.get_endpoints.assert_called_once_with(
             hostname=utils.hostname,
             orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
-            workload_id=666
+            workload_id='container1'
         )
         self.assertEqual(m_client.release_ips.call_count, 1)
         m_netns.remove_veth.assert_called_once_with("eth1234")
         m_client.remove_workload.assert_called_once_with(
-            utils.hostname, utils.DOCKER_ORCHESTRATOR_ID, 666)
+            utils.hostname, utils.DOCKER_ORCHESTRATOR_ID, "container1")
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_workload_id', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
-    def test_container_remove_no_endpoint(
-            self, m_client, m_get_container_id, m_enforce_root):
+    @patch('calico_ctl.container.netns', autospec=True)
+    def test_container_remove_with_lookup(self, m_netns, m_client,
+                                          m_get_workload_id, m_enforce_root):
         """
-        Test for container_remove when the client cannot obtain an endpoint
-
-        client.get_endpoint raises a KeyError.
-        Assert that the system then exits and all expected calls are made
+        Test for container_remove of calicoctl container command
         """
         # Set up mock objects
-        m_client.get_endpoint.side_effect = KeyError
+        m_get_workload_id.return_value = "long_id"
+        m_client.get_endpoints.return_value = []
 
-        # Call function under test expecting a SystemExit
-        self.assertRaises(SystemExit, container.container_remove, 'container1')
-
-        # Assert
-        self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_container_id.called)
-        self.assertTrue(m_client.get_endpoint.called)
-        self.assertFalse(m_client.get_ip_pools.called)
-
-    @patch('pycalico.netns.remove_veth')
-    @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_workload_id', autospec=True)
-    @patch('calico_ctl.container.client', autospec=True)
-    def test_container_remove_veth_error(self, m_client, m_get_container_id,
-                                         m_enforce_root, m_remove_veth):
-        """
-        Test for container_remove when remove_veth throws an error
-
-        Assert that the system exits and workload is not removed.
-        """
-        # Set up mock objects
-        ipv4_nets = set()
-        ipv4_nets.add(IPNetwork(IPAddress('1.1.1.1')))
-        ipv6_nets = set()
-        m_endpoint = Mock(spec=Endpoint)
-        m_endpoint.ipv4_nets = ipv4_nets
-        m_endpoint.ipv6_nets = ipv6_nets
-        m_endpoint.endpoint_id = 12
-        m_endpoint.name = "eth1234"
-        ippool = IPPool('1.1.1.1/24')
-        m_client.get_endpoint.return_value = m_endpoint
-        m_client.get_ip_pools.return_value = [ippool]
-        m_get_container_id.return_value = 52
-        m_remove_veth.side_effect = CalledProcessError(1, "test")
-
-        # Call function under test expecting a SystemExit
-        self.assertRaises(SystemExit, container.container_remove, 'container1')
+        # Call method under test
+        container.container_remove('container1')
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_get_container_id.assert_called_once_with("container1")
-        m_client.get_endpoint.assert_called_once_with(
-                                         hostname=utils.hostname,
-                                         orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
-                                         workload_id=52)
-        m_client.get_ip_pools.assert_called_once_with(4)
-        self.assertFalse(m_client.remove_workload.called)
+        self.assertEqual(m_client.release_ips.call_count, 0)
+        self.assertEqual(m_netns.remove_veth.call_count, 0)
+        self.assertEqual(m_client.get_endpoints.call_args_list,
+                         [call(hostname=utils.hostname, workload_id='container1', orchestrator_id='docker'),
+                          call(hostname=utils.hostname, workload_id='long_id', orchestrator_id='docker')])
+        m_client.remove_workload.assert_called_once_with(
+            utils.hostname, utils.DOCKER_ORCHESTRATOR_ID, "long_id")
+
+
+    @patch('calico_ctl.container.enforce_root', autospec=True)
+    @patch('calico_ctl.container.get_workload_id', autospec=True)
+    @patch('calico_ctl.container.client', autospec=True)
+    @patch('calico_ctl.container.netns', autospec=True)
+    def test_container_remove_error_on_remove_workload(self, m_netns, m_client,
+                                          m_get_workload_id, m_enforce_root):
+        """
+        Test for container_remove of calicoctl container command
+        """
+        # Set up mock objects
+        m_get_workload_id.return_value = "long_id"
+        m_client.get_endpoints.return_value = []
+        m_client.remove_workload.side_effect=KeyError('Boom!')
+
+        # Call method under test
+        container.container_remove('container1')
+
+        # Assert
+        m_enforce_root.assert_called_once_with()
+        self.assertEqual(m_client.release_ips.call_count, 0)
+        self.assertEqual(m_netns.remove_veth.call_count, 0)
+        self.assertEqual(m_client.get_endpoints.call_args_list,
+                         [call(hostname=utils.hostname, workload_id='container1', orchestrator_id='docker'),
+                          call(hostname=utils.hostname, workload_id='long_id', orchestrator_id='docker')])
+        m_client.remove_workload.assert_called_once_with(
+            utils.hostname, utils.DOCKER_ORCHESTRATOR_ID, "long_id")
+
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)

@@ -114,18 +114,6 @@ def container(arguments):
     validate_arguments(arguments)
 
     try:
-        workload_id = None
-        if "<CONTAINER>" in arguments:
-            container_id = arguments.get("<CONTAINER>")
-            if container_id.startswith("/") and os.path.exists(container_id):
-                # The ID is a path. Don't do any docker lookups
-                workload_id = escape_etcd(container_id)
-                orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
-            else:
-                info = get_container_info_or_exit(container_id)
-                workload_id = info["Id"]
-                orchestrator_id = DOCKER_ORCHESTRATOR_ID
-
         if arguments.get("ip"):
             if arguments.get("add"):
                 container_ip_add(arguments.get("<CONTAINER>"),
@@ -143,12 +131,16 @@ def container(arguments):
                 if arguments.get("remove"):
                     container_remove(arguments.get("<CONTAINER>"))
         elif arguments.get("endpoint"):
+            orchestrator_id, workload_id = \
+                                  lookup_workload(arguments.get("<CONTAINER>"))
             endpoint.endpoint_show(hostname,
                                    orchestrator_id,
                                    workload_id,
                                    None,
                                    True)
         elif arguments.get("profile"):
+            orchestrator_id, workload_id = \
+                                  lookup_workload(arguments.get("<CONTAINER>"))
             if arguments.get("append"):
                 endpoint.endpoint_profile_append(hostname,
                                                  orchestrator_id,
@@ -186,6 +178,24 @@ def container(arguments):
             print_paragraph("Unable to run docker commands. Is the docker "
                             "daemon running?")
         sys.exit(1)
+
+
+def lookup_workload(container_id):
+    """
+    Lookup the workload_id and choose the correct orchestrator ID.
+
+    :param container_id: The container ID
+    :return: and tuple of orchestrator and workload_id
+    """
+    if container_id.startswith("/") and os.path.exists(container_id):
+        # The ID is a path. Don't do any docker lookups
+        workload_id = escape_etcd(container_id)
+        orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+    else:
+        info = get_container_info_or_exit(container_id)
+        workload_id = info["Id"]
+        orchestrator_id = DOCKER_ORCHESTRATOR_ID
+    return orchestrator_id, workload_id
 
 
 def container_add(container_id, ip, interface):
@@ -304,43 +314,43 @@ def container_remove(container_id):
     # Resolve the name to ID.
     if container_id.startswith("/") and os.path.exists(container_id):
         # The ID is a path. Don't do any docker lookups
-        workload_id = escape_etcd(container_id)
         orchestrator_id = NAMESPACE_ORCHESTRATOR_ID
+        endpoints = client.get_endpoints(hostname=hostname,
+                                         orchestrator_id=orchestrator_id,
+                                         workload_id=escape_etcd(container_id))
     else:
-        workload_id = get_workload_id(container_id)
+        # We know we're using "docker" as the orchestrator. If we have a direct
+        # hit on the container id then we can proceed. Otherwise, ask docker to
+        # try converting the name/id fragment into a full ID.
         orchestrator_id = DOCKER_ORCHESTRATOR_ID
+        endpoints = client.get_endpoints(hostname=hostname,
+                                         orchestrator_id=orchestrator_id,
+                                         workload_id=container_id)
 
-    # Find the endpoint ID. We need this to find any ACL rules
+        if not endpoints:
+            container_id = get_workload_id(container_id)
+            endpoints = client.get_endpoints(hostname=hostname,
+                                             orchestrator_id=orchestrator_id,
+                                             workload_id=container_id)
+
+    for endpoint in endpoints:
+        # Remove any IP address assignments that this endpoint has
+        client.release_ips(set(map(IPAddress,
+                                   endpoint.ipv4_nets | endpoint.ipv6_nets)))
+
+        try:
+            # Remove the interface if it exists
+            netns.remove_veth(endpoint.name)
+        except CalledProcessError:
+            print "Could not remove Calico interface %s" % endpoint.name
+
+    # Always try to remove the workload, even if we didn't find any
+    # endpoints.
     try:
-        endpoint = client.get_endpoint(hostname=hostname,
-                                       orchestrator_id=orchestrator_id,
-                                       workload_id=workload_id)
+        client.remove_workload(hostname, orchestrator_id, container_id)
+        print "Removed Calico from %s" % container_id
     except KeyError:
-        print "Container %s doesn't contain any endpoints" % container_id
-        sys.exit(1)
-
-    # Remove any IP address assignments that this endpoint has
-    for net in endpoint.ipv4_nets | endpoint.ipv6_nets:
-        assert(net.size == 1)
-        ip = net.ip
-        pools = client.get_ip_pools(ip.version)
-        for pool in pools:
-            if ip in pool:
-                # Ignore failure to release_ips, since we're not
-                # enforcing assignments strictly in datastore.py.
-                client.release_ips({ip})
-
-    try:
-        # Remove the interface if it exists
-        netns.remove_veth(endpoint.name)
-    except CalledProcessError:
-        print "Could not remove Calico interface %s" % endpoint.name
-        sys.exit(1)
-
-    # Remove the container from the datastore.
-    client.remove_workload(hostname, orchestrator_id, workload_id)
-
-    print "Removed Calico interface from %s" % container_id
+        print "Failed find Calico data for %s" % container_id
 
 
 # TODO: If container created with IPv4 and then add IPv6 address, do we set up the
