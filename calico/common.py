@@ -22,23 +22,24 @@ calico.common
 Calico common utilities.
 """
 import errno
-import gevent
-import gevent.local
-import itertools
 import logging
 import logging.handlers
-import netaddr
-import netaddr.core
 import os
 import re
 import sys
 from types import StringTypes
+
+import netaddr
+import netaddr.core
 from netaddr.strategy import eui48
 
 _log = logging.getLogger(__name__)
 
 AGENT_TYPE_CALICO = 'Calico agent'
-FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lineno)d: %(message)s'
+
+FORMAT_STRING = '%(asctime)s [%(levelname)s][%(process)s/%(thread)d] %(name)s %(lineno)d: %(message)s'
+# Used "tid", which we swap for the greenlet ID, instead of "thread"
+FORMAT_STRING_GEVENT = '%(asctime)s [%(levelname)s][%(process)s/%(tid)d] %(name)s %(lineno)d: %(message)s'
 
 # This format string deliberately uses two different styles of format
 # specifier. The %()s form is used by the logging module: the {} form is used
@@ -88,24 +89,6 @@ VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
 # have anything malicious in it.
 VALID_IPAM_POOL_ID_RE = re.compile(r'^[0-9\.:a-fA-F\-]{1,43}$')
 EXPECTED_IPAM_POOL_KEYS = set(["cidr", "masquerade"])
-
-tid_storage = gevent.local.local()
-tid_counter = itertools.count()
-# Ought to do itertools.count(start=1), but python 2.6 does not support it.
-tid_counter.next()
-
-def greenlet_id():
-    """
-    Returns an integer greenlet ID.
-    itertools.count() is atomic, if the internet is correct.
-    http://stackoverflow.com/questions/23547604/python-counter-atomic-increment
-    """
-    try:
-        tid = tid_storage.tid
-    except:
-        tid = tid_counter.next()
-        tid_storage.tid = tid
-    return tid
 
 
 def validate_port(port):
@@ -183,13 +166,8 @@ def mkdir_p(path):
                 pass
             else: raise
 
-class GreenletFilter(logging.Filter):
-    def filter(self, record):
-        record.tid = greenlet_id()
-        return True
 
-
-def default_logging():
+def default_logging(gevent_in_use=True):
     """
     Sets up the Calico default logging, with default severities.
 
@@ -223,18 +201,22 @@ def default_logging():
 
     root_logger.addHandler(syslog_handler)
 
-    file_formatter = logging.Formatter(FORMAT_STRING)
+    format_string = FORMAT_STRING_GEVENT if gevent_in_use else FORMAT_STRING
+    file_formatter = logging.Formatter(format_string)
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.ERROR)
     stream_handler.setFormatter(file_formatter)
-    stream_handler.addFilter(GreenletFilter())
+    if gevent_in_use:
+        from geventutils import GreenletFilter
+        stream_handler.addFilter(GreenletFilter())
     root_logger.addHandler(stream_handler)
 
 
 def complete_logging(logfile=None,
                      file_level=logging.DEBUG,
                      syslog_level=logging.ERROR,
-                     stream_level=logging.ERROR):
+                     stream_level=logging.ERROR,
+                     gevent_in_use=True):
     """
     Updates the logging configuration based on learned configuration.
 
@@ -279,9 +261,13 @@ def complete_logging(logfile=None,
     if logfile and file_level is not None:
         if not file_handler:
             mkdir_p(os.path.dirname(logfile))
-            formatter = logging.Formatter(FORMAT_STRING)
+            format_string = (FORMAT_STRING_GEVENT if gevent_in_use
+                             else FORMAT_STRING)
+            formatter = logging.Formatter(format_string)
             file_handler = logging.handlers.WatchedFileHandler(logfile)
-            file_handler.addFilter(GreenletFilter())
+            if gevent_in_use:
+                from geventutils import GreenletFilter
+                file_handler.addFilter(GreenletFilter())
             file_handler.setLevel(file_level)
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
