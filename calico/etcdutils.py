@@ -4,6 +4,7 @@ from collections import namedtuple
 import logging
 import re
 import etcd
+import os
 from socket import timeout as SocketTimeout
 import time
 
@@ -96,9 +97,18 @@ class EtcdClientOwner(object):
     reconnecting, optionally copying the cluster ID.
     """
 
-    def __init__(self, etcd_authority):
+    def __init__(self,
+                 etcd_authority,
+                 etcd_scheme="http",
+                 etcd_key=None,
+                 etcd_cert=None,
+                 etcd_ca=None):
         super(EtcdClientOwner, self).__init__()
         self.etcd_authority = etcd_authority
+        self.etcd_scheme = etcd_scheme
+        self.etcd_key = etcd_key
+        self.etcd_cert = etcd_cert
+        self.etcd_ca = etcd_ca
         self.client = None
         self.reconnect()
 
@@ -119,9 +129,17 @@ class EtcdClientOwner(object):
         else:
             _log.info("(Re)connecting to etcd. No previous cluster ID.")
             old_cluster_id = None
+
+        key_pair = None
+        if self.etcd_cert and self.etcd_key:
+            key_pair = (self.etcd_cert, self.etcd_key)
+
         self.client = etcd.Client(
             host=host,
             port=port,
+            protocol=self.etcd_scheme,
+            cert=key_pair,
+            ca_cert=self.etcd_ca,
             expected_cluster_id=old_cluster_id
         )
 
@@ -134,8 +152,16 @@ class EtcdWatcher(EtcdClientOwner):
 
     def __init__(self,
                  etcd_authority,
-                 key_to_poll):
-        super(EtcdWatcher, self).__init__(etcd_authority)
+                 key_to_poll,
+                 etcd_scheme="http",
+                 etcd_key=None,
+                 etcd_cert=None,
+                 etcd_ca=None):
+        super(EtcdWatcher, self).__init__(etcd_authority,
+                                          etcd_scheme=etcd_scheme,
+                                          etcd_key=etcd_key,
+                                          etcd_cert=etcd_cert,
+                                          etcd_ca=etcd_ca)
         self.key_to_poll = key_to_poll
         self.next_etcd_index = None
 

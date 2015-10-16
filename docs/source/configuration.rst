@@ -79,6 +79,15 @@ The full list of parameters which can be set is as follows.
 | EtcdAddr                    | localhost:4001                 | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
 |                             |                                | to.                                                                                       |
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| EtcdScheme                  | http                           | The protocol type (http or https) of the etcd node or proxy that Felix connects to.       |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| EtcdKeyFile                 | None                           | The full path to the etcd public key file for using etcd with SSL.                        |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| EtcdCertFile                | None                           | The full path to the etcd certificate file for using etcd with SSL.                       |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| EtcdCaFile                  | None                           | The full path to the etcd Certificate Authority certificate file for using etcd with SSL  |
+|                             |                                | certificate verification.                                                                 |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | DefaultEndpointToHostAction | DROP                           | By default Calico blocks traffic from endpoints to the host itself by using an iptables   |
 |                             |                                | DROP action.  If you want to allow some or all traffic from endpoint to host then set     |
 |                             |                                | this parameter to "RETURN" (which causes the rest of the iptables INPUT chain to be       |
@@ -139,7 +148,9 @@ variables. To set a configuration parameter via an environment variable, set
 the environment variable formed by taking ``FELIX_`` and appending the uppercase
 form of the variable name. For example, to set the etcd address, set the
 environment variable ``FELIX_ETCDADDR``. Other examples include
-``FELIX_FELIXHOSTNAME``, ``FELIX_LOGFILEPATH`` and ``FELIX_METADATAADDR``.
+``FELIX_ETCDSCHEME``, ``FELIX_ETCDKEYFILE``, ``FELIX_ETCDCERTFILE``,
+``FELIX_ETCDCAFILE``, ``FELIX_FELIXHOSTNAME``, ``FELIX_LOGFILEPATH``
+and ``FELIX_METADATAADDR``.
 
 Configuration file
 ^^^^^^^^^^^^^^^^^^

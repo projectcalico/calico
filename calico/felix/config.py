@@ -165,6 +165,14 @@ class Config(object):
                            "localhost:4001", sources=[ENV, FILE])
         self.add_parameter("FelixHostname", "Felix compute host hostname",
                            socket.gethostname(), sources=[ENV, FILE])
+        self.add_parameter("EtcdScheme", "Protocol type for http or https",
+                           "http", sources=[ENV, FILE])
+        self.add_parameter("EtcdKeyFile", "Path to etcd key file",
+                           "none", sources=[ENV, FILE])
+        self.add_parameter("EtcdCertFile", "Path to etcd certificate file",
+                           "none", sources=[ENV, FILE])
+        self.add_parameter("EtcdCaFile", "Path to etcd CA certificate file",
+                           "none", sources=[ENV, FILE])
 
         self.add_parameter("StartupCleanupDelay",
                            "Delay before cleanup starts",
@@ -255,6 +263,10 @@ class Config(object):
         """
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.HOSTNAME = self.parameters["FelixHostname"].value
+        self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
+        self.ETCD_KEY_FILE = self.parameters["EtcdKeyFile"].value
+        self.ETCD_CERT_FILE = self.parameters["EtcdCertFile"].value
+        self.ETCD_CA_FILE = self.parameters["EtcdCaFile"].value
         self.STARTUP_CLEANUP_DELAY = self.parameters["StartupCleanupDelay"].value
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
         self.REFRESH_INTERVAL = self.parameters["IptablesRefreshInterval"].value
@@ -372,6 +384,56 @@ class Config(object):
         except ValueError:
             raise ConfigException("Invalid port in field",
                                   self.parameters["EtcdAddr"])
+
+        # Set default or python None value for each etcd "none" config value
+        if self.ETCD_SCHEME.lower() == "none":
+            self.ETCD_SCHEME = "http"
+        if self.ETCD_KEY_FILE.lower() == "none":
+            self.ETCD_KEY_FILE = None
+        if self.ETCD_CERT_FILE.lower() == "none":
+            self.ETCD_CERT_FILE = None
+        if self.ETCD_CA_FILE == "none":
+            self.ETCD_CA_FILE = None
+
+        if self.ETCD_SCHEME == "https":
+            # key and certificate must be both specified or both not specified
+            if bool(self.ETCD_KEY_FILE) != bool(self.ETCD_CERT_FILE):
+                if not self.ETCD_KEY_FILE:
+                    raise ConfigException("Missing etcd key file. Key and "
+                                          "certificate must both be specified "
+                                          "or both be blank.",
+                                          self.parameters["EtcdKeyFile"])
+                else:
+                    raise ConfigException("Missing etcd certificate. Key and "
+                                          "certificate must both be specified "
+                                          "or both be blank.",
+                                          self.parameters["EtcdCertFile"])
+
+            # Make sure etcd key and certificate are readable
+            if self.ETCD_KEY_FILE and self.ETCD_CERT_FILE:
+                if not (os.path.isfile(self.ETCD_KEY_FILE) and
+                        os.access(self.ETCD_KEY_FILE, os.R_OK)):
+                    raise ConfigException("Cannot read key file. Key file "
+                                          "must be a readable path.",
+                                          self.parameters["EtcdKeyFile"])
+                if not (os.path.isfile(self.ETCD_CERT_FILE) and
+                        os.access(self.ETCD_CERT_FILE, os.R_OK)):
+                    raise ConfigException("Cannot read cert file. Cert file "
+                                          "must be a readable path.",
+                                          self.parameters["EtcdCertFile"])
+
+            # If Certificate Authority cert provided, check it's readable
+            if (self.ETCD_CA_FILE and
+                    not (os.path.isfile(self.ETCD_CA_FILE) and
+                         os.access(self.ETCD_CA_FILE, os.R_OK))):
+                raise ConfigException("Missing CA certificate or file is "
+                                      "unreadable. Value must be readable "
+                                      "file path.",
+                                      self.parameters["EtcdCaFile"])
+        elif self.ETCD_SCHEME != "http":
+            raise ConfigException("Invalid protocol scheme. Value must be one "
+                                  "of: \"\", \"http\", \"https\".",
+                                  self.parameters["EtcdScheme"])
 
         try:
             self.LOGLEVFILE = LOGLEVELS[self.LOGLEVFILE.lower()]

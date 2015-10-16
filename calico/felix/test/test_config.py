@@ -24,6 +24,7 @@ import re
 import mock
 import socket
 import sys
+from contextlib import nested
 from calico.felix.config import Config, ConfigException
 
 if sys.version_info < (2, 7):
@@ -76,6 +77,10 @@ class TestConfig(unittest.TestCase):
 
             # Test defaulting.
             self.assertEqual(config.ETCD_ADDR, "localhost:4001")
+            self.assertEqual(config.ETCD_SCHEME, "http")
+            self.assertEqual(config.ETCD_KEY_FILE, None)
+            self.assertEqual(config.ETCD_CERT_FILE, None)
+            self.assertEqual(config.ETCD_CA_FILE, None)
             self.assertEqual(config.HOSTNAME, socket.gethostname())
             self.assertEqual(config.IFACE_PREFIX, "blah")
             self.assertEqual(config.METADATA_PORT, 123)
@@ -100,6 +105,64 @@ class TestConfig(unittest.TestCase):
         with self.assertRaisesRegexp(ConfigException,
                                      "Invalid field value"):
             config = Config("calico/felix/test/data/felix_invalid_action.cfg")
+
+    def test_invalid_etcd(self):
+        """
+        Test that etcd validation works correctly.
+        """
+        data = {
+            "felix_invalid_scheme.cfg": "Invalid protocol scheme",
+            "felix_missing_key.cfg": "Missing etcd key",
+            "felix_missing_cert.cfg": "Missing etcd certificate"
+        }
+
+        for filename in data:
+            log.debug("Test filename : %s", filename)
+            with self.assertRaisesRegexp(ConfigException,
+                                         data[filename]):
+                config = Config("calico/felix/test/data/%s" % filename)
+
+    def test_unreadable_etcd_key(self):
+        """
+        Test that we throw an exception when the etcd key is unreadable
+        """
+        with nested(mock.patch("os.path.isfile", autospec=True),
+                    mock.patch("os.access", autospec=True)) \
+             as (m_isfile, m_access):
+
+            m_isfile.return_value = True
+            m_access.return_value = False
+            with self.assertRaisesRegexp(ConfigException,
+                                         "Cannot read key file"):
+                config = Config("calico/felix/test/data/felix_unreadable_key.cfg")
+
+    def test_unreadable_etcd_cert(self):
+        """
+        Test that we throw an exception when the etcd cert is unreadable
+        """
+        with nested(mock.patch("os.path.isfile", autospec=True),
+                    mock.patch("os.access", autospec=True)) \
+             as (m_isfile, m_access):
+
+            m_isfile.return_value = True
+            m_access.side_effect = iter([True, False])
+            with self.assertRaisesRegexp(ConfigException,
+                                         "Cannot read cert file"):
+                config = Config("calico/felix/test/data/felix_unreadable_cert.cfg")
+
+    def test_unreadable_etcd_ca(self):
+        """
+        Test that we throw an exception when the etcd CA cert is unreadable
+        """
+        with nested(mock.patch("os.path.isfile", autospec=True),
+                    mock.patch("os.access", autospec=True)) \
+             as (m_isfile, m_access):
+
+            m_isfile.return_value = True
+            m_access.side_effect = iter([True, True, False])
+            with self.assertRaisesRegexp(ConfigException,
+                                         "Missing CA certificate"):
+                config = Config("calico/felix/test/data/felix_unreadable_ca.cfg")
 
     def test_no_logfile(self):
         # Logging to file can be excluded by explicitly saying "none" -

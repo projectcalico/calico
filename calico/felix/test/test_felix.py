@@ -72,6 +72,10 @@ class TestBasic(BaseTestCase):
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
         m_config = mock.Mock(spec=config.Config)
         m_config.ETCD_ADDR = "localhost:4001"
+        m_config.ETCD_SCHEME = "http"
+        m_config.ETCD_KEY_FILE = "none"
+        m_config.ETCD_CERT_FILE = "none"
+        m_config.ETCD_CA_FILE = "none"
         m_config.HOSTNAME = "myhost"
         m_config.IFACE_PREFIX = "tap"
         m_config.METADATA_IP = "10.0.0.1"
