@@ -31,7 +31,6 @@ from requests import ConnectionError
 
 from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION
 from utils import enforce_root
-from utils import sysctl
 from connectors import docker_client
 
 
@@ -65,14 +64,13 @@ def check_system(fix=False, quit_if_error=False, libnetwork=False):
     they are not. This function will sys.exit(1) instead of returning false if
     quit_if_error == True
     """
-    # modprobe and sysctl require root privileges.
+    # modprobe requires root privileges.
     enforce_root()
 
     kernel_ok = _check_kernel_modules(fix)
-    ip_ok = _check_ip_forwarding(fix)
     docker_ok = _check_docker_version(libnetwork)
 
-    system_ok = kernel_ok and ip_ok and docker_ok
+    system_ok = kernel_ok and docker_ok
 
     if quit_if_error and not system_ok:
         sys.exit(1)
@@ -136,36 +134,6 @@ def _check_kernel_modules(fix):
                                      "module. Load with `modprobe %s`" % \
                                      (module, module)
                 system_ok = False
-    return system_ok
-
-
-def _check_ip_forwarding(fix):
-    """
-    Check IP forwarding is enabled.
-    :param fix: if True, try to fix any system dependency issues that are
-    detected.
-    :return: True if IP forwarding is ok.
-    """
-    system_ok = True
-    # Enable IP forwarding since all compute hosts are vRouters.
-    # IPv4 forwarding should be enabled already by docker.
-    if "1" not in sysctl("net.ipv4.ip_forward"):
-        if fix:
-            if "1" not in sysctl("-w", "net.ipv4.ip_forward=1"):
-                print >> sys.stderr, "ERROR: Could not enable ipv4 forwarding."
-                system_ok = False
-        else:
-            print >> sys.stderr, "WARNING: ipv4 forwarding is not enabled."
-            system_ok = False
-
-    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
-        if fix:
-            if "1" not in sysctl("-w", "net.ipv6.conf.all.forwarding=1"):
-                print >> sys.stderr, "ERROR: Could not enable ipv6 forwarding."
-                system_ok = False
-        else:
-            print >> sys.stderr, "WARNING: ipv6 forwarding is not enabled."
-            system_ok = False
     return system_ok
 
 

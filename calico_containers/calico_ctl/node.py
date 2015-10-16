@@ -67,6 +67,7 @@ from prettytable import PrettyTable
 from connectors import client
 from connectors import docker_client
 from utils import DOCKER_ORCHESTRATOR_ID
+from utils import sysctl
 from utils import hostname
 from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
@@ -215,6 +216,9 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     """
     # Print warnings for any known system issues before continuing
     check_system(fix=False, quit_if_error=False, libnetwork=libnetwork_image)
+
+    # We will always want to setup IP forwarding
+    _setup_ip_forwarding()
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):
@@ -391,6 +395,22 @@ def _start_libnetwork_container(etcd_authority, libnetwork_image):
 
     docker_client.start(container)
     print "Calico libnetwork driver is running with id: %s" % cid
+
+
+def _setup_ip_forwarding():
+    """
+    Ensure that IP forwarding is enabled.
+    :return: None
+    """
+    # Enable IP forwarding since all compute hosts are vRouters.
+    # IPv4 forwarding should be enabled already by docker.
+    if "1" not in sysctl("net.ipv4.ip_forward"):
+        if "1" not in sysctl("-w", "net.ipv4.ip_forward=1"):
+            print >> sys.stderr, "ERROR: Could not enable ipv4 forwarding."
+
+    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
+        if "1" not in sysctl("-w", "net.ipv6.conf.all.forwarding=1"):
+            print >> sys.stderr, "ERROR: Could not enable ipv6 forwarding."
 
 
 def node_stop(force):
