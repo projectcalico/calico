@@ -19,7 +19,7 @@ Description:
   Check for incompatibilities between calico and the host system
 
 Options:
-  --fix  Allow calicoctl to attempt to correct any issues detected on the host
+  --fix  Deprecated: checksystem no longer fixes issues that it detects
   --libnetwork  Check for the correct docker version for libnetwork deployments
 """
 import sys
@@ -44,22 +44,18 @@ def checksystem(arguments):
     this file's docstring with docopt
     :return: None
     """
-    check_system(fix=arguments["--fix"],
-                 quit_if_error=True,
+    if arguments["--fix"]:
+        print >> sys.stderr, "WARNING: Deprecated flag --fix:" \
+                             "checksystem no longer fixes detected issues"
+    check_system(quit_if_error=True,
                  libnetwork=arguments["--libnetwork"])
 
-
-def check_system(fix=False, quit_if_error=False, libnetwork=False):
+def check_system(quit_if_error=False, libnetwork=False):
     """
-    Checks that the system is setup correctly. fix==True, this command will
-    attempt to fix any issues it encounters. If any fixes fail, it will
-    exit(1). Fix will automatically be set to True if the user specifies --fix
-    at the command line.
+    Checks that the system is setup correctly.
 
-    :param fix: if True, try to fix any system dependency issues that are
-    detected.
     :param quit_if_error: if True, quit with error code 1 if any issues are
-    detected, or if any fixes are unsuccesful.
+    detected.
     :return: True if all system dependencies are in the proper state, False if
     they are not. This function will sys.exit(1) instead of returning false if
     quit_if_error == True
@@ -67,7 +63,7 @@ def check_system(fix=False, quit_if_error=False, libnetwork=False):
     # modprobe requires root privileges.
     enforce_root()
 
-    kernel_ok = _check_kernel_modules(fix)
+    kernel_ok = _check_kernel_modules()
     docker_ok = _check_docker_version(libnetwork)
 
     system_ok = kernel_ok and docker_ok
@@ -97,43 +93,25 @@ def normalize_version(version):
     return [int(x) for x in re.sub(r'(\.0+)*$', '', version).split(".")]
 
 
-def _check_kernel_modules(fix):
+def _check_kernel_modules():
     """
     Check system kernel modules
-    :param fix: if True, try to fix any system dependency issues that are
-    detected.
     :return: True if kernel modules are ok.
     """
-    modprobe = sh.Command._create('modprobe')
-    ip6tables = sh.Command._create('ip6tables')
     system_ok = True
+    modprobe = sh.Command._create('modprobe')
     try:
+        ip6tables = sh.Command._create('ip6tables')
         ip6tables("-L")
     except:
-        if fix:
-            try:
-                modprobe('ip6_tables')
-            except sh.ErrorReturnCode:
-                print >> sys.stderr, "ERROR: Could not enable ip6_tables."
-                system_ok = False
-        else:
-            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables " \
-                                 "module. Load with `modprobe ip6_tables`"
-            system_ok = False
+        print >> sys.stderr, "WARNING: Unable to detect the ip6_tables"
+        system_ok = False
 
     for module in ["xt_set"]:
         if not module_loaded(module):
-            if fix:
-                try:
-                    modprobe(module)
-                except sh.ErrorReturnCode:
-                    print >> sys.stderr, "ERROR: Could not enable %s." % module
-                    system_ok = False
-            else:
-                print >> sys.stderr, "WARNING: Unable to detect the %s " \
-                                     "module. Load with `modprobe %s`" % \
-                                     (module, module)
-                system_ok = False
+            print >> sys.stderr, "WARNING: Unable to detect the %s " \
+                                 "module." % module
+            system_ok = False
     return system_ok
 
 

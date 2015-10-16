@@ -32,7 +32,7 @@ for using the default Docker networking.
 
 The two Linux servers require a recent version of Linux with a few network 
 network related kernel modules to be loaded. The easiest way to ensure this and
-that the servers meet the requirements is to run `calicoctl checksystem --fix`
+that the servers meet the requirements is to run `calicoctl checksystem`
 
 The servers also need:
 - Docker to be running - since the Calico agent is packaged as a Docker 

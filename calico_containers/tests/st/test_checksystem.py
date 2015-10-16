@@ -20,8 +20,6 @@ Test calicoctl checksystem
 
 It's worth doing a simple return code check. Anything more is going to be
 difficult given the environmental requirements.
-
-The --fix command is already executed as part of the tests (in the Makefile)
 """
 
 

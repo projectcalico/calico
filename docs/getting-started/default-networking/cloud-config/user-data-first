@@ -47,4 +47,3 @@ write_files:
     #!/usr/bin/bash -e
     wget -O /opt/bin/calicoctl https://github.com/projectcalico/calico-docker/releases/download/v0.8.0/calicoctl
     chmod +x /opt/bin/calicoctl
-    /opt/bin/calicoctl checksystem --fix

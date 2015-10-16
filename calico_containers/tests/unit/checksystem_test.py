@@ -42,34 +42,10 @@ class TestCheckSystem(unittest.TestCase):
             return False
 
         with patch("calico_ctl.checksystem.module_loaded", m_module_loaded):
-            result = _check_kernel_modules(False)
+            result = _check_kernel_modules()
 
-            # Fix = false means system is not OK.
             self.assertFalse(result)
             self.assertFalse(m_modprobe.called)
-            m_ip6tables.assert_called_once_with("-L")
-
-            # Reset mocks
-            m_modprobe.reset_mock()
-            m_ip6tables.reset_mock()
-
-            result = _check_kernel_modules(True)
-
-            # Fix = true should attempt to fix with modprobe.
-            self.assertTrue(result)
-            m_modprobe.assert_called_once_with("xt_set")
-            m_ip6tables.assert_called_once_with("-L")
-
-            # Reset mocks
-            m_modprobe.reset_mock()
-            m_ip6tables.reset_mock()
-
-            # Fix = true, but modprobe fails.
-            m_modprobe.side_effect = ErrorReturnCode("modprobe xt_set", "", "")
-            result = _check_kernel_modules(True)
-
-            self.assertFalse(result)
-            m_modprobe.assert_called_once_with("xt_set")
             m_ip6tables.assert_called_once_with("-L")
 
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
@@ -83,11 +59,11 @@ class TestCheckSystem(unittest.TestCase):
         Assert that the function returns True
         """
         # Call method under test
-        test_return = check_system(fix=False, quit_if_error=True)
+        test_return = check_system(quit_if_error=True)
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_check_kernel_modules.assert_called_once_with(False)
+        m_check_kernel_modules.assert_called_once_with()
         m_check_docker_version.assert_called_once_with(False)
         self.assertTrue(test_return)
 
@@ -117,7 +93,7 @@ class TestCheckSystem(unittest.TestCase):
             m_check_docker_version.return_value = docker_version_status
 
             # Call method under test without exiting if error detected
-            test_return = check_system(fix=False, quit_if_error=False)
+            test_return = check_system(quit_if_error=False)
 
             # Assert
             m_enforce_root.assert_called_once_with()
@@ -149,7 +125,7 @@ class TestCheckSystem(unittest.TestCase):
             m_check_docker_version.return_value = docker_version_status
 
             # Call method under test expecting a SystemExit when fail detected
-            self.assertRaises(SystemExit, check_system, fix=False, quit_if_error=True)
+            self.assertRaises(SystemExit, check_system, quit_if_error=True)
 
             # Assert
             m_enforce_root.assert_called_once_with()

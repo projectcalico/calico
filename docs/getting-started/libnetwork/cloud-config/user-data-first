@@ -54,7 +54,6 @@ coreos:
       LimitNOFILE=1048576
       LimitNPROC=1048576
       ExecStart=/opt/bin/docker --cluster-store=etcd://$private_ipv4:4001 --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
-      ExecStartPost=/opt/bin/calicoctl checksystem --fix
       RestartSec=10
       Restart=always
 
