@@ -13,13 +13,14 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl checksystem [--fix]
+  calicoctl checksystem [--fix] [--libnetwork]
 
 Description:
   Check for incompatibilities between calico and the host system
 
 Options:
   --fix  Allow calicoctl to attempt to correct any issues detected on the host
+  --libnetwork  Check for the correct docker version for libnetwork deployments
 """
 import sys
 import re
@@ -28,10 +29,11 @@ import sh
 import docker
 from requests import ConnectionError
 
-from utils import DOCKER_VERSION
+from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION
 from utils import enforce_root
 from utils import sysctl
 from connectors import docker_client
+
 
 def checksystem(arguments):
     """
@@ -43,10 +45,12 @@ def checksystem(arguments):
     this file's docstring with docopt
     :return: None
     """
-    check_system(fix=arguments["--fix"], quit_if_error=True)
+    check_system(fix=arguments["--fix"],
+                 quit_if_error=True,
+                 libnetwork=arguments["--libnetwork"])
 
 
-def check_system(fix=False, quit_if_error=False):
+def check_system(fix=False, quit_if_error=False, libnetwork=False):
     """
     Checks that the system is setup correctly. fix==True, this command will
     attempt to fix any issues it encounters. If any fixes fail, it will
@@ -66,7 +70,7 @@ def check_system(fix=False, quit_if_error=False):
 
     system_ok = (_check_kernel_modules(fix) and
                  _check_ip_forwarding(fix) and
-                 _check_docker_version())
+                 _check_docker_version(libnetwork))
 
     if quit_if_error and not system_ok:
         sys.exit(1)
@@ -163,13 +167,17 @@ def _check_ip_forwarding(fix):
     return system_ok
 
 
-def _check_docker_version():
+def _check_docker_version(libnetwork=False):
     """
     Check the Docker version is supported.
 
     :return: True if Docker version is OK.
     """
     system_ok = True
+
+    # Set correct docker version
+    version = DOCKER_VERSION if not libnetwork else DOCKER_LIBNETWORK_VERSION
+
     # Check docker version compatability
     try:
         info = docker_client.version()
@@ -178,14 +186,17 @@ def _check_docker_version():
         system_ok = False
     except docker.errors.APIError:
         print >> sys.stderr, "ERROR: Docker server must support Docker " \
-                             "Remote API v%s or greater." % DOCKER_VERSION
+                             "Remote API v%s or greater." % version
         system_ok = False
     else:
         api_version = normalize_version(info['ApiVersion'])
         # Check that API Version is above the minimum supported version
-        if cmp(api_version, normalize_version(DOCKER_VERSION)) < 0:
+        if cmp(api_version, normalize_version(version)) < 0:
+            if libnetwork:
+                print >> sys.stderr, "ERROR: Docker Version does not support Libnetwork."
+
             print >> sys.stderr, "ERROR: Docker server must support Docker " \
-                                 "Remote API v%s or greater." % DOCKER_VERSION
+                                 "Remote API v%s or greater." % version
             system_ok = False
 
     return system_ok

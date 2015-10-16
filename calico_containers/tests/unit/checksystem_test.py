@@ -90,7 +90,7 @@ class TestCheckSystem(unittest.TestCase):
         m_enforce_root.assert_called_once_with()
         m_check_kernel_modules.assert_called_once_with(False)
         m_check_ip_forwarding.assert_called_once_with(False)
-        m_check_docker_version.assert_called_once_with()
+        m_check_docker_version.assert_called_once_with(False)
         self.assertTrue(test_return)
 
     @parameterized.expand([

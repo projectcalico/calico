@@ -219,7 +219,7 @@ class TestNode(unittest.TestCase):
         # Assert
         m_os_path_exists.assert_called_once_with(log_dir)
         m_os_makedirs.assert_called_once_with(log_dir)
-        m_check_system.assert_called_once_with(fix=False, quit_if_error=False)
+        m_check_system.assert_called_once_with(fix=False, quit_if_error=False, libnetwork=libnetwork)
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
