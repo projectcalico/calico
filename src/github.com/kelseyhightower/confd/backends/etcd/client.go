@@ -15,9 +15,10 @@ type Client struct {
 
 // NewEtcdClient returns an *etcd.Client with a connection to named machines.
 // It returns an error if a connection to the cluster cannot be made.
-func NewEtcdClient(machines []string, cert, key string, caCert string) (*Client, error) {
+func NewEtcdClient(machines []string, cert, key string, caCert string, noDiscover bool) (*Client, error) {
 	var c *goetcd.Client
 	var err error
+	machines = prependSchemeToMachines(machines)
 	if cert != "" && key != "" {
 		c, err = goetcd.NewTLSClient(machines, cert, key, caCert)
 		if err != nil {
@@ -28,9 +29,13 @@ func NewEtcdClient(machines []string, cert, key string, caCert string) (*Client,
 	}
 	// Configure the DialTimeout, since 1 second is often too short
 	c.SetDialTimeout(time.Duration(3) * time.Second)
-	success := c.SetCluster(machines)
-	if !success {
-		return &Client{c}, errors.New("cannot connect to etcd cluster: " + strings.Join(machines, ","))
+
+	// If noDiscover is not set, we should locate the whole etcd cluster.
+	if !noDiscover {
+		success := c.SetCluster(machines)
+		if !success {
+			return &Client{c}, errors.New("cannot connect to etcd cluster: " + strings.Join(machines, ","))
+		}
 	}
 	return &Client{c}, nil
 }
@@ -66,7 +71,7 @@ func nodeWalk(node *goetcd.Node, vars map[string]string) error {
 	return nil
 }
 
-func (c *Client) WatchPrefix(prefix string, waitIndex uint64, stopChan chan bool) (uint64, error) {
+func (c *Client) WatchPrefix(prefix string, waitIndex uint64, stopChan chan bool, keys []string) (uint64, error) {
 	if waitIndex == 0 {
 		resp, err := c.client.Get(prefix, false, true)
 		if err != nil {
@@ -74,15 +79,25 @@ func (c *Client) WatchPrefix(prefix string, waitIndex uint64, stopChan chan bool
 		}
 		return resp.EtcdIndex, nil
 	}
-	resp, err := c.client.Watch(prefix, waitIndex+1, true, nil, stopChan)
-	if err != nil {
-		switch e := err.(type) {
-		case *goetcd.EtcdError:
-			if e.ErrorCode == 401 {
-				return 0, nil
+	for {
+		resp, err := c.client.Watch(prefix, waitIndex+1, true, nil, stopChan)
+		if err != nil {
+			switch e := err.(type) {
+			case *goetcd.EtcdError:
+				if e.ErrorCode == 401 {
+					return 0, nil
+				}
+			}
+			return waitIndex, err
+		}
+
+		// Check that the key for this node is one of the keys we care about.
+		for _, k := range keys {
+			if strings.HasPrefix(resp.Node.Key, k) {
+				return resp.Node.ModifiedIndex, err
 			}
 		}
-		return waitIndex, err
+
+		waitIndex = resp.Node.ModifiedIndex
 	}
-	return resp.Node.ModifiedIndex, err
 }
