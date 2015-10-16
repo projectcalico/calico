@@ -67,7 +67,6 @@ from prettytable import PrettyTable
 from connectors import client
 from connectors import docker_client
 from utils import DOCKER_ORCHESTRATOR_ID
-from utils import sysctl
 from utils import hostname
 from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
@@ -404,13 +403,19 @@ def _setup_ip_forwarding():
     """
     # Enable IP forwarding since all compute hosts are vRouters.
     # IPv4 forwarding should be enabled already by docker.
-    if "1" not in sysctl("net.ipv4.ip_forward"):
-        if "1" not in sysctl("-w", "net.ipv4.ip_forward=1"):
-            print >> sys.stderr, "ERROR: Could not enable ipv4 forwarding."
+    try:
+        with open('/proc/sys/net/ipv4/ip_forward', 'w') as f:
+            f.write("1")
+    except:
+        print "ERROR: Could not enable ipv4 forwarding."
+        sys.exit(1)
 
-    if "1" not in sysctl("net.ipv6.conf.all.forwarding"):
-        if "1" not in sysctl("-w", "net.ipv6.conf.all.forwarding=1"):
-            print >> sys.stderr, "ERROR: Could not enable ipv6 forwarding."
+    try:
+        with open('/proc/sys/net/ipv6/conf/all/forwarding', 'w') as f:
+            f.write("1")
+    except:
+        print "ERROR: Could not enable ipv4 forwarding."
+        sys.exit(1)
 
 
 def node_stop(force):

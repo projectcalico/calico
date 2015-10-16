@@ -14,7 +14,6 @@
 import socket
 import os
 import sys
-import sh
 import textwrap
 import netaddr
 import re
@@ -26,11 +25,6 @@ DOCKER_LIBNETWORK_VERSION = "1.21"
 DOCKER_ORCHESTRATOR_ID = "docker"
 NAMESPACE_ORCHESTRATOR_ID = "namespace"
 hostname = socket.gethostname()
-
-try:
-    sysctl = sh.Command._create("sysctl")
-except sh.CommandNotFound as e:
-    print "Missing command: %s" % e.message
 
 
 def enforce_root():
