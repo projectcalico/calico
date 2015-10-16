@@ -68,9 +68,11 @@ def check_system(fix=False, quit_if_error=False, libnetwork=False):
     # modprobe and sysctl require root privileges.
     enforce_root()
 
-    system_ok = (_check_kernel_modules(fix) and
-                 _check_ip_forwarding(fix) and
-                 _check_docker_version(libnetwork))
+    kernel_ok = _check_kernel_modules(fix)
+    ip_ok = _check_ip_forwarding(fix)
+    docker_ok = _check_docker_version(libnetwork)
+
+    system_ok = kernel_ok and ip_ok and docker_ok
 
     if quit_if_error and not system_ok:
         sys.exit(1)
