@@ -120,42 +120,51 @@ class IpsetManager(ReferenceManager):
         nets = "ipv4_nets" if self.ip_type == IPV4 else "ipv6_nets"
         return nets
 
-    @actor_message()
-    def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
-        """
-        Apply a snapshot read from etcd, replacing existing state.
-
-        :param tags_by_prof_id: A dict mapping security profile ID to a list of
-            profile tags.
-        :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
-            data dicts.
-        """
-        _log.info("Applying tags snapshot. %s tags, %s endpoints",
-                  len(tags_by_prof_id), len(endpoints_by_id))
-        missing_profile_ids = set(self.tags_by_prof_id.keys())
-        for profile_id, tags in tags_by_prof_id.iteritems():
-            assert tags is not None
-            self.on_tags_update(profile_id, tags)
-            missing_profile_ids.discard(profile_id)
-            self._maybe_yield()
-        for profile_id in missing_profile_ids:
-            self.on_tags_update(profile_id, None)
-            self._maybe_yield()
-        del missing_profile_ids
-        missing_endpoints = set(self.endpoint_data_by_ep_id.keys())
-        for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            assert endpoint is not None
-            endpoint_data = self._endpoint_data_from_dict(endpoint_id,
-                                                          endpoint)
-            self._on_endpoint_data_update(endpoint_id, endpoint_data)
-            missing_endpoints.discard(endpoint_id)
-            self._maybe_yield()
-        for endpoint_id in missing_endpoints:
-            self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
-            self._maybe_yield()
-        self._force_reprogram = True
-        _log.info("Tags snapshot applied: %s tags, %s endpoints",
-                  len(tags_by_prof_id), len(endpoints_by_id))
+    # @actor_message()
+    # def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
+    #     """
+    #     Apply a snapshot read from etcd, replacing existing state.
+    #
+    #     :param tags_by_prof_id: A dict mapping security profile ID to a list of
+    #         profile tags.
+    #     :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
+    #         data dicts.
+    #     """
+    #     _log.info("Applying tags snapshot. %s tags, %s endpoints",
+    #               len(tags_by_prof_id), len(endpoints_by_id))
+    #     missing_profile_ids = set(self.tags_by_prof_id.keys())
+    #     for profile_id, tags in tags_by_prof_id.iteritems():
+    #         assert tags is not None
+    #         self.on_tags_update(profile_id, tags)
+    #         missing_profile_ids.discard(profile_id)
+    #         self._maybe_yield()
+    #     for profile_id in missing_profile_ids:
+    #         self.on_tags_update(profile_id, None)
+    #         self._maybe_yield()
+    #     del missing_profile_ids
+    #     missing_endpoints = set(self.endpoint_data_by_ep_id.keys())
+    #     for endpoint_id, endpoint in endpoints_by_id.iteritems():
+    #         assert endpoint is not None
+    #         missing_endpoints.discard(endpoint_id)
+    #         endpoint_data = self.endpoint_data_by_ep_id.get(endpoint_id)
+    #         if endpoint_data:
+    #             profile_ids = set(endpoint.get("profile_ids", []))
+    #             nets_list = endpoint.get(self.nets_key, [])
+    #             ips = set(map(futils.net_to_ip, nets_list))
+    #             if (profile_ids == endpoint_data.profile_ids and
+    #                     ips == endpoint_data.ip_addresses):
+    #                 continue
+    #         endpoint_data = self._endpoint_data_from_dict(endpoint_id,
+    #                                                       endpoint)
+    #         self._on_endpoint_data_update(endpoint_id, endpoint_data)
+    #         self._maybe_yield()
+    #     missing_endpoints.clear()
+    #     for endpoint_id in missing_endpoints:
+    #         self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
+    #         self._maybe_yield()
+    #     self._force_reprogram = True
+    #     _log.info("Tags snapshot applied: %s tags, %s endpoints",
+    #               len(tags_by_prof_id), len(endpoints_by_id))
 
     @actor_message()
     def cleanup(self):

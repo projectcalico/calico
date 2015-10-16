@@ -25,6 +25,9 @@ import os
 import random
 import json
 import logging
+import socket
+import msgpack
+import time
 from calico.monotonic import monotonic_time
 
 from etcd import EtcdException, EtcdKeyNotFound
@@ -49,6 +52,8 @@ from calico.etcdutils import (
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
                                  iso_utc_timestamp, IPV4, IPV6)
+
+from pytrie import Trie
 
 _log = logging.getLogger(__name__)
 
@@ -86,6 +91,7 @@ RESYNC_KEYS = [
     POOL_V4_DIR,
 ]
 
+trie = Trie()
 
 class EtcdAPI(EtcdClientOwner, Actor):
     """
@@ -378,6 +384,56 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             _log.info("etcd worker about to wait for begin_polling event")
         self.begin_polling.wait()
 
+    @logging_exceptions
+    def loop(self):
+        _log.info("Started %s loop", self)
+        while not self._stopped:
+            try:
+                _log.info("Reconnecting and loading snapshot from etcd...")
+                self.reconnect(copy_cluster_id=False)
+                self._on_pre_resync()
+                try:
+                    os.unlink("/tmp/felix.sck")
+                except:
+                    pass
+                update_socket = socket.socket(socket.AF_UNIX,
+                                              socket.SOCK_SEQPACKET)
+
+                print "Created socket"
+                update_socket.bind("/tmp/felix.sck")
+                print "Bound socket"
+                update_socket.listen(1)
+                print "Marked socket for listen"
+                os.chmod("/tmp/felix.sck", 0777)
+                print "Chmodded socket"
+                update_conn, _ = update_socket.accept()
+                print "Accepted connection on socket"
+                receive_count = 0
+                while True:
+                    data = update_conn.recv(8092)
+                    receive_count += 1
+                    if receive_count % 1000 == 0:
+                        print "Recieved", receive_count
+                    key, value = msgpack.loads(data)
+                    n = Node()
+                    n.action = "set" if value is not None else "delete"
+                    n.value = value
+                    n.key = key
+                    try:
+                        self.dispatcher.handle_event(n)
+                    except ResyncRequired:
+                        _log.warning("IGNORING RESYNC.")
+            except EtcdException as e:
+                # Most likely a timeout or other error in the pre-resync;
+                # start over.  These exceptions have good semantic error text
+                # so the stack trace would just add log spam.
+                _log.error("Unexpected IO or etcd error, triggering "
+                           "resync with etcd: %r.", e)
+                time.sleep(1)  # Prevent tight loop due to unexpected error.
+            except:
+                _log.exception("Exception reading from socket?")
+        _log.info("%s.loop() stopped due to self.stop == True", self)
+
     def _load_config(self):
         """
         Loads our configuration from etcd.  Does not return
@@ -435,79 +491,87 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                     self.last_global_config = global_dict.copy()
                     self._config.report_etcd_config(host_dict, global_dict)
                 return
-
-    def _on_snapshot_loaded(self, etcd_snapshot_response):
-        """
-        Loads a snapshot from etcd and passes it to the update splitter.
-
-        :raises ResyncRequired: if the Ready flag is not set in the snapshot.
-        """
-        rules_by_id = {}
-        tags_by_id = {}
-        endpoints_by_id = {}
-        ipv4_pools_by_id = {}
-        self.endpoint_ids_per_host.clear()
-        self.ipv4_by_hostname.clear()
-        still_ready = False
-        for child in etcd_snapshot_response.children:
-            profile_id, rules = parse_if_rules(child)
-            if profile_id:
-                rules_by_id[profile_id] = rules
-                continue
-            profile_id, tags = parse_if_tags(child)
-            if profile_id:
-                tags_by_id[profile_id] = tags
-                continue
-            endpoint_id, endpoint = parse_if_endpoint(self._config, child)
-            if endpoint_id and endpoint:
-                endpoints_by_id[endpoint_id] = endpoint
-                self.endpoint_ids_per_host[endpoint_id.host].add(endpoint_id)
-                continue
-            pool_id, pool = parse_if_ipam_v4_pool(child)
-            if pool_id and pool:
-                ipv4_pools_by_id[pool_id] = pool
-                continue
-            if self._config.IP_IN_IP_ENABLED:
-                hostname, ip = parse_if_host_ip(child)
-                if hostname and ip:
-                    self.ipv4_by_hostname[hostname] = ip
-                    continue
-
-            # Double-check the flag hasn't changed since we read it before.
-            if child.key == READY_KEY:
-                if child.value == "true":
-                    still_ready = True
-                else:
-                    _log.warning("Aborting resync because ready flag was"
-                                 "unset since we read it.")
-                    raise ResyncRequired()
-
-        if not still_ready:
-            _log.warn("Aborting resync; ready flag no longer present.")
-            raise ResyncRequired()
-
-        # We now know exactly which endpoints are on this host, use that to
-        # clean up any endpoint statuses that should now be gone.
-        our_endpoints_ids = self.endpoint_ids_per_host[self._config.HOSTNAME]
-        self.clean_up_endpoint_statuses(our_endpoints_ids)
-
-        # Actually apply the snapshot. This does not return anything, but
-        # just sends the relevant messages to the relevant threads to make
-        # all the processing occur.
-        _log.info("Snapshot parsed, passing to update splitter")
-        self.splitter.apply_snapshot(rules_by_id,
-                                     tags_by_id,
-                                     endpoints_by_id,
-                                     ipv4_pools_by_id,
-                                     async=True)
-        if self._config.IP_IN_IP_ENABLED:
-            # We only support IPv4 for host tracking right now so there's not
-            # much point in going via the splitter.
-            # FIXME Support IP-in-IP for IPv6.
-            _log.info("Sending (%d) host IPs to ipset.",
-                      len(self.ipv4_by_hostname))
-            self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                             async=True)
+    #
+    # def _on_snapshot_loaded(self, etcd_snapshot_response):
+    #     """
+    #     Loads a snapshot from etcd and passes it to the update splitter.
+    #
+    #     :raises ResyncRequired: if the Ready flag is not set in the snapshot.
+    #     """
+    #     start_time = monotonic_time()
+    #     rules_by_id = {}
+    #     tags_by_id = {}
+    #     endpoints_by_id = {}
+    #     ipv4_pools_by_id = {}
+    #     self.endpoint_ids_per_host.clear()
+    #     self.ipv4_by_hostname.clear()
+    #     still_ready = False
+    #     for child in etcd_snapshot_response.children:
+    #         trie_key = [intern(s.encode("utf8")) for s in
+    #                     child.key.split("/")][2:]
+    #         if trie.get(trie_key) == child.modifiedIndex and "host" in trie_key:
+    #             continue
+    #         trie[trie_key] = child.modifiedIndex
+    #
+    #         profile_id, rules = parse_if_rules(child)
+    #         if profile_id:
+    #             rules_by_id[profile_id] = rules
+    #             continue
+    #         profile_id, tags = parse_if_tags(child)
+    #         if profile_id:
+    #             tags_by_id[profile_id] = tags
+    #             continue
+    #         endpoint_id, endpoint = parse_if_endpoint(self._config, child)
+    #         if endpoint_id and endpoint:
+    #             endpoints_by_id[endpoint_id] = endpoint
+    #             self.endpoint_ids_per_host[endpoint_id.host].add(endpoint_id)
+    #             continue
+    #         pool_id, pool = parse_if_ipam_v4_pool(child)
+    #         if pool_id and pool:
+    #             ipv4_pools_by_id[pool_id] = pool
+    #             continue
+    #         if self._config.IP_IN_IP_ENABLED:
+    #             hostname, ip = parse_if_host_ip(child)
+    #             if hostname and ip:
+    #                 self.ipv4_by_hostname[hostname] = ip
+    #                 continue
+    #
+    #         # Double-check the flag hasn't changed since we read it before.
+    #         if child.key == READY_KEY:
+    #             if child.value == "true":
+    #                 still_ready = True
+    #             else:
+    #                 _log.warning("Aborting resync because ready flag was"
+    #                              "unset since we read it.")
+    #                 raise ResyncRequired()
+    #
+    #     if not still_ready:
+    #         _log.warn("Aborting resync; ready flag no longer present.")
+    #         raise ResyncRequired()
+    #
+    #     # We now know exactly which endpoints are on this host, use that to
+    #     # clean up any endpoint statuses that should now be gone.
+    #     our_endpoints_ids = self.endpoint_ids_per_host[self._config.HOSTNAME]
+    #     self.clean_up_endpoint_statuses(our_endpoints_ids)
+    #
+    #     # Actually apply the snapshot. This does not return anything, but
+    #     # just sends the relevant messages to the relevant threads to make
+    #     # all the processing occur.
+    #     _log.info("Snapshot parsed in %.2fs, passing to update splitter",
+    #               monotonic_time() - start_time)
+    #     self.splitter.apply_snapshot(rules_by_id,
+    #                                  tags_by_id,
+    #                                  endpoints_by_id,
+    #                                  ipv4_pools_by_id,
+    #                                  async=True)
+    #     if self._config.IP_IN_IP_ENABLED:
+    #         # We only support IPv4 for host tracking right now so there's not
+    #         # much point in going via the splitter.
+    #         # FIXME Support IP-in-IP for IPv6.
+    #         _log.info("Sending (%d) host IPs to ipset.",
+    #                   len(self.ipv4_by_hostname))
+    #         self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
+    #                                          async=True)
 
     def clean_up_endpoint_statuses(self, our_endpoints_ids):
         """
@@ -567,7 +631,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
-        self.endpoint_ids_per_host[combined_id.host].add(combined_id)
+        #self.endpoint_ids_per_host[combined_id.host].add(combined_id)
         endpoint = parse_endpoint(self._config, combined_id, response.value)
         self.splitter.on_endpoint_update(combined_id, endpoint, async=True)
 
@@ -577,9 +641,9 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
-        self.endpoint_ids_per_host[combined_id.host].discard(combined_id)
-        if not self.endpoint_ids_per_host[combined_id.host]:
-            del self.endpoint_ids_per_host[combined_id.host]
+        #self.endpoint_ids_per_host[combined_id.host].discard(combined_id)
+        # if not self.endpoint_ids_per_host[combined_id.host]:
+        #     del self.endpoint_ids_per_host[combined_id.host]
         self.splitter.on_endpoint_update(combined_id, None, async=True)
 
     def on_rules_set(self, response, profile_id):
@@ -915,7 +979,7 @@ def parse_endpoint(config, combined_id, raw_json):
         common.validate_endpoint(config, combined_id, endpoint)
     except ValidationFailed as e:
         _log.warning("Validation failed for endpoint %s, treating as "
-                     "missing: %s", combined_id, e.message)
+                     "missing: %s; %r", combined_id, e.message, raw_json)
         endpoint = None
     else:
         _log.debug("Validated endpoint : %s", endpoint)
@@ -1028,3 +1092,13 @@ def safe_decode_json(raw_json, log_tag=None):
                      log_tag, raw_json)
         return None
 
+
+class Node(object):
+    __slots__ = ("key", "value", "action", "current_key", "modifiedIndex")
+
+    def __init__(self):
+        self.modifiedIndex = None
+        self.key = None
+        self.value = None
+        self.action = None
+        self.current_key = None

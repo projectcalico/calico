@@ -48,20 +48,20 @@ class DispatchChains(Actor):
         self.programmed_leaf_chains = set()
         self._dirty = False
 
-    @actor_message()
-    def apply_snapshot(self, ifaces):
-        """
-        Replaces all known interfaces with the given snapshot and rewrites the
-        chain.
-
-        :param set[str] ifaces: The interface
-        """
-        _log.info("Applying dispatch chains snapshot.")
-        self.ifaces = set(ifaces)  # Take a copy.
-        # Always reprogram the chain, even if it's empty.  This makes sure that
-        # we resync and it stops the iptables layer from marking our chain as
-        # missing.
-        self._dirty = True
+    # @actor_message()
+    # def apply_snapshot(self, ifaces):
+    #     """
+    #     Replaces all known interfaces with the given snapshot and rewrites the
+    #     chain.
+    #
+    #     :param set[str] ifaces: The interface
+    #     """
+    #     _log.info("Applying dispatch chains snapshot.")
+    #     self.ifaces = set(ifaces)  # Take a copy.
+    #     # Always reprogram the chain, even if it's empty.  This makes sure that
+    #     # we resync and it stops the iptables layer from marking our chain as
+    #     # missing.
+    #     self._dirty = True
 
     @actor_message()
     def on_endpoint_added(self, iface_name):

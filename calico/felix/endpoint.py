@@ -86,27 +86,28 @@ class EndpointManager(ReferenceManager):
         ep = self.endpoints_by_id.get(endpoint_id)
         obj.on_endpoint_update(ep, async=True)
 
-    @actor_message()
-    def apply_snapshot(self, endpoints_by_id):
-        # Tell the dispatch chains about the local endpoints in advance so
-        # that we don't flap the dispatch chain at start-of-day.
-        local_iface_name_to_ep_id = {}
-        for ep_id, ep in endpoints_by_id.iteritems():
-            if ep and ep_id.host == self.config.HOSTNAME and ep.get("name"):
-                local_iface_name_to_ep_id[ep.get("name")] = ep_id
-        self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id.keys(),
-                                            async=True)
-        # Then update/create endpoints and work out which endpoints have been
-        # deleted.
-        missing_endpoints = set(self.endpoints_by_id.keys())
-        for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            self.on_endpoint_update(endpoint_id, endpoint,
-                                    force_reprogram=True)
-            missing_endpoints.discard(endpoint_id)
-            self._maybe_yield()
-        for endpoint_id in missing_endpoints:
-            self.on_endpoint_update(endpoint_id, None)
-            self._maybe_yield()
+    # @actor_message()
+    # def apply_snapshot(self, endpoints_by_id):
+    #     # Tell the dispatch chains about the local endpoints in advance so
+    #     # that we don't flap the dispatch chain at start-of-day.
+    #     local_iface_name_to_ep_id = {}
+    #     for ep_id, ep in endpoints_by_id.iteritems():
+    #         if ep and ep_id.host == self.config.HOSTNAME and ep.get("name"):
+    #             local_iface_name_to_ep_id[ep.get("name")] = ep_id
+    #     self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id.keys(),
+    #                                         async=True)
+    #     # Then update/create endpoints and work out which endpoints have been
+    #     # deleted.
+    #     missing_endpoints = set(self.endpoints_by_id.keys())
+    #     for endpoint_id, endpoint in endpoints_by_id.iteritems():
+    #         self.on_endpoint_update(endpoint_id, endpoint,
+    #                                 force_reprogram=True)
+    #         missing_endpoints.discard(endpoint_id)
+    #         self._maybe_yield()
+    #     missing_endpoints.clear()
+    #     for endpoint_id in missing_endpoints:
+    #         self.on_endpoint_update(endpoint_id, None)
+    #         self._maybe_yield()
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
