@@ -15,6 +15,7 @@
 # For details and docs - see https://github.com/phusion/baseimage-docker#getting_started
 
 FROM ubuntu:14.04
+MAINTAINER Tom Denham <tom@projectcalico.org>
 
 CMD ["/sbin/my_init"]
 
