@@ -216,6 +216,9 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     # Print warnings for any known system issues before continuing
     check_system(fix=False, quit_if_error=False, libnetwork=libnetwork_image)
 
+    # We will always want to setup IP forwarding
+    _setup_ip_forwarding()
+
     # Ensure log directory exists
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -391,6 +394,28 @@ def _start_libnetwork_container(etcd_authority, libnetwork_image):
 
     docker_client.start(container)
     print "Calico libnetwork driver is running with id: %s" % cid
+
+
+def _setup_ip_forwarding():
+    """
+    Ensure that IP forwarding is enabled.
+    :return: None
+    """
+    # Enable IP forwarding since all compute hosts are vRouters.
+    # IPv4 forwarding should be enabled already by docker.
+    try:
+        with open('/proc/sys/net/ipv4/ip_forward', 'w') as f:
+            f.write("1")
+    except:
+        print "ERROR: Could not enable ipv4 forwarding."
+        sys.exit(1)
+
+    try:
+        with open('/proc/sys/net/ipv6/conf/all/forwarding', 'w') as f:
+            f.write("1")
+    except:
+        print "ERROR: Could not enable ipv4 forwarding."
+        sys.exit(1)
 
 
 def node_stop(force):

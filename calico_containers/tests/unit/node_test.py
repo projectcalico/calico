@@ -156,6 +156,7 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -169,7 +170,7 @@ class TestNode(unittest.TestCase):
                         m_find_or_pull_node_image, m_docker,
                         m_docker_client, m_client, m_install_plugin,
                         m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                        m_get_host_ips, m_check_system,
+                        m_get_host_ips, m_setup_ip, m_check_system,
                         m_os_makedirs, m_os_path_exists):
         """
         Test that the node_start function behaves as expected by mocking
@@ -220,6 +221,7 @@ class TestNode(unittest.TestCase):
         m_os_path_exists.assert_called_once_with(log_dir)
         m_os_makedirs.assert_called_once_with(log_dir)
         m_check_system.assert_called_once_with(fix=False, quit_if_error=False, libnetwork=libnetwork)
+        m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
@@ -254,13 +256,14 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     def test_node_start_call_backup_kube_directory(
             self, m_install_plugin, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_check_system,
+            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):
         """
         Test that node_start calls the backup kuberentes plugin directory
@@ -294,14 +297,15 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     def test_node_start_call_backup_rkt_directory(
             self, m_install_plugin, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_check_system,
-            m_os_makedirs, m_os_path_exists):
+            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
+            m_check_system, m_os_makedirs, m_os_path_exists):
         """
         Test that node_start calls the backup kuberentes plugin directory
         when install_kubernetes cannot access the default kubernetes directory
@@ -334,6 +338,7 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -343,7 +348,8 @@ class TestNode(unittest.TestCase):
     def test_node_start_remove_container_error(
             self, m_docker_client, m_client, m_install_plugin,
             m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-            m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists):
+            m_get_host_ips, m_setup_ip, m_check_system,
+            m_os_makedirs, m_os_path_exists):
         """
         Test that the docker client raises an APIError when it fails to
         remove a container.
@@ -372,6 +378,7 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -381,8 +388,8 @@ class TestNode(unittest.TestCase):
     def test_node_start_no_detected_ips(
             self, m_docker_client, m_client, m_install_plugin,
             m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-            m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists,
-            m_sys_exit):
+            m_get_host_ips, m_setup_ip, m_check_system,
+            m_os_makedirs, m_os_path_exists, m_sys_exit):
         """
         Test that system exits when no ip is provided and host ips cannot be
         obtained
@@ -411,6 +418,7 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -420,7 +428,8 @@ class TestNode(unittest.TestCase):
     def test_node_start_create_default_ip_pools(
             self, m_docker_client, m_client, m_install_plugin,
             m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-            m_get_host_ips, m_check_system, m_os_makedirs, m_os_path_exists):
+            m_get_host_ips, m_setup_ip, m_check_system,
+            m_os_makedirs, m_os_path_exists):
         """
         Test that the client creates default ipv4 and ipv6 pools when the
         client returns an empty ip_pool on etcd setup
