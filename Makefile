@@ -78,7 +78,6 @@ calico_containers/calico-node.tar: caliconode.created
 	docker save --output calico_containers/calico-node.tar calico/node
 
 st: binary calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
-	sudo dist/calicoctl checksystem
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
 fast-st: calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
