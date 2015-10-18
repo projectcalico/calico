@@ -51,22 +51,23 @@ Options:
 import sys
 import os
 import stat
-import docker
 import socket
 import urllib
 import signal
+
+import docker
+from subprocess32 import call
+from netaddr import IPAddress
+from prettytable import PrettyTable
 
 from pycalico.datastore_datatypes import IPPool
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
 from pycalico.util import get_host_ips
-from netaddr import IPAddress
-from prettytable import PrettyTable
-
 from connectors import client
 from connectors import docker_client
-from utils import DOCKER_ORCHESTRATOR_ID
+from utils import DOCKER_ORCHESTRATOR_ID, REQUIRED_MODULES
 from utils import hostname
 from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
@@ -213,6 +214,16 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     use.  None, if not using libnetwork.
     :return:  None.
     """
+    # Normally, Felix will load the modules it needs, but when running inside a
+    # container it might not be able to so ensure the required modules are
+    # loaded each time the node starts.
+    # This is just a best error attempt, as the modules might be builtins.
+    # We'll warn during the check_system() if the modules are unavailable.
+    try:
+        call(["modprobe"] + REQUIRED_MODULES)
+    except OSError:
+        pass
+
     # Print warnings for any known system issues before continuing
     check_system(quit_if_error=False, libnetwork=libnetwork_image)
 

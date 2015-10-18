@@ -28,8 +28,9 @@ import sh
 
 import docker
 from requests import ConnectionError
+from subprocess32 import check_output
 
-from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION
+from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION, REQUIRED_MODULES
 from utils import enforce_root
 from connectors import docker_client
 
@@ -61,13 +62,10 @@ def check_system(quit_if_error=False, libnetwork=False):
     they are not. This function will sys.exit(1) instead of returning false if
     quit_if_error == True
     """
-    # modprobe requires root privileges.
-    enforce_root()
-
-    kernel_ok = _check_kernel_modules()
+    modules_ok = _check_modules()
     docker_ok = _check_docker_version(libnetwork)
 
-    system_ok = kernel_ok and docker_ok
+    system_ok = modules_ok and docker_ok
 
     if quit_if_error and not system_ok:
         sys.exit(1)
@@ -75,13 +73,43 @@ def check_system(quit_if_error=False, libnetwork=False):
     return system_ok
 
 
-def module_loaded(module):
+def modules_available(modules):
     """
-    Checks if the specified kernel-module has been loaded.
-    :param module: Name of the module to check
-    :return: True if the module is loaded, False if not.
+    Checks if the specified modules are available.
+
+    :param modules: A list of of module names to check
+    :return: True if all the module is available, False if not.
     """
-    return any(s.startswith(module) for s in open("/proc/modules").readlines())
+    # For the modules we're expecting to look for, the mainline case is that
+    # they will be loadable modules. Therefore, loadable modules are checked
+    # first and builtins are checked only if needed.
+    kernel_version = check_output(["uname", "-r"]).rstrip()
+    modules_loadable_path = "/lib/modules/%s/modules.dep" % kernel_version
+    available_lines = open(modules_loadable_path).readlines()
+    all_available = check_module_lines(available_lines, modules)
+
+    if not all_available:
+        modules_builtin_path = "/lib/modules/%s/modules.builtin" % kernel_version
+        builtin_lines = open(modules_builtin_path).readlines()
+        all_available = check_module_lines(builtin_lines, modules)
+
+    return all_available
+
+
+def check_module_lines(lines, modules):
+    """
+    Check if a normalized module name appears in the given lines
+    :param lines: THe lines to check
+    :param modules: A list of module names - e.g. ["xt_set", "ip6_tables"]
+    :return: True if the module appears. False otherwise
+    """
+    all_present = True
+    for module in modules:
+        full_module = "/%s.ko" % module
+        all_present= any(full_module in s for s in lines)
+        if not all_present:
+            break
+    return all_present
 
 
 def normalize_version(version):
@@ -94,22 +122,16 @@ def normalize_version(version):
     return [int(x) for x in re.sub(r'(\.0+)*$', '', version).split(".")]
 
 
-def _check_kernel_modules():
+def _check_modules():
     """
     Check system kernel modules
     :return: True if kernel modules are ok.
     """
     system_ok = True
-    modprobe = sh.Command._create('modprobe')
-    try:
-        ip6tables = sh.Command._create('ip6tables')
-        ip6tables("-L")
-    except:
-        print >> sys.stderr, "WARNING: Unable to detect the ip6_tables"
-        system_ok = False
 
-    for module in ["xt_set"]:
-        if not module_loaded(module):
+    for module in REQUIRED_MODULES:
+        # Check modules individually to get a better error message
+        if not modules_available([module]):
             print >> sys.stderr, "WARNING: Unable to detect the %s " \
                                  "module." % module
             system_ok = False

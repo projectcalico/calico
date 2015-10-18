@@ -24,6 +24,7 @@ DOCKER_VERSION = "1.16"
 DOCKER_LIBNETWORK_VERSION = "1.21"
 DOCKER_ORCHESTRATOR_ID = "docker"
 NAMESPACE_ORCHESTRATOR_ID = "namespace"
+REQUIRED_MODULES = ["xt_set", "ip6_tables"]
 hostname = socket.gethostname()
 
 
