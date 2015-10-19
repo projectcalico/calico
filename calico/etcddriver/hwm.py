@@ -44,6 +44,7 @@ class HighWaterTracker(object):
 
         # Set to a Trie while we're tracking deletions.  None otherwise.
         self._deletion_hwms = None
+        self._latest_deletion = None
 
     def start_tracking_deletions(self):
         """
@@ -55,6 +56,7 @@ class HighWaterTracker(object):
         """
         _log.info("Started tracking deletions")
         self._deletion_hwms = Trie(TRIE_CHARS)
+        self._latest_deletion = None
 
     def stop_tracking_deletions(self):
         """
@@ -65,6 +67,7 @@ class HighWaterTracker(object):
         """
         _log.info("Stopped tracking deletions")
         self._deletion_hwms = None
+        self._latest_deletion = None
 
     def update_hwm(self, key, hwm):
         """
@@ -78,7 +81,10 @@ class HighWaterTracker(object):
         """
         _log.debug("Updating HWM for %s to %s", key, hwm)
         key = encode_key(key)
-        if self._deletion_hwms is not None:
+        if (self._deletion_hwms is not None and
+                # Optimization: avoid expensive lookup if this update comes
+                # after all deletions.
+                hwm < self._latest_deletion):
             # We're tracking deletions, check that this key hasn't been
             # deleted.
             del_hwm = self._deletion_hwms.longest_prefix_value(key, None)
@@ -103,6 +109,7 @@ class HighWaterTracker(object):
         """
         _log.debug("Key %s deleted", key)
         key = encode_key(key)
+        self._latest_deletion = max(hwm, self._latest_deletion)
         if self._deletion_hwms is not None:
             _log.debug("Tracking deletion in deletions trie")
             self._deletion_hwms[key] = hwm
