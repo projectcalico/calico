@@ -30,10 +30,8 @@ The driver is responsible for
 * resolving directory deletions so that if a directory is deleted, it tells
   Felix about all the individual keys that are deleted.
 """
-import logging
 
-_log = logging.getLogger(__name__)
-
+import sys
 
 from Queue import Queue, Empty
 
@@ -94,9 +92,11 @@ http = HTTPConnectionPool("localhost", 4001, maxsize=2)
 
 
 def watch_etcd(next_index, result_queue, stop_event):
-    http = HTTPConnectionPool("localhost", 4001, maxsize=2)
+    http = None
     try:
         while not stop_event.is_set():
+            if not http:
+                http = HTTPConnectionPool("localhost", 4001, maxsize=1)
             try:
                 _log.info("About to call http.request...")
                 resp = http.request("GET", "http://localhost:4001/v2/keys/calico/v1",
@@ -107,6 +107,7 @@ def watch_etcd(next_index, result_queue, stop_event):
             except ReadTimeoutError:
                 _log.exception("Watch read timed out, restarting watch at index %s",
                                next_index)
+                http = None  # Workaround issue where connection isn't properly timed out by urllib3
                 continue
             except:
                 _log.exception("Unexpected exception")
@@ -151,8 +152,6 @@ def resync_and_merge(update_sock):
                                       stop_worker))
         watcher_thread.daemon = True
         watcher_thread.start()
-
-
 
         # Then plough through the update incrementally.
         deletes_during_snapshot = Trie(string.printable)
@@ -305,6 +304,11 @@ def resync_and_merge(update_sock):
                 event_hwm = mod
                 best_hwm = mod
             _log.warning("Worker stopped, resyncing...")
+        except socket.error as e:
+            if e.errno == 32:
+                # FIXME Magic number
+                _log.error("Broken pipe, exiting")
+                sys.exit(1)
         except (urllib3.exceptions.HTTPError,
                 HTTPException,
                 socket.error) as e:

@@ -29,23 +29,23 @@ from threading import Thread
 import time
 
 from calico.etcddriver.driver import report_status, resync_and_merge
-from calico.common import default_logging
+from calico.common import default_logging, complete_logging
 
 _log = logging.getLogger(__name__)
 
 default_logging(gevent_in_use=False)
-
+complete_logging("/var/log/calico/etcddriver.log",
+                 logging.INFO,
+                 logging.WARNING,
+                 logging.WARNING)
 
 update_socket = socket.socket(socket.AF_UNIX,
-                              socket.SOCK_SEQPACKET)
-while True:
-    try:
-        update_socket.connect("/tmp/felix.sck")
-    except:
-        _log.exception("Failed to connect to felix...")
-        time.sleep(1)
-    else:
-        break
+                              socket.SOCK_STREAM)
+try:
+    update_socket.connect("/tmp/felix.sck")
+except:
+    _log.exception("Failed to connect to Felix")
+    raise
 
 resync_and_merge(update_socket)
 

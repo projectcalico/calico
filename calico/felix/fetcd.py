@@ -398,7 +398,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 except:
                     pass
                 update_socket = socket.socket(socket.AF_UNIX,
-                                              socket.SOCK_SEQPACKET)
+                                              socket.SOCK_STREAM)
 
                 print "Created socket"
                 update_socket.bind("/tmp/felix.sck")
@@ -413,20 +413,22 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 update_conn, _ = update_socket.accept()
                 print "Accepted connection on socket"
                 receive_count = 0
+                unpacker = msgpack.Unpacker()
                 while True:
                     data = update_conn.recv(8092)
-                    receive_count += 1
-                    if receive_count % 1000 == 0:
-                        print "Recieved", receive_count
-                    key, value = msgpack.loads(data)
-                    n = Node()
-                    n.action = "set" if value is not None else "delete"
-                    n.value = value
-                    n.key = key
-                    try:
-                        self.dispatcher.handle_event(n)
-                    except ResyncRequired:
-                        _log.warning("IGNORING RESYNC.")
+                    unpacker.feed(data)
+                    for key, value in unpacker:
+                        receive_count += 1
+                        if receive_count % 1000 == 0:
+                            print "Recieved", receive_count
+                        n = Node()
+                        n.action = "set" if value is not None else "delete"
+                        n.value = value
+                        n.key = key
+                        try:
+                            self.dispatcher.handle_event(n)
+                        except ResyncRequired:
+                            _log.warning("IGNORING RESYNC.")
             except EtcdException as e:
                 # Most likely a timeout or other error in the pre-resync;
                 # start over.  These exceptions have good semantic error text
