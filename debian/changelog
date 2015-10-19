@@ -1,4 +1,4 @@
-calico (1.2.0~pre2-1) trusty; urgency=medium
+calico (1.2.0~pre.2-1) trusty; urgency=medium
 
   * Add endpoint status reporting to Felix.  Felix now reports the state of
     endpoints into etcd so that the OpenStack plugin can report this
