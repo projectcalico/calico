@@ -19,12 +19,11 @@ Description:
   Check for incompatibilities between calico and the host system
 
 Options:
-  --fix  Deprecated: checksystem no longer fixes issues that it detects
+  --fix  DEPRECATED: checksystem no longer fixes issues that it detects
   --libnetwork  Check for the correct docker version for libnetwork deployments
 """
 import sys
 import re
-import sh
 
 import docker
 from requests import ConnectionError
@@ -46,7 +45,7 @@ def checksystem(arguments):
     :return: None
     """
     if arguments["--fix"]:
-        print >> sys.stderr, "WARNING: Deprecated flag --fix:" \
+        print >> sys.stderr, "WARNING: Deprecated flag --fix: " \
                              "checksystem no longer fixes detected issues"
     check_system(quit_if_error=True,
                  libnetwork=arguments["--libnetwork"])
@@ -62,6 +61,7 @@ def check_system(quit_if_error=False, libnetwork=False):
     they are not. This function will sys.exit(1) instead of returning false if
     quit_if_error == True
     """
+    enforce_root()
     modules_ok = _check_modules()
     docker_ok = _check_docker_version(libnetwork)
 
@@ -73,44 +73,55 @@ def check_system(quit_if_error=False, libnetwork=False):
     return system_ok
 
 
-def modules_available(modules):
+def _check_modules():
     """
-    Checks if the specified modules are available.
+    Check system kernel modules
+    :return: True if all the modules in REQUIRED_MODULES are available,
+    False if one is unloaded or other failure.
+    """
+    # Grab Kernel version with `uname`
+    try:
+        kernel_version = check_output(["uname", "-r"]).rstrip()
+    except:
+        print >> sys.stderr, "ERROR: Could not get kernel version with `uname`"
+        return False
 
-    :param modules: A list of of module names to check
-    :return: True if all the module is available, False if not.
-    """
+    modules_loadable_path = "/lib/modules/%s/modules.dep" % kernel_version
+    modules_builtin_path = "/lib/modules/%s/modules.builtin" % kernel_version
+
     # For the modules we're expecting to look for, the mainline case is that
     # they will be loadable modules. Therefore, loadable modules are checked
     # first and builtins are checked only if needed.
-    kernel_version = check_output(["uname", "-r"]).rstrip()
-    modules_loadable_path = "/lib/modules/%s/modules.dep" % kernel_version
     available_lines = open(modules_loadable_path).readlines()
-    all_available = check_module_lines(available_lines, modules)
+    builtin_lines = None
 
-    if not all_available:
-        modules_builtin_path = "/lib/modules/%s/modules.builtin" % kernel_version
-        builtin_lines = open(modules_builtin_path).readlines()
-        all_available = check_module_lines(builtin_lines, modules)
+    all_available = True
+    for module in REQUIRED_MODULES:
+        module_available = check_module_lines(available_lines, module)
+        if not module_available:
+            # Open and check builtin modules
+            if not builtin_lines:
+                builtin_lines = open(modules_builtin_path).readlines()
+            module_builtin = check_module_lines(builtin_lines, module)
+
+            # If module is not available or builtin, issue warning
+            if not module_builtin:
+                print >> sys.stderr, "WARNING: Unable to detect the %s " \
+                                     "module." % module
+                all_available = False
 
     return all_available
 
 
-def check_module_lines(lines, modules):
+def check_module_lines(lines, module):
     """
     Check if a normalized module name appears in the given lines
-    :param lines: THe lines to check
-    :param modules: A list of module names - e.g. ["xt_set", "ip6_tables"]
+    :param lines: The lines to check
+    :param module: A module name - e.g. "xt_set" or "ip6_tables"
     :return: True if the module appears. False otherwise
     """
-    all_present = True
-    for module in modules:
-        full_module = "/%s.ko" % module
-        all_present= any(full_module in s for s in lines)
-        if not all_present:
-            break
-    return all_present
-
+    full_module = "/%s.ko" % module
+    return any(full_module in line for line in lines)
 
 def normalize_version(version):
     """
@@ -120,22 +131,6 @@ def normalize_version(version):
     http://stackoverflow.com/questions/1714027/version-number-comparison
     """
     return [int(x) for x in re.sub(r'(\.0+)*$', '', version).split(".")]
-
-
-def _check_modules():
-    """
-    Check system kernel modules
-    :return: True if kernel modules are ok.
-    """
-    system_ok = True
-
-    for module in REQUIRED_MODULES:
-        # Check modules individually to get a better error message
-        if not modules_available([module]):
-            print >> sys.stderr, "WARNING: Unable to detect the %s " \
-                                 "module." % module
-            system_ok = False
-    return system_ok
 
 
 def _check_docker_version(libnetwork=False):
