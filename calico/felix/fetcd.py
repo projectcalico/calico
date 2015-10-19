@@ -415,7 +415,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 receive_count = 0
                 unpacker = msgpack.Unpacker()
                 while True:
-                    data = update_conn.recv(8092)
+                    data = update_conn.recv(16384)
                     unpacker.feed(data)
                     for key, value in unpacker:
                         receive_count += 1

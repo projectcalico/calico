@@ -33,11 +33,11 @@ from calico.common import default_logging, complete_logging
 
 _log = logging.getLogger(__name__)
 
-default_logging(gevent_in_use=False)
 complete_logging("/var/log/calico/etcddriver.log",
                  logging.INFO,
                  logging.WARNING,
-                 logging.WARNING)
+                 logging.INFO,
+                 gevent_in_use=False)
 
 update_socket = socket.socket(socket.AF_UNIX,
                               socket.SOCK_STREAM)
@@ -47,5 +47,12 @@ except:
     _log.exception("Failed to connect to Felix")
     raise
 
-resync_and_merge(update_socket)
+resync_thread = Thread(target=resync_and_merge, args=[update_socket])
+resync_thread.daemon = True
+resync_thread.start()
 
+try:
+    update_socket.recv(1024)
+except:
+    _log.exception("Failed to read from update socket,  Felix down?")
+    raise
