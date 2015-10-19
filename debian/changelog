@@ -10,7 +10,7 @@ calico (1.2.0~pre2-1) trusty; urgency=medium
     come up with the Kernel's RPF check enabled by default.
   * Optimize Felix's actor framework to reduce message-passing overhead.
 
- -- Matt Dupre <matt@projectcalico.org>  Mon, 19 Oct 2015 15:28:30 + 0100
+ -- Matt Dupre <matt@projectcalico.org>  Mon, 19 Oct 2015 15:28:30 +0100
 
 calico (1.2.0~pre.1~dev.1) trusty; urgency=low
 
