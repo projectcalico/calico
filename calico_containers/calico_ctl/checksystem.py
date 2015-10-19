@@ -79,36 +79,46 @@ def _check_modules():
     :return: True if all the modules in REQUIRED_MODULES are available,
     False if one is unloaded or other failure.
     """
-    # Grab Kernel version with `uname`
-    try:
-        kernel_version = check_output(["uname", "-r"]).rstrip()
-    except:
-        print >> sys.stderr, "ERROR: Could not get kernel version with `uname`"
-        return False
-
-    modules_loadable_path = "/lib/modules/%s/modules.dep" % kernel_version
-    modules_builtin_path = "/lib/modules/%s/modules.builtin" % kernel_version
-
-    # For the modules we're expecting to look for, the mainline case is that
-    # they will be loadable modules. Therefore, loadable modules are checked
-    # first and builtins are checked only if needed.
-    available_lines = open(modules_loadable_path).readlines()
-    builtin_lines = None
-
     all_available = True
-    for module in REQUIRED_MODULES:
-        module_available = check_module_lines(available_lines, module)
-        if not module_available:
-            # Open and check builtin modules
-            if not builtin_lines:
-                builtin_lines = open(modules_builtin_path).readlines()
-            module_builtin = check_module_lines(builtin_lines, module)
+    try:
+        # Grab Kernel version with `uname`
+        kernel_version = check_output(["uname", "-r"]).rstrip()
 
-            # If module is not available or builtin, issue warning
-            if not module_builtin:
-                print >> sys.stderr, "WARNING: Unable to detect the %s " \
-                                     "module." % module
-                all_available = False
+        modules_loadable_path = "/lib/modules/%s/modules.dep" % kernel_version
+        modules_builtin_path = "/lib/modules/%s/modules.builtin" % kernel_version
+
+        # For the modules we're expecting to look for, the mainline case is that
+        # they will be loadable modules. Therefore, loadable modules are checked
+        # first and builtins are checked only if needed.
+        available_lines = open(modules_loadable_path).readlines()
+        builtin_lines = None
+
+        for module in REQUIRED_MODULES:
+            module_available = check_module_lines(available_lines, module)
+            if not module_available:
+                # Open and check builtin modules
+                if not builtin_lines:
+                    builtin_lines = open(modules_builtin_path).readlines()
+                module_builtin = check_module_lines(builtin_lines, module)
+
+                # If module is not available or builtin, issue warning
+                if not module_builtin:
+                    print >> sys.stderr, "WARNING: Unable to detect the %s " \
+                                         "module as available or builtin." % module
+                    all_available = False
+
+    # If something goes wrong with uname or file access, try lsmod.
+    except BaseException:
+        try:
+            modules = check_output(["lsmod"])
+            for module in REQUIRED_MODULES:
+                if module not in modules:
+                    print >> sys.stderr, "WARNING: Unable to detect the %s " \
+                                         "module with lsmod." % module
+                    all_available = False
+        except BaseException as e:
+            print >> sys.stderr, "ERROR: Could not check for loaded modules \n%s" % e
+            return False
 
     return all_available
 
@@ -122,6 +132,7 @@ def check_module_lines(lines, module):
     """
     full_module = "/%s.ko" % module
     return any(full_module in line for line in lines)
+
 
 def normalize_version(version):
     """

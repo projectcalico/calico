@@ -14,6 +14,7 @@
 import unittest
 from mock import patch, Mock, call
 from sh import Command, ErrorReturnCode
+from subprocess32 import CalledProcessError
 from nose_parameterized import parameterized
 from calico_ctl.checksystem import check_system, _check_modules
 
@@ -95,7 +96,7 @@ class TestCheckSystem(unittest.TestCase):
         self.assertRaises(SystemExit, check_system, quit_if_error=True)
 
     # Numbered modules exist within the mocked files and should be valid
-    # check_modules should return false if searching for invalid module
+    # check_modules should return False if searching for invalid module
     @parameterized.expand([
         (["mod_one", "mod_four"], True),
         (["mod_four", "mod_five"], True),
@@ -112,7 +113,7 @@ class TestCheckSystem(unittest.TestCase):
         Use parameterized requirements to test a variety of states in which
         modules may or not be found. Check the number of calls to open().
         Numbered modules exist within the mocked files and should be valid.
-        check_modules should return false if searching for the invalid module.
+        check_modules should return False if searching for the invalid module.
         """
         m_file = Mock()
         m_file.readlines.side_effect = [["/mod_one.ko", "/mod_two.ko", "/mod_three.ko"], # Mocked Available modules
@@ -155,11 +156,34 @@ class TestCheckSystem(unittest.TestCase):
         m_open.assert_called_once_with("/lib/modules/version/modules.dep")
         self.assertEquals(return_val, expected_return)
 
+    @parameterized.expand([
+        (["mod_one", "mod_two"], True),
+        (["mod_three", "mod_invalid"], False),
+    ])
+    @patch('__builtin__.open', autospec=True)
     @patch('sys.stderr', autospec=True)
-    @patch('calico_ctl.checksystem.check_output', autospec=True, side_effect=OSError)
-    def test_check_modules_version_error(self, m_get_version, m_stderr):
-        """Test _check_module for error in grabbing version
-        check_system should fail if version cannot be found with `uname`
+    @patch('calico_ctl.checksystem.check_output', autospec=True)
+    def test_check_modules_lsmod(self, requirements, expected_return,
+                                 m_check_out, m_stderr, m_open):
+        """Test _check_module using lsmod
+        Cause failure on file open and check_system should
+        find modules in lsmod output.
         """
+        m_open.side_effect = CalledProcessError
+        m_check_out.return_value = "mod_one\n mod_two\n mod_three\n"
+
+        with patch('calico_ctl.checksystem.REQUIRED_MODULES', requirements):
+            return_val = _check_modules()
+
+        self.assertEquals(return_val, expected_return)
+
+    @patch('sys.stderr', autospec=True)
+    @patch('calico_ctl.checksystem.check_output', autospec=True)
+    def test_check_modules_error(self, m_check_out, m_stderr):
+        """Test _check_module lsmod failure
+        All check_output calls raise an error, meaning check_system
+        should return false.
+        """
+        m_check_out.side_effect = CalledProcessError
         return_val = _check_modules()
-        self.assertEquals(return_val, False)
+        self.assertFalse(return_val)
