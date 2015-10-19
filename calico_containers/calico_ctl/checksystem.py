@@ -56,6 +56,7 @@ def check_system(quit_if_error=False, libnetwork=False):
 
     :param quit_if_error: if True, quit with error code 1 if any issues are
     detected.
+    :param libnetwork: If True, check for Docker version >= v1.21 to support libnetwork
     :return: True if all system dependencies are in the proper state, False if
     they are not. This function will sys.exit(1) instead of returning false if
     quit_if_error == True
@@ -118,7 +119,7 @@ def _check_kernel_modules():
 def _check_docker_version(libnetwork=False):
     """
     Check the Docker version is supported.
-
+    :param libnetwork: If True, check for Docker version >= v1.21 to support libnetwork
     :return: True if Docker version is OK.
     """
     system_ok = True
