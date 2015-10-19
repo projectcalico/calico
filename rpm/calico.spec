@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.2.0
-Release:        0.1.pre1dev1%{?dist}
+Release:        0.2.pre%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -210,6 +210,24 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 19 2015 Matt Dupre <matt@projectcalico.org> 1.2.0-0.2.pre
+  - Add liveness reporting to Felix.  Felix now reports its liveness into
+    etcd and the neutron driver copies that information to the Neutron DB.
+    If Felix is down on a host, Neutron will not try to schedule a VM on
+    that host.
+  - Add endpoint status reporting to Felix.  Felix now reports the state of
+    endpoints into etcd so that the OpenStack plugin can report this
+    information into Neutron.  If Felix fails to configure a port, this now
+    causes VM creation to fail.
+  - Performance enhancements to ipset manipulation.
+  - Rev python-etcd dependency to 0.4.1.  Our patched python-etcd version
+    (which contains additional patches) is still required.
+  - Reduce occupancy of Felix's tag resolution index in the common case
+    where IP addresses only have a single owner.
+  - Felix now sets the default.rp_filter sysctl to ensure that endpoints
+    come up with the Kernel's RPF check enabled by default.
+  - Optimize Felix's actor framework to reduce message-passing overhead.
+
 * Tue Sep 08 2015 Neil Jerram <Neil.Jerram@metaswitch.com> 1.1.0
   - Improve the documentation about upgrading a Calico/OpenStack system.
   - Fix compatibility with latest OpenStack code (oslo_config).

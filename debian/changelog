@@ -1,3 +1,17 @@
+calico (1.2.0~pre2-1) trusty; urgency=medium
+
+  * Add endpoint status reporting to Felix.  Felix now reports the state of
+    endpoints into etcd so that the OpenStack plugin can report this
+    information into Neutron.  If Felix fails to configure a port, this now
+    causes VM creation to fail.
+  * Reduce occupancy of Felix's tag resolution index in the common case
+    where IP addresses only have a single owner.
+  * Felix now sets the default.rp_filter sysctl to ensure that endpoints
+    come up with the Kernel's RPF check enabled by default.
+  * Optimize Felix's actor framework to reduce message-passing overhead.
+
+ -- Matt Dupre <matt@projectcalico.org>  Mon, 19 Oct 2015 15:28:30 + 0100
+
 calico (1.2.0~pre.1~dev.1) trusty; urgency=low
 
   * Internal testing release.
