@@ -125,6 +125,22 @@ class TestFutils(unittest.TestCase):
                                           "%r but got %r" %
                                           (inp, length, exp, output))
 
+    def test_safe_truncate(self):
+        self.assert_safe_truncate("foobarbazb", 10, "foobarbazb")
+        # Yes, this gets longer, which is silly.  However, there's no point
+        # making the code complicated to handle this case that should never be
+        # hit.
+        self.assert_safe_truncate("foobarbazb", 9, "fooba...<snip>...bazb")
+        self.assert_safe_truncate(None, 9, None)
+        self.assert_safe_truncate(1234, 9, "1234")
+
+    def assert_safe_truncate(self, s, length, expected):
+        result = futils.safe_truncate(s, length)
+        self.assertEqual(result, expected,
+                         "Expected %r to be truncated as %r but got %r" %
+                         (s, expected, result))
+
+
 class TestStats(unittest.TestCase):
     def setUp(self):
         futils._registered_diags = []

@@ -67,6 +67,8 @@ SHORTENED_PREFIX = "_"
 MAX_CONCURRENT_CALLS = 32
 _call_semaphore = gevent.lock.Semaphore(MAX_CONCURRENT_CALLS)
 
+DEFAULT_TRUNC_LENGTH = 1000
+
 
 class FailedSystemCall(Exception):
     def __init__(self, message, args, retcode, stdout, stderr, input=None):
@@ -84,7 +86,20 @@ class FailedSystemCall(Exception):
                 "  stderr  : %s\n"
                 "  input  : %s\n" %
                 (self.message, self.retcode, self.args,
-                 self.stdout, self.stderr, self.input))
+                 safe_truncate(self.stdout),
+                 safe_truncate(self.stderr),
+                 safe_truncate(self.input)))
+
+
+def safe_truncate(s, max_len=DEFAULT_TRUNC_LENGTH):
+    if s is None:
+        return s
+    if not isinstance(s, basestring):
+        s = str(s)
+    snip = "...<snip>..."
+    if len(s) > max_len:
+        s = s[:(max_len+1)//2] + snip + s[-(max_len//2):]
+    return s
 
 
 def call_silent(args):
