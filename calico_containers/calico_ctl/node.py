@@ -14,8 +14,8 @@
 """
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
-    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>]
-    [--kubernetes] [--rkt]
+    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--rkt]
+    [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
@@ -41,7 +41,10 @@ Options:
   --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
-  --kubernetes              Download and install the kubernetes plugin.
+  --kubernetes              Download and install the Kubernetes plugin.
+  --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
+                            to install when using the --kubernetes option.
+                            [default: v0.3.0]
   --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
@@ -52,7 +55,6 @@ import sys
 import os
 import stat
 import socket
-import urllib
 import signal
 
 import docker
@@ -72,6 +74,7 @@ from utils import hostname
 from utils import print_paragraph
 from utils import get_container_ipv_from_arguments
 from utils import validate_ip, validate_asn, convert_asn_to_asplain
+from utils import URLGetter
 from checksystem import check_system
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
@@ -80,8 +83,7 @@ DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 CALICO_NETWORKING_ENV = "CALICO_NETWORKING"
 CALICO_NETWORKING_DEFAULT = "true"
 
-KUBERNETES_PLUGIN_VERSION = 'v0.2.0'
-KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes' % KUBERNETES_PLUGIN_VERSION
+KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes'
 KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
 KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
 
@@ -182,6 +184,8 @@ def node(arguments):
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
 
+        kubernetes_version = None if not arguments.get("--kubernetes") \
+                                else arguments.get("--kube-plugin-version")
         libnetwork_image = None if not arguments.get("--libnetwork") \
                                 else arguments.get("--libnetwork-image")
         node_start(ip=arguments.get("--ip"),
@@ -190,13 +194,13 @@ def node(arguments):
                    ip6=arguments.get("--ip6"),
                    as_num=as_num,
                    detach=detach,
-                   kubernetes=arguments.get("--kubernetes"),
+                   kubernetes_version=kubernetes_version,
                    rkt=arguments.get("--rkt"),
                    libnetwork_image=libnetwork_image)
 
 
-def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
-               libnetwork_image):
+def node_start(node_image, log_dir, ip, ip6, as_num, detach,
+               kubernetes_version, rkt, libnetwork_image):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -208,7 +212,8 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     the global default value will be used.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
-    :param kubernetes: True to install the kubernetes plugin, False otherwise.
+    :param kubernetes_version: The version of the calico-kubernetes plugin to
+     install, or None if the plugin should not be installed.
     :param rkt: True to install the rkt plugin, False otherwise.
     :param libnetwork_image: The name of the Calico libnetwork driver image to
     use.  None, if not using libnetwork.
@@ -252,14 +257,16 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach, kubernetes, rkt,
     # Warn if this hostname conflicts with an existing host
     warn_if_hostname_conflict(ip)
 
-    # Install kubernetes plugin
-    if kubernetes:
+    # Install Kubernetes plugin
+    if kubernetes_version:
+        # Build a URL based on the provided Kubernetes_version.
+        url = KUBERNETES_BINARY_URL % kubernetes_version
         try:
-            # Attempt to install to the default kubernetes directory
-            install_plugin(KUBERNETES_PLUGIN_DIR, KUBERNETES_BINARY_URL)
+            # Attempt to install to the default Kubernetes directory
+            install_plugin(KUBERNETES_PLUGIN_DIR, url)
         except OSError:
             # Use the backup directory
-            install_plugin(KUBERNETES_PLUGIN_DIR_BACKUP, KUBERNETES_BINARY_URL)
+            install_plugin(KUBERNETES_PLUGIN_DIR_BACKUP, url)
 
     # Install rkt plugin
     if rkt:
@@ -622,9 +629,12 @@ def install_plugin(plugin_dir, binary_url):
     if not os.path.exists(plugin_dir):
         os.makedirs(plugin_dir)
     binary_path = plugin_dir + 'calico'
+    getter = URLGetter()
     try:
-        urllib.urlretrieve(binary_url, binary_path)
+        getter.retrieve(binary_url, binary_path)
     except IOError:
+        # We were unable to download the binary.  This may be because the
+        # user provided an invalid calico-kubernetes version.
         print "ERROR: Couldn't download the plugin from %s" % binary_url
         sys.exit(1)
     else:

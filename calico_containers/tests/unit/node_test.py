@@ -192,13 +192,13 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kubernetes = True
+        kube_plugin_version = 'v0.2.1'
         rkt = True
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
-                        kubernetes, rkt, libnetwork)
+                        kube_plugin_version, rkt, libnetwork)
 
         # Set up variables used in assertion statements
         environment = [
@@ -230,7 +230,9 @@ class TestNode(unittest.TestCase):
         m_client.create_host.assert_called_once_with(
             node.hostname, ip_2, ip6, as_num
         )
-        m_install_plugin.assert_has_calls([call(node.KUBERNETES_PLUGIN_DIR, node.KUBERNETES_BINARY_URL),
+
+        url = node.KUBERNETES_BINARY_URL % kube_plugin_version
+        m_install_plugin.assert_has_calls([call(node.KUBERNETES_PLUGIN_DIR, url),
                                            call(node.RKT_PLUGIN_DIR, node.RKT_BINARY_URL)])
         m_docker_client.remove_container.assert_called_once_with(
             'calico-node', force=True
@@ -281,17 +283,19 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kubernetes = True
+        kube_plugin_version = 'v0.2.1'
         rkt = False
         libnetwork = False
 
         # Test expecting OSError exception
         self.assertRaises(OSError, node.node_start,
                           node_image, log_dir, ip, ip6, as_num, detach,
-                          kubernetes, rkt, libnetwork)
+                          kube_plugin_version, rkt, libnetwork)
+
+        url = node.KUBERNETES_BINARY_URL % kube_plugin_version
         m_install_plugin.assert_has_calls([
-            call(node.KUBERNETES_PLUGIN_DIR, node.KUBERNETES_BINARY_URL),
-            call(node.KUBERNETES_PLUGIN_DIR_BACKUP, node.KUBERNETES_BINARY_URL)
+            call(node.KUBERNETES_PLUGIN_DIR, url),
+            call(node.KUBERNETES_PLUGIN_DIR_BACKUP, url)
         ])
 
     @patch('os.path.exists', autospec=True)
@@ -322,14 +326,14 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kubernetes = False
+        kube_plugin_version = None
         rkt = True
         libnetwork = False
 
         # Test expecting OSError exception
         self.assertRaises(OSError, node.node_start,
                           node_image, log_dir, ip, ip6, as_num, detach,
-                          kubernetes, rkt, libnetwork)
+                          kube_plugin_version, rkt, libnetwork)
         m_install_plugin.assert_has_calls([
             call(node.RKT_PLUGIN_DIR, node.RKT_BINARY_URL),
             call(node.RKT_PLUGIN_DIR_BACKUP, node.RKT_BINARY_URL)
@@ -365,14 +369,14 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kubernetes = True
+        kube_plugin_version = 'v0.2.1'
         rkt = False
         libnetwork = False
 
         # Testing expecting APIError exception
         self.assertRaises(APIError, node.node_start,
                           node_image, log_dir, ip, ip6, as_num, detach,
-                          kubernetes, rkt, libnetwork)
+                          kube_plugin_version, rkt, libnetwork)
 
     @patch('sys.exit', autospec=True)
     @patch('os.path.exists', autospec=True)
@@ -404,13 +408,13 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kubernetes = True
+        kube_plugin_version = 'v0.2.1'
         rkt = False
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
-                        kubernetes, rkt, libnetwork)
+                        kube_plugin_version, rkt, libnetwork)
 
         # Assert
         m_sys_exit.assert_called_once_with(1)
@@ -444,13 +448,13 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kubernetes = True
+        kube_plugin_version = 'v0.2.1'
         rkt = False
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, log_dir, ip, ip6, as_num, detach,
-                        kubernetes, rkt, libnetwork)
+                        kube_plugin_version, rkt, libnetwork)
 
         # Assert
         m_client.add_ip_pool.assert_has_calls([
@@ -486,3 +490,16 @@ class TestNode(unittest.TestCase):
 
         # Call method under test expecting an exception
         self.assertRaises(APIError, node.node_stop, True)
+
+    @patch("calico_ctl.node.URLGetter", autospec=True)
+    @patch("calico_ctl.node.os", autospec=True)
+    def test_install_plugin(self, m_os, m_url_getter):
+        # Test installation of Kubernetes plugin
+        url = "http://somefake/url"
+        path = "/path/to/downloaded/binary/"
+
+        # Run method
+        node.install_plugin(path, url)
+
+        # Assert the file URL was downloaded.
+        m_url_getter().retrieve.assert_called_once_with(url, path + "calico")
