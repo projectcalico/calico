@@ -27,6 +27,7 @@ import logging
 import socket
 from threading import Thread
 import time
+import sys
 
 from calico.etcddriver.driver import report_status, resync_and_merge
 from calico.common import default_logging, complete_logging
@@ -42,7 +43,7 @@ complete_logging("/var/log/calico/etcddriver.log",
 update_socket = socket.socket(socket.AF_UNIX,
                               socket.SOCK_STREAM)
 try:
-    update_socket.connect("/tmp/felix.sck")
+    update_socket.connect(sys.argv[1])
 except:
     _log.exception("Failed to connect to Felix")
     raise

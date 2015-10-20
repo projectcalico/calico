@@ -393,34 +393,14 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 _log.info("Reconnecting and loading snapshot from etcd...")
                 self.reconnect(copy_cluster_id=False)
                 self._on_pre_resync()
-                try:
-                    os.unlink("/tmp/felix.sck")
-                except:
-                    pass
-                update_socket = socket.socket(socket.AF_UNIX,
-                                              socket.SOCK_STREAM)
 
-                print "Created socket"
-                update_socket.bind("/tmp/felix.sck")
-                print "Bound socket"
-                update_socket.listen(1)
-                print "Marked socket for listen"
-
-                subprocess.Popen([sys.executable,
-                                  "-m",
-                                  "calico.etcddriver"])
-
-                update_conn, _ = update_socket.accept()
-                print "Accepted connection on socket"
-                receive_count = 0
+                driver_sck = self.start_driver()
                 unpacker = msgpack.Unpacker()
                 while True:
-                    data = update_conn.recv(16384)
+                    data = driver_sck.recv(16384)
                     unpacker.feed(data)
                     for key, value in unpacker:
-                        receive_count += 1
-                        if receive_count % 1000 == 0:
-                            print "Recieved", receive_count
+                        # TODO stats
                         n = Node()
                         n.action = "set" if value is not None else "delete"
                         n.value = value
@@ -439,6 +419,31 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             except:
                 _log.exception("Exception reading from socket?")
         _log.info("%s.loop() stopped due to self.stop == True", self)
+
+    def start_driver(self):
+        _log.info("Creating server socket.")
+        try:
+            os.unlink("/run/felix-driver.sck")
+        except:
+            pass
+        update_socket = socket.socket(socket.AF_UNIX,
+                                      socket.SOCK_STREAM)
+        update_socket.bind("/run/felix-driver.sck")
+        update_socket.listen(1)
+        subprocess.Popen([sys.executable,
+                          "-m",
+                          "calico.etcddriver",
+                          "/run/felix-driver.sck"])
+        update_conn, _ = update_socket.accept()
+        _log.info("Accepted connection on socket")
+        # No longer need the server socket, remove it.
+        try:
+            os.unlink("/run/felix-driver.sck")
+        except:
+            _log.exception("Failed to unlink socket")
+        else:
+            _log.info("Unlinked server socket")
+        return update_conn
 
     def _load_config(self):
         """
