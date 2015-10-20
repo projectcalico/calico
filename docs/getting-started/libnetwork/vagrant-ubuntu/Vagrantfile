@@ -70,9 +70,6 @@ Vagrant.configure(2) do |config|
 
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
 
-      # Ensure that the iptables kernel modules are loaded etc...
-      host.vm.provision :shell, inline: "sudo calicoctl checksystem --fix"
-
       # Ensure the vagrant and root users get the ETCD_AUTHORITY environment.
       host.vm.provision :shell, inline: %Q|echo 'export ETCD_AUTHORITY="#{primary_ip}:4001"' >> /home/vagrant/.profile|
       host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "Defaults env_keep +=\"ETCD_AUTHORITY\"" >>/etc/sudoers'|

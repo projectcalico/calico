@@ -11,69 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import unittest
-from mock import patch, Mock
-from calico_ctl.checksystem import _check_kernel_modules
+from mock import patch, Mock, call
 from sh import Command, ErrorReturnCode
+from subprocess32 import CalledProcessError
 from nose_parameterized import parameterized
-from calico_ctl.checksystem import check_system
+from calico_ctl.checksystem import check_system, _check_modules
 
 
 class TestCheckSystem(unittest.TestCase):
 
-    @patch("calico_ctl.checksystem.sh.Command", autospec=True)
-    def test_check_mod_xt_set(self, m_command):
-
-        # Mock out sh.Command._create
-        m_modprobe = Mock(Command)
-        m_ip6tables = Mock(Command)
-
-        def _create(cmd):
-            if cmd == "modprobe":
-                return m_modprobe
-            elif cmd == "ip6tables":
-                return m_ip6tables
-            else:
-                raise ValueError()
-        m_command._create = _create
-
-        def m_module_loaded(module):
-            return False
-
-        with patch("calico_ctl.checksystem.module_loaded", m_module_loaded):
-            result = _check_kernel_modules(False)
-
-            # Fix = false means system is not OK.
-            self.assertFalse(result)
-            self.assertFalse(m_modprobe.called)
-            m_ip6tables.assert_called_once_with("-L")
-
-            # Reset mocks
-            m_modprobe.reset_mock()
-            m_ip6tables.reset_mock()
-
-            result = _check_kernel_modules(True)
-
-            # Fix = true should attempt to fix with modprobe.
-            self.assertTrue(result)
-            m_modprobe.assert_called_once_with("xt_set")
-            m_ip6tables.assert_called_once_with("-L")
-
-            # Reset mocks
-            m_modprobe.reset_mock()
-            m_ip6tables.reset_mock()
-
-            # Fix = true, but modprobe fails.
-            m_modprobe.side_effect = ErrorReturnCode("modprobe xt_set", "", "")
-            result = _check_kernel_modules(True)
-
-            self.assertFalse(result)
-            m_modprobe.assert_called_once_with("xt_set")
-            m_ip6tables.assert_called_once_with("-L")
-
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
-    @patch('calico_ctl.checksystem._check_kernel_modules', autospec=True, return_value=True)
+    @patch('calico_ctl.checksystem._check_modules', autospec=True, return_value=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True, return_value=True)
     def test_check_system(self, m_check_docker_version,
                           m_check_kernel_modules, m_enforce_root):
@@ -83,11 +32,11 @@ class TestCheckSystem(unittest.TestCase):
         Assert that the function returns True
         """
         # Call method under test
-        test_return = check_system(fix=False, quit_if_error=True)
+        test_return = check_system(quit_if_error=True)
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_check_kernel_modules.assert_called_once_with(False)
+        m_check_kernel_modules.assert_called_once_with()
         m_check_docker_version.assert_called_once_with(False)
         self.assertTrue(test_return)
 
@@ -95,61 +44,146 @@ class TestCheckSystem(unittest.TestCase):
         (True, False),
         (False, True),
     ])
+    @patch('calico_ctl.checksystem.enforce_root', autospec=True)
+    @patch('calico_ctl.checksystem._check_modules', autospec=True)
+    @patch('calico_ctl.checksystem._check_docker_version', autospec=True)
     def test_check_system_bad_state_do_not_quit(
-            self, kernel_status, docker_version_status):
+            self, kernel_status, docker_version_status,
+            m_check_docker_version, m_check_kernel_modules, m_enforce_root):
         """
         Test for check_system when one of the system checks fails
 
         This test does not quit if there is an error -
         Assert that the function returns False
 
-        :param kernel_status: return_value for _check_kernel_modules
+        :param kernel_status: return_value for _check_modules
         :param docker_version_status: return_value for _check_docker_version
         """
-        with patch('calico_ctl.checksystem.enforce_root', autospec=True) \
-                     as m_enforce_root, \
-             patch('calico_ctl.checksystem._check_kernel_modules', autospec=True) \
-                     as m_check_kernel_modules, \
-             patch('calico_ctl.checksystem._check_docker_version', autospec=True) \
-                        as m_check_docker_version:
-            # Set up mock objects
-            m_check_kernel_modules.return_value = kernel_status
-            m_check_docker_version.return_value = docker_version_status
+        # Set up mock objects
+        m_check_kernel_modules.return_value = kernel_status
+        m_check_docker_version.return_value = docker_version_status
 
-            # Call method under test without exiting if error detected
-            test_return = check_system(fix=False, quit_if_error=False)
+        # Call method under test without exiting if error detected
+        test_return = check_system(quit_if_error=False)
 
-            # Assert
-            m_enforce_root.assert_called_once_with()
-            self.assertFalse(test_return)
+        # Assert
+        self.assertFalse(test_return)
 
     @parameterized.expand([
         (True, False),
         (False, True),
     ])
+    @patch('calico_ctl.checksystem.enforce_root', autospec=True)
+    @patch('calico_ctl.checksystem._check_modules', autospec=True)
+    @patch('calico_ctl.checksystem._check_docker_version', autospec=True)
     def test_check_system_bad_state_quit(
-            self, kernel_status, docker_version_status):
+            self, kernel_status, docker_version_status,
+            m_check_docker_version, m_check_kernel_modules, m_enforce_root):
         """
         Test for check_system when one of the system checks fails
 
         This test exits if there is a detected error -
         Assert that the system exits
 
-        :param kernel_status: return_value for _check_kernel_modules patch
+        :param kernel_status: return_value for _check_modules patch
         :param docker_version_status: return_value for _check_docker_version patch
         """
-        with patch('calico_ctl.checksystem.enforce_root', autospec=True) \
-                     as m_enforce_root, \
-             patch('calico_ctl.checksystem._check_kernel_modules', autospec=True) \
-                     as m_check_kernel_modules, \
-             patch('calico_ctl.checksystem._check_docker_version', autospec=True) \
-                     as m_check_docker_version:
-            # Set up mock objects
-            m_check_kernel_modules.return_value = kernel_status
-            m_check_docker_version.return_value = docker_version_status
+        # Set up mock objects
+        m_check_kernel_modules.return_value = kernel_status
+        m_check_docker_version.return_value = docker_version_status
 
-            # Call method under test expecting a SystemExit when fail detected
-            self.assertRaises(SystemExit, check_system, fix=False, quit_if_error=True)
+        # Call method under test expecting a SystemExit when fail detected
+        self.assertRaises(SystemExit, check_system, quit_if_error=True)
 
-            # Assert
-            m_enforce_root.assert_called_once_with()
+    # Numbered modules exist within the mocked files and should be valid
+    # check_modules should return False if searching for invalid module
+    @parameterized.expand([
+        (["mod_one", "mod_four"], True),
+        (["mod_four", "mod_five"], True),
+        (["mod_invalid"], False),
+        (["mod_one", "mod_invalid"], False),
+        (["mod_four", "mod_invalid"], False),
+    ])
+    @patch('__builtin__.open', autospec=True)
+    @patch('sys.stderr', autospec=True)
+    @patch('calico_ctl.checksystem.check_output', autospec=True, return_value="version")
+    def test_check_modules_double_open(self, requirements, expected_return,
+                                       m_get_version, m_stderr, m_open):
+        """Test _check_module for different requirements (opening 2 files)
+        Use parameterized requirements to test a variety of states in which
+        modules may or not be found. Check the number of calls to open().
+        Numbered modules exist within the mocked files and should be valid.
+        check_modules should return False if searching for the invalid module.
+        """
+        m_file = Mock()
+        m_file.readlines.side_effect = [["/mod_one.ko", "/mod_two.ko", "/mod_three.ko"], # Mocked Available modules
+                                        ["/mod_four.ko", "/mod_five.ko"],                # Mocked Builtin modules
+                                       ]
+        m_open.return_value = m_file
+
+        with patch('calico_ctl.checksystem.REQUIRED_MODULES', requirements):
+            return_val = _check_modules()
+
+        self.assertEquals(return_val, expected_return)
+        m_open.assert_has_calls([call("/lib/modules/version/modules.dep"),
+                                 call().readlines(),
+                                 call("/lib/modules/version/modules.builtin"),
+                                 call().readlines(),
+                                ])
+
+    @parameterized.expand([
+        (["mod_one", "mod_two"], True),
+        (["mod_three"], True),
+    ])
+    @patch('__builtin__.open', autospec=True)
+    @patch('sys.stderr', autospec=True)
+    @patch('calico_ctl.checksystem.check_output', autospec=True, return_value="version")
+    def test_check_modules_single_open(self, requirements, expected_return,
+                                       m_get_version, m_stderr, m_open):
+        """Test _check_module for different requirements (opening 1 file)
+        Use parameterized requirements to test a variety of states in which
+        modules may or not be found. Check the number of calls to open().
+        Numbered modules exist within the mocked file and should be valid.
+        """
+        m_file = Mock()
+        m_file.readlines.return_value = ["/mod_one.ko", "/mod_two.ko", "/mod_three.ko"] # Mocked Available modules
+
+        m_open.return_value = m_file
+
+        with patch('calico_ctl.checksystem.REQUIRED_MODULES', requirements):
+            return_val = _check_modules()
+
+        m_open.assert_called_once_with("/lib/modules/version/modules.dep")
+        self.assertEquals(return_val, expected_return)
+
+    @parameterized.expand([
+        (["mod_one", "mod_two"], True),
+        (["mod_three", "mod_invalid"], False),
+    ])
+    @patch('__builtin__.open', autospec=True)
+    @patch('sys.stderr', autospec=True)
+    @patch('calico_ctl.checksystem.check_output', autospec=True)
+    def test_check_modules_lsmod(self, requirements, expected_return,
+                                 m_check_out, m_stderr, m_open):
+        """Test _check_module using lsmod
+        Cause failure on file open and check_system should
+        find modules in lsmod output.
+        """
+        m_open.side_effect = CalledProcessError
+        m_check_out.return_value = "mod_one\n mod_two\n mod_three\n"
+
+        with patch('calico_ctl.checksystem.REQUIRED_MODULES', requirements):
+            return_val = _check_modules()
+
+        self.assertEquals(return_val, expected_return)
+
+    @patch('sys.stderr', autospec=True)
+    @patch('calico_ctl.checksystem.check_output', autospec=True)
+    def test_check_modules_error(self, m_check_out, m_stderr):
+        """Test _check_module lsmod failure
+        All check_output calls raise an error, meaning check_system
+        should return false.
+        """
+        m_check_out.side_effect = CalledProcessError
+        return_val = _check_modules()
+        self.assertFalse(return_val)

@@ -66,7 +66,7 @@ export ETCD_AUTHORITY=$MANAGER_IP:4001
 export DOCKER_HOST=localhost:2377
 
 # Check that all required dependencies are installed.
-sudo ./calicoctl checksystem --fix
+sudo ./calicoctl checksystem
 
 # Start the calico node service.  We must specify the ETCD_AUTHORITY variable since 
 # sudo uses its own environment.

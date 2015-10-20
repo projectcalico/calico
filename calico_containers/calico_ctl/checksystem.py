@@ -19,17 +19,17 @@ Description:
   Check for incompatibilities between calico and the host system
 
 Options:
-  --fix  Allow calicoctl to attempt to correct any issues detected on the host
+  --fix  DEPRECATED: checksystem no longer fixes issues that it detects
   --libnetwork  Check for the correct docker version for libnetwork deployments
 """
 import sys
 import re
-import sh
 
 import docker
 from requests import ConnectionError
+from subprocess32 import check_output
 
-from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION
+from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION, REQUIRED_MODULES
 from utils import enforce_root
 from connectors import docker_client
 
@@ -44,33 +44,28 @@ def checksystem(arguments):
     this file's docstring with docopt
     :return: None
     """
-    check_system(fix=arguments["--fix"],
-                 quit_if_error=True,
+    if arguments["--fix"]:
+        print >> sys.stderr, "WARNING: Deprecated flag --fix: " \
+                             "checksystem no longer fixes detected issues"
+    check_system(quit_if_error=True,
                  libnetwork=arguments["--libnetwork"])
 
-
-def check_system(fix=False, quit_if_error=False, libnetwork=False):
+def check_system(quit_if_error=False, libnetwork=False):
     """
-    Checks that the system is setup correctly. fix==True, this command will
-    attempt to fix any issues it encounters. If any fixes fail, it will
-    exit(1). Fix will automatically be set to True if the user specifies --fix
-    at the command line.
+    Checks that the system is setup correctly.
 
-    :param fix: if True, try to fix any system dependency issues that are
-    detected.
     :param quit_if_error: if True, quit with error code 1 if any issues are
-    detected, or if any fixes are unsuccesful.
+    detected.
+    :param libnetwork: If True, check for Docker version >= v1.21 to support libnetwork
     :return: True if all system dependencies are in the proper state, False if
     they are not. This function will sys.exit(1) instead of returning false if
     quit_if_error == True
     """
-    # modprobe requires root privileges.
     enforce_root()
-
-    kernel_ok = _check_kernel_modules(fix)
+    modules_ok = _check_modules()
     docker_ok = _check_docker_version(libnetwork)
 
-    system_ok = kernel_ok and docker_ok
+    system_ok = modules_ok and docker_ok
 
     if quit_if_error and not system_ok:
         sys.exit(1)
@@ -78,13 +73,65 @@ def check_system(fix=False, quit_if_error=False, libnetwork=False):
     return system_ok
 
 
-def module_loaded(module):
+def _check_modules():
     """
-    Checks if the specified kernel-module has been loaded.
-    :param module: Name of the module to check
-    :return: True if the module is loaded, False if not.
+    Check system kernel modules
+    :return: True if all the modules in REQUIRED_MODULES are available,
+    False if one is unloaded or other failure.
     """
-    return any(s.startswith(module) for s in open("/proc/modules").readlines())
+    all_available = True
+    try:
+        # Grab Kernel version with `uname`
+        kernel_version = check_output(["uname", "-r"]).rstrip()
+
+        modules_loadable_path = "/lib/modules/%s/modules.dep" % kernel_version
+        modules_builtin_path = "/lib/modules/%s/modules.builtin" % kernel_version
+
+        # For the modules we're expecting to look for, the mainline case is that
+        # they will be loadable modules. Therefore, loadable modules are checked
+        # first and builtins are checked only if needed.
+        available_lines = open(modules_loadable_path).readlines()
+        builtin_lines = None
+
+        for module in REQUIRED_MODULES:
+            module_available = check_module_lines(available_lines, module)
+            if not module_available:
+                # Open and check builtin modules
+                if not builtin_lines:
+                    builtin_lines = open(modules_builtin_path).readlines()
+                module_builtin = check_module_lines(builtin_lines, module)
+
+                # If module is not available or builtin, issue warning
+                if not module_builtin:
+                    print >> sys.stderr, "WARNING: Unable to detect the %s " \
+                                         "module as available or builtin." % module
+                    all_available = False
+
+    # If something goes wrong with uname or file access, try lsmod.
+    except BaseException:
+        try:
+            modules = check_output(["lsmod"])
+            for module in REQUIRED_MODULES:
+                if module not in modules:
+                    print >> sys.stderr, "WARNING: Unable to detect the %s " \
+                                         "module with lsmod." % module
+                    all_available = False
+        except BaseException as e:
+            print >> sys.stderr, "ERROR: Could not check for loaded modules \n%s" % e
+            return False
+
+    return all_available
+
+
+def check_module_lines(lines, module):
+    """
+    Check if a normalized module name appears in the given lines
+    :param lines: The lines to check
+    :param module: A module name - e.g. "xt_set" or "ip6_tables"
+    :return: True if the module appears. False otherwise
+    """
+    full_module = "/%s.ko" % module
+    return any(full_module in line for line in lines)
 
 
 def normalize_version(version):
@@ -97,50 +144,10 @@ def normalize_version(version):
     return [int(x) for x in re.sub(r'(\.0+)*$', '', version).split(".")]
 
 
-def _check_kernel_modules(fix):
-    """
-    Check system kernel modules
-    :param fix: if True, try to fix any system dependency issues that are
-    detected.
-    :return: True if kernel modules are ok.
-    """
-    modprobe = sh.Command._create('modprobe')
-    ip6tables = sh.Command._create('ip6tables')
-    system_ok = True
-    try:
-        ip6tables("-L")
-    except:
-        if fix:
-            try:
-                modprobe('ip6_tables')
-            except sh.ErrorReturnCode:
-                print >> sys.stderr, "ERROR: Could not enable ip6_tables."
-                system_ok = False
-        else:
-            print >> sys.stderr, "WARNING: Unable to detect the ip6_tables " \
-                                 "module. Load with `modprobe ip6_tables`"
-            system_ok = False
-
-    for module in ["xt_set"]:
-        if not module_loaded(module):
-            if fix:
-                try:
-                    modprobe(module)
-                except sh.ErrorReturnCode:
-                    print >> sys.stderr, "ERROR: Could not enable %s." % module
-                    system_ok = False
-            else:
-                print >> sys.stderr, "WARNING: Unable to detect the %s " \
-                                     "module. Load with `modprobe %s`" % \
-                                     (module, module)
-                system_ok = False
-    return system_ok
-
-
 def _check_docker_version(libnetwork=False):
     """
     Check the Docker version is supported.
-
+    :param libnetwork: If True, check for Docker version >= v1.21 to support libnetwork
     :return: True if Docker version is OK.
     """
     system_ok = True
