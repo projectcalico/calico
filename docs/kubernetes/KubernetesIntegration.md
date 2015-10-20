@@ -20,6 +20,9 @@ This guide will describe the configuration required to use the Calico network pl
 * #####CALICO_IPAM (added in calico-kubernetes v0.2.0)
    The `CALICO_IPAM` environment variable gives the option to utilize Calico IP Address Management (IPAM). When set to `true`, Calico will automatically assign pods an IP address that is unique in the cluster. By default, `CALICO_IPAM` is set to `false`, and pods utilize the IP address assigned by Docker.
 
+* ##### KUBE_AUTH_TOKEN (added in calico-kubernetes v0.3.0)
+   The `KUBE_AUTH_TOKEN` environment variable specifies the token to use for https authentication with the Kubernetes apiserver. Each Kubernetes Service Account has its own API token. You can create Service Accounts by following the instructions in the [Kubernetes docs](http://kubernetes.io/v1.0/docs/user-guide/service-accounts.html).
+
 ## Configuring Nodes
 
 #### Creating a Calico Node with the Network Plugin
