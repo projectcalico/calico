@@ -39,10 +39,11 @@ from Queue import Queue, Empty
 import sys
 from threading import Thread, Event
 import time
+from urlparse import urlparse
 
 from ijson.backends import yajl2 as ijson
 from io import BytesIO
-from msgpack import dumps
+import msgpack
 import urllib3
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import ReadTimeoutError
@@ -58,6 +59,23 @@ events_processed = 0
 snapshot_events = 0
 watcher_events = 0
 snap_skipped = 0
+
+FLUSH_THRESHOLD = 200
+
+MSG_KEY_TYPE = "type"
+
+# Init message Felix -> Driver.
+MSG_TYPE_INIT = "init"
+MSG_KEY_ETCD_URL = "etcd_url"
+
+MSG_KEY_LOG_FILE = "log_file"
+MSG_KEY_SEV_FILE = "sev_file"
+MSG_KEY_SEV_SCREEN = "sev_screen"
+MSG_KEY_SEV_SYSLOG = "sev_syslog"
+
+MSG_TYPE_STATUS = "stat"
+MSG_TYPE_CONFIG = "conf"
+MSG_TYPE_UPDATE = "upd"
 
 
 def report_status():
@@ -138,167 +156,324 @@ def watch_etcd(next_index, result_queue, stop_event):
         result_queue.put(None)
 
 
-def resync_and_merge(update_sock):
-    _log.info("Resync thread started")
-    global events_processed, snapshot_events, watcher_events, snap_skipped
-    hwms = HighWaterTracker()
-    stop_watcher = None
-    first_resync = True
+class EtcdDriver(object):
+    def __init__(self, felix_sck):
+        self._felix_sck = felix_sck
 
-    while True:
-        if stop_watcher:
-            _log.info("Watcher was running before, stopping it")
-            stop_watcher.set()
+        # Global stop event used to signal to all threads to stop.
+        self._stop_event = Event()
 
-        # Load the recursive get as far as the headers...
+        self._reader_thread = Thread(target=self._read_from_socket)
+        self._resync_thread = Thread(target=self._resync_and_merge)
+
+        self._watcher_thread = None  # Created on demand
+        self._watcher_stop_event = None
+
+        # High-water mark cache.  Owned by resync thread.
+        self._hwms = HighWaterTracker()
+        # Number of pending updates and buffer.  Owned by resync thread.
+        self._updates_pending = 0
+        self._buf = BytesIO()
+        self._first_resync = True
+
+        # Set by the reader thread once the config has been read from Felix.
+        self._config_loaded = Event()
+        self._etcd_base_url = None
+
+    def start(self):
+        self._reader_thread.start()
+        self._resync_thread.start()
+
+    def join(self):
+        self._reader_thread.join()
+        self._resync_thread.join()
+
+    def _read_from_socket(self):
+        """
+        Thread: reader thread.  Reads messages from Felix.
+
+        So far, this means reading the init message and then dealing
+        with the exception if Felix dies.
+        """
+        try:
+            unpacker = msgpack.Unpacker()
+            while not self._stop_event.is_set():
+                try:
+                    data = self._felix_sck.recv(8092)
+                except:
+                    _log.exception("Exception reading from Felix.")
+                    raise
+                if not data:
+                    _log.error("No data read, assuming Felix closed socket")
+                    break
+                unpacker.feed(data)
+                for msg in unpacker:
+                    if msg[MSG_KEY_TYPE] == MSG_TYPE_INIT:
+                        self._handle_init(msg)
+                    else:
+                        _log.warning("Unexpected message from Felix")
+        finally:
+            _log.error("Reader thread shutting down, triggering stop event")
+            self._stop_event.set()
+
+    def _handle_init(self, msg):
+        # OK to dump the msg, it's a one-off.
+        _log.info("Got init message from Felix %s", msg)
+        self._etcd_base_url = msg[MSG_KEY_ETCD_URL].rstrip("/")
+        self._etcd_url_parts = urlparse(self._etcd_base_url)
+        self._config_loaded.set()
+
+    def _resync_and_merge(self):
+        """
+        Thread: Resync-and-merge thread.  Loads the etcd snapshot, merges
+        it with the events going on concurrently and sends the event stream
+        to Felix.
+        """
+        _log.info("Resync thread started, waiting for config to be loaded...")
+        self._config_loaded.wait()
+        _log.info("Config loaded; continuing.")
+        while not self._stop_event.is_set():
+            # Only has an effect if it's running.  Note: stopping the watcher
+            # is async (and may take a long time for its connection to time
+            # out).
+            self._stop_watcher()
+            # Kick off the request as far as the headers.
+            resp, snapshot_index = self._start_snapshot_request()
+            # Before reading from the snapshot, start the watcher thread.
+            self._start_watcher(snapshot_index)
+            # Then plough through the update incrementally.
+            try:
+                # Incrementally process the snapshot, merging in events from
+                # the queue.
+                self._process_snapshot_and_events(resp, snapshot_index)
+                # Make sure we flush before we wait for events.
+                self._flush()
+                self._process_events_only()
+            except FelixWriteFailed:
+                _log.exception("Write to Felix failed; shutting down.")
+                self._stop_event.set()
+            except WatcherDied:
+                _log.warning("Watcher died; resyncing.")
+            except (urllib3.exceptions.HTTPError,
+                    HTTPException,
+                    socket.error) as e:
+                _log.error("Request to etcd failed: %r; resyncing.", e)
+            except:
+                _log.exception("Unexpected exception; shutting down.")
+                self._stop_event.set()
+                raise
+            finally:
+                self._first_resync = False
+
+    def _start_snapshot_request(self):
+        """
+        Issues the HTTP request to etcd to load the snapshot but only
+        loads it as far as the headers.
+        :return: tuple of response and snapshot's etcd index.
+        :raises HTTPException
+        :raises HTTPError
+        :raises socket.error
+        """
         _log.info("Loading snapshot headers...")
-        http = HTTPConnectionPool("localhost", 4001, maxsize=1)
-        resp = http.request("GET", "http://localhost:4001/v2/keys/calico/v1",
+        http = self.get_etcd_connection()
+        resp = http.request("GET",
+                            self._etcd_base_url + "/v2/keys/calico/v1",
                             fields={"recursive": "true"},
                             timeout=120,
                             preload_content=False)
-
-        # ASAP, start the background thread to listen for events and queue
-        # them up...
         snapshot_index = int(resp.getheader("x-etcd-index", 1))
         _log.info("Got snapshot headers, snapshot index is %s; starting "
                   "watcher...", snapshot_index)
-        watcher_queue = Queue()
-        stop_watcher = Event()
-        watcher_thread = Thread(target=watch_etcd,
-                                args=(snapshot_index + 1,
-                                      watcher_queue,
-                                      stop_watcher))
-        watcher_thread.daemon = True
-        watcher_thread.start()
+        return resp, snapshot_index
 
-        # Then plough through the update incrementally.
-        hwms.start_tracking_deletions()
-        try:
-            buf = BytesIO()
-            parser = ijson.parse(resp)  # urllib3 response is file-like.
-            stack = []
-            frame = Node()
-            count = 0
-            for prefix, event, value in parser:
-                if event == "start_map":
-                    stack.append(frame)
-                    frame = Node()
-                elif event == "map_key":
-                    frame.current_key = value
-                elif event in ("string", "number"):
-                    if frame.done:
-                        continue
-                    if frame.current_key == "modifiedIndex":
-                        frame.modifiedIndex = value
-                    if frame.current_key == "key":
-                        frame.key = value
-                    elif frame.current_key == "value":
-                        frame.value = value
-                    if (frame.key is not None and
-                            frame.value is not None and
-                            frame.modifiedIndex is not None):
-                        frame.done = True
+    def _process_snapshot_and_events(self, etcd_response, snapshot_index):
+        """
+        Processes the etcd snapshot response incrementally while, concurrently,
+        merging in updates from the watcher thread.
+        :param etcd_response: file-like object representing the etcd response.
+        :param snapshot_index: the etcd index of the response.
+        """
+        self._hwms.start_tracking_deletions()
+        for snap_mod, snap_key, snap_value in parse_snapshot(etcd_response):
+            old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
+            if snap_mod > old_hwm:
+                # This specific key's HWM is newer than the previous
+                # version we've seen, send an update.
+                self._queue_update(snap_key, snap_value)
 
-                        old_hwm = hwms.update_hwm(frame.key, snapshot_index)
-                        hwm = frame.modifiedIndex
-                        if hwm > old_hwm:
-                            # This specific key's HWM is newer than the
-                            # previous version we've seen.
-                            buf.write(
-                                dumps((frame.key, frame.value))
-                            )
-                            events_processed += 1
-                            snapshot_events += 1
-                        else:
-                            snap_skipped += 1
-
-                    frame.current_key = None
-                elif event == "end_map":
-                    frame = stack.pop(-1)
-                if count % 100 == 0:  # Avoid checking the queue on every loop.
-                    for _ in xrange(100):  # Don't starve the snapshot.
-                        try:
-                            data = watcher_queue.get_nowait()
-                        except Empty:
-                            break
-                        if data is None:
-                            _log.warning("Watcher thread finished")
-                            break
-                        (mod, key, val) = data
-                        if val is None:
-                            # Deletion.
-                            deleted_keys = hwms.store_deletion(key, mod)
-                            for child_key in deleted_keys:
-                                buf.write(dumps((child_key, None)))
-                        else:
-                            # Normal update.
-                            hwms.update_hwm(key, mod)
-                            buf.write(dumps((key, val)))
-                        events_processed += 1
-                        watcher_events += 1
-                    buf_contents = buf.getvalue()
-                    if buf_contents:
-                        update_sock.sendall(buf_contents)
-                        buf = BytesIO()
-                count += 1
-
-            # Save occupancy by throwing away the deletion tracking metadata.
-            hwms.stop_tracking_deletions()
-
-            if not first_resync:
-                # Find any keys that were deleted while we were unable to
-                # keep up with etcd.
-                _log.info("Scanning for deletions")
-                deleted_keys = hwms.remove_old_keys(snapshot_index)
-                for key in deleted_keys:
-                    # We didn't see the value during the snapshot or via the
-                    # event queue.  It must have been deleted.
-                    buf.write(dumps((key, None)))
-                    events_processed += 1
-            else:
-                _log.info("First resync, skipping delete check.")
-
-            buf_contents = buf.getvalue()
-            if buf_contents:
-                update_sock.sendall(buf_contents)
-            del buf
-
-            _log.info("In sync, processing events only")
-            while True:
-                data = watcher_queue.get()
-                if data is None:
-                    _log.warning("Watcher thread finished, resyncing...")
+            # After we process an update from the snapshot, process
+            # several updates from the watcher queue (if there are
+            # any).  We limit the number to ensure that we always
+            # finish the snapshot eventually.
+            for _ in xrange(100):
+                if not self._watcher_queue or self._watcher_queue.empty():
+                    # Don't block on the watcher if there's nothing to do.
                     break
-                mod, key, val = data
-                if val is None:
-                    # Deletion.
-                    deleted_keys = hwms.store_deletion(key, mod)
-                    for child_key in deleted_keys:
-                        update_sock.sendall(
-                            dumps((child_key, None))
-                        )
-                else:
-                    # Normal update.
-                    hwms.update_hwm(key, mod)
-                    update_sock.sendall(dumps((key, val)))
-                events_processed += 1
-                watcher_events += 1
-            _log.warning("Worker stopped, resyncing...")
-        except socket.error as e:
-            if e.errno == 32:
-                # FIXME Magic number
-                _log.error("Broken pipe, exiting")
-                sys.exit(1)
-        except (urllib3.exceptions.HTTPError,
-                HTTPException,
-                socket.error) as e:
-            _log.error("Request to etcd failed: %r", e)
-        except:
-            _log.exception("Unexpected exception")
-            raise
-        finally:
-            first_resync = False
+                try:
+                    self._handle_next_watcher_event()
+                except WatcherDied:
+                    # Continue processing to ensure that we make
+                    # progress.
+                    _log.warning("Watcher thread died, continuing "
+                                 "with snapshot")
+                    break
+            if self._stop_event.is_set():
+                _log.error("Stop event set, exiting")
+                raise Stopped()
+        # Save occupancy by throwing away the deletion tracking metadata.
+        self._hwms.stop_tracking_deletions()
+        # Scan for deletions that happened before the snapshot.  We effectively
+        # mark all the values seen in the current snapshot above and then this
+        # sweeps the ones we didn't touch.
+        self._scan_for_deletions(snapshot_index)
+
+    def _process_events_only(self):
+        """
+        Loops processing the event stream from the watcher thread and feeding
+        it to etcd.
+        :raises WatcherDied:
+        :raises FelixWriteFailed:
+        :raises Stopped:
+        """
+        _log.info("In sync, now processing events only...")
+        while not self._stop_event.is_set():
+            self._handle_next_watcher_event()
+            self._flush()
+
+    def _scan_for_deletions(self, snapshot_index):
+        """
+        Scans the high-water mark cache for keys that haven't been seen since
+        before the snapshot_index and deletes them.
+        """
+        if self._first_resync:
+            _log.info("First resync: skipping deletion scan")
+            return
+        # Find any keys that were deleted while we were unable to
+        # keep up with etcd.
+        _log.info("Scanning for deletions")
+        deleted_keys = self._hwms.remove_old_keys(snapshot_index)
+        for ev_key in deleted_keys:
+            # We didn't see the value during the snapshot or via
+            # the event queue.  It must have been deleted.
+            self._queue_update(ev_key, None)
+
+    def _handle_next_watcher_event(self):
+        """
+        Waits for an event on the watcher queue and sends it to Felix.
+        :raises Stopped:
+        :raises WatcherDied:
+        :raises FelixWriteFailed:
+        """
+        if self._watcher_queue is None:
+            raise WatcherDied()
+        while not self._stop_event.is_set():
+            try:
+                event = self._watcher_queue.get(timeout=1)
+            except Empty():
+                pass
+            else:
+                break
+        else:
+            raise Stopped()
+        if event is None:
+            self._watcher_queue = None
+            raise WatcherDied()
+        ev_mod, ev_key, ev_val = event
+        if ev_val is not None:
+            # Normal update.
+            self._hwms.update_hwm(ev_key, ev_mod)
+            self._queue_update(ev_key, ev_val)
+        else:
+            # Deletion.
+            deleted_keys = self._hwms.store_deletion(ev_key,
+                                                     ev_mod)
+            for child_key in deleted_keys:
+                self._queue_update(child_key, None)
+
+    def _start_watcher(self, snapshot_index):
+        """
+        Starts the watcher thread, creating its queue and event in the process.
+        """
+        self._watcher_queue = Queue()
+        self._watcher_stop_event = Event()
+        # Note: we pass the queue and event in as arguments so that the thread
+        # will always access the current queue and event.  If it used self.xyz
+        # to access them then an old thread that is shutting down could access
+        # a new queue.
+        self._watcher_thread = Thread(target=watch_etcd,
+                                      args=(snapshot_index + 1,
+                                            self._watcher_queue,
+                                            self._watcher_stop_event))
+        self._watcher_thread.daemon = True
+        self._watcher_thread.start()
+
+    def _stop_watcher(self):
+        """
+        If it's running, signals the watcher thread to stop.
+        """
+        if self._watcher_stop_event is not None:
+            _log.info("Watcher was running before, stopping it")
+            self._watcher_stop_event.set()
+            self._watcher_stop_event = None
+
+    def get_etcd_connection(self):
+        return HTTPConnectionPool(self._etcd_url_parts.hostname,
+                                  self._etcd_url_parts.port or 2379,
+                                  maxsize=1)
+
+    def _queue_update(self, key, value):
+        """
+        Queues an update message to Felix.
+        :raises FelixWriteFailed:
+        """
+        self._buf.write(msgpack.dumps((key, value)))
+        self._updates_pending += 1
+        if self._updates_pending > FLUSH_THRESHOLD:
+            self._flush()
+
+    def _flush(self):
+        """
+        Flushes the write buffer to Felix.
+        :raises FelixWriteFailed:
+        """
+        buf_contents = self._buf.getvalue()
+        if buf_contents:
+            try:
+                self._felix_sck.sendall(buf_contents)
+            except socket.error as e:
+                _log.exception("Failed to write to Felix socket")
+                raise FelixWriteFailed(e)
+            self._buf = BytesIO()
+        self._updates_pending = 0
+
+
+def parse_snapshot(resp):
+    parser = ijson.parse(resp)  # urllib3 response is file-like.
+    stack = []
+    frame = Node()
+    for prefix, event, value in parser:
+        if event == "start_map":
+            stack.append(frame)
+            frame = Node()
+        elif event == "map_key":
+            frame.current_key = value
+        elif event in ("string", "number"):
+            if frame.done:
+                continue
+            if frame.current_key == "modifiedIndex":
+                frame.modifiedIndex = value
+            if frame.current_key == "key":
+                frame.key = value
+            elif frame.current_key == "value":
+                frame.value = value
+            if (frame.key is not None and
+                    frame.value is not None and
+                    frame.modifiedIndex is not None):
+                frame.done = True
+                yield frame.modifiedIndex, frame.key, frame.value
+            frame.current_key = None
+        elif event == "end_map":
+            frame = stack.pop(-1)
 
 
 class Node(object):
@@ -313,3 +488,14 @@ class Node(object):
         self.current_key = None
         self.done = False
 
+
+class WatcherDied(Exception):
+    pass
+
+
+class Stopped(Exception):
+    pass
+
+
+class FelixWriteFailed(Exception):
+    pass

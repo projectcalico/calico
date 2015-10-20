@@ -25,35 +25,23 @@ and starting our threads.
 
 import logging
 import socket
-from threading import Thread
-import time
 import sys
 
-from calico.etcddriver.driver import report_status, resync_and_merge
+from calico.etcddriver.driver import EtcdDriver
 from calico.common import default_logging, complete_logging
 
 _log = logging.getLogger(__name__)
 
-complete_logging("/var/log/calico/etcddriver.log",
-                 logging.INFO,
-                 logging.WARNING,
-                 logging.INFO,
-                 gevent_in_use=False)
+default_logging(gevent_in_use=False)
 
-update_socket = socket.socket(socket.AF_UNIX,
+felix_sck = socket.socket(socket.AF_UNIX,
                               socket.SOCK_STREAM)
 try:
-    update_socket.connect(sys.argv[1])
+    felix_sck.connect(sys.argv[1])
 except:
     _log.exception("Failed to connect to Felix")
     raise
 
-resync_thread = Thread(target=resync_and_merge, args=[update_socket])
-resync_thread.daemon = True
-resync_thread.start()
-
-try:
-    update_socket.recv(1024)
-except:
-    _log.exception("Failed to read from update socket,  Felix down?")
-    raise
+driver = EtcdDriver(felix_sck)
+driver.start()
+driver.join()

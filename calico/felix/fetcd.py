@@ -29,6 +29,8 @@ import socket
 import subprocess
 import msgpack
 import time
+from calico.etcddriver.driver import MSG_KEY_TYPE, MSG_KEY_ETCD_URL
+from calico.etcddriver.driver import MSG_TYPE_INIT
 from calico.monotonic import monotonic_time
 
 from etcd import EtcdException, EtcdKeyNotFound
@@ -396,11 +398,19 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
 
                 driver_sck = self.start_driver()
                 unpacker = msgpack.Unpacker()
+                read_count = 0
+                last_time = monotonic_time()
                 while True:
                     data = driver_sck.recv(16384)
                     unpacker.feed(data)
                     for key, value in unpacker:
-                        # TODO stats
+                        read_count += 1
+                        if read_count % 1000 == 0:
+                            now = monotonic_time()
+                            delta = now - last_time
+                            _log.warn("Processed %s updates from driver "
+                                      "%.1f/s", read_count, 1000.0 / delta)
+                            last_time = now
                         n = Node()
                         n.action = "set" if value is not None else "delete"
                         n.value = value
@@ -443,6 +453,12 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             _log.exception("Failed to unlink socket")
         else:
             _log.info("Unlinked server socket")
+
+        update_conn.sendall(msgpack.dumps({
+            MSG_KEY_TYPE: MSG_TYPE_INIT,
+            MSG_KEY_ETCD_URL: "http://" + self._config.ETCD_ADDR,
+        }))
+
         return update_conn
 
     def _load_config(self):
