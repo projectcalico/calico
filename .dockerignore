@@ -1,0 +1,5 @@
+Dockerfile*
+*.sh
+docs
+debian
+.git
