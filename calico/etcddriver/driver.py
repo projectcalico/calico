@@ -41,6 +41,7 @@ from threading import Thread, Event
 import time
 
 from ijson.backends import yajl2 as ijson
+from io import BytesIO
 from msgpack import dumps
 import urllib3
 from urllib3 import HTTPConnectionPool
@@ -174,6 +175,7 @@ def resync_and_merge(update_sock):
         # Then plough through the update incrementally.
         hwms.start_tracking_deletions()
         try:
+            buf = BytesIO()
             parser = ijson.parse(resp)  # urllib3 response is file-like.
             stack = []
             frame = Node()
@@ -203,7 +205,7 @@ def resync_and_merge(update_sock):
                         if hwm > old_hwm:
                             # This specific key's HWM is newer than the
                             # previous version we've seen.
-                            update_sock.sendall(
+                            buf.write(
                                 dumps((frame.key, frame.value))
                             )
                             events_processed += 1
@@ -215,7 +217,7 @@ def resync_and_merge(update_sock):
                 elif event == "end_map":
                     frame = stack.pop(-1)
                 if count % 100 == 0:  # Avoid checking the queue on every loop.
-                    for _ in xrange(1000):  # Don't starve the snapshot.
+                    for _ in xrange(100):  # Don't starve the snapshot.
                         try:
                             data = watcher_queue.get_nowait()
                         except Empty:
@@ -228,15 +230,17 @@ def resync_and_merge(update_sock):
                             # Deletion.
                             deleted_keys = hwms.store_deletion(key, mod)
                             for child_key in deleted_keys:
-                                update_sock.sendall(
-                                    dumps((child_key, None))
-                                )
+                                buf.write(dumps((child_key, None)))
                         else:
                             # Normal update.
                             hwms.update_hwm(key, mod)
-                            update_sock.sendall(dumps((key, val)))
+                            buf.write(dumps((key, val)))
                         events_processed += 1
                         watcher_events += 1
+                    buf_contents = buf.getvalue()
+                    if buf_contents:
+                        update_sock.sendall(buf_contents)
+                        buf = BytesIO()
                 count += 1
 
             # Save occupancy by throwing away the deletion tracking metadata.
@@ -250,10 +254,15 @@ def resync_and_merge(update_sock):
                 for key in deleted_keys:
                     # We didn't see the value during the snapshot or via the
                     # event queue.  It must have been deleted.
-                    update_sock.sendall(dumps((key, None)))
+                    buf.write(dumps((key, None)))
                     events_processed += 1
             else:
                 _log.info("First resync, skipping delete check.")
+
+            buf_contents = buf.getvalue()
+            if buf_contents:
+                update_sock.sendall(buf_contents)
+            del buf
 
             _log.info("In sync, processing events only")
             while True:
