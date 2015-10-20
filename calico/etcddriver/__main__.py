@@ -28,14 +28,14 @@ import socket
 import sys
 
 from calico.etcddriver.driver import EtcdDriver
-from calico.common import default_logging, complete_logging
+from calico.common import default_logging
 
 _log = logging.getLogger(__name__)
 
 default_logging(gevent_in_use=False)
 
 felix_sck = socket.socket(socket.AF_UNIX,
-                              socket.SOCK_STREAM)
+                          socket.SOCK_STREAM)
 try:
     felix_sck.connect(sys.argv[1])
 except:

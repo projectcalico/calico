@@ -29,7 +29,9 @@ import socket
 import subprocess
 import msgpack
 import time
-from calico.etcddriver.driver import MSG_KEY_TYPE, MSG_KEY_ETCD_URL
+from calico.etcddriver.driver import MSG_KEY_TYPE, MSG_KEY_ETCD_URL, \
+    MSG_KEY_HOSTNAME, MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, \
+    MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG
 from calico.etcddriver.driver import MSG_TYPE_INIT
 from calico.monotonic import monotonic_time
 
@@ -322,6 +324,9 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         # Register for events when values change.
         self._register_paths()
 
+        self.read_count = 0
+        self.last_rate_log_time = monotonic_time()
+
     def _register_paths(self):
         """
         Program the dispatcher with the paths we care about.
@@ -375,18 +380,6 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         self.load_config.wait()
         self.loop()
 
-    def _on_pre_resync(self):
-        self.wait_for_ready(RETRY_DELAY)
-        # Always reload the config.  This lets us detect if the config has
-        # changed and restart felix if so.
-        self._load_config()
-        if not self.configured.is_set():
-            # Unblock anyone who's waiting on the config.
-            self.configured.set()
-        if not self.begin_polling.is_set():
-            _log.info("etcd worker about to wait for begin_polling event")
-        self.begin_polling.wait()
-
     @logging_exceptions
     def loop(self):
         _log.info("Started %s loop", self)
@@ -394,7 +387,6 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             try:
                 _log.info("Reconnecting and loading snapshot from etcd...")
                 self.reconnect(copy_cluster_id=False)
-                self._on_pre_resync()
 
                 driver_sck = self.start_driver()
                 unpacker = msgpack.Unpacker()
@@ -403,22 +395,17 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 while True:
                     data = driver_sck.recv(16384)
                     unpacker.feed(data)
-                    for key, value in unpacker:
-                        read_count += 1
-                        if read_count % 1000 == 0:
-                            now = monotonic_time()
-                            delta = now - last_time
-                            _log.warn("Processed %s updates from driver "
-                                      "%.1f/s", read_count, 1000.0 / delta)
-                            last_time = now
-                        n = Node()
-                        n.action = "set" if value is not None else "delete"
-                        n.value = value
-                        n.key = key
-                        try:
-                            self.dispatcher.handle_event(n)
-                        except ResyncRequired:
-                            _log.warning("IGNORING RESYNC.")
+                    for msg in unpacker:
+                        # Optimization: put update first in the "switch"
+                        # block because it's on the critical path.
+                        msg_type = msg[MSG_KEY_TYPE]
+                        if msg_type == MSG_TYPE_UPDATE:
+                            self._handle_update(msg)
+                        elif msg_type == MSG_TYPE_CONFIG_LOADED:
+                            self._handle_config_loaded(msg)
+                        else:
+                            raise RuntimeError("Unexpected message %s" % msg)
+
             except EtcdException as e:
                 # Most likely a timeout or other error in the pre-resync;
                 # start over.  These exceptions have good semantic error text
@@ -428,7 +415,60 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 time.sleep(1)  # Prevent tight loop due to unexpected error.
             except:
                 _log.exception("Exception reading from socket?")
+                raise
         _log.info("%s.loop() stopped due to self.stop == True", self)
+
+    def _handle_update(self, msg):
+        assert self.configured.is_set()
+        key = msg[MSG_KEY_KEY]
+        value = msg[MSG_KEY_VALUE]
+        self.read_count += 1
+        if self.read_count % 1000 == 0:
+            now = monotonic_time()
+            delta = now - self.last_rate_log_time
+            _log.warn("Processed %s updates from driver "
+                      "%.1f/s", self.read_count, 1000.0 / delta)
+            self.last_rate_log_time = now
+        n = Node()
+        n.action = "set" if value is not None else "delete"
+        n.value = value
+        n.key = key
+        try:
+            self.dispatcher.handle_event(n)
+        except ResyncRequired:
+            _log.warning("IGNORING RESYNC.")
+
+    def _handle_config_loaded(self, msg):
+        global_config = msg[MSG_KEY_GLOBAL_CONFIG]
+        host_config = msg[MSG_KEY_HOST_CONFIG]
+        _log.info("Config loaded by driver:\n"
+                  "Global: %s\nPer-host: %s",
+                  global_config,
+                  host_config)
+        if self.configured.is_set():
+            # We've already been configured.  We don't yet support
+            # dynamic config update so instead we check if the config
+            # has changed and die if it has.
+            _log.info("Checking configuration for changes...")
+            if (host_config != self.last_host_config or
+                        global_config != self.last_global_config):
+                _log.warning("Felix configuration has changed, "
+                             "felix must restart.")
+                _log.info("Old host config: %s", self.last_host_config)
+                _log.info("New host config: %s", host_config)
+                _log.info("Old global config: %s",
+                          self.last_global_config)
+                _log.info("New global config: %s", global_config)
+                die_and_restart()
+        else:
+            # First time loading the config.  Report it to the config
+            # object.  Take copies because report_etcd_config is
+            # destructive.
+            self.last_host_config = host_config.copy()
+            self.last_global_config = global_config.copy()
+            self._config.report_etcd_config(host_config,
+                                            global_config)
+            self.configured.set()
 
     def start_driver(self):
         _log.info("Creating server socket.")
@@ -457,67 +497,11 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         update_conn.sendall(msgpack.dumps({
             MSG_KEY_TYPE: MSG_TYPE_INIT,
             MSG_KEY_ETCD_URL: "http://" + self._config.ETCD_ADDR,
+            MSG_KEY_HOSTNAME: self._config.HOSTNAME,
         }))
 
         return update_conn
 
-    def _load_config(self):
-        """
-        Loads our configuration from etcd.  Does not return
-        until the config is successfully loaded.
-
-        The first call to this method populates the config object.
-
-        Subsequent calls check the config hasn't changed and kill
-        the process if it has.  This allows us to be restarted by
-        the init daemon in order to pick up the new config.
-        """
-        while True:
-            try:
-                global_cfg = self.client.read(CONFIG_DIR,
-                                              recursive=True)
-                global_dict = _build_config_dict(global_cfg)
-
-                try:
-                    host_cfg = self.client.read(self.my_config_dir,
-                                                recursive=True)
-                    host_dict = _build_config_dict(host_cfg)
-                except EtcdKeyNotFound:
-                    # It is not an error for there to be no per-host
-                    # config; default to empty.
-                    _log.info("No configuration overrides for this node")
-                    host_dict = {}
-            except (EtcdKeyNotFound, EtcdException) as e:
-                # Note: we don't log the stack trace because it's too
-                # spammy and adds little.
-                _log.error("Failed to read config. etcd may be down or "
-                           "the data model may not be ready: %r. Will "
-                           "retry.", e)
-                gevent.sleep(RETRY_DELAY)
-            else:
-                if self.configured.is_set():
-                    # We've already been configured.  We don't yet support
-                    # dynamic config update so instead we check if the config
-                    # has changed and die if it has.
-                    _log.info("Checking configuration for changes...")
-                    if (host_dict != self.last_host_config or
-                            global_dict != self.last_global_config):
-                        _log.warning("Felix configuration has changed, "
-                                     "felix must restart.")
-                        _log.info("Old host config: %s", self.last_host_config)
-                        _log.info("New host config: %s", host_dict)
-                        _log.info("Old global config: %s",
-                                  self.last_global_config)
-                        _log.info("New global config: %s", global_dict)
-                        die_and_restart()
-                else:
-                    # First time loading the config.  Report it to the config
-                    # object.  Take copies because report_etcd_config is
-                    # destructive.
-                    self.last_host_config = host_dict.copy()
-                    self.last_global_config = global_dict.copy()
-                    self._config.report_etcd_config(host_dict, global_dict)
-                return
     #
     # def _on_snapshot_loaded(self, etcd_snapshot_response):
     #     """

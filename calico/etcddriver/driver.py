@@ -33,6 +33,7 @@ The driver is responsible for
 
 from httplib import HTTPException
 from json import loads
+import json
 import socket
 import logging
 from Queue import Queue, Empty
@@ -40,6 +41,7 @@ import sys
 from threading import Thread, Event
 import time
 from urlparse import urlparse
+from calico.monotonic import monotonic_time
 
 from ijson.backends import yajl2 as ijson
 from io import BytesIO
@@ -47,14 +49,12 @@ import msgpack
 import urllib3
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import ReadTimeoutError
+from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, dir_for_per_host_config
 
 from calico.etcddriver.hwm import HighWaterTracker
 
 _log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s [%(levelname)s]'
-                           '[%(process)s/%(thread)d] %(name)s %(lineno)d: '
-                           '%(message)s')
+
 events_processed = 0
 snapshot_events = 0
 watcher_events = 0
@@ -67,7 +67,14 @@ MSG_KEY_TYPE = "type"
 # Init message Felix -> Driver.
 MSG_TYPE_INIT = "init"
 MSG_KEY_ETCD_URL = "etcd_url"
+MSG_KEY_HOSTNAME = "hostname"
 
+# Config loaded message Driver -> Felix.
+MSG_TYPE_CONFIG_LOADED = "config_loaded"
+MSG_KEY_GLOBAL_CONFIG = "global"
+MSG_KEY_HOST_CONFIG = "host"
+
+# Config message Felix -> Driver.
 MSG_KEY_LOG_FILE = "log_file"
 MSG_KEY_SEV_FILE = "sev_file"
 MSG_KEY_SEV_SCREEN = "sev_screen"
@@ -75,8 +82,10 @@ MSG_KEY_SEV_SYSLOG = "sev_syslog"
 
 MSG_TYPE_STATUS = "stat"
 MSG_TYPE_CONFIG = "conf"
-MSG_TYPE_UPDATE = "upd"
 
+MSG_TYPE_UPDATE = "upd"
+MSG_KEY_KEY = "k"
+MSG_KEY_VALUE = "v"
 
 def report_status():
     while True:
@@ -175,10 +184,12 @@ class EtcdDriver(object):
         self._updates_pending = 0
         self._buf = BytesIO()
         self._first_resync = True
+        self.resync_http_pool = None
 
         # Set by the reader thread once the config has been read from Felix.
         self._config_loaded = Event()
         self._etcd_base_url = None
+        self._hostname = None
 
     def start(self):
         self._reader_thread.start()
@@ -221,6 +232,7 @@ class EtcdDriver(object):
         _log.info("Got init message from Felix %s", msg)
         self._etcd_base_url = msg[MSG_KEY_ETCD_URL].rstrip("/")
         self._etcd_url_parts = urlparse(self._etcd_base_url)
+        self._hostname = msg[MSG_KEY_HOSTNAME]
         self._config_loaded.set()
 
     def _resync_and_merge(self):
@@ -232,17 +244,25 @@ class EtcdDriver(object):
         _log.info("Resync thread started, waiting for config to be loaded...")
         self._config_loaded.wait()
         _log.info("Config loaded; continuing.")
+
         while not self._stop_event.is_set():
+            loop_start = monotonic_time()
             # Only has an effect if it's running.  Note: stopping the watcher
             # is async (and may take a long time for its connection to time
             # out).
             self._stop_watcher()
-            # Kick off the request as far as the headers.
-            resp, snapshot_index = self._start_snapshot_request()
-            # Before reading from the snapshot, start the watcher thread.
-            self._start_watcher(snapshot_index)
-            # Then plough through the update incrementally.
             try:
+                # Start with a fresh HTTP pool just in case it got into a bad
+                # state.
+                self.resync_http_pool = self.get_etcd_connection()
+                # Before we get to the snapshot, Felix needs the configuration.
+                self._wait_for_ready()
+                self._preload_config()
+                # Kick off the snapshot  request as far as the headers.
+                resp, snapshot_index = self._start_snapshot_request()
+                # Before reading from the snapshot, start the watcher thread.
+                self._start_watcher(snapshot_index)
+                # Then plough through the update incrementally.
                 # Incrementally process the snapshot, merging in events from
                 # the queue.
                 self._process_snapshot_and_events(resp, snapshot_index)
@@ -258,12 +278,74 @@ class EtcdDriver(object):
                     HTTPException,
                     socket.error) as e:
                 _log.error("Request to etcd failed: %r; resyncing.", e)
+                if monotonic_time() - loop_start < 1:
+                    _log.debug("May be tight looping, sleeping...")
+                    time.sleep(1)
             except:
                 _log.exception("Unexpected exception; shutting down.")
                 self._stop_event.set()
                 raise
             finally:
                 self._first_resync = False
+
+    def _wait_for_ready(self):
+        ready = False
+        while not ready:
+            # Read failure here will be handled by outer loop.
+            resp = self.resync_http_pool.request(
+                "GET",
+                self._etcd_base_url + "/v2/keys" + READY_KEY,
+                timeout=5,
+                preload_content=True
+            )
+            try:
+                etcd_resp = json.loads(resp.data)
+                ready = etcd_resp["node"]["value"] == "true"
+            except (TypeError, ValueError, KeyError) as e:
+                _log.warning("Failed to load Ready flag from etcd: %r", e)
+                time.sleep(1)
+
+    def _preload_config(self):
+        _log.info("Pre-loading config.")
+        global_config = self._load_config(CONFIG_DIR)
+        host_config_dir = dir_for_per_host_config(self._hostname)
+        host_config = self._load_config(host_config_dir)
+        self._buf.write(msgpack.dumps(
+            {
+                MSG_KEY_TYPE: MSG_TYPE_CONFIG_LOADED,
+                MSG_KEY_GLOBAL_CONFIG: global_config,
+                MSG_KEY_HOST_CONFIG: host_config,
+            }
+        ))
+        self._flush()
+        _log.info("Sent config message to Felix.")
+
+    def _load_config(self, config_dir):
+        # Read failure here will be handled by outer loop.
+        resp = self.resync_http_pool.request(
+            "GET",
+            self._etcd_base_url + "/v2/keys" + config_dir,
+            fields={
+                "recursive": "true",
+            },
+            timeout=5,
+            preload_content=True
+        )
+        try:
+            etcd_resp = json.loads(resp.data)
+            if etcd_resp.get("errorCode") == 100:  # Not found
+                _log.info("No config found at %s", config_dir)
+                return {}
+            config_nodes = etcd_resp["node"]["nodes"]
+            config = {}
+            for node in config_nodes:
+                if "key" in node and "value" in node:
+                    config[node["key"].split("/")[-1]] = node["value"]
+        except (TypeError, ValueError, KeyError) as e:
+            _log.warning("Failed to load config from etcd: %r,"
+                         "data %r", e, resp.data)
+            raise ResyncRequired(e)
+        return config
 
     def _start_snapshot_request(self):
         """
@@ -275,12 +357,13 @@ class EtcdDriver(object):
         :raises socket.error
         """
         _log.info("Loading snapshot headers...")
-        http = self.get_etcd_connection()
-        resp = http.request("GET",
-                            self._etcd_base_url + "/v2/keys/calico/v1",
-                            fields={"recursive": "true"},
-                            timeout=120,
-                            preload_content=False)
+        resp = self.resync_http_pool.request(
+            "GET",
+            self._etcd_base_url + "/v2/keys/calico/v1",
+            fields={"recursive": "true"},
+            timeout=120,
+            preload_content=False
+        )
         snapshot_index = int(resp.getheader("x-etcd-index", 1))
         _log.info("Got snapshot headers, snapshot index is %s; starting "
                   "watcher...", snapshot_index)
@@ -369,7 +452,7 @@ class EtcdDriver(object):
         while not self._stop_event.is_set():
             try:
                 event = self._watcher_queue.get(timeout=1)
-            except Empty():
+            except Empty:
                 pass
             else:
                 break
@@ -426,7 +509,11 @@ class EtcdDriver(object):
         Queues an update message to Felix.
         :raises FelixWriteFailed:
         """
-        self._buf.write(msgpack.dumps((key, value)))
+        self._buf.write(msgpack.dumps({
+            MSG_KEY_TYPE: MSG_TYPE_UPDATE,
+            MSG_KEY_KEY: key,
+            MSG_KEY_VALUE: value,
+        }))
         self._updates_pending += 1
         if self._updates_pending > FLUSH_THRESHOLD:
             self._flush()
@@ -498,4 +585,8 @@ class Stopped(Exception):
 
 
 class FelixWriteFailed(Exception):
+    pass
+
+
+class ResyncRequired(Exception):
     pass

@@ -280,7 +280,8 @@ class Config(object):
         common.complete_logging(self.LOGFILE,
                                 self.LOGLEVFILE,
                                 self.LOGLEVSYS,
-                                self.LOGLEVSCR)
+                                self.LOGLEVSCR,
+                                gevent_in_use=True)
 
         if final:
             # Log configuration - the whole lot of it.

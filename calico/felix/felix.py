@@ -203,7 +203,7 @@ def _main_greenlet(config):
 
 def main():
     # Initialise the logging with default parameters.
-    common.default_logging()
+    common.default_logging(gevent_in_use=True)
 
     # Create configuration, reading defaults from file if it exists.
     parser = optparse.OptionParser()
@@ -214,7 +214,7 @@ def main():
 
     try:
         config = Config(options.config_file)
-    except Exception:
+    except Exception as e:
         # Config loading error, and not just invalid parameters (from optparse)
         # as they generate a SystemExit. Attempt to open a log file, ignoring
         # any errors it gets, before we raise the exception.
@@ -222,7 +222,8 @@ def main():
             common.complete_logging("/var/log/calico/felix.log",
                                     logging.DEBUG,
                                     logging.DEBUG,
-                                    logging.DEBUG)
+                                    logging.DEBUG,
+                                    gevent_in_use=True)
         except Exception:
             pass
 
