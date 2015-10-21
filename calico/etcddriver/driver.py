@@ -106,46 +106,6 @@ MSG_KEY_VALUE = "v"
 #                            u'endpoint_175/endpoint/endpoint_175'}}
 
 
-def watch_etcd(next_index, result_queue, stop_event):
-    _log.info("Watcher thread started")
-    http = None
-    try:
-        while not stop_event.is_set():
-            if not http:
-                _log.info("No HTTP pool, creating one...")
-                http = HTTPConnectionPool("localhost", 4001, maxsize=1)
-            try:
-                _log.debug("Waiting on etcd index %s", next_index)
-                resp = http.request(
-                    "GET",
-                    "http://localhost:4001/v2/keys/calico/v1",
-                    fields={"recursive": "true",
-                            "wait": "true",
-                            "waitIndex": next_index},
-                    timeout=90,
-                )
-                resp_body = loads(resp.data)
-            except ReadTimeoutError:
-                _log.exception("Watch read timed out, restarting watch at "
-                               "index %s", next_index)
-                # Workaround urllib3 bug #718.  After a ReadTimeout, the
-                # connection is incorrectly recycled.
-                http = None
-                continue
-            except:
-                _log.exception("Unexpected exception")
-                raise
-            else:
-                node = resp_body["node"]
-                key = node["key"]
-                value = node.get("value")
-                modified_index = node["modifiedIndex"]
-                result_queue.put((modified_index, key, value))
-                next_index = modified_index + 1
-    finally:
-        result_queue.put(None)
-
-
 class EtcdDriver(object):
     def __init__(self, felix_sck):
         self._felix_sck = felix_sck
@@ -520,7 +480,7 @@ class EtcdDriver(object):
         # will always access the current queue and event.  If it used self.xyz
         # to access them then an old thread that is shutting down could access
         # a new queue.
-        self._watcher_thread = Thread(target=watch_etcd,
+        self._watcher_thread = Thread(target=self.watch_etcd,
                                       args=(snapshot_index + 1,
                                             self._watcher_queue,
                                             self._watcher_stop_event),
@@ -581,8 +541,86 @@ class EtcdDriver(object):
             self._buf = BytesIO()
         self._updates_pending = 0
 
+    def watch_etcd(self, next_index, event_queue, stop_event):
+        """
+        Thread: etcd watcher thread.  Watched etcd for changes and
+        sends them over the queue to the resync thread, which owns
+        the socket to Felix.
+
+        Note: it is important that we pass the index, queue and event
+        as parameters to ensure that each watcher thread only touches
+        the versions of those values that were created for it as
+        opposed to a later-created watcher thread.
+
+        :param next_index: The etcd index to start watching from.
+        :param event_queue: Queue of updates back to the resync thread.
+        :param stop_event: Event used to stop this thread when it is no
+               longer needed.
+        """
+        _log.info("Watcher thread started")
+        http = None
+        try:
+            while not stop_event.is_set():
+                if not http:
+                    _log.info("No HTTP pool, creating one...")
+                    http = HTTPConnectionPool("localhost", 4001, maxsize=1)
+                try:
+                    _log.debug("Waiting on etcd index %s", next_index)
+                    resp = http.request(
+                        "GET",
+                        "http://localhost:4001/v2/keys/calico/v1",
+                        fields={"recursive": "true",
+                                "wait": "true",
+                                "waitIndex": next_index},
+                        timeout=90,
+                    )
+                    if resp.status != 200:
+                        _log.warning("etcd watch returned bad HTTP status: %s",
+                                     resp.status)
+                    resp_body = resp.data
+                except ReadTimeoutError:
+                    _log.exception("Watch read timed out, restarting watch at "
+                                   "index %s", next_index)
+                    # Workaround urllib3 bug #718.  After a ReadTimeout, the
+                    # connection is incorrectly recycled.
+                    http = None
+                    continue
+                try:
+                    etcd_resp = loads(resp_body)
+                    if "errorCode" in etcd_resp:
+                        _log.error("Error from etcd: %s; triggering a resync.",
+                                   etcd_resp)
+                        break
+                    node = etcd_resp["node"]
+                    key = node["key"]
+                    value = node.get("value")
+                    modified_index = node["modifiedIndex"]
+                except (KeyError, TypeError, ValueError):
+                    _log.exception("Unexpected format for etcd response: %r;"
+                                   "trigering a resync.",
+                                   resp_body)
+                    break
+                else:
+                    event_queue.put((modified_index, key, value))
+                    next_index = modified_index + 1
+        except:
+            _log.exception("Exception finishing watcher thread.")
+            raise
+        finally:
+            # Signal to the resync thread that we've exited.
+            _log.info("Watcher thread finished. Signalling to resync thread.")
+            event_queue.put(None)
+
 
 def parse_snapshot(resp):
+    """
+    Generator: iteratively parses the response to the etcd snapshot.
+
+    Generates tuples of the form (modifiedIndex, key, value) for each
+    leaf encountered in the snapshot.
+
+    :raises ResyncRequired if the snapshot contains an error response.
+    """
     if resp.status != 200:
         raise ResyncRequired("Read from etcd failed.  HTTP status code %s",
                              resp.status)
