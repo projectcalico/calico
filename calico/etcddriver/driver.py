@@ -153,11 +153,13 @@ class EtcdDriver(object):
         # Global stop event used to signal to all threads to stop.
         self._stop_event = Event()
 
+        # Threads to own the connection from/to Felix.  The resync thread
+        # is responsible for doing resyncs and merging updates from the
+        # watcher thread (which it manages).
         self._reader_thread = Thread(target=self._read_from_socket,
                                      name="reader-thread")
         self._resync_thread = Thread(target=self._resync_and_merge,
                                      name="resync-thread")
-
         self._watcher_thread = None  # Created on demand
         self._watcher_stop_event = None
 
@@ -167,22 +169,25 @@ class EtcdDriver(object):
         self._updates_pending = 0
         self._buf = BytesIO()
         self._first_resync = True
-        self.resync_http_pool = None
+        self._resync_http_pool = None
 
         # Set by the reader thread once the init message has been received
         # from Felix.
         self._init_received = Event()
-        # Set by the reader thread once the logging config has been received
-        # from Felix.
-        self._config_received = Event()
+        # Initial config, received in the init message.
         self._etcd_base_url = None
         self._hostname = None
+        # Set by the reader thread once the logging config has been received
+        # from Felix.  Triggers the first resync.
+        self._config_received = Event()
 
     def start(self):
+        """Starts the driver's reader and resync threads."""
         self._reader_thread.start()
         self._resync_thread.start()
 
     def join(self):
+        """Blocks until the driver stops."""
         self._stop_event.wait()
 
     def _read_from_socket(self):
@@ -268,7 +273,7 @@ class EtcdDriver(object):
             try:
                 # Start with a fresh HTTP pool just in case it got into a bad
                 # state.
-                self.resync_http_pool = self.get_etcd_connection()
+                self._resync_http_pool = self.get_etcd_connection()
                 # Before we get to the snapshot, Felix needs the configuration.
                 self._queue_status(STATUS_WAIT_FOR_READY)
                 self._wait_for_ready()
@@ -309,10 +314,14 @@ class EtcdDriver(object):
                 self._first_resync = False
 
     def _wait_for_ready(self):
+        """
+        Waits for the global Ready flag to be set.  We don't load the first
+        snapshot until that flag is set.
+        """
         ready = False
         while not ready:
             # Read failure here will be handled by outer loop.
-            resp = self.resync_http_pool.request(
+            resp = self._resync_http_pool.request(
                 "GET",
                 self._etcd_base_url + "/v2/keys" + READY_KEY,
                 timeout=5,
@@ -326,6 +335,10 @@ class EtcdDriver(object):
                 time.sleep(1)
 
     def _preload_config(self):
+        """
+        Loads the config for Felix from etcd and sends it to Felix as a
+        dedicated message.
+        """
         _log.info("Pre-loading config.")
         global_config = self._load_config(CONFIG_DIR)
         host_config_dir = dir_for_per_host_config(self._hostname)
@@ -341,8 +354,11 @@ class EtcdDriver(object):
         _log.info("Sent config message to Felix.")
 
     def _load_config(self, config_dir):
+        """
+        Loads all the config keys from the given etcd directory.
+        """
         # Read failure here will be handled by outer loop.
-        resp = self.resync_http_pool.request(
+        resp = self._resync_http_pool.request(
             "GET",
             self._etcd_base_url + "/v2/keys" + config_dir,
             fields={
@@ -377,7 +393,7 @@ class EtcdDriver(object):
         :raises socket.error
         """
         _log.info("Loading snapshot headers...")
-        resp = self.resync_http_pool.request(
+        resp = self._resync_http_pool.request(
             "GET",
             self._etcd_base_url + "/v2/keys/calico/v1",
             fields={"recursive": "true"},
@@ -459,6 +475,7 @@ class EtcdDriver(object):
             # We didn't see the value during the snapshot or via
             # the event queue.  It must have been deleted.
             self._queue_update(ev_key, None)
+        _log.info("Found %d deleted keys", len(deleted_keys))
 
     def _handle_next_watcher_event(self):
         """
