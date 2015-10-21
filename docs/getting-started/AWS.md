@@ -23,7 +23,7 @@ aws configure
 #>  Default region name: <Region Name, eg. us-west-2>
 #>  Default output format: <json, text, or table>
 ```
-Note: Your <Region Name> can be found on the front page of the EC2 dashboard under the "Service Health" text.
+Note: Your `<Region Name>` can be found on the front page of the EC2 dashboard under the "Service Health" text.
 
 Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2 
 commands.  This can be set in the Services>IAM>Users User configuration page of the web console.
