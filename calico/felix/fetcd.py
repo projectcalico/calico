@@ -33,7 +33,7 @@ from calico.etcddriver.driver import MSG_KEY_TYPE, MSG_KEY_ETCD_URL, \
     MSG_KEY_HOSTNAME, MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, \
     MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, \
     MSG_TYPE_CONFIG, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, \
-    MSG_KEY_SEV_SYSLOG
+    MSG_KEY_SEV_SYSLOG, MSG_KEY_STATUS, MSG_TYPE_STATUS
 from calico.etcddriver.driver import MSG_TYPE_INIT
 from calico.monotonic import monotonic_time
 
@@ -405,6 +405,8 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                             self._handle_update(msg)
                         elif msg_type == MSG_TYPE_CONFIG_LOADED:
                             self._handle_config_loaded(msg, driver_sck)
+                        elif msg_type == MSG_TYPE_STATUS:
+                            self._handle_status(msg)
                         else:
                             raise RuntimeError("Unexpected message %s" % msg)
 
@@ -485,6 +487,10 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 MSG_KEY_SEV_SYSLOG: self._config.LOGLEVSYS,
             }))
             self.configured.set()
+
+    def _handle_status(self, msg):
+        status = msg[MSG_KEY_STATUS]
+        _log.info("etcd driver status changed to %s", status)
 
     def start_driver(self):
         _log.info("Creating server socket.")

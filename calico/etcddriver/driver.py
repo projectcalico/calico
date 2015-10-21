@@ -78,8 +78,12 @@ MSG_KEY_SEV_SCREEN = "sev_screen"
 MSG_KEY_SEV_SYSLOG = "sev_syslog"
 
 MSG_TYPE_STATUS = "stat"
+MSG_KEY_STATUS = "status"
+STATUS_WAIT_FOR_READY = "wait-for-ready"
+STATUS_RESYNC = "resync"
+STATUS_IN_SYNC = "in-sync"
 
-MSG_TYPE_UPDATE = "upd"
+MSG_TYPE_UPDATE = "u"
 MSG_KEY_KEY = "k"
 MSG_KEY_VALUE = "v"
 
@@ -165,8 +169,12 @@ class EtcdDriver(object):
         self._first_resync = True
         self.resync_http_pool = None
 
-        # Set by the reader thread once the config has been read from Felix.
-        self._config_loaded = Event()
+        # Set by the reader thread once the init message has been received
+        # from Felix.
+        self._init_received = Event()
+        # Set by the reader thread once the logging config has been received
+        # from Felix.
+        self._config_received = Event()
         self._etcd_base_url = None
         self._hostname = None
 
@@ -215,19 +223,30 @@ class EtcdDriver(object):
             self._stop_event.set()
 
     def _handle_init(self, msg):
+        """
+        Handle init message from Felix.
+
+        Called from the reader thread.
+        """
         # OK to dump the msg, it's a one-off.
         _log.info("Got init message from Felix %s", msg)
         self._etcd_base_url = msg[MSG_KEY_ETCD_URL].rstrip("/")
         self._etcd_url_parts = urlparse(self._etcd_base_url)
         self._hostname = msg[MSG_KEY_HOSTNAME]
-        self._config_loaded.set()
+        self._init_received.set()
 
     def _handle_config(self, msg):
+        """
+        Handle config message from Felix.
+
+        Called from the reader thread.
+        """
         complete_logging(msg[MSG_KEY_LOG_FILE],
                          file_level=msg[MSG_KEY_SEV_FILE],
                          syslog_level=msg[MSG_KEY_SEV_SYSLOG],
                          stream_level=msg[MSG_KEY_SEV_SCREEN],
                          gevent_in_use=False)
+        self._config_received.set()
         _log.info("Received config from Felix: %s", msg)
 
     def _resync_and_merge(self):
@@ -237,7 +256,7 @@ class EtcdDriver(object):
         to Felix.
         """
         _log.info("Resync thread started, waiting for config to be loaded...")
-        self._config_loaded.wait()
+        self._init_received.wait()
         _log.info("Config loaded; continuing.")
 
         while not self._stop_event.is_set():
@@ -251,16 +270,22 @@ class EtcdDriver(object):
                 # state.
                 self.resync_http_pool = self.get_etcd_connection()
                 # Before we get to the snapshot, Felix needs the configuration.
+                self._queue_status(STATUS_WAIT_FOR_READY)
                 self._wait_for_ready()
                 self._preload_config()
-                # Kick off the snapshot  request as far as the headers.
+                # Now (on the first run through) wait for Felix to process the
+                # config.
+                self._config_received.wait()
+                # Kick off the snapshot request as far as the headers.
+                self._queue_status(STATUS_RESYNC)
                 resp, snapshot_index = self._start_snapshot_request()
                 # Before reading from the snapshot, start the watcher thread.
                 self._start_watcher(snapshot_index)
-                # Then plough through the update incrementally.
                 # Incrementally process the snapshot, merging in events from
                 # the queue.
                 self._process_snapshot_and_events(resp, snapshot_index)
+                # We're now in-sync.  Tell Felix.
+                self._queue_status(STATUS_IN_SYNC)
                 # Make sure we flush before we wait for events.
                 self._flush()
                 self._process_events_only()
@@ -510,6 +535,16 @@ class EtcdDriver(object):
             MSG_KEY_KEY: key,
             MSG_KEY_VALUE: value,
         }))
+        self._maybe_flush()
+
+    def _queue_status(self, status):
+        self._buf.write(msgpack.dumps({
+            MSG_KEY_TYPE: MSG_TYPE_STATUS,
+            MSG_KEY_STATUS: status,
+        }))
+        self._maybe_flush()
+
+    def _maybe_flush(self):
         self._updates_pending += 1
         if self._updates_pending > FLUSH_THRESHOLD:
             self._flush()
