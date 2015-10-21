@@ -15,6 +15,7 @@
 import unittest
 
 from mock import patch
+from nose.tools import assert_raises
 from nose_parameterized import parameterized
 
 from calico_ctl import utils
@@ -125,3 +126,17 @@ class TestUtils(unittest.TestCase):
         # Assert expected result
         self.assertEqual(expected_result, test_result)
 
+
+class TestUrlGetter(unittest.TestCase):
+    def setUp(self):
+        self.getter = utils.URLGetter()
+
+    def test_404_response(self):
+        url = "http:/somefake/url"
+        fp = None
+        errcode = 404
+        msg = "Some message"
+        headers = None
+        assert_raises(IOError,
+                      self.getter.http_error_default,
+                      url, fp, errcode, msg, headers)

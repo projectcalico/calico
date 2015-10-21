@@ -17,6 +17,7 @@ import sys
 import textwrap
 import netaddr
 import re
+import urllib
 
 from netaddr.core import AddrFormatError
 
@@ -209,3 +210,23 @@ def convert_asn_to_asplain(asn):
         asn = 65536*int(left_asn)+int(right_asn)
 
     return asn
+
+
+class URLGetter(urllib.FancyURLopener):
+    """
+    Retrieves binaries.  Overridden in order to handle errors when
+    attempting to download a binary.
+    """
+    def http_error_default(self, url, fp, errcode, errmsg, headers):
+        """
+        Called when an error response is returned - override to handle 404
+        errors.
+        """
+        # Check for errors.
+        if errcode == 404:
+            # The requested URL does not exist.
+            raise IOError()
+
+        # Call the super-class
+        urllib.FancyURLopener.http_error_default(self, url, fp, errcode,
+                                                 errmsg, headers)
