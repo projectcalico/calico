@@ -31,7 +31,9 @@ import msgpack
 import time
 from calico.etcddriver.driver import MSG_KEY_TYPE, MSG_KEY_ETCD_URL, \
     MSG_KEY_HOSTNAME, MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, \
-    MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG
+    MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, \
+    MSG_TYPE_CONFIG, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, \
+    MSG_KEY_SEV_SYSLOG
 from calico.etcddriver.driver import MSG_TYPE_INIT
 from calico.monotonic import monotonic_time
 
@@ -402,7 +404,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                         if msg_type == MSG_TYPE_UPDATE:
                             self._handle_update(msg)
                         elif msg_type == MSG_TYPE_CONFIG_LOADED:
-                            self._handle_config_loaded(msg)
+                            self._handle_config_loaded(msg, driver_sck)
                         else:
                             raise RuntimeError("Unexpected message %s" % msg)
 
@@ -438,7 +440,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         except ResyncRequired:
             _log.warning("IGNORING RESYNC.")
 
-    def _handle_config_loaded(self, msg):
+    def _handle_config_loaded(self, msg, driver_sck):
         global_config = msg[MSG_KEY_GLOBAL_CONFIG]
         host_config = msg[MSG_KEY_HOST_CONFIG]
         _log.info("Config loaded by driver:\n"
@@ -468,6 +470,20 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             self.last_global_config = global_config.copy()
             self._config.report_etcd_config(host_config,
                                             global_config)
+            # Config now fully resolved, inform the driver.
+            felix_log_file = self._config.LOGFILE
+            if felix_log_file:
+                # FIXME PRoper config for driver logfile
+                driver_log_file = felix_log_file + "-driver"
+            else:
+                driver_log_file = None
+            driver_sck.send(msgpack.dumps({
+                MSG_KEY_TYPE: MSG_TYPE_CONFIG,
+                MSG_KEY_LOG_FILE: driver_log_file,
+                MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
+                MSG_KEY_SEV_SCREEN: self._config.LOGLEVSCR,
+                MSG_KEY_SEV_SYSLOG: self._config.LOGLEVSYS,
+            }))
             self.configured.set()
 
     def start_driver(self):

@@ -45,3 +45,4 @@ except:
 driver = EtcdDriver(felix_sck)
 driver.start()
 driver.join()
+_log.critical("Driver shutting down.")

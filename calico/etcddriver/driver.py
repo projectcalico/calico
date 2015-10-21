@@ -31,34 +31,30 @@ The driver is responsible for
   Felix about all the individual keys that are deleted.
 """
 
+import errno
 from httplib import HTTPException
+from io import BytesIO
 from json import loads
 import json
-import socket
 import logging
 from Queue import Queue, Empty
-import sys
+import socket
 from threading import Thread, Event
 import time
 from urlparse import urlparse
-from calico.monotonic import monotonic_time
 
 from ijson.backends import yajl2 as ijson
-from io import BytesIO
 import msgpack
 import urllib3
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import ReadTimeoutError
-from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, dir_for_per_host_config
 
+from calico.common import complete_logging
+from calico.monotonic import monotonic_time
+from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, dir_for_per_host_config
 from calico.etcddriver.hwm import HighWaterTracker
 
 _log = logging.getLogger(__name__)
-
-events_processed = 0
-snapshot_events = 0
-watcher_events = 0
-snap_skipped = 0
 
 FLUSH_THRESHOLD = 200
 
@@ -75,36 +71,17 @@ MSG_KEY_GLOBAL_CONFIG = "global"
 MSG_KEY_HOST_CONFIG = "host"
 
 # Config message Felix -> Driver.
+MSG_TYPE_CONFIG = "conf"
 MSG_KEY_LOG_FILE = "log_file"
 MSG_KEY_SEV_FILE = "sev_file"
 MSG_KEY_SEV_SCREEN = "sev_screen"
 MSG_KEY_SEV_SYSLOG = "sev_syslog"
 
 MSG_TYPE_STATUS = "stat"
-MSG_TYPE_CONFIG = "conf"
 
 MSG_TYPE_UPDATE = "upd"
 MSG_KEY_KEY = "k"
 MSG_KEY_VALUE = "v"
-
-def report_status():
-    while True:
-        start_tot = events_processed
-        start_snap = snapshot_events
-        start_watch = watcher_events
-        start_skip = snap_skipped
-        time.sleep(1)
-        end_tot = events_processed
-        end_snap = snapshot_events
-        end_watch = watcher_events
-        end_skip = snap_skipped
-        _log.info(
-            "Events/s: %s Snap: %s, Watch %s, Skip: %s",
-            end_tot - start_tot,
-            end_snap - start_snap,
-            end_watch - start_watch,
-            end_skip - start_skip
-        )
 
 
 # etcd response data looks like this:
@@ -172,8 +149,10 @@ class EtcdDriver(object):
         # Global stop event used to signal to all threads to stop.
         self._stop_event = Event()
 
-        self._reader_thread = Thread(target=self._read_from_socket)
-        self._resync_thread = Thread(target=self._resync_and_merge)
+        self._reader_thread = Thread(target=self._read_from_socket,
+                                     name="reader-thread")
+        self._resync_thread = Thread(target=self._resync_and_merge,
+                                     name="resync-thread")
 
         self._watcher_thread = None  # Created on demand
         self._watcher_stop_event = None
@@ -196,8 +175,7 @@ class EtcdDriver(object):
         self._resync_thread.start()
 
     def join(self):
-        self._reader_thread.join()
-        self._resync_thread.join()
+        self._stop_event.wait()
 
     def _read_from_socket(self):
         """
@@ -211,16 +189,25 @@ class EtcdDriver(object):
             while not self._stop_event.is_set():
                 try:
                     data = self._felix_sck.recv(8092)
-                except:
-                    _log.exception("Exception reading from Felix.")
-                    raise
+                except socket.error as e:
+                    if e.errno in (errno.EAGAIN,
+                                   errno.EWOULDBLOCK,
+                                   errno.EINTR):
+                        _log.debug("Retryable error on read from Felix.")
+                        continue
+                    else:
+                        _log.error("Failed to read from Felix socket: %r", e)
+                        raise
                 if not data:
                     _log.error("No data read, assuming Felix closed socket")
                     break
                 unpacker.feed(data)
                 for msg in unpacker:
-                    if msg[MSG_KEY_TYPE] == MSG_TYPE_INIT:
+                    msg_type = msg[MSG_KEY_TYPE]
+                    if msg_type == MSG_TYPE_INIT:
                         self._handle_init(msg)
+                    elif msg_type == MSG_TYPE_CONFIG:
+                        self._handle_config(msg)
                     else:
                         _log.warning("Unexpected message from Felix")
         finally:
@@ -234,6 +221,14 @@ class EtcdDriver(object):
         self._etcd_url_parts = urlparse(self._etcd_base_url)
         self._hostname = msg[MSG_KEY_HOSTNAME]
         self._config_loaded.set()
+
+    def _handle_config(self, msg):
+        complete_logging(msg[MSG_KEY_LOG_FILE],
+                         file_level=msg[MSG_KEY_SEV_FILE],
+                         syslog_level=msg[MSG_KEY_SEV_SYSLOG],
+                         stream_level=msg[MSG_KEY_SEV_SCREEN],
+                         gevent_in_use=False)
+        _log.info("Received config from Felix: %s", msg)
 
     def _resync_and_merge(self):
         """
@@ -402,7 +397,7 @@ class EtcdDriver(object):
                     break
             if self._stop_event.is_set():
                 _log.error("Stop event set, exiting")
-                raise Stopped()
+                raise DriverShutdown()
         # Save occupancy by throwing away the deletion tracking metadata.
         self._hwms.stop_tracking_deletions()
         # Scan for deletions that happened before the snapshot.  We effectively
@@ -416,7 +411,7 @@ class EtcdDriver(object):
         it to etcd.
         :raises WatcherDied:
         :raises FelixWriteFailed:
-        :raises Stopped:
+        :raises DriverShutdown:
         """
         _log.info("In sync, now processing events only...")
         while not self._stop_event.is_set():
@@ -443,7 +438,7 @@ class EtcdDriver(object):
     def _handle_next_watcher_event(self):
         """
         Waits for an event on the watcher queue and sends it to Felix.
-        :raises Stopped:
+        :raises DriverShutdown:
         :raises WatcherDied:
         :raises FelixWriteFailed:
         """
@@ -457,7 +452,7 @@ class EtcdDriver(object):
             else:
                 break
         else:
-            raise Stopped()
+            raise DriverShutdown()
         if event is None:
             self._watcher_queue = None
             raise WatcherDied()
@@ -486,7 +481,8 @@ class EtcdDriver(object):
         self._watcher_thread = Thread(target=watch_etcd,
                                       args=(snapshot_index + 1,
                                             self._watcher_queue,
-                                            self._watcher_stop_event))
+                                            self._watcher_stop_event),
+                                      name="watcher-thread")
         self._watcher_thread.daemon = True
         self._watcher_thread.start()
 
@@ -580,7 +576,7 @@ class WatcherDied(Exception):
     pass
 
 
-class Stopped(Exception):
+class DriverShutdown(Exception):
     pass
 
 
