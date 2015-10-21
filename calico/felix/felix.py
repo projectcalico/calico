@@ -75,7 +75,7 @@ def _main_greenlet(config):
         v4_filter_updater = IptablesUpdater("filter", ip_version=4,
                                             config=config)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4, config=config)
-        v4_ipset_mgr = IpsetManager(IPV4)
+        v4_ipset_mgr = IpsetManager(IPV4, config)
         v4_masq_manager = MasqueradeManager(IPV4, v4_nat_updater)
         v4_rules_manager = RulesManager(4, v4_filter_updater, v4_ipset_mgr)
         v4_dispatch_chains = DispatchChains(config, 4, v4_filter_updater)
@@ -89,7 +89,7 @@ def _main_greenlet(config):
         v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
         v6_filter_updater = IptablesUpdater("filter", ip_version=6,
                                             config=config)
-        v6_ipset_mgr = IpsetManager(IPV6)
+        v6_ipset_mgr = IpsetManager(IPV6, config)
         v6_rules_manager = RulesManager(6, v6_filter_updater, v6_ipset_mgr)
         v6_dispatch_chains = DispatchChains(config, 6, v6_filter_updater)
         v6_ep_manager = EndpointManager(config,

@@ -34,10 +34,11 @@ _log = logging.getLogger(__name__)
 FELIX_PFX = "felix-"
 IPSET_PREFIX = {IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-"}
 IPSET_TMP_PREFIX = {IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-"}
+DEFAULT_IPSET_SIZE = 2**20
 
 
 class IpsetManager(ReferenceManager):
-    def __init__(self, ip_type):
+    def __init__(self, ip_type, config):
         """
         Manages all the ipsets for tags for either IPv4 or IPv6.
 
@@ -46,6 +47,7 @@ class IpsetManager(ReferenceManager):
         super(IpsetManager, self).__init__(qualifier=ip_type)
 
         self.ip_type = ip_type
+        self._config = config
 
         # State.
         # Tag IDs indexed by profile IDs
@@ -74,7 +76,8 @@ class IpsetManager(ReferenceManager):
 
     def _create(self, tag_id):
         active_ipset = TagIpset(futils.uniquely_shorten(tag_id, 16),
-                                   self.ip_type)
+                                self.ip_type,
+                                max_elem=self._config.MAX_IPSET_SIZE)
         return active_ipset
 
     def _on_object_started(self, tag_id, active_ipset):
@@ -564,6 +567,12 @@ class IpsetActor(Actor):
             self._sync_to_ipset()
 
     def _sync_to_ipset(self):
+        if len(self.members) > self._ipset.max_elem:
+            _log.error("ipset %s exceeds maximum size %s.  ipset will not"
+                       "be updated until size drops below %s.",
+                       self.ipset_name, self._ipset.max_elem,
+                       self._ipset.max_elem)
+            return
         # Defer to our helper to actually make the changes.
         if self._force_reprogram:
             _log.debug("Replacing content of ipset %s with %s", self,
@@ -587,7 +596,7 @@ class TagIpset(IpsetActor, RefCountedActor):
     Specialised, RefCountedActor managing a single tag's ipset.
     """
 
-    def __init__(self, tag, ip_type):
+    def __init__(self, tag, ip_type, max_elem=DEFAULT_IPSET_SIZE):
         """
         :param str tag: Name of tag that this ipset represents.  Note: not
             the name of the ipset itself.  The name of the ipset is derived
@@ -599,7 +608,7 @@ class TagIpset(IpsetActor, RefCountedActor):
         tmpname = tag_to_ipset_name(ip_type, tag, tmp=True)
         family = "inet" if ip_type == IPV4 else "inet6"
         # Helper class, used to do atomic rewrites of ipsets.
-        ipset = Ipset(name, tmpname, family, "hash:ip")
+        ipset = Ipset(name, tmpname, family, "hash:ip", max_elem=max_elem)
         super(TagIpset, self).__init__(ipset, qualifier=tag)
 
         # Notified ready?
@@ -630,7 +639,7 @@ class Ipset(object):
     (Synchronous) wrapper around an ipset, supporting atomic rewrites.
     """
     def __init__(self, ipset_name, temp_ipset_name, ip_family,
-                 ipset_type="hash:ip"):
+                 ipset_type="hash:ip", max_elem=DEFAULT_IPSET_SIZE):
         """
         :param str ipset_name: name of the primary ipset.  Must be less than
             32 chars.
@@ -644,10 +653,14 @@ class Ipset(object):
         self.type = ipset_type
         assert ip_family in ("inet", "inet6")
         self.family = ip_family
+        self.max_elem = max_elem
 
-    def exists(self):
+    def exists(self, temp_set=False):
         try:
-            futils.check_call(["ipset", "list", self.set_name])
+            futils.check_call(
+                ["ipset", "list",
+                 self.temp_set_name if temp_set else self.set_name]
+            )
         except FailedSystemCall as e:
             if e.retcode == 1 and "does not exist" in e.stderr:
                 return False
@@ -670,6 +683,7 @@ class Ipset(object):
         """
         Update the ipset with changes to members. The set must exist.
         """
+        assert len(new_members) <= self.max_elem
         try:
             input_lines = ["del %s %s" % (self.set_name, m)
                            for m in (old_members - new_members)]
@@ -695,12 +709,20 @@ class Ipset(object):
         # so we build up the complete set of members in a temporary ipset,
         # swap it into place and then delete the old ipset.
         _log.info("Rewriting ipset %s with %d members", self, len(members))
+        assert len(members) <= self.max_elem
+        # Try to destroy the temporary set so that we get to recreate it below,
+        # possibly with new parameters.
+        if futils.call_silent(["ipset", "destroy", self.temp_set_name]) != 0:
+            if self.exists(temp_set=True):
+                _log.error("Failed to delete temporary ipset %s.  Subsequent "
+                           "commands may fail.",
+                           self.temp_set_name)
         input_lines = [
             # Ensure both the main set and the temporary set exist.
             self._create_cmd(self.set_name),
             self._create_cmd(self.temp_set_name),
-            # Flush the temporary set.  This is a no-op unless we had a
-            # left-over temporary set before.
+            # Flush the temporary set.  This is a no-op unless we failed to
+            # delete the set above.
             "flush %s" % self.temp_set_name,
         ]
         # Add all the members to the temporary set,
@@ -727,8 +749,8 @@ class Ipset(object):
         :returns an ipset restore line to create the given ipset iff it
             doesn't exist.
         """
-        return ("create %s %s family %s --exist" %
-                (name, self.type, self.family))
+        return ("create %s %s family %s maxelem %s --exist" %
+                (name, self.type, self.family, self.max_elem))
 
     def delete(self):
         """

@@ -391,3 +391,18 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.REPORTING_INTERVAL_SECS, 21)
         self.assertEqual(config.REPORTING_TTL_SECS, 63)
+
+    def test_default_ipset_size(self):
+        """
+        Test that ipset size is defaulted if out of range.
+        """
+        with mock.patch('calico.common.complete_logging'):
+            config = Config("calico/felix/test/data/felix_missing.cfg")
+        cfg_dict = {
+            "InterfacePrefix": "blah",
+            "MaxIpsetSize": "0",
+        }
+        with mock.patch('calico.common.complete_logging'):
+            config.report_etcd_config({}, cfg_dict)
+
+        self.assertEqual(config.MAX_IPSET_SIZE, 2**20)
