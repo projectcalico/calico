@@ -16,6 +16,8 @@
 - Felix now sets the default.rp_filter sysctl to ensure that endpoints
   come up with the Kernel's RPF check enabled by default.
 - Optimize Felix's actor framework to reduce message-passing overhead.
+- Fix #768: Increase maximum size of ipsets and make configurable.
+- Fix #769: Truncate long output from FailedSystemCall exception.
 
 ## 1.1.0
 
