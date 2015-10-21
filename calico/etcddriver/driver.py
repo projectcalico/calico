@@ -130,6 +130,7 @@ class EtcdDriver(object):
         self._buf = BytesIO()
         self._first_resync = True
         self._resync_http_pool = None
+        self._cluster_id = None
 
         # Set by the reader thread once the init message has been received
         # from Felix.
@@ -287,6 +288,7 @@ class EtcdDriver(object):
                 timeout=5,
                 preload_content=True
             )
+            self._check_cluster_id(resp)
             try:
                 etcd_resp = json.loads(resp.data)
                 ready = etcd_resp["node"]["value"] == "true"
@@ -327,6 +329,7 @@ class EtcdDriver(object):
             timeout=5,
             preload_content=True
         )
+        self._check_cluster_id(resp)
         try:
             etcd_resp = json.loads(resp.data)
             if etcd_resp.get("errorCode") == 100:  # Not found
@@ -351,6 +354,7 @@ class EtcdDriver(object):
         :raises HTTPException
         :raises HTTPError
         :raises socket.error
+        :raises DriverShutdown if the etcd cluster ID changes.
         """
         _log.info("Loading snapshot headers...")
         resp = self._resync_http_pool.request(
@@ -361,9 +365,39 @@ class EtcdDriver(object):
             preload_content=False
         )
         snapshot_index = int(resp.getheader("x-etcd-index", 1))
+        self._check_cluster_id(resp)
+        if not self._cluster_id:
+            _log.error("Snapshot response did not contain cluster ID, "
+                       "resyncing to avoid inconsistency")
+            raise ResyncRequired()
         _log.info("Got snapshot headers, snapshot index is %s; starting "
                   "watcher...", snapshot_index)
         return resp, snapshot_index
+
+    def _check_cluster_id(self, resp):
+        """
+        Checks the x-etcd-cluster-id header for changes since the last call.
+
+        On change, stops the driver and raises DriverShutdown.
+        :param resp: urllib3 Response object.
+        """
+        cluster_id = resp.getheader("x-etcd-cluster-id")
+        if cluster_id:
+            if self._cluster_id:
+                if self._cluster_id != cluster_id:
+                    _log.error("etcd cluster ID changed from %s to %s.  "
+                               "This invalidates our local state so Felix "
+                               "must restart.", self._cluster_id, cluster_id)
+                    self._stop_event.set()
+                    raise DriverShutdown()
+            else:
+                _log.info("First successful read from etcd.  Cluster ID: %s",
+                          cluster_id)
+                self._cluster_id = cluster_id
+        else:
+            # Missing on certain error responses.
+            _log.warning("etcd response was missing cluster ID header, unable "
+                         "to check cluster ID")
 
     def _process_snapshot_and_events(self, etcd_response, snapshot_index):
         """
@@ -543,9 +577,11 @@ class EtcdDriver(object):
 
     def watch_etcd(self, next_index, event_queue, stop_event):
         """
-        Thread: etcd watcher thread.  Watched etcd for changes and
+        Thread: etcd watcher thread.  Watches etcd for changes and
         sends them over the queue to the resync thread, which owns
         the socket to Felix.
+
+        Dies if it receives an error from etcd.
 
         Note: it is important that we pass the index, queue and event
         as parameters to ensure that each watcher thread only touches
@@ -573,11 +609,15 @@ class EtcdDriver(object):
                                 "wait": "true",
                                 "waitIndex": next_index},
                         timeout=90,
+                        # Don't pre-load so we can check the cluster ID before
+                        # we wait for the body.
+                        preload_content=False,
                     )
                     if resp.status != 200:
                         _log.warning("etcd watch returned bad HTTP status: %s",
                                      resp.status)
-                    resp_body = resp.data
+                    self._check_cluster_id(resp)
+                    resp_body = resp.data  # Force read inside try block.
                 except ReadTimeoutError:
                     _log.exception("Watch read timed out, restarting watch at "
                                    "index %s", next_index)
