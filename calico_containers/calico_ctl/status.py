@@ -45,7 +45,7 @@ def status(arguments):
               calico_node_info[0]["Status"]
 
         apt_cmd = docker_client.exec_create("calico-node",
-                                           ["/bin/bash", "-c",
+                                           ["sh", "-c",
                                             "apt-cache policy calico-felix"])
         result = re.search(r"Installed: (.*?)\s",
                            docker_client.exec_start(apt_cmd))
@@ -70,14 +70,14 @@ def pprint_bird_protocols(version):
     # the appropriate separator char for an IP address.
     if version == 4:
         bird_cmd = docker_client.exec_create("calico-node",
-                                    ["/bin/bash", "-c",
+                                    ["sh", "-c",
                                      "echo show protocols | "
                                      "birdcl -s /etc/service/bird/bird.ctl"])
         results = docker_client.exec_start(bird_cmd)
         ip_sep = "."
     else:
         bird6_cmd = docker_client.exec_create("calico-node",
-                                    ["/bin/bash", "-c",
+                                    ["sh", "-c",
                                      "echo show protocols | "
                                      "birdcl -s "
                                      "/etc/service/bird6/bird6.ctl"])

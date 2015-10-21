@@ -5,8 +5,8 @@ PYCALICO=$(wildcard $(SRCDIR)/calico_ctl/*.py) $(wildcard $(SRCDIR)/*.py)
 BUILD_DIR=build_calicoctl
 BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 # There are subdirectories so use shell rather than wildcard
-NODE_FILESYSTEM=$(shell find node_filesystem/ -type f)
-NODE_FILES=Dockerfile $(wildcard image/*) $(NODE_FILESYSTEM)
+NODE_FILESYSTEM=$(shell find calico_node/filesystem/ -type f)
+NODE_FILES=$(wildcard calico_node/*) $(NODE_FILESYSTEM)
 WHEEL_VERSION=0.0.0
 
 # These variables can be overridden by setting an environment variable.
@@ -19,11 +19,11 @@ binary: dist/calicoctl
 node: caliconode.created
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
-	docker build -t calico/node .
+	docker build -f calico_node/Dockerfile -t calico/node .
 	touch caliconode.created
 
 calicobuild.created: $(BUILD_FILES)
-	cd build_calicoctl; docker build -t calico/build .
+	docker build -f build_calicoctl/Dockerfile -t calico/build .
 	touch calicobuild.created
 
 dist/calicoctl: $(PYCALICO) calicobuild.created

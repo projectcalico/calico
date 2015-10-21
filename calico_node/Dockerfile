@@ -11,21 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM debian:wheezy
+FROM gliderlabs/alpine:edge
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-WORKDIR /code/
+ADD calico_node/start_runit /sbin/
+ADD calico_node/build.sh /build.sh
+RUN /build.sh
 
-RUN apt-get update && \
-    apt-get install -qy python-dev python-pip git libffi-dev libssl-dev procps
+# Copy in our custom configuration files etc. We do this last to speed up
+# builds for developer, as it's the thing they're most likely to change.
+COPY calico_node/filesystem /
 
-# Install the python packages needed for running UTs and building calicoctl.
-# Git is installed to allow pip installation from a github repo and also so
-# that the right branch can be included if uploading coverage.
-ADD build_calicoctl/requirements.txt /code/
-RUN pip install -r requirements.txt
-
-# Can't run pyinstaller as root so add a user - https://github.com/pyinstaller/pyinstaller/issues/1081
-RUN useradd -d /home/user -m -s /bin/bash user
-RUN chown -R user:user /code/
-USER user
+CMD ["/sbin/start_runit"]
