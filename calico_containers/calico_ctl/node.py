@@ -225,7 +225,7 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach,
     # This is just a best error attempt, as the modules might be builtins.
     # We'll warn during the check_system() if the modules are unavailable.
     try:
-        call(["modprobe"] + REQUIRED_MODULES)
+        call(["modprobe", "-a"] + REQUIRED_MODULES)
     except OSError:
         pass
 
