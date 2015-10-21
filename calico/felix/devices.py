@@ -417,15 +417,15 @@ class InterfaceWatcher(Actor):
                         _log.debug("IFLA_OPERSTATE: %s", operstate)
 
                 if (ifname and
-                        ifname in if_last_flags and
                         (msg_type == RTM_DELLINK or operstate != IF_OPER_UP)):
-                    # An interface that we've previously signalled is
-                    # being deleted or oper down, so remove our record
-                    # of it.
+                    # The interface is down; make sure the other actors know
+                    # about it.
                     self.update_splitter.on_interface_update(ifname,
                                                              iface_up=False,
                                                              async=True)
-                    del if_last_flags[ifname]
+                    # Remove any record we had of the interface so that, when
+                    # it goes back up, we'll report that.
+                    if_last_flags.pop(ifname, None)
 
                 if (ifname and
                     msg_type == RTM_NEWLINK and
