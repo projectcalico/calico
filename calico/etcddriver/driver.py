@@ -619,8 +619,8 @@ class EtcdDriver(object):
                     self._check_cluster_id(resp)
                     resp_body = resp.data  # Force read inside try block.
                 except ReadTimeoutError:
-                    _log.exception("Watch read timed out, restarting watch at "
-                                   "index %s", next_index)
+                    _log.debug("Watch read timed out, restarting watch at "
+                               "index %s", next_index)
                     # Workaround urllib3 bug #718.  After a ReadTimeout, the
                     # connection is incorrectly recycled.
                     http = None
