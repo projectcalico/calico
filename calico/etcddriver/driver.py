@@ -583,6 +583,9 @@ class EtcdDriver(object):
 
 
 def parse_snapshot(resp):
+    if resp.status != 200:
+        raise ResyncRequired("Read from etcd failed.  HTTP status code %s",
+                             resp.status)
     parser = ijson.parse(resp)  # urllib3 response is file-like.
     stack = []
     frame = Node()
@@ -597,10 +600,13 @@ def parse_snapshot(resp):
                 continue
             if frame.current_key == "modifiedIndex":
                 frame.modifiedIndex = value
-            if frame.current_key == "key":
+            elif frame.current_key == "key":
                 frame.key = value
             elif frame.current_key == "value":
                 frame.value = value
+            elif frame.current_key == "errorCode":
+                raise ResyncRequired("Error from etcd, etcd error code %s",
+                                     value)
             if (frame.key is not None and
                     frame.value is not None and
                     frame.modifiedIndex is not None):
