@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Preparing the environment for Docker default networking
 
 The basic Calico demonstration is run on two Linux servers that have a number
@@ -66,11 +74,9 @@ If you prefer not to do this you can still run the demo but remember to run
 
 ### Getting calicoctl Binary
 
-Get the calicoctl binary onto each host.  You can download a specific 
-[release][calico-releases] from github.  
-For example, to retrieve the latest v0.9.0 release, on each host run
+Get the calicoctl binary onto each host.
 
-	wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl
+	wget http://www.projectcalico.org/latest/calicoctl
 	chmod +x calicoctl
 	
 This binary should be placed in your `$PATH` so it can be run from any
@@ -79,11 +85,10 @@ directory.
 ### Preload the Calico docker image (optional)
 
 You can optionally preload the Calico Docker image to avoid the delay when you 
-run `calicoctl node` the first time.  Select the same version of the Calico 
-Docker image as you selected above.  For example, to pull the latest released 
-version
+run `calicoctl node` the first time.  Select the appropriate versions of the 
+`calico/node` as required by the version of calicoctl:
 
-    docker pull calico/node:v0.9.0
+    docker pull calico/node:latest
 
 ## Final checks
 

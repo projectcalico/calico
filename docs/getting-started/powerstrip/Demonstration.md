@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Calico with Powerstrip
 This demonstration uses [Powerstrip](https://github.com/ClusterHQ/powerstrip), a pluggable HTTP proxy for the Docker API. Development of the Powerstrip version of Calico is lagging behind the master branch, so an older version of calicoctl and the calico-node docker image are required.
 

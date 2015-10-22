@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Running calico-docker on DigitalOcean
 Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you 
 can also run Calico within a public cloud such as DigitalOcean.  The following instructions show how to network 
@@ -13,7 +21,7 @@ From the DigitalOcean Web Console, select the "Create Droplet" button in the top
 In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this 
 demo), and choose a region.  You should see something similar to the following:
 
-![alt tag](digitalocean/Create_Droplet_1.png)
+![alt tag](../images/Create_Droplet_1.png)
 
 You will be creating two droplets.  We recommend you call the first calico-01 and the second
 calico-02.
@@ -24,7 +32,7 @@ Data box under Available Settings.  Add your SSH public key to be able to log in
 
 You should now see something similar to the following:
 
-![alt tag](digitalocean/Create_Droplet_2.png)
+![alt tag](../images/Create_Droplet_2.png)
 
 
 Before selecting "Create Droplet", you will need to specify the User Data.  

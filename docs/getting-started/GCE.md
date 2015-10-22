@@ -1,13 +1,15 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Running Calico on GCE
 Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you 
 can also run Calico within a public cloud such as Google Compute Engine (GCE). The following instructions show how to 
 network containers using Calico routing and the Calico security model on GCE.
-
->NOTE: When running Calico on GCE, the `calico/node` docker image for default-networking must be `v0.7.0` or later. 
->You can do this by running `docker pull calico/node:<version>` where `<version>` is the release you would like to use 
->(such as `v0.7.0`) or `latest`.  You could alternatively [build the `calico/node` image 
->locally](https://github.com/projectcalico/calico-docker/blob/master/docs/Building.md), which saves the image in docker as 
->`calico/node:latest`.  Following the instructions below will automatically use `v0.7.0` or later.
 
 ## Getting started with GCE
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see 

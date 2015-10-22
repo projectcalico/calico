@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Configuration of BGP peering
 
 By default, when running Calico on Docker, a full BGP mesh is used to

@@ -13,6 +13,7 @@ routereflector.tar
 calicobuild.created
 caliconode.created
 calico_containers/pycalico.egg-info/
+.releasedata
 
 # Editors
 **/*.sw[pon]
