@@ -381,11 +381,11 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                         msg_type = msg[MSG_KEY_TYPE]
                         if msg_type == MSG_TYPE_UPDATE:
                             self.begin_polling.wait()
-                            self._handle_update(msg)
+                            self._on_update_from_driver(msg)
                         elif msg_type == MSG_TYPE_CONFIG_LOADED:
-                            self._handle_config_loaded(msg, driver_sck)
+                            self._on_config_loaded_from_driver(msg, driver_sck)
                         elif msg_type == MSG_TYPE_STATUS:
-                            self._handle_status(msg)
+                            self._on_status_from_driver(msg)
                         else:
                             raise RuntimeError("Unexpected message %s" % msg)
 
@@ -401,7 +401,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                 raise
         _log.info("%s.loop() stopped due to self.stop == True", self)
 
-    def _handle_update(self, msg):
+    def _on_update_from_driver(self, msg):
         assert self.configured.is_set()
         key = msg[MSG_KEY_KEY]
         value = msg[MSG_KEY_VALUE]
@@ -421,7 +421,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         except ResyncRequired:
             _log.warning("IGNORING RESYNC.")
 
-    def _handle_config_loaded(self, msg, driver_sck):
+    def _on_config_loaded_from_driver(self, msg, driver_sck):
         global_config = msg[MSG_KEY_GLOBAL_CONFIG]
         host_config = msg[MSG_KEY_HOST_CONFIG]
         _log.info("Config loaded by driver:\n"
@@ -467,7 +467,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             }))
             self.configured.set()
 
-    def _handle_status(self, msg):
+    def _on_status_from_driver(self, msg):
         status = msg[MSG_KEY_STATUS]
         _log.info("etcd driver status changed to %s", status)
 
