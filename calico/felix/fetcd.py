@@ -402,6 +402,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                         # block because it's on the critical path.
                         msg_type = msg[MSG_KEY_TYPE]
                         if msg_type == MSG_TYPE_UPDATE:
+                            self.begin_polling.wait()
                             self._handle_update(msg)
                         elif msg_type == MSG_TYPE_CONFIG_LOADED:
                             self._handle_config_loaded(msg, driver_sck)
