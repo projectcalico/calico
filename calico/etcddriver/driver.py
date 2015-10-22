@@ -50,6 +50,7 @@ from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import ReadTimeoutError
 
 from calico.common import complete_logging
+from calico.etcddriver.protocol import *
 from calico.monotonic import monotonic_time
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, dir_for_per_host_config
 from calico.etcddriver.hwm import HighWaterTracker
@@ -57,35 +58,6 @@ from calico.etcddriver.hwm import HighWaterTracker
 _log = logging.getLogger(__name__)
 
 FLUSH_THRESHOLD = 200
-
-MSG_KEY_TYPE = "type"
-
-# Init message Felix -> Driver.
-MSG_TYPE_INIT = "init"
-MSG_KEY_ETCD_URL = "etcd_url"
-MSG_KEY_HOSTNAME = "hostname"
-
-# Config loaded message Driver -> Felix.
-MSG_TYPE_CONFIG_LOADED = "config_loaded"
-MSG_KEY_GLOBAL_CONFIG = "global"
-MSG_KEY_HOST_CONFIG = "host"
-
-# Config message Felix -> Driver.
-MSG_TYPE_CONFIG = "conf"
-MSG_KEY_LOG_FILE = "log_file"
-MSG_KEY_SEV_FILE = "sev_file"
-MSG_KEY_SEV_SCREEN = "sev_screen"
-MSG_KEY_SEV_SYSLOG = "sev_syslog"
-
-MSG_TYPE_STATUS = "stat"
-MSG_KEY_STATUS = "status"
-STATUS_WAIT_FOR_READY = "wait-for-ready"
-STATUS_RESYNC = "resync"
-STATUS_IN_SYNC = "in-sync"
-
-MSG_TYPE_UPDATE = "u"
-MSG_KEY_KEY = "k"
-MSG_KEY_VALUE = "v"
 
 
 # etcd response data looks like this:
@@ -412,7 +384,7 @@ class EtcdDriver(object):
             if snap_mod > old_hwm:
                 # This specific key's HWM is newer than the previous
                 # version we've seen, send an update.
-                self._queue_update(snap_key, snap_value)
+                self._on_key_updated(snap_key, snap_value)
 
             # After we process an update from the snapshot, process
             # several updates from the watcher queue (if there are
@@ -468,7 +440,7 @@ class EtcdDriver(object):
         for ev_key in deleted_keys:
             # We didn't see the value during the snapshot or via
             # the event queue.  It must have been deleted.
-            self._queue_update(ev_key, None)
+            self._on_key_updated(ev_key, None)
         _log.info("Found %d deleted keys", len(deleted_keys))
 
     def _handle_next_watcher_event(self):
@@ -496,13 +468,13 @@ class EtcdDriver(object):
         if ev_val is not None:
             # Normal update.
             self._hwms.update_hwm(ev_key, ev_mod)
-            self._queue_update(ev_key, ev_val)
+            self._on_key_updated(ev_key, ev_val)
         else:
             # Deletion.
             deleted_keys = self._hwms.store_deletion(ev_key,
                                                      ev_mod)
             for child_key in deleted_keys:
-                self._queue_update(child_key, None)
+                self._on_key_updated(child_key, None)
 
     def _start_watcher(self, snapshot_index):
         """
@@ -536,14 +508,17 @@ class EtcdDriver(object):
                                   self._etcd_url_parts.port or 2379,
                                   maxsize=1)
 
-    def _queue_update(self, key, value):
+    def _on_key_updated(self, key, value):
+        if key == READY_KEY and value != "true":
+            _log.warning("Ready key no longer set to true, triggering resync.")
+            raise ResyncRequired()
+        self._queue_update_msg(key, value)
+
+    def _queue_update_msg(self, key, value):
         """
         Queues an update message to Felix.
         :raises FelixWriteFailed:
         """
-        if key == READY_KEY and value != "true":
-            _log.warning("Ready key no longer set to true, triggering resync.")
-            raise ResyncRequired()
         self._buf.write(msgpack.dumps({
             MSG_KEY_TYPE: MSG_TYPE_UPDATE,
             MSG_KEY_KEY: key,

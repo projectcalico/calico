@@ -29,12 +29,7 @@ import socket
 import subprocess
 import msgpack
 import time
-from calico.etcddriver.driver import MSG_KEY_TYPE, MSG_KEY_ETCD_URL, \
-    MSG_KEY_HOSTNAME, MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, \
-    MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, \
-    MSG_TYPE_CONFIG, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, \
-    MSG_KEY_SEV_SYSLOG, MSG_KEY_STATUS, MSG_TYPE_STATUS
-from calico.etcddriver.driver import MSG_TYPE_INIT
+from calico.etcddriver.protocol import *
 from calico.monotonic import monotonic_time
 
 from etcd import EtcdException, EtcdKeyNotFound
