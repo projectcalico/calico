@@ -541,6 +541,9 @@ class EtcdDriver(object):
         Queues an update message to Felix.
         :raises FelixWriteFailed:
         """
+        if key == READY_KEY and value != "true":
+            _log.warning("Ready key no longer set to true, triggering resync.")
+            raise ResyncRequired()
         self._buf.write(msgpack.dumps({
             MSG_KEY_TYPE: MSG_TYPE_UPDATE,
             MSG_KEY_KEY: key,
