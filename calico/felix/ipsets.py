@@ -38,6 +38,10 @@ DEFAULT_IPSET_SIZE = 2**20
 
 
 class IpsetManager(ReferenceManager):
+    # Using a larger batch delay here significantly reduces CPU usage when
+    # we're under heavy churn.
+    batch_delay = 0.05
+
     def __init__(self, ip_type, config):
         """
         Manages all the ipsets for tags for either IPv4 or IPv6.
