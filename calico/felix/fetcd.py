@@ -19,7 +19,6 @@ felix.fetcd
 Our API to etcd.  Contains function to synchronize felix with etcd
 as well as reporting our status into etcd.
 """
-from collections import defaultdict
 import functools
 import os
 import random
@@ -39,7 +38,7 @@ from gevent.event import Event
 
 from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
-from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
+from calico.datamodel_v1 import (VERSION_DIR, CONFIG_DIR,
                                  RULES_KEY_RE, TAGS_KEY_RE,
                                  dir_for_per_host_config,
                                  PROFILE_DIR, HOST_DIR, EndpointId, POLICY_DIR,
@@ -54,8 +53,6 @@ from calico.etcdutils import (
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
                                  iso_utc_timestamp, IPV4, IPV6)
-
-from pytrie import Trie
 
 _log = logging.getLogger(__name__)
 
@@ -93,7 +90,6 @@ RESYNC_KEYS = [
     POOL_V4_DIR,
 ]
 
-trie = Trie()
 
 class EtcdAPI(EtcdClientOwner, Actor):
     """
@@ -311,10 +307,6 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         # Polling state initialized at poll start time.
         self.splitter = None
 
-        # Cache of known endpoints, used to resolve deletions of whole
-        # directory trees.
-        self.endpoint_ids_per_host = defaultdict(set)
-
         # Next-hop IP addresses of our hosts, if populated in etcd.
         self.ipv4_by_hostname = {}
 
@@ -337,20 +329,13 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         # resync.
         for key in RESYNC_KEYS:
             reg(key, on_del=self._resync)
-        reg(READY_KEY, on_set=self.on_ready_flag_set, on_del=self._resync)
         # Profiles and their contents.
-        reg(PER_PROFILE_DIR, on_del=self.on_profile_delete)
         reg(TAGS_KEY, on_set=self.on_tags_set, on_del=self.on_tags_delete)
         reg(RULES_KEY, on_set=self.on_rules_set, on_del=self.on_rules_delete)
         # Hosts, workloads and endpoints.
-        reg(PER_HOST_DIR, on_del=self.on_host_delete)
         reg(HOST_IP_KEY,
             on_set=self.on_host_ip_set,
             on_del=self.on_host_ip_delete)
-        reg(WORKLOAD_DIR, on_del=self.on_host_delete)
-        reg(PER_ORCH_DIR, on_del=self.on_orch_delete)
-        reg(PER_WORKLOAD_DIR, on_del=self.on_workload_delete)
-        reg(ENDPOINT_DIR, on_del=self.on_workload_delete)
         reg(PER_ENDPOINT_KEY,
             on_set=self.on_endpoint_set, on_del=self.on_endpoint_delete)
         reg(CIDR_V4_KEY,
@@ -362,11 +347,11 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         # explicitly set to the default, say), Felix terminates allowing the
         # init daemon to restart it.
         reg(CONFIG_PARAM_KEY,
-            on_set=self._resync,
-            on_del=self._resync)
+            on_set=self._on_config_updated,
+            on_del=self._on_config_updated)
         reg(PER_HOST_CONFIG_PARAM_KEY,
-            on_set=self._resync,
-            on_del=self._resync)
+            on_set=self._on_host_config_updated,
+            on_del=self._on_host_config_updated)
 
     @logging_exceptions
     def _run(self):
@@ -387,8 +372,6 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
 
                 driver_sck = self.start_driver()
                 unpacker = msgpack.Unpacker()
-                read_count = 0
-                last_time = monotonic_time()
                 while True:
                     data = driver_sck.recv(16384)
                     unpacker.feed(data)
@@ -426,7 +409,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         if self.read_count % 1000 == 0:
             now = monotonic_time()
             delta = now - self.last_rate_log_time
-            _log.warn("Processed %s updates from driver "
+            _log.info("Processed %s updates from driver "
                       "%.1f/s", self.read_count, 1000.0 / delta)
             self.last_rate_log_time = now
         n = Node()
@@ -451,7 +434,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             # has changed and die if it has.
             _log.info("Checking configuration for changes...")
             if (host_config != self.last_host_config or
-                        global_config != self.last_global_config):
+                    global_config != self.last_global_config):
                 _log.warning("Felix configuration has changed, "
                              "felix must restart.")
                 _log.info("Old host config: %s", self.last_host_config)
@@ -492,7 +475,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         _log.info("Creating server socket.")
         try:
             os.unlink("/run/felix-driver.sck")
-        except:
+        except OSError:
             pass
         update_socket = socket.socket(socket.AF_UNIX,
                                       socket.SOCK_STREAM)
@@ -507,7 +490,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         # No longer need the server socket, remove it.
         try:
             os.unlink("/run/felix-driver.sck")
-        except:
+        except OSError:
             _log.exception("Failed to unlink socket")
         else:
             _log.info("Unlinked server socket")
@@ -650,17 +633,12 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         _log.warning("Resync triggered due to change to %s", response.key)
         raise ResyncRequired()
 
-    def on_ready_flag_set(self, response):
-        if response.value != "true":
-            raise ResyncRequired()
-
     def on_endpoint_set(self, response, hostname, orchestrator,
                         workload_id, endpoint_id):
         """Handler for endpoint updates, passes the update to the splitter."""
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
-        #self.endpoint_ids_per_host[combined_id.host].add(combined_id)
         endpoint = parse_endpoint(self._config, combined_id, response.value)
         self.splitter.on_endpoint_update(combined_id, endpoint, async=True)
 
@@ -670,9 +648,6 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
-        #self.endpoint_ids_per_host[combined_id.host].discard(combined_id)
-        # if not self.endpoint_ids_per_host[combined_id.host]:
-        #     del self.endpoint_ids_per_host[combined_id.host]
         self.splitter.on_endpoint_update(combined_id, None, async=True)
 
     def on_rules_set(self, response, profile_id):
@@ -699,30 +674,6 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         _log.debug("Tags for %s deleted", profile_id)
         self.splitter.on_tags_update(profile_id, None, async=True)
 
-    def on_profile_delete(self, response, profile_id):
-        """
-        Handler for a whole profile deletion
-
-        Fakes a tag and rules delete.
-        """
-        # Fake deletes for the rules and tags.
-        _log.debug("Whole profile %s deleted", profile_id)
-        self.splitter.on_rules_update(profile_id, None, async=True)
-        self.splitter.on_tags_update(profile_id, None, async=True)
-
-    def on_host_delete(self, response, hostname):
-        """
-        Handler for deletion of a whole host directory.
-
-        Deletes all the contained endpoints.
-        """
-        ids_on_that_host = self.endpoint_ids_per_host.pop(hostname, set())
-        _log.info("Host %s deleted, removing %d endpoints",
-                  hostname, len(ids_on_that_host))
-        for endpoint_id in ids_on_that_host:
-            self.splitter.on_endpoint_update(endpoint_id, None, async=True)
-        self.on_host_ip_delete(response, hostname)
-
     def on_host_ip_set(self, response, hostname):
         if not self._config.IP_IN_IP_ENABLED:
             _log.debug("Ignoring update to %s because IP-in-IP is disabled",
@@ -747,47 +698,29 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
                                              async=True)
 
+    def _on_config_updated(self, response, config_param):
+        new_value = response.value
+        if self.last_global_config.get(config_param) != new_value:
+            _log.critical("Global config value %s updated.  Felix must be "
+                          "restarted.", config_param)
+            die_and_restart()
+
+    def _on_host_config_updated(self, response, hostname, config_param):
+        if hostname != self._config.HOSTNAME:
+            _log.debug("Ignoring config update for host %s", hostname)
+            return
+        new_value = response.value
+        if self.last_host_config.get(config_param) != new_value:
+            _log.critical("Global config value %s updated.  Felix must be "
+                          "restarted.", config_param)
+            die_and_restart()
+
     def on_ipam_v4_pool_set(self, response, pool_id):
         pool = parse_ipam_pool(pool_id, response.value)
         self.splitter.on_ipam_pool_update(pool_id, pool, async=True)
 
     def on_ipam_v4_pool_delete(self, response, pool_id):
         self.splitter.on_ipam_pool_update(pool_id, None, async=True)
-
-    def on_orch_delete(self, response, hostname, orchestrator):
-        """
-        Handler for deletion of a whole host orchestrator directory.
-
-        Deletes all the contained endpoints.
-        """
-        _log.info("Orchestrator dir %s/%s deleted, removing contained hosts",
-                  hostname, orchestrator)
-        orchestrator = intern(orchestrator.encode("utf8"))
-        for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if endpoint_id.orchestrator == orchestrator:
-                self.splitter.on_endpoint_update(endpoint_id, None, async=True)
-                self.endpoint_ids_per_host[hostname].discard(endpoint_id)
-        if not self.endpoint_ids_per_host[hostname]:
-            del self.endpoint_ids_per_host[hostname]
-
-    def on_workload_delete(self, response, hostname, orchestrator,
-                           workload_id):
-        """
-        Handler for deletion of a whole workload directory.
-
-        Deletes all the contained endpoints.
-        """
-        _log.debug("Workload dir %s/%s/%s deleted, removing endpoints",
-                   hostname, orchestrator, workload_id)
-        orchestrator = intern(orchestrator.encode("utf8"))
-        workload_id = intern(workload_id.encode("utf8"))
-        for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if (endpoint_id.orchestrator == orchestrator and
-                    endpoint_id.workload == workload_id):
-                self.splitter.on_endpoint_update(endpoint_id, None, async=True)
-                self.endpoint_ids_per_host[hostname].discard(endpoint_id)
-        if not self.endpoint_ids_per_host[hostname]:
-            del self.endpoint_ids_per_host[hostname]
 
 
 class EtcdStatusReporter(EtcdClientOwner, Actor):
@@ -950,19 +883,6 @@ def die_and_restart():
     # Use a failure code to tell systemd that we expect to be restarted.  We
     # use os._exit() because it is bullet-proof.
     os._exit(1)
-
-
-def _build_config_dict(cfg_node):
-    """
-    Updates the config dict provided from the given etcd node, which
-    should point at a config directory.
-    """
-    config_dict = {}
-    for child in cfg_node.children:
-        key = child.key.rsplit("/").pop()
-        value = str(child.value)
-        config_dict[key] = value
-    return config_dict
 
 
 # Intern JSON keys as we load them to reduce occupancy.

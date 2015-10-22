@@ -206,43 +206,6 @@ class TestEtcdWatcher(BaseTestCase):
         self.watcher._load_config()
         m_die.assert_called_once_with()
 
-    def test_on_snapshot_loaded(self):
-        m_response = Mock()
-
-        endpoint_on_host = Mock()
-        endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
-                                "orch/wlid/endpoint/epid")
-        endpoint_on_host.value = ENDPOINT_STR
-
-        bad_endpoint_on_host = Mock()
-        bad_endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
-                                    "orch/wlid/endpoint/epid2")
-        bad_endpoint_on_host.value = ENDPOINT_STR[:10]
-
-        endpoint_not_on_host = Mock()
-        endpoint_not_on_host.key = ("/calico/v1/host/other/workload/"
-                                    "orch/wlid/endpoint/epid")
-        endpoint_not_on_host.value = ENDPOINT_STR
-
-        still_ready = Mock()
-        still_ready.key = ("/calico/v1/Ready")
-        still_ready.value = "true"
-
-        m_response.children = [
-            endpoint_on_host,
-            bad_endpoint_on_host,
-            endpoint_not_on_host,
-            still_ready,
-        ]
-        with patch.object(self.watcher,
-                          "clean_up_endpoint_statuses") as m_clean:
-            self.watcher._on_snapshot_loaded(m_response)
-
-        # Cleanup should only get the endpoints on our host.
-        m_clean.assert_called_once_with(
-            set([EndpointId("hostname", "orch", "wlid", "epid")])
-        )
-
     def test_resync_flag(self):
         self.watcher.resync_after_current_poll = True
         self.watcher.next_etcd_index = 1
@@ -283,60 +246,6 @@ class TestEtcdWatcher(BaseTestCase):
             None,
             async=True,
         )
-
-    def test_parent_dir_delete(self):
-        """
-        Test that deletions of parent directories of endpoints are
-        correctly handled.
-        """
-        # This additional  endpoint should be ignored by the deletes below.
-        self.dispatch("/calico/v1/host/h2/workload/o1/w2/endpoint/e2",
-                      "set", value=ENDPOINT_STR)
-        for path in ["/calico/v1/host/h1",
-                     "/calico/v1/host/h1/workload",
-                     "/calico/v1/host/h1/workload/o1",
-                     "/calico/v1/host/h1/workload/o1/w1",
-                     "/calico/v1/host/h1/workload/o1/w1/endpoint"]:
-            # Create endpoints in the cache.
-            self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
-                          "set", value=ENDPOINT_STR)
-            self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e2",
-                          "set", value=ENDPOINT_STR)
-            # This endpoint should not get cleaned up if only workload w1 is
-            # deleted...
-            self.dispatch("/calico/v1/host/h1/workload/o1/w3/endpoint/e3",
-                          "set", value=ENDPOINT_STR)
-
-            self.assertEqual(self.watcher.endpoint_ids_per_host, {
-                "h1": set([EndpointId("h1", "o1", "w1", "e1"),
-                           EndpointId("h1", "o1", "w1", "e2"),
-                           EndpointId("h1", "o1", "w3", "e3")]),
-                "h2": set([EndpointId("h2", "o1", "w2", "e2")]),
-            })
-            self.m_splitter.on_endpoint_update.reset_mock()
-            # Delete one of its parent dirs, should delete the endpoint.
-            self.dispatch(path, "delete")
-            exp_calls = [
-                call(EndpointId("h1", "o1", "w1", "e1"), None, async=True),
-                call(EndpointId("h1", "o1", "w1", "e2"), None, async=True),
-            ]
-            if path < "/calico/v1/host/h1/workload/o1/w1":
-                # Should also delete workload w3.
-                exp_calls.append(call(EndpointId("h1", "o1", "w3", "e3"),
-                                      None, async=True))
-            self.m_splitter.on_endpoint_update.assert_has_calls(exp_calls,
-                                                                any_order=True)
-            # Cache should be cleaned up.
-            exp_cache = {"h2": set([EndpointId("h2", "o1", "w2", "e2")])}
-            if path >= "/calico/v1/host/h1/workload/o1/w1":
-                # Should not have deleted workload w3.  Add it in.
-                exp_cache["h1"] = set([EndpointId("h1", "o1", "w3", "e3")])
-            self.assertEqual(self.watcher.endpoint_ids_per_host, exp_cache)
-
-            # Then simulate another delete, should have no effect.
-            self.m_splitter.on_endpoint_update.reset_mock()
-            self.dispatch(path, "delete")
-            self.assertFalse(self.m_splitter.on_endpoint_update.called)
 
     def test_rules_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
@@ -379,30 +288,6 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_splitter.on_tags_update.assert_called_once_with("prof1",
                                                                None,
                                                                async=True)
-
-    def test_dispatch_delete_resync(self):
-        """
-        Test dispatcher is correctly configured to trigger resync for
-        expected paths.
-        """
-        for key in ["/calico/v1",
-                    "/calico/v1/host",
-                    "/calico/v1/policy",
-                    "/calico/v1/policy/profile",
-                    "/calico/v1/config",
-                    "/calico/v1/config/Foo",
-                    "/calico/v1/Ready",]:
-            self.assertRaises(ResyncRequired, self.dispatch, key, "delete")
-
-    def test_per_profile_del(self):
-        """
-        Test profile deletion triggers deletion for tags and rules.
-        """
-        self.dispatch("/calico/v1/policy/profile/profA", action="delete")
-        self.m_splitter.on_tags_update.assert_called_once_with("profA", None,
-                                                               async=True)
-        self.m_splitter.on_rules_update.assert_called_once_with("profA", None,
-                                                                async=True)
 
     def test_tags_del(self):
         """
@@ -498,12 +383,6 @@ class TestEtcdWatcher(BaseTestCase):
             [],
             async=True,
         )
-
-    def test_config_update_triggers_resync(self):
-        self.assertRaises(ResyncRequired, self.dispatch,
-                          "/calico/v1/config/Foo", "set", "bar")
-        self.assertRaises(ResyncRequired, self.dispatch,
-                          "/calico/v1/host/foo/config/Foo", "set", "bar")
 
     @patch("os._exit", autospec=True)
     @patch("gevent.sleep", autospec=True)

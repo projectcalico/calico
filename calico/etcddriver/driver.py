@@ -34,8 +34,10 @@ The driver is responsible for
 import errno
 from httplib import HTTPException
 from io import BytesIO
-from json import loads
-import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 import logging
 from Queue import Queue, Empty
 import socket
@@ -58,24 +60,6 @@ from calico.etcddriver.hwm import HighWaterTracker
 _log = logging.getLogger(__name__)
 
 FLUSH_THRESHOLD = 200
-
-
-# etcd response data looks like this:
-# {u'action': u'set',
-#      u'node': {u'createdIndex': 2095663, u'modifiedIndex': 2095663,
-#                u'value': u'{"name": "tap000174", "profile_id": "prof-174", '
-#                          u'"state": "active", "ipv6_nets": [], '
-#                          u'"mac": "63:4e:60:d9:91:a6", "ipv4_nets": '
-#                          u'["1.0.0.174/32"]}',
-#                u'key': u'/calico/v1/host/host_bloop/workload/orch/'
-#                        u'endpoint_175/endpoint/endpoint_175'},
-#      u'prevNode': {u'createdIndex': 2025647, u'modifiedIndex': 2025647,
-#                    u'value': u'{"name": "tap000174", "profile_id": '
-#                              u'"prof-174", "state": "active", '
-#                              u'"ipv6_nets": [], "mac": "37:95:03:e2:f3:6c", '
-#                              u'"ipv4_nets": ["1.0.0.174/32"]}',
-#                    u'key': u'/calico/v1/host/host_bloop/workload/orch/'
-#                            u'endpoint_175/endpoint/endpoint_175'}}
 
 
 class EtcdDriver(object):
@@ -509,6 +493,14 @@ class EtcdDriver(object):
                                   maxsize=1)
 
     def _on_key_updated(self, key, value):
+        """
+        Called when we've worked out that a key  ahs been updated/deleted.
+
+        Deos any local processing and sends the update to Felix.
+        :param str key: The etcd key that has changed.
+        :param str|NoneType value: the new value of the key (None indicates
+               deletion).
+        """
         if key == READY_KEY and value != "true":
             _log.warning("Ready key no longer set to true, triggering resync.")
             raise ResyncRequired()
@@ -604,7 +596,7 @@ class EtcdDriver(object):
                     http = None
                     continue
                 try:
-                    etcd_resp = loads(resp_body)
+                    etcd_resp = json.loads(resp_body)
                     if "errorCode" in etcd_resp:
                         _log.error("Error from etcd: %s; triggering a resync.",
                                    etcd_resp)
