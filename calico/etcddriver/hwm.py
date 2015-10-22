@@ -30,7 +30,7 @@ import datrie
 _log = logging.getLogger(__name__)
 
 
-TRIE_CHARS = string.ascii_letters + string.digits + "/_-"
+TRIE_CHARS = string.ascii_letters + string.digits + "/_-:."
 TRIE_CHARS_MATCH = re.compile(r'^[%s]+$' % re.escape(TRIE_CHARS))
 
 
