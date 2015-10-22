@@ -80,9 +80,9 @@ If you prefer not to do this you can still run the demo but remember to run
 
 Get the calicoctl binary onto each host.  You can download a specific 
 [release][calico-releases] from github.  
-For example, to retrieve the latest v0.8.0 release, on each host run
+For example, to retrieve the latest v0.9.0 release, on each host run
 
-	wget https://github.com/projectcalico/calico-docker/releases/download/v0.8.0/calicoctl
+	wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl
 	chmod +x calicoctl
 	
 This binary should be placed in your `$PATH` so it can be run from any

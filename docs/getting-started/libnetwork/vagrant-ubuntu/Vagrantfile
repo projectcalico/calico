@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 # The version of calico to install
-calicoctl_ver = "v0.8.0"
+calicoctl_ver = "v0.9.0"
 calico_node_ver = calicoctl_ver
 calico_libnetwork_ver = "v0.5.0"
 

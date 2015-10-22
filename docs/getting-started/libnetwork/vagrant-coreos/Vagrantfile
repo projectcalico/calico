@@ -8,7 +8,7 @@
 # image which slows down the install process, but speeds up the demonstration.
 # This version should match the version of calicotl installed in the cloud
 # config files.  The version of calicoctl is specified in the cloud config.
-calico_node_ver = "v0.8.0"
+calico_node_ver = "v0.9.0"
 calico_libnetwork_ver = "v0.5.0"
 
 # Size of the cluster created by Vagrant

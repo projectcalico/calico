@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 # The version of calico to install
-calico_docker_ver = "v0.8.0"
+calico_docker_ver = "v0.9.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2

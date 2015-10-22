@@ -32,7 +32,7 @@ You should see output like this on each node
     vagrant@calico-01:~$ docker ps
     CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
     eec9ebbfb486        calico/node-libnetwork:v0.5.0   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
-    ffe6cb403e9b        calico/node:v0.8.0              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
+    ffe6cb403e9b        calico/node:v0.9.0              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
 
 ## Creating networked endpoints
 
