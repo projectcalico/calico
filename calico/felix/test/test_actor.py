@@ -206,7 +206,7 @@ class TestActor(BaseTestCase):
         self._actor.do_a(async=False)
         self._actor.do_a(async=False)
         self._actor.do_a(async=False)
-        m_sleep.assert_called_once_with()
+        m_sleep.assert_called_once_with(0.000001)
 
     def test_wait_and_check_no_input(self):
         actor.wait_and_check([])
