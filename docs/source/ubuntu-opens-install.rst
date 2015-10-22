@@ -49,7 +49,7 @@ found here --
 `Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html>`__ /
 `Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ /
 `Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__ /
-`Liberty <http://docs.openstack.org/liberty/install-guide-ubuntu/>__.
+`Liberty <http://docs.openstack.org/liberty/install-guide-ubuntu/>`__.
 
 
 Configuring the APT software sources
