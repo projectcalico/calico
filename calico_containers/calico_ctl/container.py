@@ -282,6 +282,7 @@ def container_add(container_id, ip, interface):
 
     # Create the veth, move into the container namespace, add the IP and
     # set up the default routes.
+    netns.increment_metrics(namespace)
     netns.create_veth(ep.name, ep.temp_interface_name)
     netns.move_veth_into_ns(namespace, ep.temp_interface_name, interface)
     netns.add_ip_to_ns_veth(namespace, ip, interface)

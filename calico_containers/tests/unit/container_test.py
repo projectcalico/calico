@@ -90,6 +90,7 @@ class TestContainer(unittest.TestCase):
         # Check an enpoint object was returned
         self.assertTrue(isinstance(test_return, Endpoint))
 
+        self.assertTrue(m_netns.increment_metrics.called)
         self.assertTrue(m_netns.create_veth.called)
         self.assertTrue(m_netns.move_veth_into_ns.called)
         self.assertTrue(m_netns.add_ip_to_ns_veth.called)
@@ -231,6 +232,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertFalse(m_client.get_default_next_hops.called)
         self.assertFalse(m_client.release_ips.called)
+        self.assertFalse(m_netns.increment_metrics.called)
         self.assertFalse(m_netns.create_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
