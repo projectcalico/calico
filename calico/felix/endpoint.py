@@ -66,6 +66,8 @@ class EndpointManager(ReferenceManager):
         # increffed.
         self.local_endpoint_ids = set()
 
+        self._data_model_in_sync = False
+
     def _create(self, combined_id):
         """
         Overrides ReferenceManager._create()
@@ -88,30 +90,25 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def on_datamodel_in_sync(self):
-        _log.error("NOT IMPLEMENTED: EndpointManager.on_datamodel_in_sync()")
+        if not self._data_model_in_sync:
+            _log.info("%s: First time we've been in-sync with the datamodel,"
+                      "sending snapshot to DispatchChains.", self)
+            self._data_model_in_sync = True
 
-    # @actor_message()
-    # def apply_snapshot(self, endpoints_by_id):
-    #     # Tell the dispatch chains about the local endpoints in advance so
-    #     # that we don't flap the dispatch chain at start-of-day.
-    #     local_iface_name_to_ep_id = {}
-    #     for ep_id, ep in endpoints_by_id.iteritems():
-    #         if ep and ep_id.host == self.config.HOSTNAME and ep.get("name"):
-    #             local_iface_name_to_ep_id[ep.get("name")] = ep_id
-    #     self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id.keys(),
-    #                                         async=True)
-    #     # Then update/create endpoints and work out which endpoints have been
-    #     # deleted.
-    #     missing_endpoints = set(self.endpoints_by_id.keys())
-    #     for endpoint_id, endpoint in endpoints_by_id.iteritems():
-    #         self.on_endpoint_update(endpoint_id, endpoint,
-    #                                 force_reprogram=True)
-    #         missing_endpoints.discard(endpoint_id)
-    #         self._maybe_yield()
-    #     missing_endpoints.clear()
-    #     for endpoint_id in missing_endpoints:
-    #         self.on_endpoint_update(endpoint_id, None)
-    #         self._maybe_yield()
+            # Tell the dispatch chains about the local endpoints in advance so
+            # that we don't flap the dispatch chain at start-of-day.  Note:
+            # the snapshot may contain information that is ahead of the
+            # state that our individual LocalEndpoint actors are sending to the
+            # DispatchChains actor.  That is OK!  The worst that can happen is
+            # that a LocalEndpoint undoes part of our update and then goes on
+            # to re-apply the update when it catches up to the snapshot.
+            local_ifaces = set()
+            for ep_id, ep in self.endpoints_by_id.iteritems():
+                if (ep and
+                        ep_id.host == self.config.HOSTNAME and
+                        ep.get("name")):
+                    local_ifaces.add(ep.get("name"))
+            self.dispatch_chains.apply_snapshot(local_ifaces, async=True)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
