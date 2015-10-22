@@ -57,19 +57,9 @@ class RulesManager(ReferenceManager):
                    profile_or_none)
         active_profile.on_profile_update(profile_or_none, async=True)
 
-    # @actor_message()
-    # def apply_snapshot(self, rules_by_profile_id):
-    #     _log.info("Rules manager applying snapshot; %s rules",
-    #               len(rules_by_profile_id))
-    #     missing_ids = set(self.rules_by_profile_id.keys())
-    #     for profile_id, profile in rules_by_profile_id.iteritems():
-    #         self.on_rules_update(profile_id, profile,
-    #                              force_reprogram=True)  # Skips queue
-    #         missing_ids.discard(profile_id)
-    #         self._maybe_yield()
-    #     missing_ids.clear()
-    #     for dead_profile_id in missing_ids:
-    #         self.on_rules_update(dead_profile_id, None)
+    @actor_message()
+    def on_datamodel_in_sync(self):
+        _log.error("NOT IMPLEMENTED: RulesManager.on_datamodel_in_sync()")
 
     @actor_message()
     def on_rules_update(self, profile_id, profile, force_reprogram=False):

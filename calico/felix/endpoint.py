@@ -86,6 +86,10 @@ class EndpointManager(ReferenceManager):
         ep = self.endpoints_by_id.get(endpoint_id)
         obj.on_endpoint_update(ep, async=True)
 
+    @actor_message()
+    def on_datamodel_in_sync(self):
+        _log.error("NOT IMPLEMENTED: EndpointManager.on_datamodel_in_sync()")
+
     # @actor_message()
     # def apply_snapshot(self, endpoints_by_id):
     #     # Tell the dispatch chains about the local endpoints in advance so

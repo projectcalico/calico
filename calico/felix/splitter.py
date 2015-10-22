@@ -50,58 +50,22 @@ class UpdateSplitter(Actor):
         self.ipv4_masq_manager = ipv4_masq_manager
         self._cleanup_scheduled = False
 
-    # @actor_message()
-    # def apply_snapshot(self, rules_by_prof_id, tags_by_prof_id,
-    #                    endpoints_by_id, ipv4_pools_by_id):
-    #     """
-    #     Replaces the whole cache state with the input.  Applies deltas vs the
-    #     current active state.
-    #
-    #     :param rules_by_prof_id: A dict mapping security profile ID to a list
-    #         of profile rules, each of which is a dict.
-    #     :param tags_by_prof_id: A dict mapping security profile ID to a list of
-    #         profile tags.
-    #     :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
-    #         data dicts.
-    #     :param ipv4_pools_by_id: A dict mapping IPAM pool ID to dicts
-    #         representing the pool.
-    #     """
-    #     # Step 1: fire in data update events to the profile and tag managers
-    #     # so they can build their indexes before we activate anything.
-    #     _log.info("Applying snapshot. Queueing rules.")
-    #     for rules_mgr in self.rules_mgrs:
-    #         rules_mgr.apply_snapshot(rules_by_prof_id, async=True)
-    #     _log.info("Applying snapshot. Queueing tags/endpoints to ipset mgr.")
-    #     for ipset_mgr in self.ipsets_mgrs:
-    #         ipset_mgr.apply_snapshot(tags_by_prof_id, endpoints_by_id,
-    #                                  async=True)
-    #
-    #     # Step 2: fire in update events into the endpoint manager, which will
-    #     # recursively trigger activation of profiles and tags.
-    #     _log.info("Applying snapshot. Queueing endpoints->endpoint mgr.")
-    #     for ep_mgr in self.endpoint_mgrs:
-    #         ep_mgr.apply_snapshot(endpoints_by_id, async=True)
-    #
-    #     # Step 3: send update to NAT manager.
-    #     _log.info("Applying snapshot.  Queueing IPv4 pools -> masq mgr.")
-    #     self.ipv4_masq_manager.apply_snapshot(ipv4_pools_by_id, async=True)
-    #
-    #     _log.info("Applying snapshot. DONE. %s rules, %s tags, "
-    #               "%s endpoints, %s pools", len(rules_by_prof_id),
-    #               len(tags_by_prof_id), len(endpoints_by_id),
-    #               len(ipv4_pools_by_id))
-    #
-    #     # Since we don't wait for all the above processing to finish, set a
-    #     # timer to clean up orphaned ipsets and tables later.  If the snapshot
-    #     # takes longer than this timer to apply then we might do the cleanup
-    #     # before the snapshot is finished.  That would cause dropped packets
-    #     # until applying the snapshot finishes.
-    #     if not self._cleanup_scheduled:
-    #         _log.info("No cleanup scheduled, scheduling one.")
-    #         gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
-    #                            functools.partial(self.trigger_cleanup,
-    #                                              async=True))
-    #         self._cleanup_scheduled = True
+    @actor_message()
+    def on_datamodel_in_sync(self):
+        """
+        Called when the data-model is known to be in-sync.
+        """
+        for mgr in self.ipsets_mgrs + self.rules_mgrs + self.endpoint_mgrs:
+            mgr.on_datamodel_in_sync(async=True)
+
+        # Now we're in sync, give the managers some time to get their house in
+        # order, then trigger the start-of-day cleanup.
+        if not self._cleanup_scheduled:
+            _log.info("No cleanup scheduled, scheduling one.")
+            gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
+                               functools.partial(self.trigger_cleanup,
+                                                 async=True))
+            self._cleanup_scheduled = True
 
     @actor_message()
     def trigger_cleanup(self):

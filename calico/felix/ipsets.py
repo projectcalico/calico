@@ -73,6 +73,7 @@ class IpsetManager(ReferenceManager):
         # May include non-live tag IDs.
         self._dirty_tags = set()
         self._force_reprogram = False
+        self._datamodel_in_sync = False
 
     def _create(self, tag_id):
         active_ipset = TagIpset(futils.uniquely_shorten(tag_id, 16),
@@ -82,11 +83,9 @@ class IpsetManager(ReferenceManager):
 
     def _on_object_started(self, tag_id, active_ipset):
         _log.debug("TagIpset actor for %s started", tag_id)
-        # Fill the ipset in with its members, this will trigger its first
-        # programming, after which it will call us back to tell us it is ready.
-        # We can't use self._dirty_tags to defer this in case the set becomes
-        # unreferenced before _finish_msg_batch() is called.
-        self._update_active_ipset(tag_id)
+        # We defer the update in order to delay updates until we're in-sync
+        # with the datamodel.
+        self._dirty_tags.add(tag_id)
 
     def _update_active_ipset(self, tag_id):
         """
@@ -96,6 +95,7 @@ class IpsetManager(ReferenceManager):
         :param tag_id: The ID of the tag, must be an active tag.
         """
         assert self._is_starting_or_live(tag_id)
+        assert self._datamodel_in_sync
         active_ipset = self.objects_by_id[tag_id]
         members = frozenset(self.ip_owners_by_tag.get(tag_id, {}).iterkeys())
         active_ipset.replace_members(members,
@@ -120,51 +120,11 @@ class IpsetManager(ReferenceManager):
         nets = "ipv4_nets" if self.ip_type == IPV4 else "ipv6_nets"
         return nets
 
-    # @actor_message()
-    # def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
-    #     """
-    #     Apply a snapshot read from etcd, replacing existing state.
-    #
-    #     :param tags_by_prof_id: A dict mapping security profile ID to a list of
-    #         profile tags.
-    #     :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
-    #         data dicts.
-    #     """
-    #     _log.info("Applying tags snapshot. %s tags, %s endpoints",
-    #               len(tags_by_prof_id), len(endpoints_by_id))
-    #     missing_profile_ids = set(self.tags_by_prof_id.keys())
-    #     for profile_id, tags in tags_by_prof_id.iteritems():
-    #         assert tags is not None
-    #         self.on_tags_update(profile_id, tags)
-    #         missing_profile_ids.discard(profile_id)
-    #         self._maybe_yield()
-    #     for profile_id in missing_profile_ids:
-    #         self.on_tags_update(profile_id, None)
-    #         self._maybe_yield()
-    #     del missing_profile_ids
-    #     missing_endpoints = set(self.endpoint_data_by_ep_id.keys())
-    #     for endpoint_id, endpoint in endpoints_by_id.iteritems():
-    #         assert endpoint is not None
-    #         missing_endpoints.discard(endpoint_id)
-    #         endpoint_data = self.endpoint_data_by_ep_id.get(endpoint_id)
-    #         if endpoint_data:
-    #             profile_ids = set(endpoint.get("profile_ids", []))
-    #             nets_list = endpoint.get(self.nets_key, [])
-    #             ips = set(map(futils.net_to_ip, nets_list))
-    #             if (profile_ids == endpoint_data.profile_ids and
-    #                     ips == endpoint_data.ip_addresses):
-    #                 continue
-    #         endpoint_data = self._endpoint_data_from_dict(endpoint_id,
-    #                                                       endpoint)
-    #         self._on_endpoint_data_update(endpoint_id, endpoint_data)
-    #         self._maybe_yield()
-    #     missing_endpoints.clear()
-    #     for endpoint_id in missing_endpoints:
-    #         self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
-    #         self._maybe_yield()
-    #     self._force_reprogram = True
-    #     _log.info("Tags snapshot applied: %s tags, %s endpoints",
-    #               len(tags_by_prof_id), len(endpoints_by_id))
+    @actor_message()
+    def on_datamodel_in_sync(self):
+        if not self._datamodel_in_sync:
+            _log.info("Datamodel now in sync, uncorking updates to TagIpsets")
+            self._datamodel_in_sync = True
 
     @actor_message()
     def cleanup(self):
@@ -458,8 +418,10 @@ class IpsetManager(ReferenceManager):
         operation.  It also avoid wasted effort if tags are flapping.
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
-        self._update_dirty_active_ipsets()
-        self._force_reprogram = False
+        if self._datamodel_in_sync:
+            _log.debug("Datamodel in sync, updating active TagIpsets.")
+            self._update_dirty_active_ipsets()
+            self._force_reprogram = False
 
 
 class EndpointData(object):
@@ -532,7 +494,7 @@ class IpsetActor(Actor):
 
         self._ipset = ipset
         # Members - which entries should be in the ipset.  None means
-        # "unknown", but this is updated immediately on actor startup.
+        # "unknown".  The first update to this field triggers programming.
         self.members = None
         # Members which really are in the ipset; again None means "unknown".
         self.programmed_members = None
@@ -572,7 +534,7 @@ class IpsetActor(Actor):
 
     def _finish_msg_batch(self, batch, results):
         _log.debug("IpsetActor._finish_msg_batch() called")
-        if not self.stopped:
+        if not self.stopped and self.members is not None:
             self._sync_to_ipset()
 
     def _sync_to_ipset(self):
@@ -628,19 +590,24 @@ class TagIpset(IpsetActor, RefCountedActor):
         # Mark the object as stopped so that we don't accidentally recreate
         # the ipset in _finish_msg_batch.
         self.stopped = True
-        try:
-            self._ipset.delete()
-        finally:
-            self._notify_cleanup_complete()
 
     def _finish_msg_batch(self, batch, results):
         _log.debug("_finish_msg_batch on TagIpset")
         super(TagIpset, self)._finish_msg_batch(batch, results)
-        if not self.notified_ready:
-            # We have created the set, so we are now ready.
-            _log.debug("TagIpset _finish_msg_batch notifying ready")
-            self.notified_ready = True
-            self._notify_ready()
+        if self.programmed_members is not None:
+            # We've managed to program the set.
+            if self.stopped:
+                # Only clean up if we ever programmed the ipset.
+                self._ipset.delete()
+            elif not self.notified_ready:
+                # Notify that the set is now available for use.
+                _log.debug("TagIpset _finish_msg_batch notifying ready")
+                self.notified_ready = True
+                self._notify_ready()
+        if self.stopped:
+            _log.debug("%s stopped, notifying cleanup complete.", self)
+            self._notify_cleanup_complete()
+
 
 
 class Ipset(object):

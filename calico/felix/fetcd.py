@@ -470,6 +470,9 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
     def _on_status_from_driver(self, msg):
         status = msg[MSG_KEY_STATUS]
         _log.info("etcd driver status changed to %s", status)
+        if status == STATUS_IN_SYNC:
+            self.begin_polling.wait()  # Make sure splitter is set.
+            self.splitter.on_datamodel_in_sync(async=True)
 
     def start_driver(self):
         _log.info("Creating server socket.")
