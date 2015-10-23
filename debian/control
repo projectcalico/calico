@@ -52,7 +52,7 @@ Depends:
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends},
- python-etcd (>= 0.4.1+calico.1)
+ python-etcd (>= 0.4.2+calico.1)
 Description: Project Calico virtual networking for cloud data centers.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. Its IP-centric architecture offers numerous

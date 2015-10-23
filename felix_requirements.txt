@@ -1,5 +1,5 @@
 gevent
 greenlet
 netaddr
-python-etcd>=0.4.1
+python-etcd>=0.4.2
 posix-spawn>=0.2.post6
