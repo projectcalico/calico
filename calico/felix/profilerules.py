@@ -71,8 +71,8 @@ class RulesManager(ReferenceManager):
     @actor_message()
     def on_datamodel_in_sync(self):
         if not self._datamodel_in_sync:
-            _log.error("%s: datamodel now in sync, unblocking profile startup",
-                       self)
+            _log.info("%s: datamodel now in sync, unblocking profile startup",
+                      self)
             self._datamodel_in_sync = True
             self._maybe_start_all()
 
