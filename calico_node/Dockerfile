@@ -14,12 +14,12 @@
 FROM gliderlabs/alpine:edge
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-ADD calico_node/start_runit /sbin/
-ADD calico_node/build.sh /build.sh
+ADD start_runit /sbin/
+ADD build.sh /build.sh
 RUN /build.sh
 
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's the thing they're most likely to change.
-COPY calico_node/filesystem /
+COPY filesystem /
 
 CMD ["/sbin/start_runit"]

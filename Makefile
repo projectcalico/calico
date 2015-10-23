@@ -19,7 +19,7 @@ binary: dist/calicoctl
 node: caliconode.created
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
-	docker build -f Dockerfile -t calico/node .
+	docker build -f calico_node/Dockerfile -t calico/node calico_node
 	touch caliconode.created
 
 calicobuild.created: $(BUILD_FILES)
