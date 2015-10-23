@@ -1,5 +1,5 @@
 # Programming Calico Policy in Kubernetes
-The [Calico Kubernetes plugin](https://github.com/projectcalico/calico-docker/blob/master/docs/kubernetes/KubernetesIntegration.md) allows you to specify networking policy in the Kubernetes API using pod annotations. 
+The Calico plugin for Kubernetes allows you to specify networking policy in the Kubernetes API using pod annotations. 
 
 ## Prerequisites
 * A Kubernetes Deployment
@@ -9,21 +9,22 @@ The [Calico Kubernetes plugin](https://github.com/projectcalico/calico-docker/bl
     - For more information on how to integrate Calico into your Kubernetes Deployment, view our [integration doc](KubernetesIntegration.md).
 
 ### Declaring Policy
-To enforce a policy rule to your pod, add a `projectcalico.org/policy` key to the annotations section of your pod's metadata. This `projectcalico.org/policy` key should map to a single string which defines network behavior. Programming policy follows a simple syntax that can specify any combination of label*, protocol, source/dest ports, and source/dest net. The syntax for this can be seen below.
+To enforce a policy rule on your pod, add a `projectcalico.org/policy` key to the annotations section of your pod's metadata. This `projectcalico.org/policy` key should map to a single string which defines network behavior. Programming policy follows a simple syntax that can specify any combination of source label, protocol, source/dest ports, and source/dest net. The syntax for this can be seen below.
 
 >Note: Versions of `calico-kubernetes` before v0.2.0 use the annotation key `policy` in place of the latest namespaced annotation key `projectcalico.org/policy`
 
->*Multiple labels per rule are unsupported in the current release of the plugin.
+>Note: The current release of the plugin only supports one source label per rule.
 
 ##### Policy Syntax
 ```
     allow [(
-      (tcp|udp) [(from [(ports <SRCPORTS>)] [(label <SRCKEY>=<SRCVAL>)] [(cidr <SRCCIDR>)])]
-      | icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
-             [(from [(label <SRCKEY>=<SRCVAL>)] [(cidr <SRCCIDR>)])]
-      | [(from [(label <SRCKEY>=<SRCVAL>)] [(cidr <SRCCIDR>)])]
+      (tcp|udp) [from [ports <PORTS>] [label <KEY>=<VAL>] [cidr <CIDR>]]
+      | icmp [type <ICMPTYPE> [code <ICMPCODE>]]
+             [from [label <KEY>=<VAL>] [cidr <CIDR>]]
+      | [from [label <KEY>=<VAL>] [cidr <CIDR>]]
     )]
 ```
+
 
 Here is an example of how this looks in a pod spec.
 ```
@@ -57,6 +58,7 @@ metadata:
     role: backend
     version: v1.2.3
 ```
+
 will generate the following tags
 ```
 namespace_production
