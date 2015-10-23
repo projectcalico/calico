@@ -346,7 +346,7 @@ perform the following steps:
 
 6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
-   to ``dnsmasq``.  No OpenStack updates are needed for Liberty.
+   to ``dnsmasq``.  For OpenStack Liberty, this step only upgrades ``dnsmasq``.
 
    .. warning:: Check the version of libvirt-bin that is installed using
                 ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
