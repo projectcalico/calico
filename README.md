@@ -1,10 +1,12 @@
 [![Build Status](https://semaphoreci.com/api/v1/projects/9d7d365d-19cb-4699-8c84-b76da25ae271/473490/shields_badge.svg)](https://semaphoreci.com/calico/calico-docker--5)
 [![CircleCI branch](https://img.shields.io/circleci/project/projectcalico/calico-docker/master.svg?label=calicoctl)](https://circleci.com/gh/projectcalico/calico-docker/tree/master)
 [![Coverage Status](https://coveralls.io/repos/projectcalico/calico-docker/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico-docker?branch=master)
-[![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
-[![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
-[![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 [![Docker Pulls](https://img.shields.io/docker/pulls/calico/node.svg)](https://hub.docker.com/r/calico/node/)
+[![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
+
+[![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
+[![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
+
 
 # Calico on Docker
 As well as providing networking for OpenStack VMs, Calico can provide
@@ -21,8 +23,8 @@ We welcome questions/comments/feedback (and pull requests).
 
 * [Announcement Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-announce_lists.projectcalico.org)
 * [Technical Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
-* [Slack Calico Users Channel](https://calicousers-slackin.herokuapp.com)
-* IRC - [#calico][irc]
+* [Slack Calico Users Channel](https://calicousers.slack.com) ([Sign up](https://calicousers-slackin.herokuapp.com))
+* IRC - [#calico](https://kiwiirc.com/client/irc.freenode.net/#calico)
 * For Calico-on-Docker specific issues, please [raise issues][raise-issues] on 
 Github.
 
@@ -114,6 +116,5 @@ For more information on what you can do with Calico, please visit the
 [powerstrip]: https://github.com/ClusterHQ/powerstrip
 [libnetwork]: https://github.com/docker/libnetwork
 [raise-issues]: https://github.com/projectcalico/calico-docker/issues/new
-[irc]: http://webchat.freenode.net?randomnick=1&channels=%23calico&uio=d4
 [project-calico]: http://www.projectcalico.org
 [etcd]: https://github.com/coreos/etcd
