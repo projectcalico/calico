@@ -65,7 +65,8 @@ Add the Calico PPA.
     sudo apt-add-repository ppa:project-calico/<release>
 
 
-Where ``<release>`` is icehouse, juno, kilo or liberty.
+Where ``<release>`` is icehouse, juno, kilo or stable (choose stable for
+Liberty onwards, because we no longer require patches to OpenStack).
 
 If you're not using OpenStack Liberty, edit ``/etc/apt/preferences`` to add the
 following lines, whose effect is to prefer Calico-provided packages for Nova
