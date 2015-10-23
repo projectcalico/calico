@@ -90,6 +90,9 @@ RESYNC_KEYS = [
     POOL_V4_DIR,
 ]
 
+# Max number of events from driver process before we yield to another greenlet.
+MAX_EVENTS_BEFORE_YIELD = 200
+
 
 class EtcdAPI(EtcdClientOwner, Actor):
     """
@@ -372,6 +375,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
 
                 driver_sck = self.start_driver()
                 unpacker = msgpack.Unpacker()
+                msgs_processed = 0
                 while True:
                     data = driver_sck.recv(16384)
                     unpacker.feed(data)
@@ -388,6 +392,12 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                             self._on_status_from_driver(msg)
                         else:
                             raise RuntimeError("Unexpected message %s" % msg)
+                        msgs_processed += 1
+                        if msgs_processed % MAX_EVENTS_BEFORE_YIELD == 0:
+                            # Yield to ensure that other actors make progress.
+                            # Sleep must be non-zero to work around gevent
+                            # issue where we could be immediately rescheduled.
+                            gevent.sleep(0.000001)
 
             except EtcdException as e:
                 # Most likely a timeout or other error in the pre-resync;
