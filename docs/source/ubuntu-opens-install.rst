@@ -321,7 +321,23 @@ perform the following steps:
        sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata python-pip
        sudo pip install networking-calico
 
-5. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
+5. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
+   will bring in Calico-specific updates to the OpenStack packages and
+   to ``dnsmasq``.  For OpenStack Liberty, this step only upgrades ``dnsmasq``.
+
+   .. warning:: Check the version of libvirt-bin that is installed using
+                ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
+                should be at least ``1.2.12-0ubuntu13``. This will become part
+                of the standard Ubuntu Kilo repository, but at the time of
+                writing needs to be installed as follows:
+
+                ::
+
+                    sudo add-apt-repository cloud-archive:kilo-proposed
+                    sudo apt-get update
+                    sudo apt-get upgrade
+
+6. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
    If you're using OpenStack Icehouse, Juno or Kilo, set the following in the
    ``[DEFAULT]`` section:
 
@@ -343,22 +359,6 @@ perform the following steps:
    ::
 
        sudo service neutron-dhcp-agent restart
-
-6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
-   will bring in Calico-specific updates to the OpenStack packages and
-   to ``dnsmasq``.  For OpenStack Liberty, this step only upgrades ``dnsmasq``.
-
-   .. warning:: Check the version of libvirt-bin that is installed using
-                ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
-                should be at least ``1.2.12-0ubuntu13``. This will become part
-                of the standard Ubuntu Kilo repository, but at the time of
-                writing needs to be installed as follows:
-
-                ::
-
-                    sudo add-apt-repository cloud-archive:kilo-proposed
-                    sudo apt-get update
-                    sudo apt-get upgrade
 
 7. Install the ``calico-compute`` package:
 
