@@ -56,7 +56,8 @@ Depends:
  python-ijson (>= 2.2-1),
  python-datrie (>= 0.7-1),
  libyajl2 (>= 2.0.4-4),
- libdatrie1 (>= 0.2.8-1)
+ libdatrie1 (>= 0.2.8-1),
+ python-msgpack (>= 0.4.2-1)
 Description: Project Calico virtual networking for cloud data centers.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. Its IP-centric architecture offers numerous
