@@ -68,10 +68,10 @@ installed::
 
     yum install yum-plugin-priorities
 
-As well as the repositories for OpenStack and EPEL
-(https://fedoraproject.org/wiki/EPEL) -- which you will have already
-configured as part of the previous step -- you will need to configure the
-repository for Calico.
+Add the EPEL repository -- see https://fedoraproject.org/wiki/EPEL.  You may
+have already added this to install OpenStack.
+
+Configure the repository for Calico.
 
 For Juno::
 
@@ -442,12 +442,29 @@ On each compute node, perform the following steps:
 
        yum install openstack-neutron
 
-   Open ``/etc/neutron/dhcp_agent.ini``. In the ``[DEFAULT]`` section, add
-   the following line (removing any existing ``interface_driver =`` line):
+   If you're using OpenStack Liberty, also install networking-calico:
+
+   ::
+
+       yum install python-pip
+       pip install networking-calico
+
+   Open ``/etc/neutron/dhcp_agent.ini``. For OpenStack Juno or Kilo, in the
+   ``[DEFAULT]`` section, add the following line (removing any existing
+   ``interface_driver =`` line):
 
    ::
 
            interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
+
+   If you're using OpenStack Liberty, instead set the following in the
+   ``[DEFAULT]`` section:
+
+   ::
+
+       dhcp_driver = networking_calico.agent.linux.dhcp.DnsmasqRouted
+       interface_driver = networking_calico.agent.linux.interface.RoutedInterfaceDriver
+       use_namespaces = False
 
 6.  Restart and enable the DHCP agent
 
