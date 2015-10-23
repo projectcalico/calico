@@ -118,11 +118,14 @@ class IpsetManager(ReferenceManager):
 
         Clears the set of dirty tags as a side-effect.
         """
+        num_updates = 0
         for tag_id in self._dirty_tags:
             if self._is_starting_or_live(tag_id):
                 self._update_active_ipset(tag_id)
+                num_updates += 1
             self._maybe_yield()
-        _log.info("Sent updates to %s updated tags", len(self._dirty_tags))
+        if num_updates > 0:
+            _log.info("Sent updates to %s updated tags", num_updates)
         self._dirty_tags.clear()
 
     @property
