@@ -24,6 +24,7 @@ and starting our threads.
 """
 
 import logging
+import os
 import socket
 import sys
 
@@ -32,6 +33,7 @@ from calico.common import default_logging
 
 _log = logging.getLogger(__name__)
 
+last_ppid = os.getppid()
 default_logging(gevent_in_use=False)
 
 felix_sck = socket.socket(socket.AF_UNIX,
@@ -44,5 +46,13 @@ except:
 
 driver = EtcdDriver(felix_sck)
 driver.start()
-driver.join()
+
+while not driver.join(timeout=1):
+    parent_pid = os.getppid()
+    # Defensive, just in case we don't get a socket error, check if the
+    # parent PID has changed, indicating that Felix has died.
+    if parent_pid == 1 or parent_pid != last_ppid:
+        _log.critical("Process adopted, assuming felix has died")
+        driver.stop()
+        break
 _log.critical("Driver shutting down.")

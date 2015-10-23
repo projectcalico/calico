@@ -103,9 +103,17 @@ class EtcdDriver(object):
         self._reader_thread.start()
         self._resync_thread.start()
 
-    def join(self):
-        """Blocks until the driver stops."""
-        self._stop_event.wait()
+    def join(self, timeout=None):
+        """
+        Blocks until the driver stops or until timeout expires.
+
+        :returns True if the driver stopped, False on timeout.
+        """
+        return self._stop_event.wait(timeout=None)
+
+    def stop(self):
+        _log.info("Stopping driver")
+        self._stop_event.set()
 
     def _read_from_socket(self):
         """
@@ -142,7 +150,7 @@ class EtcdDriver(object):
                         _log.warning("Unexpected message from Felix")
         finally:
             _log.error("Reader thread shutting down, triggering stop event")
-            self._stop_event.set()
+            self.stop()
 
     def _handle_init(self, msg):
         """
@@ -213,7 +221,7 @@ class EtcdDriver(object):
                 self._process_events_only()
             except FelixWriteFailed:
                 _log.exception("Write to Felix failed; shutting down.")
-                self._stop_event.set()
+                self.stop()
             except WatcherDied:
                 _log.warning("Watcher died; resyncing.")
             except (urllib3.exceptions.HTTPError,
@@ -225,7 +233,7 @@ class EtcdDriver(object):
                     time.sleep(1)
             except:
                 _log.exception("Unexpected exception; shutting down.")
-                self._stop_event.set()
+                self.stop()
                 raise
             finally:
                 self._first_resync = False
@@ -344,7 +352,7 @@ class EtcdDriver(object):
                     _log.error("etcd cluster ID changed from %s to %s.  "
                                "This invalidates our local state so Felix "
                                "must restart.", self._cluster_id, cluster_id)
-                    self._stop_event.set()
+                    self.stop()
                     raise DriverShutdown()
             else:
                 _log.info("First successful read from etcd.  Cluster ID: %s",
