@@ -26,11 +26,12 @@ import string
 
 from datrie import Trie
 import datrie
+import urllib
 
 _log = logging.getLogger(__name__)
 
-
-TRIE_CHARS = string.ascii_letters + string.digits + "/_-:."
+TRIE_SYMBOLS = "/_-:."
+TRIE_CHARS = string.ascii_letters + string.digits + TRIE_SYMBOLS + "%"
 TRIE_CHARS_MATCH = re.compile(r'^[%s]+$' % re.escape(TRIE_CHARS))
 
 
@@ -143,12 +144,31 @@ class HighWaterTracker(object):
 
 
 def encode_key(key):
-    # FIXME May have to be more lenient
-    assert TRIE_CHARS_MATCH.match(key)
+    """
+    Encode an etcd key for use in the trie.
+
+    This does three things:
+    * Encodes any characters that are not supported by the trie using
+      %-encoding.
+    * Adds a trailing slash if not present.  This prevents /foobar/baz from
+      being seen as a subtree of /foo/.
+    * Converts the result to a unicode string, which is what is required
+      by the trie.
+
+    Since our datamodel specifies the characters that are allowed, the first
+    operation should be a no-op on most keys but it's better to be tolerant
+    here than to blow up.
+    """
     if key[-1] != "/":
         key += "/"
+    key = unicode(urllib.quote(key.encode("utf8"), safe=TRIE_SYMBOLS))
+    assert TRIE_CHARS_MATCH.match(key)
     return key
 
 
 def decode_key(key):
+    """
+    Reverses the encoding done by encode_key.
+    """
+    key = urllib.unquote(key.encode("utf8")).decode("utf8")
     return key[:-1]
