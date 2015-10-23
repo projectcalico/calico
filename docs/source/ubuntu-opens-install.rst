@@ -17,8 +17,8 @@ Ubuntu 14.04 Packaged Install Instructions
 
 These instructions will take you through a first-time install of Calico using
 the latest packages on a system running Ubuntu 14.04 with either OpenStack
-Icehouse, Juno or Kilo. If you are upgrading an existing system, please see the
-:doc:`opens-upgrade` document instead for upgrade instructions.
+Icehouse, Juno, Kilo or Liberty. If you are upgrading an existing system,
+please see the :doc:`opens-upgrade` document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading control
 nodes to use Calico, and upgrading compute nodes to use Calico.  The
@@ -48,15 +48,15 @@ Neutron and ML2 networking. Instructions for installing OpenStack can be
 found here --
 `Icehouse <http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html>`__ /
 `Juno <http://docs.openstack.org/juno/install-guide/install/apt/content/index.html>`__ /
-`Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__.
+`Kilo <http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html>`__ /
+`Liberty <http://docs.openstack.org/liberty/install-guide-ubuntu/>`__.
 
 
 Configuring the APT software sources
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The machines need to be configured such that APT can get access to the
-Calico packages. This step differs depending on whether you're using
-Icehouse, Juno or Kilo.
+Calico packages. This step depends on the OpenStack release you're using.
 
 Add the Calico PPA.
 
@@ -65,11 +65,12 @@ Add the Calico PPA.
     sudo apt-add-repository ppa:project-calico/<release>
 
 
-Where ``<release>`` is icehouse, juno or kilo.
+Where ``<release>`` is icehouse, juno, kilo or stable (choose stable for
+Liberty onwards, because we no longer require patches to OpenStack).
 
-Edit ``/etc/apt/preferences`` to add the following lines, whose effect
-is to prefer Calico-provided packages for Nova and Neutron even if later
-versions of those packages are released by Ubuntu.
+If you're not using OpenStack Liberty, edit ``/etc/apt/preferences`` to add the
+following lines, whose effect is to prefer Calico-provided packages for Nova
+and Neutron even if later versions of those packages are released by Ubuntu.
 
 ::
 
@@ -201,7 +202,7 @@ perform the following steps:
 
 1. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
-   to ``dnsmasq``.
+   to ``dnsmasq``.  (OpenStack updates are not needed for Liberty.)
 
 2. Install the ``calico-control`` package:
 
@@ -317,24 +318,12 @@ perform the following steps:
 
    ::
 
-       sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
+       sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata python-pip
+       sudo pip install networking-calico
 
-5. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
-   In the ``[DEFAULT]`` section, add the following line:
-
-   ::
-
-       interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
-
-   Now restart the DHCP agent:
-
-   ::
-
-       sudo service neutron-dhcp-agent restart
-
-6. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
+5. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and
-   to ``dnsmasq``.
+   to ``dnsmasq``.  For OpenStack Liberty, this step only upgrades ``dnsmasq``.
 
    .. warning:: Check the version of libvirt-bin that is installed using
                 ``dpkg -s libvirt-bin``. For Kilo, the version of libvirt-bin
@@ -347,6 +336,29 @@ perform the following steps:
                     sudo add-apt-repository cloud-archive:kilo-proposed
                     sudo apt-get update
                     sudo apt-get upgrade
+
+6. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
+   If you're using OpenStack Icehouse, Juno or Kilo, set the following in the
+   ``[DEFAULT]`` section:
+
+   ::
+
+       interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
+
+   If you're using OpenStack Liberty, instead set the following in the
+   ``[DEFAULT]`` section:
+
+   ::
+
+       dhcp_driver = networking_calico.agent.linux.dhcp.DnsmasqRouted
+       interface_driver = networking_calico.agent.linux.interface.RoutedInterfaceDriver
+       use_namespaces = False
+
+   Now restart the DHCP agent:
+
+   ::
+
+       sudo service neutron-dhcp-agent restart
 
 7. Install the ``calico-compute`` package:
 
