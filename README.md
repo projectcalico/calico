@@ -1,6 +1,11 @@
-[![Build Status](https://semaphoreci.com/api/v1/projects/9d7d365d-19cb-4699-8c84-b76da25ae271/473490/badge.svg)](https://semaphoreci.com/calico/calico-docker--5)
-[![Circle CI](https://circleci.com/gh/projectcalico/calico-docker/tree/master.svg?style=svg)](https://circleci.com/gh/projectcalico/calico-docker/tree/master) [![Coverage Status](https://coveralls.io/repos/projectcalico/calico-docker/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico-docker?branch=master)
+[![Build Status](https://semaphoreci.com/api/v1/projects/9d7d365d-19cb-4699-8c84-b76da25ae271/473490/shields_badge.svg)](https://semaphoreci.com/calico/calico-docker--5)
+[![CircleCI branch](https://img.shields.io/circleci/project/projectcalico/calico-docker/master.svg?label=calicoctl)](https://circleci.com/gh/projectcalico/calico-docker/tree/master)
+[![Coverage Status](https://coveralls.io/repos/projectcalico/calico-docker/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico-docker?branch=master)
 [![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
+[![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
+[![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
+[![Docker Pulls](https://img.shields.io/docker/pulls/calico/node.svg)](https://hub.docker.com/r/calico/node/)
+
 # Calico on Docker
 As well as providing networking for OpenStack VMs, Calico can provide
 networking for containers in a Docker environment.  Each container gets its 
