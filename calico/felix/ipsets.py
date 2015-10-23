@@ -81,11 +81,21 @@ class IpsetManager(ReferenceManager):
                                 max_elem=self._config.MAX_IPSET_SIZE)
         return active_ipset
 
+    def _maybe_start(self, obj_id):
+        if self._datamodel_in_sync:
+            _log.debug("Datamodel is in-sync, deferring to superclass.")
+            return super(IpsetManager, self)._maybe_start(obj_id)
+        else:
+            _log.info("Delaying startup of tag %s because datamodel is"
+                      "not in sync.", obj_id)
+
     def _on_object_started(self, tag_id, active_ipset):
         _log.debug("TagIpset actor for %s started", tag_id)
-        # We defer the update in order to delay updates until we're in-sync
-        # with the datamodel.
-        self._dirty_tags.add(tag_id)
+        # Fill the ipset in with its members, this will trigger its first
+        # programming, after which it will call us back to tell us it is ready.
+        # We can't use self._dirty_tags to defer this in case the set becomes
+        # unreferenced before _finish_msg_batch() is called.
+        self._update_active_ipset(tag_id)
 
     def _update_active_ipset(self, tag_id):
         """
@@ -125,6 +135,7 @@ class IpsetManager(ReferenceManager):
         if not self._datamodel_in_sync:
             _log.info("Datamodel now in sync, uncorking updates to TagIpsets")
             self._datamodel_in_sync = True
+            self._maybe_start_all()
 
     @actor_message()
     def cleanup(self):
@@ -418,10 +429,8 @@ class IpsetManager(ReferenceManager):
         operation.  It also avoid wasted effort if tags are flapping.
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
-        if self._datamodel_in_sync:
-            _log.debug("Datamodel in sync, updating active TagIpsets.")
-            self._update_dirty_active_ipsets()
-            self._force_reprogram = False
+        self._update_dirty_active_ipsets()
+        self._force_reprogram = False
 
 
 class EndpointData(object):
@@ -494,7 +503,7 @@ class IpsetActor(Actor):
 
         self._ipset = ipset
         # Members - which entries should be in the ipset.  None means
-        # "unknown".  The first update to this field triggers programming.
+        # "unknown", but this is updated immediately on actor startup.
         self.members = None
         # Members which really are in the ipset; again None means "unknown".
         self.programmed_members = None
@@ -534,7 +543,7 @@ class IpsetActor(Actor):
 
     def _finish_msg_batch(self, batch, results):
         _log.debug("IpsetActor._finish_msg_batch() called")
-        if not self.stopped and self.members is not None:
+        if not self.stopped:
             self._sync_to_ipset()
 
     def _sync_to_ipset(self):
@@ -590,24 +599,19 @@ class TagIpset(IpsetActor, RefCountedActor):
         # Mark the object as stopped so that we don't accidentally recreate
         # the ipset in _finish_msg_batch.
         self.stopped = True
+        try:
+            self._ipset.delete()
+        finally:
+            self._notify_cleanup_complete()
 
     def _finish_msg_batch(self, batch, results):
         _log.debug("_finish_msg_batch on TagIpset")
         super(TagIpset, self)._finish_msg_batch(batch, results)
-        if self.programmed_members is not None:
-            # We've managed to program the set.
-            if self.stopped:
-                # Only clean up if we ever programmed the ipset.
-                self._ipset.delete()
-            elif not self.notified_ready:
-                # Notify that the set is now available for use.
-                _log.debug("TagIpset _finish_msg_batch notifying ready")
-                self.notified_ready = True
-                self._notify_ready()
-        if self.stopped:
-            _log.debug("%s stopped, notifying cleanup complete.", self)
-            self._notify_cleanup_complete()
-
+        if not self.notified_ready:
+            # We have created the set, so we are now ready.
+            _log.debug("TagIpset _finish_msg_batch notifying ready")
+            self.notified_ready = True
+            self._notify_ready()
 
 
 class Ipset(object):

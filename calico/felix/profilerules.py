@@ -44,6 +44,7 @@ class RulesManager(ReferenceManager):
         self.iptables_updater = iptables_updater
         self.ipset_manager = ipset_manager
         self.rules_by_profile_id = {}
+        self._datamodel_in_sync = False
 
     def _create(self, profile_id):
         return ProfileRules(profile_id,
@@ -57,9 +58,23 @@ class RulesManager(ReferenceManager):
                    profile_or_none)
         active_profile.on_profile_update(profile_or_none, async=True)
 
+    def _maybe_start(self, obj_id, in_sync=False):
+        in_sync |= self._datamodel_in_sync
+        if in_sync or obj_id in self.rules_by_profile_id:
+            _log.debug("Profile %s is in-sync, deferring to superclass.",
+                       obj_id)
+            return super(RulesManager, self)._maybe_start(obj_id)
+        else:
+            _log.info("Delaying startup of profile %s because datamodel is"
+                      "not in sync.", obj_id)
+
     @actor_message()
     def on_datamodel_in_sync(self):
-        _log.error("NOT IMPLEMENTED: RulesManager.on_datamodel_in_sync()")
+        if not self._datamodel_in_sync:
+            _log.error("%s: datamodel now in sync, unblocking profile startup",
+                       self)
+            self._datamodel_in_sync = True
+            self._maybe_start_all()
 
     @actor_message()
     def on_rules_update(self, profile_id, profile, force_reprogram=False):
@@ -75,6 +90,12 @@ class RulesManager(ReferenceManager):
             ap = self.objects_by_id[profile_id]
             ap.on_profile_update(profile, force_reprogram=force_reprogram,
                                  async=True)
+        elif profile_id in self.objects_by_id:
+            _log.debug("Checking if the update allows us to start profile %s",
+                       profile_id)
+            # Pass in_sync=True because we now explicitly know this profile is
+            # in sync, even if this is a deletion.
+            self._maybe_start(profile_id, in_sync=True)
 
 
 class ProfileRules(RefCountedActor):
@@ -159,7 +180,7 @@ class ProfileRules(RefCountedActor):
                     _log.info("%s unreferenced, removing our chains", self)
                     self._delete_chains()
                     self._ipset_refs.discard_all()
-                    self._ipset_refs = None # Break ref cycle.
+                    self._ipset_refs = None  # Break ref cycle.
                     self._profile = None
                     self._pending_profile = None
                 finally:
