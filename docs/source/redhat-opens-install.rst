@@ -78,7 +78,7 @@ For Juno::
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm/
+    baseurl=http://binaries.projectcalico.org/rpm_juno/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
