@@ -24,6 +24,14 @@ and then accessing them via `<docker-host-ip>:8080`, you can instead run
 and then access via `<container-ip>:80`.  No more ephemeral ports, or port conflicts over
 which container gets to bind to port 80 (or any other port)!
 
+## Can Calico containers use any IP address within a pool, even subnet 
+network/broadcast addresses?
+
+Yes!  Calico is fully routed, so all IP address within a Calico pool are usable as 
+private IP addresses to assign to a workload.  This means addresses commonly 
+reserved in a L2 subnet, such as IPv4 addresses ending in .0 or .255, are perfectly 
+okay to use.
+
 ## How do I get network traffic into and out of my Calico cluster?
 The recommended way to get traffic to/from your Calico network is by peering to 
 your existing data center L3 routers using BGP and by assigning globally 
@@ -60,14 +68,6 @@ Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 Remember: the security profile for the container will need to allow traffic to the 
 internet as well. You can read about how to configure security profiles in the 
 [Advanced Network Policy](AdvancedNetworkPolicy.md) guide.
-
-## Can Calico containers use any IP address within a pool, even subnet 
-network/broadcast addresses?
-
-Yes!  Calico is fully routed, so all IP address within a Calico pool are usable as 
-private IP addresses to assign to a workload.  This means addresses commonly 
-reserved in a L2 subnet, such as IPv4 addresses ending in .0 or .255, are perfectly 
-okay to use.
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
 As discussed, the recommended way to get traffic to containers that 
