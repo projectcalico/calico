@@ -1,0 +1,14 @@
+#!/bin/sh
+# From https://github.com/faisyl/alpine-runit
+env > /etc/envvars
+
+echo >&2 "*** Running: rc.local"
+/etc/rc.local
+retval=$?
+if [ $retval -ne 0 ];
+then
+    echo >&2 "*** Failed with return value: $?"
+    exit $retval
+fi
+
+exec /sbin/runsvdir -P /etc/service

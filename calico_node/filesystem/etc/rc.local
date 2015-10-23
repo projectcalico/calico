@@ -1,7 +1,3 @@
-#!/bin/bash
-# Record current boot time. Helps with debugging.
-date > /tmp/boottime.txt
-
 if [ "$CALICO_NETWORKING" == "false" ]; then
 	# If running in policy only mode, we don't need to run BIRD / Confd.
 	echo "Running in policy-only mode - disable BIRD and Confd"
@@ -11,5 +7,5 @@ if [ "$CALICO_NETWORKING" == "false" ]; then
 else
     # Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
     # felix to start.  Don't fail startup if this confd execution fails.
-    ./confd -confdir=. -onetime -node ${ETCD_AUTHORITY} || true
+    confd -confdir=. -onetime -node ${ETCD_AUTHORITY} || true
 fi
