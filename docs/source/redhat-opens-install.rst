@@ -36,7 +36,8 @@ Prerequisites
 
 Before starting this you will need the following:
 
--  One or more machines running RHEL 7, with OpenStack Juno or Kilo installed.
+-  One or more machines running RHEL 7, with OpenStack Juno, Kilo or Liberty
+   installed.
 -  SSH access to these machines.
 -  Working DNS between these machines (use ``/etc/hosts`` if you don't
    have DNS on your network).
@@ -53,13 +54,17 @@ Install OpenStack
 If you haven't already done so, install Openstack with Neutron and ML2 networking.
 Instructions for installing OpenStack on RHEL can be found here --
 `Juno <http://docs.openstack.org/juno/install-guide/install/yum/content/index.html>`__ /
-`Kilo <http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html>`__.
+`Kilo <http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html>`__ /
+`Liberty <http://docs.openstack.org/liberty/index.html>`__.
 
+At the time of writing the Liberty guide isn't yet available, but you can use
+PackStack instead: `https://www.rdoproject.org/QuickStart`__.
 
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you're using CentOS, check the yum priorities plugin is installed::
+If you're using CentOS with Juno or Kilo, check the yum priorities plugin is
+installed::
 
     yum install yum-plugin-priorities
 
@@ -94,6 +99,18 @@ For Kilo::
     priority=97
     EOF
 
+For Liberty (and future OpenStack releases)::
+
+    cat > /etc/yum.repos.d/calico.repo <<EOF
+    [calico]
+    name=Calico Repository
+    baseurl=http://binaries.projectcalico.org/rpm_stable/
+    enabled=1
+    skip_if_unavailable=0
+    gpgcheck=1
+    gpgkey=http://binaries.projectcalico.org/rpm/key
+    priority=97
+    EOF
 
 .. note:: The priority setting in ``calico.repo`` is needed so that the
           Calico repository can install Calico-enhanced versions of some of the
@@ -292,7 +309,8 @@ On each control node, perform the following steps:
                 left around.
 
 2. Run ``yum update``. This will bring in Calico-specific updates to the
-   OpenStack packages and to ``dnsmasq``.
+   OpenStack packages and to ``dnsmasq``.  (OpenStack updates are not needed
+   for Liberty.)
 
 3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file.  In the `[ml2]`
    section:
@@ -415,7 +433,8 @@ On each compute node, perform the following steps:
        neutron agent-delete <agent-id>
 
 4. Run ``yum update``. This will bring in Calico-specific updates to the
-   OpenStack packages and to ``dnsmasq``.
+   OpenStack packages and to ``dnsmasq``.  For OpenStack Liberty, this step
+   only upgrades ``dnsmasq``.
 
 5. Install and configure the DHCP agent on the compute host:
 
