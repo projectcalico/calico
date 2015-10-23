@@ -24,8 +24,7 @@ and then accessing them via `<docker-host-ip>:8080`, you can instead run
 and then access via `<container-ip>:80`.  No more ephemeral ports, or port conflicts over
 which container gets to bind to port 80 (or any other port)!
 
-## Can Calico containers use any IP address within a pool, even subnet 
-network/broadcast addresses?
+## Can Calico containers use any IP address within a pool, even subnet network/broadcast addresses?
 
 Yes!  Calico is fully routed, so all IP address within a Calico pool are usable as 
 private IP addresses to assign to a workload.  This means addresses commonly 
