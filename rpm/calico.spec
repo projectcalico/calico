@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.2.0
-Release:        0.2.pre%{?dist}
+Release:        1{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -210,6 +210,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 26 2015 Matt Dupre <matt@projectcalico.org> 1.2.0-1
+  - Truncate long output from FailedSystemCall exception.
+  - Add instructions for use with OpenStack Liberty.
+
 * Mon Oct 19 2015 Matt Dupre <matt@projectcalico.org> 1.2.0-0.2.pre
   - Add liveness reporting to Felix.  Felix now reports its liveness into
     etcd and the neutron driver copies that information to the Neutron DB.

@@ -1,3 +1,10 @@
+calico (1.2.0~rc1-1)  trusty; urgency=medium
+
+  * Truncate long output from FailedSystemCall exception.
+  * Add instructions for use with OpenStack Liberty.
+
+ -- Matt Dupre <matt@projectcalico.org>  Mon, 26 Oct 2015 17:50:04 +0000
+
 calico (1.2.0~pre.2-1) trusty; urgency=medium
 
   * Add endpoint status reporting to Felix.  Felix now reports the state of
