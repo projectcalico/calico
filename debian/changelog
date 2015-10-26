@@ -1,3 +1,9 @@
+calico (1.3.0~~smc.1-1) trusty; urgency=medium
+
+  * Private pre-release build.
+
+ -- Shaun Crampton <shaun@projectcalico.org>  Mon, 26 Oct 2015 13:41:00 +0100
+
 calico (1.2.0-1)  trusty; urgency=medium
 
   * Truncate long output from FailedSystemCall exception.
