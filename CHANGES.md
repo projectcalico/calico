@@ -1,11 +1,13 @@
 # Changelog
 
+## 1.2.0
+
 - Add liveness reporting to Felix.  Felix now reports its liveness into
   etcd and the neutron driver copies that information to the Neutron DB.
-  If Felix is down on a host, Neutron will not try to schedule a VM on 
+  If Felix is down on a host, Neutron will not try to schedule a VM on
   that host.
-- Add endpoint status reporting to Felix.  Felix now reports the state of 
-  endpoints into etcd so that the OpenStack plugin can report this 
+- Add endpoint status reporting to Felix.  Felix now reports the state of
+  endpoints into etcd so that the OpenStack plugin can report this
   information into Neutron.  If Felix fails to configure a port, this now
   causes VM creation to fail.
 - Performance enhancements to ipset manipulation.
@@ -16,8 +18,8 @@
 - Felix now sets the default.rp_filter sysctl to ensure that endpoints
   come up with the Kernel's RPF check enabled by default.
 - Optimize Felix's actor framework to reduce message-passing overhead.
-- Fix #768: Increase maximum size of ipsets and make configurable.
-- Fix #769: Truncate long output from FailedSystemCall exception.
+- Truncate long output from FailedSystemCall exception.
+- Add instructions for use with OpenStack Liberty.
 
 ## 1.1.0
 
