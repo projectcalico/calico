@@ -210,12 +210,6 @@ class Config(object):
         self.add_parameter("EndpointReportingDelaySecs",
                            "Minimum delay between per-endpoint status reports",
                            1, value_is_int=True)
-        self.add_parameter("MaxIpsetSize",
-                           "Maximum size of the ipsets that Felix uses to "
-                           "represent profile tag memberships.  Should be set "
-                           "to a value larger than the expected number of "
-                           "IP addresses using a single tag.",
-                           2**20, value_is_int=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
@@ -272,7 +266,6 @@ class Config(object):
             self.parameters["EndpointReportingEnabled"].value
         self.ENDPOINT_REPORT_DELAY = \
             self.parameters["EndpointReportingDelaySecs"].value
-        self.MAX_IPSET_SIZE = self.parameters["MaxIpsetSize"].value
 
         self._validate_cfg(final=final)
 
@@ -427,10 +420,6 @@ class Config(object):
         if self.ENDPOINT_REPORT_DELAY < 0:
             log.warning("Endpoint status delay is negative, defaulting to 1.")
             self.ENDPOINT_REPORT_DELAY = 1
-
-        if self.MAX_IPSET_SIZE <= 0:
-            log.warning("Max ipset size is non-positive, defaulting to 2^20.")
-            self.MAX_IPSET_SIZE = 2**20
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more
