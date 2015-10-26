@@ -3,6 +3,6 @@ greenlet
 netaddr
 python-etcd>=0.4.1
 posix-spawn>=0.2.post6
-datrie
-ijson
-msgpack-python
+datrie>=0.7
+ijson>=2.2
+msgpack-python>=0.3
