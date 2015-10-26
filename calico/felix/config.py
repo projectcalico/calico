@@ -437,11 +437,11 @@ class Config(object):
             # config to read.
             return
 
-        for name, parameter in self.parameters.iteritems():
+        for parameter in self.parameters.itervalues():
             if parameter.value is None:
                 # No value, not even a default
                 raise ConfigException("Missing undefaulted value",
-                                      self.parameters["InterfacePrefix"])
+                                      parameter)
 
     def _warn_unused_cfg(self, cfg_dict, source):
         # Warn about any unexpected items - i.e. ones we have not used.
