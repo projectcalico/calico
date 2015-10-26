@@ -1,4 +1,4 @@
-calico (1.2.0~rc1-1)  trusty; urgency=medium
+calico (1.2.0-1)  trusty; urgency=medium
 
   * Truncate long output from FailedSystemCall exception.
   * Add instructions for use with OpenStack Liberty.
