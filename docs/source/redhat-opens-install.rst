@@ -58,7 +58,7 @@ Instructions for installing OpenStack on RHEL can be found here --
 `Liberty <http://docs.openstack.org/liberty/index.html>`__.
 
 At the time of writing the Liberty guide isn't yet available, but you can use
-PackStack instead: `https://www.rdoproject.org/QuickStart`__.
+PackStack instead: https://www.rdoproject.org/QuickStart.
 
 Configure YUM repositories
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
