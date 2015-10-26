@@ -261,6 +261,7 @@ class TestEtcdWatcher(BaseTestCase):
         """
         Test set for the IP of a host.
         """
+        self.watcher._been_in_sync = True
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
@@ -284,6 +285,7 @@ class TestEtcdWatcher(BaseTestCase):
         """
         Test set for the IP of a host.
         """
+        self.watcher._been_in_sync = True
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.reset_mock()
@@ -298,6 +300,7 @@ class TestEtcdWatcher(BaseTestCase):
         """
         Test set for the IP of a host.
         """
+        self.watcher._been_in_sync = True
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.reset_mock()
@@ -345,7 +348,7 @@ class TestEtcdWatcher(BaseTestCase):
             empty_dir,
             missing_ep,
         ]
-        self.watcher.clean_up_endpoint_statuses(set([ep_id]))
+        self.watcher.clean_up_endpoint_statuses()
 
         # Missing endpoint should have been marked for cleanup.
         self.m_status_rep.mark_endpoint_dirty.assert_called_once_with(
@@ -359,13 +362,13 @@ class TestEtcdWatcher(BaseTestCase):
     def test_clean_up_endpoint_status_not_found(self):
         self.m_config.REPORT_ENDPOINT_STATUS = True
         self.client.read.side_effect = etcd.EtcdKeyNotFound()
-        self.watcher.clean_up_endpoint_statuses(set())
+        self.watcher.clean_up_endpoint_statuses()
         self.assertFalse(self.m_status_rep.mark_endpoint_dirty.called)
 
     def test_clean_up_endpoint_status_disabled(self):
         self.m_config.REPORT_ENDPOINT_STATUS = False
         self.client.read.side_effect = self.failureException
-        self.watcher.clean_up_endpoint_statuses(set())
+        self.watcher.clean_up_endpoint_statuses()
 
 
 class TestEtcdReporting(BaseTestCase):

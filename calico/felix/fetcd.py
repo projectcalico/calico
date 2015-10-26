@@ -293,6 +293,9 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         self._status_reporter = status_reporter
         self.hosts_ipset = hosts_ipset
 
+        # Whether we've been in sync with etcd at some point.
+        self._been_in_sync = False
+
         # Keep track of the config loaded from etcd so we can spot if it
         # changes.
         self.last_global_config = None
@@ -482,7 +485,10 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         _log.info("etcd driver status changed to %s", status)
         if status == STATUS_IN_SYNC:
             self.begin_polling.wait()  # Make sure splitter is set.
+            self._been_in_sync = True
             self.splitter.on_datamodel_in_sync(async=True)
+            self._update_hosts_ipset()
+            self.clean_up_endpoint_statuses()
 
     def start_driver(self):
         _log.info("Creating server socket.")
@@ -516,95 +522,10 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
 
         return update_conn
 
-    #
-    # def _on_snapshot_loaded(self, etcd_snapshot_response):
-    #     """
-    #     Loads a snapshot from etcd and passes it to the update splitter.
-    #
-    #     :raises ResyncRequired: if the Ready flag is not set in the snapshot.
-    #     """
-    #     start_time = monotonic_time()
-    #     rules_by_id = {}
-    #     tags_by_id = {}
-    #     endpoints_by_id = {}
-    #     ipv4_pools_by_id = {}
-    #     self.endpoint_ids_per_host.clear()
-    #     self.ipv4_by_hostname.clear()
-    #     still_ready = False
-    #     for child in etcd_snapshot_response.children:
-    #         trie_key = [intern(s.encode("utf8")) for s in
-    #                     child.key.split("/")][2:]
-    #         if trie.get(trie_key) == child.modifiedIndex and "host" in trie_key:
-    #             continue
-    #         trie[trie_key] = child.modifiedIndex
-    #
-    #         profile_id, rules = parse_if_rules(child)
-    #         if profile_id:
-    #             rules_by_id[profile_id] = rules
-    #             continue
-    #         profile_id, tags = parse_if_tags(child)
-    #         if profile_id:
-    #             tags_by_id[profile_id] = tags
-    #             continue
-    #         endpoint_id, endpoint = parse_if_endpoint(self._config, child)
-    #         if endpoint_id and endpoint:
-    #             endpoints_by_id[endpoint_id] = endpoint
-    #             self.endpoint_ids_per_host[endpoint_id.host].add(endpoint_id)
-    #             continue
-    #         pool_id, pool = parse_if_ipam_v4_pool(child)
-    #         if pool_id and pool:
-    #             ipv4_pools_by_id[pool_id] = pool
-    #             continue
-    #         if self._config.IP_IN_IP_ENABLED:
-    #             hostname, ip = parse_if_host_ip(child)
-    #             if hostname and ip:
-    #                 self.ipv4_by_hostname[hostname] = ip
-    #                 continue
-    #
-    #         # Double-check the flag hasn't changed since we read it before.
-    #         if child.key == READY_KEY:
-    #             if child.value == "true":
-    #                 still_ready = True
-    #             else:
-    #                 _log.warning("Aborting resync because ready flag was"
-    #                              "unset since we read it.")
-    #                 raise ResyncRequired()
-    #
-    #     if not still_ready:
-    #         _log.warn("Aborting resync; ready flag no longer present.")
-    #         raise ResyncRequired()
-    #
-    #     # We now know exactly which endpoints are on this host, use that to
-    #     # clean up any endpoint statuses that should now be gone.
-    #     our_endpoints_ids = self.endpoint_ids_per_host[self._config.HOSTNAME]
-    #     self.clean_up_endpoint_statuses(our_endpoints_ids)
-    #
-    #     # Actually apply the snapshot. This does not return anything, but
-    #     # just sends the relevant messages to the relevant threads to make
-    #     # all the processing occur.
-    #     _log.info("Snapshot parsed in %.2fs, passing to update splitter",
-    #               monotonic_time() - start_time)
-    #     self.splitter.apply_snapshot(rules_by_id,
-    #                                  tags_by_id,
-    #                                  endpoints_by_id,
-    #                                  ipv4_pools_by_id,
-    #                                  async=True)
-    #     if self._config.IP_IN_IP_ENABLED:
-    #         # We only support IPv4 for host tracking right now so there's not
-    #         # much point in going via the splitter.
-    #         # FIXME Support IP-in-IP for IPv6.
-    #         _log.info("Sending (%d) host IPs to ipset.",
-    #                   len(self.ipv4_by_hostname))
-    #         self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-    #                                          async=True)
-
-    def clean_up_endpoint_statuses(self, our_endpoints_ids):
+    def clean_up_endpoint_statuses(self):
         """
         Mark any endpoint status reports for non-existent endpoints
         for cleanup.
-
-        :param set our_endpoints_ids: Set of endpoint IDs for endpoints on
-               this host.
         """
         if not self._config.REPORT_ENDPOINT_STATUS:
             _log.debug("Endpoint status reporting disabled, ignoring.")
@@ -619,12 +540,11 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         except EtcdKeyNotFound:
             _log.info("No endpoint statuses found, nothing to clean up")
         else:
+            # Mark all statuses we find as dirty.  This will result in any
+            # unknown endpoints being cleaned up.
             for node in response.leaves:
                 combined_id = get_endpoint_id_from_key(node.key)
-                if combined_id and combined_id not in our_endpoints_ids:
-                    # We found an endpoint in our status reporting tree that
-                    # wasn't in the main tree.  Mark it as dirty so the status
-                    # reporting thread will clean it up.
+                if combined_id:
                     _log.debug("Endpoint %s removed by resync, marking "
                                "status key for cleanup",
                                combined_id)
@@ -699,8 +619,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             _log.warning("Invalid IP for hostname %s: %s, treating as "
                          "deletion", hostname, response.value)
             self.ipv4_by_hostname.pop(hostname, None)
-        self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                         async=True)
+        self._update_hosts_ipset()
 
     def on_host_ip_delete(self, response, hostname):
         if not self._config.IP_IN_IP_ENABLED:
@@ -708,8 +627,14 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                        response.key)
             return
         if self.ipv4_by_hostname.pop(hostname, None):
-            self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                             async=True)
+            self._update_hosts_ipset()
+
+    def _update_hosts_ipset(self):
+        if not self._been_in_sync:
+            _log.debug("Deferring update to hosts ipset until we're in-sync")
+            return
+        self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
+                                         async=True)
 
     def _on_config_updated(self, response, config_param):
         new_value = response.value
