@@ -541,11 +541,10 @@ class TestIpset(BaseTestCase):
         self.ipset.replace_members(set(["10.0.0.1"]))
         exp_calls = [
             call(["ipset", "destroy", "foo-tmp"]),
+            call(["ipset", "list", "foo"]),
             call(
                 ["ipset", "restore"],
-                input_str='create foo hash:ip family inet '
-                          'maxelem 1048576 --exist\n'
-                          'create foo-tmp hash:ip family inet '
+                input_str='create foo-tmp hash:ip family inet '
                           'maxelem 1048576 --exist\n'
                           'flush foo-tmp\n'
                           'add foo-tmp 10.0.0.1\n'
@@ -565,11 +564,10 @@ class TestIpset(BaseTestCase):
         exp_calls = [
             call(["ipset", "destroy", "foo-tmp"]),
             call(['ipset', 'list', 'foo-tmp']),
+            call(['ipset', 'list', 'foo']),
             call(
                 ["ipset", "restore"],
-                input_str='create foo hash:ip family inet '
-                          'maxelem 1048576 --exist\n'
-                          'create foo-tmp hash:ip family inet '
+                input_str='create foo-tmp hash:ip family inet '
                           'maxelem 1048576 --exist\n'
                           'flush foo-tmp\n'
                           'add foo-tmp 10.0.0.1\n'
@@ -605,6 +603,7 @@ class TestIpset(BaseTestCase):
            side_effect=iter([
                FailedSystemCall("Blah", [], None, None, "err"),
                None,
+               FailedSystemCall("No ipset", [], 1, None, "does not exist"),
                None]))
     def test_update_members_err(self, m_check_call):
         # First call to update_members will fail, leading to a retry.
@@ -618,6 +617,7 @@ class TestIpset(BaseTestCase):
                             'add foo 10.0.0.1\n'
                             'COMMIT\n'),
             call(["ipset", "destroy", "foo-tmp"]),
+            call(["ipset", "list", "foo"]),
             call(["ipset", "restore"],
                  input_str='create foo hash:ip family inet '
                            'maxelem 1048576 --exist\n'

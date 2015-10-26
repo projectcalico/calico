@@ -717,9 +717,19 @@ class Ipset(object):
                 _log.error("Failed to delete temporary ipset %s.  Subsequent "
                            "commands may fail.",
                            self.temp_set_name)
-        input_lines = [
-            # Ensure both the main set and the temporary set exist.
-            self._create_cmd(self.set_name),
+        if not self.exists():
+            # Ensure the main set exists so we can re-use the atomic swap
+            # code below.
+            _log.debug("Main set doesn't exist, creating it...")
+            input_lines = [self._create_cmd(self.set_name)]
+        else:
+            # Avoid trying to create the main set in case we try to create it
+            # with differing parameters (which fails even with the --exist
+            # flag).
+            _log.debug("Main set exists, skipping create.")
+            input_lines = []
+        input_lines += [
+            # Ensure the temporary set exists.
             self._create_cmd(self.temp_set_name),
             # Flush the temporary set.  This is a no-op unless we failed to
             # delete the set above.
