@@ -454,7 +454,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                 driver_log_file = felix_log_file + "-driver"
             else:
                 driver_log_file = None
-            driver_sck.send(msgpack.dumps({
+            driver_sck.sendall(msgpack.dumps({
                 MSG_KEY_TYPE: MSG_TYPE_CONFIG,
                 MSG_KEY_LOG_FILE: driver_log_file,
                 MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
