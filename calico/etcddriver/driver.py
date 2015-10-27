@@ -61,6 +61,18 @@ _log = logging.getLogger(__name__)
 
 FLUSH_THRESHOLD = 200
 
+# TODO: trigger immediate resync if these are deleted?
+# RESYNC_KEYS = [
+#     VERSION_DIR,
+#     POLICY_DIR,
+#     PROFILE_DIR,
+#     CONFIG_DIR,
+#     HOST_DIR,
+#     IPAM_DIR,
+#     IPAM_V4_DIR,
+#     POOL_V4_DIR,
+# ]
+
 
 class EtcdDriver(object):
     def __init__(self, felix_sck):

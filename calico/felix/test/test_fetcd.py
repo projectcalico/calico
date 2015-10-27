@@ -25,7 +25,7 @@ from calico.datamodel_v1 import EndpointId
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
-from calico.felix.fetcd import (_FelixEtcdWatcher, ResyncRequired, EtcdAPI,
+from calico.felix.fetcd import (_FelixEtcdWatcher, EtcdAPI,
     die_and_restart, EtcdStatusReporter, combine_statuses)
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase, JSONString
@@ -150,13 +150,6 @@ class TestEtcdWatcher(BaseTestCase):
         self.watcher.splitter = self.m_splitter
         self.client = Mock()
         self.watcher.client = self.client
-
-    def test_resync_flag(self):
-        self.watcher.resync_after_current_poll = True
-        self.watcher.next_etcd_index = 1
-        self.assertRaises(ResyncRequired,
-                          self.watcher.wait_for_etcd_event)
-        self.assertFalse(self.watcher.resync_after_current_poll)
 
     def test_endpoint_set(self):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
@@ -327,48 +320,6 @@ class TestEtcdWatcher(BaseTestCase):
         m_response.action = action
         m_response.value = value
         self.watcher.dispatcher.handle_event(m_response)
-
-    def test_clean_up_endpoint_status(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
-        ep_id = EndpointId("hostname",
-                           "openstack",
-                           "workloadid",
-                           "endpointid")
-
-        empty_dir = Mock()
-        empty_dir.key = ("/calico/felix/v1/host/hostname/workload/"
-                         "openstack/foobar")
-        empty_dir.dir = True
-
-        missing_ep = Mock()
-        missing_ep.key = ("/calico/felix/v1/host/hostname/workload/"
-                          "openstack/aworkload/endpoint/anendpoint")
-
-        self.client.read.return_value.leaves = [
-            empty_dir,
-            missing_ep,
-        ]
-        self.watcher.clean_up_endpoint_statuses()
-
-        # Missing endpoint should have been marked for cleanup.
-        self.m_status_rep.mark_endpoint_dirty.assert_called_once_with(
-            EndpointId("hostname",
-                       "openstack",
-                       "aworkload",
-                       "anendpoint"),
-            async=True
-        )
-
-    def test_clean_up_endpoint_status_not_found(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
-        self.client.read.side_effect = etcd.EtcdKeyNotFound()
-        self.watcher.clean_up_endpoint_statuses()
-        self.assertFalse(self.m_status_rep.mark_endpoint_dirty.called)
-
-    def test_clean_up_endpoint_status_disabled(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = False
-        self.client.read.side_effect = self.failureException
-        self.watcher.clean_up_endpoint_statuses()
 
 
 class TestEtcdReporting(BaseTestCase):
@@ -635,3 +586,50 @@ class TestEtcdStatusReporter(BaseTestCase):
             self.assertEqual(result, expected,
                              "Expected %r and %r to combine to %s but got %r" %
                              (lhs, rhs, expected, result))
+
+    def test_clean_up_endpoint_status(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        ep_id = EndpointId("foo",
+                           "openstack",
+                           "workloadid",
+                           "endpointid")
+
+        empty_dir = Mock()
+        empty_dir.key = ("/calico/felix/v1/host/foo/workload/"
+                         "openstack/foobar")
+        empty_dir.dir = True
+
+        missing_ep = Mock()
+        missing_ep.key = ("/calico/felix/v1/host/foo/workload/"
+                          "openstack/aworkload/endpoint/anendpoint")
+
+        self.m_client.read.return_value.leaves = [
+            empty_dir,
+            missing_ep,
+        ]
+        with patch.object(self.rep, "_mark_endpoint_dirty") as m_mark:
+            self.rep.clean_up_endpoint_statuses(async=True)
+            self.step_actor(self.rep)
+
+            # Missing endpoint should have been marked for cleanup.
+            m_mark.assert_called_once_with(
+                EndpointId("foo",
+                           "openstack",
+                           "aworkload",
+                           "anendpoint")
+            )
+
+    def test_clean_up_endpoint_status_not_found(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.m_client.read.side_effect = etcd.EtcdKeyNotFound()
+        with patch.object(self.rep, "_mark_endpoint_dirty") as m_mark:
+            self.rep.clean_up_endpoint_statuses(async=True)
+            self.step_actor(self.rep)
+            self.assertFalse(m_mark.called)
+
+    def test_clean_up_endpoint_status_disabled(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = False
+        self.m_client.read.side_effect = self.failureException
+        self.rep.clean_up_endpoint_statuses(async=True)
+        self.step_actor(self.rep)
+
