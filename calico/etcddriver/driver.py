@@ -34,6 +34,8 @@ The driver is responsible for
 import errno
 from httplib import HTTPException
 from io import BytesIO
+from calico.etcdutils import ACTION_MAPPING
+
 try:
     import simplejson as json
 except ImportError:
@@ -54,24 +56,14 @@ from urllib3.exceptions import ReadTimeoutError
 from calico.common import complete_logging
 from calico.etcddriver.protocol import *
 from calico.monotonic import monotonic_time
-from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, dir_for_per_host_config
+from calico.datamodel_v1 import (
+    READY_KEY, CONFIG_DIR, dir_for_per_host_config, VERSION_DIR
+)
 from calico.etcddriver.hwm import HighWaterTracker
 
 _log = logging.getLogger(__name__)
 
 FLUSH_THRESHOLD = 200
-
-# TODO: trigger immediate resync if these are deleted?
-# RESYNC_KEYS = [
-#     VERSION_DIR,
-#     POLICY_DIR,
-#     PROFILE_DIR,
-#     CONFIG_DIR,
-#     HOST_DIR,
-#     IPAM_DIR,
-#     IPAM_V4_DIR,
-#     POOL_V4_DIR,
-# ]
 
 
 class EtcdDriver(object):
@@ -642,11 +634,28 @@ class EtcdDriver(object):
                         break
                     node = etcd_resp["node"]
                     key = node["key"]
+                    action = ACTION_MAPPING[etcd_resp["action"]]
+                    is_dir = node.get("dir", False)
                     value = node.get("value")
+                    if is_dir:
+                        if action != "delete":
+                            # Just ignore sets to directories, we only track
+                            # leaves.
+                            _log.debug("Skipping non-delete to dir %s", key)
+                            continue
+                        else:
+                            if key == VERSION_DIR:
+                                # Special case: if the whole keyspace is
+                                # deleted, that implies the ready flag is gone
+                                # too; resync rather than generating deletes
+                                # for every key.
+                                _log.warning("Whole %s deleted, resyncing",
+                                             VERSION_DIR)
+                                break
                     modified_index = node["modifiedIndex"]
                 except (KeyError, TypeError, ValueError):
                     _log.exception("Unexpected format for etcd response: %r;"
-                                   "trigering a resync.",
+                                   "triggering a resync.",
                                    resp_body)
                     break
                 else:
