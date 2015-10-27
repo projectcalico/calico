@@ -25,9 +25,9 @@ sudo mv calicoctl /usr/bin/
 ```
 
 ## Configuring the Master
-On your master, you will need to setup an etcd directory specifically for Calico. To do so, you will need to download our etcd manifest
+On your master, you will need to setup an etcd instance specifically for Calico. To do so, you will need to download our etcd manifest
 ```
-wget https://raw.githubusercontent.com/projectcalico/calico-kubernetes-coreos-demo/master/manifests/calico-etcd.manifest
+wget https://raw.githubusercontent.com/projectcalico/calico-kubernetes/master/config/master/calico-etcd.manifest 
 ```
 
 Replace all instances of `<PRIVATE_IPV4>` with your master's IP. Then, place the manifest file in the `/etc/kubernetes/manifests/` directory. 
@@ -37,15 +37,15 @@ sudo mv calico-etcd.manifest /etc/kubernetes/manifests/
 
 After a short delay, the kubelet on your master will automatically create a container for the new etcd which can be accessed on port 6666 of your master.
 
-Next, use `calicoctl` to spin up the `calico/node` container and install the [networking plugin](https://github.com/projectcalico/calico-kubernetes) 
+Next, use `calicoctl` to spin up the `calico/node` container and install the Calico [network plugin](https://github.com/projectcalico/calico-kubernetes) for Kubernetes. 
 ```
-sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl node --kubernetes --kube-plugin-version=v0.4.0
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes --kube-plugin-version=v0.4.0
 ```
 
-Then you will need to set up an IP pool with IP-in-IP enabled. This is a [necessary step](https://github.com/projectcalico/calico-docker/blob/master/docs/FAQ.md#can-i-run-calico-in-a-public-cloud-environment) in any public cloud environment.
+Then you will need to set up an IP pool with IP-in-IP enabled. This is a [necessary step](../FAQ.md#can-i-run-calico-in-a-public-cloud-environment) in any public cloud environment.
 
 ```
-sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
 
 ### Authentication for the API Server
@@ -73,26 +73,26 @@ TOKEN=$(kubectl describe secret calico-token | grep token: | cut -f 2)
 Hold on to this token, as you will need it to configure your nodes.
 
 ## Configuring the Nodes
-On each node, use `calicoctl` to spin up the `calico/node` container and install the [networking plugin](https://github.com/projectcalico/calico-kubernetes) 
+On each node, use `calicoctl` to spin up the `calico/node` container and install the Calico [network plugin](https://github.com/projectcalico/calico-kubernetes) for Kubernetes. 
 ```
-sudo ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl node --kubernetes --kube-plugin-version=v0.3.0
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes --kube-plugin-version=v0.4.0
 ```
 
 To start using the Calico network plugin, we will need to modify the existing kubelet process on each of your nodes.
 
 First, you will need to create a file, `/etc/network-environment`, with the following contents:
 ```
-ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666
-KUBE_API_ROOT=https://<MASTER_PRIVATE_IPV4>:443/api/v1/
+ETCD_AUTHORITY=<MASTER_IPV4>:6666
+KUBE_API_ROOT=https://<MASTER_IPV4>:443/api/v1/
 KUBE_AUTH_TOKEN=<TOKEN>
 CALICO_IPAM=true
 ```
 
-In your kubelet service config file (`/lib/systemd/system/kubelet.service`), add the following line just before the `ExecStart`.
+In your kubelet service systemd unit file (default: `/lib/systemd/system/kubelet.service`), add the following line to the `[Service]` section, just before the `ExecStart` line.
 ```
 EnvironmentFile=/etc/network-environment
 ```
-You will also need to append the `--network_plugin=calico` flag to the `ExecStart` command.
+You will also need to append the `--network-plugin=calico` flag to the `ExecStart` command.
 
 Restart the kubelet.
 ```
@@ -136,8 +136,6 @@ spec:
 
 Create the pod with `kubectl create -f busybox.yaml`
 
-And check it's Calico endpoint with `ETCD_AUTHORITY=<MASTER_PRIVATE_IPV4>:6666 calicoctl endpoint show --detailed`
-
-For more information on configuring Calico for Kubernetes, see our [Kubernetes Integration docs](KubernetesIntegration.md).
+And check its Calico endpoint with `ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl endpoint show --detailed`.  You should see that both an IP address and a profile have been assigned to the pod.
 
 For more information on programming Calico Policy in Kubernetes, see our [Kubernetes Policy docs](KubernetesPolicy.md).
