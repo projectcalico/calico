@@ -110,6 +110,10 @@ class EtcdDriver(object):
         # from Felix.  Triggers the first resync.
         self._config_received = Event()
 
+        # Flag to request a resync.  Set by the reader thread, polled by the
+        # resync and merge thread.
+        self._resync_requested = False
+
     def start(self):
         """Starts the driver's reader and resync threads."""
         self._reader_thread.start()
@@ -158,6 +162,8 @@ class EtcdDriver(object):
                         self._handle_init(msg)
                     elif msg_type == MSG_TYPE_CONFIG:
                         self._handle_config(msg)
+                    elif msg_type == MSG_TYPE_RESYNC:
+                        self._handle_resync(msg)
                     else:
                         _log.warning("Unexpected message from Felix")
         finally:
@@ -190,6 +196,10 @@ class EtcdDriver(object):
                          gevent_in_use=False)
         self._config_received.set()
         _log.info("Received config from Felix: %s", msg)
+
+    def _handle_resync(self, msg):
+        _log.info("Got resync message from felix: %s", msg)
+        self._resync_requested = True
 
     def _resync_and_merge(self):
         """
@@ -249,6 +259,7 @@ class EtcdDriver(object):
                 raise
             finally:
                 self._first_resync = False
+                self._resync_requested = False
 
     def _wait_for_ready(self):
         """
@@ -453,10 +464,14 @@ class EtcdDriver(object):
         :raises DriverShutdown:
         :raises WatcherDied:
         :raises FelixWriteFailed:
+        :raises ResyncRequested:
         """
         if self._watcher_queue is None:
             raise WatcherDied()
         while not self._stop_event.is_set():
+            if self._resync_requested and self._watcher_stop_event:
+                _log.info("Resync requested, triggering one.")
+                self._watcher_stop_event.set()
             try:
                 event = self._watcher_queue.get(timeout=1)
             except Empty:

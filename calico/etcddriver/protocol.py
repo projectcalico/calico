@@ -45,6 +45,9 @@ STATUS_WAIT_FOR_READY = "wait-for-ready"
 STATUS_RESYNC = "resync"
 STATUS_IN_SYNC = "in-sync"
 
+# Force resync message Felix->Driver.
+MSG_TYPE_RESYNC = "resync"
+
 # Update message Driver -> Felix.
 MSG_TYPE_UPDATE = "u"
 MSG_KEY_KEY = "k"

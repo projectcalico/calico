@@ -27,6 +27,7 @@ import logging
 import socket
 import subprocess
 import msgpack
+import select
 from calico.etcddriver.protocol import *
 from calico.monotonic import monotonic_time
 
@@ -240,7 +241,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         :param str reason: Optional reason to log out.
         """
         _log.info("Forcing a resync with etcd.  Reason: %s.", reason)
-        self._watcher.resync_after_current_poll = True
+        self._watcher.resync_requested = True
 
         if self._config.REPORT_ENDPOINT_STATUS:
             _log.info("Endpoint status reporting enabled, marking existing "
@@ -298,7 +299,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         # Forces a resync after the current poll if set.  Safe to set from
         # another thread.  Automatically reset to False after the resync is
         # triggered.
-        self.resync_after_current_poll = False  # FIXME Periodic resync
+        self.resync_requested = False
         self.dispatcher = PathDispatcher()
 
         # Register for events when values change.
@@ -349,8 +350,12 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         unpacker = msgpack.Unpacker()
         msgs_processed = 0
         while True:
-            data = driver_sck.recv(16384)
-            unpacker.feed(data)
+            # Use select to impose a timeout on how long we block so that we
+            # periodically check the resync flag.
+            read_ready, _, _ = select.select([driver_sck], [], [], 1)
+            if read_ready:
+                data = driver_sck.recv(16384)
+                unpacker.feed(data)
             for msg in unpacker:
                 # Optimization: put update first in the "switch"
                 # block because it's on the critical path.
@@ -370,6 +375,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                     # Sleep must be non-zero to work around gevent
                     # issue where we could be immediately rescheduled.
                     gevent.sleep(0.000001)
+            if self.resync_requested:
+                self.resync_requested = False
+                driver_sck.sendall(
+                    msgpack.dumps({
+                        MSG_KEY_TYPE: MSG_TYPE_RESYNC,
+                    })
+                )
         _log.info("%s.loop() stopped due to self.stop == True", self)
 
     def _on_update_from_driver(self, msg):
