@@ -473,13 +473,14 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         """
         status = msg[MSG_KEY_STATUS]
         _log.info("etcd driver status changed to %s", status)
-        if status == STATUS_IN_SYNC:
-            # We're now in sync, tell the splitter so that we can complete
-            # our start-of day cleanup etc.
+        if status == STATUS_IN_SYNC and not self._been_in_sync:
+            # We're now in sync, tell the Actors that need to do start-of-day
+            # cleanup.
             self.begin_polling.wait()  # Make sure splitter is set.
             self._been_in_sync = True
             self.splitter.on_datamodel_in_sync(async=True)
-            self._status_reporter.clean_up_endpoint_statuses(async=True)
+            if self._config.REPORT_ENDPOINT_STATUS:
+                self._status_reporter.clean_up_endpoint_statuses(async=True)
             self._update_hosts_ipset()
 
     def start_driver(self):
@@ -688,8 +689,8 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
 
     def _finish_msg_batch(self, batch, results):
         if not self._config.REPORT_ENDPOINT_STATUS:
-            _log.error("StatusReporter called even though status reporting "
-                       "disabled.  Ignoring.")
+            _log.warning("StatusReporter called even though status reporting "
+                         "disabled.  Ignoring.")
             self._endpoint_status[IPV4].clear()
             self._endpoint_status[IPV6].clear()
             self._newer_dirty_endpoints.clear()

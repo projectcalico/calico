@@ -473,6 +473,7 @@ class EtcdDriver(object):
             if self._resync_requested and self._watcher_stop_event:
                 _log.info("Resync requested, triggering one.")
                 self._watcher_stop_event.set()
+                raise WatcherDied()
             try:
                 event = self._watcher_queue.get(timeout=1)
             except Empty:
