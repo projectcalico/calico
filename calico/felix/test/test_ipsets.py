@@ -73,7 +73,9 @@ class TestIpsetManager(BaseTestCase):
     def reset(self):
         self.created_refs = defaultdict(list)
         self.acquired_refs = {}
-        self.mgr = IpsetManager(IPV4)
+        self.config = Mock()
+        self.config.MAX_IPSET_SIZE = 1234
+        self.mgr = IpsetManager(IPV4, self.config)
         self.m_create = Mock(spec=self.mgr._create,
                              side_effect = self.m_create)
         self.mgr._create = self.m_create
@@ -92,6 +94,17 @@ class TestIpsetManager(BaseTestCase):
         ipset.tag = tag_id
         self.created_refs[tag_id].append(ipset)
         return ipset
+
+    def test_create(self):
+        with patch("calico.felix.ipsets.Ipset") as m_Ipset:
+            mgr = IpsetManager(IPV4, self.config)
+            tag_ipset = mgr._create("tagid")
+        self.assertEqual(tag_ipset.tag, "tagid")
+        self.assertEqual(tag_ipset.tag, "tagid")
+        m_Ipset.assert_called_once_with('felix-v4-tagid',
+                                        'felix-tmp-v4-tagid',
+                                        'inet', 'hash:ip',
+                                        max_elem=1234)
 
     def test_tag_then_endpoint(self):
         # Send in the messages.
@@ -446,6 +459,8 @@ class TestIpsetActor(BaseTestCase):
     def setUp(self):
         super(TestIpsetActor, self).setUp()
         self.ipset = Mock(spec=Ipset)
+        self.ipset.max_elem = 1234
+        self.ipset.set_name = "felix-a_set_name"
         self.actor = IpsetActor(self.ipset)
 
     def test_sync_to_ipset(self):
@@ -509,6 +524,12 @@ class TestIpsetActor(BaseTestCase):
             self.actor._sync_to_ipset()
         self.ipset.reset_mock()
 
+    def test_members_too_big(self):
+        self.actor.members = ["1.2.3.4"] * 2000
+        self.actor._sync_to_ipset()
+        # Check we return early without updating programmed_members.
+        self.assertEqual(self.actor.programmed_members, None)
+
 
 class TestIpset(BaseTestCase):
     def setUp(self):
@@ -518,16 +539,44 @@ class TestIpset(BaseTestCase):
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_replace_members(self, m_check_call):
         self.ipset.replace_members(set(["10.0.0.1"]))
-        m_check_call.assert_called_once_with(
-            ["ipset", "restore"],
-            input_str='create foo hash:ip family inet --exist\n'
-                      'create foo-tmp hash:ip family inet --exist\n'
-                      'flush foo-tmp\n'
-                      'add foo-tmp 10.0.0.1\n'
-                      'swap foo foo-tmp\n'
-                      'destroy foo-tmp\n'
-                      'COMMIT\n'
-        )
+        exp_calls = [
+            call(["ipset", "destroy", "foo-tmp"]),
+            call(["ipset", "list", "foo"]),
+            call(
+                ["ipset", "restore"],
+                input_str='create foo-tmp hash:ip family inet '
+                          'maxelem 1048576 --exist\n'
+                          'flush foo-tmp\n'
+                          'add foo-tmp 10.0.0.1\n'
+                          'swap foo foo-tmp\n'
+                          'destroy foo-tmp\n'
+                          'COMMIT\n'
+            )
+        ]
+        self.assertEqual(m_check_call.mock_calls, exp_calls)
+
+    @patch("calico.felix.futils.check_call", autospec=True)
+    def test_replace_members_delete_fails(self, m_check_call):
+        m_check_call.side_effect = iter([
+            FailedSystemCall("Blah", [], 1, None, "err"),
+            None, None, None])
+        self.ipset.replace_members(set(["10.0.0.1"]))
+        exp_calls = [
+            call(["ipset", "destroy", "foo-tmp"]),
+            call(['ipset', 'list', 'foo-tmp']),
+            call(['ipset', 'list', 'foo']),
+            call(
+                ["ipset", "restore"],
+                input_str='create foo-tmp hash:ip family inet '
+                          'maxelem 1048576 --exist\n'
+                          'flush foo-tmp\n'
+                          'add foo-tmp 10.0.0.1\n'
+                          'swap foo foo-tmp\n'
+                          'destroy foo-tmp\n'
+                          'COMMIT\n'
+            )
+        ]
+        self.assertEqual(m_check_call.mock_calls, exp_calls)
 
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_update_members(self, m_check_call):
@@ -553,6 +602,8 @@ class TestIpset(BaseTestCase):
     @patch("calico.felix.futils.check_call", autospec=True,
            side_effect=iter([
                FailedSystemCall("Blah", [], None, None, "err"),
+               None,
+               FailedSystemCall("No ipset", [], 1, None, "does not exist"),
                None]))
     def test_update_members_err(self, m_check_call):
         # First call to update_members will fail, leading to a retry.
@@ -560,28 +611,33 @@ class TestIpset(BaseTestCase):
         new = set(["10.0.0.1"])
         self.ipset.update_members(old, new)
 
-        calls = [call(["ipset", "restore"],
-                      input_str='del foo 10.0.0.2\n'
-                                'add foo 10.0.0.1\n'
-                                'COMMIT\n'),
-                 call(["ipset", "restore"],
-                      input_str='create foo hash:ip family inet --exist\n'
-                                'create foo-tmp hash:ip family inet --exist\n'
-                                'flush foo-tmp\n'
-                                'add foo-tmp 10.0.0.1\n'
-                                'swap foo foo-tmp\n'
-                                'destroy foo-tmp\n'
-                                'COMMIT\n')]
+        calls = [
+            call(["ipset", "restore"],
+                  input_str='del foo 10.0.0.2\n'
+                            'add foo 10.0.0.1\n'
+                            'COMMIT\n'),
+            call(["ipset", "destroy", "foo-tmp"]),
+            call(["ipset", "list", "foo"]),
+            call(["ipset", "restore"],
+                 input_str='create foo hash:ip family inet '
+                           'maxelem 1048576 --exist\n'
+                           'create foo-tmp hash:ip family inet '
+                           'maxelem 1048576 --exist\n'
+                           'flush foo-tmp\n'
+                           'add foo-tmp 10.0.0.1\n'
+                           'swap foo foo-tmp\n'
+                           'destroy foo-tmp\n'
+                           'COMMIT\n')
+        ]
 
-        self.assertEqual(m_check_call.call_count, 2)
-        m_check_call.assert_has_calls(calls)
+        self.assertEqual(m_check_call.mock_calls, calls)
 
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_ensure_exists(self, m_check_call):
         self.ipset.ensure_exists()
         m_check_call.assert_called_once_with(
             ["ipset", "restore"],
-            input_str='create foo hash:ip family inet --exist\n'
+            input_str='create foo hash:ip family inet maxelem 1048576 --exist\n'
                       'COMMIT\n'
         )
 

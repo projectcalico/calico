@@ -124,6 +124,9 @@ The full list of parameters which can be set is as follows.
 | IptablesRefreshInterval     | 60                        | Period, in seconds, at which felix re-applies all iptables state to ensure that no other  |
 |                             |                           | process has accidentally broken Calico's rules.  Set to 0 to disable iptables refresh.    |
 +-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
+| MaxIpsetSize                | 1048576                   | Maximum size for the ipsets used by Felix to implement tags.  Should be set to a number   |
+|                             |                           | that is greater than the maximum number of IP addresses that are ever expected in a tag.  |
++-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
 
 
 Environment variables
