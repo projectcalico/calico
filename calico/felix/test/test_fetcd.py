@@ -124,7 +124,7 @@ class TestEtcdAPI(BaseTestCase):
             api.force_resync(async=True)
             self.step_actor(api)
         m_status_rep.resync.assert_called_once_with(async=True)
-        self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
+        self.assertTrue(m_etcd_watcher.return_value.resync_requested)
 
 
 class ExpectedException(Exception):
