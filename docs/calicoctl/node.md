@@ -20,8 +20,8 @@ calicoctl node commands.
 
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
-    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>]
-    [--kubernetes] [--rkt]
+    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--rkt]
+    [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
@@ -48,6 +48,9 @@ Options:
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
   --kubernetes              Download and install the kubernetes plugin.
+  --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
+                            to install when using the --kubernetes option.
+                            [default: v0.3.0]
   --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
@@ -75,8 +78,9 @@ Command syntax:
 
 ```
 calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] 
-    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--kubernetes] 
-    [--rkt] [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
+    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--rkt] 
+    [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
+    [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
 
     <IP>: Unique IPv4 address associated with an interface on the host machine.
     <IP6>: Unique IPv6 address associated with an interface on the host machine.
@@ -88,6 +92,7 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
                (default: /var/log/calico)
     <DETACH>: Boolean to have calico/node run as detached (true) or in the foreground (false).
               (default: true)
+    <KUBE_PLUGIN_VERSION>: The version of the `calico-kubernetes` plugin to install.
     <LIBNETWORK_IMAGE_NAME>: Desired calico/node-libnetwork Docker image to use when 
                              using the Docker libnetwork driver.
 
