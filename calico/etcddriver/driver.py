@@ -223,6 +223,7 @@ class EtcdDriver(object):
                 self._resync_http_pool = self.get_etcd_connection()
                 # Before we get to the snapshot, Felix needs the configuration.
                 self._queue_status(STATUS_WAIT_FOR_READY)
+                self._flush()  # Send the status message immediately.
                 self._wait_for_ready()
                 self._preload_config()
                 # Now (on the first run through) wait for Felix to process the
@@ -230,6 +231,7 @@ class EtcdDriver(object):
                 self._config_received.wait()
                 # Kick off the snapshot request as far as the headers.
                 self._queue_status(STATUS_RESYNC)
+                self._flush()  # Send the status message immediately.
                 resp, snapshot_index = self._start_snapshot_request()
                 # Before reading from the snapshot, start the watcher thread.
                 self._start_watcher(snapshot_index)
@@ -238,8 +240,7 @@ class EtcdDriver(object):
                 self._process_snapshot_and_events(resp, snapshot_index)
                 # We're now in-sync.  Tell Felix.
                 self._queue_status(STATUS_IN_SYNC)
-                # Make sure we flush before we wait for events.
-                self._flush()
+                self._flush()  # Send the status message immediately.
                 self._process_events_only()
             except FelixWriteFailed:
                 _log.exception("Write to Felix failed; shutting down.")
@@ -554,11 +555,13 @@ class EtcdDriver(object):
         self._maybe_flush()
 
     def _queue_status(self, status):
+        """
+        Queues the given status to felix as a status message.
+        """
         self._buf.write(msgpack.dumps({
             MSG_KEY_TYPE: MSG_TYPE_STATUS,
             MSG_KEY_STATUS: status,
         }))
-        self._maybe_flush()
 
     def _maybe_flush(self):
         self._updates_pending += 1
