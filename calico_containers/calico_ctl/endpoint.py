@@ -231,6 +231,8 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
     The profile list may not contain duplicate entries, invalid profile names,
     or profiles that are already in the containers list.
 
+    If no profile is specified, nothing happens.
+
     :param hostname: The host that the targeted endpoint resides on.
     :param orchestrator_id: The orchestrator that created the targeted endpoint.
     :param workload_id: The ID of workload which created the targeted endpoint.
@@ -241,26 +243,30 @@ def endpoint_profile_append(hostname, orchestrator_id, workload_id,
     """
     # Validate the profile list.
     validate_profile_list(profile_names)
-    try:
-        client.append_profiles_to_endpoint(profile_names,
-                                           hostname=hostname,
-                                           orchestrator_id=orchestrator_id,
-                                           workload_id=workload_id,
-                                           endpoint_id=endpoint_id)
-        print_paragraph("Profile(s) %s appended." %
-                        (", ".join(profile_names)))
-    except KeyError:
-        print "Failed to append profiles to endpoint.\n"
-        print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
-        sys.exit(1)
-    except ProfileAlreadyInEndpoint, e:
-        print_paragraph("Profile %s is already in endpoint "
-                        "profile list" % e.profile_name)
-    except MultipleEndpointsMatch:
-        print_paragraph("More than 1 endpoint matches the provided criteria.  "
-                        "Please provide additional parameters to refine the "
-                        "search.")
-        sys.exit(1)
+
+    if not profile_names:
+        print_paragraph("No profile specified.")
+    else:
+        try:
+            client.append_profiles_to_endpoint(profile_names,
+                                               hostname=hostname,
+                                               orchestrator_id=orchestrator_id,
+                                               workload_id=workload_id,
+                                               endpoint_id=endpoint_id)
+            print_paragraph("Profile(s) %s appended." %
+                            (", ".join(profile_names)))
+        except KeyError:
+            print "Failed to append profiles to endpoint.\n"
+            print_paragraph("Endpoint %s is unknown to Calico.\n" % endpoint_id)
+            sys.exit(1)
+        except ProfileAlreadyInEndpoint, e:
+            print_paragraph("Profile %s is already in endpoint "
+                            "profile list" % e.profile_name)
+        except MultipleEndpointsMatch:
+            print_paragraph("More than 1 endpoint matches the provided criteria.  "
+                            "Please provide additional parameters to refine the "
+                            "search.")
+            sys.exit(1)
 
 
 def endpoint_profile_set(hostname, orchestrator_id, workload_id,
@@ -274,6 +280,8 @@ def endpoint_profile_set(hostname, orchestrator_id, workload_id,
     query must be specific enough to match a single endpoint or it will fail.
 
     The profile list may not contain duplicate entries or invalid profile names.
+
+    If no profile is specified, the profile list is set to be empty.
 
     :param hostname: The host that the targeted endpoint resides on.
     :param orchestrator_id: The orchestrator that created the targeted endpoint.
@@ -293,8 +301,11 @@ def endpoint_profile_set(hostname, orchestrator_id, workload_id,
                                         orchestrator_id=orchestrator_id,
                                         workload_id=workload_id,
                                         endpoint_id=endpoint_id)
-        print_paragraph("Profile(s) %s set." %
-                        (", ".join(profile_names)))
+        if not profile_names:
+           print_paragraph("Removed all profiles from endpoint.")
+        else:
+            print_paragraph("Profile(s) set to %s." %
+                            (", ".join(profile_names)))
     except KeyError:
         print "Failed to set profiles for endpoint.\n"
         print_paragraph("Endpoint could not be found.\n")
@@ -314,6 +325,8 @@ def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
     The profile list may not contain duplicate entries, invalid profile names,
     or profiles that are not already in the containers list.
 
+    If no profile is specified, nothing happens.
+
     :param hostname: The host that the targeted endpoint resides on.
     :param orchestrator_id: The orchestrator that created the targeted endpoint.
     :param workload_id: The ID of workload which created the targeted endpoint.
@@ -325,25 +338,28 @@ def endpoint_profile_remove(hostname, orchestrator_id, workload_id,
     # Validate the profile list.
     validate_profile_list(profile_names)
 
-    try:
-        client.remove_profiles_from_endpoint(profile_names,
-                                             hostname=hostname,
-                                             orchestrator_id=orchestrator_id,
-                                             workload_id=workload_id,
-                                             endpoint_id=endpoint_id)
-        print_paragraph("Profile(s) %s removed." %
-                        (",".join(profile_names)))
-    except KeyError:
-        print "Failed to remove profiles from endpoint.\n"
-        print_paragraph("Endpoint could not be found.\n")
-        sys.exit(1)
-    except ProfileNotInEndpoint, e:
-        print_paragraph("Profile %s is not in endpoint profile "
-                        "list." % e.profile_name)
-    except MultipleEndpointsMatch:
-        print "More than 1 endpoint matches the provided criteria. " \
-              "Please provide additional parameters to refine the search."
-        sys.exit(1)
+    if not profile_names:
+        print_paragraph("No profile specified.")
+    else:
+        try:
+            client.remove_profiles_from_endpoint(profile_names,
+                                                 hostname=hostname,
+                                                 orchestrator_id=orchestrator_id,
+                                                 workload_id=workload_id,
+                                                 endpoint_id=endpoint_id)
+            print_paragraph("Profile(s) %s removed." %
+                            (",".join(profile_names)))
+        except KeyError:
+            print "Failed to remove profiles from endpoint.\n"
+            print_paragraph("Endpoint could not be found.\n")
+            sys.exit(1)
+        except ProfileNotInEndpoint, e:
+            print_paragraph("Profile %s is not in endpoint profile "
+                            "list." % e.profile_name)
+        except MultipleEndpointsMatch:
+            print "More than 1 endpoint matches the provided criteria. " \
+                  "Please provide additional parameters to refine the search."
+            sys.exit(1)
 
 
 def endpoint_profile_show(hostname, orchestrator_id, workload_id, endpoint_id):
