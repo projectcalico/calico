@@ -1,8 +1,0 @@
-{
-  "id": "calico",
-  "instances": 1,
-  "cpus": 0.1,
-  "mem": 256,
-  "uris": ["https://circle-artifacts.com/gh/Metaswitch/calico-docker/139/artifacts/0/home/ubuntu/calico-docker/dist/calicoctl"],
-  "cmd": "sudo rm -f /var/run/docker.sock && ./calicoctl node --ip=127.0.0.1 && sleep 9999999999"
-}
