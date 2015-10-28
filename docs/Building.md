@@ -96,10 +96,6 @@ The full suite of system tests takes approximately 30 minutes to complete.  If y
 Docker, and are regularly running the system tests, a faster subset of system tests may be run which covers most
 mainline function.
 
-Both ST suites utilize Docker's [libnetwork network driver](https://github.com/docker/libnetwork), available in the
-Docker [experimental channel](https://github.com/docker/docker/tree/master/experimental) alongside the Docker 1.7
-release.
-
 Both STs start an etcd server bound to a local IP address (automatically determined).  If you have
 multiple local IP addresses and wish to explicitly select an IP address to bind to, set the environment variable
 LOCAL_IP_ENV with the correct IP address.  For example:
