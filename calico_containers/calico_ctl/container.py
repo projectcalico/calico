@@ -411,6 +411,10 @@ def container_ip_add(container_id, ip, interface):
         print "Error updating datastore. Aborting."
         sys.exit(1)
 
+    if not netns.ns_veth_exists(namespace, interface):
+        print "Interface provided does not exist in container. Aborting."
+        sys.exit(1)
+
     try:
         netns.add_ip_to_ns_veth(namespace, address, interface)
     except CalledProcessError:
