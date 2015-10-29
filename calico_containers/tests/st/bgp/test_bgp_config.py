@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import re
-
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import (DockerHost, CommandExecError)
+from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       LARGE_AS_NUM)
+from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.utils import check_bird_status
 
 """

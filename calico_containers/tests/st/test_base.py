@@ -15,7 +15,14 @@ import subprocess
 from unittest import TestCase
 
 from tests.st.utils.utils import get_ip
+import logging
 
+logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+logger = logging.getLogger(__name__)
+
+# Disable spammy logging from the sh module
+sh_logger = logging.getLogger("sh")
+sh_logger.setLevel(level=logging.CRITICAL)
 
 class TestBase(TestCase):
     """
@@ -26,11 +33,15 @@ class TestBase(TestCase):
         Clean up before every test.
         """
         self.ip = get_ip()
+
         # Delete /calico if it exists. This ensures each test has an empty data
         # store at start of day.
         subprocess.check_output(
             "curl -sL http://%s:2379/v2/keys/calico?recursive=true -XDELETE"
             % self.ip, shell=True)
+
+        # Log a newline to ensure that the first log appears on its own line.
+        logger.info("")
 
     def assert_connectivity(self, pass_list, fail_list=None):
         """

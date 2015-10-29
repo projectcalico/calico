@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
 
+logger = logging.getLogger(__name__)
 
 class DockerNetwork(object):
     """
@@ -25,7 +27,8 @@ class DockerNetwork(object):
     def __init__(self, host, name, driver="calico"):
         """
         Create the network.
-        :param host: The Docker Host which creates the network.
+        :param host: The Docker Host which creates the network (note that
+        networks
         :param name: The name of the network.  This must be unique per cluster
         and is the user-facing identifier for the network.  (Calico itself will
         get a UUID for the network via the driver API and will not get the
@@ -39,26 +42,22 @@ class DockerNetwork(object):
 
         self.init_host = host
         """The host which created the network."""
-
-        args = [
-            "docker", "network", "create",
-            "--driver=%s" % driver,
-            name,
-        ]
-        command = ' '.join(args)
-        self.uuid = host.execute(command).rstrip()
+        self.uuid = host.execute("docker network create -d %s %s" % (driver, name))
 
     def delete(self):
         """
         Delete the network.
         :return: Nothing
         """
-        args = [
-            "docker", "network", "rm",
-            self.name,
-        ]
-        command = ' '.join(args)
-        self.init_host.execute(command).rstrip()
+        self.init_host.execute("docker network rm " + self.name)
+
+    def disconnect(self, host, container):
+        """
+        Disconnect container from network
+        :return: Nothing
+        """
+        host.execute("docker network disconnect %s %s" %
+                     (self.name, str(container)))
 
     def __str__(self):
         return self.name
