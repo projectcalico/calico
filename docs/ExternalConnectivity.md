@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # External Connectivity - Hosts on their own Layer 2 segment
 
 Calico creates a routed network on which your containers look like normal IP speakers.  You can connect to them from a host in your cluster (assuming the network policy you've assigned allows this) using their IP address.
@@ -6,7 +14,7 @@ In order to access your containers from locations other than your cluster of hos
 
 A common scenario is for your container hosts to be on their own isolated layer 2 network, like a rack in your server room or an entire data center.  Access to that network is via a router, which also is the default router for all the container hosts.
 
-![hosts-on-layer-2-network](hosts-on-layer-2-network.png)
+![hosts-on-layer-2-network](images/hosts-on-layer-2-network.png)
 
 If this describes your infrastructure, you'll need to configure that router to communicate with the Calico-enabled hosts over BGP.  If you have a small number of hosts, you can configure BGP sessions between your router and each Calico-enabled host.
 

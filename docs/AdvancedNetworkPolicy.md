@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Advanced Network Policy
 
 Calico endpoints are assigned their network policy by configuring them with a policy profile.  In the previous examples we created profiles and assigned endpoints to them.  By default, `calicoctl profile add` adds default config to profiles so endpoints with the profile can all communicate with one another.  In this section, we look at how to customize policy profiles for more advanced policy.

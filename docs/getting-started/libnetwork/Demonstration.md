@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Calico as a libnetwork plugin.
 This demonstration uses Docker's native 
 [libnetwork network driver](https://github.com/docker/libnetwork), available 
@@ -31,8 +39,8 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
     CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
-    eec9ebbfb486        calico/node-libnetwork:v0.5.0   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
-    ffe6cb403e9b        calico/node:v0.9.0              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
+    eec9ebbfb486        calico/node-libnetwork:latest   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
+    ffe6cb403e9b        calico/node:latest              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
 
 ## Creating networked endpoints
 
@@ -74,10 +82,10 @@ one another, but workloads in other networks cannot reach them.  A, C and E are
 all in the same network so should be able to ping each other.  B and D are in 
 their own networks so shouldn't be able to ping anyone else.
     
-On calico-01 check that A can ping C and E.  You can use either the IP address
-or the name for containers within the same network.
+On calico-01 check that A can ping C and E.  We can ping workloads within a 
+containers networks by name.
 
-    docker exec workload-A ping -c 4 `docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-C`
+    docker exec workload-A ping -c 4 workload-C.net1
     docker exec workload-A ping -c 4 workload-E.net1
 
 Also check that A cannot ping B or D.  This is slightly trickier because the
@@ -85,25 +93,29 @@ hostnames for different networks will not be added to the host configuration of
 the container - so we need to determine the IP addresses assigned to containers
 B and D.
 
-On calico-01 run
+Since A and B are on the same host, we can run a single command that inspects 
+the IP address and issues the ping.  On calico-01
 
-    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-B
+    docker exec workload-A ping -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net2.IPAddress }}" workload-B`
     
-this returns the IP address of workload-B.
-    
-On calico-02 run
+These pings will fail.
 
-    docker inspect --format "{{ .NetworkSettings.IPAddress }}" workload-D
+To test connectivity between A and D which are on different hosts, it is 
+necessary to run the `docker inspect` command on the host for D (calico-02) 
+and then run the ping command on the host for A (calico-01).
+    
+On calico-02
+
+    docker inspect --format "{{ .NetworkSettings.Networks.net3.IPAddress }}" workload-D
     
 This returns the IP address of workload-D.
 
-On calico-01 run
+On calico-01
 
-    docker exec workload-A ping -c 4 <IP address of B>
     docker exec workload-A ping -c 4 <IP address of D>
 
-replacing the `<...>` with the appropriate IP address for B and D.  These pings
-will fail.
+replacing the `<...>` with the appropriate IP address of D.  These pings will
+fail.
 
 To see the list of networks, use
 

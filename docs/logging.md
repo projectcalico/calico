@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.9.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Logging
 All components log to directories under `/var/log/calico` inside the calico-node container. By default this is mapped to the `/var/log/calico` directory on the host but can be changed when using `calicoctl` by passing in the `--log-dir` parameter.
 
