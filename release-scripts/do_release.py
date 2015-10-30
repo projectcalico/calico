@@ -138,7 +138,9 @@ def update_files():
     bullet("Monitor the semaphore, CircleCI and Docker builds for this branch "
            "until all have successfully completed.  Fix any issues with the "
            "build.")
-    bullet("Run through a subset of the demonstrations:")
+    bullet("Run through a subset of the demonstrations.  When running the "
+           "vagrant instructions, make sure you are using the candidate "
+           "branch (e.g. git checkout %s-candidate):" % new_version)
     bullet("Ubuntu libnetwork", level=1)
     bullet("CoreOS default networking", level=1)
     para("Follow the URL below to view the correct demonstration instructions "
@@ -179,7 +181,9 @@ def cut_release():
 
     para("Once the release has been created on GitHub, perform a final test "
          "of the release:")
-    bullet("Run through a subset of the demonstrations:")
+    bullet("Run through a subset of the demonstrations.  When running the "
+           "vagrant instructions, make sure you are using the tagged release "
+           "(e.g. git checkout tags/%s):" % new_version)
     bullet("CoreOS libnetwork", level=1)
     bullet("Ubuntu default networking", level=1)
     next("Once you have completed the testing, re-run the script.")

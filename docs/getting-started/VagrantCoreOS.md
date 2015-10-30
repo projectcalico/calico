@@ -19,9 +19,16 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 * [Vagrant][vagrant] 1.7.4 or greater.
 * [Git][git]
 
+<!--- master only -->
 2) Clone this project
 
     git clone https://github.com/projectcalico/calico-docker.git
+<!--- else
+2) Clone this project, and checkout the **release** release
+
+    git clone https://github.com/projectcalico/calico-docker.git
+    git checkout tags/**release**
+<!--- end of master only -->
     
 3) There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or 
 the default Docker networking.  Select the required demonstration by changing into the appropriate directory:
