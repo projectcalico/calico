@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import partial
-import uuid
+import logging
 
 from netaddr import IPAddress
 
 from utils import retry_until_success
-from tests.st.utils.network import DockerNetwork
-from tests.st.utils.exceptions import CommandExecError
-
+from network import DockerNetwork
+from exceptions import CommandExecError
 NET_NONE = "none"
+
+logger = logging.getLogger(__name__)
 
 
 class Workload(object):
@@ -30,8 +31,7 @@ class Workload(object):
     These are the end-users containers that will run application-level
     software.
     """
-    def __init__(self, host, name, image="busybox", network=None,
-                 service=None):
+    def __init__(self, host, name, image="busybox", network=None):
         """
         Create the workload and detect its IPs.
 
@@ -45,37 +45,26 @@ class Workload(object):
         has ping.
         :param network: The DockerNetwork to connect to.  Set to None to use
         default Docker networking.
-        :param service: The name of the service to use. Set to None to have
-        a random one generated.
         """
         self.host = host
         self.name = name
 
-        args = [
-            "docker", "run",
-            "--tty",
-            "--interactive",
-            "--detach",
-            "--name", name,
-        ]
+        network_command = ""
         if network:
             if network is not NET_NONE:
                 assert isinstance(network, DockerNetwork)
-            if service is None:
-                service = str(uuid.uuid4())
-            args.append("--publish-service=%s.%s" % (service, network))
-        args.append(image)
-        command = ' '.join(args)
+            network_command = "--net %s" % network
 
+        command = "docker run -tid --name %s %s %s" % (name,
+                                                       network_command,
+                                                       image)
         host.execute(command)
 
         version_key = "IPAddress"
         # TODO Use version_key = "GlobalIPv6Address" for IPv6
-
-        self.ip = host.execute("docker inspect --format "
-                               "'{{ .NetworkSettings.%s }}' %s" % (version_key,
-                                                                   name),
-                               ).rstrip()
+        ip_command = "docker inspect --format '{{ .NetworkSettings.Networks.%s.%s }}' %s" % \
+                                                            (network, version_key, name)
+        self.ip = host.execute(ip_command)
 
     def execute(self, command):
         """

@@ -26,6 +26,11 @@ calicobuild.created: $(BUILD_FILES)
 	docker build -f build_calicoctl/Dockerfile -t calico/build .
 	touch calicobuild.created
 
+docker:
+	# Download the latest docker to test.
+	curl https://master.dockerproject.org/linux/amd64/docker-1.9.0-dev -o docker
+	chmod +x docker
+
 dist/calicoctl: $(PYCALICO) calicobuild.created
 	mkdir -p dist
 	chmod 777 dist
@@ -77,13 +82,14 @@ calico_containers/routereflector.tar:
 calico_containers/calico-node.tar: caliconode.created
 	docker save --output calico_containers/calico-node.tar calico/node
 
-st: binary calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
+st: docker binary calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
 	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
 
-fast-st: calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
+fast-st: docker calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
 	# This runs the tests by calling python directory without using the
-	# calicoctl binary
-	CALICOCTL=$(CURDIR)/calico_containers/calicoctl.py nosetests $(ST_TO_RUN) \
+	# calicoctl binary - this doesn't work with DIND so commenting out for now.
+	#	CALICOCTL=$(CURDIR)/calico_containers/calicoctl.py \
+	nosetests $(ST_TO_RUN) \
 	-sv --nologcapture --with-timer -a '!slow'
 
 run-etcd:
@@ -94,17 +100,18 @@ run-etcd:
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
-create-dind:
+create-dind: docker
 	@echo "You may want to load calico-node with"
 	@echo "docker load --input /code/calico_containers/calico-node.tar"
-	@ID=$$(docker run --privileged -v `pwd`:/code \
-	-tid jpetazzo/dind) ;\
+	@ID=$$(docker run --privileged -v `pwd`:/code -v `pwd`/docker:/usr/local/bin/docker \
+	-tid calico/dind:libnetwork) ;\
 	docker exec -ti $$ID bash;\
 	docker rm -f $$ID
 
 clean:
 	-rm -f *.created
 	find . -name '*.pyc' -exec rm -f {} +
+	-rm -f docker
 	-rm -rf dist
 	-rm -rf build
 	-rm -f calico_containers/busybox.tar

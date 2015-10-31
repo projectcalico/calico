@@ -11,27 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
 import os
+from subprocess import CalledProcessError
 from functools import partial
-from subprocess import check_output, CalledProcessError, STDOUT
 
-from sh import docker
-
-from tests.st.utils.exceptions import CommandExecError
-from tests.st.utils import utils
-from tests.st.utils.utils import retry_until_success, get_ip
+from utils import get_ip, log_and_run, retry_until_success
 from workload import Workload
 from network import DockerNetwork
 
-CALICO_DRIVER_SOCK = "/run/docker/plugins/calico.sock"
-
+logger = logging.getLogger(__name__)
 
 class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by
     Calico.
     """
-    def __init__(self, name, start_calico=True, dind=True):
+    def __init__(self, name, start_calico=True, dind=True,
+                 additional_docker_options="",
+                 post_docker_commands=["docker load --input /code/calico_containers/calico-node.tar",
+                                       "docker load --input /code/calico_containers/busybox.tar"]):
         self.name = name
         self.dind = dind
         self.workloads = set()
@@ -41,25 +40,22 @@ class DockerHost(object):
         self._cleaned = False
 
         if dind:
-            # TODO use pydocker
-            docker.rm("-f", self.name, _ok_code=[0, 1])
-            docker.run("--privileged", "-v", os.getcwd()+":/code", "--name",
-                       self.name,
-                       "-tid", "calico/dind")
-            self.ip = docker.inspect("--format", "{{ .NetworkSettings.IPAddress }}",
-                                     self.name).stdout.rstrip()
+            log_and_run("docker rm -f %s || true" % self.name)
+            log_and_run("docker run --privileged -tid "
+                        "-v %s/docker:/usr/local/bin/docker "
+                        "-v %s:/code --name %s "
+                        "calico/dind:libnetwork docker daemon --storage-driver=aufs %s" %
+                    (os.getcwd(), os.getcwd(), self.name, additional_docker_options))
 
-            self.ip6 = docker.inspect("--format",
-                                      "{{ .NetworkSettings."
-                                      "GlobalIPv6Address }}",
-                                      self.name).stdout.rstrip()
+            self.ip = log_and_run("docker inspect --format "
+                              "'{{.NetworkSettings.Networks.bridge.IPAddress}}' %s" % self.name)
 
             # Make sure docker is up
             docker_ps = partial(self.execute, "docker ps")
             retry_until_success(docker_ps, ex_class=CalledProcessError,
-                                retries=100)
-            self.execute("docker load --input /code/calico_containers/calico-node.tar && "
-                         "docker load --input /code/calico_containers/busybox.tar")
+                                retries=10)
+            for command in post_docker_commands:
+                self.execute(command)
         else:
             self.ip = get_ip()
 
@@ -77,23 +73,13 @@ class DockerHost(object):
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
-        etcd_auth = "ETCD_AUTHORITY=%s:2379" % get_ip()
-        # Export the environment, in case the command has multiple parts, e.g.
-        # use of | or ;
-        command = "export %s; %s" % (etcd_auth, command)
-
         if self.dind:
-            command = self.escape_bash_single_quotes(command)
-            command = "docker exec -it %s bash -c '%s'" % (self.name,
-                                                           command)
-        try:
-            output = check_output(command, shell=True, stderr=STDOUT)
-        except CalledProcessError as e:
-            # Wrap the original exception with one that gives a better error
-            # message (including command output).
-            raise CommandExecError(e)
-        else:
-            return output.strip()
+            command = self.escape_shell_single_quotes(command)
+            command = "docker exec -it %s sh -c '%s'" % (self.name,
+                                                         command)
+
+        return log_and_run(command)
+
 
     def calicoctl(self, command):
         """
@@ -114,6 +100,11 @@ class DockerHost(object):
                 calicoctl = "/code/dist/calicoctl"
             else:
                 calicoctl = "dist/calicoctl"
+
+        etcd_auth = "ETCD_AUTHORITY=%s:2379" % get_ip()
+        # Export the environment, in case the command has multiple parts, e.g.
+        # use of | or ;
+        calicoctl = "export %s; %s" % (etcd_auth, calicoctl)
         return self.execute(calicoctl + " " + command)
 
     def start_calico_node(self, as_num=None):
@@ -137,14 +128,6 @@ class DockerHost(object):
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 
-    def assert_driver_up(self):
-        """
-        Check that Calico Docker Driver is up by checking the existence of
-        the unix socket.
-        """
-        sock_exists = partial(self.execute,
-                              "[ -e %s ]" % CALICO_DRIVER_SOCK)
-        retry_until_success(sock_exists, ex_class=CalledProcessError)
 
     def remove_workloads(self):
         """
@@ -206,6 +189,7 @@ class DockerHost(object):
         volumes.
         :return:
         """
+        logger.info("# Cleaning up host %s", self.name)
         if self.dind:
             # For Docker-in-Docker, we need to remove all containers and
             # all images...
@@ -213,12 +197,12 @@ class DockerHost(object):
             self.remove_images()
 
             # ...and the outer container for DinD.
-            docker.rm("-f", self.name, _ok_code=[0, 1])
+            log_and_run("docker rm -f %s || true" % self.name)
         else:
             # For non Docker-in-Docker, we can only remove the containers we
             # created - so remove the workloads and the calico node.
             self.remove_workloads()
-            docker.rm("-f", "calico-node", _ok_code=[0, 1])
+            log_and_run("docker rm -f calico-node || true")
 
         self._cleaned = True
 
@@ -234,13 +218,11 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network=None,
-                        service=None):
+    def create_workload(self, name, image="busybox", network=None):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, image=image, network=network,
-                            service=service)
+        workload = Workload(self, name, image=image, network=network)
         self.workloads.add(workload)
         return workload
 
@@ -259,15 +241,15 @@ class DockerHost(object):
         return DockerNetwork(self, name, driver=driver)
 
     @staticmethod
-    def escape_bash_single_quotes(command):
+    def escape_shell_single_quotes(command):
         """
-        Escape single quotes in bash string strings.
+        Escape single quotes in shell strings.
 
         Replace ' (single-quote) in the command with an escaped version.
         This needs to be done, since the command is passed to "docker
         exec" to execute and needs to be single quoted.
         Strictly speaking, it's impossible to escape single-quoted
-        bash script, but there is a workaround - end the single quoted
+        shell script, but there is a workaround - end the single quoted
          string, then concatenate a double quoted single quote,
         and finally re-open the string with a single quote. Because
         this is inside a single quoted python, string, the single
@@ -277,3 +259,16 @@ class DockerHost(object):
         :return: The escaped string
         """
         return command.replace('\'', '\'"\'"\'')
+
+    def get_hostname(self):
+        """
+        Get the hostname from Docker
+        The hostname is a randomly generated string.
+        Note, this function only works with a host with dind enabled.
+        Raises an exception if dind is not enabled.
+
+        :param host: DockerHost object
+        :return: hostname of DockerHost
+        """
+        command = "docker inspect --format {{.Config.Hostname}} %s" % self.name
+        return log_and_run(command)
