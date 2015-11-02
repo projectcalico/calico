@@ -61,8 +61,8 @@ from calico.etcdutils import ACTION_MAPPING
 from calico.common import complete_logging
 from calico.monotonic import monotonic_time
 from calico.datamodel_v1 import (
-    READY_KEY, CONFIG_DIR, dir_for_per_host_config, VERSION_DIR
-)
+    READY_KEY, CONFIG_DIR, dir_for_per_host_config, VERSION_DIR,
+    ROOT_DIR)
 from calico.etcddriver.hwm import HighWaterTracker
 
 _log = logging.getLogger(__name__)
@@ -214,6 +214,7 @@ class EtcdDriver(object):
                 self._process_snapshot_and_events(resp, snapshot_index)
                 # We're now in-sync.  Tell Felix.
                 self._send_status(STATUS_IN_SYNC)
+                # Then switch to processing events only.
                 self._process_events_only()
             except WriteFailed:
                 _log.exception("Write to Felix failed; shutting down.")
@@ -245,7 +246,7 @@ class EtcdDriver(object):
             # Read failure here will be handled by outer loop.
             resp = self._resync_http_pool.request(
                 "GET",
-                self._etcd_base_url + "/v2/keys" + READY_KEY,
+                self._calculate_url(READY_KEY),
                 timeout=5,
                 preload_content=True
             )
@@ -282,7 +283,7 @@ class EtcdDriver(object):
         # Read failure here will be handled by outer loop.
         resp = self._resync_http_pool.request(
             "GET",
-            self._etcd_base_url + "/v2/keys" + config_dir,
+            self._calculate_url(config_dir),
             fields={
                 "recursive": "true",
             },
@@ -319,7 +320,7 @@ class EtcdDriver(object):
         _log.info("Loading snapshot headers...")
         resp = self._resync_http_pool.request(
             "GET",
-            self._etcd_base_url + "/v2/keys/calico/v1",
+            self._calculate_url(VERSION_DIR),
             fields={"recursive": "true"},
             timeout=120,
             preload_content=False
@@ -536,6 +537,9 @@ class EtcdDriver(object):
             }
         )
 
+    def _calculate_url(self, etcd_key):
+        return self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
+
     def watch_etcd(self, next_index, event_queue, stop_event):
         """
         Thread: etcd watcher thread.  Watches etcd for changes and
@@ -565,7 +569,7 @@ class EtcdDriver(object):
                     _log.debug("Waiting on etcd index %s", next_index)
                     resp = http.request(
                         "GET",
-                        "http://localhost:4001/v2/keys/calico/v1",
+                        self._calculate_url(VERSION_DIR),
                         fields={"recursive": "true",
                                 "wait": "true",
                                 "waitIndex": next_index},
@@ -604,7 +608,7 @@ class EtcdDriver(object):
                             _log.debug("Skipping non-delete to dir %s", key)
                             continue
                         else:
-                            if key == VERSION_DIR:
+                            if key.rstrip("/") in (VERSION_DIR, ROOT_DIR):
                                 # Special case: if the whole keyspace is
                                 # deleted, that implies the ready flag is gone
                                 # too; resync rather than generating deletes
@@ -632,10 +636,8 @@ class EtcdDriver(object):
 
 def parse_snapshot(resp, callback):
     """
-    Generator: iteratively parses the response to the etcd snapshot.
-
-    Generates tuples of the form (modifiedIndex, key, value) for each
-    leaf encountered in the snapshot.
+    Iteratively parses the response to the etcd snapshot, calling the
+    callback with each key/value pair found.
 
     :raises ResyncRequired if the snapshot contains an error response.
     """
@@ -646,13 +648,23 @@ def parse_snapshot(resp, callback):
 
     prefix, event, value = next(parser)
     if event == "start_map":
-        _parse_dict(parser, callback)
+        # As expected, response is a map.
+        _parse_map(parser, callback)
     else:
+        _log.error("Response from etcd did non contain a JSON map.")
         raise ResyncRequired("Bad response from etcd")
 
 
-def _parse_dict(parser, callback):
-    # Expect a sequence of keys and values.
+def _parse_map(parser, callback):
+    """
+    Searches the stream of JSON tokens for key/value pairs.
+
+    Calls itself recursively to handle subdirectories.
+
+    :param parser: iterator, returning JSON parse event tuples.
+    :param callback: callback to call when a key/value pair is found.
+    """
+    # Expect a sequence of keys and values terminated by an "end_map" event.
     mod_index = None
     node_key = None
     node_value = None
@@ -674,7 +686,7 @@ def _parse_dict(parser, callback):
                 while True:
                     prefix, event, value = next(parser)
                     if event == "start_map":
-                        _parse_dict(parser, callback)
+                        _parse_map(parser, callback)
                     elif event == "end_array":
                         break
                     else:
