@@ -39,12 +39,42 @@ class HighWaterTracker(object):
     """
     Tracks the highest etcd index for which we've seen a particular
     etcd key.
+
+    This class is expected to be used as follows:
+
+    Starting with a resync, while also merging events from our watch on etcd:
+
+    * Call start_tracking_deletions() to enable resolution between events
+      and the snapshot.
+    * Repeatedly call update_hwm() and store_deletion(), feeding in the
+      data from the snapshot and event stream.
+    * At the end of the snapshot processing, call stop_tracking_deletions()
+      to discard the tracking metadata (which would otherwise grow
+      indefinitely).
+    * Call remove_old_keys() to find and delete any keys that have not been
+      seen since before the snapshot was started, and hence must have been
+      deleted before the snapshot was taken.
+
+    While in sync:
+
+    * feed in events with update_hwm() and store_deletion().
+
+    At any point, if a new resync is required restart from
+    "Call start_tracking_deletions()..."
+
     """
     def __init__(self):
+        # We use a trie to track the highest etcd index at which we've seen
+        # each key.  The trie implementation forces a fixed character set;
+        # we explicitly allow the characters we expect and encode any others
+        # that we're not expecting.
         self._hwms = Trie(TRIE_CHARS)
 
         # Set to a Trie while we're tracking deletions.  None otherwise.
         self._deletion_hwms = None
+        # Optimization: tracks the highest etcd index at which we've seen a
+        # deletion.  This allows us to skip an expensive lookup in the
+        # _deletion_hwms trie for events that come after the deletion.
         self._latest_deletion = None
 
     def start_tracking_deletions(self):
