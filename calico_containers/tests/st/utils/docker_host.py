@@ -44,7 +44,7 @@ class DockerHost(object):
             log_and_run("docker run --privileged -tid "
                         "-v %s/docker:/usr/local/bin/docker "
                         "-v %s:/code --name %s "
-                        "calico/dind:libnetwork docker daemon --storage-driver=aufs %s" %
+                        "calico/dind:latest docker daemon --storage-driver=aufs %s" %
                     (os.getcwd(), os.getcwd(), self.name, additional_docker_options))
 
             self.ip = log_and_run("docker inspect --format "

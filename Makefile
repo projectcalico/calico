@@ -104,7 +104,7 @@ create-dind: docker
 	@echo "You may want to load calico-node with"
 	@echo "docker load --input /code/calico_containers/calico-node.tar"
 	@ID=$$(docker run --privileged -v `pwd`:/code -v `pwd`/docker:/usr/local/bin/docker \
-	-tid calico/dind:libnetwork) ;\
+	-tid calico/dind:latest) ;\
 	docker exec -ti $$ID bash;\
 	docker rm -f $$ID
 
