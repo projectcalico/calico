@@ -161,13 +161,13 @@ def mkdir_p(path):
     except TypeError:
         try:
             os.makedirs(path)
-        except OSError as exc: # Python >2.5
+        except OSError as exc:  # Python >2.5
             if exc.errno == errno.EEXIST and os.path.isdir(path):
                 pass
             else: raise
 
 
-def default_logging(gevent_in_use=True):
+def default_logging(gevent_in_use=True, syslog_executable_name=None):
     """
     Sets up the Calico default logging, with default severities.
 
@@ -188,7 +188,7 @@ def default_logging(gevent_in_use=True):
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
 
-    executable_name = os.path.basename(sys.argv[0])
+    executable_name = syslog_executable_name or os.path.basename(sys.argv[0])
     syslog_format = SYSLOG_FORMAT_STRING.format(excname=executable_name)
     syslog_formatter = logging.Formatter(syslog_format)
     if os.path.exists("/dev/log"):
@@ -388,6 +388,7 @@ def validate_endpoint(config, combined_id, endpoint):
     if issues:
         raise ValidationFailed(" ".join(issues))
 
+
 def validate_rules(profile_id, rules):
     """
     Ensures that the supplied rules are valid. Once this routine has returned
@@ -573,6 +574,7 @@ def validate_tags(profile_id, tags):
 
     if issues:
         raise ValidationFailed(" ".join(issues))
+
 
 def validate_ipam_pool(pool_id, pool, ip_version):
     """

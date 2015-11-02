@@ -34,7 +34,8 @@ from calico.common import default_logging
 _log = logging.getLogger(__name__)
 
 last_ppid = os.getppid()
-default_logging(gevent_in_use=False)
+default_logging(gevent_in_use=False,
+                syslog_executable_name="calico-felix-etcd")
 
 felix_sck = socket.socket(socket.AF_UNIX,
                           socket.SOCK_STREAM)
