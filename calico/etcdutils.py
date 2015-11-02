@@ -1,4 +1,5 @@
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+from collections import namedtuple
 
 import logging
 import re
@@ -54,6 +55,12 @@ class PathDispatcher(object):
             node["delete"] = on_del
 
     def handle_event(self, response):
+        """
+        :param EtcdEvent|EtcdResponse: Either a python-etcd response object
+               for a watch response or an instance of our dedicated EtcdEvent
+               class, which we use when deserialising an event that came over
+               the etcd driver socket.
+        """
         _log.debug("etcd event %s for key %s", response.action, response.key)
         key_parts = response.key.strip("/").split("/")
         self._handle(key_parts, response, self.handler_root, {})
@@ -78,6 +85,9 @@ class PathDispatcher(object):
         else:
             _log.debug("No handler for event %s on %s. Handler node %s.",
                        action, response.key, handler_node)
+
+
+EtcdEvent = namedtuple("EtcdEvent", ["action", "key", "value"])
 
 
 class EtcdClientOwner(object):

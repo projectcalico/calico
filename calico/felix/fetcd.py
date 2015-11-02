@@ -26,8 +26,6 @@ import json
 import logging
 import socket
 import subprocess
-import msgpack
-import select
 from calico.etcddriver.protocol import *
 from calico.monotonic import monotonic_time
 
@@ -48,8 +46,8 @@ from calico.datamodel_v1 import (VERSION_DIR, CONFIG_DIR,
                                  dir_for_felix_status, ENDPOINT_STATUS_ERROR,
                                  ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP)
 from calico.etcdutils import (
-    EtcdClientOwner, delete_empty_parents, PathDispatcher
-)
+    EtcdClientOwner, delete_empty_parents, PathDispatcher,
+    EtcdEvent)
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
                                  iso_utc_timestamp, IPV4, IPV6, StatCounter)
@@ -356,30 +354,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.info("...load_config set.  Starting driver read %s loop", self)
         # Start the driver process and wait for it to connect back to our
         # socket.
-        self._driver_sck = self.start_driver()
+        self._msg_reader, self._msg_writer = self.start_driver()
         # Loop reading from the socket and processing messages.
-        unpacker = msgpack.Unpacker()
         msgs_processed = 0
         while True:
-            # Use select to impose a timeout on how long we block so that we
-            # periodically check the resync flag below.
-            read_ready, _, _ = select.select([self._driver_sck], [], [], 1)
-            if read_ready:
-                # Socket has some data to read so this call shouldn't block.
-                data = self._driver_sck.recv(16384)
-                if not data:
-                    # No data indicates an orderly shutdown of the socket,
-                    # which shouldn't happen.
-                    _log.critical("Driver closed the socket. Felix must exit.")
-                    die_and_restart()
-                # Feed the data into the Unpacker, if it has enough data it
-                # will then generate some messages.  Otherwise we'll loop
-                # again.
-                unpacker.feed(data)
-            for msg in unpacker:
+            for msg_type, msg in self._msg_reader.new_messages(timeout=1):
                 # Optimization: put update first in the "switch" block because
                 # it's on the critical path.
-                msg_type = msg[MSG_KEY_TYPE]
                 if msg_type == MSG_TYPE_UPDATE:
                     _stats.increment("Update messages from driver")
                     self._on_update_from_driver(msg)
@@ -400,11 +381,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             if self.resync_requested:
                 _log.info("Resync requested, sending resync request to driver")
                 self.resync_requested = False
-                self._driver_sck.sendall(
-                    msgpack.dumps({
-                        MSG_KEY_TYPE: MSG_TYPE_RESYNC,
-                    })
-                )
+                self._msg_writer.send_message(MSG_TYPE_RESYNC)
             # Check that the driver hasn't died.  The recv() call should
             # raise an exception when the buffer runs dry but this usually
             # gets hit first.
@@ -440,13 +417,9 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             _log.info("Processed %s updates from driver "
                       "%.1f/s", self.read_count, 1000.0 / delta)
             self.last_rate_log_time = now
-        # Create a fake etcd node object.
-        # FIXME: avoid creating fake node.
-        n = Node()
-        n.action = "set" if value is not None else "delete"
-        n.value = value
-        n.key = key
-        # And dispatch it.
+        # Wrap the update in an EtcdEvent object so we can dispatch it via the
+        # PathDispatcher.
+        n = EtcdEvent("set" if value is not None else "delete", key, value)
         self.dispatcher.handle_event(n)
 
     def _on_config_loaded_from_driver(self, msg):
@@ -498,13 +471,15 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                 driver_log_file = felix_log_file + "-driver"
             else:
                 driver_log_file = None
-            self._driver_sck.sendall(msgpack.dumps({
-                MSG_KEY_TYPE: MSG_TYPE_CONFIG,
-                MSG_KEY_LOG_FILE: driver_log_file,
-                MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
-                MSG_KEY_SEV_SCREEN: self._config.LOGLEVSCR,
-                MSG_KEY_SEV_SYSLOG: self._config.LOGLEVSYS,
-            }))
+            self._msg_writer.send_message(
+                MSG_TYPE_CONFIG,
+                {
+                    MSG_KEY_LOG_FILE: driver_log_file,
+                    MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
+                    MSG_KEY_SEV_SCREEN: self._config.LOGLEVSCR,
+                    MSG_KEY_SEV_SYSLOG: self._config.LOGLEVSYS,
+                }
+            )
             self.configured.set()
 
     def _on_status_from_driver(self, msg):
@@ -571,13 +546,19 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         else:
             _log.info("Unlinked server socket")
 
-        update_conn.sendall(msgpack.dumps({
-            MSG_KEY_TYPE: MSG_TYPE_INIT,
-            MSG_KEY_ETCD_URL: "http://" + self._config.ETCD_ADDR,
-            MSG_KEY_HOSTNAME: self._config.HOSTNAME,
-        }))
-
-        return update_conn
+        # Wrap the socket in reader/writer objects that simplify using the
+        # protocol.
+        reader = MessageReader(update_conn)
+        writer = MessageWriter(update_conn)
+        # Give the driver its config.
+        writer.send_message(
+            MSG_TYPE_INIT,
+            {
+                MSG_KEY_ETCD_URL: "http://" + self._config.ETCD_ADDR,
+                MSG_KEY_HOSTNAME: self._config.HOSTNAME,
+            }
+        )
+        return reader, writer
 
     def on_endpoint_set(self, response, hostname, orchestrator,
                         workload_id, endpoint_id):
@@ -1054,14 +1035,3 @@ def safe_decode_json(raw_json, log_tag=None):
         _log.warning("Failed to decode JSON for %s: %r.  Returning None.",
                      log_tag, raw_json)
         return None
-
-
-class Node(object):
-    __slots__ = ("key", "value", "action", "current_key", "modifiedIndex")
-
-    def __init__(self):
-        self.modifiedIndex = None
-        self.key = None
-        self.value = None
-        self.action = None
-        self.current_key = None
