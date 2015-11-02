@@ -347,6 +347,7 @@ class TestContainer(unittest.TestCase):
         m_client.get_endpoint.return_value = m_endpoint
         m_namespace = Mock()
         m_netns.PidNamespace.return_value = m_namespace
+        m_netns.ns_veth_exists.return_value = True
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -369,6 +370,7 @@ class TestContainer(unittest.TestCase):
         m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
+        m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
         m_netns.PidNamespace.assert_called_once_with("Pid_info")
         m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
                                                           ip_addr,
@@ -400,6 +402,7 @@ class TestContainer(unittest.TestCase):
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
         }
+        m_netns.ns_veth_exists.return_value = True
         m_netns.PidNamespace.return_value = m_namespace
 
         # Set up arguments to pass to method under test
@@ -424,6 +427,7 @@ class TestContainer(unittest.TestCase):
                                                          pool=(None, None))
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
+        m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
         m_netns.PidNamespace.assert_called_once_with("Pid_info")
         m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
                                                           ip_addr,
@@ -451,6 +455,7 @@ class TestContainer(unittest.TestCase):
         }
         m_endpoint = Mock()
         m_client.get_endpoint.return_value = m_endpoint
+        m_netns.ns_veth_exists.return_value = True
         m_namespace = Mock()
         m_netns.PidNamespace.return_value = m_namespace
 
@@ -475,6 +480,7 @@ class TestContainer(unittest.TestCase):
         m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
         m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
+        m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
         m_netns.PidNamespace.assert_called_once_with("Pid_info")
         m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
                                                           ip_addr,
@@ -506,6 +512,7 @@ class TestContainer(unittest.TestCase):
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
         }
+        m_netns.ns_veth_exists.return_value = True
         m_netns.PidNamespace.return_value = m_namespace
 
         # Set up arguments to pass to method under test
@@ -530,6 +537,7 @@ class TestContainer(unittest.TestCase):
                                                          pool=(None, None))
         m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
+        m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
         m_netns.PidNamespace.assert_called_once_with("Pid_info")
         m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
                                                           ip_addr,
@@ -562,6 +570,7 @@ class TestContainer(unittest.TestCase):
             'State': {'Running': 1, 'Pid': 'Pid_info'}
         }
         m_netns.PidNamespace.return_value = m_namespace
+        m_netns.ns_veth_exists.return_value = True
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -585,6 +594,7 @@ class TestContainer(unittest.TestCase):
             1, 0, None, {}, pool=(pool_return, None))
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
+        m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
         m_netns.PidNamespace.assert_called_once_with("Pid_info")
         m_netns.add_ip_to_ns_veth.assert_called_once_with(m_namespace,
                                                           ip_addr,
@@ -705,8 +715,9 @@ class TestContainer(unittest.TestCase):
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns.add_ip_to_ns_veth', autospec=True)
+    @patch('calico_ctl.container.netns.ns_veth_exists', autospec=True)
     def test_container_ip_add_error_updating_datastore(
-            self, m_netns_add_ip_to_ns_veth, m_client,
+            self, m_ns_veth_exists, m_netns_add_ip_to_ns_veth, m_client,
             m_get_container_info_or_exit, m_get_pool_or_exit, m_enforce_root):
         """
         Test for container_ip_add when the client fails to update endpoint
@@ -738,16 +749,20 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_client.assign_address.called)
         m_client.release_ips.assert_called_once_with({IPAddress(ip)})
+        self.assertFalse(m_ns_veth_exists.called)
         self.assertFalse(m_netns_add_ip_to_ns_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
+    @patch('calico_ctl.container.netns.PidNamespace', autospec=True)
     @patch('calico_ctl.container.netns.add_ip_to_ns_veth', autospec=True)
+    @patch('calico_ctl.container.netns.ns_veth_exists', autospec=True)
     def test_container_ip_add_netns_error_ipv4(
-            self, m_netns_add_ip_to_ns_veth, m_client,
-            m_get_container_info_or_exit,  m_get_pool_or_exit, m_enforce_root):
+            self, m_ns_veth_exists, m_netns_add_ip_to_ns_veth, m_PidNamespace,
+            m_client, m_get_container_info_or_exit, m_get_pool_or_exit,
+            m_enforce_root):
         """
         Test container_ip_add when netns cannot add an ipv4 to interface
 
@@ -762,6 +777,9 @@ class TestContainer(unittest.TestCase):
         m_get_pool_or_exit.return_value = 'pool'
         m_endpoint = Mock()
         m_client.get_endpoint.return_value = m_endpoint
+        m_namespace = Mock()
+        m_PidNamespace.return_value = m_namespace
+        m_ns_veth_exists.return_value = True
         err = CalledProcessError(
             1, m_netns_add_ip_to_ns_veth, "Error updating container")
         m_netns_add_ip_to_ns_veth.side_effect = err
@@ -781,6 +799,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_client.assign_address.called)
+        m_ns_veth_exists.assert_called_once_with(m_namespace, interface)
         self.assertTrue(m_netns_add_ip_to_ns_veth.called)
         m_endpoint.ipv4_nets.remove.assert_called_once_with(
             IPNetwork(IPAddress(ip))
@@ -794,9 +813,12 @@ class TestContainer(unittest.TestCase):
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.print_container_not_in_calico_msg', autospec=True)
+    @patch('calico_ctl.container.netns.PidNamespace', autospec=True)
     @patch('calico_ctl.container.netns.add_ip_to_ns_veth', autospec=True)
+    @patch('calico_ctl.container.netns.ns_veth_exists', autospec=True)
     def test_container_ip_add_netns_error_ipv6(
-            self, m_netns, m_print_container_not_in_calico_msg, m_client,
+            self, m_ns_veth_exists, m_netns_add_ip_to_ns_veth, m_PidNamespace,
+            m_print_container_not_in_calico_msg, m_client,
             m_get_container_info_or_exit,  m_get_pool_or_exit, m_enforce_root):
         """
         Test container_ip_add when netns cannot add an ipv6 to interface
@@ -812,8 +834,12 @@ class TestContainer(unittest.TestCase):
         m_get_pool_or_exit.return_value = 'pool'
         m_endpoint = Mock()
         m_client.get_endpoint.return_value = m_endpoint
-        err = CalledProcessError(1, m_netns, "Error updating container")
-        m_netns.side_effect = err
+        m_namespace = Mock()
+        m_PidNamespace.return_value = m_namespace
+        m_ns_veth_exists.return_value = True
+        err = CalledProcessError(1, m_netns_add_ip_to_ns_veth,
+                                 "Error updating container")
+        m_netns_add_ip_to_ns_veth.side_effect = err
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -830,13 +856,94 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_client.assign_address.called)
-        self.assertTrue(m_netns.called)
+        m_ns_veth_exists.assert_called_once_with(m_namespace, interface)
+        self.assertTrue(m_netns_add_ip_to_ns_veth.called)
         m_endpoint.ipv6_nets.remove.assert_called_once_with(
             IPNetwork(IPAddress(ip))
         )
         m_client.update_endpoint.assert_has_calls([
             call(m_endpoint), call(m_endpoint)])
         m_client.release_ips.assert_called_once_with({IPAddress(ip)})
+
+    @patch('calico_ctl.container.enforce_root', autospec=True)
+    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
+    @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
+    @patch('calico_ctl.container.client', autospec=True)
+    @patch('calico_ctl.container.netns.add_ip_to_ns_veth', autospec=True)
+    def test_container_ip_add_bad_interface(
+            self, m_netns_add_ip_to_ns_veth, m_client,
+            m_get_container_info_or_exit, m_get_pool_or_exit, m_enforce_root):
+        """
+        Test for container_ip_add when the client fails to update endpoint
+
+        client.update_endpoint raises a KeyError.
+        Assert that the system then exits and all expected calls are made
+        """
+        # Set up mock objects
+        m_get_pool_or_exit.return_value = 'pool'
+        m_get_container_info_or_exit.return_value = {
+            'Id': 666,
+            'State': {'Running': 1, 'Pid': 'Pid_info'}
+        }
+
+        # Set up arguments to pass to method under test
+        container_name = 'container1'
+        ip = '1.1.1.1'
+        bad_if = 'bad_interface'
+
+        # Call method under test expecting a SystemExit
+        self.assertRaises(SystemExit, container.container_ip_add,
+                          container_name, ip, bad_if)
+
+        # Assert
+        self.assertTrue(m_enforce_root.called)
+        self.assertTrue(m_get_pool_or_exit.called)
+        self.assertTrue(m_get_container_info_or_exit.called)
+        self.assertTrue(m_client.get_endpoint.called)
+        self.assertTrue(m_client.assign_address.called)
+        self.assertFalse(m_netns_add_ip_to_ns_veth.called)
+
+    @patch('calico_ctl.container.enforce_root', autospec=True)
+    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
+    @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
+    @patch('calico_ctl.container.client', autospec=True)
+    @patch('calico_ctl.container.netns', autospec=True)
+    def test_container_ip_add_bad_interface(
+            self, m_netns, m_client, m_get_container_info_or_exit,
+            m_get_pool_or_exit, m_enforce_root):
+        """
+        Test for container_ip_add when the client fails to update endpoint
+
+        client.update_endpoint raises a KeyError.
+        Assert that the system then exits and all expected calls are made
+        """
+        # Set up mock objects
+        m_get_pool_or_exit.return_value = 'pool'
+        m_get_container_info_or_exit.return_value = {
+            'Id': 666,
+            'State': {'Running': 1, 'Pid': 'Pid_info'}
+        }
+        m_namespace = Mock()
+        m_netns.PidNamespace.return_value = m_namespace
+        m_netns.ns_veth_exists.return_value = False
+
+        # Set up arguments to pass to method under test
+        container_name = 'container1'
+        ip = '1.1.1.1'
+        bad_if = 'bad_interface'
+
+        # Call method under test expecting a SystemExit
+        self.assertRaises(SystemExit, container.container_ip_add,
+                          container_name, ip, bad_if)
+
+        # Assert
+        self.assertTrue(m_enforce_root.called)
+        self.assertTrue(m_get_pool_or_exit.called)
+        self.assertTrue(m_get_container_info_or_exit.called)
+        self.assertTrue(m_client.get_endpoint.called)
+        self.assertTrue(m_client.assign_address.called)
+        m_netns.ns_veth_exists.assert_called_once_with(m_namespace, bad_if)
+        self.assertFalse(m_netns.add_ip_to_ns_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
