@@ -19,6 +19,9 @@ calico.etcddriver.protocol
 Protocol constants for Felix <-> Driver protocol.
 """
 import logging
+import socket
+import errno
+from io import BytesIO
 import msgpack
 import select
 
@@ -59,19 +62,67 @@ MSG_KEY_KEY = "k"
 MSG_KEY_VALUE = "v"
 
 
+FLUSH_THRESHOLD = 200
+
+
 class SocketClosed(Exception):
     pass
 
 
+class WriteFailed(Exception):
+    pass
+
+
 class MessageWriter(object):
+    """
+    Wrapper around a socket used to write protocol messages.
+
+    Supports buffering a number of messages for subsequent flush().
+    """
     def __init__(self, sck):
         self._sck = sck
+        self._buf = BytesIO()
+        self._updates_pending = 0
 
-    def send_message(self, msg_type, fields=None):
+    def send_message(self, msg_type, fields=None, flush=True):
+        """
+        Send a message of the given type with the given fields.
+        Optionally, flush the data to the socket.
+
+        This method will flush the buffer if it grows too large in any
+        case.
+
+        :param msg_type: one of the MSG_TYPE_* constants.
+        :param dict fields: dict mapping MSG_KEY_* constants to values.
+        :param flush: True to force the data to be written immediately.
+        """
         msg = {MSG_KEY_TYPE: msg_type}
         if fields:
             msg.update(fields)
-        self._sck.sendall(msgpack.dumps(msg))
+        self._buf.write(msgpack.dumps(msg))
+        if flush:
+            self.flush()
+        else:
+            self._maybe_flush()
+
+    def _maybe_flush(self):
+        self._updates_pending += 1
+        if self._updates_pending > FLUSH_THRESHOLD:
+            self.flush()
+
+    def flush(self):
+        """
+        Flushes the write buffer to the socket immediately.
+        """
+        buf_contents = self._buf.getvalue()
+        if buf_contents:
+            try:
+                self._sck.sendall(buf_contents)
+            except socket.error as e:
+                _log.exception("Failed to write to socket")
+                raise WriteFailed(e)
+            self._buf = BytesIO()
+        self._updates_pending = 0
 
 
 class MessageReader(object):
@@ -93,7 +144,17 @@ class MessageReader(object):
             read_ready, _, _ = select.select([self._sck], [], [], 1)
             if not read_ready:
                 return
-        data = self._sck.recv(16384)
+        try:
+            data = self._sck.recv(16384)
+        except socket.error as e:
+            if e.errno in (errno.EAGAIN,
+                           errno.EWOULDBLOCK,
+                           errno.EINTR):
+                _log.debug("Retryable error on read.")
+                return
+            else:
+                _log.error("Failed to read from socket: %r", e)
+                raise
         if not data:
             # No data indicates an orderly shutdown of the socket,
             # which shouldn't happen.

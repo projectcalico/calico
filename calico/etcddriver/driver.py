@@ -31,30 +31,34 @@ The driver is responsible for
   Felix about all the individual keys that are deleted.
 """
 
-import errno
 from httplib import HTTPException
-from io import BytesIO
-from calico.etcdutils import ACTION_MAPPING
-
-try:
-    import simplejson as json
-except ImportError:
-    import json
 import logging
 from Queue import Queue, Empty
 import socket
+try:
+    # simplejson is a faster drop-in replacement.
+    import simplejson as json
+except ImportError:
+    import json
 from threading import Thread, Event
 import time
 from urlparse import urlparse
 
 from ijson.backends import yajl2 as ijson
-import msgpack
 import urllib3
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import ReadTimeoutError
 
+from calico.etcddriver.protocol import (
+    MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
+    MSG_KEY_ETCD_URL, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
+    MSG_KEY_SEV_SYSLOG, MSG_KEY_SEV_SCREEN, STATUS_WAIT_FOR_READY,
+    STATUS_RESYNC, STATUS_IN_SYNC, MSG_TYPE_CONFIG_LOADED,
+    MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, MSG_TYPE_UPDATE, MSG_KEY_KEY,
+    MSG_KEY_VALUE, MessageWriter, MSG_TYPE_STATUS, MSG_KEY_STATUS,
+    WriteFailed)
+from calico.etcdutils import ACTION_MAPPING
 from calico.common import complete_logging
-from calico.etcddriver.protocol import *
 from calico.monotonic import monotonic_time
 from calico.datamodel_v1 import (
     READY_KEY, CONFIG_DIR, dir_for_per_host_config, VERSION_DIR
@@ -63,12 +67,12 @@ from calico.etcddriver.hwm import HighWaterTracker
 
 _log = logging.getLogger(__name__)
 
-FLUSH_THRESHOLD = 200
-
 
 class EtcdDriver(object):
     def __init__(self, felix_sck):
-        self._felix_sck = felix_sck
+        # Wrap the socket with our protocol reader/writer objects.
+        self._msg_reader = MessageReader(felix_sck)
+        self._msg_writer = MessageWriter(felix_sck)
 
         # Global stop event used to signal to all threads to stop.
         self._stop_event = Event()
@@ -85,9 +89,6 @@ class EtcdDriver(object):
 
         # High-water mark cache.  Owned by resync thread.
         self._hwms = HighWaterTracker()
-        # Number of pending updates and buffer.  Owned by resync thread.
-        self._updates_pending = 0
-        self._buf = BytesIO()
         self._first_resync = True
         self._resync_http_pool = None
         self._cluster_id = None
@@ -117,7 +118,7 @@ class EtcdDriver(object):
 
         :returns True if the driver stopped, False on timeout.
         """
-        return self._stop_event.wait(timeout=None)
+        return self._stop_event.wait(timeout=timeout)
 
     def stop(self):
         _log.info("Stopping driver")
@@ -131,25 +132,8 @@ class EtcdDriver(object):
         with the exception if Felix dies.
         """
         try:
-            unpacker = msgpack.Unpacker()
             while not self._stop_event.is_set():
-                try:
-                    data = self._felix_sck.recv(8092)
-                except socket.error as e:
-                    if e.errno in (errno.EAGAIN,
-                                   errno.EWOULDBLOCK,
-                                   errno.EINTR):
-                        _log.debug("Retryable error on read from Felix.")
-                        continue
-                    else:
-                        _log.error("Failed to read from Felix socket: %r", e)
-                        raise
-                if not data:
-                    _log.error("No data read, assuming Felix closed socket")
-                    break
-                unpacker.feed(data)
-                for msg in unpacker:
-                    msg_type = msg[MSG_KEY_TYPE]
+                for msg_type, msg in self._msg_reader.new_messages():
                     if msg_type == MSG_TYPE_INIT:
                         self._handle_init(msg)
                     elif msg_type == MSG_TYPE_CONFIG:
@@ -214,16 +198,14 @@ class EtcdDriver(object):
                 # state.
                 self._resync_http_pool = self.get_etcd_connection()
                 # Before we get to the snapshot, Felix needs the configuration.
-                self._queue_status(STATUS_WAIT_FOR_READY)
-                self._flush()  # Send the status message immediately.
+                self._send_status(STATUS_WAIT_FOR_READY)
                 self._wait_for_ready()
                 self._preload_config()
                 # Now (on the first run through) wait for Felix to process the
                 # config.
                 self._config_received.wait()
                 # Kick off the snapshot request as far as the headers.
-                self._queue_status(STATUS_RESYNC)
-                self._flush()  # Send the status message immediately.
+                self._send_status(STATUS_RESYNC)
                 resp, snapshot_index = self._start_snapshot_request()
                 # Before reading from the snapshot, start the watcher thread.
                 self._start_watcher(snapshot_index)
@@ -231,10 +213,9 @@ class EtcdDriver(object):
                 # the queue.
                 self._process_snapshot_and_events(resp, snapshot_index)
                 # We're now in-sync.  Tell Felix.
-                self._queue_status(STATUS_IN_SYNC)
-                self._flush()  # Send the status message immediately.
+                self._send_status(STATUS_IN_SYNC)
                 self._process_events_only()
-            except FelixWriteFailed:
+            except WriteFailed:
                 _log.exception("Write to Felix failed; shutting down.")
                 self.stop()
             except WatcherDied:
@@ -285,14 +266,13 @@ class EtcdDriver(object):
         global_config = self._load_config(CONFIG_DIR)
         host_config_dir = dir_for_per_host_config(self._hostname)
         host_config = self._load_config(host_config_dir)
-        self._buf.write(msgpack.dumps(
+        self._msg_writer.send_message(
+            MSG_TYPE_CONFIG_LOADED,
             {
-                MSG_KEY_TYPE: MSG_TYPE_CONFIG_LOADED,
                 MSG_KEY_GLOBAL_CONFIG: global_config,
                 MSG_KEY_HOST_CONFIG: host_config,
             }
-        ))
-        self._flush()
+        )
         _log.info("Sent config message to Felix.")
 
     def _load_config(self, config_dir):
@@ -431,7 +411,7 @@ class EtcdDriver(object):
         _log.info("In sync, now processing events only...")
         while not self._stop_event.is_set():
             self._handle_next_watcher_event()
-            self._flush()
+            self._msg_writer.flush()
 
     def _scan_for_deletions(self, snapshot_index):
         """
@@ -533,48 +513,26 @@ class EtcdDriver(object):
         if key == READY_KEY and value != "true":
             _log.warning("Ready key no longer set to true, triggering resync.")
             raise ResyncRequired()
-        self._queue_update_msg(key, value)
+        self._msg_writer.send_message(
+            MSG_TYPE_UPDATE,
+            {
+                MSG_KEY_KEY: key,
+                MSG_KEY_VALUE: value,
+            },
+            flush=False
+        )
 
-    def _queue_update_msg(self, key, value):
-        """
-        Queues an update message to Felix.
-        :raises FelixWriteFailed:
-        """
-        self._buf.write(msgpack.dumps({
-            MSG_KEY_TYPE: MSG_TYPE_UPDATE,
-            MSG_KEY_KEY: key,
-            MSG_KEY_VALUE: value,
-        }))
-        self._maybe_flush()
-
-    def _queue_status(self, status):
+    def _send_status(self, status):
         """
         Queues the given status to felix as a status message.
         """
-        self._buf.write(msgpack.dumps({
-            MSG_KEY_TYPE: MSG_TYPE_STATUS,
-            MSG_KEY_STATUS: status,
-        }))
-
-    def _maybe_flush(self):
-        self._updates_pending += 1
-        if self._updates_pending > FLUSH_THRESHOLD:
-            self._flush()
-
-    def _flush(self):
-        """
-        Flushes the write buffer to Felix.
-        :raises FelixWriteFailed:
-        """
-        buf_contents = self._buf.getvalue()
-        if buf_contents:
-            try:
-                self._felix_sck.sendall(buf_contents)
-            except socket.error as e:
-                _log.exception("Failed to write to Felix socket")
-                raise FelixWriteFailed(e)
-            self._buf = BytesIO()
-        self._updates_pending = 0
+        _log.info("Sending status to Felix: %s", status)
+        self._msg_writer.send_message(
+            MSG_TYPE_STATUS,
+            {
+                MSG_KEY_STATUS: status,
+            }
+        )
 
     def watch_etcd(self, next_index, event_queue, stop_event):
         """
@@ -731,10 +689,6 @@ class WatcherDied(Exception):
 
 
 class DriverShutdown(Exception):
-    pass
-
-
-class FelixWriteFailed(Exception):
     pass
 
 
