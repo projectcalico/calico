@@ -367,13 +367,13 @@ class EtcdDriver(object):
         :param snapshot_index: the etcd index of the response.
         """
         self._hwms.start_tracking_deletions()
-        for snap_mod, snap_key, snap_value in parse_snapshot(etcd_response):
+
+        def _handle_etcd_node(snap_mod, snap_key, snap_value):
             old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
             if snap_mod > old_hwm:
                 # This specific key's HWM is newer than the previous
                 # version we've seen, send an update.
                 self._on_key_updated(snap_key, snap_value)
-
             # After we process an update from the snapshot, process
             # several updates from the watcher queue (if there are
             # any).  We limit the number to ensure that we always
@@ -393,6 +393,8 @@ class EtcdDriver(object):
             if self._stop_event.is_set():
                 _log.error("Stop event set, exiting")
                 raise DriverShutdown()
+        parse_snapshot(etcd_response, _handle_etcd_node)
+
         # Save occupancy by throwing away the deletion tracking metadata.
         self._hwms.stop_tracking_deletions()
         # Scan for deletions that happened before the snapshot.  We effectively
@@ -628,7 +630,7 @@ class EtcdDriver(object):
             event_queue.put(None)
 
 
-def parse_snapshot(resp):
+def parse_snapshot(resp, callback):
     """
     Generator: iteratively parses the response to the etcd snapshot.
 
@@ -641,47 +643,48 @@ def parse_snapshot(resp):
         raise ResyncRequired("Read from etcd failed.  HTTP status code %s",
                              resp.status)
     parser = ijson.parse(resp)  # urllib3 response is file-like.
-    stack = []
-    frame = Node()
-    for prefix, event, value in parser:
-        if event == "start_map":
-            stack.append(frame)
-            frame = Node()
-        elif event == "map_key":
-            frame.current_key = value
-        elif event in ("string", "number"):
-            if frame.done:
-                continue
-            if frame.current_key == "modifiedIndex":
-                frame.modifiedIndex = value
-            elif frame.current_key == "key":
-                frame.key = value
-            elif frame.current_key == "value":
-                frame.value = value
-            elif frame.current_key == "errorCode":
+
+    prefix, event, value = next(parser)
+    if event == "start_map":
+        _parse_dict(parser, callback)
+    else:
+        raise ResyncRequired("Bad response from etcd")
+
+
+def _parse_dict(parser, callback):
+    # Expect a sequence of keys and values.
+    mod_index = None
+    node_key = None
+    node_value = None
+    while True:
+        prefix, event, value = next(parser)
+        if event == "map_key":
+            map_key = value
+            prefix, event, value = next(parser)
+            if map_key == "modifiedIndex":
+                mod_index = value
+            elif map_key == "key":
+                node_key = value
+            elif map_key == "value":
+                node_value = value
+            elif map_key == "errorCode":
                 raise ResyncRequired("Error from etcd, etcd error code %s",
                                      value)
-            if (frame.key is not None and
-                    frame.value is not None and
-                    frame.modifiedIndex is not None):
-                frame.done = True
-                yield frame.modifiedIndex, frame.key, frame.value
-            frame.current_key = None
+            elif map_key == "nodes":
+                while True:
+                    prefix, event, value = next(parser)
+                    if event == "start_map":
+                        _parse_dict(parser, callback)
+                    elif event == "end_array":
+                        break
+                    else:
+                        raise ValueError("Unexpected: %s" % event)
         elif event == "end_map":
-            frame = stack.pop(-1)
-
-
-class Node(object):
-    __slots__ = ("key", "value", "action", "current_key", "modifiedIndex",
-                 "done")
-
-    def __init__(self):
-        self.modifiedIndex = None
-        self.key = None
-        self.value = None
-        self.action = None
-        self.current_key = None
-        self.done = False
+            if (node_key is not None and
+                    node_value is not None and
+                    mod_index is not None):
+                callback(mod_index, node_key, node_value)
+            break
 
 
 class WatcherDied(Exception):
