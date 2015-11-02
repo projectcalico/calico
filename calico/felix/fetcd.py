@@ -472,12 +472,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             self._config.report_etcd_config(host_config,
                                             global_config)
             # Config now fully resolved, inform the driver.
-            felix_log_file = self._config.LOGFILE
-            if felix_log_file:
-                # FIXME Proper config for driver logfile
-                driver_log_file = felix_log_file + "-driver"
-            else:
-                driver_log_file = None
+            driver_log_file = self._config.DRIVERLOGFILE
             self._msg_writer.send_message(
                 MSG_TYPE_CONFIG,
                 {

@@ -73,60 +73,62 @@ environment variables or etcd is often more convenient.
 
 The full list of parameters which can be set is as follows.
 
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| Setting                     | Default                   | Meaning                                                                                   |
-+=============================+===========================+===========================================================================================+
-| EtcdAddr                    | localhost:4001            | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
-|                             |                           | to.                                                                                       |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| DefaultEndpointToHostAction | DROP                      | By default Calico blocks traffic from endpoints to the host itself by using an iptables   |
-|                             |                           | DROP action.  If you want to allow some or all traffic from endpoint to host then set     |
-|                             |                           | this parameter to "RETURN" (which causes the rest of the iptables INPUT chain to be       |
-|                             |                           | processed) or "ACCEPT" (which immediately accepts packets).                               |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| FelixHostname               | socket.gethostname()      | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
-|                             |                           | autodetects is incorrect or does not match what the plugin will expect.                   |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| MetadataAddr                | 127.0.0.1                 | The IP address or domain name of the server that can answer VM queries for cloud-init     |
-|                             |                           | metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu,   |
-|                             |                           | nova-api-metadata). A value of 'None' (case insensitive) means that Felix should not set  |
-|                             |                           | up any NAT rule for the metadata path.                                                    |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| MetadataPort                | 8775                      | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), |
-|                             |                           | is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In    |
-|                             |                           | most cases this should not need to be changed.                                            |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| InterfacePrefix             | None                      | The start of the interface name for all interfaces. This is set to "tap" on OpenStack     |
-|                             |                           | by the plugin, but must be set to "veth" on most Docker deployments.                      |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| LogFilePath                 | /var/log/calico/felix.log | The full path to the felix log. Set to "none" to disable file logging.                    |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| LogSeveritySys              | ERROR                     | The log severity above which logs are sent to the syslog. Valid values are DEBUG, INFO,   |
-|                             |                           | WARNING, ERROR and CRITICAL, or NONE for no logging to syslog (all values case            |
-|                             |                           | insensitive).                                                                             |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| LogSeverityFile             | INFO                      | The log severity above which logs are sent to the log file. Valid values as for           |
-|                             |                           | LogSeveritySys.                                                                           |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| LogSeverityScreen           | ERROR                     | The log severity above which logs are sent to the stdout. Valid values as for             |
-|                             |                           | LogSeveritySys.                                                                           |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| StartupCleanupDelay         | 30                        | Delay, in seconds, before felix does its start-of-day cleanup to remove orphaned iptables |
-|                             |                           | chains and ipsets.   Before the first cleanup, felix operates in "graceful restart" mode, |
-|                             |                           | during which it preserves any pre-existing chains and ipsets.                             |
-|                             |                           |                                                                                           |
-|                             |                           | In a large deployment you may want to increase this value to give felix more time to      |
-|                             |                           | load the initial snapshot from etcd before cleaning up.                                   |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| PeriodicResyncInterval      | 3600                      | Period, in seconds, at which felix does a full resync with etcd and reprograms            |
-|                             |                           | iptables/ipsets.  Set to 0 to disable periodic resync.                                    |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| IptablesRefreshInterval     | 60                        | Period, in seconds, at which felix re-applies all iptables state to ensure that no other  |
-|                             |                           | process has accidentally broken Calico's rules.  Set to 0 to disable iptables refresh.    |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
-| MaxIpsetSize                | 1048576                   | Maximum size for the ipsets used by Felix to implement tags.  Should be set to a number   |
-|                             |                           | that is greater than the maximum number of IP addresses that are ever expected in a tag.  |
-+-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| Setting                     | Default                        | Meaning                                                                                   |
++=============================+================================+===========================================================================================+
+| EtcdAddr                    | localhost:4001                 | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
+|                             |                                | to.                                                                                       |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| DefaultEndpointToHostAction | DROP                           | By default Calico blocks traffic from endpoints to the host itself by using an iptables   |
+|                             |                                | DROP action.  If you want to allow some or all traffic from endpoint to host then set     |
+|                             |                                | this parameter to "RETURN" (which causes the rest of the iptables INPUT chain to be       |
+|                             |                                | processed) or "ACCEPT" (which immediately accepts packets).                               |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| FelixHostname               | socket.gethostname()           | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
+|                             |                                | autodetects is incorrect or does not match what the plugin will expect.                   |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| MetadataAddr                | 127.0.0.1                      | The IP address or domain name of the server that can answer VM queries for cloud-init     |
+|                             |                                | metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu,   |
+|                             |                                | nova-api-metadata). A value of 'None' (case insensitive) means that Felix should not set  |
+|                             |                                | up any NAT rule for the metadata path.                                                    |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| MetadataPort                | 8775                           | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), |
+|                             |                                | is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In    |
+|                             |                                | most cases this should not need to be changed.                                            |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| InterfacePrefix             | None                           | The start of the interface name for all interfaces. This is set to "tap" on OpenStack     |
+|                             |                                | by the plugin, but must be set to "veth" on most Docker deployments.                      |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| LogFilePath                 | /var/log/calico/felix.log      | The full path to the felix log. Set to "none" to disable file logging.                    |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| EtcdDriverLogFilePath       | /var/log/calico/felix-etcd.log | Felix's etcd driver has its own log file. This parameter contains its full path.          |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| LogSeveritySys              | ERROR                          | The log severity above which logs are sent to the syslog. Valid values are DEBUG, INFO,   |
+|                             |                                | WARNING, ERROR and CRITICAL, or NONE for no logging to syslog (all values case            |
+|                             |                                | insensitive).                                                                             |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| LogSeverityFile             | INFO                           | The log severity above which logs are sent to the log file. Valid values as for           |
+|                             |                                | LogSeveritySys.                                                                           |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| LogSeverityScreen           | ERROR                          | The log severity above which logs are sent to the stdout. Valid values as for             |
+|                             |                                | LogSeveritySys.                                                                           |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| StartupCleanupDelay         | 30                             | Delay, in seconds, before felix does its start-of-day cleanup to remove orphaned iptables |
+|                             |                                | chains and ipsets.   Before the first cleanup, felix operates in "graceful restart" mode, |
+|                             |                                | during which it preserves any pre-existing chains and ipsets.                             |
+|                             |                                |                                                                                           |
+|                             |                                | In a large deployment you may want to increase this value to give felix more time to      |
+|                             |                                | load the initial snapshot from etcd before cleaning up.                                   |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| PeriodicResyncInterval      | 3600                           | Period, in seconds, at which felix does a full resync with etcd and reprograms            |
+|                             |                                | iptables/ipsets.  Set to 0 to disable periodic resync.                                    |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| IptablesRefreshInterval     | 60                             | Period, in seconds, at which felix re-applies all iptables state to ensure that no other  |
+|                             |                                | process has accidentally broken Calico's rules.  Set to 0 to disable iptables refresh.    |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| MaxIpsetSize                | 1048576                        | Maximum size for the ipsets used by Felix to implement tags.  Should be set to a number   |
+|                             |                                | that is greater than the maximum number of IP addresses that are ever expected in a tag.  |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 
 
 Environment variables

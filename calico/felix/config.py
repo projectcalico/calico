@@ -185,6 +185,9 @@ class Config(object):
                            "an endpoint to the host.", "DROP")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
+        self.add_parameter("EtcdDriverLogFilePath",
+                           "Path to log file for etcd driver",
+                           "/var/log/calico/felix-etcd.log")
         self.add_parameter("LogSeverityFile",
                            "Log severity for logging to file", "INFO")
         self.add_parameter("LogSeveritySys",
@@ -261,6 +264,7 @@ class Config(object):
         self.DEFAULT_INPUT_CHAIN_ACTION = \
             self.parameters["DefaultEndpointToHostAction"].value
         self.LOGFILE = self.parameters["LogFilePath"].value
+        self.DRIVERLOGFILE = self.parameters["EtcdDriverLogFilePath"].value
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
@@ -387,10 +391,12 @@ class Config(object):
             raise ConfigException("Invalid log level",
                                   self.parameters["LogSeverityScreen"])
 
-        # Log file may be "None" (the literal string, case insensitive). In
+        # Log files may be "None" (the literal string, case insensitive). In
         # this case no log file should be written.
         if self.LOGFILE.lower() == "none":
             self.LOGFILE = None
+        if self.DRIVERLOGFILE.lower() == "none":
+            self.DRIVERLOGFILE = None
 
         if self.METADATA_IP.lower() == "none":
             # Metadata is not required.
