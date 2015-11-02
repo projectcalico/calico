@@ -34,7 +34,6 @@ coreos:
       RemainAfterExit=yes
       Type=oneshot
       ExecStart=/home/core/get_latest_docker.sh
-      ExecStart=/home/core/docker.sh
   - name: docker.service
     command: restart
     content: |-
