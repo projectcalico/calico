@@ -44,11 +44,13 @@ def status(arguments):
         print "calico-node container is running. Status: %s" % \
               calico_node_info[0]["Status"]
 
-        apt_cmd = docker_client.exec_create("calico-node",
-                                           ["sh", "-c",
-                                            "apt-cache policy calico-felix"])
-        result = re.search(r"Installed: (.*?)\s",
-                           docker_client.exec_start(apt_cmd))
+        libraries_cmd = docker_client.exec_create("calico-node",
+                                                  ["sh", "-c",
+                                                   "cat libraries.txt"])
+        libraries_out = docker_client.exec_start(libraries_cmd)
+        result = re.search(r"^calico\s*\((.*)\)\s*$", libraries_out,
+                           re.MULTILINE)
+
         if result is not None:
             print "Running felix version %s" % result.group(1)
 

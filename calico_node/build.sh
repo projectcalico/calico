@@ -24,6 +24,9 @@ chmod +x /sbin/*
 # Install Felix
 pip install git+https://github.com/projectcalico/calico.git
 
+# Output the python library list
+pip list > libraries.txt
+
 # Cleanup
 apk del temp && rm -rf /var/cache/apk/*
 
