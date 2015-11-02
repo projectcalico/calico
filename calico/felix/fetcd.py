@@ -52,7 +52,7 @@ from calico.etcdutils import (
 )
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
-                                 iso_utc_timestamp, IPV4, IPV6)
+                                 iso_utc_timestamp, IPV4, IPV6, StatCounter)
 
 _log = logging.getLogger(__name__)
 
@@ -81,6 +81,10 @@ CIDR_V4_KEY = POOL_V4_DIR + "/<pool_id>"
 
 # Max number of events from driver process before we yield to another greenlet.
 MAX_EVENTS_BEFORE_YIELD = 200
+
+
+# Global diagnostic counters.
+_stats = StatCounter("Etcd counters")
 
 
 class EtcdAPI(EtcdClientOwner, Actor):
@@ -153,6 +157,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
                        "seconds.", sleep_time)
             gevent.sleep(sleep_time)
             self.force_resync(reason="periodic resync", async=True)
+            _stats.increment("Periodic resync")
 
     @logging_exceptions
     def _periodically_report_status(self):
@@ -218,7 +223,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         """
         Loads our config from etcd, should only be called once.
 
-        :return: an event which is triggered when the config has been loaded.
+        :return: an Event which is triggered when the config has been loaded.
         """
         self._watcher.load_config.set()
         return self._watcher.configured
@@ -305,6 +310,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         # Register for events when values change.
         self._register_paths()
 
+        self._driver_process = None
+
         self.read_count = 0
         self.last_rate_log_time = monotonic_time()
 
@@ -343,29 +350,44 @@ class _FelixEtcdWatcher(gevent.Greenlet):
 
     @logging_exceptions
     def _run(self):
+        # Don't do anything until we're told to load the config.
         _log.info("Waiting for load_config event...")
         self.load_config.wait()
         _log.info("...load_config set.  Starting driver read %s loop", self)
-        driver_sck = self.start_driver()
+        # Start the driver process and wait for it to connect back to our
+        # socket.
+        self._driver_sck = self.start_driver()
+        # Loop reading from the socket and processing messages.
         unpacker = msgpack.Unpacker()
         msgs_processed = 0
         while True:
             # Use select to impose a timeout on how long we block so that we
-            # periodically check the resync flag.
-            read_ready, _, _ = select.select([driver_sck], [], [], 1)
+            # periodically check the resync flag below.
+            read_ready, _, _ = select.select([self._driver_sck], [], [], 1)
             if read_ready:
-                data = driver_sck.recv(16384)
+                # Socket has some data to read so this call shouldn't block.
+                data = self._driver_sck.recv(16384)
+                if not data:
+                    # No data indicates an orderly shutdown of the socket,
+                    # which shouldn't happen.
+                    _log.critical("Driver closed the socket. Felix must exit.")
+                    die_and_restart()
+                # Feed the data into the Unpacker, if it has enough data it
+                # will then generate some messages.  Otherwise we'll loop
+                # again.
                 unpacker.feed(data)
             for msg in unpacker:
-                # Optimization: put update first in the "switch"
-                # block because it's on the critical path.
+                # Optimization: put update first in the "switch" block because
+                # it's on the critical path.
                 msg_type = msg[MSG_KEY_TYPE]
                 if msg_type == MSG_TYPE_UPDATE:
-                    self.begin_polling.wait()
+                    _stats.increment("Update messages from driver")
                     self._on_update_from_driver(msg)
                 elif msg_type == MSG_TYPE_CONFIG_LOADED:
-                    self._on_config_loaded_from_driver(msg, driver_sck)
+                    _stats.increment("Config loaded messages from driver")
+                    self._on_config_loaded_from_driver(msg)
                 elif msg_type == MSG_TYPE_STATUS:
+                    _stats.increment("Status messages from driver")
                     self._on_status_from_driver(msg)
                 else:
                     raise RuntimeError("Unexpected message %s" % msg)
@@ -376,23 +398,41 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                     # issue where we could be immediately rescheduled.
                     gevent.sleep(0.000001)
             if self.resync_requested:
+                _log.info("Resync requested, sending resync request to driver")
                 self.resync_requested = False
-                driver_sck.sendall(
+                self._driver_sck.sendall(
                     msgpack.dumps({
                         MSG_KEY_TYPE: MSG_TYPE_RESYNC,
                     })
                 )
+            # Check that the driver hasn't died.  The recv() call should
+            # raise an exception when the buffer runs dry but this usually
+            # gets hit first.
+            if self._driver_process.poll() is not None:
+                _log.critical("Driver process died with RC = %s.  Felix must "
+                              "exit.", self._driver_process.poll())
+                die_and_restart()
         _log.info("%s.loop() stopped due to self.stop == True", self)
 
     def _on_update_from_driver(self, msg):
         """
         Called when the driver sends us a key/value pair update.
-        :param dict msg: The message recived from the driver.
+
+        After the initial handshake, the stream of events consists
+        entirely of updates unless something happens to change the
+        state of the driver.
+
+        :param dict msg: The message received from the driver.
         """
         assert self.configured.is_set(), "Received update before config"
+        # The driver starts polling immediately, make sure we block until
+        # everyone else is ready to receive updates.
+        self.begin_polling.wait()
+        # Unpack the message.
         key = msg[MSG_KEY_KEY]
         value = msg[MSG_KEY_VALUE]
         _log.debug("Update from driver: %s -> %s", key, value)
+        # Output some very coarse stats.
         self.read_count += 1
         if self.read_count % 1000 == 0:
             now = monotonic_time()
@@ -409,11 +449,15 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         # And dispatch it.
         self.dispatcher.handle_event(n)
 
-    def _on_config_loaded_from_driver(self, msg, driver_sck):
+    def _on_config_loaded_from_driver(self, msg):
         """
         Called when we receive a config loaded message from the driver.
 
-        Responds to the driver immediately with a config response.
+        This message is expected once per resync, when the config is
+        pre-loaded by the driver.
+
+        On the first call, responds to the driver synchronously with a
+        config response.
 
         If the config has changed since a previous call, triggers Felix
         to die.
@@ -454,7 +498,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                 driver_log_file = felix_log_file + "-driver"
             else:
                 driver_log_file = None
-            driver_sck.sendall(msgpack.dumps({
+            self._driver_sck.sendall(msgpack.dumps({
                 MSG_KEY_TYPE: MSG_TYPE_CONFIG,
                 MSG_KEY_LOG_FILE: driver_log_file,
                 MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
@@ -467,9 +511,19 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         """
         Called when we receive a status update from the driver.
 
+        The driver sends us status messages whenever its status changes.
+        It moves through these states:
+
+        * wait-for-ready (waiting for the global ready flag to become set)
+        * resync (resyncing with etcd, processing a snapshot and any
+          concurrent events)
+        * in-sync (snapshot processsing complete, now processing only events
+          from etcd)
+
+        If it falls out of sync with etcd then it moves back into
+        wait-for-ready state and starts again.
+
         If the status is in-sync, triggers the relevant processing.
-        :param msg:
-        :return:
         """
         status = msg[MSG_KEY_STATUS]
         _log.info("etcd driver status changed to %s", status)
@@ -487,6 +541,10 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         """
         Starts the driver subprocess, connects to it over the socket
         and sends it the init message.
+
+        Stores the Popen object in self._driver_process for future
+        access.
+
         :return: the connected socket to the driver.
         """
         _log.info("Creating server socket.")
@@ -498,10 +556,11 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                                       socket.SOCK_STREAM)
         update_socket.bind("/run/felix-driver.sck")
         update_socket.listen(1)
-        subprocess.Popen([sys.executable,
-                          "-m",
-                          "calico.etcddriver",
-                          "/run/felix-driver.sck"])
+        self._driver_process = subprocess.Popen([sys.executable,
+                                                 "-m",
+                                                 "calico.etcddriver",
+                                                 "/run/felix-driver.sck"])
+        _log.info("Started etcd driver with PID %s", self._driver_process.pid)
         update_conn, _ = update_socket.accept()
         _log.info("Accepted connection on socket")
         # No longer need the server socket, remove it.
@@ -526,6 +585,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
+        _stats.increment("Endpoint created/updated")
         endpoint = parse_endpoint(self._config, combined_id, response.value)
         self.splitter.on_endpoint_update(combined_id, endpoint, async=True)
 
@@ -535,11 +595,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
+        _stats.increment("Endpoint deleted")
         self.splitter.on_endpoint_update(combined_id, None, async=True)
 
     def on_rules_set(self, response, profile_id):
         """Handler for rules updates, passes the update to the splitter."""
         _log.debug("Rules for %s set", profile_id)
+        _stats.increment("Rules created/updated")
         rules = parse_rules(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_rules_update(profile_id, rules, async=True)
@@ -547,11 +609,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_rules_delete(self, response, profile_id):
         """Handler for rules deletes, passes the update to the splitter."""
         _log.debug("Rules for %s deleted", profile_id)
+        _stats.increment("Rules deleted")
         self.splitter.on_rules_update(profile_id, None, async=True)
 
     def on_tags_set(self, response, profile_id):
         """Handler for tags updates, passes the update to the splitter."""
         _log.debug("Tags for %s set", profile_id)
+        _stats.increment("Tags created/updated")
         rules = parse_tags(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_tags_update(profile_id, rules, async=True)
@@ -559,6 +623,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_tags_delete(self, response, profile_id):
         """Handler for tags deletes, passes the update to the splitter."""
         _log.debug("Tags for %s deleted", profile_id)
+        _stats.increment("Tags deleted")
         self.splitter.on_tags_update(profile_id, None, async=True)
 
     def on_host_ip_set(self, response, hostname):
@@ -566,6 +631,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             _log.debug("Ignoring update to %s because IP-in-IP is disabled",
                        response.key)
             return
+        _stats.increment("Host IP created/updated")
         ip = parse_host_ip(hostname, response.value)
         if ip:
             self.ipv4_by_hostname[hostname] = ip
@@ -580,6 +646,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             _log.debug("Ignoring update to %s because IP-in-IP is disabled",
                        response.key)
             return
+        _stats.increment("Host IP deleted")
         if self.ipv4_by_hostname.pop(hostname, None):
             self._update_hosts_ipset()
 
@@ -596,11 +663,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             _log.critical("Global config value %s updated.  Felix must be "
                           "restarted.", config_param)
             die_and_restart()
+        _stats.increment("Global config (non) updates")
 
     def _on_host_config_updated(self, response, hostname, config_param):
         if hostname != self._config.HOSTNAME:
             _log.debug("Ignoring config update for host %s", hostname)
             return
+        _stats.increment("Per-host config created/updated")
         new_value = response.value
         if self.last_host_config.get(config_param) != new_value:
             _log.critical("Global config value %s updated.  Felix must be "
@@ -608,10 +677,12 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             die_and_restart()
 
     def on_ipam_v4_pool_set(self, response, pool_id):
+        _stats.increment("IPAM pool created/updated")
         pool = parse_ipam_pool(pool_id, response.value)
         self.splitter.on_ipam_pool_update(pool_id, pool, async=True)
 
     def on_ipam_v4_pool_delete(self, response, pool_id):
+        _stats.increment("IPAM pool deleted")
         self.splitter.on_ipam_pool_update(pool_id, None, async=True)
 
 
@@ -642,8 +713,10 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
     def on_endpoint_status_changed(self, endpoint_id, ip_type, status):
         assert isinstance(endpoint_id, EndpointId)
         if status is not None:
+            _stats.increment("Endpoint status deleted")
             self._endpoint_status[ip_type][endpoint_id] = status
         else:
+            _stats.increment("Endpoint status updated")
             self._endpoint_status[ip_type].pop(endpoint_id, None)
         self._mark_endpoint_dirty(endpoint_id)
 
@@ -702,7 +775,9 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
                 self._attempt_cleanup()
             except EtcdException as e:
                 _log.error("Cleanup failed: %r", e)
+                _stats.increment("Status report cleanup failed")
             else:
+                _stats.increment("Status report cleanup done")
                 self._cleanup_pending = False
 
         if self._reporting_allowed:
@@ -772,6 +847,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         Try to actually write the status dict into etcd or delete the key
         if it is no longer needed.
         """
+        _stats.increment("Per-port status report etcd writes")
         status_key = ep_id.path_for_status
         if status:
             _log.debug("Writing endpoint status %s = %s", ep_id, status)
