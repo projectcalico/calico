@@ -26,8 +26,6 @@ import json
 import logging
 import socket
 import subprocess
-from calico.etcddriver.protocol import *
-from calico.monotonic import monotonic_time
 
 from etcd import EtcdException, EtcdKeyNotFound
 import gevent
@@ -36,21 +34,30 @@ from gevent.event import Event
 
 from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
-from calico.datamodel_v1 import (VERSION_DIR, CONFIG_DIR,
-                                 RULES_KEY_RE, TAGS_KEY_RE,
-                                 dir_for_per_host_config,
-                                 PROFILE_DIR, HOST_DIR, EndpointId,
-                                 HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE,
-                                 key_for_last_status, key_for_status,
-                                 FELIX_STATUS_DIR, get_endpoint_id_from_key,
-                                 dir_for_felix_status, ENDPOINT_STATUS_ERROR,
-                                 ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP)
+from calico.datamodel_v1 import (
+    VERSION_DIR, CONFIG_DIR, RULES_KEY_RE, TAGS_KEY_RE,
+    dir_for_per_host_config, PROFILE_DIR, HOST_DIR, EndpointId, HOST_IP_KEY_RE,
+    IPAM_V4_CIDR_KEY_RE, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
+    get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
+    ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP
+)
+from calico.etcddriver.protocol import (
+    MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
+    MSG_KEY_ETCD_URL, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
+    MSG_KEY_SEV_SYSLOG, MSG_KEY_SEV_SCREEN, STATUS_IN_SYNC,
+    MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG,
+    MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MessageWriter,
+    MSG_TYPE_STATUS, MSG_KEY_STATUS
+)
 from calico.etcdutils import (
-    EtcdClientOwner, delete_empty_parents, PathDispatcher,
-    EtcdEvent)
+    EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent
+)
 from calico.felix.actor import Actor, actor_message
-from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
-                                 iso_utc_timestamp, IPV4, IPV6, StatCounter)
+from calico.felix.futils import (
+    intern_dict, intern_list, logging_exceptions, iso_utc_timestamp, IPV4,
+    IPV6, StatCounter
+)
+from calico.monotonic import monotonic_time
 
 _log = logging.getLogger(__name__)
 

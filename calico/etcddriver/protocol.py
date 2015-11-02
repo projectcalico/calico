@@ -66,10 +66,12 @@ FLUSH_THRESHOLD = 200
 
 
 class SocketClosed(Exception):
+    """The socket was unexpectedly closed by the other end."""
     pass
 
 
 class WriteFailed(Exception):
+    """Write to the socket failed."""
     pass
 
 
@@ -114,6 +116,7 @@ class MessageWriter(object):
         """
         Flushes the write buffer to the socket immediately.
         """
+        _log.debug("Flushing the buffer to the socket")
         buf_contents = self._buf.getvalue()
         if buf_contents:
             try:
