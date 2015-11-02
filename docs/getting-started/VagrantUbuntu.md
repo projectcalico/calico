@@ -30,7 +30,7 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
     git checkout tags/**release**
 <!--- end of master only -->
     
-3) There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or the
+3) There are two demonstration options depending on whether you are running with libnetwork or the
    default Docker networking.  Select the required demonstration by changing into the appropriate directory:
 
   - For Docker default networking
@@ -41,10 +41,6 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
   
     ```cd calico-docker/docs/getting-started/libnetwork/vagrant-ubuntu```
     
-  - For Powerstrip
-  
-    ```cd calico-docker/docs/getting-started/powerstrip/vagrant-ubuntu```
-
 4) Startup and SSH
 
 Use vagrant to create and boot your VMs.
@@ -88,12 +84,11 @@ And finally check that Docker is running on both hosts by running
 
 Now you have a basic two node Ubuntu cluster setup and you are ready to try Calico networking.
 
-You can now run through the standard Calico demonstration.  There are three demonstration options depending on 
-whether you are running with libnetwork, Powerstrip or the default Docker networking.
+You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
+whether you are running with libnetwork or the default Docker networking.
 
 - [demonstration with Docker default networking](default-networking/Demonstration.md)
 - [demonstration with libnetwork](libnetwork/Demonstration.md)
-- [demonstration with Powerstrip](powerstrip/Demonstration.md)
 
 [libnetwork]: https://github.com/docker/libnetwork
 [experimental-channel]: https://github.com/docker/docker/tree/master/experimental

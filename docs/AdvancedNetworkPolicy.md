@@ -20,7 +20,7 @@ A policy profile comprises two elements: *tags* and *rules*.
 
 ## Worked Example
 
-This example assumes you have a working Calico-enabled cluster, as described in the demonstration guides for Calico with [Docker default networking](docs/getting-started/default-networking/Demonstration.md), [Docker libnetwork](docs/getting-started/libnetwork/Demonstration.md), or [Powerstrip](docs/getting-started/powerstrip/Demonstration.md).
+This example assumes you have a working Calico-enabled cluster, as described in the demonstration guides for Calico with [Docker default networking](docs/getting-started/default-networking/Demonstration.md) or [Docker libnetwork](docs/getting-started/libnetwork/Demonstration.md).
 
 Let's create a new profile and look at the default rules.
 

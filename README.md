@@ -71,7 +71,6 @@ following different networking options:
 
 - [Demonstration with Docker default networking](docs/getting-started/default-networking/Demonstration.md)
 - [Demonstration with libnetwork](docs/getting-started/libnetwork/Demonstration.md)
-- [Demonstration with Powerstrip](docs/getting-started/powerstrip/Demonstration.md)
 
 See the [Networking options](#networking-options) below for more details on 
 each of these different networking options.
@@ -80,8 +79,7 @@ With each of these tutorials we provide details for running the demonstration
 using manual setup on your own servers, or with a quick set-up in a virtualized
 environment using Vagrant, or a number of cloud services.
 
-We also provide the following additional demonstrations: 
-- [Docker Swarm cluster](docs/getting-started/powerstrip/CalicoSwarm.md) 
+We also provide the following additional demonstration: 
 - [Calico and Kubernetes](docs/kubernetes/README.md)
 
 
@@ -103,18 +101,11 @@ Setup of the libnetwork environment is a little more involved since it requires
 the current master (1.9.dev) builds of Docker, and the use of etcd as a
 datastore for Docker clustering.
 
-#### Docker with Powerstrip
-
-[Powerstrip][powerstrip] is a pluggable HTTP proxy for the Docker API. Development 
-of the Powerstrip version of Calico is lagging behind the master branch, so an 
-older version of `calicoctl` and the `calico-node` docker image are required.
-  
 ## FAQ 
 For more information on what you can do with Calico, please visit the 
 [frequently asked questions](docs/FAQ.md) page. 
 
 
-[powerstrip]: https://github.com/ClusterHQ/powerstrip
 [libnetwork]: https://github.com/docker/libnetwork
 [raise-issues]: https://github.com/projectcalico/calico-docker/issues/new
 [project-calico]: http://www.projectcalico.org

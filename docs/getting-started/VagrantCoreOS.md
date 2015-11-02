@@ -30,7 +30,7 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
     git checkout tags/**release**
 <!--- end of master only -->
     
-3) There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or 
+3) There are two demonstration options depending on whether you are running with libnetwork or 
 the default Docker networking.  Select the required demonstration by changing into the appropriate directory:
 
   - For default Docker networking
@@ -41,10 +41,6 @@ the default Docker networking.  Select the required demonstration by changing in
   
     ```cd calico-docker/docs/getting-started/libnetwork/vagrant-coreos```
     
-  - For Powerstrip
-  
-    ```cd calico-docker/docs/getting-started/powerstrip/vagrant-coreos```
-
 4) Startup and SSH
 
 Run
@@ -88,12 +84,11 @@ And finally check that Docker is running on both hosts by running
 ## Try out Calico networking
 Now you have a basic two node CoreOS cluster setup and you are ready to try Calico networking.
 
-You can now run through the standard Calico demonstration.  There are three demonstration options depending on 
-whether you are running with libnetwork, Powerstrip or the default Docker networking.
+You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
+whether you are running with libnetwork or the default Docker networking.
 
 - [demonstration with Docker default networking](default-networking/Demonstration.md)
 - [demonstration with libnetwork](libnetwork/Demonstration.md) 
-- [demonstration with Powerstrip](powerstrip/Demonstration.md)
 
 
 [calico-networking]: https://github.com/projectcalico/calico-docker

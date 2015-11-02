@@ -141,12 +141,11 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 ## Spinning up the VMs
 Create the two Calico Docker hosts by passing in a `cloud-config` file. 
 
-There are three demonstration options depending on whether you are running with libnetwork, Powerstrip or the 
+There are two demonstration options depending on whether you are running with libnetwork or the 
 default Docker networking.  Select the appropriate cloud-config based on the demonstration option.
 
 - [User Data for Docker default networking](default-networking/cloud-config)
 - [User Data for libnetwork](libnetwork/cloud-config)
-- [User Data for Powerstrip](powerstrip/cloud-config)
   
 A different file is used for the two servers.
 - For the first server, use the `user-data-first`
@@ -206,12 +205,11 @@ calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
 
 # Running the demonstration
-You can now run through the standard Calico demonstration.  There are three demonstration options depending on 
-whether you are running with libnetwork, Powerstrip or the default Docker networking.
+You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
+whether you are running with libnetwork or the default Docker networking.
 
 - [demonstration with Docker default networking](default-networking/Demonstration.md)
 - [demonstration with libnetwork](libnetwork/Demonstration.md) 
-- [demonstration with Powerstrip](powerstrip/Demonstration.md)
 
 # (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in AWS can be exposed to the internet.  Since the containers have IP 
