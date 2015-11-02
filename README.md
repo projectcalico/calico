@@ -7,6 +7,7 @@
 
 [![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
+<!--- end of master only -->
 
 # Calico on Docker
 As well as providing networking for OpenStack VMs, Calico can provide
