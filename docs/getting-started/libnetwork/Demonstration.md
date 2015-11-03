@@ -54,12 +54,21 @@ network:  `--net <network>`.
 So let's go ahead and create some networks and start a few containers 
 on each host spread between these networks.
 
-On either host, create three networks:
+Create three networks.  If you are not running in cloud 
+environment run the following on either host: 
 
     docker network create --driver=calico --subnet=192.168.0.0/24 net1
     docker network create --driver=calico --subnet=192.168.1.0/24 net2
     docker network create --driver=calico --subnet=192.168.2.0/24 net3
     
+If you are running in a cloud environment (AWS, DigitalOcean, GCE), you will 
+need to configure the network with `ipip` and `nat-outgoing` options.  On
+either host, run:
+
+    docker network create --driver=calico --opt nat-outgoing=true --opt ipip=true --subnet=192.168.0.0/24 net1
+    docker network create --driver=calico --opt nat-outgoing=true --opt ipip=true --subnet=192.168.1.0/24 net2
+    docker network create --driver=calico --opt nat-outgoing=true --opt ipip=true --subnet=192.168.2.0/24 net3
+
 Note that we use the Calico driver `calico`.  This driver is run within 
 the calico-node container.  We explicitly choose an IP Pool for each network
 rather than using the default selections - this is to avoid potential conflicts
