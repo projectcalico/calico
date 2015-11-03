@@ -244,13 +244,7 @@ class EtcdDriver(object):
         ready = False
         while not ready:
             # Read failure here will be handled by outer loop.
-            resp = self._resync_http_pool.request(
-                "GET",
-                self._calculate_url(READY_KEY),
-                timeout=5,
-                preload_content=True
-            )
-            self._check_cluster_id(resp)
+            resp = self._etcd_request(self._resync_http_pool, READY_KEY)
             try:
                 etcd_resp = json.loads(resp.data)
                 ready = etcd_resp["node"]["value"] == "true"
@@ -281,16 +275,8 @@ class EtcdDriver(object):
         Loads all the config keys from the given etcd directory.
         """
         # Read failure here will be handled by outer loop.
-        resp = self._resync_http_pool.request(
-            "GET",
-            self._calculate_url(config_dir),
-            fields={
-                "recursive": "true",
-            },
-            timeout=5,
-            preload_content=True
-        )
-        self._check_cluster_id(resp)
+        resp = self._etcd_request(self._resync_http_pool,
+                                  config_dir, recursive=True)
         try:
             etcd_resp = json.loads(resp.data)
             if etcd_resp.get("errorCode") == 100:  # Not found
@@ -318,15 +304,12 @@ class EtcdDriver(object):
         :raises DriverShutdown if the etcd cluster ID changes.
         """
         _log.info("Loading snapshot headers...")
-        resp = self._resync_http_pool.request(
-            "GET",
-            self._calculate_url(VERSION_DIR),
-            fields={"recursive": "true"},
-            timeout=120,
-            preload_content=False
-        )
+        resp = self._etcd_request(self._resync_http_pool,
+                                  VERSION_DIR,
+                                  recursive=True,
+                                  timeout=120,
+                                  preload_content=False)
         snapshot_index = int(resp.getheader("x-etcd-index", 1))
-        self._check_cluster_id(resp)
         if not self._cluster_id:
             _log.error("Snapshot response did not contain cluster ID, "
                        "resyncing to avoid inconsistency")
@@ -334,6 +317,39 @@ class EtcdDriver(object):
         _log.info("Got snapshot headers, snapshot index is %s; starting "
                   "watcher...", snapshot_index)
         return resp, snapshot_index
+
+    def _etcd_request(self, http_pool, key, timeout=5, wait_index=None,
+                      recursive=False, preload_content=None):
+        """
+        Make a request to etcd on the given HTTP pool for the given key.
+
+        :param timeout: Read timeout for the request.
+        :param int wait_index: If set, issues a watch request.
+        :param recursive: True to request a recursive GET or watch.
+
+        :return: The urllib3 Response object.
+        """
+        fields = {}
+        if recursive:
+            _log.debug("Adding recursive=true to request")
+            fields["recursive"] = "true"
+        if wait_index is not None:
+            _log.debug("Request is a watch, adding wait* headers and forcing "
+                       "preload_content to False")
+            fields["wait"] = "true"
+            fields["waitIndex"] = wait_index
+            preload_content = False
+        if preload_content is None:
+            preload_content = True
+        resp = http_pool.request(
+            "GET",
+            self._calculate_url(key),
+            fields=fields or None,
+            timeout=timeout,
+            preload_content=preload_content
+        )
+        self._check_cluster_id(resp)
+        return resp
 
     def _check_cluster_id(self, resp):
         """
@@ -567,6 +583,11 @@ class EtcdDriver(object):
                     http = HTTPConnectionPool("localhost", 4001, maxsize=1)
                 try:
                     _log.debug("Waiting on etcd index %s", next_index)
+                    self._etcd_request(http,
+                                       VERSION_DIR,
+                                       recursive=True,
+                                       wait_index=next_index,
+                                       timeout=90)
                     resp = http.request(
                         "GET",
                         self._calculate_url(VERSION_DIR),
