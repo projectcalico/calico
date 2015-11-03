@@ -353,6 +353,15 @@ class EtcdDriver(object):
 
         :return: The urllib3 Response object.
         """
+        resp = self._issue_etcd_request(
+            http_pool, key, timeout, wait_index,
+            recursive, preload_content
+        )
+        self._check_cluster_id(resp)
+        return resp
+
+    def _issue_etcd_request(self, http_pool, key, timeout=5, wait_index=None,
+                            recursive=False, preload_content=None):
         fields = {}
         if recursive:
             _log.debug("Adding recursive=true to request")
@@ -372,7 +381,6 @@ class EtcdDriver(object):
             timeout=timeout,
             preload_content=preload_content
         )
-        self._check_cluster_id(resp)
         return resp
 
     def _check_cluster_id(self, resp):
