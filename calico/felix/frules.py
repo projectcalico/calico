@@ -507,8 +507,10 @@ def _build_input_chain(iface_match, metadata_addr, metadata_port,
         # IP-in-IP enabled, drop any IP-in-IP packets that are not from other
         # Calico hosts.
         _log.info("IPIP enabled, dropping IPIP packets from non-Calico hosts.")
+        # The ipencap proctol uses the ID "4". Some versions of iptables can't
+        # understand protocol names.
         chain.append(
-            "--append %s --protocol ipencap "
+            "--append %s --protocol 4 "
             "--match set ! --match-set %s src --jump DROP" %
             (CHAIN_INPUT, hosts_set_name)
         )
