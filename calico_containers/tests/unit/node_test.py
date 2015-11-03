@@ -572,16 +572,32 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_stop(self, m_docker_client, m_client):
         """
-        Test the client removes the host and stops the node when node_stop
-        called
+        Test the client stops the node when node_stop called when there are
+        endpoints and the force flag is set.
         """
         # Call method under test
+        m_client.get_endpoints.return_value = [Mock()]
         node.node_stop(True)
 
         # Assert
-        m_client.remove_host.assert_called_once_with(node.hostname)
+        m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
         m_docker_client.stop.assert_has_calls([call('calico-node'),
                                                call('calico-libnetwork')])
+
+    @patch('calico_ctl.node.client', autospec=True)
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    def test_node_stop_endpoints(self, m_docker_client, m_client):
+        """
+        Test the client does not stops the node when node_stop is called and
+        there are endpoints and the force flag is not set.
+        """
+        # Call method under test
+        m_client.get_endpoints.return_value = [Mock()]
+        self.assertRaises(SystemExit, node.node_stop, False)
+
+        # Assert
+        m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
+        self.assertEquals(m_docker_client.stop.call_count, 0)
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
@@ -591,11 +607,100 @@ class TestNode(unittest.TestCase):
         stop the node
         """
         # Set up mock objects
+        m_client.get_endpoints.return_value = [Mock()]
         err = APIError("Test error message", Response())
-        m_docker_client.stop.side_effect = err
 
-        # Call method under test expecting an exception
-        self.assertRaises(APIError, node.node_stop, True)
+        for sidee in ([None, err], [err, None]):
+            m_docker_client.stop.side_effect = sidee
+
+            # Call method under test expecting an exception
+            self.assertRaises(APIError, node.node_stop, True)
+
+    @patch('calico_ctl.node.remove_veth', autospec=True)
+    @patch('calico_ctl.node._container_running', autospec=True, return_value=False)
+    @patch('calico_ctl.node.client', autospec=True)
+    def test_node_remove(self, m_client, m_cont_running, m_veth):
+        """
+        Test the client removes the host when node_remove called, and that
+        endpoints are removed when remove_endpoints flag is set.
+        """
+        # Call method under test
+        endpoint1 = Mock()
+        endpoint1.name = "vethname1"
+        endpoint2 = Mock()
+        endpoint2.name = "vethname2"
+        m_client.get_endpoints.return_value = [endpoint1, endpoint2]
+        node.node_remove(True)
+
+        # Assert
+        m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
+        m_client.remove_host.assert_called_once_with(node.hostname)
+        m_veth.assert_has_calls([call("vethname1"), call("vethname2")])
+        m_cont_running.assert_has_calls([call("calico-node"), call("calico-libnetwork")])
+
+    @patch('calico_ctl.node.remove_veth', autospec=True)
+    @patch('calico_ctl.node._container_running', autospec=True, return_value=True)
+    @patch('calico_ctl.node.client', autospec=True)
+    def test_node_remove_node_running(self, m_client, m_cont_running, m_veth):
+        """
+        Test the client does not remove host when containers are running and
+        node_remove is invoked.
+        """
+        # Assert
+        self.assertRaises(SystemExit, node.node_remove, True)
+        self.assertEquals(m_client.get_endpoints.call_count, 0)
+        self.assertEquals(m_client.remove_host.call_count, 0)
+        self.assertEquals(m_veth.call_count, 0)
+
+    @patch('calico_ctl.node.remove_veth', autospec=True)
+    @patch('calico_ctl.node._container_running', autospec=True, return_value=False)
+    @patch('calico_ctl.node.client', autospec=True)
+    def test_node_remove_endpoints_exist(self, m_client, m_cont_running, m_veth):
+        """
+        Test the client does not remove host when endpoints exist and
+        node_remove is invoked without remove_endpoints flag.
+        """
+        # Call method under test
+        m_client.get_endpoints.return_value = [Mock()]
+        self.assertRaises(SystemExit, node.node_remove, False)
+
+        # Assert
+        m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
+        self.assertEquals(m_client.remove_host.call_count, 0)
+        self.assertEquals(m_veth.call_count, 0)
+
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    def test_container_running_no_cont(self, m_docker_client):
+        """
+        Test the _container_running command when no container exists.
+        """
+        response = Response()
+        response.status_code = 404
+        m_docker_client.inspect_container.side_effect = APIError("Test error message", response)
+
+        self.assertEquals(node._container_running("container1"), False)
+        m_docker_client.inspect_container.assert_called_once_with("container1")
+
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    def test_container_running_err(self, m_docker_client):
+        """
+        Test the _container_running command when the inspect command errors.
+        """
+        response = Response()
+        response.status_code = 400
+        m_docker_client.inspect_container.side_effect = APIError("Test error message", response)
+
+        self.assertRaises(APIError, node._container_running, "container1")
+        m_docker_client.inspect_container.assert_called_once_with("container1")
+
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    def test_container_running_cont_running(self, m_docker_client):
+        """
+        Test the _container_running command when the container is running
+        """
+        for test in (True, False):
+            m_docker_client.inspect_container.return_value = {"State": {"Running": test}}
+            self.assertEquals(node._container_running("container1"), test)
 
     @patch("calico_ctl.node.URLGetter", autospec=True)
     @patch("calico_ctl.node.os", autospec=True)

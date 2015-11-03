@@ -32,6 +32,7 @@ Usage:
     [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
+  calicoctl node remove [--remove-endpoints]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
   calicoctl node bgp peer show [--ipv4 | --ipv6]
@@ -41,8 +42,10 @@ Description:
   for this node.
 
 Options:
-  --force                   Stop the node process even if it has active
-                            endpoints.
+  --force                   Stop the Calico node even if there are still
+                            endpoints configured.
+  --remove-endpoints        Remove the endpoint data when deleting the node
+                            from the Calico network.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
                             container. [default: calico/node:latest]
   --detach=<DETACH>         Set "true" to run Calico service as detached,
@@ -60,7 +63,7 @@ Options:
   --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
-  --kubernetes              Download and install the kubernetes plugin.
+  --kubernetes              Download and install the Kubernetes plugin.
   --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
                             to install when using the --kubernetes option.
                             [default: v0.3.0]
@@ -165,8 +168,9 @@ Calico libnetwork driver is running with id: 504b1d6d42908e376d9941ad8e3dfd65b07
 ```
 
 ### calicoctl node stop 
-This command is used to stop a `calico/node` instance.  If there exist 
-endpoints that have been networked with Calico, a warning message will appear. 
+This command is used to stop a `calico/node` instance.  If there are endpoints 
+remaining on the host that have been networked with Calico, a warning message 
+will appear and the command will abort unless forced with the --force option.
 
 To stop the node cleanly, you must first remove all workloads from Calico and 
 manually clean up any workloads that were uncleanly stopped with the 
@@ -180,7 +184,8 @@ Command syntax:
 ```
 calicoctl node stop [--force]
 
-    --force: Stop the node instance, regardless of warnings.
+    --force:  Stop the Calico node even if there are still endpoints
+              configured.
 ```
 
 Examples:
@@ -188,6 +193,33 @@ Examples:
 ```
 $ calicoctl node stop
 Node stopped and all configuration removed
+```
+
+### calicoctl node remove 
+This command is used to remove data associated with a `calico/node` instance.  
+
+To remove the node cleanly, you must first remove all workloads from Calico and 
+manually clean up any workloads that were uncleanly stopped with the 
+`calicoctl endpoint remove` command, and then run the `calicoctl node stop`
+command to stop the node before removing it.
+
+This command must be run as root and must be run on the specific Calico node 
+that you are configuring.
+
+Command syntax:
+
+```
+calicoctl node remove [--remove-endpoints]
+
+    --remove-endpoints:  Remove the endpoint data when deleting the node
+                         from the Calico network.
+```
+
+Examples:
+
+```
+$ calicoctl node remove
+Node configuration removed
 ```
 
 ### calicoctl node bgp peer add \<PEER_IP\> as \<AS_NUM\>
