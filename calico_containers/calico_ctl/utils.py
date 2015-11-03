@@ -19,6 +19,7 @@ import netaddr
 import re
 import urllib
 
+from pycalico.util import get_hostname
 from netaddr.core import AddrFormatError
 
 DOCKER_VERSION = "1.16"
@@ -26,7 +27,7 @@ DOCKER_LIBNETWORK_VERSION = "1.21"
 DOCKER_ORCHESTRATOR_ID = "docker"
 NAMESPACE_ORCHESTRATOR_ID = "namespace"
 REQUIRED_MODULES = ["xt_set", "ip6_tables"]
-hostname = socket.gethostname()
+hostname = get_hostname()
 
 
 def enforce_root():
