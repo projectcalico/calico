@@ -19,6 +19,16 @@ If you have everything set up properly you should have `calicoctl` in your
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
 
 
+## Running in the cloud (AWS / DigitalOcean / GCE)
+
+If you are running in the cloud, you will need to configure an IP Pool with
+the `ipip` and `nat-outgoing` options.
+
+On either node:
+
+    calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
+
+
 ## Starting Calico services<a id="calico-services"></a>
 
 Once you have your cluster up and running, start calico on all the nodes

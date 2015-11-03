@@ -190,23 +190,21 @@ aws ec2 run-instances \
 #  Include the subnet param above if using a non-default VPC
 ```
 
-## Set up the IP Pool before running the demo
-Run the following commands to SSH into each node and set up the IP pool
+# Running the demonstration
+You can now run through the standard Calico demonstration.  You will require
+SSH access to the nodes.
 
-SSH into a node with the mykey.pem and username core. The public IP addresses of your instances can be found on your AWS EC2 dashboard.
+SSH into a node with the mykey.pem and username core. The public IP addresses 
+of your instances can be found on your AWS EC2 dashboard.
 ```
 ssh -i mykey.pem core@<PUBLIC IP>
 ```
 
-On any one of the hosts, create the IP pool Calico will use for your containers:
+> When running the demonstrations, be sure to follow the additional 
+> instructions for configuring `ipip` and `nat-outgoing`. 
 
-```
-calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-```
-
-# Running the demonstration
-You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
-whether you are running with libnetwork or the default Docker networking.
+There are two demonstration options depending on whether you are running with 
+libnetwork or the default Docker networking.
 
 - [demonstration with Docker default networking](default-networking/Demonstration.md)
 - [demonstration with libnetwork](libnetwork/Demonstration.md) 

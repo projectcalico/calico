@@ -83,22 +83,23 @@ gcloud compute instances create \
   --metadata-from-file user-data=<PATH_TO_CLOUD_CONFIG>/user-data-others
 ```
 
-## Set up the IP Pool before running the demo
+
+# Running the demonstration
+You can now run through the standard Calico demonstration.  You will require
+SSH access to the nodes.
+
 SSH into each node using gcloud (names are calico-1 and calico-2):
 ```
 gcloud compute ssh <instance name>
 ```
 
-On any one of the hosts, create the IP pool Calico will use for your containers:
-```
-calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-```
+> When running the demonstrations, be sure to follow the additional 
+> instructions for configuring `ipip` and `nat-outgoing`. 
 
-# Running the demonstration
-You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
-whether you are running with libnetwork or the default Docker networking.
+There are two demonstration options depending on whether you are running with 
+libnetwork or the default Docker networking.
 
-- [demonstration with Docker default networking](default-networking/Demonstration.md) 
+- [demonstration with Docker default networking](default-networking/Demonstration.md)
 - [demonstration with libnetwork](libnetwork/Demonstration.md) 
 
 ## (Optional) Enabling traffic from the internet to containers
