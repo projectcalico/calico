@@ -71,7 +71,7 @@ write_files:
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/docker https://test.docker.com/builds/Linux/x86_64/docker-1.9.0-rc3
+    wget -O /opt/bin/docker https://get.docker.com/builds/Linux/x86_64/docker-1.9.0
     chmod +x opt/bin/docker
 - path: /home/core/get_calicoctl.sh
   permissions: 777

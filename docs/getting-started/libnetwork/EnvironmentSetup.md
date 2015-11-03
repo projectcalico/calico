@@ -45,8 +45,7 @@ The servers also need:
 - A specific Docker release to be running - since the Calico agent is packaged
 as a Docker container, and the libnetwork features required are currently
 only available in an experimental release.
-- A consul server used for clustering Docker
-- An Etcd cluster - which Calico uses for coordinating state between the nodes.
+- An Etcd cluster - used for clustering Docker and by Calico for coordinating state between the nodes.
 - The `calicoctl` binary to be placed in the system `$PATH`.
 
 ## Requirements

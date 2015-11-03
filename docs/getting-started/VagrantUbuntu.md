@@ -56,7 +56,7 @@ To connect to your servers
 
 5) Verify environment
 
-You should now have two Ubuntu servers, with Consul and Etcd running on the first server.
+You should now have two Ubuntu servers, with Etcd running on the first server.
 
 At this point, it's worth checking that your servers can ping each other.
 
