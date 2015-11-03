@@ -31,6 +31,9 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'calico_docker_ver\s*=\s*"latest"'),
      'calico_docker_ver = "{version}"'),
 
+    (re.compile('calico_node_ver\s*=\s*"latest"'),
+     'calico_node_ver = "{version}"'),
+
     (re.compile('calico/node:latest'),
      'calico/node:{version}'),
 
