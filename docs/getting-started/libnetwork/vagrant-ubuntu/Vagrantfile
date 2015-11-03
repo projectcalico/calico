@@ -8,7 +8,7 @@ calicoctl_url = "http://www.projectcalico.org/latest/calicoctl"
 # the calico/node and calico/node-libnetwork images which slows down the
 # install process, but speeds up the demonstration.
 #
-# This version should match the version required by calicotl installed from
+# This version should match the version required by calicoctl installed from
 # calicoctl_url.
 calico_node_ver = "latest"
 calico_libnetwork_ver = "latest"
