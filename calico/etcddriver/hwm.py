@@ -172,6 +172,9 @@ class HighWaterTracker(object):
         _log.info("Deleted %s old keys", len(old_keys))
         return map(decode_key, old_keys)
 
+    def __len__(self):
+        return len(self._hwms)
+
 
 def encode_key(key):
     """
