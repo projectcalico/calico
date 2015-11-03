@@ -49,7 +49,7 @@ CANDIDATE_VERSION_REPLACE = [
 # point to the Git archives.
 FINAL_VERSION_REPLACE = [
     (re.compile('http://www\.projectcalico\.org/latest/calicoctl\?circleci\-branch=.*\-candidate'),
-     'https://github.com/projectcalico/calico-docker/releases/tag/{version}'),
+     'https://github.com/projectcalico/calico-docker/releases/download/{version}/calicoctl'),
 ]
 
 
