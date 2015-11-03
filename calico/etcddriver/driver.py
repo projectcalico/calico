@@ -82,8 +82,10 @@ class EtcdDriver(object):
         # watcher thread (which it manages).
         self._reader_thread = Thread(target=self._read_from_socket,
                                      name="reader-thread")
+        self._reader_thread.daemon = True
         self._resync_thread = Thread(target=self._resync_and_merge,
                                      name="resync-thread")
+        self._resync_thread.daemon = True
         self._watcher_thread = None  # Created on demand
         self._watcher_stop_event = None
 
@@ -118,7 +120,19 @@ class EtcdDriver(object):
 
         :returns True if the driver stopped, False on timeout.
         """
-        return self._stop_event.wait(timeout=timeout)
+        self._stop_event.wait(timeout=timeout)
+        stopped = self._stop_event.is_set()
+        if stopped:
+            self._resync_thread.join(timeout=timeout)
+            stopped &= not self._resync_thread.is_alive()
+            self._reader_thread.join(timeout=timeout)
+            stopped &= not self._reader_thread.is_alive()
+            try:
+                self._watcher_thread.join(timeout=timeout)
+                stopped &= not self._watcher_thread.is_alive()
+            except AttributeError:
+                pass
+        return stopped
 
     def stop(self):
         _log.info("Stopping driver")
