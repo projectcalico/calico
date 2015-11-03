@@ -482,7 +482,9 @@ class EtcdDriver(object):
             self._hwms.update_hwm(ev_key, ev_mod)
             self._on_key_updated(ev_key, ev_val)
         else:
-            # Deletion.
+            # Deletion.  In case this is a directory deletion, we search the
+            # trie for anything that is under the deleted key and send
+            # individual deletions to Felix for each one.
             deleted_keys = self._hwms.store_deletion(ev_key,
                                                      ev_mod)
             for child_key in deleted_keys:
@@ -580,7 +582,7 @@ class EtcdDriver(object):
             while not stop_event.is_set():
                 if not http:
                     _log.info("No HTTP pool, creating one...")
-                    http = HTTPConnectionPool("localhost", 4001, maxsize=1)
+                    http = self.get_etcd_connection()
                 try:
                     _log.debug("Waiting on etcd index %s", next_index)
                     self._etcd_request(http,
