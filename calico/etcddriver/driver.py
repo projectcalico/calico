@@ -217,7 +217,12 @@ class EtcdDriver(object):
                 self._preload_config()
                 # Now (on the first run through) wait for Felix to process the
                 # config.
-                self._config_received.wait()
+                while not self._config_received.is_set():
+                    _log.info("Waiting for Felix to process the config...")
+                    self._config_received.wait(1)
+                    if self._stop_event.is_set():
+                        raise DriverShutdown()
+                    _log.info("Felix sent us the config, continuing.")
                 # Kick off the snapshot request as far as the headers.
                 self._send_status(STATUS_RESYNC)
                 resp, snapshot_index = self._start_snapshot_request()
@@ -256,7 +261,7 @@ class EtcdDriver(object):
         snapshot until that flag is set.
         """
         ready = False
-        while not ready:
+        while not ready and not self._stop_event.is_set():
             # Read failure here will be handled by outer loop.
             resp = self._etcd_request(self._resync_http_pool, READY_KEY)
             try:
@@ -335,7 +340,8 @@ class EtcdDriver(object):
     def _etcd_request(self, http_pool, key, timeout=5, wait_index=None,
                       recursive=False, preload_content=None):
         """
-        Make a request to etcd on the given HTTP pool for the given key.
+        Make a request to etcd on the given HTTP pool for the given key
+        and check the cluster ID.
 
         :param timeout: Read timeout for the request.
         :param int wait_index: If set, issues a watch request.
@@ -599,22 +605,11 @@ class EtcdDriver(object):
                     http = self.get_etcd_connection()
                 try:
                     _log.debug("Waiting on etcd index %s", next_index)
-                    self._etcd_request(http,
-                                       VERSION_DIR,
-                                       recursive=True,
-                                       wait_index=next_index,
-                                       timeout=90)
-                    resp = http.request(
-                        "GET",
-                        self._calculate_url(VERSION_DIR),
-                        fields={"recursive": "true",
-                                "wait": "true",
-                                "waitIndex": next_index},
-                        timeout=90,
-                        # Don't pre-load so we can check the cluster ID before
-                        # we wait for the body.
-                        preload_content=False,
-                    )
+                    resp = self._etcd_request(http,
+                                              VERSION_DIR,
+                                              recursive=True,
+                                              wait_index=next_index,
+                                              timeout=90)
                     if resp.status != 200:
                         _log.warning("etcd watch returned bad HTTP status: %s",
                                      resp.status)
@@ -678,12 +673,15 @@ def parse_snapshot(resp, callback):
 
     :raises ResyncRequired if the snapshot contains an error response.
     """
+    _log.debug("Parsing snapshot response...")
     if resp.status != 200:
         raise ResyncRequired("Read from etcd failed.  HTTP status code %s",
                              resp.status)
     parser = ijson.parse(resp)  # urllib3 response is file-like.
 
     prefix, event, value = next(parser)
+    _log.debug("Read first token from response %s, %s, %s", prefix, event,
+               value)
     if event == "start_map":
         # As expected, response is a map.
         _parse_map(parser, callback)
@@ -707,6 +705,7 @@ def _parse_map(parser, callback):
     node_value = None
     while True:
         prefix, event, value = next(parser)
+        _log.debug("Parsing %s, %s, %s", prefix, event, value)
         if event == "map_key":
             map_key = value
             prefix, event, value = next(parser)
