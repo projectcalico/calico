@@ -38,7 +38,6 @@ coreos:
       [Service]
       RemainAfterExit=yes
       Type=oneshot
-      ExecStart=/home/core/get_consul.sh
       ExecStart=/home/core/get_latest_docker.sh
   - name: docker.service
     command: restart
@@ -72,22 +71,12 @@ write_files:
     echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
     echo 'export ETCD_AUTHORITY="$private_ipv4:4001"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_AUTHORITY"' >>/etc/sudoers.d/etcd
-- path: /home/core/get_consul.sh
-  permissions: 777
-  owner: root
-  content: |
-    #!/usr/bin/bash -e
-    cd /opt/bin
-    wget https://dl.bintray.com/mitchellh/consul/0.5.2_linux_amd64.zip -O consul.zip
-    unzip -o consul.zip
-    rm consul.zip
-    chmod +x consul
 - path: /home/core/get_latest_docker.sh
   permissions: 777
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/docker https://test.docker.com/builds/Linux/x86_64/docker-1.9.0-rc3
+    wget -O /opt/bin/docker https://get.docker.com/builds/Linux/x86_64/docker-1.9.0
     chmod +x opt/bin/docker
 - path: /home/core/get_calicoctl.sh
   permissions: 777

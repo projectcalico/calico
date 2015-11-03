@@ -28,7 +28,7 @@ calicobuild.created: $(BUILD_FILES)
 
 docker:
 	# Download the latest docker to test.
-	curl https://master.dockerproject.org/linux/amd64/docker-1.9.0-dev -o docker
+	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 -o docker
 	chmod +x docker
 
 dist/calicoctl: $(PYCALICO) calicobuild.created
