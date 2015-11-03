@@ -162,6 +162,11 @@ calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>]
     <PROFILES>: One or more profiles to append, remove, or set on the endpoint.
 ```
 
+The `<ENDPOINT_ID>` uniquely identifies the endpoint.  Although it is not 
+necessary to include the optional `<HOSTNAME>`, `<ORCHESTRATOR_ID>` and 
+`<WORKLOAD_ID>` identifiers, this command executes faster and with reduced 
+load on the etcd datastore when all of the identifiers are specified together.
+
 Examples:
 
 ```
@@ -192,6 +197,11 @@ calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>]
     <ORCHESTRATOR_ID>: Orchestrator ID that manages the endpoint's workload.
     <WORKLOAD_ID>: ID of workload that contains the endpoint.
 ```
+
+The `<ENDPOINT_ID>` uniquely identifies the endpoint.  Although it is not 
+necessary to include the optional `<HOSTNAME>`, `<ORCHESTRATOR_ID>` and 
+`<WORKLOAD_ID>` identifiers, this command executes faster and with reduced 
+load on the etcd datastore when all of the identifiers are specified together.
 
 Examples:
 
