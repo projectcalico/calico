@@ -102,8 +102,3 @@ Yes.  If you are running in a public cloud that doesn't allow either L3 peering 
 ./calicoctl pool add <CIDR> --ipip --nat-outgoing
 ```
 Calico will then route traffic between Calico hosts using IP in IP.
-
-## Orchestrator integration
-
-For a lower level integration see [Orchestrators](Orchestrators.md).
-
