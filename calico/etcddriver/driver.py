@@ -267,9 +267,13 @@ class EtcdDriver(object):
             try:
                 etcd_resp = json.loads(resp.data)
                 ready = etcd_resp["node"]["value"] == "true"
+                mod_idx = etcd_resp["node"]["modifiedIndex"]
             except (TypeError, ValueError, KeyError) as e:
                 _log.warning("Failed to load Ready flag from etcd: %r", e)
                 time.sleep(1)
+            else:
+                _log.info("Ready flag set to %s", etcd_resp["node"]["value"])
+                self._hwms.update_hwm(READY_KEY, mod_idx)
 
     def _preload_config(self):
         """
