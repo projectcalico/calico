@@ -82,7 +82,7 @@ from the `Fuel Plugin Catalog`_. Alternatively, you can build a copy of the
 plugin yourself, following the instructions on the plugin's `GitHub`_ page.
 
 .. _Fuel Plugin Catalog: https://www.mirantis.com/products/openstack-drivers-and-plugins/fuel-plugins/
-.. _GitHub: https://github.com/stackforge/fuel-plugin-calico
+.. _GitHub: https://github.com/openstack/fuel-plugin-calico
 
 However you obtain a copy of the Calico plugin, you will need to copy it onto
 the master node and install it with::
