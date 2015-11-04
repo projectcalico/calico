@@ -77,9 +77,6 @@ class TestMessageWriter(TestCase):
     def test_send_message_buffered(self):
         # First message gets buffered.
         self.writer.send_message(MSG_TYPE_STATUS,
-                                 {
-                                     MSG_KEY_STATUS: STATUS_RESYNC
-                                 },
                                  flush=False)
         self.assert_no_more_messages()
 
@@ -89,8 +86,7 @@ class TestMessageWriter(TestCase):
                                      MSG_KEY_STATUS: STATUS_IN_SYNC
                                  })
         self.assert_message_sent({
-            MSG_KEY_TYPE: MSG_TYPE_STATUS,
-            MSG_KEY_STATUS: STATUS_RESYNC
+            MSG_KEY_TYPE: MSG_TYPE_STATUS
         })
         self.assert_message_sent({
             MSG_KEY_TYPE: MSG_TYPE_STATUS,
@@ -120,6 +116,10 @@ class TestMessageWriter(TestCase):
                 MSG_KEY_STATUS: STATUS_RESYNC
             })
         self.assert_no_more_messages()
+
+    def test_flush_no_content(self):
+        self.writer.flush()
+        self.assertFalse(self.sck.chunks)
 
     def assert_message_sent(self, msg):
         try:
@@ -165,6 +165,22 @@ class TestMessageReader(TestCase):
                 call(16384),
             ]
         )
+
+    @patch("select.select", autospec=True)
+    def test_partial_read(self, m_select):
+        m_select.side_effect = iter([
+            ([self.sck], [], []),
+            ([self.sck], [], []),
+        ])
+        exp_msg = {MSG_KEY_TYPE: MSG_TYPE_STATUS}
+        msg_bytes = msgpack.dumps(exp_msg)
+        self.sck.recv.side_effect = iter([
+            msg_bytes[:len(msg_bytes)/2],
+            msg_bytes[len(msg_bytes)/2:],
+        ])
+        self.assertRaises(StopIteration, next, self.reader.new_messages())
+        self.assertEqual(next(self.reader.new_messages()),
+                         (MSG_TYPE_STATUS, exp_msg))
 
     @patch("select.select", autospec=True)
     def test_retryable_error(self, m_select):
