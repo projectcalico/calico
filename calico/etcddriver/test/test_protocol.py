@@ -178,8 +178,9 @@ class TestMessageReader(TestCase):
             msg_bytes[:len(msg_bytes)/2],
             msg_bytes[len(msg_bytes)/2:],
         ])
-        self.assertRaises(StopIteration, next, self.reader.new_messages())
-        self.assertEqual(next(self.reader.new_messages()),
+        self.assertRaises(StopIteration, next,
+                          self.reader.new_messages(timeout=None))
+        self.assertEqual(next(self.reader.new_messages(timeout=None)),
                          (MSG_TYPE_STATUS, exp_msg))
 
     @patch("select.select", autospec=True)
@@ -229,5 +230,5 @@ class TestMessageReader(TestCase):
     @patch("select.select", autospec=True)
     def test_shutdown(self, m_select):
         self.sck.recv.return_value = ""
-        msg_gen = self.reader.new_messages()
+        msg_gen = self.reader.new_messages(timeout=None)
         self.assertRaises(SocketClosed, next, msg_gen)

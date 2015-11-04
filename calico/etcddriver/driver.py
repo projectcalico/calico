@@ -147,7 +147,7 @@ class EtcdDriver(object):
         """
         try:
             while not self._stop_event.is_set():
-                for msg_type, msg in self._msg_reader.new_messages():
+                for msg_type, msg in self._msg_reader.new_messages(timeout=1):
                     if msg_type == MSG_TYPE_INIT:
                         self._handle_init(msg)
                     elif msg_type == MSG_TYPE_CONFIG:
@@ -556,9 +556,9 @@ class EtcdDriver(object):
 
     def _on_key_updated(self, key, value):
         """
-        Called when we've worked out that a key  ahs been updated/deleted.
+        Called when we've worked out that a key has been updated/deleted.
 
-        Deos any local processing and sends the update to Felix.
+        Does any local processing and sends the update to Felix.
         :param str key: The etcd key that has changed.
         :param str|NoneType value: the new value of the key (None indicates
                deletion).

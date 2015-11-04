@@ -133,7 +133,7 @@ class MessageReader(object):
         self._sck = sck
         self._unpacker = msgpack.Unpacker()
 
-    def new_messages(self, timeout=None):
+    def new_messages(self, timeout=1):
         """
         Generator: generates 0 or more tuples containing message type and
         message body (as a dict).
