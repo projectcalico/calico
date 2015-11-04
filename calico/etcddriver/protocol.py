@@ -144,7 +144,7 @@ class MessageReader(object):
         :raises SocketClosed if the socket is closed.
         """
         if timeout is not None:
-            read_ready, _, _ = select.select([self._sck], [], [], 1)
+            read_ready, _, _ = select.select([self._sck], [], [], timeout)
             if not read_ready:
                 return
         try:
