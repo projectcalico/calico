@@ -271,9 +271,17 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     """
     Greenlet that communicates with the etcd driver over a socket.
 
-    * Handles initial configuration of the driver.
-    * Processes the initial config responses.
-    * Then fans out the stream of updates.
+    * Does the initial handshake with the driver, sening it the init
+      message.
+    * Receives the pre-loaded config from the driver and uses that
+      to do Felix's one-off configuration.
+    * Sends the relevant config back to the driver.
+    * Processes the event stream from the driver, sending it on to
+      the splitter.
+
+    This class is similar to the EtcdWatcher class in that it uses
+    a PathDispatcher to fan out updates but it doesn't own an etcd
+    connection of its own.
     """
 
     def __init__(self, config, etcd_api, status_reporter, hosts_ipset):
@@ -282,57 +290,45 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self._etcd_api = etcd_api
         self._status_reporter = status_reporter
         self.hosts_ipset = hosts_ipset
-
         # Whether we've been in sync with etcd at some point.
         self._been_in_sync = False
-
         # Keep track of the config loaded from etcd so we can spot if it
         # changes.
         self.last_global_config = None
         self.last_host_config = None
         self.my_config_dir = dir_for_per_host_config(self._config.HOSTNAME)
-
         # Events triggered by the EtcdAPI Actor to tell us to load the config
         # and start polling.  These are one-way flags.
         self.load_config = Event()
         self.begin_polling = Event()
-
         # Event that we trigger once the config is loaded.
         self.configured = Event()
-
         # Polling state initialized at poll start time.
         self.splitter = None
-
         # Next-hop IP addresses of our hosts, if populated in etcd.
         self.ipv4_by_hostname = {}
-
         # Forces a resync after the current poll if set.  Safe to set from
         # another thread.  Automatically reset to False after the resync is
         # triggered.
         self.resync_requested = False
         self.dispatcher = PathDispatcher()
-
-        # Register for events when values change.
-        self._register_paths()
-
+        # The Popen object for the driver.
         self._driver_process = None
-
+        # Stats.
         self.read_count = 0
         self.last_rate_log_time = monotonic_time()
+        # Register for events when values change.
+        self._register_paths()
 
     def _register_paths(self):
         """
         Program the dispatcher with the paths we care about.
-
-        Since etcd gives us a single event for a recursive directory
-        deletion, we have to handle deletes for lots of directories that
-        we otherwise wouldn't care about.
         """
         reg = self.dispatcher.register
         # Profiles and their contents.
         reg(TAGS_KEY, on_set=self.on_tags_set, on_del=self.on_tags_delete)
         reg(RULES_KEY, on_set=self.on_rules_set, on_del=self.on_rules_delete)
-        # Hosts, workloads and endpoints.
+        # Hosts and endpoints.
         reg(HOST_IP_KEY,
             on_set=self.on_host_ip_set,
             on_del=self.on_host_ip_delete)
@@ -341,11 +337,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
-        # Configuration keys.  If any of these is changed or set a resync is
-        # done, including a full reload of configuration. If any field has
-        # actually changed (as opposed to being reset to the same value or
-        # explicitly set to the default, say), Felix terminates allowing the
-        # init daemon to restart it.
+        # Configuration keys.  If any of these is changed or created, we'll
+        # restart to pick up the change.
         reg(CONFIG_PARAM_KEY,
             on_set=self._on_config_updated,
             on_del=self._on_config_updated)
