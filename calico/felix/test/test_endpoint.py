@@ -56,6 +56,7 @@ class TestEndpointManager(BaseTestCase):
         self.mgr = EndpointManager(self.m_config, "IPv4", self.m_updater,
                                    self.m_dispatch, self.m_rules_mgr,
                                    self.m_status_reporter)
+        self.mgr.get_and_incref = Mock()
 
     def test_create(self):
         obj = self.mgr._create(ENDPOINT_ID)
