@@ -22,14 +22,12 @@ import json
 
 import logging
 from Queue import Queue, Empty
-import os
 from unittest import TestCase
 
 from mock import Mock, call, patch
-from urllib3.exceptions import TimeoutError
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, VERSION_DIR
 
-from calico.etcddriver.driver import EtcdDriver, DriverShutdown
+from calico.etcddriver.driver import EtcdDriver
 from calico.etcddriver.protocol import *
 
 _log = logging.getLogger(__name__)
@@ -71,7 +69,7 @@ class StubMessageReader(MessageReader):
             item = self.queue.get()
             if item is None:
                 return  # timeout
-            if isinstance(item, Exception):
+            if isinstance(item, BaseException):
                 raise item
             else:
                 yield item
@@ -118,7 +116,7 @@ class StubEtcd(object):
         """
         self.request_queue.put((key, kwargs))
         response = self.response_queue.get(30)
-        if isinstance(response, Exception):
+        if isinstance(response, BaseException):
             raise response
         else:
             return response
@@ -292,23 +290,14 @@ class TestEtcdDriverFV(TestCase):
     def test_mainline(self):
         self.driver.start()
         # First message comes from Felix.
-        self.msg_reader.send_msg(
-            MSG_TYPE_INIT,
-            {
-                MSG_KEY_ETCD_URL: "http://localhost:4001",
-                MSG_KEY_HOSTNAME: "thehostname",
-            }
-        )
-        # Should trigger driver to start polling the ready flag.
-        self.assert_msg_to_felix(
-            MSG_TYPE_STATUS,
-            {MSG_KEY_STATUS: STATUS_WAIT_FOR_READY}
-        )
-        self.assert_flush_to_felix()
-        # Respond with ready == true.
+        self.send_init_msg()
+        # Should trigger driver to send a status and start polling the ready
+        # flag.
+        self.assert_status_message(STATUS_WAIT_FOR_READY)
+        # Respond to etcd request with ready == true.
         self.resync_etcd.assert_request(READY_KEY)
         self.resync_etcd.respond_with_value(READY_KEY, "true", mod_index=10)
-        # Then we should get the global config request.
+        # Then etcd should get the global config request.
         self.resync_etcd.assert_request(CONFIG_DIR, recursive=True)
         self.resync_etcd.respond_with_dir(CONFIG_DIR, {
             CONFIG_DIR + "/InterfacePrefix": "tap"
@@ -339,13 +328,7 @@ class TestEtcdDriverFV(TestCase):
                 MSG_KEY_SEV_SYSLOG: "DEBUG",
             }
         )
-        self.assert_msg_to_felix(
-            MSG_TYPE_STATUS,
-            {
-                MSG_KEY_STATUS: STATUS_RESYNC,
-            }
-        )
-        self.assert_flush_to_felix()
+        self.assert_status_message(STATUS_RESYNC)
         # We should get a request to load the full snapshot.
         self.resync_etcd.assert_request(
             VERSION_DIR, recursive=True, timeout=120, preload_content=False
@@ -452,10 +435,7 @@ class TestEtcdDriverFV(TestCase):
         ''')
         # Should get the in-sync message.  (No event for Ready flag due to
         # HWM.
-        self.assert_msg_to_felix(MSG_TYPE_STATUS, {
-            MSG_KEY_STATUS: STATUS_IN_SYNC,
-        })
-        self.assert_flush_to_felix()
+        self.assert_status_message(STATUS_IN_SYNC)
         # Now send a watcher event, which should go straight through.
         self.watcher_etcd.respond_with_value(
             "/calico/v1/adir/ekey",
@@ -468,6 +448,22 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_VALUE: "e",
         })
         self.assert_flush_to_felix()
+
+    def assert_status_message(self, status):
+        self.assert_msg_to_felix(
+            MSG_TYPE_STATUS,
+            {MSG_KEY_STATUS: status}
+        )
+        self.assert_flush_to_felix()
+
+    def send_init_msg(self):
+        self.msg_reader.send_msg(
+            MSG_TYPE_INIT,
+            {
+                MSG_KEY_ETCD_URL: "http://localhost:4001",
+                MSG_KEY_HOSTNAME: "thehostname",
+            }
+        )
 
     def assert_msg_to_felix(self, msg_type, fields=None):
         try:
@@ -520,8 +516,9 @@ class TestEtcdDriverFV(TestCase):
             self.driver.stop()
             # Make sure we don't block the driver from stopping.
             self.msg_reader.send_timeout()
-            self.resync_etcd.respond_with_exception(TimeoutError())
-            self.watcher_etcd.respond_with_exception(TimeoutError())
+            # SystemExit kills (only) the thread silently.
+            self.resync_etcd.respond_with_exception(SystemExit())
+            self.watcher_etcd.respond_with_exception(SystemExit())
             # Wait for it to stop.
             self.assertTrue(self.driver.join(1), "Driver failed to stop")
         finally:
