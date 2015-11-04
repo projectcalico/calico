@@ -897,20 +897,6 @@ json_decoder = json.JSONDecoder(
 )
 
 
-def parse_if_endpoint(config, etcd_node):
-    combined_id = get_endpoint_id_from_key(etcd_node.key)
-    if combined_id:
-        # Got an endpoint.
-        if etcd_node.action == "delete":
-            _log.debug("Found deleted endpoint %s", combined_id)
-            endpoint = None
-        else:
-            endpoint = parse_endpoint(config, combined_id, etcd_node.value)
-        # EndpointId does the interning for us.
-        return combined_id, endpoint
-    return None, None
-
-
 def parse_endpoint(config, combined_id, raw_json):
     endpoint = safe_decode_json(raw_json,
                                 log_tag="endpoint %s" % combined_id.endpoint)
@@ -925,19 +911,6 @@ def parse_endpoint(config, combined_id, raw_json):
     return endpoint
 
 
-def parse_if_rules(etcd_node):
-    m = RULES_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some rules.
-        profile_id = m.group("profile_id")
-        if etcd_node.action == "delete":
-            rules = None
-        else:
-            rules = parse_rules(profile_id, etcd_node.value)
-        return intern(profile_id.encode("utf8")), rules
-    return None, None
-
-
 def parse_rules(profile_id, raw_json):
     rules = safe_decode_json(raw_json, log_tag="rules %s" % profile_id)
     try:
@@ -948,19 +921,6 @@ def parse_rules(profile_id, raw_json):
         return None
     else:
         return rules
-
-
-def parse_if_tags(etcd_node):
-    m = TAGS_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some tags.
-        profile_id = m.group("profile_id")
-        if etcd_node.action == "delete":
-            tags = None
-        else:
-            tags = parse_tags(profile_id, etcd_node.value)
-        return intern(profile_id.encode("utf8")), tags
-    return None, None
 
 
 def parse_tags(profile_id, raw_json):
@@ -977,38 +937,12 @@ def parse_tags(profile_id, raw_json):
         return intern_list(tags)
 
 
-def parse_if_host_ip(etcd_node):
-    m = HOST_IP_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some rules.
-        hostname = m.group("hostname")
-        if etcd_node.action == "delete":
-            ip = None
-        else:
-            ip = parse_host_ip(hostname, etcd_node.value)
-        return hostname, ip
-    return None, None
-
-
 def parse_host_ip(hostname, raw_value):
     if raw_value is None or validate_ip_addr(raw_value):
         return canonicalise_ip(raw_value, None)
     else:
         _log.debug("%s has invalid IP: %r", hostname, raw_value)
         return None
-
-
-def parse_if_ipam_v4_pool(etcd_node):
-    m = IPAM_V4_CIDR_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some rules.
-        pool_id = m.group("encoded_cidr")
-        if etcd_node.action == "delete":
-            pool = None
-        else:
-            pool = parse_ipam_pool(pool_id, etcd_node.value)
-        return pool_id, pool
-    return None, None
 
 
 def parse_ipam_pool(pool_id, raw_json):
