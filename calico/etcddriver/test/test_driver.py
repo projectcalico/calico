@@ -25,6 +25,7 @@ from Queue import Queue, Empty
 from unittest import TestCase
 
 from mock import Mock, call, patch
+from urllib3.exceptions import TimeoutError
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, VERSION_DIR
 
 from calico.etcddriver.driver import EtcdDriver
@@ -86,8 +87,11 @@ class StubMessageWriter(MessageWriter):
     def __init__(self, sck):
         super(StubMessageWriter, self).__init__(sck)
         self.queue = Queue()
+        self.exception = None
 
     def send_message(self, msg_type, fields=None, flush=True):
+        if self.exception:
+            raise self.exception
         self.queue.put((msg_type, fields))
         if flush:
             self.flush()
@@ -223,6 +227,8 @@ class PipeFile(object):
         if not self.buf:
             self.buf = self.queue.get()
         while len(data) < length:
+            if isinstance(self.buf, BaseException):
+                raise self.buf
             data += self.buf[:length - len(data)]
             self.buf = self.buf[length - len(data):]
             if not self.buf:
@@ -287,82 +293,18 @@ class TestEtcdDriverFV(TestCase):
                                     "complete_logging", autospec=True)
         self._logging_patch.start()
 
-    def test_mainline(self):
-        self.driver.start()
-        # First message comes from Felix.
-        self.send_init_msg()
-        # Should trigger driver to send a status and start polling the ready
-        # flag.
-        self.assert_status_message(STATUS_WAIT_FOR_READY)
-        # Respond to etcd request with ready == true.
-        self.resync_etcd.assert_request(READY_KEY)
-        self.resync_etcd.respond_with_value(READY_KEY, "true", mod_index=10)
-        # Then etcd should get the global config request.
-        self.resync_etcd.assert_request(CONFIG_DIR, recursive=True)
-        self.resync_etcd.respond_with_dir(CONFIG_DIR, {
-            CONFIG_DIR + "/InterfacePrefix": "tap"
-        })
-        # Followed by the per-host one...
-        self.resync_etcd.assert_request("/calico/v1/host/thehostname/config",
-                                        recursive=True)
-        self.resync_etcd.respond_with_dir(CONFIG_DIR, {
-            "/calico/v1/host/thehostname/config/LogSeverityFile": "DEBUG"
-        })
-        # Then the driver should send the config to Felix.
-        self.assert_msg_to_felix(
-            MSG_TYPE_CONFIG_LOADED,
-            {
-                MSG_KEY_GLOBAL_CONFIG: {"InterfacePrefix": "tap"},
-                MSG_KEY_HOST_CONFIG: {"LogSeverityFile": "DEBUG"},
-            }
-        )
-        self.assert_flush_to_felix()
-        # We respond with the config message to trigger the start of the
-        # resync.
-        self.msg_reader.send_msg(
-            MSG_TYPE_CONFIG,
-            {
-                MSG_KEY_LOG_FILE: "/tmp/driver.log",
-                MSG_KEY_SEV_FILE: "DEBUG",
-                MSG_KEY_SEV_SCREEN: "DEBUG",
-                MSG_KEY_SEV_SYSLOG: "DEBUG",
-            }
-        )
-        self.assert_status_message(STATUS_RESYNC)
-        # We should get a request to load the full snapshot.
-        self.resync_etcd.assert_request(
-            VERSION_DIR, recursive=True, timeout=120, preload_content=False
-        )
-        snap_stream = self.resync_etcd.respond_with_stream(etcd_index=10)
-        # And then the headers should trigger a request from the watcher
-        # including the etcd_index we sent even though we haven't sent a
-        # response body to the resync thread.
-        self.watcher_etcd.assert_request(
-            VERSION_DIR, recursive=True, timeout=90, wait_index=11
-        )
-        # Start sending the snapshot response:
-        snap_stream.write('''{
-            "action": "get",
-            "node": {
-                "key": "/calico/v1",
-                "dir": true,
-                "nodes": [
-                {
-                    "key": "/calico/v1/adir",
-                    "dir": true,
-                    "nodes": [
-                    {
-                        "key": "/calico/v1/adir/akey",
-                        "value": "akey's value",
-                        "modifiedIndex": 8
-                    },
-        ''')
-        # Should generate a message to felix even though it's only seen part
-        # of the response...
-        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
-            MSG_KEY_KEY: "/calico/v1/adir/akey",
-            MSG_KEY_VALUE: "akey's value",
-        })
+    def test_mainline_resync(self):
+        """
+        Test of the mainline resync-and-merge processing.
+
+        * Does the initial config handshake with Felix.
+        * Interleaves the snapshot response with updates via the watcher.
+        * Checks that the result is correctly merged.
+        """
+        # Initial handshake.
+        self.start_driver_and_handshake()
+        # Check for etcd request and start the response.
+        snap_stream = self.start_snapshot_response()
         # Respond to the watcher, this should get merged into the event
         # stream at some point later.
         self.watcher_etcd.respond_with_value(
@@ -448,6 +390,120 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_VALUE: "e",
         })
         self.assert_flush_to_felix()
+
+    @patch("time.sleep", autospec=True)
+    def test_resync_pipe_write_fail(self, m_sleep):
+        """
+        Test a read failure on the snapshot.
+        """
+        # Start the driver, it will wait for a message from Felix.
+        self.driver.start()
+        # Queue up an error on the driver's next write.
+        self.msg_writer.exception = WriteFailed()
+        # Send init message from Felix to driver.
+        self.send_init_msg()
+        # Driver should die.
+        for _ in xrange(100):
+            # Need to time out the reader thread or it will block shutdown.
+            self.msg_reader.send_timeout()
+            if self.driver.join(timeout=0.01):
+                break
+        else:
+            self.fail("Driver failed to die.")
+
+    @patch("time.sleep", autospec=True)
+    def test_resync_etcd_read_fail(self, m_sleep):
+        """
+        Test a read failure on the snapshot.
+        """
+        # Initial handshake.
+        self.start_driver_and_handshake()
+        # Start streaming some data.
+        snap_stream = self.start_snapshot_response()
+        # But then the read times out...
+        snap_stream.write(TimeoutError())
+        # Triggering a restart of the resync loop.
+        self.assert_status_message(STATUS_WAIT_FOR_READY)
+
+    def start_driver_and_handshake(self):
+        self.driver.start()
+        # First message comes from Felix.
+        self.send_init_msg()
+        # Should trigger driver to send a status and start polling the ready
+        # flag.
+        self.assert_status_message(STATUS_WAIT_FOR_READY)
+        # Respond to etcd request with ready == true.
+        self.resync_etcd.assert_request(READY_KEY)
+        self.resync_etcd.respond_with_value(READY_KEY, "true", mod_index=10)
+        # Then etcd should get the global config request.
+        self.resync_etcd.assert_request(CONFIG_DIR, recursive=True)
+        self.resync_etcd.respond_with_dir(CONFIG_DIR, {
+            CONFIG_DIR + "/InterfacePrefix": "tap"
+        })
+        # Followed by the per-host one...
+        self.resync_etcd.assert_request("/calico/v1/host/thehostname/config",
+                                        recursive=True)
+        self.resync_etcd.respond_with_dir(CONFIG_DIR, {
+            "/calico/v1/host/thehostname/config/LogSeverityFile": "DEBUG"
+        })
+        # Then the driver should send the config to Felix.
+        self.assert_msg_to_felix(
+            MSG_TYPE_CONFIG_LOADED,
+            {
+                MSG_KEY_GLOBAL_CONFIG: {"InterfacePrefix": "tap"},
+                MSG_KEY_HOST_CONFIG: {"LogSeverityFile": "DEBUG"},
+            }
+        )
+        self.assert_flush_to_felix()
+        # We respond with the config message to trigger the start of the
+        # resync.
+        self.msg_reader.send_msg(
+            MSG_TYPE_CONFIG,
+            {
+                MSG_KEY_LOG_FILE: "/tmp/driver.log",
+                MSG_KEY_SEV_FILE: "DEBUG",
+                MSG_KEY_SEV_SCREEN: "DEBUG",
+                MSG_KEY_SEV_SYSLOG: "DEBUG",
+            }
+        )
+        self.assert_status_message(STATUS_RESYNC)
+
+    def start_snapshot_response(self):
+        # We should get a request to load the full snapshot.
+        self.resync_etcd.assert_request(
+            VERSION_DIR, recursive=True, timeout=120, preload_content=False
+        )
+        snap_stream = self.resync_etcd.respond_with_stream(etcd_index=10)
+        # And then the headers should trigger a request from the watcher
+        # including the etcd_index we sent even though we haven't sent a
+        # response body to the resync thread.
+        self.watcher_etcd.assert_request(
+            VERSION_DIR, recursive=True, timeout=90, wait_index=11
+        )
+        # Start sending the snapshot response:
+        snap_stream.write('''{
+            "action": "get",
+            "node": {
+                "key": "/calico/v1",
+                "dir": true,
+                "nodes": [
+                {
+                    "key": "/calico/v1/adir",
+                    "dir": true,
+                    "nodes": [
+                    {
+                        "key": "/calico/v1/adir/akey",
+                        "value": "akey's value",
+                        "modifiedIndex": 8
+                    },
+        ''')
+        # Should generate a message to felix even though it's only seen part
+        # of the response...
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/akey",
+            MSG_KEY_VALUE: "akey's value",
+        })
+        return snap_stream
 
     def assert_status_message(self, status):
         self.assert_msg_to_felix(
