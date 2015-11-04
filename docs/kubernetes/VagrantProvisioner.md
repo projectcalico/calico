@@ -14,7 +14,7 @@ The Kubernetes Vagrant provider uses OpenVSwitch networking by default, but it c
 ## Getting Started
 First, you'll need to check out a copy of the Kubernetes git repo. Currently the Calico Vagrant plugin code is waiting to be merged into the Kubernetes repo, so for now you'll need to check out our fork of the Kubernetes repo (which is based on the latest 1.0 release candidate).
 ```
-git clone git@github.com:projectcalico/calico-kubernetes.git
+git clone https://github.com/projectcalico/calico-kubernetes.git
 cd calico-kubernetes
 git checkout calico-network-plugin-dev
 ```
