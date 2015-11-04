@@ -27,7 +27,8 @@ calicoctl node commands.
 
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
-    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--rkt]
+    [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
+    [--detach=<DETACH>] [--rkt]
     [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
@@ -48,6 +49,11 @@ Options:
                             "false" to run in the foreground.  When using
                             libnetwork, this may not be set to "false".
                             [default: true]
+  --runtime=<RUNTIME>       Specify how Calico services should be
+                            launched.  When set to "docker", services will be
+                            launched via the calico-node container, whereas a
+                            value of "none" will not launch them at all.
+                            [default: docker]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
@@ -71,7 +77,11 @@ Options:
 
 ### calicoctl node 
 
-This command starts a container using the `calico/node` Docker image. 
+This command performs two actions:
+1. Initialize this host for Calico by setting first-time config in etcd.
+2. (Optional) Start the `calico/node` Docker container. By default
+(or via `--runtime=docker`) the `calicoctl node` does this by downloading
+the `calico/node` Docker image and running it in a container.
 
 It is required to run the `calicoctl node` command prior to configuring 
 endpoints to use Calico networking.  In order to run the command, the host must 
@@ -85,7 +95,8 @@ Command syntax:
 
 ```
 calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] 
-    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--rkt] 
+    [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
+    [--detach=<DETACH>] [--rkt]
     [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
 
@@ -93,6 +104,7 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     <IP6>: Unique IPv6 address associated with an interface on the host machine.
     <DOCKER_IMAGE_NAME>: Desired calico/node Docker image to use.
                          (default value depends on calicoctl binary version)
+    <RUNTIME>: Specify how Calico should launch its core processes.
     <AS_NUM>: Autonomous System number to use for BGP peering.
               (default global AS number of 64511 is used if not specified)
     <LOG_DIR>: Directory where Calico will store logs, if not default.
@@ -111,6 +123,11 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
 When running the `calicoctl node` command with the `--libnetwork` plugin, the 
 command starts a container using the `calico/node-libnetwork` Docker image in 
 addition to starting the `calico/node` Docker image.
+
+The `--runtime=none` setting can be used to prevent Calico from launching the
+calico-node Docker container, instead allowing you to run the core processes
+via some other means. For example, you might install directly on the host and
+execute them via a systemd unit.
 
 The `--ip` and `--ip6` flags should be used to specify a unique IP address that 
 is owned by an interface on this Calico host system.  These IP addresses are 

@@ -22,6 +22,7 @@ Description:
 import re
 
 from prettytable import PrettyTable
+from requests import ConnectionError
 
 from connectors import docker_client
 
@@ -35,29 +36,34 @@ def status(arguments):
     this file's docstring with docopt
     :return: None
     """
-    calico_node_info = filter(lambda container: "/calico-node" in
-                              container["Names"],
-                              docker_client.containers())
-    if len(calico_node_info) == 0:
-        print "calico-node container not running"
-    else:
-        print "calico-node container is running. Status: %s" % \
-              calico_node_info[0]["Status"]
+    try:
+        calico_node_info = filter(lambda container: "/calico-node" in
+                                  container["Names"],
+                                  docker_client.containers())
+        if len(calico_node_info) == 0:
+            print "calico-node container not running"
+        else:
+            print "calico-node container is running. Status: %s" % \
+                  calico_node_info[0]["Status"]
 
-        libraries_cmd = docker_client.exec_create("calico-node",
-                                                  ["sh", "-c",
-                                                   "cat libraries.txt"])
-        libraries_out = docker_client.exec_start(libraries_cmd)
-        result = re.search(r"^calico\s*\((.*)\)\s*$", libraries_out,
-                           re.MULTILINE)
+            libraries_cmd = docker_client.exec_create("calico-node",
+                                                      ["sh", "-c",
+                                                       "cat libraries.txt"])
+            libraries_out = docker_client.exec_start(libraries_cmd)
+            result = re.search(r"^calico\s*\((.*)\)\s*$", libraries_out,
+                               re.MULTILINE)
 
-        if result is not None:
-            print "Running felix version %s" % result.group(1)
+            if result is not None:
+                print "Running felix version %s" % result.group(1)
 
-        print "\nIPv4 BGP status"
-        pprint_bird_protocols(4)
-        print "IPv6 BGP status"
-        pprint_bird_protocols(6)
+            print "\nIPv4 BGP status"
+            pprint_bird_protocols(4)
+            print "IPv6 BGP status"
+            pprint_bird_protocols(6)
+    except ConnectionError:
+        print "Docker is not running"
+        # TODO: Perform status checks in platform-independent way.
+        return
 
 
 def pprint_bird_protocols(version):

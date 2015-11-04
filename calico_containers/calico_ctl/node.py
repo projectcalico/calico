@@ -14,7 +14,8 @@
 """
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
-    [--as=<AS_NUM>] [--log-dir=<LOG_DIR>] [--detach=<DETACH>] [--rkt]
+    [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
+    [--detach=<DETACH>] [--rkt]
     [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
@@ -35,6 +36,11 @@ Options:
                             "false" to run in the foreground.  When using
                             libnetwork, this may not be set to "false".
                             [default: true]
+  --runtime=<RUNTIME>       Specify how Calico services should be
+                            launched.  When set to "docker", services will be
+                            launched via the calico-node container, whereas a
+                            value of "none" will not launch them at all.
+                            [default: docker]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
@@ -119,6 +125,7 @@ def validate_arguments(arguments):
     peer_ip_ok = arguments.get("<PEER_IP>") is None or \
                  validate_ip(arguments["<PEER_IP>"], 4) or \
                  validate_ip(arguments["<PEER_IP>"], 6)
+    runtime_ok = arguments.get("--runtime") in [None, "none", "docker"]
 
     asnum_ok = True
     asnum = arguments.get("<AS_NUM>") or arguments.get("--as")
@@ -145,10 +152,12 @@ def validate_arguments(arguments):
         print "Valid values for --detach are 'true' and 'false'"
     if not detach_libnetwork_ok:
         print "The only valid value for --detach is 'true' when using libnetwork"
+    if not runtime_ok:
+        print "Runtime must be 'docker' or 'none'."
 
     # Exit if not valid argument
     if not (ip_ok and ip6_ok and container_ip_ok and peer_ip_ok and asnum_ok
-            and detach_ok and detach_libnetwork_ok):
+            and detach_ok and detach_libnetwork_ok and runtime_ok):
         sys.exit(1)
 
 
@@ -190,6 +199,7 @@ def node(arguments):
                                 else arguments.get("--libnetwork-image")
         node_start(ip=arguments.get("--ip"),
                    node_image=arguments.get('--node-image'),
+                   runtime=arguments.get("--runtime"),
                    log_dir=arguments.get("--log-dir"),
                    ip6=arguments.get("--ip6"),
                    as_num=as_num,
@@ -199,7 +209,7 @@ def node(arguments):
                    libnetwork_image=libnetwork_image)
 
 
-def node_start(node_image, log_dir, ip, ip6, as_num, detach,
+def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
                kubernetes_version, rkt, libnetwork_image):
     """
     Create the calico-node container and establish Calico networking on this
@@ -230,7 +240,9 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach,
         pass
 
     # Print warnings for any known system issues before continuing
-    check_system(quit_if_error=False, libnetwork=libnetwork_image)
+    using_docker = True if runtime == 'docker' else False
+    check_system(quit_if_error=False, libnetwork=libnetwork_image,
+                 check_docker=using_docker)
 
     # We will always want to setup IP forwarding
     _setup_ip_forwarding()
@@ -297,10 +309,10 @@ def node_start(node_image, log_dir, ip, ip6, as_num, detach,
     etcd_authority_address, etcd_authority_port = etcd_authority.split(':')
     etcd_authority = '%s:%s' % (socket.gethostbyname(etcd_authority_address),
                                 etcd_authority_port)
-
-    _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach)
-    if libnetwork_image:
-        _start_libnetwork_container(etcd_authority, libnetwork_image)
+    if runtime == 'docker':
+        _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach)
+        if libnetwork_image:
+            _start_libnetwork_container(etcd_authority, libnetwork_image)
 
 
 def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
@@ -536,24 +548,30 @@ def warn_if_hostname_conflict(ip):
     """
     # If there's already a calico-node container on this host, they're probably
     # just re-running node to update one of the ip addresses, so skip..
-    if not docker_client.containers(filters={'name': 'calico-node'}):
-        # Otherwise, check if another host with the same hostname
-        # is already configured
-        try:
-            current_ipv4, _ = client.get_host_bgp_ips(hostname)
-        except KeyError:
-            # No other machine has registered configuration under this hostname.
-            # This must be a new host with a unique hostname, which is the
-            # expected behavior.
-            pass
-        else:
-            if current_ipv4 != "" and current_ipv4 != ip:
-                print_paragraph("WARNING: Hostname '%s' is already in use "
-                                "with IP address %s. Calico requires each compute host to "
-                                "have a unique hostname. If this is your first time "
-                                "running 'calicoctl node' on this host, ensure that "
-                                "another host is not already using the "
-                                "same hostname." % (hostname, ip))
+    try:
+        current_ipv4, _ = client.get_host_bgp_ips(hostname)
+    except KeyError:
+        # No other machine has registered configuration under this hostname.
+        # This must be a new host with a unique hostname, which is the
+        # expected behavior.
+        pass
+    else:
+        if current_ipv4 != "" and current_ipv4 != ip:
+            hostname_warning = "WARNING: Hostname '%s' is already in use " \
+                               "with IP address %s. Calico requires each " \
+                               "compute host to have a unique hostname. " \
+                               "If this is your first time running " \
+                               "'calicoctl node' on this host, ensure " \
+                               "that another host is not already using the " \
+                               "same hostname." % (hostname, ip)
+            try:
+                if not docker_client.containers(filters={'name': 'calico-node'}):
+                    # Calico-node isn't running on this host.
+                    # There may be another host using this hostname.
+                    print_paragraph(hostname_warning)
+            except IOError:
+                # Couldn't connect to docker to confirm calico-node is running.
+                print_paragraph(hostname_warning)
 
 
 def _find_or_pull_node_image(image_name):
