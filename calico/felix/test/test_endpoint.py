@@ -20,7 +20,8 @@ Tests of endpoint module.
 """
 from contextlib import nested
 import logging
-from calico.felix.endpoint import EndpointManager
+from neutron.common.constants import IPv4
+from calico.felix.endpoint import EndpointManager, LocalEndpoint
 from calico.felix.fetcd import EtcdAPI, EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
@@ -38,6 +39,56 @@ from calico.felix import futils
 from calico.datamodel_v1 import EndpointId
 
 _log = logging.getLogger(__name__)
+
+
+ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
+
+
+class TestEndpointManager(BaseTestCase):
+    def setUp(self):
+        super(TestEndpointManager, self).setUp()
+        self.m_config = Mock(spec=config.Config)
+        self.m_config.HOSTNAME = "hostname"
+        self.m_updater = Mock(spec=IptablesUpdater)
+        self.m_dispatch = Mock(spec=DispatchChains)
+        self.m_rules_mgr = Mock(spec=RulesManager)
+        self.m_status_reporter = Mock(spec=EtcdStatusReporter)
+        self.mgr = EndpointManager(self.m_config, "IPv4", self.m_updater,
+                                   self.m_dispatch, self.m_rules_mgr,
+                                   self.m_status_reporter)
+
+    def test_create(self):
+        obj = self.mgr._create(ENDPOINT_ID)
+        self.assertTrue(isinstance(obj, LocalEndpoint))
+
+    def test_on_started(self):
+        ep = {"name": "tap1234"}
+        self.mgr.on_endpoint_update(ENDPOINT_ID,
+                                    ep,
+                                    async=True)
+        self.step_actor(self.mgr)
+        m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr._on_object_started(ENDPOINT_ID, m_endpoint)
+        self.assertEqual(
+            m_endpoint.on_endpoint_update.mock_calls,
+            [mock.call(ep, async=True)]
+        )
+
+    def test_on_datamodel_in_sync(self):
+        ep = {"name": "tap1234"}
+        self.mgr.on_endpoint_update(ENDPOINT_ID,
+                                    ep,
+                                    async=True)
+        self.step_actor(self.mgr)
+        self.mgr.on_datamodel_in_sync(async=True)
+        self.step_actor(self.mgr)
+        # Second call should have no effect.
+        self.mgr.on_datamodel_in_sync(async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(
+            self.m_dispatch.apply_snapshot.mock_calls,
+            [mock.call(frozenset(["tap1234"]), async=True)]
+        )
 
 
 class TestLocalEndpoint(BaseTestCase):

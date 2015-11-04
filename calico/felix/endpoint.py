@@ -102,12 +102,7 @@ class EndpointManager(ReferenceManager):
             # DispatchChains actor.  That is OK!  The worst that can happen is
             # that a LocalEndpoint undoes part of our update and then goes on
             # to re-apply the update when it catches up to the snapshot.
-            local_ifaces = set()
-            for ep_id, ep in self.endpoints_by_id.iteritems():
-                if (ep and
-                        ep_id.host == self.config.HOSTNAME and
-                        ep.get("name")):
-                    local_ifaces.add(ep.get("name"))
+            local_ifaces = frozenset(self.endpoint_id_by_iface_name.keys())
             self.dispatch_chains.apply_snapshot(local_ifaces, async=True)
 
     @actor_message()
