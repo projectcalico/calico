@@ -177,7 +177,7 @@ class TestRules(BaseTestCase):
                                                 "DROP",
                                                 "felix-hosts")
         self.assertEqual(chain, [
-            '--append felix-INPUT --protocol ipencap --match set ! --match-set felix-hosts src --jump DROP',
+            '--append felix-INPUT --protocol 4 --match set ! --match-set felix-hosts src --jump DROP',
             '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
             '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
             '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
