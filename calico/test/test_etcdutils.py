@@ -21,9 +21,13 @@ Tests for etcd utility function.
 
 import logging
 import types
-import etcd
 from mock import Mock, patch, call
-from calico.etcdutils import PathDispatcher, EtcdWatcher, delete_empty_parents
+from calico.etcdutils import (
+    PathDispatcher, EtcdWatcher, delete_empty_parents
+)
+# Since other tests patch the module table, make sure we have the same etcd
+# module as the module under test.
+from calico.etcdutils import etcd
 
 from calico.felix.test.base import BaseTestCase
 

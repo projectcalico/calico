@@ -39,11 +39,18 @@ FLUSH = object()
 
 
 class StubMessageReader(MessageReader):
+    """
+    Replacement for the Driver's MessageReader, which is how it reads
+    from Felix.
+
+    Allows us to send messages as if we were Felix.
+    """
     def __init__(self, sck):
         super(StubMessageReader, self).__init__(sck)
         self.queue = Queue()
 
     def send_msg(self, msg_type, fields=None):
+        """Called by the test to send the driver a message."""
         msg = {
             MSG_KEY_TYPE: msg_type
         }
@@ -51,12 +58,15 @@ class StubMessageReader(MessageReader):
         self.queue.put((msg_type, msg))
 
     def send_timeout(self):
+        """Called by the test to send the driver a timeout."""
         self.queue.put(None)
 
     def send_exception(self, exc):
+        """Called by the test to raise an exception from the driver's read."""
         self.queue.put(exc)
 
     def new_messages(self, timeout=None):
+        """Called by the driver to receive new messages."""
         while True:
             item = self.queue.get()
             if item is None:
@@ -68,6 +78,13 @@ class StubMessageReader(MessageReader):
 
 
 class StubMessageWriter(MessageWriter):
+    """
+    Replacement for the driver's MessageWriter, which it uses to send messages
+    to Felix.
+
+    Buffers the messages and flush calls in a queue for the test to
+    interrogate.
+    """
     def __init__(self, sck):
         super(StubMessageWriter, self).__init__(sck)
         self.queue = Queue()
@@ -82,6 +99,11 @@ class StubMessageWriter(MessageWriter):
 
 
 class StubEtcd(object):
+    """
+    A fake connection to etcd.  We hook the driver's _issue_etcd_request
+    method and block the relevant thread until the test calls one of the
+    respond_... methods.
+    """
     def __init__(self):
         self.request_queue = Queue()
         self.response_queue = Queue()
@@ -90,6 +112,10 @@ class StubEtcd(object):
         }
 
     def request(self, key, **kwargs):
+        """
+        Called from the driver to make a request.  Blocks until the
+        test thread sends a response.
+        """
         self.request_queue.put((key, kwargs))
         response = self.response_queue.get(30)
         if isinstance(response, Exception):
@@ -97,11 +123,17 @@ class StubEtcd(object):
         else:
             return response
 
-    def get_open_request(self):
+    def get_next_request(self):
+        """
+        Called from the test to get the next request from the driver.
+        """
         return self.request_queue.get(timeout=10)
 
     def assert_request(self, expected_key, **expected_args):
-        key, args = self.get_open_request()
+        """
+        Asserts the properies of the next request.
+        """
+        key, args = self.get_next_request()
         default_args = {'wait_index': None,
                         'preload_content': None,
                         'recursive': False,
@@ -117,10 +149,18 @@ class StubEtcd(object):
                                  (expected_args, key, args))
 
     def respond_with_exception(self, exc):
+        """
+        Called from the test to raise an exception from the current/next
+        request.
+        """
         self.response_queue.put(exc)
 
     def respond_with_value(self, key, value, mod_index=None,
                            etcd_index=None, status=200, action="get"):
+        """
+        Called from the test to return a simple single-key value to the
+        driver.
+        """
         data = json.dumps({
             "action": action,
             "node": {
@@ -133,6 +173,10 @@ class StubEtcd(object):
 
     def respond_with_dir(self, key, children, mod_index=None,
                          etcd_index=None, status=200):
+        """
+        Called from the test to return a directory of key/values (from a
+        recursive request).
+        """
         nodes = [{"key": k, "value": v, "modifiedIndex": mod_index}
                  for (k, v) in children.iteritems()]
         data = json.dumps({
@@ -147,6 +191,10 @@ class StubEtcd(object):
         self.respond_with_data(data, etcd_index, status)
 
     def respond_with_data(self, data, etcd_index, status):
+        """
+        Called from the test to return a raw response (e.g. to send
+        malformed JSON).
+        """
         headers = self.headers.copy()
         if etcd_index is not None:
             headers["x-etcd-index"] = str(etcd_index)
@@ -154,39 +202,43 @@ class StubEtcd(object):
         self.response_queue.put(resp)
 
     def respond_with_stream(self, etcd_index, status=200):
+        """
+        Called from the test to respond with a stream, allowing the test to
+        send chunks of data in response.
+        """
         headers = self.headers.copy()
         if etcd_index is not None:
             headers["x-etcd-index"] = str(etcd_index)
-        rh, wh = os.pipe()
-        # os.fdopen() is the standard way to wrap a pipe object but, on the
-        # read side, it seems to be impossible to prevent buffering.  That's
-        # no good for us, where it can result in blocking the reader forever.
-        # Use our own, more basic, wrapper.
-        rf = FileWrapper(rh)
-        wf = FileWrapper(wh)
-        resp = MockResponse(status, rf, headers)
+        f = PipeFile()
+        resp = MockResponse(status, f, headers)
         self.response_queue.put(resp)
-        return wf
+        return f
 
 
-class FileWrapper(object):
-    """
-    Ultra low-level file-like wrapper.  Avoids the buffering that is
-    baked into os.fdopen()'s file wrapper.
-    """
-    def __init__(self, fd):
-        self.fd = fd
+class PipeFile(object):
+    def __init__(self):
+        self.queue = Queue()
+        self.buf = None
 
-    def read(self, bufsize):
-        return os.read(self.fd, bufsize)
+    def read(self, length):
+        data = ""
+        if not self.buf:
+            self.buf = self.queue.get()
+        while len(data) < length:
+            data += self.buf[:length - len(data)]
+            self.buf = self.buf[length - len(data):]
+            if not self.buf:
+                try:
+                    self.buf = self.queue.get_nowait()
+                except Empty:
+                    break
+        return data
 
-    def write(self, s):
-        while s:
-            bytes_written = os.write(self.fd, s)
-            s = s[bytes_written:]
+    def write(self, data):
+        self.queue.put(data)
 
     def __del__(self):
-        os.close(self.fd)
+        self.queue.put("")
 
 
 class MockResponse(object):
