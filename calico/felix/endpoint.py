@@ -486,7 +486,7 @@ class LocalEndpoint(RefCountedActor):
     def _remove_chains(self):
         try:
             self.iptables_updater.delete_chains(chain_names(self._suffix),
-                                                async=True)
+                                                async=False)
         except FailedSystemCall:
             _log.exception("Failed to delete chains for %s", self)
         else:
