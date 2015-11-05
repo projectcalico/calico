@@ -155,7 +155,8 @@ class EtcdDriver(object):
                     elif msg_type == MSG_TYPE_RESYNC:
                         self._handle_resync(msg)
                     else:
-                        _log.warning("Unexpected message from Felix")
+                        _log.error("Unexpected message from Felix: %s", msg)
+                        raise RuntimeError("Unexpected message from Felix")
         finally:
             _log.error("Reader thread shutting down, triggering stop event")
             self.stop()
@@ -217,12 +218,7 @@ class EtcdDriver(object):
                 self._preload_config()
                 # Now (on the first run through) wait for Felix to process the
                 # config.
-                while not self._config_received.is_set():
-                    _log.info("Waiting for Felix to process the config...")
-                    self._config_received.wait(1)
-                    if self._stop_event.is_set():
-                        raise DriverShutdown()
-                    _log.info("Felix sent us the config, continuing.")
+                self._wait_for_config()
                 # Kick off the snapshot request as far as the headers.
                 self._send_status(STATUS_RESYNC)
                 resp, snapshot_index = self._start_snapshot_request()
@@ -254,6 +250,14 @@ class EtcdDriver(object):
             finally:
                 self._first_resync = False
                 self._resync_requested = False
+
+    def _wait_for_config(self):
+        while not self._config_received.is_set():
+            _log.info("Waiting for Felix to process the config...")
+            if self._stop_event.is_set():
+                raise DriverShutdown()
+            self._config_received.wait(1)
+            _log.info("Felix sent us the config, continuing.")
 
     def _wait_for_ready(self):
         """
