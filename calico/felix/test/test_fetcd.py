@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import socket
 import subprocess
 from datetime import datetime
 import json
@@ -26,7 +27,10 @@ from mock import Mock, call, patch, ANY
 from calico.datamodel_v1 import EndpointId
 from calico.etcddriver.protocol import MessageReader, MessageWriter, \
     MSG_TYPE_CONFIG_LOADED, MSG_TYPE_STATUS, STATUS_RESYNC, MSG_KEY_STATUS, \
-    MSG_TYPE_UPDATE
+    MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
+    MSG_KEY_HOST_CONFIG, MSG_KEY_GLOBAL_CONFIG, MSG_TYPE_CONFIG, \
+    MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, MSG_KEY_SEV_SYSLOG, \
+    STATUS_IN_SYNC
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
@@ -229,8 +233,129 @@ class TestEtcdWatcher(BaseTestCase):
             with patch.object(self.watcher, "_on_update_from_driver") as m_upd:
                 msg = Mock()
                 self.watcher._dispatch_msg_from_driver(MSG_TYPE_UPDATE, msg)
-        self.assertEqual(m_sleep.mock_calls,
-                         [call(0.000001)])
+        self.assertEqual(m_sleep.mock_calls, [call(0.000001)])
+
+    def test_on_update_from_driver(self):
+        self.watcher.read_count = 999
+        self.watcher.configured.set()
+        with patch.object(self.watcher, "begin_polling") as m_begin:
+            self.watcher._on_update_from_driver({
+                MSG_KEY_TYPE: MSG_TYPE_UPDATE,
+                MSG_KEY_KEY: "/calico/v1/Ready",
+                MSG_KEY_VALUE: "true",
+            })
+        m_begin.wait.assert_called_once_with()
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_on_config_loaded(self, m_die):
+        self.m_config.DRIVERLOGFILE = "/tmp/driver.log"
+        global_config = {"InterfacePrefix": "tap"}
+        local_config = {"LogSeverityFile": "DEBUG"}
+        self.watcher._on_config_loaded_from_driver({
+            MSG_KEY_GLOBAL_CONFIG: global_config,
+            MSG_KEY_HOST_CONFIG: local_config,
+        })
+        self.assertTrue(self.watcher.configured.is_set())
+        self.assertEqual(
+            self.m_config.report_etcd_config.mock_calls,
+            [call(local_config, global_config)]
+        )
+        self.assertEqual(
+            self.m_writer.send_message.mock_calls,
+            [call(MSG_TYPE_CONFIG,
+                  {
+                      MSG_KEY_LOG_FILE: "/tmp/driver.log",
+                      MSG_KEY_SEV_FILE: self.m_config.LOGLEVFILE,
+                      MSG_KEY_SEV_SCREEN: self.m_config.LOGLEVSCR,
+                      MSG_KEY_SEV_SYSLOG: self.m_config.LOGLEVSYS,
+                  })]
+        )
+        self.assertEqual(m_die.mock_calls, [])
+
+        # Check a subsequent config change results in Felix dying.
+        global_config = {"InterfacePrefix": "not!tap"}
+        local_config = {"LogSeverityFile": "not!DEBUG"}
+        self.watcher._on_config_loaded_from_driver({
+            MSG_KEY_GLOBAL_CONFIG: global_config,
+            MSG_KEY_HOST_CONFIG: local_config,
+        })
+        self.assertEqual(m_die.mock_calls, [call()])
+
+    def test_on_status_from_driver(self):
+        self.watcher._on_status_from_driver({
+            MSG_KEY_STATUS: STATUS_RESYNC
+        })
+        self.assertFalse(self.watcher._been_in_sync)
+
+        with patch.object(self.watcher, "begin_polling") as m_begin:
+            # Two calls but second should be ignored...
+            self.watcher._on_status_from_driver({
+                MSG_KEY_STATUS: STATUS_IN_SYNC
+            })
+            self.watcher._on_status_from_driver({
+                MSG_KEY_STATUS: STATUS_IN_SYNC
+            })
+        m_begin.wait.assert_called_once_with()
+        self.assertTrue(self.watcher._been_in_sync)
+        self.assertEqual(self.m_splitter.on_datamodel_in_sync.mock_calls,
+                         [call(async=True)])
+        self.assertEqual(self.m_hosts_ipset.replace_members.mock_calls,
+                         [call([], async=True)])
+
+    @patch("subprocess.Popen")
+    @patch("socket.socket")
+    @patch("os.unlink")
+    def test_start_driver(self, m_unlink, m_socket, m_popen):
+        m_sck = Mock()
+        m_socket.return_value = m_sck
+        m_conn = Mock()
+        m_sck.accept.return_value = m_conn, None
+        reader, writer = self.watcher._start_driver()
+        self.assertEqual(m_socket.mock_calls[0], call(socket.AF_UNIX,
+                                                      socket.SOCK_STREAM))
+        self.assertEqual(m_sck.bind.mock_calls,
+                         [call("/run/felix-driver.sck")])
+        self.assertEqual(m_sck.listen.mock_calls, [call(1)])
+        self.assertEqual(m_popen.mock_calls[0],
+                         call([ANY, "-m", "calico.etcddriver",
+                               "/run/felix-driver.sck"]))
+        self.assertEqual(m_unlink.mock_calls,
+                         [call("/run/felix-driver.sck")] * 2)
+        self.assertTrue(isinstance(reader, MessageReader))
+        self.assertTrue(isinstance(writer, MessageWriter))
+
+    @patch("subprocess.Popen")
+    @patch("socket.socket")
+    @patch("os.unlink")
+    def test_start_driver_unlink_fail(self, m_unlink, m_socket, m_popen):
+        m_unlink.side_effect = OSError()
+        m_sck = Mock()
+        m_socket.return_value = m_sck
+        m_conn = Mock()
+        m_sck.accept.return_value = m_conn, None
+        reader, writer = self.watcher._start_driver()
+        self.assertTrue(isinstance(reader, MessageReader))
+        self.assertTrue(isinstance(writer, MessageWriter))
+
+    def test_update_hosts_ipset_not_in_sync(self):
+        self.watcher._update_hosts_ipset()
+        self.assertEqual(self.m_hosts_ipset.mock_calls, [])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_config_set(self, m_die):
+        self.watcher.last_global_config = {}
+        self.dispatch("/calico/v1/config/InterfacePrefix",
+                      "set", value="foo")
+        self.assertEqual(m_die.mock_calls, [call()])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_host_config_set(self, m_die):
+        self.watcher.last_host_config = {}
+        self.dispatch("/calico/v1/host/notourhostname/config/InterfacePrefix",
+                      "set", value="foo")
+        self.dispatch("/calico/v1/host/hostname/config/InterfacePrefix",
+                      "set", value="foo")
+        self.assertEqual(m_die.mock_calls, [call()])
 
     def test_endpoint_set(self):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",

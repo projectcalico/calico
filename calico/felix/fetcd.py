@@ -527,7 +527,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         try:
             os.unlink("/run/felix-driver.sck")
         except OSError:
-            pass
+            _log.debug("Failed to delete driver socket, assuming it "
+                       "didn't exist.")
         update_socket = socket.socket(socket.AF_UNIX,
                                       socket.SOCK_STREAM)
         update_socket.bind("/run/felix-driver.sck")
@@ -543,6 +544,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         try:
             os.unlink("/run/felix-driver.sck")
         except OSError:
+            # Unexpected but carry on...
             _log.exception("Failed to unlink socket")
         else:
             _log.info("Unlinked server socket")
