@@ -510,6 +510,16 @@ class TestEtcdWatcher(BaseTestCase):
             async=True,
         )
 
+    def test_ipam_pool_set(self):
+        self.dispatch("/calico/v1/ipam/v4/pool/1234", action="set", value="{}")
+        self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
+                         [call("1234", None, async=True)])
+
+    def test_ipam_pool_del(self):
+        self.dispatch("/calico/v1/ipam/v4/pool/1234", action="delete")
+        self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
+                         [call("1234", None, async=True)])
+
     @patch("os._exit", autospec=True)
     @patch("gevent.sleep", autospec=True)
     def test_die_and_restart(self, m_sleep, m_exit):
@@ -692,6 +702,12 @@ class TestEtcdStatusReporter(BaseTestCase):
         self.assertEqual(self.rep._newer_dirty_endpoints, set())
         self.assertEqual(self.rep._older_dirty_endpoints, set())
 
+    def test_mark_endpoint_dirty_already_dirty(self):
+        endpoint_id = EndpointId("a", "b", "c", "d")
+        self.rep._older_dirty_endpoints.add(endpoint_id)
+        self.rep._mark_endpoint_dirty(endpoint_id)
+        self.assertFalse(endpoint_id in self.rep._newer_dirty_endpoints)
+
     def test_on_endpoint_status_failure(self):
         # Send in an endpoint status update.
         endpoint_id = EndpointId("foo", "bar", "baz", "biff")
@@ -824,6 +840,14 @@ class TestEtcdStatusReporter(BaseTestCase):
                            "aworkload",
                            "anendpoint")
             )
+
+    def test_clean_up_endpoint_status_etcd_error(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        with patch.object(self.rep, "_attempt_cleanup") as m_clean:
+            m_clean.side_effect = EtcdException()
+            self.rep.clean_up_endpoint_statuses(async=True)
+            self.step_actor(self.rep)
+            self.assertTrue(self.rep._cleanup_pending)
 
     def test_clean_up_endpoint_status_not_found(self):
         self.m_config.REPORT_ENDPOINT_STATUS = True

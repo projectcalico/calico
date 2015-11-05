@@ -720,10 +720,6 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         self._timer_scheduled = False
         self._reporting_allowed = True
 
-    @actor_message()
-    def mark_endpoint_dirty(self, endpoint_id):
-        self._mark_endpoint_dirty(endpoint_id)
-
     def _mark_endpoint_dirty(self, endpoint_id):
         assert isinstance(endpoint_id, EndpointId)
         if endpoint_id in self._older_dirty_endpoints:
