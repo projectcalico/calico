@@ -161,8 +161,8 @@ class EtcdAPI(EtcdClientOwner, Actor):
             _log.debug("After jitter, next periodic resync will be in %.1f "
                        "seconds.", sleep_time)
             gevent.sleep(sleep_time)
-            self.force_resync(reason="periodic resync", async=True)
             _stats.increment("Periodic resync")
+            self.force_resync(reason="periodic resync", async=True)
 
     @logging_exceptions
     def _periodically_report_status(self):
@@ -316,6 +316,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self._driver_process = None
         # Stats.
         self.read_count = 0
+        self.msgs_processed = 0
         self.last_rate_log_time = monotonic_time()
         # Register for events when values change.
         self._register_paths()
@@ -354,30 +355,14 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.info("...load_config set.  Starting driver read %s loop", self)
         # Start the driver process and wait for it to connect back to our
         # socket.
-        self._msg_reader, self._msg_writer = self.start_driver()
+        self._msg_reader, self._msg_writer = self._start_driver()
         # Loop reading from the socket and processing messages.
-        msgs_processed = 0
+        self._loop_reading_from_driver()
+
+    def _loop_reading_from_driver(self):
         while True:
             for msg_type, msg in self._msg_reader.new_messages(timeout=1):
-                # Optimization: put update first in the "switch" block because
-                # it's on the critical path.
-                if msg_type == MSG_TYPE_UPDATE:
-                    _stats.increment("Update messages from driver")
-                    self._on_update_from_driver(msg)
-                elif msg_type == MSG_TYPE_CONFIG_LOADED:
-                    _stats.increment("Config loaded messages from driver")
-                    self._on_config_loaded_from_driver(msg)
-                elif msg_type == MSG_TYPE_STATUS:
-                    _stats.increment("Status messages from driver")
-                    self._on_status_from_driver(msg)
-                else:
-                    raise RuntimeError("Unexpected message %s" % msg)
-                msgs_processed += 1
-                if msgs_processed % MAX_EVENTS_BEFORE_YIELD == 0:
-                    # Yield to ensure that other actors make progress.
-                    # Sleep must be non-zero to work around gevent
-                    # issue where we could be immediately rescheduled.
-                    gevent.sleep(0.000001)
+                self._dispatch_msg_from_driver(msg_type, msg)
             if self.resync_requested:
                 _log.info("Resync requested, sending resync request to driver")
                 self.resync_requested = False
@@ -385,11 +370,32 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             # Check that the driver hasn't died.  The recv() call should
             # raise an exception when the buffer runs dry but this usually
             # gets hit first.
-            if self._driver_process.poll() is not None:
+            driver_rc = self._driver_process.poll()
+            if driver_rc is not None:
                 _log.critical("Driver process died with RC = %s.  Felix must "
-                              "exit.", self._driver_process.poll())
+                              "exit.", driver_rc)
                 die_and_restart()
-        _log.info("%s.loop() stopped due to self.stop == True", self)
+
+    def _dispatch_msg_from_driver(self, msg_type, msg):
+        # Optimization: put update first in the "switch" block because
+        # it's on the critical path.
+        if msg_type == MSG_TYPE_UPDATE:
+            _stats.increment("Update messages from driver")
+            self._on_update_from_driver(msg)
+        elif msg_type == MSG_TYPE_CONFIG_LOADED:
+            _stats.increment("Config loaded messages from driver")
+            self._on_config_loaded_from_driver(msg)
+        elif msg_type == MSG_TYPE_STATUS:
+            _stats.increment("Status messages from driver")
+            self._on_status_from_driver(msg)
+        else:
+            raise RuntimeError("Unexpected message %s" % msg)
+        self.msgs_processed += 1
+        if self.msgs_processed % MAX_EVENTS_BEFORE_YIELD == 0:
+            # Yield to ensure that other actors make progress.
+            # Sleep must be non-zero to work around gevent
+            # issue where we could be immediately rescheduled.
+            gevent.sleep(0.000001)
 
     def _on_update_from_driver(self, msg):
         """
@@ -507,7 +513,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                 self._status_reporter.clean_up_endpoint_statuses(async=True)
             self._update_hosts_ipset()
 
-    def start_driver(self):
+    def _start_driver(self):
         """
         Starts the driver subprocess, connects to it over the socket
         and sends it the init message.

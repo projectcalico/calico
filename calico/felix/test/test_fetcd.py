@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import subprocess
 from datetime import datetime
 import json
 import logging
@@ -19,9 +20,13 @@ import logging
 from etcd import EtcdResult, EtcdException
 import etcd
 from gevent.event import Event
+import gevent
 from mock import Mock, call, patch, ANY
 
 from calico.datamodel_v1 import EndpointId
+from calico.etcddriver.protocol import MessageReader, MessageWriter, \
+    MSG_TYPE_CONFIG_LOADED, MSG_TYPE_STATUS, STATUS_RESYNC, MSG_KEY_STATUS, \
+    MSG_TYPE_UPDATE
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
@@ -31,7 +36,6 @@ from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase, JSONString
 
 _log = logging.getLogger(__name__)
-
 
 VALID_ENDPOINT = {
     "state": "active",
@@ -60,71 +64,84 @@ ETCD_ADDRESS = 'localhost:4001'
 
 
 class TestEtcdAPI(BaseTestCase):
+    def setUp(self):
+        super(TestEtcdAPI, self).setUp()
+        self.m_config = Mock(spec=Config)
+        self.m_config.ETCD_ADDR = ETCD_ADDRESS
+        self.m_hosts_ipset = Mock(spec=IpsetActor)
+        with patch("calico.felix.fetcd._FelixEtcdWatcher",
+                   autospec=True) as m_etcd_watcher:
+            with patch("gevent.spawn", autospec=True) as m_spawn:
+                self.api = EtcdAPI(self.m_config, self.m_hosts_ipset)
+        self.m_spawn = m_spawn
+        self.m_etcd_watcher = m_etcd_watcher.return_value
+        self.m_etcd_watcher.load_config = Mock(spec=Event)
+        self.m_etcd_watcher.begin_polling = Mock(spec=Event)
+        self.m_etcd_watcher.configured = Mock(spec=Event)
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
-    def test_create(self, m_spawn, m_etcd_watcher):
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        m_etcd_watcher.assert_has_calls([
-            call(m_config, m_hosts_ipset).link(api._on_worker_died),
-            call(m_config, m_hosts_ipset).start(),
+    def test_create(self):
+        self.m_etcd_watcher.assert_has_calls([
+            call.link(self.api._on_worker_died),
+            call.start(),
         ])
-        m_spawn.assert_has_calls([
-            call(api._periodically_resync),
-            call(api._periodically_resync).link_exception(api._on_worker_died)
+        self.m_spawn.assert_has_calls([
+            call(self.api._periodically_resync),
+            call(self.api._periodically_resync).link_exception(
+                self.api._on_worker_died)
         ])
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
     @patch("gevent.sleep", autospec=True)
-    def test_periodic_resync_mainline(self, m_sleep, m_spawn, m_etcd_watcher):
+    def test_periodic_resync_mainline(self, m_sleep):
+        self.m_config.RESYNC_INTERVAL = 10
         m_configured = Mock(spec=Event)
-        m_etcd_watcher.return_value.configured = m_configured
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        m_config.RESYNC_INTERVAL = 10
-        with patch.object(api, "force_resync") as m_force_resync:
+        self.m_etcd_watcher.configured = m_configured
+        with patch.object(self.api, "force_resync") as m_force_resync:
             m_force_resync.side_effect = ExpectedException()
-            self.assertRaises(ExpectedException, api._periodically_resync)
+            self.assertRaises(ExpectedException,
+                              self.api._periodically_resync)
         m_configured.wait.assert_called_once_with()
         m_sleep.assert_called_once_with(ANY)
         sleep_time = m_sleep.call_args[0][0]
         self.assertTrue(sleep_time >= 10)
         self.assertTrue(sleep_time <= 12)
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
     @patch("gevent.sleep", autospec=True)
-    def test_periodic_resync_disabled(self, m_sleep, m_spawn, m_etcd_watcher):
-        m_etcd_watcher.return_value.configured = Mock(spec=Event)
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        m_config.RESYNC_INTERVAL = 0
-        with patch.object(api, "force_resync") as m_force_resync:
+    def test_periodic_resync_disabled(self, m_sleep):
+        self.m_config.RESYNC_INTERVAL = 0
+        self.m_etcd_watcher.configured = Mock(spec=Event)
+        with patch.object(self.api, "force_resync") as m_force_resync:
             m_force_resync.side_effect = Exception()
-            api._periodically_resync()
+            self.api._periodically_resync()
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
-    def test_force_resync(self, m_spawn, m_etcd_watcher):
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_config.REPORT_ENDPOINT_STATUS = True
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
-        with patch.object(api, "status_reporter") as m_status_rep:
-            api.force_resync(async=True)
-            self.step_actor(api)
+    def test_force_resync(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        with patch.object(self.api, "status_reporter") as m_status_rep:
+            self.api.force_resync(async=True)
+            self.step_actor(self.api)
         m_status_rep.resync.assert_called_once_with(async=True)
-        self.assertTrue(m_etcd_watcher.return_value.resync_requested)
+        self.assertTrue(self.m_etcd_watcher.resync_requested)
+
+    def test_load_config(self):
+        result = self.api.load_config(async=True)
+        self.step_actor(self.api)
+        conf = result.get()
+        self.assertEqual(conf, self.m_etcd_watcher.configured)
+        self.m_etcd_watcher.load_config.set.assert_called_once_with()
+
+    def test_start_watch(self):
+        m_splitter = Mock()
+        result = self.api.start_watch(m_splitter, async=True)
+        self.step_actor(self.api)
+        self.m_etcd_watcher.load_config.set.assert_called_once_with()
+        self.assertEqual(self.m_etcd_watcher.splitter, m_splitter)
+        self.m_etcd_watcher.begin_polling.set.assert_called_once_with()
+
+    @patch("sys.exit", autospec=True)
+    def test_on_worker_died(self, m_exit):
+        glet = gevent.spawn(lambda: None)
+        glet.link(self.api._on_worker_died)
+        glet.join(1)
+        m_exit.assert_called_once_with(1)
 
 
 class ExpectedException(Exception):
@@ -148,8 +165,72 @@ class TestEtcdWatcher(BaseTestCase):
                                          self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
-        self.client = Mock()
-        self.watcher.client = self.client
+        self.m_reader = Mock(spec=MessageReader)
+        self.m_writer = Mock(spec=MessageWriter)
+        self.watcher._msg_reader = self.m_reader
+        self.watcher._msg_writer = self.m_writer
+        self.m_driver_proc = Mock(spec=subprocess.Popen)
+        self.watcher._driver_process = self.m_driver_proc
+
+    def test_run(self):
+        with patch.object(self.watcher.load_config, "wait") as m_wait:
+            with patch.object(self.watcher, "_start_driver") as m_start:
+                m_reader = Mock()
+                m_writer = Mock()
+                m_start.return_value = (m_reader, m_writer)
+                m_reader.new_messages.side_effect = ExpectedException()
+                self.assertRaises(ExpectedException, self.watcher._run)
+        self.assertEqual(m_wait.mock_calls, [call()])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_read_loop(self, m_die):
+        self.m_reader.new_messages.side_effect = iter([
+            iter([]),
+            iter([(MSG_TYPE_STATUS, {MSG_KEY_STATUS: STATUS_RESYNC})])
+        ])
+        self.m_driver_proc.poll.side_effect = iter([
+            None, 1
+        ])
+        m_die.side_effect = ExpectedException()
+        with patch.object(self.watcher, "_dispatch_msg_from_driver") as m_disp:
+            self.assertRaises(ExpectedException,
+                              self.watcher._loop_reading_from_driver)
+        self.assertEqual(m_disp.mock_calls,
+                         [call(MSG_TYPE_STATUS,
+                               {MSG_KEY_STATUS: STATUS_RESYNC})])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_read_loop_resync(self, m_die):
+        self.m_reader.new_messages.side_effect = iter([iter([]), iter([])])
+        self.m_driver_proc.poll.side_effect = iter([None, 1])
+        self.watcher.resync_requested = True
+        m_die.side_effect = ExpectedException()
+        self.assertRaises(ExpectedException,
+                          self.watcher._loop_reading_from_driver)
+
+    def test_dispatch_from_driver(self):
+        for msg_type, expected_method in [
+                (MSG_TYPE_UPDATE, "_on_update_from_driver"),
+                (MSG_TYPE_CONFIG_LOADED, "_on_config_loaded_from_driver"),
+                (MSG_TYPE_STATUS, "_on_status_from_driver"),]:
+            with patch.object(self.watcher, expected_method) as m_meth:
+                msg = Mock()
+                self.watcher._dispatch_msg_from_driver(msg_type, msg)
+                self.assertEqual(m_meth.mock_calls, [call(msg)])
+
+    def test_dispatch_from_driver_unexpected(self):
+        self.assertRaises(RuntimeError,
+                          self.watcher._dispatch_msg_from_driver,
+                          "unknown", {})
+
+    @patch("gevent.sleep")
+    def test_dispatch_yield(self, m_sleep):
+        for _ in xrange(399):
+            with patch.object(self.watcher, "_on_update_from_driver") as m_upd:
+                msg = Mock()
+                self.watcher._dispatch_msg_from_driver(MSG_TYPE_UPDATE, msg)
+        self.assertEqual(m_sleep.mock_calls,
+                         [call(0.000001)])
 
     def test_endpoint_set(self):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
