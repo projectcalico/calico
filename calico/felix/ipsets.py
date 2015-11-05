@@ -72,7 +72,6 @@ class IpsetManager(ReferenceManager):
         # index-update functions. We apply the updates in _finish_msg_batch().
         # May include non-live tag IDs.
         self._dirty_tags = set()
-        self._force_reprogram = False
         self._datamodel_in_sync = False
 
     def _create(self, tag_id):
@@ -108,9 +107,7 @@ class IpsetManager(ReferenceManager):
         assert self._datamodel_in_sync
         active_ipset = self.objects_by_id[tag_id]
         members = frozenset(self.ip_owners_by_tag.get(tag_id, {}).iterkeys())
-        active_ipset.replace_members(members,
-                                     force_reprogram=self._force_reprogram,
-                                     async=True)
+        active_ipset.replace_members(members, async=True)
 
     def _update_dirty_active_ipsets(self):
         """
@@ -433,7 +430,6 @@ class IpsetManager(ReferenceManager):
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
         self._update_dirty_active_ipsets()
-        self._force_reprogram = False
 
 
 class EndpointData(object):
@@ -537,7 +533,7 @@ class IpsetActor(Actor):
         """
         Replace the members of this ipset with the supplied set.
 
-        :param set[str]|list[str] members: IP address strings. Must be a copy
+        :param set[str] members: IP address strings. Must be a copy
         (as this routine keeps a link to it).
         """
         _log.info("Replacing members of ipset %s", self.name)
