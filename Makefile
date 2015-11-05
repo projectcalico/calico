@@ -97,8 +97,8 @@ run-etcd:
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
+	--listen-client-urls "http://0.0.0.0:2379"
 
 create-dind: docker
 	@echo "You may want to load calico-node with"

@@ -46,7 +46,7 @@ Here is an example of how this looks in a pod spec.
 You can specify multiple rules by separating them with semicolons.
 ```
 ...
-      projectcalico.org/policy: "allow from label role=backend; allow tcp to ports 4001,443"
+      projectcalico.org/policy: "allow from label role=backend; allow tcp to ports 2379,443"
 ...
 ```
 In its current state, the Calico Kubernetes Plugin supports whitelist oriented, inbound rules. This means that any traffic not specified in a pod's policy is unauthorized, and unauthorized traffic will be dropped at the receiving Kubernetes node.

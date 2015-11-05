@@ -4,11 +4,11 @@ coreos:
   update:
     reboot-strategy: 'off'
   etcd2:
-    advertise-client-urls: http://$private_ipv4:2379,http://$private_ipv4:4001
-    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    advertise-client-urls: http://$private_ipv4:2379,http://$private_ipv4:2379
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:2379
   fleet:
     public-ip: $public_ipv4
-    etcd_servers: http://$private_ipv4:4001
+    etcd_servers: http://$private_ipv4:2379
   units:
   - name: etcd2.service
     command: start
@@ -38,7 +38,7 @@ write_files:
     mkdir -p /opt/bin
     rm /home/core/.bashrc
     echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
-    echo 'export ETCD_AUTHORITY="$private_ipv4:4001"' >> /home/core/.bashrc
+    echo 'export ETCD_AUTHORITY="$private_ipv4:2379"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_AUTHORITY"' >>/etc/sudoers.d/etcd
 - path: /home/core/get_calicoctl.sh
   permissions: 777
