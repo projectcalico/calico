@@ -4,7 +4,9 @@ include =
     calico/openstack/*
     calico/*.py
 omit =
+    calico/test/*
     calico/felix/test/*
     calico/openstack/test/*
+    calico/etcddriver/test/*
 branch = True
 concurrency = eventlet
