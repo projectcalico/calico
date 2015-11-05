@@ -59,8 +59,17 @@ class RulesManager(ReferenceManager):
         active_profile.on_profile_update(profile_or_none, async=True)
 
     def _maybe_start(self, obj_id, in_sync=False):
+        """
+        Override: gates starting the ProfileRules on being in sync.
+
+        :param obj_id: The ID of the object (profile) that we'd like to start.
+        :param in_sync: True if we know that this profile is in-sync even if
+               we might not have received the global in-sync message.
+        """
         in_sync |= self._datamodel_in_sync
         if in_sync or obj_id in self.rules_by_profile_id:
+            # Either we're globally in-sync or we've explicitly heard about
+            # this profile so we know it is in sync.  Defer to the superclass.
             _log.debug("Profile %s is in-sync, deferring to superclass.",
                        obj_id)
             return super(RulesManager, self)._maybe_start(obj_id)
@@ -224,7 +233,8 @@ class ProfileRules(RefCountedActor):
                                    self.id)
                 else:
                     self._dirty = False
-            elif not self._ipset_refs.ready:
+            else:
+                assert not self._ipset_refs.ready
                 _log.info("Can't program rules %s yet, waiting on ipsets",
                           self.id)
 
