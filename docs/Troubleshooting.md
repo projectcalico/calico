@@ -33,7 +33,7 @@ guide for more information.
 ## etcd.EtcdException: No more machines in the cluster
 
 If you see this exception, it means `calicoctl` can't communicate with your etcd 
-cluster.  Ensure etcd is up and listening on `localhost:4001`
+cluster.  Ensure etcd is up and listening on `localhost:2379`
 
 ## Basic checks
 Running `ip route` shows what routes have been programmed. Routes from other hosts 

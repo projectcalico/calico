@@ -101,7 +101,7 @@ one another.
 You should also verify each host can access etcd.  The following will return 
 the current etcd version if etcd is available.
 
-    curl -L http://127.0.0.1:4001/version
+    curl -L http://127.0.0.1:2379/version
     
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-docker/releases/

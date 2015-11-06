@@ -62,12 +62,12 @@ Vagrant.configure(2) do |config|
           # sudo apt-get install -y unzip
           curl -L --silent https://github.com/coreos/etcd/releases/download/v2.2.0/etcd-v2.2.0-linux-amd64.tar.gz -o etcd-v2.2.0-linux-amd64.tar.gz
           tar xzvf etcd-v2.2.0-linux-amd64.tar.gz
-          nohup etcd-v2.2.0-linux-amd64/etcd --addr=#{primary_ip}:4001 > etcd.log &
+          nohup etcd-v2.2.0-linux-amd64/etcd --addr=#{primary_ip}:2379 > etcd.log &
         SHELL
       end
 
       # Set Docker to use etcd for multihost.
-      host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "DOCKER_OPTS=\"--cluster-store=etcd://#{primary_ip}:4001\"" > /etc/default/docker'|
+      host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "DOCKER_OPTS=\"--cluster-store=etcd://#{primary_ip}:2379\"" > /etc/default/docker'|
 
       # Restart docker.
       host.vm.provision :shell, inline: "sudo start docker"
@@ -78,7 +78,7 @@ Vagrant.configure(2) do |config|
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
 
       # Ensure the vagrant and root users get the ETCD_AUTHORITY environment.
-      host.vm.provision :shell, inline: %Q|echo 'export ETCD_AUTHORITY="#{primary_ip}:4001"' >> /home/vagrant/.profile|
+      host.vm.provision :shell, inline: %Q|echo 'export ETCD_AUTHORITY="#{primary_ip}:2379"' >> /home/vagrant/.profile|
       host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "Defaults env_keep +=\"ETCD_AUTHORITY\"" >>/etc/sudoers'|
     end
   end
