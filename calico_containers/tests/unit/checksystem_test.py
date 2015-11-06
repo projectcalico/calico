@@ -24,7 +24,8 @@ class TestCheckSystem(unittest.TestCase):
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
     @patch('calico_ctl.checksystem._check_modules', autospec=True, return_value=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True, return_value=True)
-    def test_check_system(self, m_check_docker_version,
+    @patch('calico_ctl.checksystem._check_etcd_version', autospec=True, return_value=True)
+    def test_check_system(self, m_check_etcd_version, m_check_docker_version,
                           m_check_kernel_modules, m_enforce_root):
         """
         Test for check_system when all checks pass
@@ -38,7 +39,9 @@ class TestCheckSystem(unittest.TestCase):
         m_enforce_root.assert_called_once_with()
         m_check_kernel_modules.assert_called_once_with()
         m_check_docker_version.assert_called_once_with(False)
-        self.assertTrue(test_return)
+        m_check_etcd_version.assert_called_once_with()
+        for check in test_return:
+            self.assertTrue(check)
 
     @parameterized.expand([
         (True, False),
@@ -47,8 +50,9 @@ class TestCheckSystem(unittest.TestCase):
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
     @patch('calico_ctl.checksystem._check_modules', autospec=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True)
+    @patch('calico_ctl.checksystem._check_etcd_version', autospec=True, return_value=True)
     def test_check_system_bad_state_do_not_quit(
-            self, kernel_status, docker_version_status,
+            self, kernel_status, docker_version_status, m_check_etcd_version,
             m_check_docker_version, m_check_kernel_modules, m_enforce_root):
         """
         Test for check_system when one of the system checks fails
@@ -67,7 +71,7 @@ class TestCheckSystem(unittest.TestCase):
         test_return = check_system(quit_if_error=False)
 
         # Assert
-        self.assertFalse(test_return)
+        self.assertIn(False, test_return)
 
     @parameterized.expand([
         (True, False),
@@ -76,8 +80,9 @@ class TestCheckSystem(unittest.TestCase):
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
     @patch('calico_ctl.checksystem._check_modules', autospec=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True)
+    @patch('calico_ctl.checksystem._check_etcd_version', autospec=True, return_value=True)
     def test_check_system_bad_state_quit(
-            self, kernel_status, docker_version_status,
+            self, kernel_status, docker_version_status, m_check_etcd_version,
             m_check_docker_version, m_check_kernel_modules, m_enforce_root):
         """
         Test for check_system when one of the system checks fails

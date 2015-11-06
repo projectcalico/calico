@@ -17,7 +17,7 @@ import docker
 import docker.errors
 
 from pycalico.ipam import IPAMClient
-from pycalico.datastore import ETCD_AUTHORITY_ENV
+from pycalico.datastore import ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT
 
 from utils import DOCKER_VERSION
 from utils import print_paragraph
@@ -25,7 +25,7 @@ from utils import validate_hostname_port
 
 # If an ETCD_AUTHORITY is specified in the environment variables, validate
 # it.
-etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, None)
+etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
 if etcd_authority and not validate_hostname_port(etcd_authority):
     print_paragraph("Invalid %s. It must take the form <address>:<port>. "
                     "Value provided is '%s'" % (ETCD_AUTHORITY_ENV,

@@ -26,12 +26,14 @@ import sys
 import re
 
 import docker
+from etcd import EtcdConnectionFailed
 from requests import ConnectionError
 from subprocess32 import check_output
 
-from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION, REQUIRED_MODULES
+from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION, REQUIRED_MODULES, \
+    ETCD_VERSION
 from utils import enforce_root
-from connectors import docker_client
+from connectors import docker_client, client, etcd_authority
 
 
 def checksystem(arguments):
@@ -57,20 +59,22 @@ def check_system(quit_if_error=False, libnetwork=False, check_docker=True):
     :param quit_if_error: if True, quit with error code 1 if any issues are
     detected.
     :param libnetwork: If True, check for Docker version >= v1.21 to support libnetwork
-    :return: True if all system dependencies are in the proper state, False if
-    they are not. This function will sys.exit(1) instead of returning false if
+    :return: a tuple containing the results of the checks
+
+    This function will sys.exit(1) instead of returning false if
     quit_if_error == True
     """
     enforce_root()
     modules_ok = _check_modules()
     docker_ok = _check_docker_version(libnetwork) if check_docker else True
+    etcd_ok = _check_etcd_version()
 
-    system_ok = modules_ok and docker_ok
+    system_ok = modules_ok and docker_ok and etcd_ok
 
     if quit_if_error and not system_ok:
         sys.exit(1)
 
-    return system_ok
+    return (modules_ok, docker_ok, etcd_ok)
 
 
 def _check_modules():
@@ -136,7 +140,7 @@ def check_module_lines(lines, module):
 
 def normalize_version(version):
     """
-    This function convers a string representation of a version into
+    This function converts a string representation of a version into
     a list of integer values.
     e.g.:   "1.5.10" => [1, 5, 10]
     http://stackoverflow.com/questions/1714027/version-number-comparison
@@ -174,6 +178,39 @@ def _check_docker_version(libnetwork=False):
 
             print >> sys.stderr, "ERROR: Docker server must support Docker " \
                                  "Remote API v%s or greater." % version
+            system_ok = False
+
+    return system_ok
+
+def _check_etcd_version():
+    """
+    Check that etcd is running and supported.
+
+    :return: True if etcd version is OK.
+    """
+    system_ok = True
+
+    minimum_version_string = ETCD_VERSION
+    minimum_version = normalize_version(minimum_version_string)
+
+    try:
+        detected_version_string = \
+            client.etcd_client.api_execute("/version", 'GET').data
+    except EtcdConnectionFailed:
+        print >> sys.stderr, "ERROR: Could not connect to etcd at %s" % \
+            etcd_authority
+        system_ok = False
+    else:
+        # Remove everything except numbers and dots from the string.
+        detected_version_string = re.sub(r'[^\d\.]', '',
+                                         detected_version_string)
+        detected_version = normalize_version(detected_version_string)
+
+        if cmp(detected_version, minimum_version) < 0:
+            print >> sys.stderr, "ERROR: etcd must be at least version %s " \
+                                 "(Detected version: %s)" % \
+                                 (minimum_version_string,
+                                  detected_version_string)
             system_ok = False
 
     return system_ok
