@@ -28,7 +28,3 @@ pip list > libraries.txt
 
 # Cleanup
 apk del temp && rm -rf /var/cache/apk/*
-
-
-
-

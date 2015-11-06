@@ -60,6 +60,8 @@ They must have the following software installed:
 - etcd installed and available on each node: [etcd documentation][etcd]
 - `ipset`, `iptables`, and `ip6tables` kernel modules.
 
+> NOTE: If you are running etcd with SSL/TLS, see the (Etcd Secure Cluster)[../../EtcdSecureCluster.md]
+> page.
 ### Docker permissions
 
 Running Docker is much easier if your user has permissions to run Docker 

@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import subprocess
 from unittest import TestCase
 
-from tests.st.utils.utils import get_ip
+from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
+                                  ETCD_KEY)
 import logging
 
 HOST_IPV6 = get_ip(v6=True)
@@ -25,6 +27,7 @@ logger = logging.getLogger(__name__)
 # Disable spammy logging from the sh module
 sh_logger = logging.getLogger("sh")
 sh_logger.setLevel(level=logging.CRITICAL)
+
 
 class TestBase(TestCase):
     """
@@ -38,9 +41,17 @@ class TestBase(TestCase):
 
         # Delete /calico if it exists. This ensures each test has an empty data
         # store at start of day.
-        subprocess.check_output(
-            "curl -sL http://%s:2379/v2/keys/calico?recursive=true -XDELETE"
-            % self.ip, shell=True)
+        if ETCD_SCHEME == "https":
+            # Etcd is running with SSL/TLS, require key/certificates
+            subprocess.check_output(
+                "curl --cacert %s --cert %s --key %s "
+                "-sL https://%s:2379/v2/keys/calico?recursive=true -XDELETE"
+                % (ETCD_CA, ETCD_CERT, ETCD_KEY, self.ip),
+                shell=True)
+        else:
+            subprocess.check_output(
+                "curl -sL http://%s:2379/v2/keys/calico?recursive=true -XDELETE"
+                % self.ip, shell=True)
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")

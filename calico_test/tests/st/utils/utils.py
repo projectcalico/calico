@@ -26,6 +26,10 @@ LOCAL_IP_ENV = "MY_IP"
 LOCAL_IPv6_ENV = "MY_IPv6"
 logger = logging.getLogger(__name__)
 
+ETCD_SCHEME = os.environ.get("ETCD_SCHEME", "http")
+ETCD_CA = os.environ.get("ETCD_CA_CERT_FILE", "")
+ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
+ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
 
 def get_ip(v6=False):
     """

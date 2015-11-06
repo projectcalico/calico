@@ -219,7 +219,10 @@ def _check_etcd_version():
                                       detected_version_string)
                 system_ok = False
         else:
-            print >> sys.stderr, "ERROR: unable to detect etcd version"
+            print >> sys.stderr, "ERROR: Unable to detect etcd version. If " \
+                                 "using etcd with SSL, set ETCD_SCHEME, " \
+                                 "ETCD_KEY_FILE, ETCD_CERT_FILE, " \
+                                 "and ETCD_CA_CERT_FILE environment variables"
             system_ok = False
 
     return system_ok
