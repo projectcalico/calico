@@ -1,5 +1,6 @@
 [run]
 include =
+    calico/etcddriver/*
     calico/felix/*
     calico/openstack/*
     calico/*.py
