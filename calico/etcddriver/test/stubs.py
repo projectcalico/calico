@@ -101,6 +101,7 @@ class PipeFile(object):
     def __init__(self):
         self.queue = Queue()
         self.buf = None
+        self._finished = False
 
     def read(self, length):
         data = ""
@@ -120,9 +121,11 @@ class PipeFile(object):
 
     def write(self, data):
         self.queue.put(data)
+        if data == "" or isinstance(data, Exception):
+            self._finished = True
 
     def __del__(self):
-        self.queue.put("")
+        assert self._finished, "PipeFile wasn't correctly finished."
 
 
 class StubEtcd(object):
@@ -160,11 +163,13 @@ class StubEtcd(object):
         """
         Asserts the properies of the next request.
         """
+        _log.info("Waiting for request for key %s")
         key, args = self.get_next_request()
         default_args = {'wait_index': None,
                         'preload_content': None,
                         'recursive': False,
                         'timeout': 5}
+        _log.info("Got request for key %s")
         for k, v in default_args.iteritems():
             if k in args and args[k] == v:
                 del args[k]

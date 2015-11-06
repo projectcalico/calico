@@ -30,11 +30,14 @@ The driver is responsible for
 * resolving directory deletions so that if a directory is deleted, it tells
   Felix about all the individual keys that are deleted.
 """
-
+from functools import partial
 from httplib import HTTPException
 import logging
 from Queue import Queue, Empty
 import socket
+
+from ijson import IncompleteJSONError, JSONError
+
 try:
     # simplejson is a faster drop-in replacement.
     import simplejson as json
@@ -123,13 +126,22 @@ class EtcdDriver(object):
         self._stop_event.wait(timeout=timeout)
         stopped = self._stop_event.is_set()
         if stopped:
+
             self._resync_thread.join(timeout=timeout)
-            stopped &= not self._resync_thread.is_alive()
+            resync_alive = self._resync_thread.is_alive()
+            stopped &= not resync_alive
+            _log.debug("Resync thread alive: %s", resync_alive)
+
             self._reader_thread.join(timeout=timeout)
-            stopped &= not self._reader_thread.is_alive()
+            reader_alive = self._reader_thread.is_alive()
+            stopped &= not reader_alive
+            _log.debug("Reader thread alive: %s", reader_alive)
+
             try:
                 self._watcher_thread.join(timeout=timeout)
-                stopped &= not self._watcher_thread.is_alive()
+                watcher_alive = self._watcher_thread.is_alive()
+                stopped &= not watcher_alive
+                _log.debug("Watcher thread alive: %s", watcher_alive)
             except AttributeError:
                 pass
         return stopped
@@ -243,6 +255,9 @@ class EtcdDriver(object):
                 if monotonic_time() - loop_start < 1:
                     _log.debug("May be tight looping, sleeping...")
                     time.sleep(1)
+            except DriverShutdown:
+                _log.info("Driver shut down.")
+                return
             except:
                 _log.exception("Unexpected exception; shutting down.")
                 self.stop()
@@ -420,33 +435,9 @@ class EtcdDriver(object):
         :param snapshot_index: the etcd index of the response.
         """
         self._hwms.start_tracking_deletions()
-
-        def _handle_etcd_node(snap_mod, snap_key, snap_value):
-            old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
-            if snap_mod > old_hwm:
-                # This specific key's HWM is newer than the previous
-                # version we've seen, send an update.
-                self._on_key_updated(snap_key, snap_value)
-            # After we process an update from the snapshot, process
-            # several updates from the watcher queue (if there are
-            # any).  We limit the number to ensure that we always
-            # finish the snapshot eventually.
-            for _ in xrange(100):
-                if not self._watcher_queue or self._watcher_queue.empty():
-                    # Don't block on the watcher if there's nothing to do.
-                    break
-                try:
-                    self._handle_next_watcher_event()
-                except WatcherDied:
-                    # Continue processing to ensure that we make
-                    # progress.
-                    _log.warning("Watcher thread died, continuing "
-                                 "with snapshot")
-                    break
-            if self._stop_event.is_set():
-                _log.error("Stop event set, exiting")
-                raise DriverShutdown()
-        parse_snapshot(etcd_response, _handle_etcd_node)
+        parse_snapshot(etcd_response,
+                       callback=partial(self._handle_etcd_node,
+                                        snapshot_index=snapshot_index))
 
         # Save occupancy by throwing away the deletion tracking metadata.
         self._hwms.stop_tracking_deletions()
@@ -454,6 +445,34 @@ class EtcdDriver(object):
         # mark all the values seen in the current snapshot above and then this
         # sweeps the ones we didn't touch.
         self._scan_for_deletions(snapshot_index)
+
+    def _handle_etcd_node(self, snap_mod, snap_key, snap_value,
+                          snapshot_index=None):
+        assert snapshot_index is not None
+        old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
+        if snap_mod > old_hwm:
+            # This specific key's HWM is newer than the previous
+            # version we've seen, send an update.
+            self._on_key_updated(snap_key, snap_value)
+        # After we process an update from the snapshot, process
+        # several updates from the watcher queue (if there are
+        # any).  We limit the number to ensure that we always
+        # finish the snapshot eventually.
+        for _ in xrange(100):
+            if not self._watcher_queue or self._watcher_queue.empty():
+                # Don't block on the watcher if there's nothing to do.
+                break
+            try:
+                self._handle_next_watcher_event(resync_in_progress=True)
+            except WatcherDied:
+                # Continue processing to ensure that we make
+                # progress.
+                _log.warning("Watcher thread died, continuing "
+                             "with snapshot")
+                break
+        if self._stop_event.is_set():
+            _log.error("Stop event set, exiting")
+            raise DriverShutdown()
 
     def _process_events_only(self):
         """
@@ -465,7 +484,7 @@ class EtcdDriver(object):
         """
         _log.info("In sync, now processing events only...")
         while not self._stop_event.is_set():
-            self._handle_next_watcher_event()
+            self._handle_next_watcher_event(resync_in_progress=False)
             self._msg_writer.flush()
 
     def _scan_for_deletions(self, snapshot_index):
@@ -486,7 +505,7 @@ class EtcdDriver(object):
             self._on_key_updated(ev_key, None)
         _log.info("Found %d deleted keys", len(deleted_keys))
 
-    def _handle_next_watcher_event(self):
+    def _handle_next_watcher_event(self, resync_in_progress):
         """
         Waits for an event on the watcher queue and sends it to Felix.
         :raises DriverShutdown:
@@ -497,7 +516,11 @@ class EtcdDriver(object):
         if self._watcher_queue is None:
             raise WatcherDied()
         while not self._stop_event.is_set():
-            if self._resync_requested and self._watcher_stop_event:
+            # To make sure we always make progress, only trigger a new resync
+            # if we're not in the middle of one.
+            if (not resync_in_progress and
+                    self._resync_requested and
+                    self._watcher_stop_event):
                 _log.info("Resync requested, triggering one.")
                 self._watcher_stop_event.set()
                 raise WatcherDied()
@@ -695,15 +718,19 @@ def parse_snapshot(resp, callback):
                              resp.status)
     parser = ijson.parse(resp)  # urllib3 response is file-like.
 
-    prefix, event, value = next(parser)
-    _log.debug("Read first token from response %s, %s, %s", prefix, event,
-               value)
-    if event == "start_map":
-        # As expected, response is a map.
-        _parse_map(parser, callback)
-    else:
-        _log.error("Response from etcd did non contain a JSON map.")
-        raise ResyncRequired("Bad response from etcd")
+    try:
+        prefix, event, value = next(parser)
+        _log.debug("Read first token from response %s, %s, %s", prefix, event,
+                   value)
+        if event == "start_map":
+            # As expected, response is a map.
+            _parse_map(parser, callback)
+        else:
+            _log.error("Response from etcd did non contain a JSON map.")
+            raise ResyncRequired("Bad response from etcd")
+    except JSONError:
+        _log.exception("Response from etcd containers bad JSON.")
+        raise ResyncRequired("Bad JSON from etcd")
 
 
 def _parse_map(parser, callback):

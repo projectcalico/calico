@@ -18,21 +18,29 @@ calico.etcddriver.test.test_driver
 
 Tests for the etcd driver module.
 """
+import json
 from Queue import Empty
-from unittest2 import TestCase, SkipTest
+
+import time
+from unittest import TestCase
 
 from mock import Mock, patch, call
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import TimeoutError
 
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, VERSION_DIR
-from calico.etcddriver.driver import EtcdDriver, DriverShutdown
+from calico.etcddriver import driver
+from calico.etcddriver.driver import EtcdDriver, DriverShutdown, ResyncRequired, \
+    WatcherDied
 from calico.etcddriver.protocol import *
 from calico.etcddriver.test.stubs import (
     StubMessageReader, StubMessageWriter, StubEtcd,
     FLUSH)
 
 _log = logging.getLogger(__name__)
+
+
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
 
 class TestEtcdDriverFV(TestCase):
@@ -105,7 +113,7 @@ class TestEtcdDriverFV(TestCase):
         })
         # Respond to the watcher with another event.
         self.watcher_etcd.respond_with_value(
-            "/calico/v1/adir/dkey",
+            "/calico/v1/adir2/dkey",
             "d",
             mod_index=13,
             action="set"
@@ -128,7 +136,7 @@ class TestEtcdDriverFV(TestCase):
         # The resync event would be generated first but we should should only
         # see the watcher event.
         self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
-            MSG_KEY_KEY: "/calico/v1/adir/dkey",
+            MSG_KEY_KEY: "/calico/v1/adir2/dkey",
             MSG_KEY_VALUE: "d",
         })
         # Finish the snapshot.
@@ -142,22 +150,27 @@ class TestEtcdDriverFV(TestCase):
             }
         }
         ''')
+        snap_stream.write("")  # Close the response.
         # Should get the in-sync message.  (No event for Ready flag due to
         # HWM.
         self.assert_status_message(STATUS_IN_SYNC)
         # Now send a watcher event, which should go straight through.
         self.send_watcher_event_and_assert_felix_msg(14)
 
-    def test_second_resync(self):
-        try:
-            # Start by going through the first resync.
-            self.test_mainline_resync()
-        except AssertionError:
-            _log.exception("Mainline resync test failed")
-            raise SkipTest("Mainline resync test failed to initialise driver")
+        # Check the contents of the trie.
+        keys = set(self.driver._hwms._hwms.keys())
+        self.assertEqual(keys, set([u'/calico/v1/Ready/',
+                                    u'/calico/v1/adir/akey/',
+                                    u'/calico/v1/adir/bkey/',
+                                    u'/calico/v1/adir/ckey/',
+                                    u'/calico/v1/adir2/dkey/',
+                                    u'/calico/v1/adir/ekey/']))
 
-        # Felix sends a resync message.
-        self.msg_reader.send_msg(MSG_TYPE_RESYNC, {})
+    def test_felix_triggers_resync(self):
+        self._run_initial_resync()
+
+        # Send a resync request from Felix.
+        self.send_resync_and_wait_for_flag()
 
         # Wait for the watcher to make its request.
         self.watcher_etcd.assert_request(
@@ -206,7 +219,7 @@ class TestEtcdDriverFV(TestCase):
         # Finish the snapshot.
         snap_stream.write('''
                     {
-                        "key": "/calico/v1/adir/dkey",
+                        "key": "/calico/v1/adir2/dkey",
                         "value": "c",
                         "modifiedIndex": 8
                     },
@@ -219,6 +232,7 @@ class TestEtcdDriverFV(TestCase):
             }
         }
         ''')
+        snap_stream.write("")  # Close the response.
         # Should get a deletion for the keys that were missing in this
         # snapshot.
         self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
@@ -230,6 +244,97 @@ class TestEtcdDriverFV(TestCase):
         self.assert_status_message(STATUS_IN_SYNC)
         # Now send a watcher event, which should go straight through.
         self.send_watcher_event_and_assert_felix_msg(104)
+
+    def send_resync_and_wait_for_flag(self):
+        # Felix sends a resync message.
+        self.msg_reader.send_msg(MSG_TYPE_RESYNC, {})
+
+        # For determinism, wait for the message to be processed.
+        for _ in xrange(100):
+            if self.driver._resync_requested:
+                break
+            time.sleep(0.01)
+        else:
+            self.fail("Resync flag never got set.")
+
+    def test_directory_deletion(self):
+        self._run_initial_resync()
+        # For coverage: Nothing happens for a while, poll times out.
+        self.watcher_etcd.respond_with_exception(
+            driver.ReadTimeoutError(Mock(), "", "")
+        )
+        # For coverage: Then a set to a dir, which should be ignored.
+        self.watcher_etcd.respond_with_data(json.dumps({
+            "action": "create",
+            "node": {
+                "key": "/calico/v1/foo",
+                "dir": True
+            }
+        }), 100, 200)
+        # Then a whole directory is deleted.
+        self.watcher_etcd.respond_with_value(
+            "/calico/v1/adir",
+            value=None,
+            action="delete",
+            mod_index=101,
+            status=300  # For coverage of warning log.
+        )
+        # Should get individual deletes for each one then a flush.  We're
+        # relying on the trie returning sorted results here.
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/akey",
+            MSG_KEY_VALUE: None,
+        })
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/bkey",
+            MSG_KEY_VALUE: None,
+        })
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/ckey",
+            MSG_KEY_VALUE: None,
+        })
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/ekey",
+            MSG_KEY_VALUE: None,
+        })
+        self.assert_flush_to_felix()
+
+        # Check the contents of the trie.
+        keys = set(self.driver._hwms._hwms.keys())
+        self.assertEqual(keys, set([u'/calico/v1/Ready/',
+                                    u'/calico/v1/adir2/dkey/']))
+
+    def _run_initial_resync(self):
+        try:
+            # Start by going through the first resync.
+            self.test_mainline_resync()
+        except AssertionError:
+            _log.exception("Mainline resync test failed, aborting test %s",
+                           self.id())
+            raise AssertionError("Mainline resync test failed to "
+                                 "initialise driver")
+
+    def test_root_directory_deletion(self):
+        self._run_initial_resync()
+        # Delete the whole /calico/v1 dir.
+        self.watcher_etcd.respond_with_data(json.dumps({
+            "action": "delete",
+            "node": {
+                "key": "/calico/v1/",
+                "dir": True
+            }
+        }), 100, 200)
+
+        # Should trigger a resync.
+        self.assert_status_message(STATUS_WAIT_FOR_READY)
+
+    def test_garbage_watcher_response(self):
+        self._run_initial_resync()
+        # Delete the whole /calico/v1 dir.
+        self.watcher_etcd.respond_with_data("{foobar", 100, 200)
+
+        # Should trigger a resync.
+        self.assert_status_message(STATUS_WAIT_FOR_READY)
 
     def send_watcher_event_and_assert_felix_msg(self, etcd_index):
         self.watcher_etcd.respond_with_value(
@@ -312,15 +417,14 @@ class TestEtcdDriverFV(TestCase):
         # Followed by the per-host one...
         self.resync_etcd.assert_request("/calico/v1/host/thehostname/config",
                                         recursive=True)
-        self.resync_etcd.respond_with_dir(CONFIG_DIR, {
-            "/calico/v1/host/thehostname/config/LogSeverityFile": "DEBUG"
-        })
+        self.resync_etcd.respond_with_data('{"errorCode": 100}',
+                                           10, 404)
         # Then the driver should send the config to Felix.
         self.assert_msg_to_felix(
             MSG_TYPE_CONFIG_LOADED,
             {
                 MSG_KEY_GLOBAL_CONFIG: {"InterfacePrefix": "tap"},
-                MSG_KEY_HOST_CONFIG: {"LogSeverityFile": "DEBUG"},
+                MSG_KEY_HOST_CONFIG: {},
             }
         )
         self.assert_flush_to_felix()
@@ -377,6 +481,7 @@ class TestEtcdDriverFV(TestCase):
         return snap_stream
 
     def assert_status_message(self, status):
+        _log.info("Expecting %s status from driver...", status)
         self.assert_msg_to_felix(
             MSG_TYPE_STATUS,
             {MSG_KEY_STATUS: status}
@@ -438,16 +543,18 @@ class TestEtcdDriverFV(TestCase):
                                  preload_content=preload_content)
 
     def tearDown(self):
+        _log.info("Tearing down test")
         try:
             # Request that the driver stops.
             self.driver.stop()
             # Make sure we don't block the driver from stopping.
             self.msg_reader.send_timeout()
+
             # SystemExit kills (only) the thread silently.
             self.resync_etcd.respond_with_exception(SystemExit())
             self.watcher_etcd.respond_with_exception(SystemExit())
             # Wait for it to stop.
-            self.assertTrue(self.driver.join(1), "Driver failed to stop")
+            self.assertTrue(self.driver.join(0.1), "Driver failed to stop")
         finally:
             # Now the driver is stopped, it's safe to remove our patch of
             # complete_logging()
@@ -520,4 +627,104 @@ class TestDriver(TestCase):
         self.assertRaises(DriverShutdown, self.driver._check_cluster_id,
                           m_resp)
         self.assertTrue(self.driver._stop_event.is_set())
+
+    def test_load_config_bad_data(self):
+        with patch.object(self.driver, "_etcd_request") as m_etcd_req:
+            m_resp = Mock()
+            m_resp.data = "{garbage"
+            m_etcd_req.return_value = m_resp
+            self.assertRaises(ResyncRequired,
+                              self.driver._load_config, "/calico/v1/config")
+
+    def test_start_snap_missing_cluster_id(self):
+        with patch.object(self.driver, "_etcd_request") as m_etcd_req:
+            m_resp = Mock()
+            m_resp.getheader.return_value = 123
+            m_etcd_req.return_value = m_resp
+            self.assertRaises(ResyncRequired,
+                              self.driver._start_snapshot_request)
+
+    def test_cluster_id_missing(self):
+        m_resp = Mock()
+        m_resp.getheader.return_value = None
+        self.driver._check_cluster_id(m_resp)
+        self.assertEqual(m_resp.getheader.mock_calls,
+                         [call("x-etcd-cluster-id")])
+
+    def test_watcher_dies_during_resync(self):
+        self.driver.stop()
+        with patch.object(self.driver, "_on_key_updated") as m_on_key:
+            with patch.object(self.driver,
+                              "_handle_next_watcher_event") as m_handle:
+                m_queue = Mock()
+                m_queue.empty.return_value = False
+                m_handle.side_effect = WatcherDied()
+                self.driver._watcher_queue = m_queue
+                self.assertRaises(DriverShutdown,
+                                  self.driver._handle_etcd_node,
+                                  123, "/calico/v1/foo", "bar",
+                                  snapshot_index=1000)
+
+    def test_handle_next_watcher_died(self):
+        self.driver._watcher_queue = None
+        self.assertRaises(WatcherDied, self.driver._handle_next_watcher_event,
+                          False)
+
+    def test_handle_next_queue_empty(self):
+        m_queue = Mock()
+        m_queue.get.side_effect = iter([
+            Empty(),
+            RuntimeError()
+        ])
+        self.driver._watcher_queue = m_queue
+        self.assertRaises(RuntimeError,
+                          self.driver._handle_next_watcher_event,
+                          False)
+
+    def test_handle_next_stopped(self):
+        self.driver._watcher_queue = Mock()
+        self.driver.stop()
+        self.assertRaises(DriverShutdown,
+                          self.driver._handle_next_watcher_event,
+                          False)
+
+    def test_ready_key_set_to_false(self):
+        self.assertRaises(ResyncRequired,
+                          self.driver._on_key_updated, READY_KEY, "false")
+
+    def test_watch_etcd_error_from_etcd(self):
+        m_queue = Mock()
+        m_stop_ev = Mock()
+        m_stop_ev.is_set.return_value = False
+        with patch.object(self.driver, "get_etcd_connection") as m_get_conn:
+            with patch.object(self.driver, "_etcd_request") as m_req:
+                with patch.object(self.driver, "_check_cluster_id") as m_check:
+                    m_resp = Mock()
+                    m_resp.data = json.dumps({"errorCode": 100})
+                    m_req.side_effect = iter([
+                        m_resp,
+                        AssertionError()
+                    ])
+                    self.driver.watch_etcd(10, m_queue, m_stop_ev)
+
+    def test_parse_snapshot_bad_status(self):
+        m_resp = Mock()
+        m_resp.status = 500
+        self.assertRaises(ResyncRequired, driver.parse_snapshot,
+                          m_resp, Mock())
+
+    def test_parse_snapshot_bad_data(self):
+        m_resp = Mock()
+        m_resp.status = 200
+        m_resp.read.return_value = "[]"
+        self.assertRaises(ResyncRequired, driver.parse_snapshot,
+                          m_resp, Mock())
+
+    def test_parse_snapshot_garbage_data(self):
+        m_resp = Mock()
+        m_resp.status = 200
+        m_resp.read.return_value = "garbage"
+        self.assertRaises(ResyncRequired, driver.parse_snapshot,
+                          m_resp, Mock())
+
 
