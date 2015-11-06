@@ -319,6 +319,10 @@ def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
     calico_networking = os.getenv(CALICO_NETWORKING_ENV,
                                   CALICO_NETWORKING_DEFAULT)
 
+    # Make sure the required image is pulled before removing the old one.
+    # This minimizes downtime during upgrade.
+    _find_or_pull_node_image(node_image)
+
     try:
         docker_client.remove_container("calico-node", force=True)
     except docker.errors.APIError as err:
@@ -348,7 +352,6 @@ def _start_node_container(ip, ip6, etcd_authority, log_dir, node_image, detach):
         network_mode="host",
         binds=binds)
 
-    _find_or_pull_node_image(node_image)
     container = docker_client.create_container(
         node_image,
         name="calico-node",
@@ -375,6 +378,10 @@ def _start_libnetwork_container(etcd_authority, libnetwork_image):
     use.  None, if not using libnetwork.
     :return:  None
     """
+    # Make sure the required image is pulled before removing the old one.
+    # This minimizes downtime during upgrade.
+    _find_or_pull_node_image(libnetwork_image)
+
     try:
         docker_client.remove_container("calico-libnetwork", force=True)
     except docker.errors.APIError as err:
@@ -400,7 +407,6 @@ def _start_libnetwork_container(etcd_authority, libnetwork_image):
         network_mode="host",
         binds=binds)
 
-    _find_or_pull_node_image(libnetwork_image)
     container = docker_client.create_container(
         libnetwork_image,
         name="calico-libnetwork",
