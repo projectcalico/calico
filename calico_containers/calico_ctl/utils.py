@@ -24,6 +24,8 @@ from netaddr.core import AddrFormatError
 
 DOCKER_VERSION = "1.16"
 DOCKER_LIBNETWORK_VERSION = "1.21"
+# There is an issue with 2.0.9 and CAS (when using py-etcd) - https://github.com/projectcalico/calico-docker/issues/479
+ETCD_VERSION = "2.0.10"
 DOCKER_ORCHESTRATOR_ID = "docker"
 NAMESPACE_ORCHESTRATOR_ID = "namespace"
 REQUIRED_MODULES = ["xt_set", "ip6_tables"]

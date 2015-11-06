@@ -184,6 +184,7 @@ class TestNode(unittest.TestCase):
         m_docker.utils.create_host_config.return_value = 'host_config'
         container = {'Id': 666}
         m_docker_client.create_container.return_value = container
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = 'node_image'
@@ -275,6 +276,7 @@ class TestNode(unittest.TestCase):
         m_docker.utils.create_host_config.return_value = 'host_config'
         container = {'Id': 666}
         m_docker_client.create_container.return_value = container
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = 'node_image'
@@ -369,6 +371,7 @@ class TestNode(unittest.TestCase):
         m_os_path_exists.return_value = True
         m_get_host_ips.return_value = ['1.1.1.1']
         m_install_plugin.side_effect = OSError
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = "node_image"
@@ -413,6 +416,7 @@ class TestNode(unittest.TestCase):
         m_os_path_exists.return_value = True
         m_get_host_ips.return_value = ['1.1.1.1']
         m_install_plugin.side_effect = OSError
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = "node_image"
@@ -457,6 +461,7 @@ class TestNode(unittest.TestCase):
         # Set up mock objects
         err = APIError("Test error message", Response())
         m_docker_client.remove_container.side_effect = err
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = 'node_image'
@@ -497,6 +502,7 @@ class TestNode(unittest.TestCase):
         """
         # Set up mock objects
         m_get_host_ips.return_value = []
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = 'node_image'
@@ -538,6 +544,7 @@ class TestNode(unittest.TestCase):
         """
         # Set up mock objects
         m_client.get_ip_pools.return_value = []
+        m_check_system.return_value = [True, True, True]
 
         # Set up arguments
         node_image = 'node_image'
