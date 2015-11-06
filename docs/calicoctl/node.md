@@ -78,6 +78,7 @@ Options:
 ### calicoctl node 
 
 This command performs two actions:
+
 1. Initialize this host for Calico by setting first-time config in etcd.
 2. (Optional) Start the `calico/node` Docker container. By default
 (or via `--runtime=docker`) the `calicoctl node` does this by downloading
