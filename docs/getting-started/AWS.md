@@ -276,6 +276,63 @@ You should now be able to access the container using the public IP address of yo
 curl http://<host public ip>:80
 ```
 
+# (Optional) Modifying MTU for Performance Boost
+
+Some [AWS instance types](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/network_mtu.html#jumbo_frame_instances) 
+utilize a default [MTU](https://en.wikipedia.org/wiki/Maximum_transmission_unit) 
+of 9001, which is larger than the standard 1500 used by most of the Internet. 
+
+If you have a high traffic deployment and all of your host instances in your 
+AWS Calico cluster are using these instance types, you may be able to improve 
+performance for traffic between your Calico nodes. To do this, you need to 
+modify the MTU of the IP-in-IP tunnels on your Calico hosts and the veth 
+interfaces of your Calico containers.
+
+> **WARNING**: You must run these commands on ALL of the hosts and containers in your 
+> deployment. If not all of your instances are jumbo frame instances or if you 
+> do not modify MTU on all containers and hosts, you may  experience unexpected 
+> behavior and/or packet loss.
+
+#### Modify Calico interface MTU on hosts
+First, modify the MTU on the Calico tunnel interface and `cali######` 
+interfaces on your host instances (use `ip link` or `ifconfig` to see the 
+interface names):
+```
+sudo ifconfig <interface> mtu 8981
+```
+Repeat for all relevant Calico interfaces on the host.
+
+Note that the value used is 8981.  This is because Calico traffic will flow 
+through the IP-in-IP tunnel.  When packets enter the IP-in-IP tunnel, an IP 
+header of length 20 is added to the packet, summing to a total size of 9001.
+
+#### Install nsenter
+In order to modify the MTU of the Calico interface in your containers, you must 
+access the container's network namespace on your host, which manages the 
+container's interface. The [`nsenter`](https://github.com/jpetazzo/nsenter) 
+tool can be used to enter the namespace and make this change.
+
+```
+# Install nsenter
+docker run -v /usr/local/bin:/target jpetazzo/nsenter
+```
+
+#### Modify container Calico interface MTU
+For each container on your host, enter the namespace of the container, 
+replacing `<container_id>` with the name or ID of the container.
+```
+sudo nsenter -n -t $(sudo docker inspect --format '{{ .State.Pid }}' <container_id>) /bin/bash
+```
+
+Finally, modify the MTU of the Calico interface on the container. If you 
+specified an interface when adding the container to Calico, change `eth1` to be 
+the name of the interface you passed in.
+```
+sudo ifconfig eth1 mtu 8981
+```
+
+For high traffic deployments, this should greatly increase the performance of 
+traffic between your Calico containers.
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
 [configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
