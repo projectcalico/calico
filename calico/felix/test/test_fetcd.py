@@ -41,6 +41,8 @@ from calico.felix.test.base import BaseTestCase, JSONString
 
 _log = logging.getLogger(__name__)
 
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
+
 VALID_ENDPOINT = {
     "state": "active",
     "name": "tap1234",

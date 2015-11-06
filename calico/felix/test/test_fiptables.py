@@ -31,6 +31,7 @@ from calico.felix.test.base import BaseTestCase
 
 _log = logging.getLogger(__name__)
 
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
 EXTRACT_UNREF_TESTS = [
 ("""Chain INPUT (policy DROP)

@@ -20,7 +20,6 @@ Tests of endpoint module.
 """
 from contextlib import nested
 import logging
-from neutron.common.constants import IPv4
 from calico.felix.endpoint import EndpointManager, LocalEndpoint
 from calico.felix.fetcd import EtcdAPI, EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
@@ -40,6 +39,7 @@ from calico.datamodel_v1 import EndpointId
 
 _log = logging.getLogger(__name__)
 
+mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
 
 ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
 

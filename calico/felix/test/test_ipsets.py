@@ -37,6 +37,7 @@ from calico.felix.test.base import BaseTestCase
 # Logger
 _log = logging.getLogger(__name__)
 
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
 EP_ID_1_1 = EndpointId("host1", "orch", "wl1_1", "ep1_1")
 EP_1_1 = {

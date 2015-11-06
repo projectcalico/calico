@@ -26,6 +26,8 @@ else:
 
 import mock
 
+mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
+
 _log = logging.getLogger(__name__)
 
 

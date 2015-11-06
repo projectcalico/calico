@@ -38,6 +38,7 @@ from calico.felix.test.base import BaseTestCase, ExpectedException
 
 _log = logging.getLogger(__name__)
 
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
 SAME_AS_KEY = object()
 
