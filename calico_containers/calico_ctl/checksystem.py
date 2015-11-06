@@ -194,23 +194,32 @@ def _check_etcd_version():
     minimum_version = normalize_version(minimum_version_string)
 
     try:
-        detected_version_string = \
+        detected_version_string_raw = \
             client.etcd_client.api_execute("/version", 'GET').data
     except EtcdConnectionFailed:
         print >> sys.stderr, "ERROR: Could not connect to etcd at %s" % \
             etcd_authority
         system_ok = False
     else:
-        # Remove everything except numbers and dots from the string.
-        detected_version_string = re.sub(r'[^\d\.]', '',
-                                         detected_version_string)
-        detected_version = normalize_version(detected_version_string)
+        # Different version of etcd provide different version strings e.g.
+        # {"etcdserver":"2.3.0-alpha.0","etcdcluster":"2.3.0"}
+        # etcd 2.0.11
+        #
+        # Try to just extract a version string using a regex matching for three
+        # groups of digits seperated by dots.
+        match = re.search(r'(\d+\.\d+\.\d+)', detected_version_string_raw)
+        if match:
+            detected_version_string = match.group(1)
+            detected_version = normalize_version(detected_version_string)
 
-        if cmp(detected_version, minimum_version) < 0:
-            print >> sys.stderr, "ERROR: etcd must be at least version %s " \
-                                 "(Detected version: %s)" % \
-                                 (minimum_version_string,
-                                  detected_version_string)
+            if cmp(detected_version, minimum_version) < 0:
+                print >> sys.stderr, "ERROR: etcd must be at least version %s " \
+                                     "(Detected version: %s)" % \
+                                     (minimum_version_string,
+                                      detected_version_string)
+                system_ok = False
+        else:
+            print >> sys.stderr, "ERROR: unable to detect etcd version"
             system_ok = False
 
     return system_ok
