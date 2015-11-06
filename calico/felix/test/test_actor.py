@@ -19,17 +19,17 @@ felix.test.test_actor
 Tests of the Actor framework.
 """
 
-import logging
-import itertools
 import gc
+import itertools
+import logging
 import sys
 
-from gevent.event import AsyncResult
 import mock
-from calico.felix.actor import actor_message, ResultOrExc, SplitBatchAndRetry
-from calico.felix.test.base import BaseTestCase
-from calico.felix import actor
+from gevent.event import AsyncResult
 
+from calico.felix import actor
+from calico.felix.actor import actor_message, ResultOrExc, SplitBatchAndRetry
+from calico.felix.test.base import BaseTestCase, ExpectedException
 
 # Logger
 log = logging.getLogger(__name__)
@@ -184,7 +184,7 @@ class TestActor(BaseTestCase):
     def test_blocking_call(self):
         self._actor.start()  # Really start it.
         self._actor.do_a(async=False)
-        self.assertRaises(ExpectedException, self._actor.do_exc,  async=False)
+        self.assertRaises(ExpectedException, self._actor.do_exc, async=False)
 
     def test_same_actor_call(self):
         """
@@ -367,10 +367,6 @@ class ActorForTesting(actor.Actor):
         assert not self.unreferenced
         self.unreferenced = True
         return self.on_unref_result
-
-
-class ExpectedException(Exception):
-    pass
 
 
 class FinishException(Exception):

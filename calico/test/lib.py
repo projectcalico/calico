@@ -87,7 +87,7 @@ class EtcdException(Exception):
     pass
 
 
-class EtcdKeyNotFound(EtcdException):
+class EtcdValueError(EtcdException, ValueError):
     pass
 
 
@@ -95,11 +95,23 @@ class EtcdClusterIdChanged(EtcdException):
     pass
 
 
+class EtcdKeyError(EtcdException):
+    pass
+
+
+class EtcdKeyNotFound(EtcdKeyError):
+    pass
+
+
 class EtcdEventIndexCleared(EtcdException):
     pass
 
 
-class EtcdValueError(EtcdException):
+class EtcdConnectionFailed(EtcdException):
+    pass
+
+
+class EtcdWatcherCleared(EtcdException):
     pass
 
 
@@ -110,6 +122,7 @@ class EtcdDirNotEmpty(EtcdValueError):
 m_etcd.EtcdException = EtcdException
 m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
 m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
+m_etcd.EtcdConnectionFailed = EtcdConnectionFailed
 m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
 m_etcd.EtcdValueError = EtcdValueError
 m_etcd.EtcdDirNotEmpty = EtcdDirNotEmpty

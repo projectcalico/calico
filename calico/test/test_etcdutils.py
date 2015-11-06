@@ -21,15 +21,20 @@ Tests for etcd utility function.
 
 import logging
 import types
+
+from etcd import EtcdException
 from mock import Mock, patch, call
+from urllib3.exceptions import ReadTimeoutError
+
 from calico.etcdutils import (
-    PathDispatcher, EtcdWatcher, delete_empty_parents
+    PathDispatcher, EtcdWatcher, delete_empty_parents,
+    EtcdClientOwner, ResyncRequired
 )
 # Since other tests patch the module table, make sure we have the same etcd
 # module as the module under test.
 from calico.etcdutils import etcd
 
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, ExpectedException
 
 _log = logging.getLogger(__name__)
 
@@ -96,6 +101,11 @@ class TestEtcdutils(BaseTestCase):
                 call("foo/bar/baz/biff", dir=True, timeout=5),
             ]
         )
+
+    def test_delete_empty_parents_bad_prefix(self):
+        self.assertRaises(ValueError,
+                          delete_empty_parents,
+                          Mock(), "/foo/bar/baz/biff", "/bar")
 
 
 class _TestPathDispatcherBase(BaseTestCase):
@@ -232,13 +242,93 @@ class TestDispatcherExpire(_TestPathDispatcherBase):
     expected_handlers = "delete"
 
 
+class TestEtcdClientOwner(BaseTestCase):
+    @patch("etcd.Client", autospec=True)
+    def test_create(self, m_client_cls):
+        owner = EtcdClientOwner("localhost:1234")
+        m_client = m_client_cls.return_value
+        m_client.expected_cluster_id = "abcdef"
+        owner.reconnect()
+        self.assertEqual(m_client_cls.mock_calls,
+                         [call(host="localhost", port=1234,
+                               expected_cluster_id=None),
+                          call().__nonzero__(),
+                          call(host="localhost", port=1234,
+                               expected_cluster_id="abcdef"),])
+
+    @patch("etcd.Client", autospec=True)
+    def test_create_default(self, m_client):
+        owner = EtcdClientOwner("localhost")
+        self.assertEqual(m_client.mock_calls,
+                         [call(host="localhost", port=4001,
+                               expected_cluster_id=None)])
+
+
 class TestEtcdWatcher(BaseTestCase):
     def setUp(self):
         super(TestEtcdWatcher, self).setUp()
-        with patch("calico.etcdutils.EtcdWatcher.reconnect") as m_reconnect:
-            self.watcher = EtcdWatcher("foobar:4001", "/calico")
+        self.reconnect_patch = patch("calico.etcdutils.EtcdWatcher.reconnect")
+        self.m_reconnect = self.reconnect_patch.start()
+        self.watcher = EtcdWatcher("foobar:4001", "/calico")
         self.m_client = Mock()
         self.watcher.client = self.m_client
+        self.m_dispatcher = Mock(spec=PathDispatcher)
+        self.watcher.dispatcher = self.m_dispatcher
+
+    @patch("time.sleep", autospec=True)
+    def test_mainline(self, m_sleep):
+        m_snap_response = Mock()
+        m_snap_response.etcd_index = 1
+        m_poll_response = Mock()
+        m_poll_response.modifiedIndex = 2
+        responses = [
+            m_snap_response, m_poll_response, ResyncRequired(),  # Loop 1
+            EtcdException(),  # Loop 2
+            ExpectedException(),  # Loop 3, Break out of loop.
+        ]
+        self.m_client.read.side_effect = iter(responses)
+        with patch.object(self.watcher, "_on_pre_resync",
+                          autospec=True) as m_pre_r:
+            with patch.object(self.watcher, "_on_snapshot_loaded",
+                              autospec=True) as m_snap_load:
+                self.assertRaises(ExpectedException, self.watcher.loop)
+        # _on_pre_resync() called once per loop.
+        self.assertEqual(m_pre_r.mock_calls, [call(), call(), call()])
+        # The snapshot only loads successfully the first time.
+        self.assertEqual(m_snap_load.mock_calls, [call(m_snap_response)])
+        self.assertEqual(self.m_dispatcher.handle_event.mock_calls,
+                         [call(m_poll_response)])
+        # Should sleep after exception.
+        m_sleep.assert_called_once_with(1)
+
+    def test_loop_stopped(self):
+        self.watcher._stopped = True
+
+        with patch.object(self.watcher, "_on_pre_resync",
+                          autospec=True) as m_pre_r:
+            self.watcher.loop()
+        self.assertFalse(m_pre_r.called)
+
+    def test_register(self):
+        self.watcher.register_path("key", foo="bar")
+        self.assertEqual(self.m_dispatcher.register.mock_calls,
+                         [call("key", foo="bar")])
+
+    @patch("time.sleep", autospec=True)
+    def test_wait_for_ready(self, m_sleep):
+        m_resp_1 = Mock()
+        m_resp_1.value = "false"
+        m_resp_2 = Mock()
+        m_resp_2.value = "true"
+        responses = [
+            etcd.EtcdException(),
+            etcd.EtcdKeyNotFound(),
+            m_resp_1,
+            m_resp_2,
+        ]
+        self.m_client.read.side_effect = iter(responses)
+        self.watcher.wait_for_ready(1)
+        self.assertEqual(m_sleep.mock_calls, [call(1)] * 3)
 
     def test_load_initial_dump(self):
         m_response = Mock(spec=etcd.EtcdResult)
@@ -256,3 +346,68 @@ class TestEtcdWatcher(BaseTestCase):
             call("/calico", recursive=True),
         ])
         self.assertEqual(self.watcher.next_etcd_index, 10001)
+
+    def test_load_initial_dump_stopped(self):
+        self.watcher.stop()
+        self.m_client.read.side_effect = etcd.EtcdKeyNotFound()
+        self.assertRaises(etcd.EtcdKeyNotFound, self.watcher.load_initial_dump)
+
+    def test_resync_set(self):
+        self.watcher.next_etcd_index = 1
+        self.watcher.resync_after_current_poll = True
+        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
+        self.assertFalse(self.watcher.resync_after_current_poll)
+
+    @patch("time.sleep", autospec=True)
+    def test_wait_for_etcd_event_conn_failed(self, m_sleep):
+        self.watcher.next_etcd_index = 1
+        m_resp = Mock()
+        m_resp.modifiedIndex = 123
+        read_timeout = etcd.EtcdConnectionFailed()
+        read_timeout.cause = ReadTimeoutError(Mock(), "", "")
+        other_error = etcd.EtcdConnectionFailed()
+        other_error.cause = ExpectedException()
+        responses = [
+            read_timeout,
+            other_error,
+            m_resp,
+        ]
+        self.m_client.read.side_effect = iter(responses)
+        event = self.watcher.wait_for_etcd_event()
+        self.assertEqual(event, m_resp)
+        self.assertEqual(m_sleep.mock_calls, [call(1)])
+
+    def test_wait_for_etcd_event_cluster_id_changed(self):
+        self.watcher.next_etcd_index = 1
+        responses = [
+            etcd.EtcdClusterIdChanged(),
+        ]
+        self.m_client.read.side_effect = iter(responses)
+        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
+
+    def test_wait_for_etcd_event_index_cleared(self):
+        self.watcher.next_etcd_index = 1
+        responses = [
+            etcd.EtcdEventIndexCleared(),
+        ]
+        self.m_client.read.side_effect = iter(responses)
+        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
+
+    @patch("time.sleep", autospec=True)
+    def test_wait_for_etcd_event_unexpected_error(self, m_sleep):
+        self.watcher.next_etcd_index = 1
+        responses = [
+            etcd.EtcdException(),
+        ]
+        self.m_client.read.side_effect = iter(responses)
+        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
+        self.assertEqual(m_sleep.mock_calls, [call(1)])
+
+    def test_coverage(self):
+        # These methods are no-ops.
+        self.watcher._on_pre_resync()
+        self.watcher._on_snapshot_loaded(Mock())
+
+    def tearDown(self):
+        self.reconnect_patch.stop()
+        super(TestEtcdWatcher, self).tearDown()

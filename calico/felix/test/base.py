@@ -74,3 +74,7 @@ class JSONString(object):
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.json_obj)
+
+
+class ExpectedException(Exception):
+    pass
