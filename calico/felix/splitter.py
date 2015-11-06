@@ -119,6 +119,11 @@ class UpdateSplitter(Actor):
         for ipset_mgr in self.ipsets_mgrs:
             ipset_mgr.cleanup(async=False)
 
+        # We've cleaned up any unused ipsets and iptables.   Let any plugins
+        # know in case they want to take any action.
+        for plugin in self.config.plugins.itervalues():
+            plugin.cleanup_complete(self.config)
+
     @actor_message()
     def on_rules_update(self, profile_id, rules):
         """

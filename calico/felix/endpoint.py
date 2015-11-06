@@ -26,14 +26,11 @@ from calico.datamodel_v1 import (
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
-from calico.felix.futils import IPV4
+from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
-from calico.felix.frules import (
-    profile_to_chain_name, commented_drop_fragment, interface_to_suffix,
-    chain_names
-)
+from calico.felix.frules import interface_to_suffix
 
 _log = logging.getLogger(__name__)
 
@@ -191,6 +188,7 @@ class LocalEndpoint(RefCountedActor):
         assert isinstance(rules_manager, RulesManager)
 
         self.config = config
+        self.iptables_generator = config.plugins["iptables_generator"]
 
         self.combined_id = combined_id
         self.ip_type = ip_type
@@ -468,17 +466,20 @@ class LocalEndpoint(RefCountedActor):
         self._pending_endpoint = None
 
     def _update_chains(self):
-        updates, deps = _get_endpoint_rules(self.combined_id.endpoint,
-                                            self._suffix,
-                                            self._mac,
-                                            self.endpoint["profile_ids"])
+        updates, deps = self.iptables_generator.endpoint_updates(
+            IP_TYPE_TO_VERSION[self.ip_type],
+            self.combined_id.endpoint,
+            self._suffix,
+            self._mac,
+            self.endpoint["profile_ids"])
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
         except FailedSystemCall:
             _log.exception("Failed to program chains for %s. Removing.", self)
             try:
-                self.iptables_updater.delete_chains(chain_names(self._suffix),
-                                                    async=False)
+                self.iptables_updater.delete_chains(
+                    self.iptables_generator.endpoint_chain_names(self._suffix),
+                    async=False)
             except FailedSystemCall:
                 _log.exception("Failed to remove chains after original "
                                "failure")
@@ -488,8 +489,9 @@ class LocalEndpoint(RefCountedActor):
 
     def _remove_chains(self):
         try:
-            self.iptables_updater.delete_chains(chain_names(self._suffix),
-                                                async=True)
+            self.iptables_updater.delete_chains(
+                self.iptables_generator.endpoint_chain_names(self._suffix),
+                async=True)
         except FailedSystemCall:
             _log.exception("Failed to delete chains for %s", self)
         else:
@@ -567,65 +569,3 @@ class LocalEndpoint(RefCountedActor):
         return ("LocalEndpoint<%s,id=%s,iface=%s>" %
                 (self.ip_type, self.combined_id,
                  self._iface_name or "unknown"))
-
-
-def _get_endpoint_rules(endpoint_id, suffix, mac, profile_ids):
-    to_chain_name, from_chain_name = chain_names(suffix)
-
-    to_chain, to_deps = _build_to_or_from_chain(
-        endpoint_id,
-        profile_ids,
-        to_chain_name,
-        "inbound"
-    )
-    from_chain, from_deps = _build_to_or_from_chain(
-        endpoint_id,
-        profile_ids,
-        from_chain_name,
-        "outbound",
-        expected_mac=mac,
-    )
-
-    updates = {to_chain_name: to_chain, from_chain_name: from_chain}
-    deps = {to_chain_name: to_deps, from_chain_name: from_deps}
-    return updates, deps
-
-
-def _build_to_or_from_chain(endpoint_id, profile_ids, chain_name,
-                            direction, expected_mac=None):
-    # Ensure the MARK is set to 0 when we start so that unmatched packets will
-    # be dropped.
-    chain = [
-        "--append %s --jump MARK --set-mark 0" % chain_name
-    ]
-    if expected_mac:
-        _log.debug("Policing source MAC: %s", expected_mac)
-        chain.append('--append %s --match mac ! --mac-source %s --jump DROP '
-                     '--match comment --comment "Incorrect source MAC"' %
-                     (chain_name, expected_mac))
-    # Jump to each profile in turn.  The profile will do one of the
-    # following:
-    # * DROP the packet; in which case we won't see it again.
-    # * RETURN the packet with MARK==1, indicating it accepted the packet. In
-    #   which case, we RETURN and skip further profiles.
-    # * RETURN the packet with MARK==0, indicating it did not match the packet.
-    #   In which case, we carry on and process the next profile.
-    deps = set()
-    for profile_id in profile_ids:
-        profile_chain = profile_to_chain_name(direction, profile_id)
-        deps.add(profile_chain)
-        chain.append("--append %s --jump %s" % (chain_name, profile_chain))
-        # If the profile accepted the packet, it sets MARK==1.  Immediately
-        # RETURN the packet to signal that it's been accepted.
-        chain.append('--append %s --match mark --mark 1/1 '
-                     '--match comment --comment "Profile accepted packet" '
-                     '--jump RETURN' % chain_name)
-
-    # Default drop rule.
-    chain.append(
-        commented_drop_fragment(
-            chain_name,
-            "Default DROP if no match (endpoint %s):" % endpoint_id
-        )
-    )
-    return chain, deps

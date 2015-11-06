@@ -29,11 +29,14 @@ import os
 import ConfigParser
 import logging
 import socket
+import pkg_resources
 
 from calico import common
 
 # Logger
 log = logging.getLogger(__name__)
+
+FELIX_IPT_GENERATOR_PLUGIN_NAME = "calico.felix.iptables_generator"
 
 # Convert log level names into python log levels.
 LOGLEVELS = {"none":      None,
@@ -52,7 +55,7 @@ ENV = "Environment variable"
 FILE = "Configuration file"
 GLOBAL_ETCD = "Global etcd configuration"
 LOCAL_ETCD = "Host specific etcd configuration"
-DEFAULT_SOURCES = [ ENV, FILE, GLOBAL_ETCD, LOCAL_ETCD ]
+DEFAULT_SOURCES = [ENV, FILE, GLOBAL_ETCD, LOCAL_ETCD]
 
 
 class ConfigException(Exception):
@@ -160,6 +163,7 @@ class Config(object):
         :raises EtcdException
         """
         self.parameters = {}
+        self.plugins = {}
 
         self.add_parameter("EtcdAddr", "Address and port for etcd",
                            "localhost:4001", sources=[ENV, FILE])
@@ -211,10 +215,32 @@ class Config(object):
                            "Minimum delay between per-endpoint status reports",
                            1, value_is_int=True)
 
+        # The following setting determines which flavour of Iptables Generator
+        # plugin is loaded.  Note: this plugin support is currently highly
+        # experimental and may change significantly, or be removed completed,
+        # in future releases. This config attribute is therefore not yet
+        # publicly documented.
+        self.add_parameter("IptablesGeneratorPlugin",
+                           "Which IptablesGenerator Plugin to use.",
+                           "default")
+
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
         self._read_cfg_file(config_path)
         self._finish_update(final=False)
+
+        # Load the iptables generator plugin.
+        self.plugins["iptables_generator"] = _load_plugin(
+            FELIX_IPT_GENERATOR_PLUGIN_NAME,
+            self.IPTABLES_GENERATOR_PLUGIN
+        )()
+
+        # Give plugins the opportunity to register any plugin specific
+        # config attributes.   We've already loaded environment variables and
+        # the configuration file at this point, so plugin specific attributes
+        # will only be settable via etcd.
+        for plugin in self.plugins.itervalues():
+            plugin.register_config(self)
 
     def add_parameter(self, name, description, default, **kwargs):
         """
@@ -242,13 +268,16 @@ class Config(object):
         configuration load fails, and not having the log file early enough is
         worse.
 
-        :param final: Have we completed (rather than just read env and config file)
+        :param final: Have we completed (rather than just read env and config
+                      file)
         """
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.HOSTNAME = self.parameters["FelixHostname"].value
-        self.STARTUP_CLEANUP_DELAY = self.parameters["StartupCleanupDelay"].value
+        self.STARTUP_CLEANUP_DELAY = \
+            self.parameters["StartupCleanupDelay"].value
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
-        self.REFRESH_INTERVAL = self.parameters["IptablesRefreshInterval"].value
+        self.REFRESH_INTERVAL = \
+            self.parameters["IptablesRefreshInterval"].value
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
@@ -260,14 +289,25 @@ class Config(object):
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
         self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
         self.IP_IN_IP_MTU = self.parameters["IpInIpMtu"].value
-        self.REPORTING_INTERVAL_SECS = self.parameters["ReportingIntervalSecs"].value
+        self.REPORTING_INTERVAL_SECS = \
+            self.parameters["ReportingIntervalSecs"].value
         self.REPORTING_TTL_SECS = self.parameters["ReportingTTLSecs"].value
         self.REPORT_ENDPOINT_STATUS = \
             self.parameters["EndpointReportingEnabled"].value
         self.ENDPOINT_REPORT_DELAY = \
             self.parameters["EndpointReportingDelaySecs"].value
+        self.IPTABLES_GENERATOR_PLUGIN = \
+            self.parameters["IptablesGeneratorPlugin"].value
 
         self._validate_cfg(final=final)
+
+        for plugin in self.plugins.itervalues():
+            # Plugins don't get loaded and registered until we've read config
+            # from the environment and file.   This means that they don't get
+            # passed config until the final time through this function.
+            assert final, "Plugins should only be loaded on the final " \
+                          "config pass"
+            plugin.store_and_validate_config(self)
 
         # Update logging.
         common.complete_logging(self.LOGFILE,
@@ -457,3 +497,14 @@ class Config(object):
         except socket.gaierror:
             raise ConfigException("Invalid or unresolvable value",
                                   self.parameters[name])
+
+
+def _load_plugin(plugin_entry_point, flavor):
+    for v in pkg_resources.iter_entry_points(plugin_entry_point, flavor):
+        constructor = v.load()
+        log.info("Successfully loaded %s plugin: %s" %
+                 (plugin_entry_point, flavor))
+        return constructor
+    raise ImportError(
+        'No plugin called "{0:s}" has been registered for entrypoint "{1:s}".'.
+        format(flavor, plugin_entry_point))

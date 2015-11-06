@@ -27,7 +27,7 @@ from mock import patch, call, Mock, ANY
 from calico.felix import fiptables
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.futils import FailedSystemCall
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 
 _log = logging.getLogger(__name__)
 
@@ -61,7 +61,15 @@ ACCEPT     all  --  anywhere             anywhere
 set(["felix-temp"])),
 ]
 
-MISSING_CHAIN_DROP = '--append %s --jump DROP -m comment --comment "WARNING Missing chain DROP:"'
+# Define this as a function so that we can override it in plugin tests
+def drop_rules(chain_name):
+    return [
+        '--append %s --jump DROP -m comment --comment "WARNING '
+        'Missing '
+        'chain"' % chain_name
+    ]
+
+STANDARD_ACTIONS = ("MARK", "ACCEPT", "DROP", "RETURN")
 
 
 class TestIptablesUpdater(BaseTestCase):
@@ -69,9 +77,9 @@ class TestIptablesUpdater(BaseTestCase):
     def setUp(self):
         super(TestIptablesUpdater, self).setUp()
         self.stub = IptablesStub("filter")
-        self.m_config = Mock()
-        self.m_config.REFRESH_INTERVAL = 0  # disable refresh thread
-        self.ipt = IptablesUpdater("filter", self.m_config, 4)
+        env_dict = {"FELIX_REFRESHINTERVAL": "0"}
+        self.config = load_config("felix_default.cfg", env_dict=env_dict)
+        self.ipt = IptablesUpdater("filter", self.config, 4)
         self.ipt._execute_iptables = self.stub.apply_iptables_restore
         self.check_output_patch = patch("gevent.subprocess.check_output",
                                         autospec=True)
@@ -103,7 +111,7 @@ class TestIptablesUpdater(BaseTestCase):
         self.step_actor(self.ipt)
         self.assertEqual(self.stub.chains_contents,
             {"foo": ["--append foo --jump bar"],
-             'bar': [MISSING_CHAIN_DROP % "bar"]})
+             'bar': drop_rules("bar")})
 
     def test_rewrite_chains_cover(self):
         """
@@ -145,7 +153,7 @@ class TestIptablesUpdater(BaseTestCase):
         self.step_actor(self.ipt)
         self.assertEqual(self.stub.chains_contents,
             {"foo": ["--append foo --jump bar"],
-             'bar': [MISSING_CHAIN_DROP % "bar"] })
+             'bar': drop_rules("bar") })
 
     def test_cleanup_with_dependencies(self):
         # Set up the dataplane with some chains that the IptablesUpdater
@@ -206,7 +214,7 @@ class TestIptablesUpdater(BaseTestCase):
             "felix-bar": ["--append felix-bar --jump ACCEPT"],
             "felix-baz": ["--append felix-baz --src 10.0.0.2/32 "
                           "--jump felix-biff"],
-            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            "felix-boff": drop_rules("felix-boff"),
             "felix-biff": ["--append felix-biff --src 10.0.0.3/32 --jump DROP"],
         })
 
@@ -229,8 +237,8 @@ class TestIptablesUpdater(BaseTestCase):
                           "--append felix-foo --jump felix-boff"],
             "felix-bar": ["--append felix-bar --jump ACCEPT"],
             # All required but unknown chains stubbed.
-            "felix-baz": [MISSING_CHAIN_DROP % "felix-baz"],
-            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            "felix-baz": drop_rules("felix-baz"),
+            "felix-boff": drop_rules("felix-boff"),
             # felix-biff deleted, even though it was referenced by felix-baz
             # before.
         })
@@ -259,7 +267,7 @@ class TestIptablesUpdater(BaseTestCase):
         # IptablesUpdater hears about all the chains before the cleanup.
         # Chains have dependencies.
         self.ipt.rewrite_chains(
-            {"felix-foo": ["--append felix-foo --jump felix-bar",],
+            {"felix-foo": ["--append felix-foo --jump felix-bar"],
              "felix-bar": ["--append felix-bar --jump ACCEPT"],
              "felix-baz": ["--append felix-baz --jump ACCEPT"]},
             {"felix-foo": set(["felix-bar"]),
@@ -282,7 +290,7 @@ class TestIptablesUpdater(BaseTestCase):
         self.step_actor(self.ipt)
         self.stub.assert_chain_contents({
             "felix-foo": ["--append felix-foo --jump felix-bar"],
-            "felix-bar": [MISSING_CHAIN_DROP % "felix-bar"],
+            "felix-bar": drop_rules("felix-bar"),
         })
 
     def test_cleanup_bad_read_back(self):
@@ -295,7 +303,7 @@ class TestIptablesUpdater(BaseTestCase):
         self.step_actor(self.ipt)
         self.stub.assert_chain_contents({
             "felix-foo": ["--append felix-foo --jump felix-boff"],
-            "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+            "felix-boff": drop_rules("felix-boff"),
         })
 
         # Some other process then breaks our chains.
@@ -327,7 +335,7 @@ class TestIptablesUpdater(BaseTestCase):
             )
             self.stub.assert_chain_contents({
                 "felix-foo": ["--append felix-foo --jump felix-boff"],
-                "felix-boff": [MISSING_CHAIN_DROP % "felix-boff"],
+                "felix-boff": drop_rules("felix-boff"),
             })
 
     def test_ensure_rule_inserted(self):
@@ -522,7 +530,7 @@ class IptablesStub(object):
         self.declared_chains = None
 
         self.iptables_save_output = []
-        
+
     def generate_iptables_save(self):
         if self.iptables_save_output:
             output = self.iptables_save_output.pop(0)
@@ -613,7 +621,7 @@ class IptablesStub(object):
             if m:
                 action = m.group(1)
                 _log.debug("Action %s", action)
-                if action not in ("MARK", "ACCEPT", "DROP", "RETURN"):
+                if action not in STANDARD_ACTIONS:
                     # Assume a dependent chain.
                     self.new_dependencies[chain].add(action)
         elif ipt_op in ("--delete-chain", "-X"):

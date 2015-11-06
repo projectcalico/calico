@@ -18,18 +18,13 @@ felix.test.test_splitter
 
 Tests of the actor that splits update messages to multiple manager actors.
 """
-import collections
-
 import gevent
 import mock
 from calico.felix.masq import MasqueradeManager
 
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.splitter import UpdateSplitter
 
-
-# A mocked config object for use in the UpdateSplitter.
-Config = collections.namedtuple('Config', ['STARTUP_CLEANUP_DELAY'])
 
 class TestUpdateSplitter(BaseTestCase):
     """
@@ -39,7 +34,8 @@ class TestUpdateSplitter(BaseTestCase):
         super(TestUpdateSplitter, self).setUp()
 
         # Set the cleanup delay to 0, to force immediate cleanup.
-        self.config = Config(0)
+        self.config = load_config("felix_default.cfg",
+                                  host_dict={"StartupCleanupDelay": 0})
         self.ipsets_mgrs = [mock.MagicMock(), mock.MagicMock()]
         self.rules_mgrs = [mock.MagicMock(), mock.MagicMock()]
         self.endpoint_mgrs = [mock.MagicMock(), mock.MagicMock()]

@@ -80,6 +80,10 @@ setuptools.setup(
         'neutron.ml2.mechanism_drivers': [
             'calico = calico.openstack.mech_calico:CalicoMechanismDriver',
         ],
+        'calico.felix.iptables_generator': [
+            'default = '
+            'calico.felix.plugins.fiptgenerator:FelixIptablesGenerator',
+        ],
     },
     install_requires=collect_requirements()
 )
