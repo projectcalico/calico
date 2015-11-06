@@ -18,25 +18,16 @@ from tests.st.utils.workload import NET_NONE
 
 
 class TestNoOrchestratorSingleHost(TestBase):
-    def test_single_host(self):
+    def test_single_host_ipv4(self):
         """
         Test mainline functionality without using an orchestrator plugin
         """
         with DockerHost('host', dind=False) as host:
-            # TODO ipv6 too
             host.calicoctl("profile add TEST_GROUP")
 
             # Create a workload on each host.
             workload1 = host.create_workload("workload1")
             workload2 = host.create_workload("workload2")
-
-            # TODO - find a better home for this assertion
-            # # Attempt to configure the nodes with the same profiles.  This will
-            # # fail since we didn't use the driver to create the nodes.
-            # with self.assertRaises(CalledProcessError):
-            #     host.calicoctl("profile TEST_GROUP member add %s" % workload1)
-            # with self.assertRaises(CalledProcessError):
-            #     host.calicoctl("profile TEST_GROUP member add %s" % workload2)
 
             # Add the nodes to Calico networking.
             host.calicoctl("container add %s 192.168.1.1" % workload1)
@@ -60,3 +51,26 @@ class TestNoOrchestratorSingleHost(TestBase):
             host.calicoctl("pool remove 192.168.0.0/16")
             host.calicoctl("node stop")
             host.calicoctl("node remove")
+
+    def test_single_host_ipv6(self):
+        """
+        Test mainline functionality without using an orchestrator plugin
+        """
+        with DockerHost('host', dind=False) as host:
+            host.calicoctl("profile add TEST_GROUP")
+
+            # Create a workload on each host.
+            workload1 = host.create_workload("workload1")
+            workload2 = host.create_workload("workload2")
+
+            # Add the nodes to Calico networking.
+            host.calicoctl("container add %s fd80:24e2:f998:72d6::1" % workload1)
+            host.calicoctl("container add %s fd80:24e2:f998:72d6::2" % workload2)
+
+            # Now add the profiles - one using set and one using append
+            host.calicoctl("container %s profile set TEST_GROUP" % workload1)
+            host.calicoctl("container %s profile append TEST_GROUP" % workload2)
+
+            # # Check it works
+            workload1.assert_can_ping("fd80:24e2:f998:72d6::2", retries=3)
+            workload2.assert_can_ping("fd80:24e2:f998:72d6::1", retries=3)
