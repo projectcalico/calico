@@ -28,14 +28,14 @@ import os
 import socket
 import sys
 
-from calico.etcddriver.driver import EtcdDriver
-from calico.common import default_logging
+from calico.etcddriver import driver
+from calico import common
 
 _log = logging.getLogger(__name__)
 
 last_ppid = os.getppid()
-default_logging(gevent_in_use=False,
-                syslog_executable_name="calico-felix-etcd")
+common.default_logging(gevent_in_use=False,
+                       syslog_executable_name="calico-felix-etcd")
 
 felix_sck = socket.socket(socket.AF_UNIX,
                           socket.SOCK_STREAM)
@@ -45,15 +45,15 @@ except:
     _log.exception("Failed to connect to Felix")
     raise
 
-driver = EtcdDriver(felix_sck)
-driver.start()
+etcd_driver = driver.EtcdDriver(felix_sck)
+etcd_driver.start()
 
-while not driver.join(timeout=1):
+while not etcd_driver.join(timeout=1):
     parent_pid = os.getppid()
     # Defensive, just in case we don't get a socket error, check if the
     # parent PID has changed, indicating that Felix has died.
     if parent_pid == 1 or parent_pid != last_ppid:
         _log.critical("Process adopted, assuming felix has died")
-        driver.stop()
+        etcd_driver.stop()
         break
 _log.critical("Driver shutting down.")
