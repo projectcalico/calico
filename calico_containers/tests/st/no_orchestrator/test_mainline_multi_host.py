@@ -53,4 +53,6 @@ class TestNoOrchestratorMultiHost(TestBase):
             host2.calicoctl("container remove %s" % workload2)
             host1.calicoctl("pool remove 192.168.0.0/16")
             host1.calicoctl("node stop")
+            host1.calicoctl("node remove")
             host2.calicoctl("node stop")
+            host2.calicoctl("node remove")

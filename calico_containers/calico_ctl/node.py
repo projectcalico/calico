@@ -19,6 +19,7 @@ Usage:
     [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
+  calicoctl node remove [--remove-endpoints]
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
   calicoctl node bgp peer show [--ipv4 | --ipv6]
@@ -28,8 +29,10 @@ Description:
   for this node.
 
 Options:
-  --force                   Stop the node process even if it has active
-                            endpoints.
+  --force                   Stop the Calico node even if there are still
+                            endpoints configured.
+  --remove-endpoints        Remove the endpoint data when deleting the node
+                            from the Calico network.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
                             container. [default: calico/node:latest]
   --detach=<DETACH>         Set "true" to run Calico service as detached,
@@ -72,6 +75,7 @@ from pycalico.datastore_datatypes import IPPool
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
+from pycalico.netns import remove_veth
 from pycalico.util import get_host_ips
 from connectors import client
 from connectors import docker_client
@@ -189,6 +193,8 @@ def node(arguments):
                     node_bgppeer_show(ip_version)
     elif arguments.get("stop"):
         node_stop(arguments.get("--force"))
+    elif arguments.get("remove"):
+        node_remove(arguments.get("--remove-libnetwork"))
     else:
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
@@ -459,14 +465,27 @@ def _setup_ip_forwarding():
 
 
 def node_stop(force):
-    num_endpoints = len(client.get_endpoints(hostname=hostname,
-                                             orchestrator_id=DOCKER_ORCHESTRATOR_ID))
-    if num_endpoints and not force:
-        print "Current host has active endpoints so can't be stopped." \
-              " Force with --force"
-        return
+    """
+    Stop the Calico node.  This stops the containers (calico/node and
+    calico/node-libnetwork) that are started by calicoctl node.
+    """
+    endpoints = len(client.get_endpoints(hostname=hostname))
+    if endpoints:
+        if not force:
+            print_paragraph("Current host has active endpoints so can't be "
+                "stopped.  Force with --force")
+            print_paragraph("Note that stopping the node while there are "
+                            "active endpoints may make it difficult to clean "
+                            "up the endpoints: for example, Docker containers "
+                            "networked using libnetwork with Calico will not "
+                            "invoke network cleanup during the normal "
+                            "container lifecycle.")
+            sys.exit(1)
+        else:
+            print_paragraph("Stopping node while host has active endpoints.  "
+                            "If this in error, restart the node using the "
+                            "'calicoctl node' command.")
 
-    client.remove_host(hostname)
     try:
         docker_client.stop("calico-node")
     except docker.errors.APIError as err:
@@ -478,7 +497,54 @@ def node_stop(force):
         if err.response.status_code != 404:
             raise
 
-    print "Node stopped and all configuration removed"
+    print "Node stopped"
+
+
+def node_remove(remove_endpoints):
+    """
+    Remove a node from the Calico network.
+    :param remove_endpoints: Whether the endpoint data should be forcibly
+    removed.
+    """
+    if _container_running("calico-node") or \
+       _container_running("calico-libnetwork"):
+        print_paragraph("The node cannot be removed while it is running.  "
+                        "Please run 'calicoctl node stop' to stop the node "
+                        "before removing it.")
+        sys.exit(1)
+
+    endpoints = client.get_endpoints(hostname=hostname)
+    if endpoints and not remove_endpoints:
+        print_paragraph("The node has active Calico endpoints so can't be "
+                        "deleted. Force with --remove-endpoints")
+        print_paragraph("Note that forcible removing the node may leave some "
+                        "workloads in an indeterminate networked state.  If "
+                        "this is in error, you may restart the node using the "
+                        "'calicoctl node' command and clean up the workloads "
+                        "in the normal way.")
+        sys.exit(1)
+
+    for endpoint in endpoints:
+        remove_veth(endpoint.name)
+    client.remove_host(hostname)
+
+    print "Node configuration removed"
+
+
+def _container_running(container_name):
+    """
+    Check if a container is currently running or not.
+    :param container_name:  The container name or ID.
+    :return: True if running, otherwise False.
+    """
+    try:
+        cdata = docker_client.inspect_container(container_name)
+    except docker.errors.APIError as err:
+        if err.response.status_code != 404:
+            raise
+        return False
+    else:
+        return cdata["State"]["Running"]
 
 
 def node_bgppeer_add(ip, version, as_num):
