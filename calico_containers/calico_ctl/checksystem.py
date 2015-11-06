@@ -50,7 +50,7 @@ def checksystem(arguments):
     check_system(quit_if_error=True,
                  libnetwork=arguments["--libnetwork"])
 
-def check_system(quit_if_error=False, libnetwork=False):
+def check_system(quit_if_error=False, libnetwork=False, check_docker=True):
     """
     Checks that the system is setup correctly.
 
@@ -63,7 +63,7 @@ def check_system(quit_if_error=False, libnetwork=False):
     """
     enforce_root()
     modules_ok = _check_modules()
-    docker_ok = _check_docker_version(libnetwork)
+    docker_ok = _check_docker_version(libnetwork) if check_docker else True
 
     system_ok = modules_ok and docker_ok
 
