@@ -22,16 +22,17 @@ import json
 from Queue import Empty
 
 import time
+from StringIO import StringIO
 from unittest import TestCase
 
 from mock import Mock, patch, call
 from urllib3 import HTTPConnectionPool
-from urllib3.exceptions import TimeoutError
-
+from urllib3.exceptions import TimeoutError, HTTPError
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, VERSION_DIR
 from calico.etcddriver import driver
-from calico.etcddriver.driver import EtcdDriver, DriverShutdown, ResyncRequired, \
-    WatcherDied
+from calico.etcddriver.driver import (
+    EtcdDriver, DriverShutdown, ResyncRequired, WatcherDied, ijson
+)
 from calico.etcddriver.protocol import *
 from calico.etcddriver.test.stubs import (
     StubMessageReader, StubMessageWriter, StubEtcd,
@@ -166,6 +167,61 @@ class TestEtcdDriverFV(TestCase):
                                     u'/calico/v1/adir2/dkey/',
                                     u'/calico/v1/adir/ekey/']))
 
+
+    def test_many_events_during_resync(self):
+        """
+        Test of the mainline resync-and-merge processing.
+
+        * Does the initial config handshake with Felix.
+        * Interleaves the snapshot response with updates via the watcher.
+        * Checks that the result is correctly merged.
+        """
+        # Initial handshake.
+        self.start_driver_and_handshake()
+
+        # Check for etcd request and start the response.
+        snap_stream = self.start_snapshot_response()
+
+        # Respond to the watcher, this should get merged into the event
+        # stream at some point later.
+        for ii in xrange(200):
+            self.watcher_etcd.respond_with_value(
+                "/calico/v1/adir/bkey",
+                "watch",
+                mod_index=11 + ii,
+                action="set"
+            )
+            self.watcher_etcd.assert_request(
+                VERSION_DIR, recursive=True, timeout=90, wait_index=12 + ii
+            )
+        snap_stream.write('''
+                     {
+                         "key": "/calico/v1/adir/bkey",
+                         "value": "snap",
+                         "modifiedIndex": 8
+                     },
+                     {
+                        "key": "/calico/v1/Ready",
+                        "value": "true",
+                        "modifiedIndex": 10
+                    }]
+                }]
+            }
+        }
+        ''')
+        snap_stream.write("")
+
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/bkey",
+            MSG_KEY_VALUE: "snap",
+        })
+        for _ in xrange(200):
+            self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+                MSG_KEY_KEY: "/calico/v1/adir/bkey",
+                MSG_KEY_VALUE: "watch",
+            })
+        self.assert_status_message(STATUS_IN_SYNC)
+
     def test_felix_triggers_resync(self):
         self._run_initial_resync()
 
@@ -274,6 +330,7 @@ class TestEtcdDriverFV(TestCase):
         # Then a whole directory is deleted.
         self.watcher_etcd.respond_with_value(
             "/calico/v1/adir",
+            dir=True,
             value=None,
             action="delete",
             mod_index=101,
@@ -412,7 +469,8 @@ class TestEtcdDriverFV(TestCase):
         # Then etcd should get the global config request.
         self.resync_etcd.assert_request(CONFIG_DIR, recursive=True)
         self.resync_etcd.respond_with_dir(CONFIG_DIR, {
-            CONFIG_DIR + "/InterfacePrefix": "tap"
+            CONFIG_DIR + "/InterfacePrefix": "tap",
+            CONFIG_DIR + "/Foo": None,  # Directory
         })
         # Followed by the per-host one...
         self.resync_etcd.assert_request("/calico/v1/host/thehostname/config",
@@ -726,5 +784,46 @@ class TestDriver(TestCase):
         m_resp.read.return_value = "garbage"
         self.assertRaises(ResyncRequired, driver.parse_snapshot,
                           m_resp, Mock())
+
+    def test_resync_driver_stopped(self):
+        self.driver._init_received.set()
+        with patch.object(self.driver, "get_etcd_connection") as m_get:
+            m_get.side_effect = DriverShutdown()
+            self.driver._resync_and_merge()
+
+    @patch("time.sleep")
+    def test_resync_http_error(self, m_sleep):
+        self.driver._init_received.set()
+        with patch.object(self.driver, "get_etcd_connection") as m_get:
+            with patch("calico.etcddriver.driver.monotonic_time") as m_time:
+                m_time.side_effect = iter([
+                    1, 10, RuntimeError()
+                ])
+                m_get.side_effect = HTTPError()
+                self.assertRaises(RuntimeError, self.driver._resync_and_merge)
+
+    def test_parse_snap_error_from_etcd(self):
+        parser = ijson.parse(StringIO(json.dumps({
+            "errorCode": 100
+        })))
+        next(parser)
+        self.assertRaises(ResyncRequired, driver._parse_map, parser, None)
+
+    def test_parse_snap_bad_data(self):
+        parser = ijson.parse(StringIO(json.dumps({
+            "nodes": [
+                "foo"
+            ]
+        })))
+        next(parser)
+        self.assertRaises(ValueError, driver._parse_map, parser, None)
+
+    def test_join_not_stopped(self):
+        with patch.object(self.driver._stop_event, "wait"):
+            self.assertFalse(self.driver.join())
+
+    def test_process_events_stopped(self):
+        self.driver._stop_event.set()
+        self.driver._process_events_only()
 
 

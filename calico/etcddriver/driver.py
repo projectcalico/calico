@@ -126,7 +126,6 @@ class EtcdDriver(object):
         self._stop_event.wait(timeout=timeout)
         stopped = self._stop_event.is_set()
         if stopped:
-
             self._resync_thread.join(timeout=timeout)
             resync_alive = self._resync_thread.is_alive()
             stopped &= not resync_alive
@@ -673,12 +672,7 @@ class EtcdDriver(object):
                     is_dir = node.get("dir", False)
                     value = node.get("value")
                     if is_dir:
-                        if action != "delete":
-                            # Just ignore sets to directories, we only track
-                            # leaves.
-                            _log.debug("Skipping non-delete to dir %s", key)
-                            continue
-                        else:
+                        if action == "delete":
                             if key.rstrip("/") in (VERSION_DIR, ROOT_DIR):
                                 # Special case: if the whole keyspace is
                                 # deleted, that implies the ready flag is gone
@@ -687,6 +681,11 @@ class EtcdDriver(object):
                                 _log.warning("Whole %s deleted, resyncing",
                                              VERSION_DIR)
                                 break
+                        else:
+                            # Just ignore sets to directories, we only track
+                            # leaves.
+                            _log.debug("Skipping non-delete to dir %s", key)
+                            continue
                     modified_index = node["modifiedIndex"]
                 except (KeyError, TypeError, ValueError):
                     _log.exception("Unexpected format for etcd response: %r;"
@@ -770,7 +769,9 @@ def _parse_map(parser, callback):
                         break
                     else:
                         raise ValueError("Unexpected: %s" % event)
-        elif event == "end_map":
+        else:
+            assert event == "end_map", ("Unexpected JSON event %s %s %s" %
+                                        (prefix, event, value))
             if (node_key is not None and
                     node_value is not None and
                     mod_index is not None):

@@ -119,7 +119,7 @@ class HighWaterTracker(object):
             # We're tracking deletions, check that this key hasn't been
             # deleted.
             del_hwm = self._deletion_hwms.longest_prefix_value(key, None)
-            if del_hwm > hwm:
+            if hwm < del_hwm:
                 _log.debug("Key %s previously deleted, skipping", key)
                 return del_hwm
         try:

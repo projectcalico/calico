@@ -94,6 +94,9 @@ class TestHighWaterTracker(TestCase):
         old_hwm = self.hwm.update_hwm("/a/$/g", 10)
         self.assertEqual(old_hwm, 13)  # Returns the etcd_index of the delete.
         self.assertEqual(len(self.hwm), 5)
+        # But ones outside the subtree ar not.
+        old_hwm = self.hwm.update_hwm("/f/g", 10)
+        self.assertEqual(old_hwm, None)
         # And subsequent updates are processed ignoring the delete.
         old_hwm = self.hwm.update_hwm("/a/$/f", 16)
         self.assertEqual(old_hwm, 15)
@@ -110,18 +113,18 @@ class TestHighWaterTracker(TestCase):
         self.assertEqual(old_hwm, None)  # Seen for the first time.
         old_hwm = self.hwm.update_hwm("/d/e/f", 19)
         self.assertEqual(old_hwm, 10)  # From the snapshot.
-        self.assertEqual(len(self.hwm), 6)
+        self.assertEqual(len(self.hwm), 7)
 
         # We should be able to find all the keys that weren't seen during
         # the snapshot.
         old_keys = self.hwm.remove_old_keys(10)
         self.assertEqual(set(old_keys), set(["/b/c/d", "/j/c/d"]))
-        self.assertEqual(len(self.hwm), 4)
+        self.assertEqual(len(self.hwm), 5)
 
         # They should now be gone from the index.
         old_hwm = self.hwm.update_hwm("/b/c/d", 20)
         self.assertEqual(old_hwm, None)
-        self.assertEqual(len(self.hwm), 5)
+        self.assertEqual(len(self.hwm), 6)
 
 
 class TestKeyEncoding(TestCase):
@@ -132,6 +135,7 @@ class TestKeyEncoding(TestCase):
         self.assert_enc_dec("/:_-.~/foo", "/:_-.%7E/foo/")
         self.assert_enc_dec("/%/foo", "/%25/foo/")
         self.assert_enc_dec(u"/\u01b1/foo", "/%C6%B1/foo/")
+        self.assertEqual(hwm.encode_key("/foo/"), "/foo/")
 
     def assert_enc_dec(self, key, expected_encoding):
         encoded = hwm.encode_key(key)

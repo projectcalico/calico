@@ -167,4 +167,6 @@ class MessageReader(object):
         # generate some messages.
         self._unpacker.feed(data)
         for msg in self._unpacker:
-            yield msg[MSG_KEY_TYPE], msg
+            _log.debug("Unpacked message: %s", msg)
+            # coverage.py doesn't fully support yield statements.
+            yield msg[MSG_KEY_TYPE], msg  # pragma: nocover

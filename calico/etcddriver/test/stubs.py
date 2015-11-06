@@ -157,13 +157,14 @@ class StubEtcd(object):
         """
         Called from the test to get the next request from the driver.
         """
-        return self.request_queue.get(timeout=10)
+        return self.request_queue.get(timeout=1)
 
     def assert_request(self, expected_key, **expected_args):
         """
         Asserts the properies of the next request.
         """
-        _log.info("Waiting for request for key %s")
+        _log.info("Waiting for request for key %s, %s",
+                  expected_key, expected_args)
         key, args = self.get_next_request()
         default_args = {'wait_index': None,
                         'preload_content': None,
@@ -187,19 +188,18 @@ class StubEtcd(object):
         """
         self.response_queue.put(exc)
 
-    def respond_with_value(self, key, value, mod_index=None,
+    def respond_with_value(self, key, value, dir=False, mod_index=None,
                            etcd_index=None, status=200, action="get"):
         """
         Called from the test to return a simple single-key value to the
         driver.
         """
+        node = {"key": key, "value": value, "modifiedIndex": mod_index}
+        if dir:
+            node["dir"] = True
         data = json.dumps({
             "action": action,
-            "node": {
-                "key": key,
-                "value": value,
-                "modifiedIndex": mod_index,
-            }
+            "node": node
         })
         self.respond_with_data(data, etcd_index, status)
 
@@ -209,8 +209,15 @@ class StubEtcd(object):
         Called from the test to return a directory of key/values (from a
         recursive request).
         """
-        nodes = [{"key": k, "value": v, "modifiedIndex": mod_index}
-                 for (k, v) in children.iteritems()]
+        nodes = []
+        for k, v in children.iteritems():
+            if v is not None:
+                nodes.append({"key": k, "value": v,
+                              "modifiedIndex": mod_index})
+            else:
+                nodes.append({"key": k, "dir": True,
+                              "modifiedIndex": mod_index,
+                              "nodes": []})
         data = json.dumps({
             "action": "get",
             "node": {
