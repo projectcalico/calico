@@ -57,8 +57,8 @@ class DockerHost(object):
             for command in post_docker_commands:
                 self.execute(command)
         else:
-            self.ip = get_ip(False)
-            self.ip6 = get_ip(True)
+            self.ip = get_ip(v6=False)
+            self.ip6 = get_ip(v6=True)
 
         if start_calico:
             self.start_calico_node()
