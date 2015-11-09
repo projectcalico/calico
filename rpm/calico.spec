@@ -2,8 +2,8 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.2.0
-Release:        1%{?dist}
+Version:        1.3.0
+Release:        0.3%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -84,6 +84,7 @@ This package provides the pieces needed on a controller node.
 %package common
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
+Requires:       python-etcd, posix-spawn, python-setuptools
 
 %description common
 This package provides common files.
@@ -92,7 +93,8 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, conntrack-tools, ipset, net-tools, python-devel, python-netaddr, python-gevent
+Requires:       calico-common, conntrack-tools, ipset, iptables, net-tools, python-devel, python-netaddr, python-gevent
+
 
 %description felix
 This package provides the Felix component.
