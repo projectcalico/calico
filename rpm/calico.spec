@@ -93,7 +93,7 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, conntrack-tools, ipset, iptables, net-tools, python-devel, python-netaddr, python-gevent
+Requires:       calico-common, conntrack-tools, ipset, iptables, net-tools, python-devel, python-netaddr, python-gevent, datrie, ijson, python-urllib3, python-msgpack
 
 
 %description felix

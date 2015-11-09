@@ -6,3 +6,4 @@ posix-spawn>=0.2.post6
 datrie>=0.7
 ijson>=2.2
 msgpack-python>=0.3
+urllib3>=1.7.1
