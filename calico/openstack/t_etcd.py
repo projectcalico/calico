@@ -855,7 +855,7 @@ def port_etcd_data(port):
             # MD4 TODO Check the old version writes 'profile_id' in a form that
             # translation code in common.validate_endpoint() will work.
 
-    # Collect IPv6 and IPv6 addresses.  On the way, also set the
+    # Collect IPv4 and IPv6 addresses.  On the way, also set the
     # corresponding gateway fields.  If there is more than one IPv4 or IPv6
     # gateway, the last one (in port['fixed_ips']) wins.
     ipv4_nets = []

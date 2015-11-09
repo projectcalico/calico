@@ -308,7 +308,7 @@ class EtcdWatcher(EtcdClientOwner):
         Abstract:
 
         Called before the initial dump is loaded and passed to
-        _process_initial_dump().
+        _on_snapshot_loaded().
         """
         pass
 
