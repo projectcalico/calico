@@ -81,6 +81,7 @@ environment using Vagrant, or a number of cloud services.
 
 We also provide the following additional demonstration: 
 - [Calico and Kubernetes](docs/kubernetes/README.md)
+- [Calico and Mesos](docs/mesos/README.md)
 
 
 ### Networking options
