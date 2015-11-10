@@ -60,12 +60,6 @@ class Workload(object):
                                                        image)
         host.execute(command)
 
-        version_key = "IPAddress"
-        # TODO Use version_key = "GlobalIPv6Address" for IPv6
-        ip_command = "docker inspect --format '{{ .NetworkSettings.Networks.%s.%s }}' %s" % \
-                                                            (network, version_key, name)
-        self.ip = host.execute(ip_command)
-
     def execute(self, command):
         """
         Execute arbitrary commands on this workload.
@@ -85,12 +79,16 @@ class Workload(object):
         The function raises a CommandExecError exception if the ping fails,
         or returns the output of the ping.
         """
-        version = IPAddress(ip).version
-        assert version in [4, 6]
-        if version == 4:
-            ping = "ping"
-        else:  # if version == 6:
-            ping = "ping6"
+        # Default to "ping"
+        ping = "ping"
+
+        try:
+            version = IPAddress(ip).version
+            assert version in [4, 6]
+            if version == 6:
+                ping = "ping6"
+        except BaseException:
+            pass
 
         args = [
             ping,

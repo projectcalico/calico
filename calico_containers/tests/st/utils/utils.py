@@ -20,26 +20,38 @@ from subprocess import CalledProcessError
 from exceptions import CommandExecError
 import re
 import json
+from pycalico.util import get_host_ips
 
 LOCAL_IP_ENV = "MY_IP"
+LOCAL_IPv6_ENV = "MY_IPv6"
 logger = logging.getLogger(__name__)
 
 
-def get_ip():
+def get_ip(v6=False):
     """
     Return a string of the IP of the hosts interface.
     Try to get the local IP from the environment variables.  This allows
     testers to specify the IP address in cases where there is more than one
     configured IP address for the test system.
     """
-    try:
-        ip = os.environ[LOCAL_IP_ENV]
-    except KeyError:
-        # No env variable set; try to auto detect.
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
+    env = LOCAL_IPv6_ENV if v6 else LOCAL_IP_ENV
+    ip = os.environ.get(env)
+    if not ip:
+        try:
+            # No env variable set; try to auto detect.
+            socket_type = socket.AF_INET6 if v6 else socket.AF_INET
+            s = socket.socket(socket_type, socket.SOCK_DGRAM)
+            remote_ip = "2001:4860:4860::8888" if v6 else "8.8.8.8"
+            s.connect((remote_ip, 0))
+            ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            # Failed to connect, just try to get the address from the interfaces
+            version = 6 if v6 else 4
+            ips = get_host_ips(version)
+            if ips:
+                ip = ips[0]
+
     return ip
 
 
@@ -195,7 +207,7 @@ def get_profile_name(host, network):
 
     # Network inspect returns a list of dicts for each network being inspected.
     # We are only inspecting 1, so use the first entry.
-    return info[0]["id"]
+    return info[0]["Id"]
 
 def assert_network(host, network):
     """

@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import re
 
 from nose.plugins.attrib import attr
 
@@ -54,8 +53,8 @@ class TestNodePeers(TestBase):
              DockerHost('host2', start_calico=False) as host2:
 
             # Start both hosts using specific AS numbers.
-            host1.start_calico_node(as_num=LARGE_AS_NUM)
-            host2.start_calico_node(as_num=LARGE_AS_NUM)
+            host1.start_calico_node("--as=%s" % LARGE_AS_NUM)
+            host2.start_calico_node("--as=%s" % LARGE_AS_NUM)
 
             # Create a profile to associate with both workloads
             host1.calicoctl("profile add TEST_GROUP")
