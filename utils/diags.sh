@@ -15,8 +15,8 @@ CALICO_DIR=/var/log/calico
 NEUTRON_DIR=/var/log/neutron
 NOVA_DIR=/var/log/nova
 date=`date +"%F_%H-%M-%S"`
-diags_dir=./"$date"
 system=`hostname`
+diags_dir=./calico-diags_"$system"_"$date"
 echo "  creating dir $diags_dir"
 mkdir "$diags_dir" || exit 2
 pushd "$diags_dir" > /dev/null || exit 2
