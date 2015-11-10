@@ -7,7 +7,7 @@ set -x
 echo "http://alpine.gliderlabs.com/alpine/edge/testing" >> /etc/apk/repositories
 
 # These packages make it into the final image.
-apk -U add runit python py-setuptools libffi ip6tables ipset iputils
+apk -U add runit python py-setuptools libffi ip6tables ipset iputils iproute2
 
 # These packages are only used for building and get removed.
 apk add --virtual temp python-dev libffi-dev py-pip alpine-sdk curl

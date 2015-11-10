@@ -60,12 +60,6 @@ class Workload(object):
                                                        image)
         host.execute(command)
 
-        version_key = "IPAddress"
-        # TODO Use version_key = "GlobalIPv6Address" for IPv6
-        ip_command = "docker inspect --format '{{ .NetworkSettings.Networks.%s.%s }}' %s" % \
-                                                            (network, version_key, name)
-        self.ip = host.execute(ip_command)
-
     def execute(self, command):
         """
         Execute arbitrary commands on this workload.

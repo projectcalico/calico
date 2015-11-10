@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from subprocess import CalledProcessError
-from unittest import skip
+import unittest
 
-from tests.st.test_base import TestBase
+from tests.st.test_base import TestBase, HOST_IPV6
 from tests.st.utils.docker_host import DockerHost
 
 """
@@ -48,7 +47,7 @@ class TestAutoAssignIp(TestBase):
         """
         Test "calicoctl container add <container> ipv4"
         """
-        with DockerHost('host') as host:
+        with DockerHost('host', dind=False) as host:
             # Test that auto-assiging IPv4 addresses gives what we expect
             workloads = self._setup_env(host, count=2, ip="ipv4")
 
@@ -66,12 +65,12 @@ class TestAutoAssignIp(TestBase):
             workloads[0].assert_can_ping("192.168.0.1", retries=3)
             workloads[1].assert_can_ping("192.168.0.0", retries=3)
 
-    @skip("IPv6 st tests aren't working yet")
+    @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_add_autoassigned_ipv6(self):
         """
         Test "calicoctl container add <container> ipv6"
         """
-        with DockerHost('host') as host:
+        with DockerHost('host', dind=False) as host:
             # Test that auto-assiging IPv4 addresses gives what we expect
             workloads = self._setup_env(host, count=2, ip="ipv6")
 
@@ -94,7 +93,7 @@ class TestAutoAssignIp(TestBase):
         Test "calicoctl container add <container> <IPv4 CIDR>"
         (192.168.0.0/16)
         """
-        with DockerHost('host') as host:
+        with DockerHost('host', dind=False) as host:
             # Test that auto-assiging IPv4 addresses gives what we expect
             workloads = self._setup_env(host, count=2,
                                         ip=self.DEFAULT_IPV4_POOL)
@@ -102,13 +101,13 @@ class TestAutoAssignIp(TestBase):
             workloads[0].assert_can_ping("192.168.0.1", retries=3)
             workloads[1].assert_can_ping("192.168.0.0", retries=3)
 
-    @skip("IPv6 st tests aren't working yet")
+    @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_add_autoassigned_pool_ipv6(self):
         """
         Test "calicoctl container add <container> <IPv6 CIDR>"
         (fd80:24e2:f998:72d6::/64)
         """
-        with DockerHost('host') as host:
+        with DockerHost('host', dind=False) as host:
             # Test that auto-assiging IPv6 addresses gives what we expect
             workloads = self._setup_env(host, count=2,
                                         ip=self.DEFAULT_IPV6_POOL)
