@@ -329,13 +329,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         call back into our check_segment_for_agent() method, which does
         further checks.
         """
-        for agent in context.host_agents(constants.AGENT_TYPE_DHCP):
-            LOG.debug("Checking agent: %s", agent)
-            if agent["alive"]:
-                break
-        else:
-            LOG.warning("No live DHCP agents on host")
-            return
+        # FIXME: Actually for now we don't check for a DHCP agent,
+        # because we haven't yet worked out the future architecture
+        # for this.  The key point is that we don't want to do this
+        # via the Neutron database and RPC mechanisms, because that is
+        # what causes the scaling problem that led us to switch to an
+        # etcd-driven DHCP agent.
         return super(CalicoMechanismDriver, self).bind_port(context)
 
     def check_segment_for_agent(self, segment, agent):
