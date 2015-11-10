@@ -19,12 +19,13 @@ calico.etcddriver.test.test_driver
 Tests for the etcd driver module.
 """
 import json
+import traceback
 from Queue import Empty
 
-import time
 from StringIO import StringIO
 from unittest import TestCase
 
+import sys
 from mock import Mock, patch, call
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import TimeoutError, HTTPError
@@ -80,10 +81,10 @@ class TestEtcdDriverFV(TestCase):
         # Initial handshake.
         self.start_driver_and_handshake()
         # Check for etcd request and start the response.
-        snap_stream = self.start_snapshot_response()
+        snap_stream, watcher_req = self.start_snapshot_response()
         # Respond to the watcher, this should get merged into the event
         # stream at some point later.
-        self.watcher_etcd.respond_with_value(
+        watcher_req.respond_with_value(
             "/calico/v1/adir/bkey",
             "b",
             mod_index=12,
@@ -92,7 +93,7 @@ class TestEtcdDriverFV(TestCase):
         # Wait until the watcher makes its next request (with revved
         # wait_index) to make sure it has queued its event to the resync
         # thread.
-        self.watcher_etcd.assert_request(
+        watcher_req = self.watcher_etcd.assert_request(
             VERSION_DIR, recursive=True, timeout=90, wait_index=13
         )
         # Write some more data to the resync thread, it should process that
@@ -113,7 +114,7 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_VALUE: "b",
         })
         # Respond to the watcher with another event.
-        self.watcher_etcd.respond_with_value(
+        watcher_req.respond_with_value(
             "/calico/v1/adir2/dkey",
             "d",
             mod_index=13,
@@ -122,7 +123,7 @@ class TestEtcdDriverFV(TestCase):
         # Wait until the watcher makes its next request (with revved
         # wait_index) to make sure it has queued its event to the resync
         # thread.
-        self.watcher_etcd.assert_request(
+        watcher_req = self.watcher_etcd.assert_request(
             VERSION_DIR, recursive=True, timeout=90, wait_index=14
         )
         # Send the resync thread some data that should be ignored due to the
@@ -156,7 +157,7 @@ class TestEtcdDriverFV(TestCase):
         # HWM.
         self.assert_status_message(STATUS_IN_SYNC)
         # Now send a watcher event, which should go straight through.
-        self.send_watcher_event_and_assert_felix_msg(14)
+        self.send_watcher_event_and_assert_felix_msg(14, req=watcher_req)
 
         # Check the contents of the trie.
         keys = set(self.driver._hwms._hwms.keys())
@@ -167,10 +168,9 @@ class TestEtcdDriverFV(TestCase):
                                     u'/calico/v1/adir2/dkey/',
                                     u'/calico/v1/adir/ekey/']))
 
-
     def test_many_events_during_resync(self):
         """
-        Test of the mainline resync-and-merge processing.
+        Test many events during resync
 
         * Does the initial config handshake with Felix.
         * Interleaves the snapshot response with updates via the watcher.
@@ -180,18 +180,18 @@ class TestEtcdDriverFV(TestCase):
         self.start_driver_and_handshake()
 
         # Check for etcd request and start the response.
-        snap_stream = self.start_snapshot_response()
+        snap_stream, watcher_req = self.start_snapshot_response()
 
         # Respond to the watcher, this should get merged into the event
         # stream at some point later.
         for ii in xrange(200):
-            self.watcher_etcd.respond_with_value(
+            watcher_req.respond_with_value(
                 "/calico/v1/adir/bkey",
                 "watch",
                 mod_index=11 + ii,
                 action="set"
             )
-            self.watcher_etcd.assert_request(
+            watcher_req = self.watcher_etcd.assert_request(
                 VERSION_DIR, recursive=True, timeout=90, wait_index=12 + ii
             )
         snap_stream.write('''
@@ -225,39 +225,99 @@ class TestEtcdDriverFV(TestCase):
     def test_felix_triggers_resync(self):
         self._run_initial_resync()
 
-        # Send a resync request from Felix.
-        self.send_resync_and_wait_for_flag()
-
         # Wait for the watcher to make its request.
-        self.watcher_etcd.assert_request(
+        watcher_req = self.watcher_etcd.assert_request(
             VERSION_DIR, recursive=True, timeout=90, wait_index=15
         )
-        # Then for determinism, force it to die before it polls again.
-        self.driver._watcher_stop_event.set()
-        # The event from the watcher triggers the resync.
-        self.send_watcher_event_and_assert_felix_msg(15)
 
-        # Back into wait-for-ready mode.
+        # Take a copy of the watcher stop event so that we don't race to read
+        # it.
+        watcher_stop_event = self.driver._watcher_stop_event
+
+        # Send a resync request from Felix.
+        self.msg_reader.send_msg(MSG_TYPE_RESYNC, {})
+
+        # Respond to the watcher, this should trigger the resync.
+        watcher_req.respond_with_value(
+            "/calico/v1/adir/ekey",
+            "e",
+            mod_index=15,
+            action="set"
+        )
+
+        # Resync thread should tell the watcher to die.
+        watcher_stop_event.wait(timeout=1)
+
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/ekey",
+            MSG_KEY_VALUE: "e",
+        })
+        self.assert_flush_to_felix()
         self.assert_status_message(STATUS_WAIT_FOR_READY)
+
         # Re-do the config handshake.
         self.do_handshake()
 
-        # Check for etcd request and start the response.
-        snap_stream = self.start_snapshot_response(etcd_index=100)
+        # We should get a request to load the full snapshot.
+        watcher_req = self.resync_etcd.assert_request(
+            VERSION_DIR, recursive=True, timeout=120, preload_content=False
+        )
+        snap_stream = watcher_req.respond_with_stream(
+            etcd_index=100
+        )
+
+        # There could be more than one watcher now so we need to be careful
+        # to respond to the right one...
+        watcher_req = self.watcher_etcd.get_next_request()
+        if watcher_req.kwargs["wait_index"] == 16:
+            # Old watcher thread
+            watcher_req.respond_with_value("/calico/v1/adir/ekey", "e",
+                                           mod_index=99)
+            watcher_req = self.watcher_etcd.get_next_request()
+        # watcher_req should be from the new watcher thread
+        self.assertEqual(watcher_req.kwargs["wait_index"], 101)
+
+        # Start sending the snapshot response:
+        snap_stream.write('''{
+            "action": "get",
+            "node": {
+                "key": "/calico/v1",
+                "dir": true,
+                "nodes": [
+                {
+                    "key": "/calico/v1/adir",
+                    "dir": true,
+                    "nodes": [
+                    {
+                        "key": "/calico/v1/adir/akey",
+                        "value": "akey's value",
+                        "modifiedIndex": 98
+                    },
+        ''')
+        # Should generate a message to felix even though it's only seen part
+        # of the response...
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/akey",
+            MSG_KEY_VALUE: "akey's value",
+        })
+
         # Respond to the watcher, this should get merged into the event
         # stream at some point later.
-        self.watcher_etcd.respond_with_value(
+        watcher_req.respond_with_value(
             "/calico/v1/adir/bkey",
             "b",
             mod_index=102,
             action="set"
         )
+
         # Wait until the watcher makes its next request (with revved
         # wait_index) to make sure it has queued its event to the resync
-        # thread.
-        self.watcher_etcd.assert_request(
-            VERSION_DIR, recursive=True, timeout=90, wait_index=103
-        )
+        # thread.  Skip any events fro the old watcher.
+        watcher_req = self.watcher_etcd.get_next_request()
+        if watcher_req.kwargs["wait_index"] in (16, 100):
+            watcher_req = self.watcher_etcd.get_next_request()
+        self.assertFalse(watcher_req.kwargs["wait_index"] in (16, 100))
+
         # Write some data for an unchanged key to the resync thread, which
         # should be ignored.
         snap_stream.write('''
@@ -299,28 +359,18 @@ class TestEtcdDriverFV(TestCase):
         # HWM.
         self.assert_status_message(STATUS_IN_SYNC)
         # Now send a watcher event, which should go straight through.
-        self.send_watcher_event_and_assert_felix_msg(104)
-
-    def send_resync_and_wait_for_flag(self):
-        # Felix sends a resync message.
-        self.msg_reader.send_msg(MSG_TYPE_RESYNC, {})
-
-        # For determinism, wait for the message to be processed.
-        for _ in xrange(100):
-            if self.driver._resync_requested:
-                break
-            time.sleep(0.01)
-        else:
-            self.fail("Resync flag never got set.")
+        self.send_watcher_event_and_assert_felix_msg(104, req=watcher_req)
 
     def test_directory_deletion(self):
         self._run_initial_resync()
         # For coverage: Nothing happens for a while, poll times out.
-        self.watcher_etcd.respond_with_exception(
+        watcher_req = self.watcher_etcd.get_next_request()
+        watcher_req.respond_with_exception(
             driver.ReadTimeoutError(Mock(), "", "")
         )
         # For coverage: Then a set to a dir, which should be ignored.
-        self.watcher_etcd.respond_with_data(json.dumps({
+        watcher_req = self.watcher_etcd.get_next_request()
+        watcher_req.respond_with_data(json.dumps({
             "action": "create",
             "node": {
                 "key": "/calico/v1/foo",
@@ -328,7 +378,8 @@ class TestEtcdDriverFV(TestCase):
             }
         }), 100, 200)
         # Then a whole directory is deleted.
-        self.watcher_etcd.respond_with_value(
+        watcher_req = self.watcher_etcd.get_next_request()
+        watcher_req.respond_with_value(
             "/calico/v1/adir",
             dir=True,
             value=None,
@@ -364,7 +415,7 @@ class TestEtcdDriverFV(TestCase):
     def _run_initial_resync(self):
         try:
             # Start by going through the first resync.
-            self.test_mainline_resync()
+            self.test_mainline_resync()  # Returns open watcher req.
         except AssertionError:
             _log.exception("Mainline resync test failed, aborting test %s",
                            self.id())
@@ -374,7 +425,8 @@ class TestEtcdDriverFV(TestCase):
     def test_root_directory_deletion(self):
         self._run_initial_resync()
         # Delete the whole /calico/v1 dir.
-        self.watcher_etcd.respond_with_data(json.dumps({
+        watcher_req = self.watcher_etcd.get_next_request()
+        watcher_req.respond_with_data(json.dumps({
             "action": "delete",
             "node": {
                 "key": "/calico/v1/",
@@ -388,13 +440,16 @@ class TestEtcdDriverFV(TestCase):
     def test_garbage_watcher_response(self):
         self._run_initial_resync()
         # Delete the whole /calico/v1 dir.
-        self.watcher_etcd.respond_with_data("{foobar", 100, 200)
+        watcher_req = self.watcher_etcd.get_next_request()
+        watcher_req.respond_with_data("{foobar", 100, 200)
 
         # Should trigger a resync.
         self.assert_status_message(STATUS_WAIT_FOR_READY)
 
-    def send_watcher_event_and_assert_felix_msg(self, etcd_index):
-        self.watcher_etcd.respond_with_value(
+    def send_watcher_event_and_assert_felix_msg(self, etcd_index, req=None):
+        if req is None:
+            req = self.watcher_etcd.get_next_request()
+        req.respond_with_value(
             "/calico/v1/adir/ekey",
             "e",
             mod_index=etcd_index,
@@ -434,7 +489,7 @@ class TestEtcdDriverFV(TestCase):
         # Initial handshake.
         self.start_driver_and_handshake()
         # Start streaming some data.
-        snap_stream = self.start_snapshot_response()
+        snap_stream, watcher_req = self.start_snapshot_response()
         # But then the read times out...
         snap_stream.write(TimeoutError())
         # Triggering a restart of the resync loop.
@@ -444,8 +499,8 @@ class TestEtcdDriverFV(TestCase):
     def test_bad_ready_key_retry(self, m_sleep):
         self.start_driver_and_init()
         # Respond to etcd request with a bad response
-        self.resync_etcd.assert_request(READY_KEY)
-        self.resync_etcd.respond_with_data("foobar", 123, 500)
+        req = self.resync_etcd.assert_request(READY_KEY)
+        req.respond_with_data("foobar", 123, 500)
         # Then it should retry.
         self.resync_etcd.assert_request(READY_KEY)
         m_sleep.assert_called_once_with(1)
@@ -464,18 +519,19 @@ class TestEtcdDriverFV(TestCase):
 
     def do_handshake(self):
         # Respond to etcd request with ready == true.
-        self.resync_etcd.assert_request(READY_KEY)
-        self.resync_etcd.respond_with_value(READY_KEY, "true", mod_index=10)
+        req = self.resync_etcd.assert_request(READY_KEY)
+        req.respond_with_value(READY_KEY, "true", mod_index=10)
         # Then etcd should get the global config request.
-        self.resync_etcd.assert_request(CONFIG_DIR, recursive=True)
-        self.resync_etcd.respond_with_dir(CONFIG_DIR, {
+        req = self.resync_etcd.assert_request(CONFIG_DIR, recursive=True)
+        req.respond_with_dir(CONFIG_DIR, {
             CONFIG_DIR + "/InterfacePrefix": "tap",
             CONFIG_DIR + "/Foo": None,  # Directory
         })
         # Followed by the per-host one...
-        self.resync_etcd.assert_request("/calico/v1/host/thehostname/config",
-                                        recursive=True)
-        self.resync_etcd.respond_with_data('{"errorCode": 100}',
+        req = self.resync_etcd.assert_request(
+            "/calico/v1/host/thehostname/config", recursive=True
+        )
+        req.respond_with_data('{"errorCode": 100}',
                                            10, 404)
         # Then the driver should send the config to Felix.
         self.assert_msg_to_felix(
@@ -501,16 +557,16 @@ class TestEtcdDriverFV(TestCase):
 
     def start_snapshot_response(self, etcd_index=10):
         # We should get a request to load the full snapshot.
-        self.resync_etcd.assert_request(
+        req = self.resync_etcd.assert_request(
             VERSION_DIR, recursive=True, timeout=120, preload_content=False
         )
-        snap_stream = self.resync_etcd.respond_with_stream(
+        snap_stream = req.respond_with_stream(
             etcd_index=etcd_index
         )
         # And then the headers should trigger a request from the watcher
         # including the etcd_index we sent even though we haven't sent a
         # response body to the resync thread.
-        self.watcher_etcd.assert_request(
+        req = self.watcher_etcd.assert_request(
             VERSION_DIR, recursive=True, timeout=90, wait_index=etcd_index+1
         )
         # Start sending the snapshot response:
@@ -536,7 +592,7 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_KEY: "/calico/v1/adir/akey",
             MSG_KEY_VALUE: "akey's value",
         })
-        return snap_stream
+        return snap_stream, req
 
     def assert_status_message(self, status):
         _log.info("Expecting %s status from driver...", status)
@@ -557,7 +613,7 @@ class TestEtcdDriverFV(TestCase):
 
     def assert_msg_to_felix(self, msg_type, fields=None):
         try:
-            mt, fs = self.msg_writer.queue.get(timeout=2)
+            mt, fs = self.msg_writer.next_msg()
         except Empty:
             self.fail("Expected %s message to felix but no message was sent" %
                       msg_type)
@@ -609,10 +665,12 @@ class TestEtcdDriverFV(TestCase):
             self.msg_reader.send_timeout()
 
             # SystemExit kills (only) the thread silently.
-            self.resync_etcd.respond_with_exception(SystemExit())
-            self.watcher_etcd.respond_with_exception(SystemExit())
+            self.resync_etcd.stop()
+            self.watcher_etcd.stop()
             # Wait for it to stop.
-            self.assertTrue(self.driver.join(0.1), "Driver failed to stop")
+            if not self.driver.join(1):
+                dump_all_thread_stacks()
+                self.fail("Driver failed to stop")
         finally:
             # Now the driver is stopped, it's safe to remove our patch of
             # complete_logging()
@@ -827,3 +885,16 @@ class TestDriver(TestCase):
         self.driver._process_events_only()
 
 
+def dump_all_thread_stacks():
+    print >> sys.stderr, "\n*** STACKTRACE - START ***\n"
+    code = []
+    for threadId, stack in sys._current_frames().items():
+        code.append("\n# ThreadID: %s" % threadId)
+        for filename, lineno, name, line in traceback.extract_stack(stack):
+            code.append('File: "%s", line %d, in %s' % (filename,
+                                                        lineno, name))
+            if line:
+                code.append("  %s" % (line.strip()))
+    for line in code:
+        print >> sys.stderr, line
+    print >> sys.stderr, "\n*** STACKTRACE - END ***\n"
