@@ -17,6 +17,8 @@ from unittest import TestCase
 from tests.st.utils.utils import get_ip
 import logging
 
+HOST_IPV6 = get_ip(v6=True)
+
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
 

@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import unittest
 
-from tests.st.test_base import TestBase
+from tests.st.test_base import TestBase, HOST_IPV6
 from tests.st.utils.docker_host import DockerHost
-from tests.st.utils.workload import NET_NONE
-
 
 class TestNoOrchestratorSingleHost(TestBase):
     def test_single_host_ipv4(self):
@@ -52,6 +51,7 @@ class TestNoOrchestratorSingleHost(TestBase):
             host.calicoctl("node stop")
             host.calicoctl("node remove")
 
+    @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_single_host_ipv6(self):
         """
         Test mainline functionality without using an orchestrator plugin

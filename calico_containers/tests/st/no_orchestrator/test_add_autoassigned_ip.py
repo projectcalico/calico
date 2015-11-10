@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import unittest
 
-from tests.st.test_base import TestBase
+from tests.st.test_base import TestBase, HOST_IPV6
 from tests.st.utils.docker_host import DockerHost
 
 """
@@ -64,6 +65,7 @@ class TestAutoAssignIp(TestBase):
             workloads[0].assert_can_ping("192.168.0.1", retries=3)
             workloads[1].assert_can_ping("192.168.0.0", retries=3)
 
+    @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_add_autoassigned_ipv6(self):
         """
         Test "calicoctl container add <container> ipv6"
@@ -99,6 +101,7 @@ class TestAutoAssignIp(TestBase):
             workloads[0].assert_can_ping("192.168.0.1", retries=3)
             workloads[1].assert_can_ping("192.168.0.0", retries=3)
 
+    @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_add_autoassigned_pool_ipv6(self):
         """
         Test "calicoctl container add <container> <IPv6 CIDR>"
