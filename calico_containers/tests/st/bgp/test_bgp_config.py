@@ -77,7 +77,7 @@ class TestBGP(TestBase):
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).
             host1.start_calico_node()
-            host2.start_calico_node(as_num=LARGE_AS_NUM)
+            host2.start_calico_node("--as=%s" % LARGE_AS_NUM)
 
             # Create a profile to associate with both workloads
             host1.calicoctl("profile add TEST_GROUP")
