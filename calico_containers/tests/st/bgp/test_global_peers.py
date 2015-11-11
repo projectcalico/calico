@@ -53,8 +53,8 @@ class TestGlobalPeers(TestBase):
              DockerHost('host2', start_calico=False) as host2:
 
             # Start both hosts using specific AS numbers.
-            host1.start_calico_node(as_num=LARGE_AS_NUM)
-            host2.start_calico_node(as_num=LARGE_AS_NUM)
+            host1.start_calico_node("--as=%s" % LARGE_AS_NUM)
+            host2.start_calico_node("--as=%s" % LARGE_AS_NUM)
 
             # Create the network on host1, but it should be usable from all
             # hosts.

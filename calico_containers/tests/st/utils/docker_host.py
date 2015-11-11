@@ -108,7 +108,7 @@ class DockerHost(object):
         calicoctl = "export %s; %s" % (etcd_auth, calicoctl)
         return self.execute(calicoctl + " " + command)
 
-    def start_calico_node(self, as_num=None):
+    def start_calico_node(self, options=""):
         """
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
@@ -123,8 +123,8 @@ class DockerHost(object):
         except AttributeError:
             # No ip6 configured
             pass
-        if as_num:
-            args.append('--as=%s' % as_num)
+
+        args.append(options)
 
         cmd = ' '.join(args)
         self.calicoctl(cmd)

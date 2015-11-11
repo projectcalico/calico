@@ -79,12 +79,16 @@ class Workload(object):
         The function raises a CommandExecError exception if the ping fails,
         or returns the output of the ping.
         """
-        version = IPAddress(ip).version
-        assert version in [4, 6]
-        if version == 4:
-            ping = "ping"
-        else:  # if version == 6:
-            ping = "ping6"
+        # Default to "ping"
+        ping = "ping"
+
+        try:
+            version = IPAddress(ip).version
+            assert version in [4, 6]
+            if version == 6:
+                ping = "ping6"
+        except BaseException:
+            pass
 
         args = [
             ping,
