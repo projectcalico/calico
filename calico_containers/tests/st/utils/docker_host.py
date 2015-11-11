@@ -21,6 +21,7 @@ from workload import Workload
 from network import DockerNetwork
 
 logger = logging.getLogger(__name__)
+CHECKOUT_DIR = os.getenv("HOST_CHECKOUT_DIR", os.getcwd())
 
 class DockerHost(object):
     """
@@ -29,8 +30,8 @@ class DockerHost(object):
     """
     def __init__(self, name, start_calico=True, dind=True,
                  additional_docker_options="",
-                 post_docker_commands=["docker load --input /code/calico_containers/calico-node.tar",
-                                       "docker load --input /code/calico_containers/busybox.tar"]):
+                 post_docker_commands=["docker load -i /code/calico_containers/calico-node.tar",
+                                       "docker load -i /code/calico_containers/busybox.tar"]):
         self.name = name
         self.dind = dind
         self.workloads = set()
@@ -45,7 +46,7 @@ class DockerHost(object):
                         "-v %s/docker:/usr/local/bin/docker "
                         "-v %s:/code --name %s "
                         "calico/dind:latest docker daemon --storage-driver=aufs %s" %
-                    (os.getcwd(), os.getcwd(), self.name, additional_docker_options))
+                    (CHECKOUT_DIR, CHECKOUT_DIR, self.name, additional_docker_options))
 
             self.ip = log_and_run("docker inspect --format "
                               "'{{.NetworkSettings.Networks.bridge.IPAddress}}' %s" % self.name)

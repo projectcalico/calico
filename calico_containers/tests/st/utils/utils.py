@@ -45,7 +45,7 @@ def get_ip(v6=False):
             s.connect((remote_ip, 0))
             ip = s.getsockname()[0]
             s.close()
-        except Exception:
+        except BaseException:
             # Failed to connect, just try to get the address from the interfaces
             version = 6 if v6 else 4
             ips = get_host_ips(version)
