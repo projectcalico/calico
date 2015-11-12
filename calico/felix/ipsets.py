@@ -551,10 +551,11 @@ class IpsetActor(Actor):
         """
         Replace the members of this ipset with the supplied set.
 
-        :param set[str]|list[str] members: IP address strings. Must be a copy
-        (as this routine keeps a link to it).
+        :param set[str]|frozenset[str] members: IP address strings. Must be a
+        copy (as this routine keeps a link to it).
         """
         _log.info("Replacing members of ipset %s", self.name)
+        assert isinstance(members, (set, frozenset))
         self.members = members
         self._force_reprogram |= force_reprogram
 
@@ -670,6 +671,8 @@ class Ipset(object):
         """
         Update the ipset with changes to members. The set must exist.
         """
+        assert isinstance(old_members, (set, frozenset))
+        assert isinstance(new_members, (set, frozenset))
         try:
             input_lines = ["del %s %s" % (self.set_name, m)
                            for m in (old_members - new_members)]
@@ -695,6 +698,7 @@ class Ipset(object):
         # so we build up the complete set of members in a temporary ipset,
         # swap it into place and then delete the old ipset.
         _log.info("Rewriting ipset %s with %d members", self, len(members))
+        assert isinstance(members, (set, frozenset))
         input_lines = [
             # Ensure both the main set and the temporary set exist.
             self._create_cmd(self.set_name),

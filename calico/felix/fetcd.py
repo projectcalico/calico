@@ -506,8 +506,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             # FIXME Support IP-in-IP for IPv6.
             _log.info("Sending (%d) host IPs to ipset.",
                       len(self.ipv4_by_hostname))
-            self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                             async=True)
+            self._update_hosts_ipset()
 
     def clean_up_endpoint_statuses(self, our_endpoints_ids):
         """
@@ -642,8 +641,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             _log.warning("Invalid IP for hostname %s: %s, treating as "
                          "deletion", hostname, response.value)
             self.ipv4_by_hostname.pop(hostname, None)
-        self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                         async=True)
+        self._update_hosts_ipset()
 
     def on_host_ip_delete(self, response, hostname):
         if not self._config.IP_IN_IP_ENABLED:
@@ -651,8 +649,16 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
                        response.key)
             return
         if self.ipv4_by_hostname.pop(hostname, None):
-            self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                             async=True)
+            self._update_hosts_ipset()
+
+    def _update_hosts_ipset(self):
+        """
+        Update the hosts ipset from the ipv4_by_hostname cache.
+        """
+        self.hosts_ipset.replace_members(
+            frozenset(self.ipv4_by_hostname.values()),
+            async=True
+        )
 
     def on_ipam_v4_pool_set(self, response, pool_id):
         pool = parse_ipam_pool(pool_id, response.value)

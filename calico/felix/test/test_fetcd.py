@@ -441,7 +441,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            ["10.0.0.1"],
+            frozenset(["10.0.0.1"]),
             async=True,
         )
 
@@ -467,7 +467,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="delete")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            [],
+            frozenset([]),
             async=True,
         )
 
@@ -481,7 +481,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="gibberish")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            [],
+            frozenset([]),
             async=True,
         )
 
@@ -495,7 +495,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo",
                       action="delete")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            [],
+            frozenset([]),
             async=True,
         )
 
