@@ -36,7 +36,7 @@ import logging
 from Queue import Queue, Empty
 import socket
 
-from ijson import IncompleteJSONError, JSONError
+from ijson import JSONError
 
 try:
     # simplejson is a faster drop-in replacement.
@@ -97,6 +97,7 @@ class EtcdDriver(object):
         self._resync_thread.daemon = True
         self._watcher_thread = None  # Created on demand
         self._watcher_stop_event = None
+        self._watcher_start_index = None
 
         # High-water mark cache.  Owned by resync thread.
         self._hwms = HighWaterTracker()
@@ -222,10 +223,6 @@ class EtcdDriver(object):
 
         while not self._stop_event.is_set():
             loop_start = monotonic_time()
-            # Only has an effect if it's running.  Note: stopping the watcher
-            # is async (and may take a long time for its connection to time
-            # out).
-            self._stop_watcher()
             try:
                 # Start with a fresh HTTP pool just in case it got into a bad
                 # state.
@@ -240,7 +237,7 @@ class EtcdDriver(object):
                 self._send_status(STATUS_RESYNC)
                 resp, snapshot_index = self._start_snapshot_request()
                 # Before reading from the snapshot, start the watcher thread.
-                self._start_watcher(snapshot_index)
+                self._ensure_watcher_running(snapshot_index)
                 # Incrementally process the snapshot, merging in events from
                 # the queue.
                 self._process_snapshot_and_events(resp, snapshot_index)
@@ -253,13 +250,22 @@ class EtcdDriver(object):
                 self.stop()
             except WatcherDied:
                 _log.warning("Watcher died; resyncing.")
+                self._stop_watcher()  # Clean up the event
             except (urllib3.exceptions.HTTPError,
                     HTTPException,
                     socket.error) as e:
                 _log.error("Request to etcd failed: %r; resyncing.", e)
+                self._stop_watcher()
                 if monotonic_time() - loop_start < 1:
                     _log.warning("May be tight looping, sleeping...")
                     time.sleep(1)
+            except ResyncRequested:
+                _log.info("Resync requested, looping to start a new resync. "
+                          "Leaving watcher running if possible.")
+            except ResyncRequired:
+                _log.warn("Detected inconsistency requiring a full resync, "
+                          "stopping watcher")
+                self._stop_watcher()
             except DriverShutdown:
                 _log.info("Driver shut down.")
                 return
@@ -540,12 +546,9 @@ class EtcdDriver(object):
         while not self._stop_event.is_set():
             # To make sure we always make progress, only trigger a new resync
             # if we're not in the middle of one.
-            if (not resync_in_progress and
-                    self._resync_requested and
-                    self._watcher_stop_event):
+            if not resync_in_progress and self._resync_requested:
                 _log.info("Resync requested, triggering one.")
-                self._watcher_stop_event.set()
-                raise WatcherDied()
+                raise ResyncRequested()
             try:
                 event = self._watcher_queue.get(timeout=1)
             except Empty:
@@ -571,12 +574,21 @@ class EtcdDriver(object):
             for child_key in deleted_keys:
                 self._on_key_updated(child_key, None)
 
-    def _start_watcher(self, snapshot_index):
+    def _ensure_watcher_running(self, snapshot_index):
         """
-        Starts the watcher thread, creating its queue and event in the process.
+        Starts a new watcher from the given snapshot index, if needed.
         """
-        # Defensive: stop the watcher if it's already running.
-        self._stop_watcher()
+        if (self._watcher_thread is not None and
+                self._watcher_thread.is_alive() and
+                self._watcher_stop_event is not None and
+                not self._watcher_stop_event.is_set() and
+                self._watcher_queue is not None and
+                self._watcher_start_index <= snapshot_index):
+            _log.info("Watcher is still alive and started from a valid index, "
+                      "leaving it running")
+            return
+
+        self._watcher_start_index = snapshot_index
         self._watcher_queue = Queue(maxsize=WATCHER_QUEUE_SIZE)
         self._watcher_stop_event = Event()
         # Note: we pass the queue and event in as arguments so that the thread
@@ -665,7 +677,7 @@ class EtcdDriver(object):
         _log.info("Watcher thread started")
         http = None
         try:
-            while not stop_event.is_set():
+            while not self._stop_event.is_set() and not stop_event.is_set():
                 if not http:
                     _log.info("No HTTP pool, creating one...")
                     http = self.get_etcd_connection()
@@ -818,4 +830,8 @@ class DriverShutdown(Exception):
 
 
 class ResyncRequired(Exception):
+    pass
+
+
+class ResyncRequested(Exception):
     pass

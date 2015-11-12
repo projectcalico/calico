@@ -19,6 +19,7 @@ calico.etcddriver.test.test_driver
 Tests for the etcd driver module.
 """
 import json
+import threading
 import traceback
 from Queue import Empty
 
@@ -168,6 +169,23 @@ class TestEtcdDriverFV(TestCase):
                                     u'/calico/v1/adir2/dkey/',
                                     u'/calico/v1/adir/ekey/']))
 
+    def test_bad_data_triggers_resync(self):
+        # Initial handshake.
+        self.start_driver_and_handshake()
+        # Check for etcd request and start the response.
+        snap_stream, watcher_req = self.start_snapshot_response()
+        # Write some garbage to the stream, should trigger a resync.
+        watcher_stop_event = self.driver._watcher_stop_event
+        snap_stream.write('''
+                     {
+                         "key
+        ''')
+        snap_stream.write("")
+
+        watcher_stop_event.wait(1)
+        self.assertTrue(watcher_stop_event.is_set())
+        self.assert_status_message(STATUS_WAIT_FOR_READY)
+
     def test_many_events_during_resync(self):
         """
         Test many events during resync
@@ -230,10 +248,6 @@ class TestEtcdDriverFV(TestCase):
             VERSION_DIR, recursive=True, timeout=90, wait_index=15
         )
 
-        # Take a copy of the watcher stop event so that we don't race to read
-        # it.
-        watcher_stop_event = self.driver._watcher_stop_event
-
         # Send a resync request from Felix.
         self.msg_reader.send_msg(MSG_TYPE_RESYNC, {})
 
@@ -244,15 +258,12 @@ class TestEtcdDriverFV(TestCase):
             mod_index=15,
             action="set"
         )
-
-        # Resync thread should tell the watcher to die.
-        watcher_stop_event.wait(timeout=1)
-
         self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
             MSG_KEY_KEY: "/calico/v1/adir/ekey",
             MSG_KEY_VALUE: "e",
         })
         self.assert_flush_to_felix()
+
         self.assert_status_message(STATUS_WAIT_FOR_READY)
 
         # Re-do the config handshake.
@@ -266,16 +277,19 @@ class TestEtcdDriverFV(TestCase):
             etcd_index=100
         )
 
-        # There could be more than one watcher now so we need to be careful
-        # to respond to the right one...
-        watcher_req = self.watcher_etcd.get_next_request()
-        if watcher_req.kwargs["wait_index"] == 16:
-            # Old watcher thread
-            watcher_req.respond_with_value("/calico/v1/adir/ekey", "e",
-                                           mod_index=99)
-            watcher_req = self.watcher_etcd.get_next_request()
-        # watcher_req should be from the new watcher thread
-        self.assertEqual(watcher_req.kwargs["wait_index"], 101)
+        watcher_req = self.watcher_etcd.assert_request(VERSION_DIR,
+                                                       wait_index=16,
+                                                       recursive=True,
+                                                       timeout=90)
+        watcher_req.respond_with_value("/calico/v1/adir/ekey", "e",
+                                       mod_index=50, action="set")
+
+        # Wait for next watcher event to make sure it has queued its request to
+        # the resync thread.
+        watcher_req = self.watcher_etcd.assert_request(VERSION_DIR,
+                                                       wait_index=51,
+                                                       recursive=True,
+                                                       timeout=90)
 
         # Start sending the snapshot response:
         snap_stream.write('''{
@@ -300,6 +314,10 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_KEY: "/calico/v1/adir/akey",
             MSG_KEY_VALUE: "akey's value",
         })
+        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
+            MSG_KEY_KEY: "/calico/v1/adir/ekey",
+            MSG_KEY_VALUE: "e",
+        })
 
         # Respond to the watcher, this should get merged into the event
         # stream at some point later.
@@ -313,10 +331,10 @@ class TestEtcdDriverFV(TestCase):
         # Wait until the watcher makes its next request (with revved
         # wait_index) to make sure it has queued its event to the resync
         # thread.  Skip any events fro the old watcher.
-        watcher_req = self.watcher_etcd.get_next_request()
-        if watcher_req.kwargs["wait_index"] in (16, 100):
-            watcher_req = self.watcher_etcd.get_next_request()
-        self.assertFalse(watcher_req.kwargs["wait_index"] in (16, 100))
+        watcher_req = self.watcher_etcd.assert_request(VERSION_DIR,
+                                                       wait_index=103,
+                                                       recursive=True,
+                                                       timeout=90)
 
         # Write some data for an unchanged key to the resync thread, which
         # should be ignored.
@@ -887,6 +905,13 @@ class TestDriver(TestCase):
     def test_process_events_stopped(self):
         self.driver._stop_event.set()
         self.assertRaises(DriverShutdown, self.driver._process_events_only)
+
+    def test_watch_etcd_already_stopped(self):
+        stop_event = threading.Event()
+        stop_event.set()
+        m_queue = Mock()
+        self.driver.watch_etcd(10, m_queue, stop_event)
+        self.assertEqual(m_queue.put.mock_calls, [call(None)])
 
 
 def dump_all_thread_stacks():
