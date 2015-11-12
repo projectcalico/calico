@@ -92,13 +92,14 @@ is outside the scope of this article.  If you want to work on Docker
 integration please see the
 [calico-docker](https://github.com/projectcalico/calico-docker) repo.
 
-To run the unit tests, you'll also need to type:
+If you want to run the unit tests, first install dependencies:
 
+    apt-get install git libffi-dev python-dev python-pip
     pip install tox
 
 Then, still at the root of the calico directory, run:
 
-    tox
+    ./run-unit-test.sh -r
 
 Tox runs the tests under Python 2.6, 2.7 and PyPy, which you will need to [install separately](http://pypy.readthedocs.org/en/latest/install.html).
 
