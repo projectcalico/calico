@@ -16,7 +16,9 @@ NEUTRON_DIR=/var/log/neutron
 NOVA_DIR=/var/log/nova
 date=`date +"%F_%H-%M-%S"`
 system=`hostname`
-diags_dir=./calico-diags_"$system"_"$date"
+diags_file=calico-diags_"$system"_"$date"
+diags_dir=/tmp/"$diags_file"
+current_dir=`pwd`
 echo "  creating dir $diags_dir"
 mkdir "$diags_dir" || exit 2
 pushd "$diags_dir" > /dev/null || exit 2
@@ -90,12 +92,12 @@ cp /var/log/messages* logs >/dev/null 2>&1
 
 echo "  compressing..."
 cd ..
-tar -Jcf "$diags_dir.tar.xz" "$date"
+tar -Jcf "$current_dir/$diags_file.tar.xz" "$date"
 
 popd > /dev/null
 
-echo "Diags saved to \"$diags_dir\" and compressed to \"$diags_dir.tar.xz\""
+echo "Diags saved to \"$diags_dir\" and compressed to \"./$diags_file.tar.xz\""
 echo "Please run this script on all nodes involved in your issue (including any controllers)."
 echo "We've tried to strip passwords from your nova and neutron configuration, but please review the diagnostics yourself before uploading."
 echo "Once you've collected and reviewed the diagnostics, please raise a github issue detailing the symptoms you encountered, upload the diagnostics and link them from the issue."
-echo "If you don't have anywhere to upload diagnostics to, you could use \`curl --upload-file $diags_dir.tar.xz https://transfer.sh/controller_diags.tar.xz\`."
+echo "If you don't have anywhere to upload diagnostics to, you could use \`curl --upload-file ./$diags_file.tar.xz https://transfer.sh/controller_diags.tar.xz\`."
