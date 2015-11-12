@@ -71,6 +71,12 @@ from calico.etcddriver.hwm import HighWaterTracker
 _log = logging.getLogger(__name__)
 
 
+# Bound on the size of the queue between watcher and resync thread.  In
+# general, Felix and the resync thread process much more quickly than the
+# watcher can read from etcd so this is defensive.
+WATCHER_QUEUE_SIZE = 20000
+
+
 class EtcdDriver(object):
     def __init__(self, felix_sck):
         # Wrap the socket with our protocol reader/writer objects.
@@ -571,7 +577,7 @@ class EtcdDriver(object):
         """
         # Defensive: stop the watcher if it's already running.
         self._stop_watcher()
-        self._watcher_queue = Queue()
+        self._watcher_queue = Queue(maxsize=WATCHER_QUEUE_SIZE)
         self._watcher_stop_event = Event()
         # Note: we pass the queue and event in as arguments so that the thread
         # will always access the current queue and event.  If it used self.xyz
@@ -698,8 +704,10 @@ class EtcdDriver(object):
                             if key.rstrip("/") in (VERSION_DIR, ROOT_DIR):
                                 # Special case: if the whole keyspace is
                                 # deleted, that implies the ready flag is gone
-                                # too; resync rather than generating deletes
-                                # for every key.
+                                # too.  Break out of the loop to trigger a
+                                # resync.  This avoids queuing up a bunch of
+                                # events that would be discarded by the
+                                # resync thread.
                                 _log.warning("Whole %s deleted, resyncing",
                                              VERSION_DIR)
                                 break

@@ -394,9 +394,10 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             raise RuntimeError("Unexpected message %s" % msg)
         self.msgs_processed += 1
         if self.msgs_processed % MAX_EVENTS_BEFORE_YIELD == 0:
-            # Yield to ensure that other actors make progress.
-            # Sleep must be non-zero to work around gevent
-            # issue where we could be immediately rescheduled.
+            # Yield to ensure that other actors make progress.  (gevent only
+            # yields for us if the socket would block.)  The sleep must be
+            # non-zero to work around gevent issue where we could be
+            # immediately rescheduled.
             gevent.sleep(0.000001)
 
     def _on_update_from_driver(self, msg):
