@@ -138,10 +138,14 @@ class MessageReader(object):
         Generator: generates 0 or more tuples containing message type and
         message body (as a dict).
 
+        May generate 0 events in certain conditions even if there are
+        events available.  (If the socket returns EAGAIN, for example.)
+
         :param timeout: Maximum time to block waiting on the socket before
                giving up.  No exception is raised upon timeout but 0 events
                are generated.
         :raises SocketClosed if the socket is closed.
+        :raises socket.error if an unexpected socket error occurs.
         """
         if timeout is not None:
             read_ready, _, _ = select.select([self._sck], [], [], timeout)

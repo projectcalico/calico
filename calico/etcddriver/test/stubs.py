@@ -235,7 +235,8 @@ class StubRequest(object):
         return self.pipe_file
 
     def get_response(self):
-        if self.response_available.wait(30):
+        self.response_available.wait(timeout=30)  # returns None in Python 2.6
+        if self.response_available.is_set():
             return self.response
         else:
             raise AssertionError("No response")

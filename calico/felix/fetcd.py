@@ -239,7 +239,9 @@ class EtcdAPI(EtcdClientOwner, Actor):
         Starts watching etcd for changes.  Implicitly loads the config
         if it hasn't been loaded yet.
         """
-        self._watcher.load_config.set()
+        assert self._watcher.load_config.is_set(), (
+            "load_config() should be called before start_watch()."
+        )
         self._watcher.splitter = splitter
         self._watcher.begin_polling.set()
 
@@ -271,7 +273,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     """
     Greenlet that communicates with the etcd driver over a socket.
 
-    * Does the initial handshake with the driver, sening it the init
+    * Does the initial handshake with the driver, sending it the init
       message.
     * Receives the pre-loaded config from the driver and uses that
       to do Felix's one-off configuration.
@@ -490,14 +492,14 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         The driver sends us status messages whenever its status changes.
         It moves through these states:
 
-        * wait-for-ready (waiting for the global ready flag to become set)
-        * resync (resyncing with etcd, processing a snapshot and any
-          concurrent events)
-        * in-sync (snapshot processsing complete, now processing only events
-          from etcd)
+        (1) wait-for-ready (waiting for the global ready flag to become set)
+        (2) resync (resyncing with etcd, processing a snapshot and any
+            concurrent events)
+        (3) in-sync (snapshot processsing complete, now processing only events
+            from etcd)
 
-        If it falls out of sync with etcd then it moves back into
-        wait-for-ready state and starts again.
+        If the driver falls out of sync with etcd then it will start again
+        from (1).
 
         If the status is in-sync, triggers the relevant processing.
         """
@@ -789,7 +791,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
                                           self._cleanup_pending):
             # Schedule a timer to stop our rate limiting or retry cleanup.
             timeout = self._config.ENDPOINT_REPORT_DELAY
-            timeout *= 0.9 + (random.random() * 0.2)  # Jitter by +/- 10%.
+            timeout *= (0.9 + (random.random() * 0.2))  # Jitter by +/- 10%.
             gevent.spawn_later(timeout,
                                self._on_timer_pop,
                                async=True)

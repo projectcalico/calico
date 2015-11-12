@@ -697,6 +697,10 @@ class TestDriver(TestCase):
         self.driver._stop_event.set()
         self.assertRaises(DriverShutdown, self.driver._wait_for_config)
 
+    def test_shutdown_before_ready(self):
+        self.driver._stop_event.set()
+        self.assertRaises(DriverShutdown, self.driver._wait_for_ready)
+
     def test_issue_etcd_request_basic_get(self):
         # Initialise the etcd URL.
         self.driver._handle_init({
@@ -882,7 +886,7 @@ class TestDriver(TestCase):
 
     def test_process_events_stopped(self):
         self.driver._stop_event.set()
-        self.driver._process_events_only()
+        self.assertRaises(DriverShutdown, self.driver._process_events_only)
 
 
 def dump_all_thread_stacks():

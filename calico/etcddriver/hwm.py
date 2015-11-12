@@ -30,8 +30,14 @@ import urllib
 
 _log = logging.getLogger(__name__)
 
+# The trie implementation that we use requires us to specify the character set
+# in advance...
+# Symbols that are allowed in our etcd keys.
 TRIE_SYMBOLS = "/_-:."
+# Chars we allow in the trie.  In addition to alphanumerics and our
+# white-listed symbols, we also use % for %-encoding of unexpected symbols.
 TRIE_CHARS = string.ascii_letters + string.digits + TRIE_SYMBOLS + "%"
+# Regex that matches chars that are allowed in the trie.
 TRIE_CHARS_MATCH = re.compile(r'^[%s]+$' % re.escape(TRIE_CHARS))
 
 
@@ -100,7 +106,7 @@ class HighWaterTracker(object):
         self._deletion_hwms = None
         self._latest_deletion = None
 
-    def update_hwm(self, key, hwm):
+    def update_hwm(self, key, new_mod_idx):
         """
         Updates the HWM for a key if the new value is greater than the old.
         If deletion tracking is enabled, resolves deletions so that updates
@@ -110,29 +116,29 @@ class HighWaterTracker(object):
         :return int|NoneType: the old HWM of the key (or the HWM at which it
                 was deleted) or None if it did not previously exist.
         """
-        _log.debug("Updating HWM for %s to %s", key, hwm)
+        _log.debug("Updating HWM for %s to %s", key, new_mod_idx)
         key = encode_key(key)
         if (self._deletion_hwms is not None and
                 # Optimization: avoid expensive lookup if this update comes
                 # after all deletions.
-                hwm < self._latest_deletion):
+                new_mod_idx < self._latest_deletion):
             # We're tracking deletions, check that this key hasn't been
             # deleted.
             del_hwm = self._deletion_hwms.longest_prefix_value(key, None)
-            if hwm < del_hwm:
+            if new_mod_idx < del_hwm:
                 _log.debug("Key %s previously deleted, skipping", key)
                 return del_hwm
         try:
             old_hwm = self._hwms[key]  # Trie doesn't have get().
         except KeyError:
             old_hwm = None
-        if old_hwm < hwm:  # Works for None too.
+        if old_hwm < new_mod_idx:  # Works for None too.
             _log.debug("Key %s HWM updated to %s, previous %s",
-                       key, hwm, old_hwm)
-            self._hwms[key] = hwm
+                       key, new_mod_idx, old_hwm)
+            self._hwms[key] = new_mod_idx
         return old_hwm
 
-    def store_deletion(self, key, hwm):
+    def store_deletion(self, key, deletion_mod_idx):
         """
         Store that a given key (or directory) was deleted at a given HWM.
         :return: List of known keys that were deleted.  This will be the
@@ -140,10 +146,10 @@ class HighWaterTracker(object):
         """
         _log.debug("Key %s deleted", key)
         key = encode_key(key)
-        self._latest_deletion = max(hwm, self._latest_deletion)
+        self._latest_deletion = max(deletion_mod_idx, self._latest_deletion)
         if self._deletion_hwms is not None:
             _log.debug("Tracking deletion in deletions trie")
-            self._deletion_hwms[key] = hwm
+            self._deletion_hwms[key] = deletion_mod_idx
         deleted_keys = []
         for child_key, child_mod in self._hwms.items(key):
             del self._hwms[child_key]
@@ -193,10 +199,15 @@ def encode_key(key):
     here than to blow up.
     """
     if key[-1] != "/":
-        key += "/"
-    key = unicode(urllib.quote(key.encode("utf8"), safe=TRIE_SYMBOLS))
-    assert TRIE_CHARS_MATCH.match(key)
-    return key
+        suffixed_key = key + "/"
+    else:
+        suffixed_key = key
+    encoded_key = unicode(urllib.quote(suffixed_key.encode("utf8"),
+                                       safe=TRIE_SYMBOLS))
+    assert TRIE_CHARS_MATCH.match(encoded_key), (
+        "Key %r encoded to %r contained invalid chars" % (key, encoded_key)
+    )
+    return encoded_key
 
 
 def decode_key(key):

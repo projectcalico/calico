@@ -214,7 +214,7 @@ def main():
 
     try:
         config = Config(options.config_file)
-    except Exception as e:
+    except Exception:
         # Config loading error, and not just invalid parameters (from optparse)
         # as they generate a SystemExit. Attempt to open a log file, ignoring
         # any errors it gets, before we raise the exception.

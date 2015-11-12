@@ -151,19 +151,20 @@ class EtcdDriver(object):
 
     def _read_from_socket(self):
         """
-        Thread: reader thread.  Reads messages from Felix.
-
-        So far, this means reading the init message and then dealing
-        with the exception if Felix dies.
+        Thread: reader thread.  Reads messages from Felix and fans them out.
         """
         try:
             while not self._stop_event.is_set():
                 for msg_type, msg in self._msg_reader.new_messages(timeout=1):
                     if msg_type == MSG_TYPE_INIT:
+                        # Init message, received at start of day.
                         self._handle_init(msg)
                     elif msg_type == MSG_TYPE_CONFIG:
+                        # Config message, expected after we send the raw
+                        # config to Felix.
                         self._handle_config(msg)
                     elif msg_type == MSG_TYPE_RESYNC:
+                        # Request to do a resync.
                         self._handle_resync(msg)
                     else:
                         _log.error("Unexpected message from Felix: %s", msg)
@@ -227,8 +228,7 @@ class EtcdDriver(object):
                 self._send_status(STATUS_WAIT_FOR_READY)
                 self._wait_for_ready()
                 self._preload_config()
-                # Now (on the first run through) wait for Felix to process the
-                # config.
+                # Wait for config if we have not already received it.
                 self._wait_for_config()
                 # Kick off the snapshot request as far as the headers.
                 self._send_status(STATUS_RESYNC)
@@ -252,7 +252,7 @@ class EtcdDriver(object):
                     socket.error) as e:
                 _log.error("Request to etcd failed: %r; resyncing.", e)
                 if monotonic_time() - loop_start < 1:
-                    _log.debug("May be tight looping, sleeping...")
+                    _log.warning("May be tight looping, sleeping...")
                     time.sleep(1)
             except DriverShutdown:
                 _log.info("Driver shut down.")
@@ -268,8 +268,7 @@ class EtcdDriver(object):
     def _wait_for_config(self):
         while not self._config_received.is_set():
             _log.info("Waiting for Felix to process the config...")
-            if self._stop_event.is_set():
-                raise DriverShutdown()
+            self._check_stop_event()
             self._config_received.wait(1)
             _log.info("Felix sent us the config, continuing.")
 
@@ -292,6 +291,12 @@ class EtcdDriver(object):
             else:
                 _log.info("Ready flag set to %s", etcd_resp["node"]["value"])
                 self._hwms.update_hwm(READY_KEY, mod_idx)
+        self._check_stop_event()
+
+    def _check_stop_event(self):
+        if self._stop_event.is_set():
+            _log.info("Told to stop, raising DriverShutdown.")
+            raise DriverShutdown()
 
     def _preload_config(self):
         """
@@ -447,16 +452,29 @@ class EtcdDriver(object):
 
     def _handle_etcd_node(self, snap_mod, snap_key, snap_value,
                           snapshot_index=None):
+        """
+        Callback for use with parse_snapshot.  Called once for each key/value
+        pair that is found.
+
+        Handles the key/value itself and then checks for work from the
+        watcher.
+
+        :param snap_mod: Modified index of the key.
+        :param snap_key: The key itself.
+        :param snap_value: The value attached to the key.
+        :param snapshot_index: Index of the snapshot as a whole.
+        """
         assert snapshot_index is not None
         old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
         if snap_mod > old_hwm:
             # This specific key's HWM is newer than the previous
             # version we've seen, send an update.
             self._on_key_updated(snap_key, snap_value)
-        # After we process an update from the snapshot, process
-        # several updates from the watcher queue (if there are
-        # any).  We limit the number to ensure that we always
-        # finish the snapshot eventually.
+        # After we process an update from the snapshot, process several
+        # updates from the watcher queue (if there are any).  We limit the
+        # number to ensure that we always finish the snapshot eventually.
+        # The limit isn't too sensitive but values much lower than 100 seemed
+        # to starve the watcher in testing.
         for _ in xrange(100):
             if not self._watcher_queue or self._watcher_queue.empty():
                 # Don't block on the watcher if there's nothing to do.
@@ -469,9 +487,7 @@ class EtcdDriver(object):
                 _log.warning("Watcher thread died, continuing "
                              "with snapshot")
                 break
-        if self._stop_event.is_set():
-            _log.error("Stop event set, exiting")
-            raise DriverShutdown()
+        self._check_stop_event()
 
     def _process_events_only(self):
         """
@@ -485,6 +501,7 @@ class EtcdDriver(object):
         while not self._stop_event.is_set():
             self._handle_next_watcher_event(resync_in_progress=False)
             self._msg_writer.flush()
+        self._check_stop_event()
 
     def _scan_for_deletions(self, snapshot_index):
         """
@@ -552,6 +569,8 @@ class EtcdDriver(object):
         """
         Starts the watcher thread, creating its queue and event in the process.
         """
+        # Defensive: stop the watcher if it's already running.
+        self._stop_watcher()
         self._watcher_queue = Queue()
         self._watcher_stop_event = Event()
         # Note: we pass the queue and event in as arguments so that the thread
@@ -590,6 +609,9 @@ class EtcdDriver(object):
                deletion).
         """
         if key == READY_KEY and value != "true":
+            # Special case: the global Ready flag has been unset, trigger a
+            # resync, which will poll the Ready flag until it is set to true
+            # again.
             _log.warning("Ready key no longer set to true, triggering resync.")
             raise ResyncRequired()
         self._msg_writer.send_message(

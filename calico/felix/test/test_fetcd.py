@@ -136,6 +136,7 @@ class TestEtcdAPI(BaseTestCase):
 
     def test_start_watch(self):
         m_splitter = Mock()
+        self.api.load_config(async=True)
         result = self.api.start_watch(m_splitter, async=True)
         self.step_actor(self.api)
         self.m_etcd_watcher.load_config.set.assert_called_once_with()
