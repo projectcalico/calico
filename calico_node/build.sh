@@ -3,7 +3,6 @@ set -e
 set -x
 
 # Ensure the main and testing repros are present. Needed for runit
-#echo "http://dl-3.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
 echo "http://alpine.gliderlabs.com/alpine/edge/testing" >> /etc/apk/repositories
 
 # These packages make it into the final image.

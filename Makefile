@@ -1,9 +1,11 @@
-.PHONEY: all binary test ut ut-circle st clean setup-env run-etcd install-completion fast-st
+.PHONEY: all binary node test ut ut-circle st clean run-etcd create-dind help
 
 SRCDIR=calico_containers
 PYCALICO=$(wildcard $(SRCDIR)/calico_ctl/*.py) $(wildcard $(SRCDIR)/*.py)
 BUILD_DIR=build_calicoctl
 BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
+TEST_CONTAINER_DIR=calico_test
+TEST_CONTAINER_FILES=$(TEST_CONTAINER_DIR)/Dockerfile $(TEST_CONTAINER_DIR)/requirements.txt $(shell find calico_containers/tests/ -type f)
 # There are subdirectories so use shell rather than wildcard
 NODE_FILESYSTEM=$(shell find calico_node/filesystem/ -type f)
 NODE_FILES=$(wildcard calico_node/*) $(NODE_FILESYSTEM)
@@ -12,24 +14,37 @@ WHEEL_VERSION=0.0.0
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 ST_TO_RUN?=calico_containers/tests/st/
+# Can exclude the slower tests with "-a '!slow'"
+ST_OPTIONS?=
+HOST_CHECKOUT_DIR?=$(shell pwd)
 
-default: all
-all: test
-binary: dist/calicoctl
-node: caliconode.created
+default: help
+all: test                ## Run all the tests
+binary: dist/calicoctl   ## Create the calicoctl binary
+node: caliconode.created ## Create the calico/node image
+test: st ut              ## Run all the tests
 
-caliconode.created: $(PYCALICO) $(NODE_FILES)
-	docker build -f calico_node/Dockerfile -t calico/node calico_node
-	touch caliconode.created
+## Display this help text
+help:
+	# Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
+	$(info Available targets)
+	@awk '/^[a-zA-Z\-\_0-9]+:/ {                                   \
+		nb = sub( /^## /, "", helpMsg );                             \
+		if(nb == 0) {                                                \
+			helpMsg = $$0;                                             \
+			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                  \
+		}                                                            \
+		if (nb)                                                      \
+			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg; \
+	}                                                              \
+	{ helpMsg = $$0 }'                                             \
+	width=$$(grep -o '^[a-zA-Z_0-9]\+:' $(MAKEFILE_LIST) | wc -L)  \
+	$(MAKEFILE_LIST)
 
-calicobuild.created: $(BUILD_FILES)
+
+calicobuild.created: $(BUILD_FILES)  ## Run all the tests
 	docker build -f build_calicoctl/Dockerfile -t calico/build .
 	touch calicobuild.created
-
-docker:
-	# Download the latest docker to test.
-	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 -o docker
-	chmod +x docker
 
 dist/calicoctl: $(PYCALICO) calicobuild.created
 	mkdir -p dist
@@ -46,30 +61,16 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	 calico/build \
 	 pyinstaller calico_containers/calicoctl.py -ayF
 
-test: st ut 
+calicotest.created: $(TEST_CONTAINER_FILES) $(PYCALICO) dist/calicoctl
+	docker build -f calico_test/Dockerfile -t calico/test .
+	touch calicotest.created
 
-ut: calicobuild.created
-	# Use the `root` user, since code coverage requires the /code directory to
-	# be writable.  It may not be writable for the `user` account inside the
-	# container.
-	docker run --rm -v `pwd`/calico_containers:/code -u root \
-	calico/build bash -c \
-	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	nosetests tests/unit  -c nose.cfg'
+caliconode.created: $(PYCALICO) $(NODE_FILES)
+	docker build -f calico_node/Dockerfile -t calico/node calico_node
+	touch caliconode.created
 
-# UT runs on Cicle need to create the calicoctl binary
-ut-circle: calicobuild.created dist/calicoctl
-	# Can't use --rm on circle
-	# Circle also requires extra options for reporting.
-	docker run \
-	-v `pwd`:/code \
-	-v $(CIRCLE_TEST_REPORTS):/circle_output \
-	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
-	calico/build bash -c \
-	'/tmp/etcd -data-dir=/tmp/default.etcd/ >/dev/null 2>&1 & \
-	cd calico_containers; nosetests tests/unit -c nose.cfg \
-	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
-	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
+calico_containers/calico-node.tar: caliconode.created
+	docker save --output calico_containers/calico-node.tar calico/node
 
 calico_containers/busybox.tar:
 	docker pull busybox:latest
@@ -79,19 +80,31 @@ calico_containers/routereflector.tar:
 	docker pull calico/routereflector:latest
 	docker save --output calico_containers/routereflector.tar calico/routereflector:latest
 
-calico_containers/calico-node.tar: caliconode.created
-	docker save --output calico_containers/calico-node.tar calico/node
+## Download the latest docker binary
+docker:
+	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 -o docker
+	chmod +x docker
 
-st: docker binary calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
-	nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer
+## Run the UTs in a container.
+ut: calicotest.created
+	docker run --rm -v `pwd`/calico_containers:/code calico/test \
+		nosetests tests/unit  -c nose.cfg
 
-fast-st: docker calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar run-etcd
-	# This runs the tests by calling python directory without using the
-	# calicoctl binary - this doesn't work with DIND so commenting out for now.
-	#	CALICOCTL=$(CURDIR)/calico_containers/calicoctl.py \
-	nosetests $(ST_TO_RUN) \
-	-sv --nologcapture --with-timer -a '!slow'
+ut-circle: calicotest.created
+	# Test this locally using CIRCLE_TEST_REPORTS=/tmp COVERALLS_REPO_TOKEN=bad make ut-circle
+	# Can't use --rm on circle
+	# Circle also requires extra options for reporting.
+	docker run \
+	-v `pwd`:/code \
+	-v $(CIRCLE_TEST_REPORTS):/circle_output \
+	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
+	calico/test \
+	sh -c '\
+	cd calico_containers; nosetests tests/unit -c nose.cfg \
+	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
+	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
+## Run etcd in a container. Used by the STs and generally useful.
 run-etcd:
 	@-docker rm -f calico-etcd
 	docker run --detach \
@@ -100,6 +113,26 @@ run-etcd:
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"
 
+## Run the STs in a container
+st: run-etcd calicotest.created calico_containers/busybox.tar calico_containers/routereflector.tar calico_containers/calico-node.tar
+	# Use the host, PID and network namespaces from the host.
+	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
+	# Map the docker socket in so docker can be used from inside the container
+	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
+	# All of code under test is mounted into the container.
+	#   - This also provides access to calicoctl and the docker client
+	docker run --uts=host \
+	           --pid=host \
+	           --net=host \
+	           --privileged \
+	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
+	           --rm -ti \
+	           -v /var/run/docker.sock:/var/run/docker.sock \
+	           -v `pwd`:/code \
+	           calico/test \
+	           nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)
+
+## Run a Docker in Docker (DinD) container.
 create-dind: docker
 	@echo "You may want to load calico-node with"
 	@echo "docker load --input /code/calico_containers/calico-node.tar"
@@ -108,6 +141,7 @@ create-dind: docker
 	docker exec -ti $$ID bash;\
 	docker rm -f $$ID
 
+## Clean everything (including stray volumes)
 clean:
 	-rm -f *.created
 	find . -name '*.pyc' -exec rm -f {} +
@@ -121,10 +155,5 @@ clean:
 	-docker rm -f calico-node
 	-docker rmi calico/node
 	-docker rmi calico/build
+	-docker rmi calico/test
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
-
-setup-env:
-	virtualenv venv
-	venv/bin/pip install --upgrade -r build_calicoctl/requirements.txt
-	@echo "run\n. venv/bin/activate"
-
