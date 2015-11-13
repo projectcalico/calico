@@ -220,7 +220,7 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network=None):
+    def create_workload(self, name, image="busybox", network="bridge"):
         """
         Create a workload container inside this host container.
         """
