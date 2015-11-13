@@ -5,7 +5,7 @@ PYCALICO=$(wildcard $(SRCDIR)/calico_ctl/*.py) $(wildcard $(SRCDIR)/*.py)
 BUILD_DIR=build_calicoctl
 BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 TEST_CONTAINER_DIR=calico_test
-TEST_CONTAINER_FILES=Dockerfile.test $(TEST_CONTAINER_DIR)/requirements.txt $(shell find calico_containers/tests/ -type f)
+TEST_CONTAINER_FILES=Dockerfile $(TEST_CONTAINER_DIR)/requirements.txt $(shell find calico_containers/tests/ -type f)
 # There are subdirectories so use shell rather than wildcard
 NODE_FILESYSTEM=$(shell find calico_node/filesystem/ -type f)
 NODE_FILES=$(wildcard calico_node/*) $(NODE_FILESYSTEM)
@@ -62,7 +62,7 @@ dist/calicoctl: $(PYCALICO) calicobuild.created
 	 pyinstaller calico_containers/calicoctl.py -ayF
 
 calicotest.created: $(TEST_CONTAINER_FILES) $(PYCALICO) dist/calicoctl
-	docker build -f Dockerfile.test -t calico/test .
+	docker build -f Dockerfile -t calico/test .
 	touch calicotest.created
 
 caliconode.created: $(PYCALICO) $(NODE_FILES)
