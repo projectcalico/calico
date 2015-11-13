@@ -132,6 +132,37 @@ st: run-etcd calicotest.created calico_containers/busybox.tar calico_containers/
 	           calico/test \
 	           nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)
 
+semaphore:
+	# Clean up unwanted files to free disk space.
+	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
+
+	# Caching - From http://tschottdorf.github.io/cockroach-docker-circleci-continuous-integration/
+	find . -exec touch -t 201401010000 {} \;
+	for x in $(git ls-tree --full-tree --name-only -r HEAD); do touch -t  $(date -d "$(git log -1 --format=%ci "${x}")" +%y%m%d%H%M.%S) "${x}"; done
+
+	# "Upgrade" docker
+	docker version
+	stop docker
+	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 -o /usr/bin/docker
+	cp /usr/bin/docker .
+	start docker
+
+	# Use the cache
+	cp $SEMAPHORE_CACHE_DIR/busybox.tar calico_containers || true
+	docker load --input $SEMAPHORE_CACHE_DIR/calico-node.tar || true
+	docker load --input $SEMAPHORE_CACHE_DIR/calico-build.tar || true
+
+	# Make sure semaphore has the modules loaded that we need.
+	modprobe -a ip6_tables xt_set
+
+	# Actually run the tests (refreshing the images as required)
+	make st
+
+	# Store off the images if the tests passed.
+	cp calico_containers/calico-node.tar $SEMAPHORE_CACHE_DIR
+	cp calico_containers/busybox.tar $SEMAPHORE_CACHE_DIR
+	docker save --output $SEMAPHORE_CACHE_DIR/calico-build.tar calico/build
+
 ## Run a Docker in Docker (DinD) container.
 create-dind: docker
 	@echo "You may want to load calico-node with"
