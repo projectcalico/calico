@@ -7,14 +7,8 @@ env
 *~
 .coverage
 cover
-busybox.tar
-calico-node.tar
-routereflector.tar
-calicobuild.created
-caliconode.created
-calicotest.created
-calico_containers/pycalico.egg-info/
+*.tar
+*.created
 .releasedata
 docker
-# Editors
 **/*.sw[pon]
