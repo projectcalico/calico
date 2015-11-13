@@ -2,7 +2,6 @@
 include =
     calico/etcddriver/*
     calico/felix/*
-    calico/openstack/*
     calico/*.py
 omit =
     calico/test/*

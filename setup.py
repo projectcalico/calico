@@ -77,9 +77,6 @@ setuptools.setup(
         'console_scripts': [
             'calico-felix = calico.felix.felix:main',
         ],
-        'neutron.ml2.mechanism_drivers': [
-            'calico = calico.openstack.mech_calico:CalicoMechanismDriver',
-        ],
     },
     install_requires=collect_requirements()
 )
