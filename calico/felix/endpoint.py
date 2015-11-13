@@ -522,7 +522,7 @@ class LocalEndpoint(RefCountedActor):
                                self.endpoint["mac"],
                                reset_arp=reset_arp)
 
-        except (IOError, FailedSystemCall):
+        except (IOError, FailedSystemCall) as e:
             if not devices.interface_exists(self._iface_name):
                 _log.info("Interface %s for %s does not exist yet",
                           self._iface_name, self.combined_id)
@@ -530,9 +530,13 @@ class LocalEndpoint(RefCountedActor):
                 _log.info("Interface %s for %s is not up yet",
                           self._iface_name, self.combined_id)
             else:
-                # Interface flapped back up after we failed?
-                _log.warning("Failed to configure interface %s for %s",
-                             self._iface_name, self.combined_id)
+                # Either the interface flapped back up after the failure (in
+                # which case we'll retry when the event reaches us) or there
+                # was a genuine failure due to bad data or some other factor.
+                _log.error("Failed to configure interface %s for %s: %r.  "
+                           "Either the interface is flapping or it is "
+                           "misconfigured.", self._iface_name,
+                           self.combined_id, e)
         else:
             _log.info("Interface %s configured", self._iface_name)
             self._device_in_sync = True
