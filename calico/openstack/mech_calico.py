@@ -280,13 +280,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if status:
             port_status = PORT_STATUS_MAPPING.get(status.get("status"),
                                                   constants.PORT_STATUS_ERROR)
+            LOG.info("Updating port %s status to %s", port_id, port_status)
         else:
             # Report deletion as error.  Either the port has genuinely been
             # deleted, in which case this update is ignored by
             # update_port_status or the port still exists but we disagree,
             # which is an error.
             port_status = constants.PORT_STATUS_ERROR
-        LOG.info("Updating port %s status to %s", port_id, port_status)
+            LOG.info("Reporting port %s deletion", port_id)
+
         session = self._db_context.session
         try:
             with session.begin(subtransactions=True):
