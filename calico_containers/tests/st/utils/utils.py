@@ -58,11 +58,16 @@ def get_ip(v6=False):
 def log_and_run(command):
     try:
         logger.info(command)
-        return check_output(command, shell=True, stderr=STDOUT).rstrip()
+        results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        lines = results.split("\n")
+        for line in lines:
+            logger.info("  # %s", line[:-1])
+        return results
     except CalledProcessError as e:
-            # Wrap the original exception with one that gives a better error
-            # message (including command output).
-            raise CommandExecError(e)
+        # Wrap the original exception with one that gives a better error
+        # message (including command output).
+        logger.info("  # Return code: %s", e.returncode)
+        raise CommandExecError(e)
 
 
 def retry_until_success(function, retries=10, ex_class=Exception):
