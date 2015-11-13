@@ -84,7 +84,7 @@ The `<IP>` parameter can be expressed in three different ways:
 
 NOTE: Since Calico is fully routed, you do not have to worry about conflicts 
 with addresses that are commonly reserved L2 subnets, such as the subnet 
-network and broadcast addresses. It is prefectly okay to assign an IP address 
+network and broadcast addresses. It is perfectly okay to assign an IP address 
 that ends in .0 or .255 to a workload.
 
 If you specify the `--interface` flag, Calico will use the passed in value as 

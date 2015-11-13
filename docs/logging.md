@@ -56,12 +56,12 @@ For more information on the allowed levels, see the [documentation](https://gith
 ## Docker Driver
 The Docker driver receives requests from the Docker daemon for configuring networks.
 
-It's implemented using [flask](http://flask.pocoo.org/) and [gunicorn](http://gunicorn.org/). Gunicorn error and access logs are combined with the Flask application logs in a single file.
+It's implemented using [Flask](http://flask.pocoo.org/) and [Gunicorn](http://gunicorn.org/). Gunicorn error and access logs are combined with the Flask application logs in a single file.
 
 Directory | Default level
 --- | ---
 `dockerdriver` | `INFO`
 
-To change the gunicorn log level, edit the node_filesystem/etc/service/calico-driver/run and rebuild the calico-node image. See the gunicorn [documentation](http://gunicorn-docs.readthedocs.org/en/latest/settings.html#loglevel) for more details.
+To change the Gunicorn log level, edit the node_filesystem/etc/service/calico-driver/run and rebuild the calico-node image. See the Gunicorn [documentation](http://gunicorn-docs.readthedocs.org/en/latest/settings.html#loglevel) for more details.
 
 To configure the logging for the driver itself, edit the Python code in calico_containers/docker_plugin.py. For more information see the flask [documentation](http://flask.pocoo.org/docs/0.10/errorhandling/). Again, this requires a rebuild of the calico-node image.
