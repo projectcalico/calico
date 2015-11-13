@@ -92,7 +92,7 @@ cp /var/log/messages* logs >/dev/null 2>&1
 
 echo "  compressing..."
 cd ..
-tar -Jcf "$current_dir/$diags_file.tar.xz" "$date"
+tar -Jcf "$current_dir/$diags_file.tar.xz" "$diags_file"
 
 popd > /dev/null
 
