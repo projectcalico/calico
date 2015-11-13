@@ -12,6 +12,7 @@ calico-node.tar
 routereflector.tar
 calicobuild.created
 caliconode.created
+calicotest.created
 calico_containers/pycalico.egg-info/
 .releasedata
 docker
