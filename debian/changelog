@@ -1,3 +1,13 @@
+calico (1.2.1-1) trusty; urgency=medium
+
+  * Fix Felix ipset exception when using IPIP.
+  * Use iptables protocol numbers not names.
+  * Fixes to diagnostics collection scripts.
+  * Pin networking-calico pip version.
+  * Really delete routes to ns-* devices in pre-Liberty OpenStack.
+
+ -- Matt Dupre <matt@projectcalico.org>  Fri, 13 Nov 2015 12:23:09 +0000
+
 calico (1.2.0-1)  trusty; urgency=medium
 
   * Truncate long output from FailedSystemCall exception.
