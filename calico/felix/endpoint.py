@@ -499,12 +499,11 @@ class LocalEndpoint(RefCountedActor):
     def _configure_interface(self):
         """
         Applies sysctls and routes to the interface.
-
-        :param: bool mac_changed: Has the MAC address changed since it was last
-                     configured? If so, we reconfigure ARP for the interface in
-                     IPv4 (ARP does not exist for IPv6, which uses neighbour
-                     solicitation instead).
         """
+        if not self._device_is_up:
+            _log.debug("Device is known to be down, skipping attempt to "
+                       "configure it.")
+            return
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)

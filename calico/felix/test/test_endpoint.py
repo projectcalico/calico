@@ -246,13 +246,9 @@ class TestLocalEndpoint(BaseTestCase):
                 local_ep.on_endpoint_update(data, async=True)
                 self.step_actor(local_ep)
                 self.assertEqual(local_ep._mac, data['mac'])
-                m_conf.assert_called_once_with(iface)
-                m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
-                                                     iface,
-                                                     data['mac'],
-                                                     reset_arp=True)
-                self.assertTrue(local_ep._device_in_sync)
+                self.assertFalse(m_conf.called)
+                self.assertFalse(m_set_routes.called)
+                self.assertFalse(local_ep._device_in_sync)
 
         # Now pretend to get an interface update - does all the same work.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
@@ -296,12 +292,9 @@ class TestLocalEndpoint(BaseTestCase):
                 local_ep.on_endpoint_update(data, async=True)
                 self.step_actor(local_ep)
                 self.assertEqual(local_ep._mac, data['mac'])
-                m_conf.assert_called_once_with(iface, None)
-                m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
-                                                     iface,
-                                                     data['mac'],
-                                                     reset_arp=False)
+                self.assertFalse(m_conf.called)
+                self.assertFalse(m_set_routes.called)
+                self.assertFalse(local_ep._device_in_sync)
 
         # Now pretend to get an interface update - does all the same work.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
