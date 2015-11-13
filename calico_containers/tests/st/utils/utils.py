@@ -61,7 +61,7 @@ def log_and_run(command):
         results = check_output(command, shell=True, stderr=STDOUT).rstrip()
         lines = results.split("\n")
         for line in lines:
-            logger.info("  # %s", line[:-1])
+            logger.info("  # %s", line)
         return results
     except CalledProcessError as e:
         # Wrap the original exception with one that gives a better error
