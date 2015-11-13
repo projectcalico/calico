@@ -196,7 +196,11 @@ class IptablesUpdater(Actor):
             are not referenced by other chains.
         """
         raw_ipt_output = subprocess.check_output(
-            [self._iptables_cmd, "--wait", "--list", "--table", self.table])
+            [self._iptables_cmd,
+             "--wait",  # Wait for the xtables lock.
+             "--list",  # Action to perform.
+             "--numeric",  # Avoid DNS lookups.
+             "--table", self.table])
         return _extract_our_unreffed_chains(raw_ipt_output)
 
     @actor_message()

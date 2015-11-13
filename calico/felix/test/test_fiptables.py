@@ -82,7 +82,8 @@ class TestIptablesUpdater(BaseTestCase):
         _log.info("Stubbing out call to %s", cmd)
         if cmd == ["iptables-save", "--table", "filter"]:
             return self.stub.generate_iptables_save()
-        elif cmd == ['iptables', '--wait', '--list', '--table', 'filter']:
+        elif cmd == ['iptables', '--wait', '--list', '--numeric',
+                     '--table', 'filter']:
             return self.stub.generate_iptables_list()
         else:
             raise AssertionError("Unexpected call %r" % cmd)
