@@ -88,11 +88,15 @@ class TestLocalEndpoint(BaseTestCase):
         with nested(
                 mock.patch('calico.felix.devices.set_routes'),
                 mock.patch('calico.felix.devices.configure_interface_ipv4'),
+                mock.patch('calico.felix.devices.interface_exists'),
                 mock.patch('calico.felix.devices.interface_up'),
-        ) as [m_set_routes, m_conf, m_iface_up]:
+        ) as [m_set_routes, m_conf, m_iface_exists, m_iface_up]:
+            m_iface_exists.return_value = True
             m_iface_up.return_value = True
+
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
+
             self.assertEqual(local_ep._mac, data['mac'])
             m_conf.assert_called_once_with(iface)
             m_set_routes.assert_called_once_with(ip_type,
@@ -161,8 +165,10 @@ class TestLocalEndpoint(BaseTestCase):
         with nested(
                 mock.patch('calico.felix.devices.set_routes'),
                 mock.patch('calico.felix.devices.configure_interface_ipv6'),
+                mock.patch('calico.felix.devices.interface_exists'),
                 mock.patch('calico.felix.devices.interface_up'),
-        ) as [m_set_routes, m_conf, m_iface_up]:
+        ) as [m_set_routes, m_conf, m_iface_exists, m_iface_up]:
+                m_iface_exists.return_value = True
                 m_iface_up.return_value = True
                 local_ep.on_endpoint_update(data, async=True)
                 self.step_actor(local_ep)
