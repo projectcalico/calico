@@ -228,7 +228,7 @@ class DockerHost(object):
         self.workloads.add(workload)
         return workload
 
-    def create_network(self, name, driver="calico"):
+    def create_network(self, name, driver="calico", ipam_driver=None):
         """
         Create a Docker network using this host.
 
@@ -238,9 +238,12 @@ class DockerHost(object):
         name).
         :param driver: The name of the network driver to use.  (The Calico
         driver is the default.)
+        :param ipam_driver:  The name of the IPAM driver to use, or None to use
+        the default driver.
         :return: A DockerNetwork object.
         """
-        return DockerNetwork(self, name, driver=driver)
+        return DockerNetwork(self, name, driver=driver,
+                             ipam_driver=ipam_driver)
 
     @staticmethod
     def escape_shell_single_quotes(command):

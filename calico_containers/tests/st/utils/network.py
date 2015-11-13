@@ -24,7 +24,7 @@ class DockerNetwork(object):
     by containers).
     """
 
-    def __init__(self, host, name, driver="calico"):
+    def __init__(self, host, name, driver="calico", ipam_driver=None):
         """
         Create the network.
         :param host: The Docker Host which creates the network (note that
@@ -35,6 +35,8 @@ class DockerNetwork(object):
         name).
         :param driver: The name of the network driver to use.  (The Calico
         driver is the default.)
+        :param ipam_driver:  The name of the IPAM driver to use, or None to use
+        the default driver.
         :return: A DockerNetwork object.
         """
         self.name = name
@@ -42,7 +44,10 @@ class DockerNetwork(object):
 
         self.init_host = host
         """The host which created the network."""
-        self.uuid = host.execute("docker network create -d %s %s" % (driver, name))
+
+        ipam_option = ("--ipam-driver %s" % ipam_driver) if ipam_driver else ""
+        cmd = "docker network create -d %s %s %s" % (driver, ipam_option, name)
+        self.uuid = host.execute(cmd)
 
     def delete(self):
         """
