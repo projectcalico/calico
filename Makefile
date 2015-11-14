@@ -124,8 +124,8 @@ semaphore:
 	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
 
 	# Caching - From http://tschottdorf.github.io/cockroach-docker-circleci-continuous-integration/
-	find . -exec touch -t 201401010000 {} \;
-	for x in $(git ls-tree --full-tree --name-only -r HEAD); do touch -t  $(date -d "$(git log -1 --format=%ci "${x}")" +%y%m%d%H%M.%S) "${x}"; done
+	#find . -exec touch -t 201401010000 {} \;
+	#for x in $(git ls-tree --full-tree --name-only -r HEAD); do touch -t  $(date -d "$(git log -1 --format=%ci "${x}")" +%y%m%d%H%M.%S) "${x}"; done
 
 	# "Upgrade" docker
 	docker version
@@ -135,9 +135,9 @@ semaphore:
 	start docker
 
 	# Use the cache
-	cp $SEMAPHORE_CACHE_DIR/busybox.tar calico_containers || true
-	docker load --input $SEMAPHORE_CACHE_DIR/calico-node.tar || true
-	docker load --input $SEMAPHORE_CACHE_DIR/calico-build.tar || true
+	#cp $SEMAPHORE_CACHE_DIR/busybox.tar calico_containers || true
+	#docker load --input $SEMAPHORE_CACHE_DIR/calico-node.tar || true
+	#docker load --input $SEMAPHORE_CACHE_DIR/calico-build.tar || true
 
 	# Make sure semaphore has the modules loaded that we need.
 	modprobe -a ip6_tables xt_set
@@ -146,9 +146,9 @@ semaphore:
 	make st
 
 	# Store off the images if the tests passed.
-	cp calico_containers/calico-node.tar $SEMAPHORE_CACHE_DIR
-	cp calico_containers/busybox.tar $SEMAPHORE_CACHE_DIR
-	docker save --output $SEMAPHORE_CACHE_DIR/calico-build.tar calico/build
+	#cp calico_containers/calico-node.tar $SEMAPHORE_CACHE_DIR
+	#cp calico_containers/busybox.tar $SEMAPHORE_CACHE_DIR
+	#docker save --output $SEMAPHORE_CACHE_DIR/calico-build.tar calico/build
 
 ## Run a Docker in Docker (DinD) container.
 create-dind: docker
