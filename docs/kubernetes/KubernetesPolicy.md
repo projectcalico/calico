@@ -52,7 +52,7 @@ You can specify multiple rules by separating them with semicolons.
 In its current state, the Calico Kubernetes Plugin supports whitelist oriented, inbound rules. This means that any traffic not specified in a pod's policy is unauthorized, and unauthorized traffic will be dropped at the receiving Kubernetes node.
 
 ### Defaults
-With no specified policy, Calico will only allow traffic from within a pod's own namespace. This default rule will be overidden if any policy is programmed. The only exception to this are resources within the `kube-system` namespace. These are universally accessed by all namespaces and will accept all traffic.
+With no specified policy, Calico will only allow traffic from within a pod's own namespace. This default rule will be overridden if any policy is programmed. The only exception to this are resources within the `kube-system` namespace. These are universally accessed by all namespaces and will accept all traffic.
 
 ### Tags, Labels, and Namespaces
 For each policy profile, Calico will generate a tag for its namespace, pod name, and for each label pair.

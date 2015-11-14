@@ -9,7 +9,7 @@
 # Running the Kubernetes Vagrant provider with Calico networking
 Calico can be used as a network plugin for Kubernetes, to provide connectivity for workloads in a Kubernetes cluster.
 
-The Kubernetes Vagrant provider uses OpenVSwitch networking by default, but it can also be configured to provision a local cluster with Calico networking.
+The Kubernetes Vagrant provider uses Open vSwitch networking by default, but it can also be configured to provision a local cluster with Calico networking.
 
 ## Getting Started
 First, you'll need to check out a copy of the Kubernetes git repo. Currently the Calico Vagrant plugin code is waiting to be merged into the Kubernetes repo, so for now you'll need to check out our fork of the Kubernetes repo (which is based on the latest 1.0 release candidate).
@@ -25,7 +25,7 @@ export NETWORK_MODE=calico
 cluster/kube-up.sh
 ```
 
-This will create a 2-node, 1-master cluster, with Calico providing network connectivity for Pods. As with the openvswitch mode, you can set the `NUM_MINIONS` environment variable to change the number of nodes that are provisioned.
+This will create a 2-node, 1-master cluster, with Calico providing network connectivity for Pods. As with the Open vSwitch mode, you can set the `NUM_MINIONS` environment variable to change the number of nodes that are provisioned.
 
 ## Operating the cluster
 The cluster will operate as normal; from the perspective of a Pod's containers, IP connectivity is the same.

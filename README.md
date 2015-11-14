@@ -27,7 +27,7 @@ We welcome questions/comments/feedback (and pull requests).
 * [Slack Calico Users Channel](https://calicousers.slack.com) ([Sign up](https://calicousers-slackin.herokuapp.com))
 * IRC - [#calico](https://kiwiirc.com/client/irc.freenode.net/#calico)
 * For Calico-on-Docker specific issues, please [raise issues][raise-issues] on 
-Github.
+GitHub.
 
 ## How does it work?
 
@@ -96,7 +96,7 @@ This is compatible with all Docker versions from 1.6 onwards.
 #### Docker with libnetwork
 
 Docker's native [libnetwork network driver][libnetwork] is available in the 
-Docker 1.9 release currently underoing development.
+Docker 1.9 release currently undergoing development.
 
 Setup of the libnetwork environment is a little more involved since it requires
 the current master (1.9.dev) builds of Docker, and the use of etcd as a
