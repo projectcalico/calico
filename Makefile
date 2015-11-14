@@ -77,7 +77,7 @@ ut: calico_test/.calico_test.created
 	docker run --rm -v `pwd`/calicoctl:/code calico/test \
 		nosetests tests/unit  -c nose.cfg
 
-ut-circle: calico_test/.calico_test.created
+ut-circle: calico_test/.calico_test.created dist/calicoctl
 	# Test this locally using CIRCLE_TEST_REPORTS=/tmp COVERALLS_REPO_TOKEN=bad make ut-circle
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
