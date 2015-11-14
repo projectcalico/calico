@@ -430,7 +430,10 @@ class LocalEndpoint(RefCountedActor):
                 if self._device_is_up is None:
                     _log.debug("Learned interface name, checking if device "
                                "is up.")
-                    self._device_is_up = devices.interface_up(self._iface_name)
+                    self._device_is_up = (
+                        devices.interface_exists(self._iface_name) and
+                        devices.interface_up(self._iface_name)
+                    )
 
             # Check if the profile ID or IP addresses have changed, requiring
             # a refresh of the dataplane.
