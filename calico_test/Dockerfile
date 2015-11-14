@@ -18,15 +18,15 @@ RUN apk --update add python py-setuptools iproute2 iputils ip6tables ipset
 
 # Could make this container smaller by merging the next three lines with a remove.
 RUN apk add git py-pip musl-dev gcc python-dev
-ADD calico_test/requirements.txt /
+ADD requirements.txt /
 RUN pip install -r requirements.txt
 
 # The test _framework_ needs to be part of the image - everything else gets volume mounted
-ADD calico_containers/tests/st/utils /tests/st/utils
-ADD calico_containers/tests/st/test_base.py /tests/st/test_base.py
-RUN touch /tests/__init__.py /tests/st/__init__.py
-RUN ln -s /code/docker /usr/local/bin/docker
+ADD tests tests
+
+# The container is used by mounting the code-under-test to /code
 WORKDIR /code/
+RUN ln -s /code/docker /usr/local/bin/docker
 
 
 

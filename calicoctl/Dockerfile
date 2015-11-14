@@ -22,7 +22,7 @@ RUN apt-get update && \
 # Install the python packages needed for running UTs and building calicoctl.
 # Git is installed to allow pip installation from a github repo and also so
 # that the right branch can be included if uploading coverage.
-ADD build_calicoctl/requirements.txt /code/
+ADD requirements.txt /code/
 RUN pip install -r requirements.txt
 
 # Can't run pyinstaller as root so add a user - https://github.com/pyinstaller/pyinstaller/issues/1081

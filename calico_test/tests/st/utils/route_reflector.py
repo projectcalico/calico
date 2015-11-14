@@ -46,7 +46,7 @@ class RouteReflectorCluster(object):
             for jj in range(self.num_in_redundancy_group):
                 rr = DockerHost('RR.%d.%d' % (ii, jj), start_calico=False)
                 ip = "-e IP=%s" % rr.ip
-                rr.execute("docker load --input /code/calico_containers/routereflector.tar")
+                rr.execute("docker load --input /code/routereflector.tar")
                 rr.execute("docker run --privileged --net=host -d "
                            "--name rr %s %s "
                            "calico/routereflector" % (etcd_auth, ip))

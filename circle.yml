@@ -19,8 +19,8 @@ dependencies:
 # If the build.tar exists, then load it into docker to take advantage of any cached layers.
     - if [[ -e ~/docker/build.tar ]]; then docker load -i ~/docker/build.tar; fi
 # Build the build image. Docker will use cached layers where it can.
-    - make calicobuild.created 
-    - docker save --output ~/docker/build.tar calico/build
+    - make calicoctl/.calico_build.created 
+    - docker save --output ~/docker/build.tar calico/build:latest
 
 test:
   override:

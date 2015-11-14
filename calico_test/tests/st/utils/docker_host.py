@@ -30,8 +30,8 @@ class DockerHost(object):
     """
     def __init__(self, name, start_calico=True, dind=True,
                  additional_docker_options="",
-                 post_docker_commands=["docker load -i /code/calico_containers/calico-node.tar",
-                                       "docker load -i /code/calico_containers/busybox.tar"]):
+                 post_docker_commands=["docker load -i /code/calico-node.tar",
+                                       "docker load -i /code/busybox.tar"]):
         self.name = name
         self.dind = dind
         self.workloads = set()
@@ -95,14 +95,7 @@ class DockerHost(object):
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
-        if os.environ.get("CALICOCTL"):
-            calicoctl = os.environ["CALICOCTL"]
-        else:
-            if self.dind:
-                calicoctl = "/code/dist/calicoctl"
-            else:
-                calicoctl = "dist/calicoctl"
-
+        calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
         etcd_auth = "ETCD_AUTHORITY=%s:2379" % get_ip()
         # Export the environment, in case the command has multiple parts, e.g.
         # use of | or ;
