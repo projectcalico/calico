@@ -26,7 +26,7 @@ namespace where Calico veth pairs are anchored for connections to containers.
 This can interfere with the Calico agent's ability to route correctly.
 
 You can configure interfaces in the `/etc/network/interfaces` file if the 
-NetworkManager removes your host's interfaces. See the debian 
+NetworkManager removes your host's interfaces. See the Debian 
 [NetworkConfiguration](https://wiki.debian.org/NetworkConfiguration) 
 guide for more information.
 
