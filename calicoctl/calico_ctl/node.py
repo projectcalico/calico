@@ -53,7 +53,7 @@ Options:
   --kubernetes              Download and install the Kubernetes plugin.
   --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
                             to install when using the --kubernetes option.
-                            [default: v0.3.0]
+                            [default: v0.6.0]
   --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
