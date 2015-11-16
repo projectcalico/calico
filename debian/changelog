@@ -1,0 +1,30 @@
+networking-calico (1:1.0.1~pre1-5) trusty; urgency=low
+
+  * Reupload without extraneous source content.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Mon, 16 Nov 2015 14:03:31 +0000
+
+networking-calico (1:1.0.1~pre1-4) trusty; urgency=low
+
+  * Move Calico mechanism driver here, from core Calico repository
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Mon, 16 Nov 2015 13:58:22 +0000
+
+networking-calico (1:1.0.1~pre1-3) trusty; urgency=low
+
+  * Add networking-calico package, containing all the code
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Thu, 12 Nov 2015 15:19:36 +0000
+
+networking-calico (1:1.0.1~pre1-2) trusty; urgency=low
+
+  * Generate calico-compute and calico-control packages
+  * Add epoch 1 so that our packages are newer than those from core Calico repo
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Thu, 12 Nov 2015 14:59:46 +0000
+
+networking-calico (1.0.1~pre1-1) trusty; urgency=low
+
+  * First attempt at Debian packaging for networking-calico.
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Thu, 12 Nov 2015 13:29:05 +0000

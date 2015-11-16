@@ -1,7 +1,8 @@
 [run]
 branch = True
 source = networking_calico
-omit = networking_calico/openstack/*
+omit = networking_calico/plugins/ml2/drivers/calico/test/*
+concurrency = eventlet
 
 [report]
 ignore_errors = True

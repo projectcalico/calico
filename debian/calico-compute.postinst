@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ]
+then
+    # Enable checksum calculation on DHCP responses.  This is needed
+    # when sending DHCP responses over the TAP interfaces to guest
+    # VMs, as apparently Linux doesn't itself do the checksum
+    # calculation in that case.
+    iptables -C POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill ||
+    iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill
+
+    # Save current iptables for subsequent reboots.
+    iptables-save > /etc/iptables/rules.v4
+
+    # Enable IP forwarding.
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    sysctl -p
+fi
+
+#DEBHELPER#

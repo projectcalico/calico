@@ -1,0 +1,61 @@
+Source: networking-calico
+Section: net
+Priority: optional
+Maintainer: Project Calico Maintainers <maintainers@projectcalico.org>
+Build-Depends: debhelper (>= 8.0.0), python-all (>= 2.6), python-setuptools, python-pbr
+XS-Python-Version: >= 2.6
+Standards-Version: 3.9.4
+
+Package: calico-compute
+Architecture: all
+Depends:
+ bird,
+ calico-felix,
+ networking-calico,
+ neutron-dhcp-agent,
+ iptables-persistent,
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends}
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package provides the pieces needed on a compute node.
+
+Package: calico-control
+Architecture: all
+Depends:
+ networking-calico,
+ ${misc:Depends},
+ ${python:Depends}
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package provides the pieces needed on a controller node.
+
+Package: networking-calico
+Architecture: all
+Depends:
+ calico-common,
+ ${misc:Depends},
+ ${python:Depends}
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package installs the networking-calico Calico/Neutron
+ integration code.
