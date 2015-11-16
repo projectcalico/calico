@@ -1,12 +1,25 @@
 #!/usr/bin/env python
+"""do_release.py
+
+Usage:
+  do_release.py [--force] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION]
+
+Options:
+  -h --help     Show this screen.
+
+"""
+import subprocess
+
 import utils
 import re
+from docopt import docopt
 
 from utils import print_paragraph as para
 from utils import print_user_actions as actions
 from utils import print_bullet as bullet
 from utils import print_next as next
 from utils import print_warning as warning
+
 
 # The candidate version replacement performs most of the required version
 # replacements, but replaces build artifact URLs with a dynamic URL that
@@ -83,26 +96,33 @@ def start_release():
     old_version = utils.get_calicoctl_version()
     para("Current version is: %s" % old_version)
 
-    while True:
-        new_version = raw_input("New calicoctl version?: ")
-        release_type = utils.check_version_increment(old_version, new_version)
-        if release_type:
-            break
-    para("Release type: %s" % release_type)
+    new_version = arguments["CALICO_DOCKER_VERSION"]
+    if not new_version:
+        while True:
+            new_version = raw_input("New calicoctl version?: ")
+            release_type = utils.check_version_increment(old_version, new_version)
+            if release_type:
+                para("Release type: %s" % release_type)
+                break
 
-    para("To pin the calico libraries used by calico-docker, please specify "
-         "the name of the requested versions as they appear in the GitHub "
-         "releases.")
+    calico_version = arguments["CALICO_VERSION"]
+    libcalico_version = arguments["LIBCALICO_VERSION"]
+    libnetwork_version = arguments["LIBNETWORK_VERSION"]
 
-    calico_version = \
-        utils.get_github_library_version("calico (felix)",
-                                         "https://github.com/projectcalico/calico")
-    libcalico_version = \
-        utils.get_github_library_version("libcalico",
-                                         "https://github.com/projectcalico/libcalico")
-    libnetwork_version = \
-        utils.get_github_library_version("libnetwork-plugin",
-                                         "https://github.com/projectcalico/libnetwork-plugin")
+    if not (calico_version and libcalico_version and libnetwork_version):
+        para("To pin the calico libraries used by calico-docker, please specify "
+             "the name of the requested versions as they appear in the GitHub "
+             "releases.")
+
+        calico_version = \
+            utils.get_github_library_version("calico (felix)",
+                                             "https://github.com/projectcalico/calico")
+        libcalico_version = \
+            utils.get_github_library_version("libcalico",
+                                             "https://github.com/projectcalico/libcalico")
+        libnetwork_version = \
+            utils.get_github_library_version("libnetwork-plugin",
+                                             "https://github.com/projectcalico/libnetwork-plugin")
 
     release_data["versions"] = {"version": new_version,
                                 "version-no-v": new_version[1:],
@@ -110,20 +130,11 @@ def start_release():
                                 "libcalico-version": libcalico_version,
                                 "libnetwork-version": libnetwork_version}
 
-    actions()
-    bullet("Create a candidate release branch called "
+    bullet("Creating a candidate release branch called "
            "'%s-candidate'." % new_version)
-    bullet("git checkout -b %s-candidate" % new_version, level=1)
-    next("When you have created the branch, re-run the script.")
-
-
-def update_files():
-    """
-    Continue the release process by updating the version information in all
-    the files.
-    """
-    utils.check_or_exit("Is your git repository now on the candidate release "
-                        "branch")
+    if arguments['--force']:
+        subprocess.call("git branch -D %s-candidate" % new_version, shell=True)
+    subprocess.call("git checkout -b %s-candidate" % new_version, shell=True)
 
     # Update the code tree
     utils.update_files(CANDIDATE_VERSION_REPLACE, release_data["versions"])
@@ -131,13 +142,17 @@ def update_files():
     new_version = release_data["versions"]["version"]
     para("The codebase has been updated to reference the release candidate "
          "artifacts.")
-    actions()
-    bullet("Add, commit and push the updated files to "
+
+    bullet("Adding, committing and pushing the updated files to "
            "origin/%s-candidate" % new_version)
-    bullet("git add --all", level=1)
-    bullet('git commit -m "Update version strings for release '
-           'candidate %s"' % new_version, level=1)
-    bullet("git push origin %s-candidate" % new_version, level=1)
+    subprocess.call("git add --all", shell=True)
+    subprocess.call('git commit -m "Update version strings for release '
+           'candidate %s"' % new_version, shell=True)
+    if arguments['--force']:
+        subprocess.call("git push -f origin %s-candidate" % new_version, shell=True)
+    else:
+        subprocess.call("git push origin %s-candidate" % new_version, shell=True)
+    actions()
     bullet("Create a DockerHub release called '%s'" % new_version)
     bullet("Monitor the semaphore, CircleCI and Docker builds for this branch "
            "until all have successfully completed.  Fix any issues with the "
@@ -247,7 +262,6 @@ def complete():
 
 RELEASE_STEPS = [
     start_release,
-    update_files,
     cut_release,
     change_to_master,
     update_master,
@@ -270,4 +284,6 @@ def do_steps():
 
 
 if __name__ == "__main__":
+    arguments = docopt(__doc__)
+
     do_steps()
