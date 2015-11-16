@@ -335,7 +335,7 @@ class TestNode(unittest.TestCase):
         )
         m_docker.utils.create_host_config.assert_called_once_with(
             privileged=True,
-            restart_policy={"Name": "Always"},
+            restart_policy={"Name": "always"},
             network_mode="host",
             binds=binds
         )
