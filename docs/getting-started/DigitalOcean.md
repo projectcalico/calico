@@ -1,7 +1,7 @@
 <!--- master only -->
 > ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.10.0/README.md).
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.11.0/README.md).
 <!--- else
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
