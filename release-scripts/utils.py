@@ -10,9 +10,9 @@ import urllib2
 PATH_ROOT = os.path.dirname(os.path.dirname(os.path.realpath("__file_")))
 
 # Path names relative to the root of the project
-PATH_CALICOCTL_REQS = os.path.join("build_calicoctl", "requirements.txt")
-PATH_CALICOCTL_NODE = os.path.join("calico_containers", "calico_ctl", "node.py")
-PATH_CALICOCTL_INIT = os.path.join("calico_containers", "calico_ctl", "__init__.py")
+PATH_CALICOCTL_REQS = os.path.join("calicoctl", "requirements.txt")
+PATH_CALICOCTL_NODE = os.path.join("calicoctl", "calico_ctl", "node.py")
+PATH_CALICOCTL_INIT = os.path.join("calicoctl", "calico_ctl", "__init__.py")
 PATH_CALICONODE_BUILD = os.path.join("calico_node", "build.sh")
 PATH_MAIN_README = "README.md"
 PATH_DOCS = "docs"
@@ -222,7 +222,7 @@ def load_release_data():
             print_warning("You are continuing an existing release.  If this "
                           "an error, delete the release data file and try "
                           "again.  "
-                          "Filename=%s" % filen)
+                          "Filename = %s" % filen)
 
         return data
     except:
