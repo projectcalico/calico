@@ -20,7 +20,8 @@ Tests for the profilerules module.
 """
 
 import logging
-from mock import Mock, call
+from mock import Mock, call, patch
+from calico.felix import refcount
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.futils import FailedSystemCall
 from calico.felix.ipsets import IpsetManager, TagIpset
@@ -94,6 +95,116 @@ RULES_2_CHAINS = {
             '--jump MARK --set-mark 0',
     ]
 }
+
+
+class TestRulesManager(BaseTestCase):
+    def setUp(self):
+        super(TestRulesManager, self).setUp()
+        self.m_updater = Mock(spec=IptablesUpdater)
+        self.m_ipset_mgr = Mock(spec=IpsetManager)
+        self.mgr = RulesManager(4, self.m_updater, self.m_ipset_mgr)
+
+    def test_create(self):
+        pr = self.mgr._create("profile-id")
+        self.assertEqual(pr.id, "profile-id")
+        self.assertEqual(pr.ip_version, 4)
+        self.assertEqual(pr._iptables_updater, self.m_updater)
+        self.assertEqual(pr._ipset_mgr, self.m_ipset_mgr)
+
+    def test_on_object_started_unknown(self):
+        m_pr = Mock(spec=ProfileRules)
+        self.mgr._on_object_started("profile-id", m_pr)
+        self.assertEqual(
+            m_pr.on_profile_update.mock_calls,
+            [call(None, async=True)]
+        )
+
+    def test_on_object_started(self):
+        m_pr = Mock(spec=ProfileRules)
+        self.mgr.rules_by_profile_id["profile-id"] = {"foo": "bar"}
+        self.mgr._on_object_started("profile-id", m_pr)
+        self.assertEqual(
+            m_pr.on_profile_update.mock_calls,
+            [call({"foo": "bar"}, async=True)]
+        )
+
+    def test_on_datamodel_in_sync(self):
+        with patch("calico.felix.refcount.ReferenceManager."
+                   "_maybe_start_all", autospec=True) as m_start:
+            self.mgr.on_datamodel_in_sync(async=True)
+            self.mgr.on_datamodel_in_sync(async=True)
+            self.step_actor(self.mgr)
+            # Only the first datamodel_in_sync triggers maybe_start_all.
+            self.assertEqual(m_start.mock_calls, [call(self.mgr)])
+
+    def test_maybe_start_known_in_sync(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            self.mgr._maybe_start("profile-id", in_sync=True)
+            self.assertEqual(
+                m_maybe_start.mock_calls,
+                [call("profile-id")]
+            )
+
+    def test_maybe_start_globally_in_sync(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            self.mgr.on_datamodel_in_sync(async=True)
+            self.step_actor(self.mgr)
+            self.mgr._maybe_start("profile-id")
+            self.assertEqual(
+                m_maybe_start.mock_calls,
+                [call("profile-id")]
+            )
+
+    def test_maybe_start_not_in_sync(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            self.mgr._maybe_start("profile-id", in_sync=False)
+            self.assertEqual(m_maybe_start.mock_calls, [])
+
+    def test_on_rules_update_unknown(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            self.mgr.on_rules_update("prof-id", {"foo": "bar"}, async=True)
+            self.step_actor(self.mgr)
+            # Nothing to try to start.
+            self.assertEqual(m_maybe_start.mock_calls, [])
+
+    def test_on_rules_update_not_started(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            self.mgr.on_rules_update("prof-id", {"foo": "bar"}, async=True)
+            self.mgr.objects_by_id["prof-id"] = Mock()
+            self.step_actor(self.mgr)
+            # Should try to start the ProfileRules.
+            self.assertEqual(m_maybe_start.mock_calls,
+                             [call("prof-id")])
+
+    def test_on_rules_update_started(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            p = {"foo": "bar"}
+            self.mgr.on_rules_update("prof-id", p, async=True)
+            m_pr = Mock()
+            m_pr.ref_mgmt_state = refcount.LIVE
+            self.mgr.objects_by_id["prof-id"] = m_pr
+            self.step_actor(self.mgr)
+            self.assertEqual(m_pr.on_profile_update.mock_calls,
+                             [call(p, force_reprogram=False, async=True)])
+            # Already started so shouldn't try to start it.
+            self.assertEqual(m_maybe_start.mock_calls, [])
+
+    def test_on_rules_delete(self):
+        with patch("calico.felix.refcount."
+                   "ReferenceManager._maybe_start") as m_maybe_start:
+            self.mgr.on_rules_update("prof-id", None, async=True)
+            self.mgr.objects_by_id["prof-id"] = Mock()
+            self.step_actor(self.mgr)
+            # Even though we know it's gone, still try to start it.  If it's
+            # referenced this will ensure that the chain is cleaned up.
+            self.assertEqual(m_maybe_start.mock_calls,
+                             [call("prof-id")])
 
 
 class TestProfileRules(BaseTestCase):
@@ -254,6 +365,11 @@ class TestProfileRules(BaseTestCase):
         self.m_ipt_updater.delete_chains.assert_called_once_with(
             set(['felix-p-prof1-i', 'felix-p-prof1-o']), async=False
         )
+        # Further calls should be ignored
+        self.m_ipt_updater.reset_mock()
+        self.rules.on_unreferenced(async=True)
+        self.step_actor(self.rules)
+        self.assertFalse(self.m_ipt_updater.delete_chains.called)
 
     def test_unreferenced_after_creation(self):
         """

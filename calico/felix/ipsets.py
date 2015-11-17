@@ -72,13 +72,21 @@ class IpsetManager(ReferenceManager):
         # index-update functions. We apply the updates in _finish_msg_batch().
         # May include non-live tag IDs.
         self._dirty_tags = set()
-        self._force_reprogram = False
+        self._datamodel_in_sync = False
 
     def _create(self, tag_id):
         active_ipset = TagIpset(futils.uniquely_shorten(tag_id, 16),
                                 self.ip_type,
                                 max_elem=self._config.MAX_IPSET_SIZE)
         return active_ipset
+
+    def _maybe_start(self, obj_id):
+        if self._datamodel_in_sync:
+            _log.debug("Datamodel is in-sync, deferring to superclass.")
+            return super(IpsetManager, self)._maybe_start(obj_id)
+        else:
+            _log.info("Delaying startup of tag %s because datamodel is"
+                      "not in sync.", obj_id)
 
     def _on_object_started(self, tag_id, active_ipset):
         _log.debug("TagIpset actor for %s started", tag_id)
@@ -96,11 +104,10 @@ class IpsetManager(ReferenceManager):
         :param tag_id: The ID of the tag, must be an active tag.
         """
         assert self._is_starting_or_live(tag_id)
+        assert self._datamodel_in_sync
         active_ipset = self.objects_by_id[tag_id]
         members = frozenset(self.ip_owners_by_tag.get(tag_id, {}).iterkeys())
-        active_ipset.replace_members(members,
-                                     force_reprogram=self._force_reprogram,
-                                     async=True)
+        active_ipset.replace_members(members, async=True)
 
     def _update_dirty_active_ipsets(self):
         """
@@ -108,11 +115,14 @@ class IpsetManager(ReferenceManager):
 
         Clears the set of dirty tags as a side-effect.
         """
+        num_updates = 0
         for tag_id in self._dirty_tags:
             if self._is_starting_or_live(tag_id):
                 self._update_active_ipset(tag_id)
+                num_updates += 1
             self._maybe_yield()
-        _log.info("Sent updates to %s updated tags", len(self._dirty_tags))
+        if num_updates > 0:
+            _log.info("Sent updates to %s updated tags", num_updates)
         self._dirty_tags.clear()
 
     @property
@@ -121,41 +131,11 @@ class IpsetManager(ReferenceManager):
         return nets
 
     @actor_message()
-    def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
-        """
-        Apply a snapshot read from etcd, replacing existing state.
-
-        :param tags_by_prof_id: A dict mapping security profile ID to a list of
-            profile tags.
-        :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
-            data dicts.
-        """
-        _log.info("Applying tags snapshot. %s tags, %s endpoints",
-                  len(tags_by_prof_id), len(endpoints_by_id))
-        missing_profile_ids = set(self.tags_by_prof_id.keys())
-        for profile_id, tags in tags_by_prof_id.iteritems():
-            assert tags is not None
-            self.on_tags_update(profile_id, tags)
-            missing_profile_ids.discard(profile_id)
-            self._maybe_yield()
-        for profile_id in missing_profile_ids:
-            self.on_tags_update(profile_id, None)
-            self._maybe_yield()
-        del missing_profile_ids
-        missing_endpoints = set(self.endpoint_data_by_ep_id.keys())
-        for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            assert endpoint is not None
-            endpoint_data = self._endpoint_data_from_dict(endpoint_id,
-                                                          endpoint)
-            self._on_endpoint_data_update(endpoint_id, endpoint_data)
-            missing_endpoints.discard(endpoint_id)
-            self._maybe_yield()
-        for endpoint_id in missing_endpoints:
-            self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
-            self._maybe_yield()
-        self._force_reprogram = True
-        _log.info("Tags snapshot applied: %s tags, %s endpoints",
-                  len(tags_by_prof_id), len(endpoints_by_id))
+    def on_datamodel_in_sync(self):
+        if not self._datamodel_in_sync:
+            _log.info("Datamodel now in sync, uncorking updates to TagIpsets")
+            self._datamodel_in_sync = True
+            self._maybe_start_all()
 
     @actor_message()
     def cleanup(self):
@@ -450,7 +430,6 @@ class IpsetManager(ReferenceManager):
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
         self._update_dirty_active_ipsets()
-        self._force_reprogram = False
 
 
 class EndpointData(object):
@@ -554,7 +533,7 @@ class IpsetActor(Actor):
         """
         Replace the members of this ipset with the supplied set.
 
-        :param set[str]|list[str] members: IP address strings. Must be a copy
+        :param set[str] members: IP address strings. Must be a copy
         (as this routine keeps a link to it).
         """
         _log.info("Replacing members of ipset %s", self.name)

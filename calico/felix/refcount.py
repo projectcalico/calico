@@ -141,10 +141,24 @@ class ReferenceManager(Actor):
             # May have unblocked start of new object...
             self._maybe_start(object_id)
 
+    def _maybe_start_all(self):
+        _log.debug("Checking all objects to see if they can be started")
+        for obj_id in self.objects_by_id:
+            self._maybe_start(obj_id)
+
     def _maybe_start(self, obj_id):
         """
         Starts the actor with the given ID if it is present and there
         are no pending cleanups for that ID.
+
+        Subclasses may override this method to place additional
+        pre-requisites on starting the object.  They should call
+        this implementation if they are happy for the start to
+        proceed.
+
+        If the subclass chooses to block startup, it must later call
+        this method (or the convenience method _maybe_start_all())
+        when it wants to allow startup to proceed.
         """
         obj = self.objects_by_id.get(obj_id)
         if (obj and
@@ -196,9 +210,8 @@ class ReferenceManager(Actor):
         raise NotImplementedError()  # pragma nocover
 
     def _is_starting_or_live(self, obj_id):
-        return (obj_id in self.objects_by_id
-                and self.objects_by_id[obj_id].ref_mgmt_state in
-                    (STARTING, LIVE))
+        return (obj_id in self.objects_by_id and
+                self.objects_by_id[obj_id].ref_mgmt_state in (STARTING, LIVE))
 
 
 class RefHelper(object):

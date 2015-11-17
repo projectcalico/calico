@@ -23,10 +23,13 @@ from collections import defaultdict
 import logging
 from pprint import pformat
 from mock import *
+from netaddr import IPAddress
+
 from calico.datamodel_v1 import EndpointId
-from calico.felix.futils import IPV4, FailedSystemCall
-from calico.felix.ipsets import (EndpointData,  IpsetManager, IpsetActor,
-                                 TagIpset, EMPTY_ENDPOINT_DATA, Ipset)
+from calico.felix.futils import IPV4, FailedSystemCall, CommandOutput
+from calico.felix.ipsets import (EndpointData, IpsetManager, IpsetActor,
+                                 TagIpset, EMPTY_ENDPOINT_DATA, Ipset,
+                                 list_ipset_names)
 from calico.felix.refcount import CREATED
 from calico.felix.test.base import BaseTestCase
 
@@ -34,6 +37,7 @@ from calico.felix.test.base import BaseTestCase
 # Logger
 _log = logging.getLogger(__name__)
 
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
 EP_ID_1_1 = EndpointId("host1", "orch", "wl1_1", "ep1_1")
 EP_1_1 = {
@@ -63,6 +67,26 @@ EP_2_1_IPV6 = {
     "ipv6_nets": ["dead:beef::/128"],
 }
 EP_DATA_2_1 = EndpointData(["prof1"], ["10.0.0.1"])
+
+IPSET_LIST_OUTPUT = """Name: felix-v4-calico_net
+Type: hash:ip
+Revision: 2
+Header: family inet hashsize 1024 maxelem 1048576
+Size in memory: 16728
+References: 1
+Members:
+10.1.0.28
+10.1.0.29
+10.1.0.19
+
+Name: felix-v6-calico_net
+Type: hash:ip
+Revision: 2
+Header: family inet6 hashsize 1024 maxelem 1048576
+Size in memory: 16504
+References: 1
+Members:
+"""
 
 
 class TestIpsetManager(BaseTestCase):
@@ -106,6 +130,17 @@ class TestIpsetManager(BaseTestCase):
                                         'inet', 'hash:ip',
                                         max_elem=1234)
 
+    def test_maybe_start_gates_on_in_sync(self):
+        with patch("calico.felix.refcount.ReferenceManager."
+                   "_maybe_start") as m_maybe_start:
+            self.mgr._maybe_start("tag-123")
+            self.assertFalse(m_maybe_start.called)
+            self.mgr.on_datamodel_in_sync(async=True)
+            self.step_mgr()
+            self.mgr._maybe_start("tag-123")
+            self.assertEqual(m_maybe_start.mock_calls,
+                             [call("tag-123")])
+
     def test_tag_then_endpoint(self):
         # Send in the messages.
         self.mgr.on_tags_update("prof1", ["tag1"], async=True)
@@ -113,6 +148,11 @@ class TestIpsetManager(BaseTestCase):
         # Let the actor process them.
         self.step_mgr()
         self.assert_one_ep_one_tag()
+        # Undo our messages to check that the index is correctly updated,
+        self.mgr.on_tags_update("prof1", None, async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
+        self.step_mgr()
+        self.assert_index_empty()
 
     def test_endpoint_then_tag(self):
         # Send in the messages.
@@ -140,6 +180,10 @@ class TestIpsetManager(BaseTestCase):
                 "10.0.0.1": ("prof1", EP_ID_1_1),
             }
         })
+
+    def assert_index_empty(self):
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {})
+        self.assertEqual(self.mgr.ip_owners_by_tag, {})
 
     def test_change_ip(self):
         # Initial set-up.
@@ -310,6 +354,8 @@ class TestIpsetManager(BaseTestCase):
     @patch("calico.felix.ipsets.list_ipset_names", autospec=True)
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_cleanup(self, m_check_call, m_list_ipsets):
+        # We're testing the in-sync processing
+        self.mgr.on_datamodel_in_sync(async=True)
         # Start with a couple ipsets.
         self.mgr.get_and_incref("foo", callback=self.on_ref_acquired,
                                 async=True)
@@ -357,63 +403,20 @@ class TestIpsetManager(BaseTestCase):
                              call(["ipset", "destroy", "felix-v4-baz"]),
                          ]))
 
-    def test_apply_snapshot_mainline(self):
-        self.mgr.apply_snapshot(
-            {"prof1": ["tag1"], "prof2": ["B"], "prof3": ["B"]},
-            {EP_ID_1_1: EP_1_1,
-             EP_ID_2_1: EP_2_1},
-            async=True,
-        )
-        self.mgr.get_and_incref("tag1",
-                                callback=self.on_ref_acquired,
-                                async=True)
+    def test_update_dirty(self):
+        self.mgr.on_datamodel_in_sync(async=True)
         self.step_mgr()
-        self.mgr.on_object_startup_complete("tag1",
-                                            self.created_refs["tag1"][0],
-                                            async=True)
-        self.step_mgr()
-        self.mgr.apply_snapshot(
-            {"prof1": ["tag1", "tag2"]},
-            {EP_ID_1_1: EP_1_1},
-            async=True,
-        )
-        self.step_mgr()
-        self.assertEqual(self.mgr.tags_by_prof_id,
-                         {"prof1": ["tag1", "tag2"]})
-        self.assertEqual(self.mgr.endpoint_data_by_ep_id,
-                         {EP_ID_1_1: EP_DATA_1_1})
-        ipset = self.acquired_refs["tag1"]
-        self.assertEqual(
-            ipset.replace_members.mock_calls,
-            [
-                call(set(['10.0.0.1']), force_reprogram=True, async=True),
-                call(set(['10.0.0.1']), force_reprogram=True, async=True),
-            ]
-        )
-
-    def test_apply_snapshot_forces_reprogram(self):
-        # Apply a snapshot but mock the finish call so that we can check that
-        # apply_snapshot set the flag...
-        self.mgr.apply_snapshot(
-            {"prof1": ["A"], "prof2": ["B"]},
-            {EP_ID_1_1: EP_1_1,
-             EP_ID_2_1: EP_2_1},
-            async=True,
-        )
-        # noinspection PyUnresolvedReferences
-        with patch.object(self.mgr, "_finish_msg_batch"):
-            self.step_actor(self.mgr)
-        self.assertTrue(self.mgr._force_reprogram)
-
-    def test_finish_msg_batch_clears_reprogram_flag(self):
-        # Apply a snapshot and step the actor for real, should clear the flag.
-        self.mgr.apply_snapshot(
-            {"prof1": ["A"]},
-            {EP_ID_1_1: EP_1_1},
-            async=True,
-        )
-        self.step_mgr()
-        self.assertFalse(self.mgr._force_reprogram)
+        self.mgr._dirty_tags.add("tag-123")
+        m_ipset = Mock(spec=TagIpset)
+        self.mgr.objects_by_id["tag-123"] = m_ipset
+        with patch.object(self.mgr, "_is_starting_or_live",
+                          autospec=True) as m_sol:
+            m_sol.return_value = True
+            self.mgr._update_dirty_active_ipsets()
+            self.assertEqual(
+                m_ipset.replace_members.mock_calls,
+                [call(frozenset(), async=True)]
+            )
 
     def _notify_ready(self, tags):
         for tag in tags:
@@ -461,6 +464,7 @@ class TestIpsetActor(BaseTestCase):
         self.ipset = Mock(spec=Ipset)
         self.ipset.max_elem = 1234
         self.ipset.set_name = "felix-a_set_name"
+        self.ipset.temp_set_name = "felix-a_set_name-tmp"
         self.actor = IpsetActor(self.ipset)
 
     def test_sync_to_ipset(self):
@@ -525,10 +529,43 @@ class TestIpsetActor(BaseTestCase):
         self.ipset.reset_mock()
 
     def test_members_too_big(self):
-        self.actor.members = ["1.2.3.4"] * 2000
-        self.actor._sync_to_ipset()
+        members = set([str(IPAddress(x)) for x in range(2000)])
+        self.actor.replace_members(members, async=True)
+        self.step_actor(self.actor)
         # Check we return early without updating programmed_members.
         self.assertEqual(self.actor.programmed_members, None)
+
+    def test_owned_ipset_names(self):
+        self.assertEqual(self.actor.owned_ipset_names(),
+                         set(["felix-a_set_name", "felix-a_set_name-tmp"]))
+
+
+class TestTagIpsetActor(BaseTestCase):
+    def setUp(self):
+        super(TestTagIpsetActor, self).setUp()
+        self.m_ipset = Mock(spec=Ipset)
+        self.m_ipset.max_elem = 1234
+        self.m_ipset.set_name = "felix-a_set_name"
+        self.m_ipset.temp_set_name = "felix-a_set_name-tmp"
+        self.tag_ipset = TagIpset("tag-123", "IPv4", max_elem=1024)
+        self.tag_ipset._ipset = self.m_ipset
+        self.m_mgr = Mock()
+        self.tag_ipset._manager = self.m_mgr
+        self.tag_ipset._id = "tag-123"
+
+    def test_lifecycle(self):
+        self.tag_ipset.replace_members(set(["1.2.3.4"]), async=True)
+        self.step_actor(self.tag_ipset)
+        self.assertEqual(
+            self.m_mgr.on_object_startup_complete.mock_calls,
+            [call("tag-123", self.tag_ipset, async=True)]
+        )
+        self.tag_ipset.on_unreferenced(async=True)
+        self.step_actor(self.tag_ipset)
+        self.assertEqual(
+            self.m_mgr.on_object_cleanup_complete.mock_calls,
+            [call("tag-123", self.tag_ipset, async=True)]
+        )
 
 
 class TestIpset(BaseTestCase):
@@ -651,3 +688,9 @@ class TestIpset(BaseTestCase):
                 call(["ipset", "destroy", "foo-tmp"]),
             ]
         )
+
+    @patch("calico.felix.futils.check_call", autospec=True)
+    def test_list_ipset_names(self, m_check_call):
+        m_check_call.return_value = CommandOutput(IPSET_LIST_OUTPUT, "")
+        self.assertEqual(list_ipset_names(),
+                         ['felix-v4-calico_net', 'felix-v6-calico_net'])

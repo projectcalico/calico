@@ -118,6 +118,7 @@ class TestConfig(unittest.TestCase):
         config.report_etcd_config({}, cfg_dict)
 
         self.assertEqual(config.LOGFILE, None)
+        self.assertEqual(config.DRIVERLOGFILE, None)
 
     def test_no_metadata(self):
         # Metadata can be excluded by explicitly saying "none"
