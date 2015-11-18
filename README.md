@@ -88,7 +88,7 @@ We also provide the following additional demonstration:
 
 #### Docker default networking
 
-This uses Dockers standard networking infrastructure, requiring you to 
+This uses Docker's standard networking infrastructure, requiring you to 
 explicitly add a created container into a Calico network.
 
 This is compatible with all Docker versions from 1.6 onwards.
