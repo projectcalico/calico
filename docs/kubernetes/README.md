@@ -7,18 +7,14 @@
 <!--- end of master only -->
 
 # Kubernetes with Calico networking
-Calico can be used as a network plugin for Kubernetes, to provide connectivity for workloads in a Kubernetes cluster.
+Calico can be used as a network plugin for Kubernetes, to provide connectivity for workloads in a Kubernetes cluster.  Calico is particularly suitable for large Kubernetes deployments on bare metal or private clouds, where the performance and complexity costs of overlay networks can become significant. It can also be used in public clouds.
 
-Calico is particularly suitable for large Kubernetes deployments on bare metal or private clouds, where the performance and complexity costs of overlay networks can become significant. It can also be used in public clouds.
-To start using Calico Networking in Kubernetes, check out our [Integration Doc](https://github.com/projectcalico/calico-docker/tree/master/docs/kubernetes/KubernetesIntegration.md)
+To start using Calico Networking in your existing Kubernetes cluster, check out our [integration guide](KubernetesIntegration.md).
 
-The following configuration guides have been written:
+To build a new Kubernetes cluster with Calico networking, try one of the following guides:
 
-- [Kubernetes Vagrant Saltfiles](https://github.com/projectcalico/calico-docker/tree/master/docs/kubernetes/VagrantProvisioner.md)
-- [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
-- [CoreOS bare-metal](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
-- [AWS Cluster Integration](https://github.com/projectcalico/calico-docker/tree/master/docs/kubernetes/AWSIntegration.md)
-
-Coming soon:
-
-- Digital Ocean
+- [Ubuntu/systemd bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
+- [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
+- [Kubernetes Vagrant Saltfiles](VagrantProvisioner.md)
+- [AWS Cluster Integration](AWSIntegration.md)
+- [DigitalOcean + Fedora](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/fedora/fedora-calico.md)
