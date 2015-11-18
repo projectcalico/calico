@@ -79,12 +79,20 @@ class TestDevices(unittest.TestCase):
         args = []
         retcode = 1
         stdout = ""
-        stderr = "Device \"%s\" does not exist." % tap
-        err = futils.FailedSystemCall("From test", args, retcode, stdout, stderr)
 
-        with mock.patch('calico.felix.futils.check_call', side_effect=err):
-            self.assertFalse(devices.interface_exists(tap))
-            futils.check_call.assert_called_with(["ip", "link", "list", tap])
+        # Check we correctly handle error messages for a missing interface,
+        # and do so for all supported flavors of Linux.
+        error_messages = [
+            "Device \"%s\" does not exist." % tap,  # Ubuntu/RHEL
+            "ip: can't find device '%s'" % tap,     # Alpine
+        ]
+
+        for stderr in error_messages:
+	    err = futils.FailedSystemCall("From test", args, retcode, stdout, stderr)
+
+	    with mock.patch('calico.felix.futils.check_call', side_effect=err):
+	        self.assertFalse(devices.interface_exists(tap))
+	        futils.check_call.assert_called_with(["ip", "link", "list", tap])
 
         with mock.patch('calico.felix.futils.check_call'):
             self.assertTrue(devices.interface_exists(tap))
