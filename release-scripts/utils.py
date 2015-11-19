@@ -14,6 +14,7 @@ PATH_CALICOCTL_REQS = os.path.join("calicoctl", "requirements.txt")
 PATH_CALICOCTL_NODE = os.path.join("calicoctl", "calico_ctl", "node.py")
 PATH_CALICOCTL_INIT = os.path.join("calicoctl", "calico_ctl", "__init__.py")
 PATH_CALICONODE_BUILD = os.path.join("calico_node", "build.sh")
+PATH_MAKEFILE = "Makefile"
 PATH_MAIN_README = "README.md"
 PATH_DOCS = "docs"
 PATH_RELEASE_DATA = ".releasedata"
@@ -30,7 +31,8 @@ UPDATE_FILES_STATIC = [PATH_MAIN_README,
                        PATH_CALICOCTL_NODE,
                        PATH_CALICOCTL_REQS,
                        PATH_CALICONODE_BUILD,
-                       PATH_CALICOCTL_INIT]
+                       PATH_CALICOCTL_INIT,
+                       PATH_MAKEFILE]
 UPDATE_FILES_DIRS = [PATH_DOCS]
 UPDATE_FILES_EXCLUDE = [PATH_BUILDING]
 UPDATE_FILES_RE = re.compile("(.*\.md)|(Vagrantfile)|(user\-data\-.*)")
