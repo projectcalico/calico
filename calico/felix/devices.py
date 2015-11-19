@@ -91,7 +91,12 @@ def interface_exists(interface):
         futils.check_call(["ip", "link", "list", interface])
         return True
     except futils.FailedSystemCall as fsc:
-        if fsc.stderr.count("does not exist") != 0:
+        # If the interface doesn't exist, the error message varies by
+        # flavor of Linux:
+        #  * Ubuntu/RHEL: "Device 'XYZ' does not exist"
+        #  * Alpine:      "ip: can't find device 'XYZ'"
+        if ("does not exist" in fsc.stderr) or \
+           ("can't find device" in fsc.stderr):
             return False
         else:
             # An error other than does not exist; just pass on up
