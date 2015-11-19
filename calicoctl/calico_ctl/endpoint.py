@@ -51,7 +51,7 @@ from pycalico.datastore_errors import ProfileNotInEndpoint
 
 from connectors import client
 from utils import print_paragraph
-from utils import validate_characters
+from pycalico.util import validate_characters
 
 
 def validate_arguments(arguments):

@@ -120,24 +120,6 @@ def validate_ip(ip_addr, version):
         return netaddr.valid_ipv6(ip_addr)
 
 
-def validate_characters(input_string):
-    """
-    Validate that input_string passed only contains letters a-z,
-    numbers 0-9, and symbols _ . -
-
-    :param input_string: string to be validated
-    :return: Boolean: True is valid, False if invalid
-    """
-    # List of valid characters that Felix permits
-    valid_chars = '[a-zA-Z0-9_\.\-]'
-
-    # Check for invalid characters
-    if not re.match("^%s+$" % valid_chars, input_string):
-        return False
-    else:
-        return True
-
-
 def validate_hostname(hostname):
     """
     Validate a hostname string.  This allows standard hostnames and IPv4
