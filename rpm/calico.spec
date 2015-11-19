@@ -2,8 +2,8 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.3.0
-Release:        0.3%{?dist}
+Version:        1.3.0~pre.2
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -21,64 +21,6 @@ overlays, including scalability, efficiency, and simplicity. It is
 designed for a wide range of environments including OpenStack,
 lightweight Linux containers (LXCs), bare metal, and Network Functions
 Virtualization (NFV).
-
-
-%package compute
-Group:          Applications/Engineering
-Summary:        Project Calico virtual networking for cloud data centers
-%if 0%{?el6}
-Requires:       calico-common, calico-felix, openstack-neutron, iptables, python-argparse
-%else
-Requires:       calico-common, calico-felix, openstack-neutron, iptables
-%endif
-
-
-%description compute
-This package provides the pieces needed on a compute node.
-
-%post compute
-if [ $1 -eq 1 ] ; then
-    # Initial installation
-
-    # Enable checksum calculation on DHCP responses.  This is needed
-    # when sending DHCP responses over the TAP interfaces to guest
-    # VMs, as apparently Linux doesn't itself do the checksum
-    # calculation in that case.
-    iptables -D POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill >/dev/null 2>&1 || true
-    iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill
-
-    # Don't reject INPUT and FORWARD packets by default on the compute host.
-    iptables -D INPUT -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
-    iptables -D FORWARD -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
-
-    # Save current iptables for subsequent reboots.
-    iptables-save > /etc/sysconfig/iptables
-
-    # Enable IP forwarding.
-    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
-    sysctl -p
-fi
-
-%preun compute
-if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
-    :
-fi
-
-%postun compute
-if [ $1 -ge 1 ] ; then
-    # Package upgrade, not uninstall
-    :
-fi
-
-%package control
-Group:          Applications/Engineering
-Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, python-six
-
-%description control
-This package provides the pieces needed on a controller node.
 
 
 %package common
@@ -183,18 +125,10 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 %{python_sitelib}/calico*
 /usr/bin/calico-diags
-%doc
-
-%files compute
-%defattr(-,root,root,-)
 /usr/bin/calico-gen-bird-conf.sh
 /usr/bin/calico-gen-bird6-conf.sh
 /usr/bin/calico-gen-bird-mesh-conf.sh
 /usr/share/calico/bird/*
-%doc
-
-%files control
-%defattr(-,root,root,-)
 %doc
 
 %files felix
