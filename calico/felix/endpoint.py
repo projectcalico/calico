@@ -532,10 +532,13 @@ class LocalEndpoint(RefCountedActor):
                 # Either the interface flapped back up after the failure (in
                 # which case we'll retry when the event reaches us) or there
                 # was a genuine failure due to bad data or some other factor.
-                _log.error("Failed to configure interface %s for %s: %r.  "
-                           "Either the interface is flapping or it is "
-                           "misconfigured.", self._iface_name,
-                           self.combined_id, e)
+                #
+                # Since the former is fairly common, we log at warning level
+                # rather than error, which avoids false positives.
+                _log.warning("Failed to configure interface %s for %s: %r.  "
+                             "Either the interface is flapping or it is "
+                             "misconfigured.", self._iface_name,
+                             self.combined_id, e)
         else:
             _log.info("Interface %s configured", self._iface_name)
             self._device_in_sync = True
