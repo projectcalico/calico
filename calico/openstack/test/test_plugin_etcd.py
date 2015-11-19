@@ -893,13 +893,6 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             }
         )
 
-    def test_bind_port_coverage(self):
-        context = mock.Mock()
-        context.host_agents.return_value = [
-            {"alive": False}
-        ]
-        self.driver.bind_port(context)
-
     def test_on_port_status_changed(self):
         self.driver._get_db()
         self.driver._db_context = mock.Mock()

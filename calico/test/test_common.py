@@ -686,19 +686,6 @@ class TestCommon(unittest.TestCase):
                                      "Invalid tag"):
             common.validate_tags(profile_id, ["value", "bad value"])
 
-    def test_greenlet_id(self):
-        def greenlet_run():
-            tid = common.greenlet_id()
-            return tid
-
-        tid = common.greenlet_id()
-        child = eventlet.spawn(greenlet_run)
-        child_tid = child.wait()
-        new_tid = common.greenlet_id()
-
-        self.assertTrue(child_tid > tid)
-        self.assertEqual(tid, new_tid)
-
     def test_validate_ipam_pool(self):
         self.assert_ipam_pool_valid({"cidr": "10/16", "foo": "bar"},
                                     {"cidr": "10.0.0.0/16"}, 4)

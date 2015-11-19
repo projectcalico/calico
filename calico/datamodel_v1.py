@@ -190,6 +190,12 @@ class EndpointId(object):
     def __str__(self):
         return self.__class__.__name__ + ("<%s>" % self.endpoint)
 
+    def __repr__(self):
+        return self.__class__.__name__ + ("(%r,%r,%r,%r)" % (self.host,
+                                                             self.orchestrator,
+                                                             self.workload,
+                                                             self.endpoint))
+
     def __eq__(self, other):
         if other is self:
             return True

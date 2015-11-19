@@ -185,6 +185,9 @@ class Config(object):
                            "an endpoint to the host.", "DROP")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
+        self.add_parameter("EtcdDriverLogFilePath",
+                           "Path to log file for etcd driver",
+                           "/var/log/calico/felix-etcd.log")
         self.add_parameter("LogSeverityFile",
                            "Log severity for logging to file", "INFO")
         self.add_parameter("LogSeveritySys",
@@ -210,6 +213,12 @@ class Config(object):
         self.add_parameter("EndpointReportingDelaySecs",
                            "Minimum delay between per-endpoint status reports",
                            1, value_is_int=True)
+        self.add_parameter("MaxIpsetSize",
+                           "Maximum size of the ipsets that Felix uses to "
+                           "represent profile tag memberships.  Should be set "
+                           "to a value larger than the expected number of "
+                           "IP addresses using a single tag.",
+                           2**20, value_is_int=True)
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
@@ -255,6 +264,7 @@ class Config(object):
         self.DEFAULT_INPUT_CHAIN_ACTION = \
             self.parameters["DefaultEndpointToHostAction"].value
         self.LOGFILE = self.parameters["LogFilePath"].value
+        self.DRIVERLOGFILE = self.parameters["EtcdDriverLogFilePath"].value
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
@@ -266,6 +276,7 @@ class Config(object):
             self.parameters["EndpointReportingEnabled"].value
         self.ENDPOINT_REPORT_DELAY = \
             self.parameters["EndpointReportingDelaySecs"].value
+        self.MAX_IPSET_SIZE = self.parameters["MaxIpsetSize"].value
 
         self._validate_cfg(final=final)
 
@@ -273,7 +284,8 @@ class Config(object):
         common.complete_logging(self.LOGFILE,
                                 self.LOGLEVFILE,
                                 self.LOGLEVSYS,
-                                self.LOGLEVSCR)
+                                self.LOGLEVSCR,
+                                gevent_in_use=True)
 
         if final:
             # Log configuration - the whole lot of it.
@@ -379,10 +391,12 @@ class Config(object):
             raise ConfigException("Invalid log level",
                                   self.parameters["LogSeverityScreen"])
 
-        # Log file may be "None" (the literal string, case insensitive). In
+        # Log files may be "None" (the literal string, case insensitive). In
         # this case no log file should be written.
         if self.LOGFILE.lower() == "none":
             self.LOGFILE = None
+        if self.DRIVERLOGFILE.lower() == "none":
+            self.DRIVERLOGFILE = None
 
         if self.METADATA_IP.lower() == "none":
             # Metadata is not required.
@@ -421,16 +435,20 @@ class Config(object):
             log.warning("Endpoint status delay is negative, defaulting to 1.")
             self.ENDPOINT_REPORT_DELAY = 1
 
+        if self.MAX_IPSET_SIZE <= 0:
+            log.warning("Max ipset size is non-positive, defaulting to 2^20.")
+            self.MAX_IPSET_SIZE = 2**20
+
         if not final:
             # Do not check that unset parameters are defaulted; we have more
             # config to read.
             return
 
-        for name, parameter in self.parameters.iteritems():
+        for parameter in self.parameters.itervalues():
             if parameter.value is None:
                 # No value, not even a default
                 raise ConfigException("Missing undefaulted value",
-                                      self.parameters["InterfacePrefix"])
+                                      parameter)
 
     def _warn_unused_cfg(self, cfg_dict, source):
         # Warn about any unexpected items - i.e. ones we have not used.

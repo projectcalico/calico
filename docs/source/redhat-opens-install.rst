@@ -207,18 +207,6 @@ please get in touch with us and we'll be happy to help you through the process.
         systemctl start etcd
         systemctl enable etcd
 
-3. Install dependencies for python-etcd::
-
-        yum groupinstall 'Development Tools'
-        yum install python-devel libffi-devel openssl-devel
-
-4. Install python-etcd::
-
-        curl -L https://github.com/projectcalico/python-etcd/releases/download/0.4.2%2Bcalico.1/python-etcd_0.4.2.calico.1.tar.gz -o python-etcd.tar.gz
-        tar xvf python-etcd.tar.gz
-        cd python-etcd-0.4.2+calico.1
-        python setup.py install
-
 Etcd Proxy Install
 ------------------
 
@@ -275,19 +263,6 @@ running the etcd database itself (both control and compute nodes).
 
         systemctl start etcd
         systemctl enable etcd
-
-
-3. Install dependencies for python-etcd::
-
-        yum groupinstall 'Development Tools'
-        yum install python-devel libffi-devel openssl-devel
-
-4. Install python-etcd::
-
-        curl -L https://github.com/projectcalico/python-etcd/releases/download/0.4.2%2Bcalico.1/python-etcd_0.4.2.calico.1.tar.gz -o python-etcd.tar.gz
-        tar xvf python-etcd.tar.gz
-        cd python-etcd-0.4.2+calico.1
-        python setup.py install
 
 .. _control-node:
 
@@ -498,21 +473,13 @@ On each compute node, perform the following steps:
 
         yum install -y bird bird6
 
-10. Install python-posix-spawn::
-
-        yum install -y gcc libffi-devel
-        curl -L https://github.com/projectcalico/python-posix-spawn/releases/download/v0.2.post7/posix-spawn-0.2.post7.tar.gz -o posix-spawn.tar.gz
-        tar xvf posix-spawn.tar.gz
-        cd posix-spawn-0.2.post7
-        python setup.py install
-
-11. Install the ``calico-compute`` package:
+10. Install the ``calico-compute`` package:
 
     ::
 
         yum install calico-compute
 
-12. Configure BIRD. By default Calico assumes that you'll be deploying a
+11. Configure BIRD. By default Calico assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's
@@ -561,11 +528,11 @@ On each compute node, perform the following steps:
          chkconfig bird on
          chkconfig bird6 on
 
-13. Create the ``/etc/calico/felix.cfg`` file by copying
+12. Create the ``/etc/calico/felix.cfg`` file by copying
     ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
     used, but see :doc:`configuration` for more details.
 
-14. Restart the Felix service:
+13. Restart the Felix service:
 
     ::
 

@@ -280,13 +280,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if status:
             port_status = PORT_STATUS_MAPPING.get(status.get("status"),
                                                   constants.PORT_STATUS_ERROR)
+            LOG.info("Updating port %s status to %s", port_id, port_status)
         else:
             # Report deletion as error.  Either the port has genuinely been
             # deleted, in which case this update is ignored by
             # update_port_status or the port still exists but we disagree,
             # which is an error.
             port_status = constants.PORT_STATUS_ERROR
-        LOG.info("Updating port %s status to %s", port_id, port_status)
+            LOG.info("Reporting port %s deletion", port_id)
+
         session = self._db_context.session
         try:
             with session.begin(subtransactions=True):
@@ -329,13 +331,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         call back into our check_segment_for_agent() method, which does
         further checks.
         """
-        for agent in context.host_agents(constants.AGENT_TYPE_DHCP):
-            LOG.debug("Checking agent: %s", agent)
-            if agent["alive"]:
-                break
-        else:
-            LOG.warning("No live DHCP agents on host")
-            return
+        # FIXME: Actually for now we don't check for a DHCP agent,
+        # because we haven't yet worked out the future architecture
+        # for this.  The key point is that we don't want to do this
+        # via the Neutron database and RPC mechanisms, because that is
+        # what causes the scaling problem that led us to switch to an
+        # etcd-driven DHCP agent.
         return super(CalicoMechanismDriver, self).bind_port(context)
 
     def check_segment_for_agent(self, segment, agent):

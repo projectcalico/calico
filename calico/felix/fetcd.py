@@ -19,13 +19,13 @@ felix.fetcd
 Our API to etcd.  Contains function to synchronize felix with etcd
 as well as reporting our status into etcd.
 """
-from collections import defaultdict
 import functools
 import os
 import random
 import json
 import logging
-from calico.monotonic import monotonic_time
+import socket
+import subprocess
 
 from etcd import EtcdException, EtcdKeyNotFound
 import gevent
@@ -34,21 +34,30 @@ from gevent.event import Event
 
 from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
-from calico.datamodel_v1 import (VERSION_DIR, READY_KEY, CONFIG_DIR,
-                                 RULES_KEY_RE, TAGS_KEY_RE,
-                                 dir_for_per_host_config,
-                                 PROFILE_DIR, HOST_DIR, EndpointId, POLICY_DIR,
-                                 HOST_IP_KEY_RE, IPAM_V4_CIDR_KEY_RE,
-                                 key_for_last_status, key_for_status,
-                                 FELIX_STATUS_DIR, get_endpoint_id_from_key,
-                                 dir_for_felix_status, ENDPOINT_STATUS_ERROR,
-                                 ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP)
+from calico.datamodel_v1 import (
+    VERSION_DIR, CONFIG_DIR, RULES_KEY_RE, TAGS_KEY_RE,
+    dir_for_per_host_config, PROFILE_DIR, HOST_DIR, EndpointId, HOST_IP_KEY_RE,
+    IPAM_V4_CIDR_KEY_RE, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
+    get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
+    ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP
+)
+from calico.etcddriver.protocol import (
+    MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
+    MSG_KEY_ETCD_URL, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
+    MSG_KEY_SEV_SYSLOG, MSG_KEY_SEV_SCREEN, STATUS_IN_SYNC,
+    MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG,
+    MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MessageWriter,
+    MSG_TYPE_STATUS, MSG_KEY_STATUS
+)
 from calico.etcdutils import (
-    EtcdClientOwner, EtcdWatcher, ResyncRequired,
-    delete_empty_parents)
+    EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent
+)
 from calico.felix.actor import Actor, actor_message
-from calico.felix.futils import (intern_dict, intern_list, logging_exceptions,
-                                 iso_utc_timestamp, IPV4, IPV6)
+from calico.felix.futils import (
+    intern_dict, intern_list, logging_exceptions, iso_utc_timestamp, IPV4,
+    IPV6, StatCounter
+)
+from calico.monotonic import monotonic_time
 
 _log = logging.getLogger(__name__)
 
@@ -75,16 +84,12 @@ IPAM_V4_DIR = IPAM_DIR + "/v4"
 POOL_V4_DIR = IPAM_V4_DIR + "/pool"
 CIDR_V4_KEY = POOL_V4_DIR + "/<pool_id>"
 
-RESYNC_KEYS = [
-    VERSION_DIR,
-    POLICY_DIR,
-    PROFILE_DIR,
-    CONFIG_DIR,
-    HOST_DIR,
-    IPAM_DIR,
-    IPAM_V4_DIR,
-    POOL_V4_DIR,
-]
+# Max number of events from driver process before we yield to another greenlet.
+MAX_EVENTS_BEFORE_YIELD = 200
+
+
+# Global diagnostic counters.
+_stats = StatCounter("Etcd counters")
 
 
 class EtcdAPI(EtcdClientOwner, Actor):
@@ -156,6 +161,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
             _log.debug("After jitter, next periodic resync will be in %.1f "
                        "seconds.", sleep_time)
             gevent.sleep(sleep_time)
+            _stats.increment("Periodic resync")
             self.force_resync(reason="periodic resync", async=True)
 
     @logging_exceptions
@@ -222,7 +228,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         """
         Loads our config from etcd, should only be called once.
 
-        :return: an event which is triggered when the config has been loaded.
+        :return: an Event which is triggered when the config has been loaded.
         """
         self._watcher.load_config.set()
         return self._watcher.configured
@@ -233,7 +239,9 @@ class EtcdAPI(EtcdClientOwner, Actor):
         Starts watching etcd for changes.  Implicitly loads the config
         if it hasn't been loaded yet.
         """
-        self._watcher.load_config.set()
+        assert self._watcher.load_config.is_set(), (
+            "load_config() should be called before start_watch()."
+        )
         self._watcher.splitter = splitter
         self._watcher.begin_polling.set()
 
@@ -245,7 +253,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
         :param str reason: Optional reason to log out.
         """
         _log.info("Forcing a resync with etcd.  Reason: %s.", reason)
-        self._watcher.resync_after_current_poll = True
+        self._watcher.resync_requested = True
 
         if self._config.REPORT_ENDPOINT_STATUS:
             _log.info("Endpoint status reporting enabled, marking existing "
@@ -261,304 +269,302 @@ class EtcdAPI(EtcdClientOwner, Actor):
         sys.exit(1)
 
 
-class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
+class _FelixEtcdWatcher(gevent.Greenlet):
     """
-    Greenlet that watches the etcd data model for changes.
+    Greenlet that communicates with the etcd driver over a socket.
 
-    (1) Waits for the load_config event to be triggered.
-    (2) Connects to etcd and waits for the Ready flag to be set,
-        indicating the data model is consistent.
-    (3) Loads the config from etcd and passes it to the config object.
-    (4) Waits for the begin_polling Event to be triggered.
-    (5) Loads a complete snapshot from etcd and passes it to the
-        UpdateSplitter.
-    (6) Watches etcd for changes, sending them incrementally to the
-        UpdateSplitter.
-    (On etcd error) starts again from step (5)
+    * Does the initial handshake with the driver, sending it the init
+      message.
+    * Receives the pre-loaded config from the driver and uses that
+      to do Felix's one-off configuration.
+    * Sends the relevant config back to the driver.
+    * Processes the event stream from the driver, sending it on to
+      the splitter.
 
-    This greenlet is expected to be managed by the EtcdAPI Actor.
+    This class is similar to the EtcdWatcher class in that it uses
+    a PathDispatcher to fan out updates but it doesn't own an etcd
+    connection of its own.
     """
 
     def __init__(self, config, etcd_api, status_reporter, hosts_ipset):
-        super(_FelixEtcdWatcher, self).__init__(config.ETCD_ADDR, VERSION_DIR)
+        super(_FelixEtcdWatcher, self).__init__()
         self._config = config
         self._etcd_api = etcd_api
         self._status_reporter = status_reporter
         self.hosts_ipset = hosts_ipset
-
+        # Whether we've been in sync with etcd at some point.
+        self._been_in_sync = False
         # Keep track of the config loaded from etcd so we can spot if it
         # changes.
         self.last_global_config = None
         self.last_host_config = None
         self.my_config_dir = dir_for_per_host_config(self._config.HOSTNAME)
-
         # Events triggered by the EtcdAPI Actor to tell us to load the config
         # and start polling.  These are one-way flags.
         self.load_config = Event()
         self.begin_polling = Event()
-
         # Event that we trigger once the config is loaded.
         self.configured = Event()
-
         # Polling state initialized at poll start time.
         self.splitter = None
-
-        # Cache of known endpoints, used to resolve deletions of whole
-        # directory trees.
-        self.endpoint_ids_per_host = defaultdict(set)
-
         # Next-hop IP addresses of our hosts, if populated in etcd.
         self.ipv4_by_hostname = {}
-
+        # Forces a resync after the current poll if set.  Safe to set from
+        # another thread.  Automatically reset to False after the resync is
+        # triggered.
+        self.resync_requested = False
+        self.dispatcher = PathDispatcher()
+        # The Popen object for the driver.
+        self._driver_process = None
+        # Stats.
+        self.read_count = 0
+        self.msgs_processed = 0
+        self.last_rate_log_time = monotonic_time()
         # Register for events when values change.
         self._register_paths()
 
     def _register_paths(self):
         """
         Program the dispatcher with the paths we care about.
-
-        Since etcd gives us a single event for a recursive directory
-        deletion, we have to handle deletes for lots of directories that
-        we otherwise wouldn't care about.
         """
-        reg = self.register_path
-        # Top-level directories etc.  If these go away, stop polling and
-        # resync.
-        for key in RESYNC_KEYS:
-            reg(key, on_del=self._resync)
-        reg(READY_KEY, on_set=self.on_ready_flag_set, on_del=self._resync)
+        reg = self.dispatcher.register
         # Profiles and their contents.
-        reg(PER_PROFILE_DIR, on_del=self.on_profile_delete)
         reg(TAGS_KEY, on_set=self.on_tags_set, on_del=self.on_tags_delete)
         reg(RULES_KEY, on_set=self.on_rules_set, on_del=self.on_rules_delete)
-        # Hosts, workloads and endpoints.
-        reg(PER_HOST_DIR, on_del=self.on_host_delete)
+        # Hosts and endpoints.
         reg(HOST_IP_KEY,
             on_set=self.on_host_ip_set,
             on_del=self.on_host_ip_delete)
-        reg(WORKLOAD_DIR, on_del=self.on_host_delete)
-        reg(PER_ORCH_DIR, on_del=self.on_orch_delete)
-        reg(PER_WORKLOAD_DIR, on_del=self.on_workload_delete)
-        reg(ENDPOINT_DIR, on_del=self.on_workload_delete)
         reg(PER_ENDPOINT_KEY,
             on_set=self.on_endpoint_set, on_del=self.on_endpoint_delete)
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
-        # Configuration keys.  If any of these is changed or set a resync is
-        # done, including a full reload of configuration. If any field has
-        # actually changed (as opposed to being reset to the same value or
-        # explicitly set to the default, say), Felix terminates allowing the
-        # init daemon to restart it.
+        # Configuration keys.  If any of these is changed or created, we'll
+        # restart to pick up the change.
         reg(CONFIG_PARAM_KEY,
-            on_set=self._resync,
-            on_del=self._resync)
+            on_set=self._on_config_updated,
+            on_del=self._on_config_updated)
         reg(PER_HOST_CONFIG_PARAM_KEY,
-            on_set=self._resync,
-            on_del=self._resync)
+            on_set=self._on_host_config_updated,
+            on_del=self._on_host_config_updated)
 
     @logging_exceptions
     def _run(self):
-        """
-        Greenlet main loop: loads the initial dump from etcd and then
-        monitors for changes and feeds them to the splitter.
-        """
+        # Don't do anything until we're told to load the config.
+        _log.info("Waiting for load_config event...")
         self.load_config.wait()
-        self.loop()
+        _log.info("...load_config set.  Starting driver read %s loop", self)
+        # Start the driver process and wait for it to connect back to our
+        # socket.
+        self._msg_reader, self._msg_writer = self._start_driver()
+        # Loop reading from the socket and processing messages.
+        self._loop_reading_from_driver()
 
-    def _on_pre_resync(self):
-        self.wait_for_ready(RETRY_DELAY)
-        # Always reload the config.  This lets us detect if the config has
-        # changed and restart felix if so.
-        self._load_config()
-        if not self.configured.is_set():
-            # Unblock anyone who's waiting on the config.
-            self.configured.set()
-        if not self.begin_polling.is_set():
-            _log.info("etcd worker about to wait for begin_polling event")
-        self.begin_polling.wait()
-
-    def _load_config(self):
-        """
-        Loads our configuration from etcd.  Does not return
-        until the config is successfully loaded.
-
-        The first call to this method populates the config object.
-
-        Subsequent calls check the config hasn't changed and kill
-        the process if it has.  This allows us to be restarted by
-        the init daemon in order to pick up the new config.
-        """
+    def _loop_reading_from_driver(self):
         while True:
-            try:
-                global_cfg = self.client.read(CONFIG_DIR,
-                                              recursive=True)
-                global_dict = _build_config_dict(global_cfg)
+            for msg_type, msg in self._msg_reader.new_messages(timeout=1):
+                self._dispatch_msg_from_driver(msg_type, msg)
+            if self.resync_requested:
+                _log.info("Resync requested, sending resync request to driver")
+                self.resync_requested = False
+                self._msg_writer.send_message(MSG_TYPE_RESYNC)
+            # Check that the driver hasn't died.  The recv() call should
+            # raise an exception when the buffer runs dry but this usually
+            # gets hit first.
+            driver_rc = self._driver_process.poll()
+            if driver_rc is not None:
+                _log.critical("Driver process died with RC = %s.  Felix must "
+                              "exit.", driver_rc)
+                die_and_restart()
 
-                try:
-                    host_cfg = self.client.read(self.my_config_dir,
-                                                recursive=True)
-                    host_dict = _build_config_dict(host_cfg)
-                except EtcdKeyNotFound:
-                    # It is not an error for there to be no per-host
-                    # config; default to empty.
-                    _log.info("No configuration overrides for this node")
-                    host_dict = {}
-            except (EtcdKeyNotFound, EtcdException) as e:
-                # Note: we don't log the stack trace because it's too
-                # spammy and adds little.
-                _log.error("Failed to read config. etcd may be down or "
-                           "the data model may not be ready: %r. Will "
-                           "retry.", e)
-                gevent.sleep(RETRY_DELAY)
-            else:
-                if self.configured.is_set():
-                    # We've already been configured.  We don't yet support
-                    # dynamic config update so instead we check if the config
-                    # has changed and die if it has.
-                    _log.info("Checking configuration for changes...")
-                    if (host_dict != self.last_host_config or
-                            global_dict != self.last_global_config):
-                        _log.warning("Felix configuration has changed, "
-                                     "felix must restart.")
-                        _log.info("Old host config: %s", self.last_host_config)
-                        _log.info("New host config: %s", host_dict)
-                        _log.info("Old global config: %s",
-                                  self.last_global_config)
-                        _log.info("New global config: %s", global_dict)
-                        die_and_restart()
-                else:
-                    # First time loading the config.  Report it to the config
-                    # object.  Take copies because report_etcd_config is
-                    # destructive.
-                    self.last_host_config = host_dict.copy()
-                    self.last_global_config = global_dict.copy()
-                    self._config.report_etcd_config(host_dict, global_dict)
-                return
+    def _dispatch_msg_from_driver(self, msg_type, msg):
+        # Optimization: put update first in the "switch" block because
+        # it's on the critical path.
+        if msg_type == MSG_TYPE_UPDATE:
+            _stats.increment("Update messages from driver")
+            self._on_update_from_driver(msg)
+        elif msg_type == MSG_TYPE_CONFIG_LOADED:
+            _stats.increment("Config loaded messages from driver")
+            self._on_config_loaded_from_driver(msg)
+        elif msg_type == MSG_TYPE_STATUS:
+            _stats.increment("Status messages from driver")
+            self._on_status_from_driver(msg)
+        else:
+            raise RuntimeError("Unexpected message %s" % msg)
+        self.msgs_processed += 1
+        if self.msgs_processed % MAX_EVENTS_BEFORE_YIELD == 0:
+            # Yield to ensure that other actors make progress.  (gevent only
+            # yields for us if the socket would block.)  The sleep must be
+            # non-zero to work around gevent issue where we could be
+            # immediately rescheduled.
+            gevent.sleep(0.000001)
 
-    def _on_snapshot_loaded(self, etcd_snapshot_response):
+    def _on_update_from_driver(self, msg):
         """
-        Loads a snapshot from etcd and passes it to the update splitter.
+        Called when the driver sends us a key/value pair update.
 
-        :raises ResyncRequired: if the Ready flag is not set in the snapshot.
+        After the initial handshake, the stream of events consists
+        entirely of updates unless something happens to change the
+        state of the driver.
+
+        :param dict msg: The message received from the driver.
         """
-        rules_by_id = {}
-        tags_by_id = {}
-        endpoints_by_id = {}
-        ipv4_pools_by_id = {}
-        self.endpoint_ids_per_host.clear()
-        self.ipv4_by_hostname.clear()
-        still_ready = False
-        for child in etcd_snapshot_response.children:
-            profile_id, rules = parse_if_rules(child)
-            if profile_id:
-                rules_by_id[profile_id] = rules
-                continue
-            profile_id, tags = parse_if_tags(child)
-            if profile_id:
-                tags_by_id[profile_id] = tags
-                continue
-            endpoint_id, endpoint = parse_if_endpoint(self._config, child)
-            if endpoint_id and endpoint:
-                endpoints_by_id[endpoint_id] = endpoint
-                self.endpoint_ids_per_host[endpoint_id.host].add(endpoint_id)
-                continue
-            pool_id, pool = parse_if_ipam_v4_pool(child)
-            if pool_id and pool:
-                ipv4_pools_by_id[pool_id] = pool
-                continue
-            if self._config.IP_IN_IP_ENABLED:
-                hostname, ip = parse_if_host_ip(child)
-                if hostname and ip:
-                    self.ipv4_by_hostname[hostname] = ip
-                    continue
+        assert self.configured.is_set(), "Received update before config"
+        # The driver starts polling immediately, make sure we block until
+        # everyone else is ready to receive updates.
+        self.begin_polling.wait()
+        # Unpack the message.
+        key = msg[MSG_KEY_KEY]
+        value = msg[MSG_KEY_VALUE]
+        _log.debug("Update from driver: %s -> %s", key, value)
+        # Output some very coarse stats.
+        self.read_count += 1
+        if self.read_count % 1000 == 0:
+            now = monotonic_time()
+            delta = now - self.last_rate_log_time
+            _log.info("Processed %s updates from driver "
+                      "%.1f/s", self.read_count, 1000.0 / delta)
+            self.last_rate_log_time = now
+        # Wrap the update in an EtcdEvent object so we can dispatch it via the
+        # PathDispatcher.
+        n = EtcdEvent("set" if value is not None else "delete", key, value)
+        self.dispatcher.handle_event(n)
 
-            # Double-check the flag hasn't changed since we read it before.
-            if child.key == READY_KEY:
-                if child.value == "true":
-                    still_ready = True
-                else:
-                    _log.warning("Aborting resync because ready flag was"
-                                 "unset since we read it.")
-                    raise ResyncRequired()
+    def _on_config_loaded_from_driver(self, msg):
+        """
+        Called when we receive a config loaded message from the driver.
 
-        if not still_ready:
-            _log.warn("Aborting resync; ready flag no longer present.")
-            raise ResyncRequired()
+        This message is expected once per resync, when the config is
+        pre-loaded by the driver.
 
-        # We now know exactly which endpoints are on this host, use that to
-        # clean up any endpoint statuses that should now be gone.
-        our_endpoints_ids = self.endpoint_ids_per_host[self._config.HOSTNAME]
-        self.clean_up_endpoint_statuses(our_endpoints_ids)
+        On the first call, responds to the driver synchronously with a
+        config response.
 
-        # Actually apply the snapshot. This does not return anything, but
-        # just sends the relevant messages to the relevant threads to make
-        # all the processing occur.
-        _log.info("Snapshot parsed, passing to update splitter")
-        self.splitter.apply_snapshot(rules_by_id,
-                                     tags_by_id,
-                                     endpoints_by_id,
-                                     ipv4_pools_by_id,
-                                     async=True)
-        if self._config.IP_IN_IP_ENABLED:
-            # We only support IPv4 for host tracking right now so there's not
-            # much point in going via the splitter.
-            # FIXME Support IP-in-IP for IPv6.
-            _log.info("Sending (%d) host IPs to ipset.",
-                      len(self.ipv4_by_hostname))
+        If the config has changed since a previous call, triggers Felix
+        to die.
+        """
+        global_config = msg[MSG_KEY_GLOBAL_CONFIG]
+        host_config = msg[MSG_KEY_HOST_CONFIG]
+        _log.info("Config loaded by driver:\n"
+                  "Global: %s\nPer-host: %s",
+                  global_config,
+                  host_config)
+        if self.configured.is_set():
+            # We've already been configured.  We don't yet support
+            # dynamic config update so instead we check if the config
+            # has changed and die if it has.
+            _log.info("Checking configuration for changes...")
+            if (host_config != self.last_host_config or
+                    global_config != self.last_global_config):
+                _log.warning("Felix configuration has changed, "
+                             "felix must restart.")
+                _log.info("Old host config: %s", self.last_host_config)
+                _log.info("New host config: %s", host_config)
+                _log.info("Old global config: %s",
+                          self.last_global_config)
+                _log.info("New global config: %s", global_config)
+                die_and_restart()
+        else:
+            # First time loading the config.  Report it to the config
+            # object.  Take copies because report_etcd_config is
+            # destructive.
+            self.last_host_config = host_config.copy()
+            self.last_global_config = global_config.copy()
+            self._config.report_etcd_config(host_config,
+                                            global_config)
+            # Config now fully resolved, inform the driver.
+            driver_log_file = self._config.DRIVERLOGFILE
+            self._msg_writer.send_message(
+                MSG_TYPE_CONFIG,
+                {
+                    MSG_KEY_LOG_FILE: driver_log_file,
+                    MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
+                    MSG_KEY_SEV_SCREEN: self._config.LOGLEVSCR,
+                    MSG_KEY_SEV_SYSLOG: self._config.LOGLEVSYS,
+                }
+            )
+            self.configured.set()
+
+    def _on_status_from_driver(self, msg):
+        """
+        Called when we receive a status update from the driver.
+
+        The driver sends us status messages whenever its status changes.
+        It moves through these states:
+
+        (1) wait-for-ready (waiting for the global ready flag to become set)
+        (2) resync (resyncing with etcd, processing a snapshot and any
+            concurrent events)
+        (3) in-sync (snapshot processsing complete, now processing only events
+            from etcd)
+
+        If the driver falls out of sync with etcd then it will start again
+        from (1).
+
+        If the status is in-sync, triggers the relevant processing.
+        """
+        status = msg[MSG_KEY_STATUS]
+        _log.info("etcd driver status changed to %s", status)
+        if status == STATUS_IN_SYNC and not self._been_in_sync:
+            # We're now in sync, tell the Actors that need to do start-of-day
+            # cleanup.
+            self.begin_polling.wait()  # Make sure splitter is set.
+            self._been_in_sync = True
+            self.splitter.on_datamodel_in_sync(async=True)
+            if self._config.REPORT_ENDPOINT_STATUS:
+                self._status_reporter.clean_up_endpoint_statuses(async=True)
             self._update_hosts_ipset()
 
-    def clean_up_endpoint_statuses(self, our_endpoints_ids):
+    def _start_driver(self):
         """
-        Mark any endpoint status reports for non-existent endpoints
-        for cleanup.
+        Starts the driver subprocess, connects to it over the socket
+        and sends it the init message.
 
-        :param set our_endpoints_ids: Set of endpoint IDs for endpoints on
-               this host.
+        Stores the Popen object in self._driver_process for future
+        access.
+
+        :return: the connected socket to the driver.
         """
-        if not self._config.REPORT_ENDPOINT_STATUS:
-            _log.debug("Endpoint status reporting disabled, ignoring.")
-            return
-
-        our_host_dir = "/".join([FELIX_STATUS_DIR, self._config.HOSTNAME,
-                                 "workload"])
+        _log.info("Creating server socket.")
         try:
-            # Grab all the existing status reports.
-            response = self.client.read(our_host_dir,
-                                        recursive=True)
-        except EtcdKeyNotFound:
-            _log.info("No endpoint statuses found, nothing to clean up")
+            os.unlink("/run/felix-driver.sck")
+        except OSError:
+            _log.debug("Failed to delete driver socket, assuming it "
+                       "didn't exist.")
+        update_socket = socket.socket(socket.AF_UNIX,
+                                      socket.SOCK_STREAM)
+        update_socket.bind("/run/felix-driver.sck")
+        update_socket.listen(1)
+        self._driver_process = subprocess.Popen([sys.executable,
+                                                 "-m",
+                                                 "calico.etcddriver",
+                                                 "/run/felix-driver.sck"])
+        _log.info("Started etcd driver with PID %s", self._driver_process.pid)
+        update_conn, _ = update_socket.accept()
+        _log.info("Accepted connection on socket")
+        # No longer need the server socket, remove it.
+        try:
+            os.unlink("/run/felix-driver.sck")
+        except OSError:
+            # Unexpected but carry on...
+            _log.exception("Failed to unlink socket")
         else:
-            for node in response.leaves:
-                combined_id = get_endpoint_id_from_key(node.key)
-                if combined_id and combined_id not in our_endpoints_ids:
-                    # We found an endpoint in our status reporting tree that
-                    # wasn't in the main tree.  Mark it as dirty so the status
-                    # reporting thread will clean it up.
-                    _log.debug("Endpoint %s removed by resync, marking "
-                               "status key for cleanup",
-                               combined_id)
-                    self._status_reporter.mark_endpoint_dirty(combined_id,
-                                                              async=True)
-                elif node.dir:
-                    # This leaf is an empty directory, try to clean it up.
-                    # This is safe even if another thread is adding keys back
-                    # into the directory.
-                    _log.debug("Found empty directory %s, cleaning up",
-                               node.key)
-                    delete_empty_parents(self.client, node.key, our_host_dir)
+            _log.info("Unlinked server socket")
 
-    def _resync(self, response, **kwargs):
-        """
-        Force a resync.
-        :raises ResyncRequired: always.
-        """
-        _log.warning("Resync triggered due to change to %s", response.key)
-        raise ResyncRequired()
-
-    def on_ready_flag_set(self, response):
-        if response.value != "true":
-            raise ResyncRequired()
+        # Wrap the socket in reader/writer objects that simplify using the
+        # protocol.
+        reader = MessageReader(update_conn)
+        writer = MessageWriter(update_conn)
+        # Give the driver its config.
+        writer.send_message(
+            MSG_TYPE_INIT,
+            {
+                MSG_KEY_ETCD_URL: "http://" + self._config.ETCD_ADDR,
+                MSG_KEY_HOSTNAME: self._config.HOSTNAME,
+            }
+        )
+        return reader, writer
 
     def on_endpoint_set(self, response, hostname, orchestrator,
                         workload_id, endpoint_id):
@@ -566,7 +572,7 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
-        self.endpoint_ids_per_host[combined_id.host].add(combined_id)
+        _stats.increment("Endpoint created/updated")
         endpoint = parse_endpoint(self._config, combined_id, response.value)
         self.splitter.on_endpoint_update(combined_id, endpoint, async=True)
 
@@ -576,14 +582,13 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
         combined_id = EndpointId(hostname, orchestrator, workload_id,
                                  endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
-        self.endpoint_ids_per_host[combined_id.host].discard(combined_id)
-        if not self.endpoint_ids_per_host[combined_id.host]:
-            del self.endpoint_ids_per_host[combined_id.host]
+        _stats.increment("Endpoint deleted")
         self.splitter.on_endpoint_update(combined_id, None, async=True)
 
     def on_rules_set(self, response, profile_id):
         """Handler for rules updates, passes the update to the splitter."""
         _log.debug("Rules for %s set", profile_id)
+        _stats.increment("Rules created/updated")
         rules = parse_rules(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_rules_update(profile_id, rules, async=True)
@@ -591,11 +596,13 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
     def on_rules_delete(self, response, profile_id):
         """Handler for rules deletes, passes the update to the splitter."""
         _log.debug("Rules for %s deleted", profile_id)
+        _stats.increment("Rules deleted")
         self.splitter.on_rules_update(profile_id, None, async=True)
 
     def on_tags_set(self, response, profile_id):
         """Handler for tags updates, passes the update to the splitter."""
         _log.debug("Tags for %s set", profile_id)
+        _stats.increment("Tags created/updated")
         rules = parse_tags(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_tags_update(profile_id, rules, async=True)
@@ -603,37 +610,15 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
     def on_tags_delete(self, response, profile_id):
         """Handler for tags deletes, passes the update to the splitter."""
         _log.debug("Tags for %s deleted", profile_id)
+        _stats.increment("Tags deleted")
         self.splitter.on_tags_update(profile_id, None, async=True)
-
-    def on_profile_delete(self, response, profile_id):
-        """
-        Handler for a whole profile deletion
-
-        Fakes a tag and rules delete.
-        """
-        # Fake deletes for the rules and tags.
-        _log.debug("Whole profile %s deleted", profile_id)
-        self.splitter.on_rules_update(profile_id, None, async=True)
-        self.splitter.on_tags_update(profile_id, None, async=True)
-
-    def on_host_delete(self, response, hostname):
-        """
-        Handler for deletion of a whole host directory.
-
-        Deletes all the contained endpoints.
-        """
-        ids_on_that_host = self.endpoint_ids_per_host.pop(hostname, set())
-        _log.info("Host %s deleted, removing %d endpoints",
-                  hostname, len(ids_on_that_host))
-        for endpoint_id in ids_on_that_host:
-            self.splitter.on_endpoint_update(endpoint_id, None, async=True)
-        self.on_host_ip_delete(response, hostname)
 
     def on_host_ip_set(self, response, hostname):
         if not self._config.IP_IN_IP_ENABLED:
             _log.debug("Ignoring update to %s because IP-in-IP is disabled",
                        response.key)
             return
+        _stats.increment("Host IP created/updated")
         ip = parse_host_ip(hostname, response.value)
         if ip:
             self.ipv4_by_hostname[hostname] = ip
@@ -648,59 +633,46 @@ class _FelixEtcdWatcher(EtcdWatcher, gevent.Greenlet):
             _log.debug("Ignoring update to %s because IP-in-IP is disabled",
                        response.key)
             return
+        _stats.increment("Host IP deleted")
         if self.ipv4_by_hostname.pop(hostname, None):
             self._update_hosts_ipset()
 
     def _update_hosts_ipset(self):
-        """
-        Update the hosts ipset from the ipv4_by_hostname cache.
-        """
+        if not self._been_in_sync:
+            _log.debug("Deferring update to hosts ipset until we're in-sync")
+            return
         self.hosts_ipset.replace_members(
             frozenset(self.ipv4_by_hostname.values()),
             async=True
         )
 
+    def _on_config_updated(self, response, config_param):
+        new_value = response.value
+        if self.last_global_config.get(config_param) != new_value:
+            _log.critical("Global config value %s updated.  Felix must be "
+                          "restarted.", config_param)
+            die_and_restart()
+        _stats.increment("Global config (non) updates")
+
+    def _on_host_config_updated(self, response, hostname, config_param):
+        if hostname != self._config.HOSTNAME:
+            _log.debug("Ignoring config update for host %s", hostname)
+            return
+        _stats.increment("Per-host config created/updated")
+        new_value = response.value
+        if self.last_host_config.get(config_param) != new_value:
+            _log.critical("Global config value %s updated.  Felix must be "
+                          "restarted.", config_param)
+            die_and_restart()
+
     def on_ipam_v4_pool_set(self, response, pool_id):
+        _stats.increment("IPAM pool created/updated")
         pool = parse_ipam_pool(pool_id, response.value)
         self.splitter.on_ipam_pool_update(pool_id, pool, async=True)
 
     def on_ipam_v4_pool_delete(self, response, pool_id):
+        _stats.increment("IPAM pool deleted")
         self.splitter.on_ipam_pool_update(pool_id, None, async=True)
-
-    def on_orch_delete(self, response, hostname, orchestrator):
-        """
-        Handler for deletion of a whole host orchestrator directory.
-
-        Deletes all the contained endpoints.
-        """
-        _log.info("Orchestrator dir %s/%s deleted, removing contained hosts",
-                  hostname, orchestrator)
-        orchestrator = intern(orchestrator.encode("utf8"))
-        for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if endpoint_id.orchestrator == orchestrator:
-                self.splitter.on_endpoint_update(endpoint_id, None, async=True)
-                self.endpoint_ids_per_host[hostname].discard(endpoint_id)
-        if not self.endpoint_ids_per_host[hostname]:
-            del self.endpoint_ids_per_host[hostname]
-
-    def on_workload_delete(self, response, hostname, orchestrator,
-                           workload_id):
-        """
-        Handler for deletion of a whole workload directory.
-
-        Deletes all the contained endpoints.
-        """
-        _log.debug("Workload dir %s/%s/%s deleted, removing endpoints",
-                   hostname, orchestrator, workload_id)
-        orchestrator = intern(orchestrator.encode("utf8"))
-        workload_id = intern(workload_id.encode("utf8"))
-        for endpoint_id in list(self.endpoint_ids_per_host[hostname]):
-            if (endpoint_id.orchestrator == orchestrator and
-                    endpoint_id.workload == workload_id):
-                self.splitter.on_endpoint_update(endpoint_id, None, async=True)
-                self.endpoint_ids_per_host[hostname].discard(endpoint_id)
-        if not self.endpoint_ids_per_host[hostname]:
-            del self.endpoint_ids_per_host[hostname]
 
 
 class EtcdStatusReporter(EtcdClientOwner, Actor):
@@ -722,6 +694,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         self._newer_dirty_endpoints = set()
         self._older_dirty_endpoints = set()
 
+        self._cleanup_pending = False
         self._timer_scheduled = False
         self._reporting_allowed = True
 
@@ -729,8 +702,10 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
     def on_endpoint_status_changed(self, endpoint_id, ip_type, status):
         assert isinstance(endpoint_id, EndpointId)
         if status is not None:
+            _stats.increment("Endpoint status deleted")
             self._endpoint_status[ip_type][endpoint_id] = status
         else:
+            _stats.increment("Endpoint status updated")
             self._endpoint_status[ip_type].pop(endpoint_id, None)
         self._mark_endpoint_dirty(endpoint_id)
 
@@ -750,10 +725,6 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         self._timer_scheduled = False
         self._reporting_allowed = True
 
-    @actor_message()
-    def mark_endpoint_dirty(self, endpoint_id):
-        self._mark_endpoint_dirty(endpoint_id)
-
     def _mark_endpoint_dirty(self, endpoint_id):
         assert isinstance(endpoint_id, EndpointId)
         if endpoint_id in self._older_dirty_endpoints:
@@ -766,15 +737,34 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
             _log.debug("Marking endpoint %s dirty", endpoint_id)
             self._newer_dirty_endpoints.add(endpoint_id)
 
+    @actor_message()
+    def clean_up_endpoint_statuses(self):
+        """
+        Note that we need to do cleanup.  We'll then try/retry from
+        _finish_msg_batch().
+        """
+        self._cleanup_pending = True
+
     def _finish_msg_batch(self, batch, results):
         if not self._config.REPORT_ENDPOINT_STATUS:
-            _log.error("StatusReporter called even though status reporting "
-                       "disabled.  Ignoring.")
+            _log.warning("StatusReporter called even though status reporting "
+                         "disabled.  Ignoring.")
             self._endpoint_status[IPV4].clear()
             self._endpoint_status[IPV6].clear()
             self._newer_dirty_endpoints.clear()
             self._older_dirty_endpoints.clear()
             return
+
+        if self._cleanup_pending:
+            try:
+                self._attempt_cleanup()
+            except EtcdException as e:
+                _log.error("Cleanup failed: %r", e)
+                _stats.increment("Status report cleanup failed")
+            else:
+                _stats.increment("Status report cleanup done")
+                self._cleanup_pending = False
+
         if self._reporting_allowed:
             # We're not rate limited, go ahead and do a write to etcd.
             _log.debug("Status reporting is allowed by rate limit.")
@@ -800,20 +790,49 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
                 # Reset the rate limit flag.
                 self._reporting_allowed = False
 
-        if not self._timer_scheduled and not self._reporting_allowed:
-            # Schedule a timer to stop our rate limiting.
+        if not self._timer_scheduled and ((not self._reporting_allowed) or
+                                          self._cleanup_pending):
+            # Schedule a timer to stop our rate limiting or retry cleanup.
             timeout = self._config.ENDPOINT_REPORT_DELAY
-            timeout *= 0.9 + (random.random() * 0.2)  # Jitter by +/- 10%.
+            timeout *= (0.9 + (random.random() * 0.2))  # Jitter by +/- 10%.
             gevent.spawn_later(timeout,
                                self._on_timer_pop,
                                async=True)
             self._timer_scheduled = True
+
+    def _attempt_cleanup(self):
+        our_host_dir = "/".join([FELIX_STATUS_DIR, self._config.HOSTNAME,
+                                 "workload"])
+        try:
+            # Grab all the existing status reports.
+            response = self.client.read(our_host_dir,
+                                        recursive=True)
+        except EtcdKeyNotFound:
+            _log.info("No endpoint statuses found, nothing to clean up")
+        else:
+            # Mark all statuses we find as dirty.  This will result in any
+            # unknown endpoints being cleaned up.
+            for node in response.leaves:
+                combined_id = get_endpoint_id_from_key(node.key)
+                if combined_id:
+                    _log.debug("Endpoint %s removed by resync, marking "
+                               "status key for cleanup",
+                               combined_id)
+                    self._mark_endpoint_dirty(combined_id)
+                elif node.dir:
+                    # This leaf is an empty directory, try to clean it up.
+                    # This is safe even if another thread is adding keys back
+                    # into the directory.
+                    _log.debug("Found empty directory %s, cleaning up",
+                               node.key)
+                    delete_empty_parents(self.client, node.key, our_host_dir)
 
     def _write_endpoint_status_to_etcd(self, ep_id, status):
         """
         Try to actually write the status dict into etcd or delete the key
         if it is no longer needed.
         """
+        _stats.increment("Per-port status report etcd writes")
         status_key = ep_id.path_for_status
         if status:
             _log.debug("Writing endpoint status %s = %s", ep_id, status)
@@ -865,19 +884,6 @@ def die_and_restart():
     os._exit(1)
 
 
-def _build_config_dict(cfg_node):
-    """
-    Updates the config dict provided from the given etcd node, which
-    should point at a config directory.
-    """
-    config_dict = {}
-    for child in cfg_node.children:
-        key = child.key.rsplit("/").pop()
-        value = str(child.value)
-        config_dict[key] = value
-    return config_dict
-
-
 # Intern JSON keys as we load them to reduce occupancy.
 FIELDS_TO_INTERN = set([
     # Endpoint dicts.  It doesn't seem worth interning items like the MAC
@@ -900,20 +906,6 @@ json_decoder = json.JSONDecoder(
 )
 
 
-def parse_if_endpoint(config, etcd_node):
-    combined_id = get_endpoint_id_from_key(etcd_node.key)
-    if combined_id:
-        # Got an endpoint.
-        if etcd_node.action == "delete":
-            _log.debug("Found deleted endpoint %s", combined_id)
-            endpoint = None
-        else:
-            endpoint = parse_endpoint(config, combined_id, etcd_node.value)
-        # EndpointId does the interning for us.
-        return combined_id, endpoint
-    return None, None
-
-
 def parse_endpoint(config, combined_id, raw_json):
     endpoint = safe_decode_json(raw_json,
                                 log_tag="endpoint %s" % combined_id.endpoint)
@@ -921,24 +913,11 @@ def parse_endpoint(config, combined_id, raw_json):
         common.validate_endpoint(config, combined_id, endpoint)
     except ValidationFailed as e:
         _log.warning("Validation failed for endpoint %s, treating as "
-                     "missing: %s", combined_id, e.message)
+                     "missing: %s; %r", combined_id, e.message, raw_json)
         endpoint = None
     else:
         _log.debug("Validated endpoint : %s", endpoint)
     return endpoint
-
-
-def parse_if_rules(etcd_node):
-    m = RULES_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some rules.
-        profile_id = m.group("profile_id")
-        if etcd_node.action == "delete":
-            rules = None
-        else:
-            rules = parse_rules(profile_id, etcd_node.value)
-        return intern(profile_id.encode("utf8")), rules
-    return None, None
 
 
 def parse_rules(profile_id, raw_json):
@@ -951,19 +930,6 @@ def parse_rules(profile_id, raw_json):
         return None
     else:
         return rules
-
-
-def parse_if_tags(etcd_node):
-    m = TAGS_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some tags.
-        profile_id = m.group("profile_id")
-        if etcd_node.action == "delete":
-            tags = None
-        else:
-            tags = parse_tags(profile_id, etcd_node.value)
-        return intern(profile_id.encode("utf8")), tags
-    return None, None
 
 
 def parse_tags(profile_id, raw_json):
@@ -980,38 +946,12 @@ def parse_tags(profile_id, raw_json):
         return intern_list(tags)
 
 
-def parse_if_host_ip(etcd_node):
-    m = HOST_IP_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some rules.
-        hostname = m.group("hostname")
-        if etcd_node.action == "delete":
-            ip = None
-        else:
-            ip = parse_host_ip(hostname, etcd_node.value)
-        return hostname, ip
-    return None, None
-
-
 def parse_host_ip(hostname, raw_value):
     if raw_value is None or validate_ip_addr(raw_value):
         return canonicalise_ip(raw_value, None)
     else:
         _log.debug("%s has invalid IP: %r", hostname, raw_value)
         return None
-
-
-def parse_if_ipam_v4_pool(etcd_node):
-    m = IPAM_V4_CIDR_KEY_RE.match(etcd_node.key)
-    if m:
-        # Got some rules.
-        pool_id = m.group("encoded_cidr")
-        if etcd_node.action == "delete":
-            pool = None
-        else:
-            pool = parse_ipam_pool(pool_id, etcd_node.value)
-        return pool_id, pool
-    return None, None
 
 
 def parse_ipam_pool(pool_id, raw_json):
@@ -1033,4 +973,3 @@ def safe_decode_json(raw_json, log_tag=None):
         _log.warning("Failed to decode JSON for %s: %r.  Returning None.",
                      log_tag, raw_json)
         return None
-

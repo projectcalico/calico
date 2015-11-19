@@ -1,5 +1,8 @@
 # Changelog
 
+- Felix now parses the etcd snapshot in parallel with the event stream;
+  this dramatically increases scale when under load.
+
 ## 1.2.1
 
 - Fix Felix ipset exception when using IPIP.
