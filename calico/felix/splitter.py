@@ -127,7 +127,7 @@ class UpdateSplitter(Actor):
         :param EndpointId endpoint_id: EndpointId object in question
         :param dict endpoint: Endpoint data dict
         """
-        _log.info("Endpoint update for %s.", endpoint_id)
+        _log.debug("Endpoint update for %s.", endpoint_id)
         for ipset_mgr in self.ipsets_mgrs:
             ipset_mgr.on_endpoint_update(endpoint_id, endpoint, async=True)
         for endpoint_mgr in self.endpoint_mgrs:
