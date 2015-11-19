@@ -71,6 +71,15 @@ is finishing development, however you can download the binaries from the
 overnight builds of the master branch (1.9.dev) from
 https://master.dockerproject.org/linux/amd64
 
+For libnetworking, the Docker daemon needs to be run specifying a cluster store
+used for multi-host networking.  If using etcd as a cluster store, run Docker
+daemon with the following additional parameter:
+
+    --cluster-store=etcd://<ETCD IP>:2379
+    
+Replacing `<ETCD IP>` with the appropriate address for your etcd cluster.  This 
+also assumes your cluster uses the standard etcd port 2379.
+
 ### Docker permissions
 
 Running Docker is much easier if your user has permissions to run Docker 
