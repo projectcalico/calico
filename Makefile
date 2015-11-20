@@ -97,8 +97,8 @@ run-etcd:
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379" \
+	--listen-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379"
 
 ## Run the STs in a container
 st: run-etcd dist/calicoctl docker calico_test/.calico_test.created busybox.tar routereflector.tar calico-node.tar
