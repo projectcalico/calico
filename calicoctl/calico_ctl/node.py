@@ -194,7 +194,7 @@ def node(arguments):
     elif arguments.get("stop"):
         node_stop(arguments.get("--force"))
     elif arguments.get("remove"):
-        node_remove(arguments.get("--remove-libnetwork"))
+        node_remove(arguments.get("--remove-endpoints"))
     else:
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
