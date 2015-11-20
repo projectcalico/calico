@@ -700,10 +700,10 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
     def on_endpoint_status_changed(self, endpoint_id, ip_type, status):
         assert isinstance(endpoint_id, EndpointId)
         if status is not None:
-            _stats.increment("Endpoint status deleted")
+            _stats.increment("Endpoint status updated")
             self._endpoint_status[ip_type][endpoint_id] = status
         else:
-            _stats.increment("Endpoint status updated")
+            _stats.increment("Endpoint status deleted")
             self._endpoint_status[ip_type].pop(endpoint_id, None)
         self._mark_endpoint_dirty(endpoint_id)
 
