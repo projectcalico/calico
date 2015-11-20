@@ -67,7 +67,7 @@ from pycalico.datastore import Rules
 
 from connectors import client
 from utils import print_paragraph
-from utils import validate_characters
+from pycalico.util import validate_characters, validate_ports, validate_icmp_type
 from utils import validate_cidr
 
 
@@ -81,10 +81,10 @@ def validate_arguments(arguments):
         <DSTCIDR>
         <ICMPTYPE>
         <ICMPCODE>
-
-    Arguments not validated:
         <SRCPORTS>
         <DSTPORTS>
+
+    Arguments not validated:
         <POSITION>
 
     :param arguments: Docopt processed arguments
@@ -106,16 +106,22 @@ def validate_arguments(arguments):
     for arg in ["<SRCCIDR>", "<DSTCIDR>"]:
         if arguments.get(arg) is not None:
             cidr_ok = validate_cidr(arguments[arg])
+            if not cidr_ok:
+                break
 
     icmp_ok = True
     for arg in ["<ICMPCODE>", "<ICMPTYPE>"]:
         if arguments.get(arg) is not None:
-            try:
-                value = int(arguments[arg])
-                if not (0 <= value < 255):  # Felix doesn't support 255
-                    raise ValueError("Invalid %s: %s" % (arg, value))
-            except ValueError:
-                icmp_ok = False
+            icmp_ok = validate_icmp_type(arguments[arg])
+            if not icmp_ok:
+                break
+
+    ports_ok = True
+    for arg in ["<SRCPORTS>", "<DSTPORTS>"]:
+        if arguments.get(arg) is not None:
+            ports_ok = validate_ports(arguments[arg])
+            if not ports_ok:
+                break
 
     # Print error message
     if not profile_ok:
@@ -128,11 +134,13 @@ def validate_arguments(arguments):
     if not cidr_ok:
         print "Invalid CIDR specified."
     if not icmp_ok:
-        print "Invalid ICMP type or code specified."
+        print "Invalid ICMP type or ICMP code specified."
+    if not ports_ok:
+        print "Invalid SRCPORTS or DSTPORTS specified."
 
     # Exit if not valid
     if not (profile_ok and tag_src_ok and tag_dst_ok
-            and cidr_ok and icmp_ok):
+            and cidr_ok and icmp_ok and ports_ok):
         sys.exit(1)
 
 

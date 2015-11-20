@@ -64,34 +64,6 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(expected_result, test_result)
 
     @parameterized.expand([
-        ('abcdefghijklmnopqrstuvwxyz', True),
-        ('0123456789', True),
-        ('profile_1', True),
-        ('profile-1', True),
-        ('profile 1', False),
-        ('profile.1', True),
-        ('!', False),
-        ('@', False),
-        ('#', False),
-        ('$', False),
-        ('%', False),
-        ('^', False),
-        ('&', False),
-        ('*', False),
-        ('()', False)
-    ])
-    def test_validate_characters(self, input_string, expected_result):
-        """
-        Test validate_characters function in calico_ctl utils
-        """
-        with patch('sys.exit', autospec=True) as m_sys_exit:
-            # Call method under test
-            test_result = utils.validate_characters(input_string)
-
-            # Assert expected result
-            self.assertEqual(expected_result, test_result)
-
-    @parameterized.expand([
         ('1.2.3.4', False),
         ('abcde', False),
         ('aa:bb::cc:1234', False),
