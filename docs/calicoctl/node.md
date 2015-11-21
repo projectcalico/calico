@@ -167,6 +167,32 @@ Calico node is running with id: c95fc492d57bd7d3c568e5b1d67001c1cec7c01b77153161
 Calico libnetwork driver is running with id: 504b1d6d42908e376d9941ad8e3dfd65b072c15455c108e0205beee52d71fa69
 ```
 
+#### Calico with libnetwork
+When running Calico with libnetwork, the Calico libnetwork driver handles 
+creation of a profile, and adding and removing the container from the Calico
+network during the lifecycle of a network and the containers attached to that
+network.
+
+The `docker network create` command allows you to specify the driver used for
+networking _and_ the driver used for IPAM.  To use Calico networking with 
+libnetwork you need to :
+
+- Run `calicoctl node` with the `--libnetwork` flag
+- Create a network using the `-d calico` setting.  You may optionally use the
+`--ipam-driver calico` setting if you would like to use Calico IP address
+management.
+
+    calicoctl node --libnetwork
+    docker network create -d calico net1
+    docker network create -d calico --ipam-driver calico net2
+
+If you create a network that does not use the Calico IPAM driver, IP assignment
+is handled by the default built-in bridge driver.
+
+If you create a network using the Calico IPAM driver, IP assignment is handled
+by Calico.  IPs are assigned from the available set of configured IP pools.
+
+
 ### calicoctl node stop 
 This command is used to stop a `calico/node` instance.  If there are endpoints 
 remaining on the host that have been networked with Calico, a warning message 
