@@ -3,6 +3,14 @@
 - Felix now parses the etcd snapshot in parallel with the event stream;
   this dramatically increases scale when under load.
 
+## 1.2.1
+
+- Fix Felix ipset exception when using IPIP.
+- Use iptables protocol numbers not names.
+- Fixes to diagnostics collection scripts.
+- Pin networking-calico pip version.
+- Really delete routes to ns-* devices in pre-Liberty OpenStack.
+
 ## 1.2.0
 
 - Add liveness reporting to Felix.  Felix now reports its liveness into

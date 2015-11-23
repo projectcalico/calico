@@ -319,7 +319,7 @@ perform the following steps:
    ::
 
        sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata python-pip
-       sudo pip install networking-calico
+       sudo pip install networking-calico==1.0.0
 
 5. Run ``apt-get upgrade`` and ``apt-get dist-upgrade``. These commands
    will bring in Calico-specific updates to the OpenStack packages and

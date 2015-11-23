@@ -641,8 +641,10 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         if not self._been_in_sync:
             _log.debug("Deferring update to hosts ipset until we're in-sync")
             return
-        self.hosts_ipset.replace_members(self.ipv4_by_hostname.values(),
-                                         async=True)
+        self.hosts_ipset.replace_members(
+            frozenset(self.ipv4_by_hostname.values()),
+            async=True
+        )
 
     def _on_config_updated(self, response, config_param):
         new_value = response.value

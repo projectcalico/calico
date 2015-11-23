@@ -303,7 +303,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.assertEqual(self.m_splitter.on_datamodel_in_sync.mock_calls,
                          [call(async=True)])
         self.assertEqual(self.m_hosts_ipset.replace_members.mock_calls,
-                         [call([], async=True)])
+                         [call(frozenset([]), async=True)])
 
     @patch("subprocess.Popen")
     @patch("socket.socket")
@@ -467,7 +467,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            ["10.0.0.1"],
+            frozenset(["10.0.0.1"]),
             async=True,
         )
 
@@ -494,7 +494,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="delete")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            [],
+            frozenset([]),
             async=True,
         )
 
@@ -509,7 +509,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="gibberish")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
-            [],
+            frozenset([]),
             async=True,
         )
 

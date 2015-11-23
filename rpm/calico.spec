@@ -212,6 +212,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Nov 13 2015 Matt Dupre <matt@projectcalico.org> 1.2.1-1
+  - Fix Felix ipset exception when using IPIP.
+  - Use iptables protocol numbers not names.
+  - Fixes to diagnostics collection scripts.
+  - Pin networking-calico pip version.
+  - Really delete routes to ns-* devices in pre-Liberty OpenStack.
+
 * Mon Oct 26 2015 Matt Dupre <matt@projectcalico.org> 1.2.0-1
   - Truncate long output from FailedSystemCall exception.
   - Add instructions for use with OpenStack Liberty.

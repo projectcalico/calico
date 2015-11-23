@@ -422,7 +422,7 @@ On each compute node, perform the following steps:
    ::
 
        yum install python-pip
-       pip install networking-calico
+       pip install networking-calico==1.0.0
 
    Open ``/etc/neutron/dhcp_agent.ini``. For OpenStack Juno or Kilo, in the
    ``[DEFAULT]`` section, add the following line (removing any existing
