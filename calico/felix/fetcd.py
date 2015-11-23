@@ -833,11 +833,11 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
         _stats.increment("Per-port status report etcd writes")
         status_key = ep_id.path_for_status
         if status:
-            _log.debug("Writing endpoint status %s = %s", ep_id, status)
+            _log.info("Writing endpoint status %s = %s", ep_id, status)
             self.client.set(status_key,
                             json.dumps(status))
         else:
-            _log.debug("Removing endpoint status %s", ep_id)
+            _log.info("Removing endpoint status %s", ep_id)
             try:
                 self.client.delete(status_key)
             except EtcdKeyNotFound:
