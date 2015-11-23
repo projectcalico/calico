@@ -392,11 +392,17 @@ class TestEtcdDriverFV(TestCase):
             "action": "create",
             "node": {
                 "key": "/calico/v1/foo",
-                "dir": True
+                "dir": True,
+                "modifiedIndex": 100,
             }
         }), 100, 200)
         # Then a whole directory is deleted.
-        watcher_req = self.watcher_etcd.get_next_request()
+        watcher_req = self.watcher_etcd.assert_request(
+            VERSION_DIR,
+            timeout=90,
+            recursive=True,
+            wait_index=101,
+        )
         watcher_req.respond_with_value(
             "/calico/v1/adir",
             dir=True,
