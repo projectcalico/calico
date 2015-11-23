@@ -49,7 +49,7 @@ from urlparse import urlparse
 
 from ijson.backends import yajl2 as ijson
 import urllib3
-from urllib3 import HTTPConnectionPool
+from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import ReadTimeoutError
 
 from calico.etcddriver.protocol import (
@@ -59,7 +59,7 @@ from calico.etcddriver.protocol import (
     STATUS_RESYNC, STATUS_IN_SYNC, MSG_TYPE_CONFIG_LOADED,
     MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, MSG_TYPE_UPDATE, MSG_KEY_KEY,
     MSG_KEY_VALUE, MessageWriter, MSG_TYPE_STATUS, MSG_KEY_STATUS,
-    WriteFailed)
+    MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE, MSG_KEY_CA_FILE, WriteFailed)
 from calico.etcdutils import ACTION_MAPPING
 from calico.common import complete_logging
 from calico.monotonic import monotonic_time
@@ -190,6 +190,9 @@ class EtcdDriver(object):
         _log.info("Got init message from Felix %s", msg)
         self._etcd_base_url = msg[MSG_KEY_ETCD_URL].rstrip("/")
         self._etcd_url_parts = urlparse(self._etcd_base_url)
+        self._etcd_key_file = msg[MSG_KEY_KEY_FILE]
+        self._etcd_cert_file = msg[MSG_KEY_CERT_FILE]
+        self._etcd_ca_file = msg[MSG_KEY_CA_FILE]
         self._hostname = msg[MSG_KEY_HOSTNAME]
         self._init_received.set()
 
@@ -613,9 +616,17 @@ class EtcdDriver(object):
             self._watcher_stop_event = None
 
     def get_etcd_connection(self):
-        return HTTPConnectionPool(self._etcd_url_parts.hostname,
-                                  self._etcd_url_parts.port or 2379,
-                                  maxsize=1)
+        if self._etcd_url_parts.scheme == "https":
+            return HTTPSConnectionPool(self._etcd_url_parts.hostname,
+                                       self._etcd_url_parts.port or 2379,
+                                       key_file=self._etcd_key_file,
+                                       cert_file=self._etcd_cert_file,
+                                       ca_certs=self._etcd_ca_file,
+                                       maxsize=1)
+        else:
+            return HTTPConnectionPool(self._etcd_url_parts.hostname,
+                                      self._etcd_url_parts.port or 2379,
+                                      maxsize=1)
 
     def _on_key_updated(self, key, value):
         """

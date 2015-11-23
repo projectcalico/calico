@@ -246,23 +246,32 @@ class TestDispatcherExpire(_TestPathDispatcherBase):
 class TestEtcdClientOwner(BaseTestCase):
     @patch("etcd.Client", autospec=True)
     def test_create(self, m_client_cls):
-        owner = EtcdClientOwner("localhost:1234")
+        owner = EtcdClientOwner("localhost:1234",
+                                etcd_scheme="https",
+                                etcd_key="/path/to/key",
+                                etcd_cert="/path/to/cert",
+                                etcd_ca="/path/to/ca")
         m_client = m_client_cls.return_value
         m_client.expected_cluster_id = "abcdef"
         owner.reconnect()
         self.assertEqual(m_client_cls.mock_calls,
                          [call(host="localhost", port=1234,
-                               expected_cluster_id=None),
+                               expected_cluster_id=None,
+                               cert=("/path/to/cert", "/path/to/key"),
+                               ca_cert="/path/to/ca", protocol="https"),
                           call().__nonzero__(),
                           call(host="localhost", port=1234,
-                               expected_cluster_id="abcdef"),])
+                               expected_cluster_id="abcdef",
+                               cert=("/path/to/cert", "/path/to/key"),
+                               ca_cert="/path/to/ca", protocol="https")])
 
     @patch("etcd.Client", autospec=True)
     def test_create_default(self, m_client):
         owner = EtcdClientOwner("localhost")
         self.assertEqual(m_client.mock_calls,
                          [call(host="localhost", port=4001,
-                               expected_cluster_id=None)])
+                               expected_cluster_id=None,
+                               cert=None, ca_cert=None, protocol="http")])
 
 
 class TestEtcdWatcher(BaseTestCase):

@@ -626,6 +626,9 @@ class TestEtcdDriverFV(TestCase):
             {
                 MSG_KEY_ETCD_URL: "http://localhost:4001",
                 MSG_KEY_HOSTNAME: "thehostname",
+                MSG_KEY_KEY_FILE: None,
+                MSG_KEY_CERT_FILE: None,
+                MSG_KEY_CA_FILE: None
             }
         )
 
@@ -724,6 +727,9 @@ class TestDriver(TestCase):
         self.driver._handle_init({
             MSG_KEY_ETCD_URL: "http://localhost:4001/",
             MSG_KEY_HOSTNAME: "ourhost",
+            MSG_KEY_KEY_FILE: None,
+            MSG_KEY_CERT_FILE: None,
+            MSG_KEY_CA_FILE: None
         })
         m_pool = Mock(spec=HTTPConnectionPool)
         self.driver._issue_etcd_request(m_pool, "calico/v1/Ready")
@@ -741,6 +747,9 @@ class TestDriver(TestCase):
         self.driver._handle_init({
             MSG_KEY_ETCD_URL: "http://localhost:4001/",
             MSG_KEY_HOSTNAME: "ourhost",
+            MSG_KEY_KEY_FILE: None,
+            MSG_KEY_CERT_FILE: None,
+            MSG_KEY_CA_FILE: None
         })
         m_pool = Mock(spec=HTTPConnectionPool)
         self.driver._issue_etcd_request(m_pool, "calico/v1", timeout=10,
