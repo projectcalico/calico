@@ -20,7 +20,6 @@ Test common utility code.
 """
 import copy
 from collections import namedtuple
-import eventlet
 import logging
 import mock
 import sys

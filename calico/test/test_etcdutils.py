@@ -259,7 +259,6 @@ class TestEtcdClientOwner(BaseTestCase):
                                expected_cluster_id=None,
                                cert=("/path/to/cert", "/path/to/key"),
                                ca_cert="/path/to/ca", protocol="https"),
-                          call().__nonzero__(),
                           call(host="localhost", port=1234,
                                expected_cluster_id="abcdef",
                                cert=("/path/to/cert", "/path/to/key"),

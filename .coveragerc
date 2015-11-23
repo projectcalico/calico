@@ -9,4 +9,4 @@ omit =
     calico/openstack/test/*
     calico/etcddriver/test/*
 branch = True
-concurrency = eventlet
+concurrency = thread
