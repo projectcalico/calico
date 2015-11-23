@@ -182,9 +182,11 @@ libnetwork you need to :
 `--ipam-driver calico` setting if you would like to use Calico IP address
 management.
 
-    calicoctl node --libnetwork
-    docker network create -d calico net1
-    docker network create -d calico --ipam-driver calico net2
+```
+calicoctl node --libnetwork
+docker network create -d calico net1
+docker network create -d calico --ipam-driver calico net2
+```
 
 If you create a network that does not use the Calico IPAM driver, IP assignment
 is handled by the default built-in bridge driver.
