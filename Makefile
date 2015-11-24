@@ -33,7 +33,7 @@ calicoctl/.calico_build.created: $(BUILD_FILES)
 	cd calicoctl && docker build -t calico/build:latest .
 	touch calicoctl/.calico_build.created
 
-dist/calicoctl: $(PYCALICO) calicoctl/.calico_build.created
+dist/calicoctl: $(CALICOCTL_FILE) calicoctl/.calico_build.created
 	mkdir -p dist
 	chmod 777 dist
 
