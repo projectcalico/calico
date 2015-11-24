@@ -31,7 +31,6 @@ The driver is responsible for
   Felix about all the individual keys that are deleted.
 """
 from functools import partial
-from httplib import HTTPException
 import logging
 from Queue import Queue, Empty
 import socket
@@ -48,9 +47,9 @@ import time
 from urlparse import urlparse
 
 from ijson.backends import yajl2 as ijson
-import urllib3
 from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
-from urllib3.exceptions import ReadTimeoutError
+import urllib3.exceptions
+import httplib
 
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
@@ -75,6 +74,9 @@ _log = logging.getLogger(__name__)
 # general, Felix and the resync thread process much more quickly than the
 # watcher can read from etcd so this is defensive.
 WATCHER_QUEUE_SIZE = 20000
+
+# Threshold in seconds for detecting watcher tight looping on exception.
+REQ_TIGHT_LOOP_THRESH = 0.2
 
 
 class EtcdDriver(object):
@@ -255,7 +257,7 @@ class EtcdDriver(object):
                 _log.warning("Watcher died; resyncing.")
                 self._stop_watcher()  # Clean up the event
             except (urllib3.exceptions.HTTPError,
-                    HTTPException,
+                    httplib.HTTPException,
                     socket.error) as e:
                 _log.error("Request to etcd failed: %r; resyncing.", e)
                 self._stop_watcher()
@@ -692,6 +694,7 @@ class EtcdDriver(object):
                 if not http:
                     _log.info("No HTTP pool, creating one...")
                     http = self.get_etcd_connection()
+                req_start_time = monotonic_time()
                 try:
                     _log.debug("Waiting on etcd index %s", next_index)
                     resp = self._etcd_request(http,
@@ -704,9 +707,32 @@ class EtcdDriver(object):
                                      resp.status)
                     self._check_cluster_id(resp)
                     resp_body = resp.data  # Force read inside try block.
-                except ReadTimeoutError:
+                except urllib3.exceptions.ReadTimeoutError:
+                    # 100% expected when there are no events.
                     _log.debug("Watch read timed out, restarting watch at "
                                "index %s", next_index)
+                    # Workaround urllib3 bug #718.  After a ReadTimeout, the
+                    # connection is incorrectly recycled.
+                    http = None
+                    continue
+                except (urllib3.exceptions.HTTPError,
+                        httplib.HTTPException,
+                        socket.error) as e:
+                    # Not so expected but still possible to recover:  etcd
+                    # being restarted, for example.
+                    req_end_time = monotonic_time()
+                    req_time = req_end_time - req_start_time
+                    if req_time < REQ_TIGHT_LOOP_THRESH:
+                        # Failed fast, make sure we don't tight loop.
+                        delay = REQ_TIGHT_LOOP_THRESH - req_time
+                        _log.warning("Connection to etcd failed with %r, "
+                                     "restarting watch at index %s after "
+                                     "delay %.3f", e, next_index, delay)
+                        time.sleep(delay)
+                    else:
+                        _log.warning("Connection to etcd failed with %r, "
+                                     "restarting watch at index %s "
+                                     "immediately", e, next_index)
                     # Workaround urllib3 bug #718.  After a ReadTimeout, the
                     # connection is incorrectly recycled.
                     http = None

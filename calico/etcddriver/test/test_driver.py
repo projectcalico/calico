@@ -24,12 +24,13 @@ import traceback
 from Queue import Empty
 
 from StringIO import StringIO
+from httplib import HTTPException
 from unittest import TestCase
 
 import sys
 from mock import Mock, patch, call
 from urllib3 import HTTPConnectionPool
-from urllib3.exceptions import TimeoutError, HTTPError
+from urllib3.exceptions import TimeoutError, HTTPError, ReadTimeoutError
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, VERSION_DIR
 from calico.etcddriver import driver
 from calico.etcddriver.driver import (
@@ -381,11 +382,24 @@ class TestEtcdDriverFV(TestCase):
 
     def test_directory_deletion(self):
         self._run_initial_resync()
-        # For coverage: Nothing happens for a while, poll times out.
         watcher_req = self.watcher_etcd.get_next_request()
-        watcher_req.respond_with_exception(
-            driver.ReadTimeoutError(Mock(), "", "")
-        )
+        with patch("calico.etcddriver.driver.monotonic_time",
+                   autospec=True) as m_mon:
+            # The watcher has code to detect tight loops, vary the duration
+            # between timeouts/exceptions so that we trigger that on the first
+            # loop.
+            m_mon.side_effect = iter([0.1, 0.2, 10, 20, 30, 40, 50])
+            # For coverage: Nothing happens for a while, poll times out.
+            watcher_req.respond_with_exception(
+                ReadTimeoutError(Mock(), "", "")
+            )
+            with patch("time.sleep", autospec=True) as m_sleep:
+                for exc in [HTTPError(), HTTPException(), socket.error()]:
+                    # For coverage: non-timeout errors.
+                    watcher_req = self.watcher_etcd.get_next_request()
+                    watcher_req.respond_with_exception(exc)
+        self.assertEqual(m_sleep.mock_calls, [call(0.1)])
+
         # For coverage: Then a set to a dir, which should be ignored.
         watcher_req = self.watcher_etcd.get_next_request()
         watcher_req.respond_with_data(json.dumps({
