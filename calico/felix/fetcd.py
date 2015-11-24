@@ -35,9 +35,8 @@ from gevent.event import Event
 from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
 from calico.datamodel_v1 import (
-    VERSION_DIR, CONFIG_DIR, RULES_KEY_RE, TAGS_KEY_RE,
-    dir_for_per_host_config, PROFILE_DIR, HOST_DIR, EndpointId, HOST_IP_KEY_RE,
-    IPAM_V4_CIDR_KEY_RE, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
+    VERSION_DIR, CONFIG_DIR, dir_for_per_host_config, PROFILE_DIR, HOST_DIR,
+    EndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
     get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
     ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP
 )
@@ -48,8 +47,7 @@ from calico.etcddriver.protocol import (
     MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG,
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MessageWriter,
     MSG_TYPE_STATUS, MSG_KEY_STATUS, MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE,
-    MSG_KEY_CA_FILE
-)
+    MSG_KEY_CA_FILE, SocketClosed)
 from calico.etcdutils import (
     EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent
 )
@@ -368,8 +366,15 @@ class _FelixEtcdWatcher(gevent.Greenlet):
 
     def _loop_reading_from_driver(self):
         while True:
-            for msg_type, msg in self._msg_reader.new_messages(timeout=1):
-                self._dispatch_msg_from_driver(msg_type, msg)
+            try:
+                # Note: self._msg_reader.new_messages() returns iterator so
+                # whole for loop must be inside the try.
+                for msg_type, msg in self._msg_reader.new_messages(timeout=1):
+                    self._dispatch_msg_from_driver(msg_type, msg)
+            except SocketClosed:
+                _log.critical("The driver process closed its socket, Felix "
+                              "must exit.")
+                die_and_restart()
             if self.resync_requested:
                 _log.info("Resync requested, sending resync request to driver")
                 self.resync_requested = False

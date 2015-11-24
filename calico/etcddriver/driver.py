@@ -58,7 +58,8 @@ from calico.etcddriver.protocol import (
     STATUS_RESYNC, STATUS_IN_SYNC, MSG_TYPE_CONFIG_LOADED,
     MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, MSG_TYPE_UPDATE, MSG_KEY_KEY,
     MSG_KEY_VALUE, MessageWriter, MSG_TYPE_STATUS, MSG_KEY_STATUS,
-    MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE, MSG_KEY_CA_FILE, WriteFailed)
+    MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE, MSG_KEY_CA_FILE, WriteFailed,
+    SocketClosed)
 from calico.etcdutils import ACTION_MAPPING
 from calico.common import complete_logging
 from calico.monotonic import monotonic_time
@@ -178,8 +179,12 @@ class EtcdDriver(object):
                     else:
                         _log.error("Unexpected message from Felix: %s", msg)
                         raise RuntimeError("Unexpected message from Felix")
+        except SocketClosed:
+            _log.warning("Felix closed its socket.  The driver must exit.")
+        except DriverShutdown:
+            _log.warning("Reader thread stopping due to driver shutdown.")
         finally:
-            _log.error("Reader thread shutting down, triggering stop event")
+            _log.info("Reader thread shutting down, triggering stop event")
             self.stop()
 
     def _handle_init(self, msg):
@@ -780,6 +785,8 @@ class EtcdDriver(object):
                         # sub-keys.)
                         event_queue.put((modified_index, key, value))
                     next_index = modified_index + 1
+        except DriverShutdown:
+            _log.warning("Watcher thread stopping due to driver shutdown.")
         except:
             _log.exception("Exception finishing watcher thread.")
             raise

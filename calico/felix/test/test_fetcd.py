@@ -30,7 +30,7 @@ from calico.etcddriver.protocol import MessageReader, MessageWriter, \
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
     MSG_KEY_HOST_CONFIG, MSG_KEY_GLOBAL_CONFIG, MSG_TYPE_CONFIG, \
     MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, MSG_KEY_SEV_SYSLOG, \
-    STATUS_IN_SYNC
+    STATUS_IN_SYNC, SocketClosed
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
@@ -213,6 +213,14 @@ class TestEtcdWatcher(BaseTestCase):
         self.assertEqual(m_disp.mock_calls,
                          [call(MSG_TYPE_STATUS,
                                {MSG_KEY_STATUS: STATUS_RESYNC})])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_read_loop_socket_error(self, m_die):
+        self.m_reader.new_messages.side_effect = SocketClosed()
+        m_die.side_effect = ExpectedException
+        self.assertRaises(ExpectedException,
+                          self.watcher._loop_reading_from_driver)
+        self.assertEqual(m_die.mock_calls, [call()])
 
     @patch("calico.felix.fetcd.die_and_restart", autospec=True)
     def test_read_loop_resync(self, m_die):

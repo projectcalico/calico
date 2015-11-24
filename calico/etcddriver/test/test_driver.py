@@ -734,6 +734,14 @@ class TestDriver(TestCase):
         self.msg_reader.send_msg("unknown", {})
         self.assertRaises(RuntimeError, self.driver._read_from_socket)
 
+    def test_read_socket_closed(self):
+        self.msg_reader.send_exception(SocketClosed())
+        self.driver._read_from_socket()
+
+    def test_read_driver_shutdown(self):
+        self.msg_reader.send_exception(DriverShutdown())
+        self.driver._read_from_socket()
+
     def test_shutdown_before_config(self):
         self.driver._stop_event.set()
         self.assertRaises(DriverShutdown, self.driver._wait_for_config)
@@ -940,6 +948,17 @@ class TestDriver(TestCase):
         stop_event.set()
         m_queue = Mock()
         self.driver.watch_etcd(10, m_queue, stop_event)
+        self.assertEqual(m_queue.put.mock_calls, [call(None)])
+
+    def test_watch_etcd_driver_shutdown(self):
+        stop_event = threading.Event()
+        self.driver.get_etcd_connection = Mock()
+        self.driver._etcd_request = Mock()
+        self.driver._check_cluster_id = Mock(side_effect=DriverShutdown())
+        # Should return without exception.
+        m_queue = Mock()
+        self.driver.watch_etcd(10, m_queue, stop_event)
+        # And send it's normal shutdown signal.
         self.assertEqual(m_queue.put.mock_calls, [call(None)])
 
 
