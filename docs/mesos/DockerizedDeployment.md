@@ -99,7 +99,7 @@ Pull the Docker images.  This will take a few minutes.
 
 Next, download the unit files
 
-    $ wget wget https://github.com/projectcalico/calico-mesos/releases/download/v0.1.2/units.tgz
+    $ wget https://github.com/projectcalico/calico-mesos/releases/download/v0.1.2/units.tgz
     $ tar -xzf units.tgz
 
 ## Zookeeper
