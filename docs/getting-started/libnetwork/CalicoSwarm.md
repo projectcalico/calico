@@ -15,7 +15,7 @@ The following instructions configure a Docker Swarm cluster networked using Cali
 
 ## Prerequisites 
 
-This demonstrations assumes that your client and each node in your cluster have `calicoctl`, etcd, and Docker 1.9 or greater installed in your `$PATH`. See our [Environment Setup guide](https://github.com/projectcalico/calico-docker/blob/master/docs/getting-started/libnetwork/EnvironmentSetup.md) for instructions on getting this properly set up.
+This demonstration assumes that your client and each node in your cluster have `calicoctl`, etcd, and Docker 1.9 or greater installed in your `$PATH`. See our [Environment Setup guide](https://github.com/projectcalico/calico-docker/blob/master/docs/getting-started/libnetwork/EnvironmentSetup.md) for instructions on getting this properly set up.
 
 To make things simpler, let's store some commonly used values as environment variables on each **Swarm node**. We will use these variables throughout the guide.
 
@@ -41,7 +41,7 @@ Now, start the Calico node service on each node in the cluster.
 
 ## Configure Swarm Cluster
 
-Now that Calico networking is configured on our cluster, lets join our nodes into a Docker Swarm cluster.
+Now that Calico networking is configured on our cluster, let's join our nodes into a Docker Swarm cluster.
 
 We'll use the token based discovery backend, so let's first create the token which will identify our swarm. To do this, run the following on our client. Note that docker commands may need to be run with root privileges depending on your docker installation.
 
