@@ -722,6 +722,7 @@ class EtcdDriver(object):
                     action = ACTION_MAPPING[etcd_resp["action"]]
                     is_dir = node.get("dir", False)
                     value = node.get("value")
+                    dir_creation = False
                     if is_dir:
                         if action == "delete":
                             if key.rstrip("/") in (VERSION_DIR, ROOT_DIR):
@@ -738,7 +739,7 @@ class EtcdDriver(object):
                             # Just ignore sets to directories, we only track
                             # leaves.
                             _log.debug("Skipping non-delete to dir %s", key)
-                            continue
+                            dir_creation = True
                     modified_index = node["modifiedIndex"]
                 except (KeyError, TypeError, ValueError):
                     _log.exception("Unexpected format for etcd response: %r;"
@@ -746,7 +747,12 @@ class EtcdDriver(object):
                                    resp_body)
                     break
                 else:
-                    event_queue.put((modified_index, key, value))
+                    if not dir_creation:
+                        # The resync thread doesn't need to know about
+                        # directory creations so we skip them.  (It does need
+                        # to know about deletions in order to clean up
+                        # sub-keys.)
+                        event_queue.put((modified_index, key, value))
                     next_index = modified_index + 1
         except:
             _log.exception("Exception finishing watcher thread.")
