@@ -15,5 +15,4 @@ override_dh_install:
 	install etc/bird/*.template debian/tmp/usr/share/calico/bird
 	install -d debian/tmp/usr/bin
 	install -m 755 etc/*.sh debian/tmp/usr/bin
-	install -m 755 utils/diags.sh debian/tmp/usr/bin/calico-diags
 	dh_install
