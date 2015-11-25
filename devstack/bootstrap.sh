@@ -14,7 +14,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-# IMPORTANT
+set -ex
+
+#------------------------------------------------------------------------------
+# IMPORTANT - Review before use!
 #
 # This script can be used to bootstrap a single or multi-node
 # Calico/DevStack cluster.  Please note that it has not been
@@ -22,9 +25,11 @@
 # on a fresh Ubuntu Trusty VM, with no data that you would care about
 # losing.  We recommend that you review the following code, before
 # running the script.
+#------------------------------------------------------------------------------
 
-set -ex
-
+#------------------------------------------------------------------------------
+# Environment Variables
+#
 # If the SERVICE_HOST environment variable is already set when
 # ./stack.sh is run, and is _different_ from the local machine's
 # hostname, the networking-calico DevStack plugin will interpret that
@@ -35,15 +40,13 @@ set -ex
 # the local hostname, the plugin will set up a combined controller and
 # compute node.
 #
-# Therefore, to bring up a multi-node Calico/DevStack cluster, you can
-# edit the following line so that SERVICE_HOST is set to the hostname
-# for the chosen controller node in your cluster, and then copy and
-# run this script on each node, without any further changes.
+# Therefore, to bring up a multi-node Calico/DevStack cluster, set and
+# export SERVICE_HOST in the environment, to the hostname for the chosen
+# controller node in your cluster, before invoking this script.
 #
-# For a single node Calico/DevStack cluster, you can leave
-# SERVICE_HOST unset, by commenting out the following line.
-#
-export SERVICE_HOST=calico-vm18
+# For a single node Calico/DevStack cluster, the environment should
+# leave SERVICE_HOST unset.
+#------------------------------------------------------------------------------
 
 # Assume that we are starting from the home directory of a non-root
 # user that can sudo, and hence is suitable for running DevStack.  For
