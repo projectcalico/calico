@@ -146,6 +146,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Nov 25 2015 Neil Jerram <Neil.Jerram@metaswitch.com> 1.3.0-0.4.pre
+  - Move Calico mechanism driver to networking-calico.
+
 * Fri Nov 13 2015 Matt Dupre <matt@projectcalico.org> 1.2.1-1
   - Fix Felix ipset exception when using IPIP.
   - Use iptables protocol numbers not names.
