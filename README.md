@@ -95,7 +95,7 @@ integration please see the
 If you want to run the unit tests, first install dependencies:
 
     apt-get install git libffi-dev libyajl2 python-dev python-pip
-    pip install coverage eventlet tox
+    pip install coverage tox
 
 Then, still at the root of the Calico directory (not inside a virtualenv), run:
 

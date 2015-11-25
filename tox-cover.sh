@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # This script wraps the nosetests and coverage commands to allow the
-# concurrecy mode to be specified when collecting coverage.
+# concurrency mode to be specified when collecting coverage.
 set -x
 set -e
 
