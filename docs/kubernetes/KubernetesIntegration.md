@@ -14,7 +14,7 @@ This guide will describe the steps required to install Calico on an existing Kub
 - An existing Kubernetes cluster running Kubernetes >= v1.0
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
 
-## Calico Components
+## About the Calico Components
 
 There are two components of a Calico / Kubernetes integration.
 - The Calico per-node docker container, `calico/node`
@@ -27,36 +27,40 @@ The `calico-kubernetes` plugin integrates directly with the Kubernetes `kubelet`
 
 We recommend using the latest version of [calicoctl](https://github.com/projectcalico/calico-docker/releases) to install both `calico/node` and `calico-kubernetes` on each of your nodes.
 
-## Installing Calico on a Kubernetes Master
-The Kubernetes master does not run any pods itself, and so does not typically require the `calico-kubernetes` plugin.  It does require the `calico/node` docker container so that individual pod IPs can be learned over BGP.
+## Installing Calico Componenets
+#### 1. Install Calico
+Each Kubernetes node requires both the `calico/node` container as well as the `calico-kubernetes` plugin.  Kubernetes Masters do not need the `calico-kubernetes` plugin installed, but may do so if pods will be scheduled on the master.
 
-The following set of commands will install `calico/node` on a Kubernetes master: 
+The following set of commands will install both `calico/node` and the `calico-kubernetes` plugin on a machine.
 ```
 # Download and install `calicoctl`
-wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl 
+wget https://github.com/projectcalico/calico-docker/releases/download/v0.12.0/calicoctl 
 sudo chmod +x calicoctl
 
 # Run the calico/node container
-sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node
+sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node --kubernetes --kube-plugin-version=v0.6.1
 ```
-> For more information on running `calicoctl node`, please see the [`calicoctl` node documentation](https://github.com/projectcalico/calico-docker/blob/master/docs/calicoctl/node.md)
+> In the above commands, the `--kubernetes` option installs the `calico-kubernetes` plugin at the given version. 
 
-## Installing Calico on a Kubernetes Node
+#### 2. Configure the Network Plugin 
+The Calico network plugin for Kubernetes uses the `calico_kubernetes.ini` file to read in user configuration.
 
-#### Installing the Calico Components
-The Kubernetes node requires both the `calico/node` container as well as the `calico-kubernetes` plugin.
+Create a file called `calico_kubernetes.ini` in the same directory as the Calico plugin.
+- Default: `/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/calico_kubernetes.ini`
+- CoreOS: `/etc/kubelet-plugins/calico/calico_kubernetes.ini`
 
-The following set of commands will install these components on a Kubernetes node:
+Your configuration file will look something like this:
 ```
-# Download and install `calicoctl`
-wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl 
-sudo chmod +x calicoctl
-
-# Run the calico/node container
-sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node --kubernetes
+[config]
+ETCD_AUTHORITY=kubernetes-master:6666
+KUBE_API_ROOT=https://kubernetes-master:443/api/v1/
+DEFAULT_POLICY=allow
+CALICO_IPAM=true
+KUBE_AUTH_TOKEN=<INSERT_AUTH_TOKEN>
 ```
-> The `--kubernetes` option installs the `calico-kubernetes` plugin appropriate for the given version of `calicoctl`.  You can use the `--kube-plugin-version` option to specify an exact version of the `calico-kubernetes` plugin to install.
+> Supported configuration options are discussed in the [configuration guide](PluginConfiguration.md).
 
+## Configuring Kubernetes
 #### Configuring the Kubelet 
 Once the Calico network plugin has been installed, and the `calico/node` container started, you will need to configure the Kubelet to use the Calico network plugin when starting pods. 
 
@@ -64,10 +68,6 @@ The `kubelet` can be configured to use Calico by starting it with the `--network
 
 On CoreOS machines, the Calico network plugin is installed to the `/etc/kubelet-plugins` directory, and so an additional flag is necessary to inform the `kubelet` of the location of the plugin.  On CoreOS, include the `--network-plugin-dir=/etc/kubelet-plugins` option when starting the `kubelet`.
 > Note: the `--network-plugin-dir=` option is only available in Kubernetes >= v1.1.0
-
-In addition to specifying the location of the plugin, you'll need to configure the Calico network plugin via the `kubelet` environment. Supported options can be found in the documentation on [network plugin configuration](PluginConfiguration.md).
-
-To configure these options, it is recommended to start the `kubelet` via a process manager such as `systemd`, passing an environment file which contains the desired configuration options.
 
 #### Configuring the Kube-Proxy
 In order to use Calico policy with Kubernetes, the `kube-proxy` component must be configured to leave the source address of service bound traffic intact.  This feature is first officially supported in Kubernetes v1.1.0.

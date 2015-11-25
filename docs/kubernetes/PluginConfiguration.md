@@ -1,11 +1,19 @@
 # Configuring the Calico Kubernetes Plugin
 
-The Calico network plugin is configurable via environment variables. Each variable assumes a default value, but can be overridden in the environment for the `kubelet` process.
+The Calico network plugin is configurable using the following variables. Each variable assumes a default value, but can
+be overridden by the user.
+
+These variables can be specified in one of two ways:
+- A configuration file named `calico_kubernetes.ini` in the same directory as the plugin.
+- In the environment of the `kubelet` process.
+
+If a variable is defined in both the configuration file and the kubelet, the value in the kubelet's environment will be
+preferred.
 
 * #####ETCD_AUTHORITY (added in calico-kubernetes v0.1.0)
    The location of the Calico `etcd` datastore in the form `<IP>:<PORT>`.
    
-   Default: `kubernetes-master:6666`.
+   Default: `localhost:2379`.
 
 * #####KUBE_API_ROOT (added in calico-kubernetes v0.1.0)
    The URL for the root of the Kubernetes API. The transport must be included. 
@@ -26,17 +34,18 @@ The Calico network plugin is configurable via environment variables. Each variab
 
    Default: `true`  (version >= v0.5.0)
 
-   Default: `false` (version < v0.5.0)
-
 * ##### KUBE_AUTH_TOKEN (added in calico-kubernetes v0.3.0)
    Specifies the token to use for https authentication with the Kubernetes apiserver. Each Kubernetes Service Account has its own API token. You can create Service Accounts by following the instructions in the [Kubernetes docs](http://kubernetes.io/v1.0/docs/user-guide/service-accounts.html).
 
    Default: None
 
-+ #####CALICOCTL_PATH (Deprecated)
-   _Deprecated in [calico-kubernetes v0.4.0](https://github.com/projectcalico/calico-kubernetes/releases/tag/v0.4.0)_
-
-   Path to the `calicoctl` binary.
-
-   Default: `calicoctl`
-
+## Example calico_kubernetes.ini
+Below is an example configuration file for the Calico Kubernetes plugin.
+```
+[config]
+ETCD_AUTHORITY=kubernetes-master:6666
+KUBE_API_ROOT=https://kubernetes-master:443/api/v1/
+DEFAULT_POLICY=ns_isolation
+CALICO_IPAM=true
+KUBE_AUTH_TOKEN=<INSERT_AUTH_TOKEN>
+```
