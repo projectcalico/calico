@@ -39,14 +39,6 @@ preferred.
 
    Default: None
 
-+ #####CALICOCTL_PATH (Deprecated)
-   _Deprecated in [calico-kubernetes v0.4.0](https://github.com/projectcalico/calico-kubernetes/releases/tag/v0.4.0)_
-
-   Path to the `calicoctl` binary.
-
-   Default: `calicoctl`
-
-
 ## Example calico_kubernetes.ini
 Below is an example configuration file for the Calico Kubernetes plugin.
 ```
