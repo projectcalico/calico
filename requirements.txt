@@ -7,4 +7,3 @@ Babel>=1.3
 eventlet
 six
 python-etcd>=0.4.1
-sqlalchemy
