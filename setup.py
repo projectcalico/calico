@@ -78,5 +78,6 @@ setuptools.setup(
             'calico-felix = calico.felix.felix:main',
         ],
     },
+    scripts=['utils/calico-diags'],
     install_requires=collect_requirements()
 )

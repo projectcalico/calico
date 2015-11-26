@@ -111,7 +111,6 @@ install -d %{buildroot}%{_datadir}/calico/bird
 install etc/bird/*.template %{buildroot}%{_datadir}/calico/bird
 install -d %{buildroot}%{_bindir}
 install -m 755 etc/*.sh %{buildroot}%{_bindir}
-install -m 755 utils/diags.sh %{buildroot}%{_bindir}/calico-diags
 
 install -d -m 755 %{buildroot}/%{_sysconfdir}/logrotate.d
 install    -m 644 %_sourcedir/calico-felix.logrotate    %{buildroot}/%{_sysconfdir}/logrotate.d/calico-felix
