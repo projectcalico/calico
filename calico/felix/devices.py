@@ -75,32 +75,22 @@ def configure_global_kernel_config():
     # configured it yet.
     _write_proc_sys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
 
+    # We use sysfs for inspecting devices.
+    if not os.path.exists("/sys/class/net"):
+        raise BadKernelConfig("Felix requires sysfs to be mounted at /sys")
+
 
 def interface_exists(interface):
     """
     Checks if an interface exists.
     :param str interface: Interface name
     :returns: True if interface device exists
-    :raises: FailedSystemCall if ip link list fails.
 
-    We could check under /sys/class/net here, but there's a window where
-    /sys/class/net/<iface> might still exist for a link that is in the process
-    of being deleted, so we use ip link list instead.
+    Note: this checks that the interface exists at a particular point in time
+    but the caller needs to be defensive to the interface disappearing before
+    it has a chance to access it.
     """
-    try:
-        futils.check_call(["ip", "link", "list", interface])
-        return True
-    except futils.FailedSystemCall as fsc:
-        # If the interface doesn't exist, the error message varies by
-        # flavor of Linux:
-        #  * Ubuntu/RHEL: "Device 'XYZ' does not exist"
-        #  * Alpine:      "ip: can't find device 'XYZ'"
-        if ("does not exist" in fsc.stderr) or \
-           ("can't find device" in fsc.stderr):
-            return False
-        else:
-            # An error other than does not exist; just pass on up
-            raise
+    return os.path.exists("/sys/class/net/%s" % interface)
 
 
 def list_interface_ips(ip_type, interface):
@@ -264,27 +254,25 @@ def interface_up(if_name):
     """
     Checks whether a given interface is up.
 
-    Check this by examining the interface flags and looking for whether the
-    IFF_UP flag has been set. IFF_UP is the flag 0x01, so read in the flags
-    (represented by a hexadecimal integer) and check if the 1 bit is set.
+    Check this by examining the operstate of the interface, which is the
+    highest level "is it ready to work with" flag.
 
     :param str if_name: Interface name
     :returns: True if interface up, False if down or cannot detect
     """
-    flags_file = '/sys/class/net/%s/flags' % if_name
-
+    operstate_filename = '/sys/class/net/%s/operstate' % if_name
     try:
-        with open(flags_file, 'r') as f:
-            flags = f.read().strip()
-            _log.debug("Interface %s has flags %s", if_name, flags)
+        with open(operstate_filename, 'r') as f:
+            oper_state = f.read().strip()
     except IOError as e:
         # If we fail to check that the interface is up, then it has probably
         # gone under our feet or is flapping.
-        _log.warning("Cannot check flags for interface %s (%s) - assume "
-                     "down: %r.", if_name, flags_file, e)
+        _log.warning("Failed to read state of interface %s (%s) - assume "
+                     "down/absent: %r.", if_name, operstate_filename, e)
         return False
-
-    return bool(int(flags, 16) & 1)
+    else:
+        _log.debug("Interface %s has state %s", if_name, oper_state)
+    return oper_state == "up"
 
 
 def remove_conntrack_flows(ip_addresses, ip_version):
