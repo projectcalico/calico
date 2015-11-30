@@ -111,7 +111,7 @@ def list_interface_ips(ip_type, interface):
 
     lines = data.split("\n")
 
-    _log.debug("Existing routes to %s : %s" % (interface, ",".join(lines)))
+    _log.debug("Existing routes to %s : %s", interface, lines)
 
     for line in lines:
         # Example of the lines we care about is (having specified the
