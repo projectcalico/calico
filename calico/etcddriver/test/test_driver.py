@@ -546,7 +546,7 @@ class TestEtcdDriverFV(TestCase):
     def start_driver_and_init(self):
         self.driver.start()
         # First message comes from Felix.
-        self.send_init_msg()
+        self.send_init_msg_ssl()
         # Should trigger driver to send a status and start polling the ready
         # flag.
         self.assert_status_message(STATUS_WAIT_FOR_READY)
@@ -649,6 +649,18 @@ class TestEtcdDriverFV(TestCase):
                 MSG_KEY_KEY_FILE: None,
                 MSG_KEY_CERT_FILE: None,
                 MSG_KEY_CA_FILE: None
+            }
+        )
+
+    def send_init_msg_ssl(self):
+        self.msg_reader.send_msg(
+            MSG_TYPE_INIT,
+            {
+                MSG_KEY_ETCD_URL: "https://localhost:4001",
+                MSG_KEY_HOSTNAME: "thehostname",
+                MSG_KEY_KEY_FILE: "/path/to/key",
+                MSG_KEY_CERT_FILE: "/path/to/cert",
+                MSG_KEY_CA_FILE: "/path/to/ca"
             }
         )
 
