@@ -26,6 +26,8 @@ import sys
 
 sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()
+sys.modules['neutron.agent'] = m_neutron.agent
+sys.modules['neutron.agent.rpc'] = m_neutron.agent.rpc
 sys.modules['neutron.common'] = m_neutron.common
 sys.modules['neutron.common.constants'] = m_constants = \
     m_neutron.common.constants
@@ -306,8 +308,11 @@ class Lib(object):
         # Replacement for eventlet.sleep: sleep for some simulated passage of
         # time (as directed by simulated_time_advance), instead of for real
         # elapsed time.
-        def simulated_time_sleep(secs):
-
+        def simulated_time_sleep(secs=None):
+            if secs is None:
+                # Thread just wants to yield to any other waiting thread.
+                self.give_way()
+                return
             # Create a new queue.
             queue = eventlet.Queue(1)
             queue.stack = inspect.stack()[1][3]

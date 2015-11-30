@@ -32,8 +32,10 @@ import os
 
 # OpenStack imports.
 import eventlet
+from neutron.agent import rpc as agent_rpc
 from neutron.common import constants
 from neutron.common.exceptions import PortNotFound
+from neutron.common import topics
 from neutron import context as ctx
 from neutron.db import models_v2
 from neutron import manager
@@ -43,6 +45,12 @@ from sqlalchemy import exc as sa_exc
 
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
+
+# OpenStack imports.
+try:
+    from oslo.config import cfg
+except ImportError:
+    from oslo_config import cfg
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
@@ -70,11 +78,23 @@ except ImportError:
 # Calico imports.
 from calico import datamodel_v1
 from calico.logutils import logging_exceptions
+from calico.monotonic import monotonic_time
 import etcd
 
 from networking_calico.plugins.ml2.drivers.calico import t_etcd
 
 LOG = log.getLogger(__name__)
+
+calico_opts = [
+    cfg.IntOpt('num_port_status_threads', default=4,
+               help="Number of threads to use for writing port status "
+                    "updates to the database."),
+]
+cfg.CONF.register_opts(calico_opts, 'calico')
+
+# In order to rate limit warning logs about queue lengths, we check if we've
+# already logged within this interval (seconds) before logging.
+QUEUE_WARN_LOG_INTERVAL_SECS = 10
 
 # An OpenStack agent type name for Felix, the Calico agent component in the new
 # architecture.
@@ -93,6 +113,8 @@ PORT_STATUS_MAPPING = {
 RESYNC_INTERVAL_SECS = 60
 # When we're not the master, how often we check if we have become the master.
 MASTER_CHECK_INTERVAL_SECS = 5
+# Delay before retrying a failed port status update to the Neutron DB.
+PORT_UPDATE_RETRY_DELAY_SECS = 5
 
 # We wait for a short period of time before we initialize our state to avoid
 # problems with Neutron forking.
@@ -181,7 +203,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Initialize fields for the database object and transport.  We will
         # initialize these properly when we first need them.
         self.db = None
-        self._db_context = None
+        self._agent_update_context = None
         self.transport = None
         self._etcd_watcher = None
         self._etcd_watcher_thread = None
@@ -192,9 +214,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # hostname is included to disambiguate between multiple copies of a
         # port, which may exist during a migration or a re-schedule.
         self._port_status_cache = {}
+        # Queue used to fan out port status updates to worker threads.  Notes:
+        # * we bound the queue so that, at some level of sustained overload
+        #   we'll be forced to resync with etcd
+        # * we don't recreate the queue in _init_state() so that we can't
+        #   possibly lose updates that had already been queued.
+        self._port_status_queue = eventlet.Queue(maxsize=10000)
+        # RPC client for fanning out agent state reports.
+        self.state_report_rpc = None
         # Whether the version of update_port_status() available in this version
         # of OpenStack has the host argument.  computed on first use.
         self._cached_update_port_status_has_host_param = None
+        # Last time we logged about a long port-status queue.  Used for rate
+        # limiting.  Note: monotonic_time() uses its own epoch so it's only
+        # safe to compare this with other values returned by monotonic_time().
+        self._last_status_queue_log_time = monotonic_time()
 
         # Tell the monkeypatch where we are.
         global mech_driver
@@ -204,11 +238,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Make sure we initialise even if we don't see any API calls.
         eventlet.spawn_after(STARTUP_DELAY_SECS, self._init_state)
 
+    @logging_exceptions(LOG)
     def _init_state(self):
         """_init_state
 
         Creates the connection state required for talking to the Neutron DB
         and to etcd. This is a no-op if it has been executed before.
+
+        This is split out from __init__ to allow us to defer this
+        initialisation until after Neutron has forked off its worker
+        children.  If we initialise the DB and etcd connections before
+        the fork (as would happen in __init__()) then the workers
+        would share sockets incorrectly.
         """
         current_pid = os.getpid()
         if self._my_pid == current_pid:
@@ -227,7 +268,20 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # (Re)init the DB.
         self.db = None
         self._get_db()
-        self._db_context = ctx.get_admin_context()
+
+        # Admin context used by (only) the thread that updates Felix agent
+        # status.
+        self._agent_update_context = ctx.get_admin_context()
+
+        # Get RPC connection for fanning out Felix state reports.
+        try:
+            state_report_topic = topics.REPORTS
+        except AttributeError:
+            # Older versions of OpenStack share the PLUGIN topic.
+            state_report_topic = topics.PLUGIN
+        self.state_report_rpc = agent_rpc.PluginReportStateAPI(
+            state_report_topic
+        )
 
         # Use Etcd-based transport.
         if self.transport:
@@ -249,6 +303,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._epoch += 1
         eventlet.spawn(self.periodic_resync_thread, self._epoch)
         eventlet.spawn(self._status_updating_thread, self._epoch)
+        for _ in xrange(cfg.CONF.calico.num_port_status_threads):
+            eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
 
     @logging_exceptions(LOG)
     def _status_updating_thread(self, expected_epoch):
@@ -288,8 +344,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         "Handling status updates thread exiting.")
 
     def on_felix_alive(self, felix_hostname, new):
+        LOG.info("Felix on host %s is alive; fanning out status report",
+                 felix_hostname)
+        # Rather than writing directly to the database, we use the RPC
+        # mechanism to fan out the request to another process.  This
+        # distributes the DB write load and avoids turning the db-access lock
+        # into a bottleneck.
         agent_state = felix_agent_state(felix_hostname, start_flag=new)
-        self.db.create_or_update_agent(self._db_context, agent_state)
+        self.state_report_rpc.report_state(self._agent_update_context,
+                                           agent_state,
+                                           use_call=False)
 
     def on_port_status_changed(self, hostname, port_id, status_dict):
         """Called when etcd tells us that a port status has changed.
@@ -310,8 +374,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if self._port_status_cache.get(port_status_key) != calico_status:
             LOG.info("Status of port %s on host %s changed to %s",
                      port_status_key, hostname, calico_status)
-            # Cache the status so we can squash duplicate updates during a
-            # resync, for example.
+            # We write the update to our in-memory cache, which is shared with
+            # the DB writer threads.  This means that the next write for a
+            # particular key always goes directly to the correct state.
+            # Python's dict is thread-safe for set and get, which is what we
+            # need.
             if calico_status is not None:
                 if calico_status in PORT_STATUS_MAPPING:
                     # Intern the status to avoid keeping thousands of copies
@@ -325,12 +392,36 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     self._port_status_cache.pop(port_status_key, None)
             else:
                 self._port_status_cache.pop(port_status_key, None)
-            # Actually do the update.
-            self._try_to_update_port_status(port_status_key)
+            # Defer the actual update to the background thread so that we don't
+            # hold up reading from etcd.  In particular, we don't want to block
+            # Felix status updates while we wait on the DB.
+            self._port_status_queue.put(port_status_key)
+            if self._port_status_queue.qsize() > 10:
+                now = monotonic_time()
+                if (now - self._last_status_queue_log_time >
+                        QUEUE_WARN_LOG_INTERVAL_SECS):
+                    LOG.warning("Port status update queue length is high: %s",
+                                self._port_status_queue.qsize())
+                    self._last_status_queue_log_time = now
+                # Queue is getting large, make sure the DB writer threads
+                # get CPU.
+                eventlet.sleep()
 
-    def _try_to_update_port_status(self, port_status_key):
+    @logging_exceptions(LOG)
+    def _loop_writing_port_statuses(self, expected_epoch):
+        LOG.info("Port status write thread started epoch=%s", expected_epoch)
+        admin_context = ctx.get_admin_context()
+        while self._epoch == expected_epoch:
+            # Wait for work to do.
+            port_status_key = self._port_status_queue.get()
+            # Actually do the update.
+            self._try_to_update_port_status(admin_context, port_status_key)
+
+    def _try_to_update_port_status(self, admin_context, port_status_key):
         """Attempts to update the given port status.
 
+        :param admin_context: Admin context to pass to Neutron.  Should be
+               unique for each thread.
         :param port_status_key: tuple of hostname, port_id.
         """
         hostname, port_id = port_status_key
@@ -350,7 +441,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if self._update_port_status_has_host_param():
                 # Later OpenStack versions support passing the hostname.
                 LOG.debug("update_port_status() supports host parameter")
-                self.db.update_port_status(self._db_context,
+                self.db.update_port_status(admin_context,
                                            port_id,
                                            neutron_status,
                                            host=hostname)
@@ -358,7 +449,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Older versions don't have a way to specify the hostname so
                 # we do our best.
                 LOG.debug("update_port_status() missing host parameter")
-                self.db.update_port_status(self._db_context,
+                self.db.update_port_status(admin_context,
                                            port_id,
                                            neutron_status)
         except (db_exc.DBError,
@@ -370,8 +461,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # retry decorator in the neutron code.
             LOG.warning("Failed to update port status for %s due to %r.",
                         port_id, e)
+            # Queue up a retry after a delay.
+            eventlet.spawn_after(PORT_UPDATE_RETRY_DELAY_SECS,
+                                 self._retry_port_status_update,
+                                 port_status_key)
         else:
             LOG.debug("Updated port status for %s", port_id)
+
+    @logging_exceptions(LOG)
+    def _retry_port_status_update(self, port_status_key):
+        LOG.info("Retrying update to port %s", port_status_key)
+        # Queue up the update so that we'll go via the normal writer threads.
+        # They will re-read the current state of the port from the cache.
+        self._port_status_queue.put(port_status_key)
 
     def _update_port_status_has_host_param(self):
         """Check whether update_port_status() supports the host parameter."""
@@ -786,14 +888,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Only do the resync logic if we're actually the master node.
                 if self.transport.is_master:
                     LOG.info("I am master: doing periodic resync")
-                    context = ctx.get_admin_context()
+                    # Since this thread is not associated with any particular
+                    # request, we use our own admin context for accessing the
+                    # database.
+                    admin_context = ctx.get_admin_context()
 
                     try:
                         # First, resync endpoints.
-                        self.resync_endpoints(context)
+                        self.resync_endpoints(admin_context)
 
                         # Second, profiles.
-                        self.resync_profiles(context)
+                        self.resync_profiles(admin_context)
 
                         # Now, set the config flags.
                         self.transport.provide_felix_config()

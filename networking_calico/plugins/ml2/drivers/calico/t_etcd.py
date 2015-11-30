@@ -649,6 +649,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
         Updates the driver with the current state.
         """
+        LOG.info("Started processing status-reporting snapshot from etcd")
         endpoints_by_host = collections.defaultdict(set)
         hosts_with_live_felix = set()
 
@@ -700,6 +701,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
         # Swap in the newly-loaded state.
         self._endpoints_by_host = endpoints_by_host
+        LOG.info("Finished processing status-reporting snapshot from etcd")
 
     def _on_status_set(self, response, hostname):
         """Called when a felix uptime report is inserted/updated."""

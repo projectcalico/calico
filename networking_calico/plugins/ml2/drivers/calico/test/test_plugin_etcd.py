@@ -30,6 +30,7 @@ import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from calico import common
 from calico import datamodel_v1
 from calico.etcdutils import ResyncRequired
+from calico.monotonic import monotonic_time
 import networking_calico.plugins.ml2.drivers.calico.mech_calico as mech_calico
 import networking_calico.plugins.ml2.drivers.calico.t_etcd as t_etcd
 
@@ -61,6 +62,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         lib.m_oslo.config.cfg.CONF.calico.etcd_cert_file = None
         lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = None
         lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = None
+        lib.m_oslo.config.cfg.CONF.calico.num_port_status_threads = 4
 
         # Hook the (mock) etcd client.
         lib.m_etcd.Client.reset_mock()
@@ -910,79 +912,136 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
     def test_on_felix_alive(self):
         self.driver._get_db()
-        self.driver._db_context = mock.Mock()
-        self.driver.on_felix_alive("hostfoo", True)
-        self.db.create_or_update_agent.assert_called_once_with(
-            self.driver._db_context,
-            {
-                "agent_type": "Calico per-host agent (felix)",
-                "binary": "calico-felix",
-                "host": "hostfoo",
-                "start_flag": True,
-                'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
-            }
+        self.driver._agent_update_context = mock.Mock()
+        with mock.patch.object(self.driver, "state_report_rpc") as m_rpc:
+            self.driver.on_felix_alive("hostfoo", True)
+        self.assertEqual(
+            m_rpc.report_state.mock_calls,
+            [
+                mock.call(
+                    self.driver._agent_update_context,
+                    {
+                        "agent_type": "Calico per-host agent (felix)",
+                        "binary": "calico-felix",
+                        "host": "hostfoo",
+                        "start_flag": True,
+                        'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+                    },
+                    use_call=False
+                )
+            ]
         )
 
     def test_on_port_status_changed(self):
-        self.driver._get_db()
-        self.driver._db_context = mock.Mock(name="DB context")
-        self.driver._db_context.session = mock.MagicMock()
+        self.driver._last_status_queue_log_time = monotonic_time() - 100
+        with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
+            m_queue.qsize.return_value = 100
+            self.driver.on_port_status_changed("host", "port_id",
+                                               {"status": "up"})
+            self.assertEqual(
+                self.driver._port_status_cache[("host", "port_id")],
+                "up"
+            )
+            self.assertEqual(m_queue.put.mock_calls,
+                             [mock.call(("host", "port_id"))])
+            m_queue.put.reset_mock()
+            # Send a duplicate change.
+            self.driver.on_port_status_changed("host", "port_id",
+                                               {"status": "up"})
+            # Should have no effect on the cache.
+            self.assertEqual(
+                self.driver._port_status_cache[("host", "port_id")],
+                "up"
+            )
+            # And the queue update should be skipped.
+            self.assertEqual(m_queue.put.mock_calls, [])
+            m_queue.put.reset_mock()
+            # Deletion takes a different code path.
+            self.driver.on_port_status_changed("host", "port_id", None)
+            self.assertEqual(self.driver._port_status_cache, {})
+            # Unknown value should be treated as deletion.
+            self.driver.on_port_status_changed("host", "port_id",
+                                               {"status": "unknown"})
+            self.assertEqual(self.driver._port_status_cache, {})
+            # One queue put for each deletion.
+            self.assertEqual(
+                m_queue.put.mock_calls,
+                [
+                    mock.call(("host", "port_id")),
+                    mock.call(("host", "port_id")),
+                ]
+            )
 
+    def test_loop_writing_port_statuses(self):
+        with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
+            with mock.patch.object(self.driver,
+                                   "_try_to_update_port_status") as m_try_upd:
+                m_queue.get.side_effect = iter([("host", "port")])
+                self.assertRaises(StopIteration,
+                                  self.driver._loop_writing_port_statuses,
+                                  self.driver._epoch)
+        self.assertEqual(
+            m_try_upd.mock_calls,
+            [
+                mock.call(mock.ANY, ("host", "port")),
+            ]
+        )
+
+    def test_try_to_update_port_status(self):
         # New OpenStack releases have a host parameter.
-        def m_update_port_status(context, port_id, status, host=None):
-            raise lib.DBError()
-
-        self.db.update_port_status = m_update_port_status
-        self.driver.on_port_status_changed("host",
-                                           "port_id",
-                                           {"status": "up"})
-
-        # Subsequent change should be ignored due to cache.
-        self.driver.on_port_status_changed("host",
-                                           "port_id",
-                                           {"status": "up"})
-        self.db.update_port_status = mock.Mock()
-        self.driver.on_port_status_changed("host",
-                                           "port_id",
-                                           None)
-        self.assertEqual(
-            self.db.update_port_status.mock_calls,
-            [mock.call(self.driver._db_context,
-                       "port_id",
-                       lib.m_constants.PORT_STATUS_ERROR,
-                       host="host")]
-        )
-        self.db.update_port_status.reset_mock()
-
-    def test_on_port_status_changed_older_openstack(self):
         self.driver._get_db()
-        self.driver._db_context = mock.Mock(name="DB context")
-        self.driver._db_context.session = mock.MagicMock()
 
-        # Older versions of OpenStack don't have the host parameter.
+        # Driver uses reflection to check the function sig so we have to put
+        # a real function here.
+        mock_calls = []
+
         def m_update_port_status(context, port_id, status):
+            """Older version of OpenStack; no host parameter"""
+            mock_calls.append(mock.call(context, port_id, status))
+
+        self.db.update_port_status = m_update_port_status
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+            self.driver._try_to_update_port_status(context, ("host", "p1"))
+        self.assertEqual(mock_calls,
+                         [mock.call(context, "p1",
+                                    lib.m_constants.PORT_STATUS_ERROR)])
+        self.assertEqual(m_spawn.mock_calls, [])  # No retry on success
+
+    def test_try_to_update_port_status_fail(self):
+        # New OpenStack releases have a host parameter.
+        self.driver._get_db()
+
+        # Driver uses reflection to check the function sig so we have to put
+        # a real function here.
+        mock_calls = []
+
+        def m_update_port_status(context, port_id, status, host=None):
+            """Newer version of OpenStack; host parameter"""
+            mock_calls.append(mock.call(context, port_id, status, host=host))
             raise lib.DBError()
 
         self.db.update_port_status = m_update_port_status
-        self.driver.on_port_status_changed("host",
-                                           "port_id",
-                                           {"status": "down"})
-
-        # Subsequent change should be ignored due to cache.
-        self.driver.on_port_status_changed("host",
-                                           "port_id",
-                                           {"status": "down"})
-        self.db.update_port_status = mock.Mock()
-        self.driver.on_port_status_changed("host",
-                                           "port_id",
-                                           {"status": "up"})
+        self.driver._port_status_cache[("host", "p1")] = "up"
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+            self.driver._try_to_update_port_status(context, ("host", "p1"))
+        self.assertEqual(mock_calls,
+                         [mock.call(context, "p1",
+                                    lib.m_constants.PORT_STATUS_ACTIVE,
+                                    host="host")])
         self.assertEqual(
-            self.db.update_port_status.mock_calls,
-            [mock.call(self.driver._db_context,
-                       "port_id",
-                       lib.m_constants.PORT_STATUS_ACTIVE)]
+            m_spawn.mock_calls,
+            [
+                mock.call(5, self.driver._retry_port_status_update,
+                          ("host", "p1"))
+            ]
         )
-        self.db.update_port_status.reset_mock()
+
+    def test_retry_port_status_update(self):
+        with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
+            self.driver._retry_port_status_update(("host", "port"))
+        self.assertEqual(m_queue.put.mock_calls, [mock.call(("host", "port"))])
 
 
 class TestCalicoEtcdWatcher(unittest.TestCase):
