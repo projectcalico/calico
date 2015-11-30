@@ -30,7 +30,7 @@ test_time = 0
 def set_time(value):
     global test_time
     test_time = value
-    log.debug("Time now set to : %d" % test_time)
+    log.debug("Time now set to : %d", test_time)
 
 def get_time():
     return test_time
