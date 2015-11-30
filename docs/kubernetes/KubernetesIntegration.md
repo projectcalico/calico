@@ -17,7 +17,7 @@ This guide will describe the steps required to install Calico on an existing Kub
 ## About the Calico Components
 
 There are two components of a Calico / Kubernetes integration.
-- The Calico per-node docker container, `calico/node`
+- The Calico per-node docker container, [`calico/node`](https://hub.docker.com/r/calico/node/)
 - The [calico-kubernetes](https://github.com/projectcalico/calico-kubernetes) network plugin.
 
 > In addition, Calico relies on `etcd` for a distributed data storage.  This guide does not cover configuring `etcd`.
@@ -25,16 +25,16 @@ There are two components of a Calico / Kubernetes integration.
 The `calico/node` docker container must be run on the Kubernetes master and each Kubernetes node in your cluster, as it contains the BGP agent necessary for Calico routing to occur.
 The `calico-kubernetes` plugin integrates directly with the Kubernetes `kubelet` process on each node to discover which pods have been created, and adds them to Calico networking.
 
-We recommend using the latest version of [calicoctl](https://github.com/projectcalico/calico-docker/releases) to install both `calico/node` and `calico-kubernetes` on each of your nodes.
+We recommend using the latest version of [calicoctl](https://github.com/projectcalico/calico-docker/releases/latest) to install both `calico/node` and `calico-kubernetes` on each of your nodes.
 
 ## Installing Calico Componenets
 #### 1. Install Calico
-Each Kubernetes node requires both the `calico/node` container as well as the `calico-kubernetes` plugin.  Kubernetes Masters do not need the `calico-kubernetes` plugin installed, but may do so if pods will be scheduled on the master.
+Each Kubernetes node requires both the `calico/node` container as well as the `calico-kubernetes` plugin.  Kubernetes masters do not need the `calico-kubernetes` plugin installed, but may do so if pods will be scheduled on the master.
 
 The following set of commands will install both `calico/node` and the `calico-kubernetes` plugin on a machine.
 ```
 # Download and install `calicoctl`
-wget https://github.com/projectcalico/calico-docker/releases/download/v0.12.0/calicoctl 
+wget http://www.projectcalico.org/latest/calicoctl 
 sudo chmod +x calicoctl
 
 # Run the calico/node container
