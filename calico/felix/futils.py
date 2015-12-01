@@ -346,7 +346,7 @@ def multi_call(ops):
     """
     Issue multiple ops, all of which must succeed.
     """
-    log.debug("Calling out to system : %s" % ops)
+    log.debug("Calling out to system : %s", ops)
 
     fd, name = tempfile.mkstemp(text=True)
     f = os.fdopen(fd, "w")
