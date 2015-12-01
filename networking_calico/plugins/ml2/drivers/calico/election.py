@@ -144,6 +144,13 @@ class Elector(object):
                 # without us getting the delete action, but safer to handle it.
                 LOG.warning("Implausible vanished key - become master")
                 self._become_master()
+            except etcd.EtcdEventIndexCleared:
+                # etcd only keeps a buffer of 1000 events. If that buffer wraps
+                # before the master refreshes, we get EtcdEventIndexCleared.
+                # Simply return, which will retry the read and get the new
+                # etcd index.
+                LOG.info("etcd index cleared; aborting poll to re-read key.")
+                return
             except etcd.EtcdException as e:
                 # Something bad and unexpected. Log and reconnect.
                 self._log_exception("wait for master change", e)

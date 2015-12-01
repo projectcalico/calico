@@ -67,6 +67,11 @@ OPENSTACK_ENDPOINT_RE = re.compile(
 
 LOG = log.getLogger(__name__)
 
+# Set a low refresh interval on the master key.  This reduces the chance of
+# the etcd event buffer wrapping while non-masters are waiting for the key to
+# be refreshed.
+MASTER_REFRESH_INTERVAL = 10
+MASTER_TIMEOUT = 60
 
 # Objects for lightly wrapping etcd return values for use in the mechanism
 # driver.
@@ -160,7 +165,9 @@ class CalicoTransportEtcd(object):
             elector = Elector(
                 client=client,
                 server_id=cfg.CONF.calico.elector_name,
-                election_key=datamodel_v1.NEUTRON_ELECTION_KEY
+                election_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+                interval=MASTER_REFRESH_INTERVAL,
+                ttl=MASTER_TIMEOUT,
             )
             # Since normal reading threads don't take the lock, save the
             # client and elector off together atomically.  This is atomic
