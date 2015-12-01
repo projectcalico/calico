@@ -906,14 +906,23 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
     def test_on_port_status_changed(self):
         self.driver._get_db()
-        self.driver._db_context = mock.Mock()
+        self.driver._db_context = mock.Mock(name="DB context")
         self.driver._db_context.session = mock.MagicMock()
-        self.db.update_port_status.side_effect = lib.DBError()
+
+        # New OpenStack releases have a host parameter.
+        def m_update_port_status(context, port_id, status, host=None):
+            raise lib.DBError()
+
+        self.db.update_port_status = m_update_port_status
         self.driver.on_port_status_changed("host",
                                            "port_id",
                                            {"status": "up"})
 
-        self.db.update_port_status.side_effect = None
+        # Subsequent change should be ignored due to cache.
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "up"})
+        self.db.update_port_status = mock.Mock()
         self.driver.on_port_status_changed("host",
                                            "port_id",
                                            None)
@@ -921,23 +930,39 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.db.update_port_status.mock_calls,
             [mock.call(self.driver._db_context,
                        "port_id",
-                       lib.m_constants.PORT_STATUS_ACTIVE),
-             mock.call(self.driver._db_context,
-                       "port_id",
-                       lib.m_constants.PORT_STATUS_ERROR)]
+                       lib.m_constants.PORT_STATUS_ERROR,
+                       host="host")]
         )
         self.db.update_port_status.reset_mock()
 
-    def test_on_port_status_changed_not_found(self):
+    def test_on_port_status_changed_older_openstack(self):
         self.driver._get_db()
-        self.driver._db_context = mock.Mock()
+        self.driver._db_context = mock.Mock(name="DB context")
         self.driver._db_context.session = mock.MagicMock()
-        self.driver._db_context.session.query.side_effect = lib.NoResultFound()
-        self.db.update_port_status.side_effect = RuntimeError()
+
+        # Older versions of OpenStack don't have the host parameter.
+        def m_update_port_status(context, port_id, status):
+            raise lib.DBError()
+
+        self.db.update_port_status = m_update_port_status
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "down"})
+
+        # Subsequent change should be ignored due to cache.
+        self.driver.on_port_status_changed("host",
+                                           "port_id",
+                                           {"status": "down"})
+        self.db.update_port_status = mock.Mock()
         self.driver.on_port_status_changed("host",
                                            "port_id",
                                            {"status": "up"})
-        self.assertEqual(self.db.update_port_status.mock_calls, [])
+        self.assertEqual(
+            self.db.update_port_status.mock_calls,
+            [mock.call(self.driver._db_context,
+                       "port_id",
+                       lib.m_constants.PORT_STATUS_ACTIVE)]
+        )
         self.db.update_port_status.reset_mock()
 
 
