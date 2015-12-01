@@ -74,6 +74,16 @@ Now, restart etcd::
 On each machine running the Calico compute software (the component called
 Felix), run the following upgrade steps.
 
+Uninstall pip-installed networking-calico
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If present, uninstall any pip-installed networking-calico package::
+
+    pip uninstall networking-calico
+
+(networking-calico function is now installed as a Debian or RPM package
+instead.)
+
 Ubuntu 14.04
 ^^^^^^^^^^^^
 
