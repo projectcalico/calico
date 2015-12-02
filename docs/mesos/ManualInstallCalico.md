@@ -1,12 +1,7 @@
 # Manually Add Calico Networking to Mesos
 This guide will walk you through manually adding Calico networking to your Mesos deployment. You must follow these steps on *each Agent in your cluster*. 
 
-*This guide assumes you already have [Mesos + Net-Modules](https://github.com/projectcalico/calico-docker/tree/master/docs/mesos#mesos--netmodules) installed on your Agent(s).* 
-
-> To obtain the Calico files, you will need `wget` installed. Please install the tool if you haven't already done so.
-
 ## Download the Calico Mesos Plugin
-
 The Calico-Mesos plugin is available for download from the [calico-mesos repository releases](https://github.com/projectcalico/calico-mesos/releases). In this example, we will install the binary in the `/calico` directory.
 
     $ wget https://github.com/projectcalico/calico-mesos/releases/download/v0.1.1/calico_mesos
@@ -22,27 +17,22 @@ To enable Calico networking in Mesos, you must create a `modules.json` file. Whe
       "libraries": [
         {
           "file": "/opt/net-modules/libmesos_network_isolator.so", 
-          # Point Mesos to location of the network-isolator plugin libraries
           "modules": [
             {
               "name": "com_mesosphere_mesos_NetworkIsolator", 
-              # Tell Mesos that the specified plugin is a network isolator
               "parameters": [
                 {
                   "key": "isolator_command", 
-                  # Tell the Network Isolator which plugin to use for Network Isolation
                   "value": "/calico/calico_mesos"
                 },
                 {
                   "key": "ipam_command", 
-                  # Tell the Network Isolator which plugin to use for IPAM
                   "value": "/calico/calico_mesos"
                 }
               ]
             },
             {
               "name": "com_mesosphere_mesos_NetworkHook" 
-              # Register the Network Isolator to receive Network Hooks from mesos
             }
           ]
         }
