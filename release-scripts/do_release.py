@@ -33,7 +33,7 @@ CANDIDATE_VERSION_REPLACE = [
      '{version}'),
 
     (re.compile('http://www\.projectcalico\.org/latest/calicoctl'),
-     'http://www.projectcalico.org/latest/calicoctl?circleci-branch={version}-candidate'),
+     'http://www.projectcalico.org/builds/calicoctl?circleci-branch={version}-candidate'),
 
     (re.compile(r'git\+https://github\.com/projectcalico/calico\.git'),
      'git+https://github.com/projectcalico/calico.git@{calico-version}'),
@@ -196,7 +196,7 @@ def cut_release():
 
     para("Attach the calicoctl binary to the release.  It can be downloaded "
          "from the following URL:")
-    bullet("http://www.projectcalico.org/latest/calicoctl?circleci-branch=%s-candidate" % new_version)
+    bullet("http://www.projectcalico.org/builds/calicoctl?circleci-branch=%s-candidate" % new_version)
 
     para("Once the release has been created on GitHub, perform a final test "
          "of the release:")

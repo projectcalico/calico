@@ -78,5 +78,5 @@ write_files:
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/calicoctl http://www.projectcalico.org/latest/calicoctl
+    wget -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
     chmod +x /opt/bin/calicoctl
