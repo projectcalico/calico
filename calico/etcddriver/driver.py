@@ -81,7 +81,7 @@ WATCHER_QUEUE_SIZE = 20000
 # Threshold in seconds for detecting watcher tight looping on exception.
 REQ_TIGHT_LOOP_THRESH = 0.2
 # How often to log stats.
-STATS_LOG_INTERVAL = 10
+STATS_LOG_INTERVAL = 30
 
 
 class EtcdDriver(object):
@@ -742,6 +742,10 @@ class EtcdDriver(object):
                     http = self.get_etcd_connection()
                 req_start_time = monotonic_time()
                 if req_end_time is not None:
+                    # Calculate the time since the end of the previous request,
+                    # i.e. the time we spent processing the response.  Note:
+                    # start and end are flipped because we just read the start
+                    # time but we have the end time from the last loop.
                     non_req_time = req_start_time - req_end_time
                     non_req_time_stat.store_reading(non_req_time * 1000)
                 _log.debug("Waiting on etcd index %s", next_index)
