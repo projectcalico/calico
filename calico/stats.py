@@ -27,6 +27,9 @@ _log = logging.getLogger(__name__)
 
 
 class RateStat(object):
+    """
+    Records instances of an event and calculates the rate.
+    """
     def __init__(self, name):
         self.name = name
         self.start_time = None
@@ -57,6 +60,9 @@ class RateStat(object):
 
 
 class AggregateStat(RateStat):
+    """
+    Records a sequence of numeric stats and calculates aggregate stats.
+    """
     def __init__(self, name, unit):
         super(AggregateStat, self).__init__(name)
         self.unit = unit

@@ -30,14 +30,14 @@ The driver is responsible for
 * resolving directory deletions so that if a directory is deleted, it tells
   Felix about all the individual keys that are deleted.
 """
-from functools import partial
 import logging
-from Queue import Queue, Empty
 import socket
+from Queue import Queue, Empty
+from functools import partial
 
 from ijson import JSONError
 
-from calico.etcddriver.stats import AggregateStat, RateStat
+from calico.stats import AggregateStat, RateStat
 
 try:
     # simplejson is a faster drop-in replacement.
