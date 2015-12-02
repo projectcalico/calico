@@ -37,7 +37,7 @@ import socket
 
 from ijson import JSONError
 
-from calico.etcddriver.stats import AggregateStat
+from calico.etcddriver.stats import AggregateStat, RateStat
 
 try:
     # simplejson is a faster drop-in replacement.
@@ -111,6 +111,17 @@ class EtcdDriver(object):
         self._first_resync = True
         self._resync_http_pool = None
         self._cluster_id = None
+
+        # Resync thread stats.
+        self._snap_keys_processed = RateStat("snapshot keys processed")
+        self._event_keys_processed = RateStat("event keys processed")
+        self._felix_updates_sent = RateStat("felix updates sent")
+        self._resync_stats = [
+            self._snap_keys_processed,
+            self._event_keys_processed,
+            self._felix_updates_sent,
+        ]
+        self._last_resync_stat_log_time = monotonic_time()
 
         # Set by the reader thread once the init message has been received
         # from Felix.
@@ -236,6 +247,7 @@ class EtcdDriver(object):
         _log.info("Config loaded; continuing.")
 
         while not self._stop_event.is_set():
+            self._reset_resync_thread_stats()
             loop_start = monotonic_time()
             try:
                 # Start with a fresh HTTP pool just in case it got into a bad
@@ -491,6 +503,7 @@ class EtcdDriver(object):
         :param snapshot_index: Index of the snapshot as a whole.
         """
         assert snapshot_index is not None
+        self._snap_keys_processed.store_occurance()
         old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
         if snap_mod > old_hwm:
             # This specific key's HWM is newer than the previous
@@ -514,6 +527,7 @@ class EtcdDriver(object):
                              "with snapshot")
                 break
         self._check_stop_event()
+        self._maybe_log_resync_thread_stats()
 
     def _process_events_only(self):
         """
@@ -563,6 +577,7 @@ class EtcdDriver(object):
             if not resync_in_progress and self._resync_requested:
                 _log.info("Resync requested, triggering one.")
                 raise ResyncRequested()
+            self._maybe_log_resync_thread_stats()
             try:
                 event = self._watcher_queue.get(timeout=1)
             except Empty:
@@ -574,6 +589,7 @@ class EtcdDriver(object):
         if event is None:
             self._watcher_queue = None
             raise WatcherDied()
+        self._event_keys_processed.store_occurance()
         ev_mod, ev_key, ev_val = event
         if ev_val is not None:
             # Normal update.
@@ -662,6 +678,7 @@ class EtcdDriver(object):
             },
             flush=False
         )
+        self._felix_updates_sent.store_occurance()
 
     def _send_status(self, status):
         """
@@ -677,6 +694,19 @@ class EtcdDriver(object):
 
     def _calculate_url(self, etcd_key):
         return self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
+
+    def _reset_resync_thread_stats(self):
+        for stat in self._resync_stats:
+            stat.reset()
+        self._last_resync_stat_log_time = monotonic_time()
+
+    def _maybe_log_resync_thread_stats(self):
+        now = monotonic_time()
+        if now - self._last_resync_stat_log_time > STATS_LOG_INTERVAL:
+            for stat in self._resync_stats:
+                _log.info("Resync thread %s", stat)
+                stat.reset()
+            self._last_resync_stat_log_time = now
 
     def watch_etcd(self, next_index, event_queue, stop_event):
         """

@@ -41,13 +41,19 @@ class RateStat(object):
         self.count += 1
 
     @property
-    def rate(self):
+    def time_since_start(self):
         now = monotonic_time()
         time_since_start = now - self.start_time
+        return time_since_start
+
+    @property
+    def rate(self):
+        time_since_start = self.time_since_start
         return self.count / time_since_start if time_since_start > 0 else 0.0
 
     def __str__(self):
-        return "%s: %s (%.3f/s)" % (self.name, self.count, self.rate)
+        return "%s: %s in %.1fs (%.3f/s)" % (self.name, self.count,
+                                             self.time_since_start, self.rate)
 
 
 class AggregateStat(RateStat):
