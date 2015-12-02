@@ -163,6 +163,8 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # then this string is "tap+".
     iface_match = config.IFACE_PREFIX + "+"
 
+    iptables_generator = config.plugins["iptables_generator"]
+
     # If enabled, create the IP-in-IP device
     if config.IP_IN_IP_ENABLED:
         _log.info("IP-in-IP enabled, ensuring device exists.")
@@ -182,9 +184,9 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
 
     # Ensure that Calico-controlled IPv6 hosts cannot spoof their IP addresses.
     # (For IPv4, this is controlled by a per-interface sysctl.)
-    v6_raw_prerouting_chain, v6_raw_prerouting_deps = \
-        config.plugins["iptables_generator"].raw_rpfilter_failed_chain(
-            ip_version=6)
+    v6_raw_prerouting_chain, v6_raw_prerouting_deps = (
+        iptables_generator.raw_rpfilter_failed_chain(ip_version=6)
+    )
 
     v6_raw_updater.rewrite_chains({CHAIN_PREROUTING: v6_raw_prerouting_chain},
                                   {CHAIN_PREROUTING: v6_raw_prerouting_deps},
@@ -199,8 +201,9 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # The IPV4 nat table first. This must have a felix-PREROUTING chain.
     # Write the chain first and then udpate the v4 NAT kernel chain to
     # reference it.
-    prerouting_chain, prerouting_deps = \
-        config.plugins["iptables_generator"].nat_prerouting_chain(ip_version=4)
+    prerouting_chain, prerouting_deps = (
+        iptables_generator.nat_prerouting_chain(ip_version=4)
+    )
     v4_nat_updater.rewrite_chains({CHAIN_PREROUTING: prerouting_chain},
                                   {CHAIN_PREROUTING: prerouting_deps},
                                   async=False)
@@ -221,22 +224,21 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
         else:
             hosts_set_name = None
 
-        input_chain, input_deps = \
-            config.plugins["iptables_generator"].filter_input_chain(
-                ip_version,
-                hosts_set_name)
-        forward_chain, forward_deps = \
-            config.plugins["iptables_generator"].filter_forward_chain(
-                ip_version)
+        input_chain, input_deps = (
+            iptables_generator.filter_input_chain(ip_version, hosts_set_name)
+        )
+        forward_chain, forward_deps = (
+            iptables_generator.filter_forward_chain(ip_version)
+        )
 
         iptables_updater.rewrite_chains(
             {
                 CHAIN_FORWARD: forward_chain,
-                CHAIN_INPUT: input_chain
+                CHAIN_INPUT: input_chain,
             },
             {
                 CHAIN_FORWARD: forward_deps,
-                CHAIN_INPUT: input_deps
+                CHAIN_INPUT: input_deps,
             },
             async=False)
 

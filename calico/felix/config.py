@@ -500,11 +500,28 @@ class Config(object):
 
 
 def _load_plugin(plugin_entry_point, flavor):
+    """
+    Load a plugin for the specified entry point.   A package that implements a
+    plugin exposes one or more named implementations (flavors) of one of more
+    plugin entry points.  For example, the core Felix package registers a
+    "default" implementation / flavor of the "calico.felix.iptables_generator"
+    entry point (in setup.py).   There may be multiple packages installed, each
+    offering different flavours of a given entry point.
+
+    :param plugin_entry_point: The entry point for which we wish to load a
+        plugin implementation.   E.g. "calico.felix.iptables_generator"
+    :param flavor: The flavor / named implementation of the entry point we wish
+        to load.  E.g. "default"
+    :return: If an implementation of the requested entry point is available
+        that matches the requested flavor then this function loads it and
+        returns the function mapped by the entry point.   Otherwise this
+        function raises ImportError.
+    """
     for v in pkg_resources.iter_entry_points(plugin_entry_point, flavor):
-        constructor = v.load()
+        entry_point = v.load()
         log.info("Successfully loaded %s plugin: %s" %
                  (plugin_entry_point, flavor))
-        return constructor
+        return entry_point
     raise ImportError(
         'No plugin called "{0:s}" has been registered for entrypoint "{1:s}".'.
         format(flavor, plugin_entry_point))

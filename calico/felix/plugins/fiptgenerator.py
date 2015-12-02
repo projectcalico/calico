@@ -437,7 +437,7 @@ class FelixIptablesGenerator(FelixPlugin):
 
         return updates, deps
 
-    def drop_rules(self, ip_version, chain_name, rule_spec, comment,
+    def drop_rules(self, ip_version, chain_name, rule_spec=None, comment=None,
                    ipt_action="--append"):
         """
         Return a list of iptables updates that can be applied to a chain to
@@ -462,16 +462,35 @@ class FelixIptablesGenerator(FelixPlugin):
                 "Invalid comment %r" % comment
             comment_str = '-m comment --comment "%s"' % comment
 
-        return [' '.join(filter(None, [
-            ipt_action,
-            chain_name,
-            rule_spec,
-            '--jump DROP',
-            comment_str
-            ]))]
+        parts = [p for p in [ipt_action,
+                             chain_name,
+                             rule_spec,
+                             '--jump DROP',
+                             comment_str]
+                 if p is not None]
+        return [' '.join(parts)]
 
     def _build_to_or_from_chain(self, ip_version, endpoint_id, profile_ids,
                                 chain_name, direction, expected_mac=None):
+        """
+        Generate the necessary set of iptables fragments for a to or from
+        chain for a given endpoint.
+
+        :param ip_version.  Whether this chain is for IPv4 or IPv6 iptables.
+        :param endpoint_id: The endpoint's ID.
+        :param profile_ids: The set of profile_ids associated with this
+        endpoint.
+        :param chain_name: The name of the chain to generate.
+        :param direction: One of "inbound" or "outbound".
+        :param expected_mac: The expected source MAC address.   If not None
+        then the chain will explicitly drop any packets that do not have this
+        expected source MAC address.
+
+        :returns Tuple: chain, deps.   Chain is a list of fragments that can
+        be submitted to iptables to program the requested chain.  Deps is a
+        set containing names of chains that this endpoint chain depends on.
+        """
+
         # Ensure the MARK is set to 0 when we start so that unmatched packets
         # will be dropped.
         chain = [

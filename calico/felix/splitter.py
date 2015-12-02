@@ -121,7 +121,9 @@ class UpdateSplitter(Actor):
 
         # We've cleaned up any unused ipsets and iptables.   Let any plugins
         # know in case they want to take any action.
-        for plugin in self.config.plugins.itervalues():
+        for plugin_name, plugin in self.config.plugins.iteritems():
+            _log.info("Invoking cleanup_complete for plugin %s",
+                      plugin_name)
             plugin.cleanup_complete(self.config)
 
     @actor_message()

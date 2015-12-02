@@ -77,7 +77,7 @@ The full list of parameters which can be set is as follows.
 | Setting                     | Default                   | Meaning                                                                                   |
 +=============================+===========================+===========================================================================================+
 | EtcdAddr                    | localhost:4001            | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
-|                             |                           | to.  Note: this value cannot be set through etcd.                                         |
+|                             |                           | to.                                                                                       |
 +-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | DefaultEndpointToHostAction | DROP                      | By default Calico blocks traffic from endpoints to the host itself by using an iptables   |
 |                             |                           | DROP action.  If you want to allow some or all traffic from endpoint to host then set     |
@@ -85,8 +85,7 @@ The full list of parameters which can be set is as follows.
 |                             |                           | processed) or "ACCEPT" (which immediately accepts packets).                               |
 +-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | FelixHostname               | socket.gethostname()      | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
-|                             |                           | autodetects is incorrect or does not match what the plugin will expect.  Note: this value |
-|                             |                           | cannot be set through etcd.                                                               |
+|                             |                           | autodetects is incorrect or does not match what the plugin will expect.                   |
 +-----------------------------+---------------------------+-------------------------------------------------------------------------------------------+
 | MetadataAddr                | 127.0.0.1                 | The IP address or domain name of the server that can answer VM queries for cloud-init     |
 |                             |                           | metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu,   |
@@ -149,8 +148,8 @@ etcd configuration
 ^^^^^^^^^^^^^^^^^^
 
 .. note:: etcd configuration cannot be used to set either EtcdAddr or
-          FelixHostname, both of which are required before the etcd configuration
-          can be read.
+          FelixHostname, both of which are required before the etcd
+          configuration can be read.
 
 etcd configuration is read from etcd from two places.
 

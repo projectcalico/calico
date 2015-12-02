@@ -45,6 +45,7 @@ class DispatchChains(Actor):
         self.config = config
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
+        self.iptables_generator = self.config.plugins["iptables_generator"]
         self.ifaces = set()
         self.programmed_leaf_chains = set()
         self._dirty = False
@@ -232,13 +233,13 @@ class DispatchChains(Actor):
                 # Add a default drop to the end of the leaf chain.
                 # Add a default drop to the end of the leaf chain.
                 from_upds.extend(
-                    self.config.plugins["iptables_generator"].drop_rules(
+                    self.iptables_generator.drop_rules(
                         self.ip_version,
                         disp_from_chain,
                         None,
                         "From unknown endpoint"))
                 to_upds.extend(
-                    self.config.plugins["iptables_generator"].drop_rules(
+                    self.iptables_generator.drop_rules(
                         self.ip_version,
                         disp_to_chain,
                         None,
@@ -247,13 +248,13 @@ class DispatchChains(Actor):
         # Both TO and FROM chains end with a DROP so that interfaces that
         # we don't know about yet can't bypass our rules.
         root_from_upds.extend(
-            self.config.plugins["iptables_generator"].drop_rules(
+            self.iptables_generator.drop_rules(
                 self.ip_version,
                 CHAIN_FROM_ENDPOINT,
                 None,
                 "From unknown endpoint"))
         root_to_upds.extend(
-            self.config.plugins["iptables_generator"].drop_rules(
+            self.iptables_generator.drop_rules(
                 self.ip_version,
                 CHAIN_TO_ENDPOINT,
                 None,
