@@ -30,12 +30,14 @@ The driver is responsible for
 * resolving directory deletions so that if a directory is deleted, it tells
   Felix about all the individual keys that are deleted.
 """
-from functools import partial
 import logging
-from Queue import Queue, Empty
 import socket
+from Queue import Queue, Empty
+from functools import partial
 
 from ijson import JSONError
+
+from calico.stats import AggregateStat, RateStat
 
 try:
     # simplejson is a faster drop-in replacement.
@@ -78,6 +80,8 @@ WATCHER_QUEUE_SIZE = 20000
 
 # Threshold in seconds for detecting watcher tight looping on exception.
 REQ_TIGHT_LOOP_THRESH = 0.2
+# How often to log stats.
+STATS_LOG_INTERVAL = 30
 
 
 class EtcdDriver(object):
@@ -107,6 +111,17 @@ class EtcdDriver(object):
         self._first_resync = True
         self._resync_http_pool = None
         self._cluster_id = None
+
+        # Resync thread stats.
+        self._snap_keys_processed = RateStat("snapshot keys processed")
+        self._event_keys_processed = RateStat("event keys processed")
+        self._felix_updates_sent = RateStat("felix updates sent")
+        self._resync_stats = [
+            self._snap_keys_processed,
+            self._event_keys_processed,
+            self._felix_updates_sent,
+        ]
+        self._last_resync_stat_log_time = monotonic_time()
 
         # Set by the reader thread once the init message has been received
         # from Felix.
@@ -232,6 +247,7 @@ class EtcdDriver(object):
         _log.info("Config loaded; continuing.")
 
         while not self._stop_event.is_set():
+            self._reset_resync_thread_stats()
             loop_start = monotonic_time()
             try:
                 # Start with a fresh HTTP pool just in case it got into a bad
@@ -487,6 +503,7 @@ class EtcdDriver(object):
         :param snapshot_index: Index of the snapshot as a whole.
         """
         assert snapshot_index is not None
+        self._snap_keys_processed.store_occurance()
         old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
         if snap_mod > old_hwm:
             # This specific key's HWM is newer than the previous
@@ -510,6 +527,7 @@ class EtcdDriver(object):
                              "with snapshot")
                 break
         self._check_stop_event()
+        self._maybe_log_resync_thread_stats()
 
     def _process_events_only(self):
         """
@@ -559,6 +577,7 @@ class EtcdDriver(object):
             if not resync_in_progress and self._resync_requested:
                 _log.info("Resync requested, triggering one.")
                 raise ResyncRequested()
+            self._maybe_log_resync_thread_stats()
             try:
                 event = self._watcher_queue.get(timeout=1)
             except Empty:
@@ -570,6 +589,7 @@ class EtcdDriver(object):
         if event is None:
             self._watcher_queue = None
             raise WatcherDied()
+        self._event_keys_processed.store_occurance()
         ev_mod, ev_key, ev_val = event
         if ev_val is not None:
             # Normal update.
@@ -658,6 +678,7 @@ class EtcdDriver(object):
             },
             flush=False
         )
+        self._felix_updates_sent.store_occurance()
 
     def _send_status(self, status):
         """
@@ -673,6 +694,19 @@ class EtcdDriver(object):
 
     def _calculate_url(self, etcd_key):
         return self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
+
+    def _reset_resync_thread_stats(self):
+        for stat in self._resync_stats:
+            stat.reset()
+        self._last_resync_stat_log_time = monotonic_time()
+
+    def _maybe_log_resync_thread_stats(self):
+        now = monotonic_time()
+        if now - self._last_resync_stat_log_time > STATS_LOG_INTERVAL:
+            for stat in self._resync_stats:
+                _log.info("Resync thread %s", stat)
+                stat.reset()
+            self._last_resync_stat_log_time = now
 
     def watch_etcd(self, next_index, event_queue, stop_event):
         """
@@ -692,7 +726,14 @@ class EtcdDriver(object):
         :param stop_event: Event used to stop this thread when it is no
                longer needed.
         """
-        _log.info("Watcher thread started")
+        _log.info("Watcher thread started with next index %s", next_index)
+        last_log_time = monotonic_time()
+        req_end_time = None
+        non_req_time_stat = AggregateStat("processing time", "ms")
+        etcd_response_time = None
+        etcd_response_time_stat = AggregateStat("etcd response time", "ms")
+        stats = [etcd_response_time_stat,
+                 non_req_time_stat]
         http = None
         try:
             while not self._stop_event.is_set() and not stop_event.is_set():
@@ -700,15 +741,29 @@ class EtcdDriver(object):
                     _log.info("No HTTP pool, creating one...")
                     http = self.get_etcd_connection()
                 req_start_time = monotonic_time()
+                if req_end_time is not None:
+                    # Calculate the time since the end of the previous request,
+                    # i.e. the time we spent processing the response.  Note:
+                    # start and end are flipped because we just read the start
+                    # time but we have the end time from the last loop.
+                    non_req_time = req_start_time - req_end_time
+                    non_req_time_stat.store_reading(non_req_time * 1000)
+                _log.debug("Waiting on etcd index %s", next_index)
                 try:
-                    _log.debug("Waiting on etcd index %s", next_index)
-                    resp = self._etcd_request(http,
-                                              VERSION_DIR,
-                                              recursive=True,
-                                              wait_index=next_index,
-                                              timeout=90)
+                    try:
+                        resp = self._etcd_request(http,
+                                                  VERSION_DIR,
+                                                  recursive=True,
+                                                  wait_index=next_index,
+                                                  timeout=90)
+                    finally:
+                        # Make sure the time is available to both exception and
+                        # mainline code paths.
+                        req_end_time = monotonic_time()
+                        etcd_response_time = req_end_time - req_start_time
                     if resp.status != 200:
-                        _log.warning("etcd watch returned bad HTTP status: %s",
+                        _log.warning("etcd watch returned bad HTTP status to"
+                                     "poll on index %s: %s", next_index,
                                      resp.status)
                     self._check_cluster_id(resp)
                     resp_body = resp.data  # Force read inside try block.
@@ -725,11 +780,10 @@ class EtcdDriver(object):
                         socket.error) as e:
                     # Not so expected but still possible to recover:  etcd
                     # being restarted, for example.
-                    req_end_time = monotonic_time()
-                    req_time = req_end_time - req_start_time
-                    if req_time < REQ_TIGHT_LOOP_THRESH:
+                    assert etcd_response_time is not None
+                    if etcd_response_time < REQ_TIGHT_LOOP_THRESH:
                         # Failed fast, make sure we don't tight loop.
-                        delay = REQ_TIGHT_LOOP_THRESH - req_time
+                        delay = REQ_TIGHT_LOOP_THRESH - etcd_response_time
                         _log.warning("Connection to etcd failed with %r, "
                                      "restarting watch at index %s after "
                                      "delay %.3f", e, next_index, delay)
@@ -742,11 +796,14 @@ class EtcdDriver(object):
                     # connection is incorrectly recycled.
                     http = None
                     continue
+                # If we get to this point, we've got an etcd response to
+                # process; try to parse it.
                 try:
                     etcd_resp = json.loads(resp_body)
                     if "errorCode" in etcd_resp:
-                        _log.error("Error from etcd: %s; triggering a resync.",
-                                   etcd_resp)
+                        _log.error("Error from etcd for index %s: %s; "
+                                   "triggering a resync.",
+                                   next_index, etcd_resp)
                         break
                     node = etcd_resp["node"]
                     key = node["key"]
@@ -773,11 +830,16 @@ class EtcdDriver(object):
                             dir_creation = True
                     modified_index = node["modifiedIndex"]
                 except (KeyError, TypeError, ValueError):
-                    _log.exception("Unexpected format for etcd response: %r;"
-                                   "triggering a resync.",
-                                   resp_body)
+                    _log.exception("Unexpected format for etcd response to"
+                                   "index %s: %r; triggering a resync.",
+                                   next_index, resp_body)
                     break
                 else:
+                    # We successfully parsed the response, hand it off to the
+                    # resync thread.  Now we know that we got a response,
+                    # we record that in the stat.
+                    etcd_response_time_stat.store_reading(etcd_response_time *
+                                                          1000)
                     if not dir_creation:
                         # The resync thread doesn't need to know about
                         # directory creations so we skip them.  (It does need
@@ -785,6 +847,14 @@ class EtcdDriver(object):
                         # sub-keys.)
                         event_queue.put((modified_index, key, value))
                     next_index = modified_index + 1
+
+                    # Opportunistically log stats.
+                    now = monotonic_time()
+                    if now - last_log_time > STATS_LOG_INTERVAL:
+                        for stat in stats:
+                            _log.info("Watcher %s", stat)
+                            stat.reset()
+                        last_log_time = now
         except DriverShutdown:
             _log.warning("Watcher thread stopping due to driver shutdown.")
         except:
@@ -792,7 +862,8 @@ class EtcdDriver(object):
             raise
         finally:
             # Signal to the resync thread that we've exited.
-            _log.info("Watcher thread finished. Signalling to resync thread.")
+            _log.info("Watcher thread finished. Signalling to resync thread. "
+                      "Was at index %s.", next_index)
             event_queue.put(None)
 
 
