@@ -52,10 +52,21 @@ ETCD_TIMEOUT = 5
 
 # Register Calico-specific options.
 calico_opts = [
+    # etcd connection information.
     cfg.StrOpt('etcd_host', default='localhost',
                help="The hostname or IP of the etcd node/proxy"),
     cfg.IntOpt('etcd_port', default=4001,
                help="The port to use for the etcd node/proxy"),
+    # etcd TLS-related options.
+    cfg.StrOpt('etcd_key_file', default=None,
+               help="The path to the TLS key file to use with etcd."),
+    cfg.StrOpt('etcd_cert_file', default=None,
+               help="The path to the TLS client certificate file to use with "
+                    "etcd."),
+    cfg.StrOpt('etcd_ca_cert_file', default=None,
+               help="The path to the TLS CA certificate file to use with "
+                    "etcd."),
+    # Elector configuration.
     cfg.StrOpt('elector_name', default=_hostname,
                help="A unique name to identify this node in leader election"),
 ]
@@ -160,11 +171,33 @@ class CalicoTransportEtcd(object):
             if self.elector:
                 LOG.warning("There was already an elector, shutting it down.")
                 self.elector.stop()
-            client = etcd.Client(host=cfg.CONF.calico.etcd_host,
-                                 port=cfg.CONF.calico.etcd_port)
+            calico_cfg = cfg.CONF.calico
+            tls_config_params = [
+                calico_cfg.etcd_key_file,
+                calico_cfg.etcd_cert_file,
+                calico_cfg.etcd_ca_cert_file,
+            ]
+            if any(tls_config_params):
+                LOG.info("TLS to etcd is enabled with key file %s; "
+                         "cert file %s; CA cert file %s", *tls_config_params)
+                # Etcd client expects cert and key as a tuple.
+                tls_cert = (calico_cfg.etcd_cert_file,
+                            calico_cfg.etcd_key_file)
+                tls_ca_cert = calico_cfg.etcd_ca_cert_file
+                protocol = "https"
+            else:
+                LOG.info("TLS disabled, using HTTP to connect to etcd.")
+                tls_cert = None
+                tls_ca_cert = None
+                protocol = "http"
+            client = etcd.Client(host=calico_cfg.etcd_host,
+                                 port=calico_cfg.etcd_port,
+                                 protocol=protocol,
+                                 cert=tls_cert,
+                                 ca_cert=tls_ca_cert)
             elector = Elector(
                 client=client,
-                server_id=cfg.CONF.calico.elector_name,
+                server_id=calico_cfg.elector_name,
                 election_key=datamodel_v1.NEUTRON_ELECTION_KEY,
                 interval=MASTER_REFRESH_INTERVAL,
                 ttl=MASTER_TIMEOUT,
@@ -551,12 +584,29 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
     """
 
     def __init__(self, calico_driver):
-        host = cfg.CONF.calico.etcd_host
-        port = cfg.CONF.calico.etcd_port
+        calico_cfg = cfg.CONF.calico
+        host = calico_cfg.etcd_host
+        port = calico_cfg.etcd_port
         LOG.info("CalicoEtcdWatcher created for %s:%s", host, port)
+        tls_config_params = [
+            calico_cfg.etcd_key_file,
+            calico_cfg.etcd_cert_file,
+            calico_cfg.etcd_ca_cert_file,
+        ]
+        if any(tls_config_params):
+            LOG.info("TLS to etcd is enabled with key file %s; "
+                     "cert file %s; CA cert file %s", *tls_config_params)
+            protocol = "https"
+        else:
+            LOG.info("TLS disabled, using HTTP to connect to etcd.")
+            protocol = "http"
         super(CalicoEtcdWatcher, self).__init__(
             "%s:%s" % (host, port),
-            datamodel_v1.FELIX_STATUS_DIR
+            datamodel_v1.FELIX_STATUS_DIR,
+            etcd_scheme=protocol,
+            etcd_key=calico_cfg.etcd_key_file,
+            etcd_cert=calico_cfg.etcd_cert_file,
+            etcd_ca=calico_cfg.etcd_ca_cert_file
         )
         self.calico_driver = calico_driver
 
