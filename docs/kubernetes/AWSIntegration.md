@@ -19,7 +19,7 @@ This guide will walk you through how to use Calico Networking with an existing A
 ## Installing Calico
 On each of your AWS Instances, you will need to download and install the `calicoctl` binary
 ```
-wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl
+wget http://www.projectcalico.org/builds/calicoctl
 chmod +x calicoctl
 sudo mv calicoctl /usr/bin/
 ```
@@ -27,7 +27,7 @@ sudo mv calicoctl /usr/bin/
 ## Configuring the Master
 On your master, you will need to setup an etcd instance specifically for Calico. To do so, you will need to download our etcd manifest
 ```
-wget https://raw.githubusercontent.com/projectcalico/calico-kubernetes/master/config/master/calico-etcd.manifest 
+wget https://raw.githubusercontent.com/projectcalico/calico-kubernetes/v0.6.0/config/master/calico-etcd.manifest 
 ```
 
 Replace all instances of `<PRIVATE_IPV4>` with your master's IP. Then, place the manifest file in the `/etc/kubernetes/manifests/` directory. 
@@ -39,7 +39,7 @@ After a short delay, the kubelet on your master will automatically create a cont
 
 Next, use `calicoctl` to spin up the `calico/node` container and install the Calico [network plugin](https://github.com/projectcalico/calico-kubernetes) for Kubernetes. 
 ```
-sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes --kube-plugin-version=v0.4.0
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes
 ```
 
 Then you will need to set up an IP pool with IP-in-IP enabled. This is a [necessary step](../FAQ.md#can-i-run-calico-in-a-public-cloud-environment) in any public cloud environment.
@@ -75,7 +75,7 @@ Hold on to this token, as you will need it to configure your nodes.
 ## Configuring the Nodes
 On each node, use `calicoctl` to spin up the `calico/node` container and install the Calico [network plugin](https://github.com/projectcalico/calico-kubernetes) for Kubernetes. 
 ```
-sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes --kube-plugin-version=v0.4.0
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes
 ```
 
 To start using the Calico network plugin, we will need to modify the existing kubelet process on each of your nodes.

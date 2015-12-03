@@ -38,9 +38,9 @@ wget http://www.projectcalico.org/latest/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
-sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node --kubernetes --kube-plugin-version=v0.6.1
+sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node --kubernetes
 ```
-> In the above commands, the `--kubernetes` option installs the `calico-kubernetes` plugin at the given version. 
+> In the above commands, the `--kubernetes` option installs the `calico-kubernetes` plugin. 
 
 #### 2. Configure the Network Plugin 
 The Calico network plugin for Kubernetes uses the `calico_kubernetes.ini` file to read in user configuration.
