@@ -80,3 +80,4 @@ such as transfer.sh using curl or similar.  For example:
 
   curl --upload-file /tmp/tmp991ZWu/diags-151015_155032.tar.gz https://transfer.sh/diags-151015_155032.tar.gz
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/diags.md?pixel)](https://github.com/igrigorik/ga-beacon)

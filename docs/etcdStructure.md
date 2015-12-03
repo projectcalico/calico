@@ -201,3 +201,4 @@ In all cases, the data is a JSON blob in the form:
           "as_num": "The AS Number of the peer"
         }
 
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/etcdStructure.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -226,3 +226,4 @@ $ calicoctl bgp default-node-as 64512
 $ calicoctl bgp default-node-as
 64512
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/bgp.md?pixel)](https://github.com/igrigorik/ga-beacon)

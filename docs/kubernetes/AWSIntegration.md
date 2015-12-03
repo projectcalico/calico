@@ -139,3 +139,4 @@ Create the pod with `kubectl create -f busybox.yaml`
 And check its Calico endpoint with `ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl endpoint show --detailed`.  You should see that both an IP address and a profile have been assigned to the pod.
 
 For more information on programming Calico Policy in Kubernetes, see our [Kubernetes Policy docs](KubernetesPolicy.md).
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/AWSIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)

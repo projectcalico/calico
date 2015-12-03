@@ -111,3 +111,4 @@ For more information on what you can do with Calico, please visit the
 [raise-issues]: https://github.com/projectcalico/calico-docker/issues/new
 [project-calico]: http://www.projectcalico.org
 [etcd]: https://github.com/coreos/etcd
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

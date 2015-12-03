@@ -75,3 +75,4 @@ In order to use Calico policy with Kubernetes, the `kube-proxy` component must b
 There are two ways to enable this behavior.
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
 - Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)

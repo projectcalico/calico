@@ -141,3 +141,4 @@ For example:
     calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1
 
 See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/default-networking/Demonstration.md?pixel)](https://github.com/igrigorik/ga-beacon)

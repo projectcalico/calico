@@ -85,3 +85,4 @@ Now you can ping between the two containers using their IPv6 addresses.
 On calico-02:
 
     docker exec workload-G ping6 -c 4 fd80:24e2:f998:72d6::1
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/default-networking/DemonstrationIPv6.md?pixel)](https://github.com/igrigorik/ga-beacon)

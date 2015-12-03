@@ -96,3 +96,4 @@ whether you are running with libnetwork or the default Docker networking.
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
 [calico-networking]: https://github.com/projectcalico/calico-docker
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/VagrantUbuntu.md?pixel)](https://github.com/igrigorik/ga-beacon)

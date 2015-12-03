@@ -28,3 +28,4 @@ You can check that Calico is successfully running by typing:
 Or check Docker and look for the calico-node container.
 
     $ sudo docker ps | grep "calico-node"
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/RpmInstallCalico.md?pixel)](https://github.com/igrigorik/ga-beacon)

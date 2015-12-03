@@ -134,3 +134,4 @@ the current etcd version if etcd is available.
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-docker/releases/
 [docker]: https://docs.docker.com/installation/
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/libnetwork/EnvironmentSetup.md?pixel)](https://github.com/igrigorik/ga-beacon)

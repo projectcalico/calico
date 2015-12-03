@@ -74,3 +74,4 @@ production_pod1
 production_role_backend
 production_version_v1.2.3
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/KubernetesPolicy.md?pixel)](https://github.com/igrigorik/ga-beacon)

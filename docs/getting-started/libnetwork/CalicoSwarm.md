@@ -125,3 +125,4 @@ To find the IP address of workload B, we can run the `docker inspect` command. T
 
     $ export WORKLOADB_IP=`docker -H $MANAGER_IP:$SWARM_PORT inspect --format "{{ .NetworkSettings.Networks.net2.IPAddress }}" workload-B`
     $ docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 $WORKLOADB_IP
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/libnetwork/CalicoSwarm.md?pixel)](https://github.com/igrigorik/ga-beacon)

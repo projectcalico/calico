@@ -172,3 +172,4 @@ $ calicoctl pool show
 | fd80:24e2:f998:72d6::/64 |         |
 +--------------------------+---------+
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/pool.md?pixel)](https://github.com/igrigorik/ga-beacon)
