@@ -704,7 +704,7 @@ class EtcdDriver(object):
         now = monotonic_time()
         if now - self._last_resync_stat_log_time > STATS_LOG_INTERVAL:
             for stat in self._resync_stats:
-                _log.info("Resync thread %s", stat)
+                _log.info("STAT: Resync thread %s", stat)
                 stat.reset()
             self._last_resync_stat_log_time = now
 
@@ -721,9 +721,9 @@ class EtcdDriver(object):
         the versions of those values that were created for it as
         opposed to a later-created watcher thread.
 
-        :param next_index: The etcd index to start watching from.
-        :param event_queue: Queue of updates back to the resync thread.
-        :param stop_event: Event used to stop this thread when it is no
+        :param int next_index: The etcd index to start watching from.
+        :param Queue event_queue: Queue of updates back to the resync thread.
+        :param Event stop_event: Event used to stop this thread when it is no
                longer needed.
         """
         _log.info("Watcher thread started with next index %s", next_index)
@@ -852,8 +852,10 @@ class EtcdDriver(object):
                     now = monotonic_time()
                     if now - last_log_time > STATS_LOG_INTERVAL:
                         for stat in stats:
-                            _log.info("Watcher %s", stat)
+                            _log.info("STAT: Watcher %s", stat)
                             stat.reset()
+                        _log.info("STAT: Watcher queue length: %s",
+                                  event_queue.qsize())
                         last_log_time = now
         except DriverShutdown:
             _log.warning("Watcher thread stopping due to driver shutdown.")
@@ -862,9 +864,13 @@ class EtcdDriver(object):
             raise
         finally:
             # Signal to the resync thread that we've exited.
-            _log.info("Watcher thread finished. Signalling to resync thread. "
-                      "Was at index %s.", next_index)
             event_queue.put(None)
+            # Make sure we get some stats output from the watcher.
+            for stat in stats:
+                _log.info("STAT: Final watcher %s", stat)
+            _log.info("Watcher thread finished. Signalled to resync thread. "
+                      "Was at index %s.  Queue length is %s.", next_index,
+                      event_queue.qsize())
 
 
 def parse_snapshot(resp, callback):
