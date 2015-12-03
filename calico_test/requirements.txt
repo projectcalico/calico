@@ -11,3 +11,5 @@ prettytable
 git+https://github.com/projectcalico/libcalico.git
 flask
 gunicorn
+monotime
+ConcurrentLogHandler
