@@ -64,3 +64,4 @@ WARNING: Unable to detect the ipip module. Load with `modprobe ipip`
 $ calicoctl checksystem --libnetwork
 
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/checksystem.md?pixel)](https://github.com/igrigorik/ga-beacon)

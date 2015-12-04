@@ -49,3 +49,4 @@ Now you may run the mesos-slave process on each of your agent hosts.
     $ sudo systemctl start mesos-slave.service
 
 
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/RpmInstallMesos.md?pixel)](https://github.com/igrigorik/ga-beacon)

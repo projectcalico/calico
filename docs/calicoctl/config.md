@@ -206,3 +206,4 @@ $ calicoctl config node bgp loglevel debug
 $ calicoctl config node bgp loglevel --remove
 Value removed
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/config.md?pixel)](https://github.com/igrigorik/ga-beacon)

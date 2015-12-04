@@ -52,3 +52,4 @@ If you have SELinux policy enforced, you must perform the following step:
     $ sudo chcon -Rt svirt_sandbox_file_t /var/etcd
 
 *If you have a firewall configured on the host running etcd, open ports 2379 and 4001 to allow incoming and outgoing tcp traffic. See our [Host Preparation Guide](PrepareHosts.md) for more details on firewall configuration.*
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/PrepareCoreServices.md?pixel)](https://github.com/igrigorik/ga-beacon)

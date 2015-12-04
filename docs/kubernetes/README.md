@@ -18,3 +18,4 @@ To build a new Kubernetes cluster with Calico networking, try one of the followi
 - [Kubernetes Vagrant Saltfiles](VagrantProvisioner.md)
 - [AWS Cluster Integration](AWSIntegration.md)
 - [DigitalOcean + Fedora](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/fedora/fedora-calico.md)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

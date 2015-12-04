@@ -37,3 +37,4 @@ Example `firewalld` config
     $ sudo systemctl restart firewalld
 
 *Note: etcd uses tcp over ports 2379 and 4001, ZooKeeper uses tcp over port 2181, and Marathon uses tcp over port 8080. If you choose to run these services on your Mesos Master (as we do in the [Core Services Preparation Guide](PrepareCoreServices.md)), be sure to open these ports on that host as well.*
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/PrepareHosts.md?pixel)](https://github.com/igrigorik/ga-beacon)

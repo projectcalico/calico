@@ -35,3 +35,4 @@ Lastly, you'll need to configure your router.  Consult your router's configurati
 If you have a L3 routed fabric or some other scenario not covered by the above, detailed datacenter networking recommendations are given in the main 
 [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/) to discuss your environment.
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/ExternalConnectivity.md?pixel)](https://github.com/igrigorik/ga-beacon)

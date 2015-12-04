@@ -281,4 +281,4 @@ contained in this profile:
 ## IPv6 (Optional)
 
 IPv6 networking is supported for libnetwork when using both the Calico network
-and IPAM drivers together.
+and IPAM drivers together.[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/libnetwork/Demonstration.md?pixel)](https://github.com/igrigorik/ga-beacon)

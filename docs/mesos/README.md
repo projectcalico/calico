@@ -33,3 +33,4 @@ d.) Manually Install Dockerless Calico (coming soon)
 [mesos]: https://mesos.apache.org/
 [net-modules]: https://github.com/mesosphere/net-modules
 [docker]: https://www.docker.com/
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

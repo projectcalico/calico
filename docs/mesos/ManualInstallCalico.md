@@ -60,3 +60,4 @@ The last component required for Calico networking in Mesos is `calico-node`, a D
     $ wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl
     $ chmod +x calicoctl
     $ sudo ETCD_AUTHORITY=<IP of host with etcd>:4001 ./calicoctl node
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/ManualInstallCalico.md?pixel)](https://github.com/igrigorik/ga-beacon)

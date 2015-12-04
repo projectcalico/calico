@@ -109,3 +109,4 @@ Verify the tag was accepted by running
     WEB
     APP_7890
 
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/AdvancedNetworkPolicy.md?pixel)](https://github.com/igrigorik/ga-beacon)

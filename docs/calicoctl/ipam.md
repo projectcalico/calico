@@ -95,3 +95,4 @@ IP 192.168.1.2 is not currently assigned
 $ calicoctl ipam info 192.168.1.1
 No attributes defined for 192.168.1.1
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/ipam.md?pixel)](https://github.com/igrigorik/ga-beacon)

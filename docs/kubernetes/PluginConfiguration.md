@@ -49,3 +49,4 @@ DEFAULT_POLICY=ns_isolation
 CALICO_IPAM=true
 KUBE_AUTH_TOKEN=<INSERT_AUTH_TOKEN>
 ```
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/PluginConfiguration.md?pixel)](https://github.com/igrigorik/ga-beacon)
