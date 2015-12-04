@@ -5,20 +5,24 @@ import shutil
 import sys
 import textwrap
 import urllib2
+from os import path
+import subprocess
 
 # The root directory
-PATH_ROOT = os.path.dirname(os.path.dirname(os.path.realpath("__file_")))
+PATH_ROOT = path.dirname(path.dirname(path.realpath(__file__)))
+sys.path.append(path.join(PATH_ROOT, "calicoctl"))
+from calico_ctl import __version__
 
 # Path names relative to the root of the project
-PATH_CALICOCTL_REQS = os.path.join("calicoctl", "requirements.txt")
-PATH_CALICOCTL_NODE = os.path.join("calicoctl", "calico_ctl", "node.py")
-PATH_CALICOCTL_INIT = os.path.join("calicoctl", "calico_ctl", "__init__.py")
-PATH_CALICONODE_BUILD = os.path.join("calico_node", "build.sh")
+PATH_CALICOCTL_REQS = path.join("calicoctl", "requirements.txt")
+PATH_CALICOCTL_NODE = path.join("calicoctl", "calico_ctl", "node.py")
+PATH_CALICOCTL_INIT = path.join("calicoctl", "calico_ctl", "__init__.py")
+PATH_CALICONODE_BUILD = path.join("calico_node", "build.sh")
 PATH_MAKEFILE = "Makefile"
 PATH_MAIN_README = "README.md"
 PATH_DOCS = "docs"
 PATH_RELEASE_DATA = ".releasedata"
-PATH_BUILDING = os.path.join(PATH_DOCS, "Building.md")
+PATH_BUILDING = path.join(PATH_DOCS, "Building.md")
 
 # Regexes for calico-docker version format.
 INIT_VERSION = re.compile(r'__version__\s*=\s*"(.*)"')
@@ -42,6 +46,19 @@ BLOCK_INDICATOR_MASTER_START = "<!--- master only -->"
 BLOCK_INDICATOR_MASTER_ELSE = "<!--- else"
 BLOCK_INDICATOR_MASTER_END = "<!--- end of master only -->"
 
+arguments = {}
+
+def run(command):
+    """
+    Run or print a command
+    :param command: The command to run
+    :return: None
+    """
+    if arguments['--dry-run']:
+        print command
+    else:
+        subprocess.call(command, shell=True)
+
 
 def get_update_file_list():
     """
@@ -51,11 +68,11 @@ def get_update_file_list():
     update_files_list = set(UPDATE_FILES_STATIC)
     update_files_exclude = set(UPDATE_FILES_EXCLUDE)
     for dirn in UPDATE_FILES_DIRS:
-        for root, dirs, files in os.walk(os.path.join(PATH_ROOT, dirn)):
+        for root, dirs, files in os.walk(path.join(PATH_ROOT, dirn)):
             for filen in files:
                 if UPDATE_FILES_RE.match(filen):
-                    filep = os.path.join(root, filen)
-                    update_files_list.add(os.path.relpath(filep, PATH_ROOT))
+                    filep = path.join(root, filen)
+                    update_files_list.add(path.relpath(filep, PATH_ROOT))
     return update_files_list - update_files_exclude
 
 
@@ -68,7 +85,7 @@ def replace_file(filename, contents):
     :param contents: The contents of the files as a list of lines, each line
     should include the newline character.
     """
-    filename = os.path.join(PATH_ROOT, filename)
+    filename = path.join(PATH_ROOT, filename)
     filename_bak = "%s.release.bak" % filename
     os.rename(filename, filename_bak)
     with open(filename, "w") as out_file:
@@ -84,7 +101,7 @@ def load_file(filename):
     :return: The contents of the files as a list of lines.  Each line includes
     the newline character.
     """
-    with open(os.path.join(PATH_ROOT, filename), "r") as in_file:
+    with open(path.join(PATH_ROOT, filename), "r") as in_file:
         return in_file.readlines()
 
 
@@ -93,13 +110,7 @@ def get_calicoctl_version():
     Determine the current version from the calicoctl __init__.py
     :return: The current calicoctl version
     """
-    for line in load_file(PATH_CALICOCTL_INIT):
-        match = INIT_VERSION.match(line.strip())
-        if match:
-            # The python version string does not include the "v", so add it in.
-            return "v" + match.group(1)
-    print_paragraph("Unable to locate version string in %s" % PATH_CALICOCTL_INIT)
-    sys.exit(1)
+    return "v" + __version__
 
 
 def check_version_increment(old_version, new_version):
@@ -215,7 +226,7 @@ def load_release_data():
     contains any release data.
     :return:
     """
-    filen = os.path.join(PATH_ROOT, PATH_RELEASE_DATA)
+    filen = path.join(PATH_ROOT, PATH_RELEASE_DATA)
     try:
         with open(filen, "r") as in_file:
             data = pickle.load(in_file)
@@ -236,38 +247,43 @@ def save_release_data(release_data):
     :param release_data: The release data to pickle.
     """
     assert isinstance(release_data, dict)
-    filen = os.path.join(PATH_ROOT, PATH_RELEASE_DATA)
+    filen = path.join(PATH_ROOT, PATH_RELEASE_DATA)
     filen_bak = "%s.bak" % filen
     try:
-        if os.path.exists(filen_bak):
+        if path.exists(filen_bak):
             print_warning("Backup release data is found indicating an unclean "
                           "save.  If this is expected, delete the file and "
                           "try again.  "
                           "Filename=%s" % filen_bak)
             sys.exit(1)
 
-        if os.path.exists(filen):
+        if path.exists(filen):
             os.rename(filen, filen_bak)
 
         with open(filen, "w") as out_file:
             pickle.dump(release_data, out_file)
 
-        if os.path.exists(filen_bak):
+        if path.exists(filen_bak):
             os.remove(filen_bak)
     except Exception, e:
         print_warning("Unable to store release data: %s" % e)
         sys.exit(1)
 
 
-def get_github_library_version(name, url):
+def get_github_library_version(name, current, url):
     """
     Ask the user for the version of a GitHub library.
     :param name: A friendly name.
+    :param current: The current version
     :param url: The GitHub repo.
     :return:
     """
     while True:
-        version = raw_input("Version of %s ?: " % name)
+        version = raw_input("Version of %s [currently %s]?: " % (name, current))
+        if not version:
+            # Default to current if user just presses enter
+            version = current
+
         if not url_exists("%s/releases/tag/%s" % (url, version)):
             print_warning("The version of %s is not valid.  Please check the "
                           "GitHub releases for exact naming at "

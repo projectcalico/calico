@@ -2,23 +2,26 @@
 """do_release.py
 
 Usage:
-  do_release.py [--force] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION]
+  do_release.py [--force] [--dry-run] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION]
 
 Options:
   -h --help     Show this screen.
 
 """
-import subprocess
-
-import utils
 import re
+
 from docopt import docopt
 
+import utils
 from utils import print_paragraph as para
 from utils import print_user_actions as actions
 from utils import print_bullet as bullet
 from utils import print_next as next
 from utils import print_warning as warning
+from utils import run
+from calico_ctl import __libnetwork_plugin_version__
+from calico_ctl import __libcalico_version__
+from calico_ctl import __felix_version__
 
 
 # The candidate version replacement performs most of the required version
@@ -28,6 +31,15 @@ from utils import print_warning as warning
 CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'__version__\s*=\s*".*"'),
      '__version__ = "{version-no-v}"'),
+
+    (re.compile(r'__libnetwork_plugin_version__\s*=\s*".*"'),
+     '__libnetwork_plugin_version__ = "{libnetwork-version}"'),
+
+    (re.compile(r'__libcalico_version__\s*=\s*".*"'),
+     '__libcalico_version__ = "{libcalico-version}"'),
+
+    (re.compile(r'__felix_version__\s*=\s*".*"'),
+     '__felix_version__ = "{calico-version}"'),
 
     (re.compile(r'\*\*release\*\*'),
      '{version}'),
@@ -115,13 +127,13 @@ def start_release():
              "releases.")
 
         calico_version = \
-            utils.get_github_library_version("calico (felix)",
+            utils.get_github_library_version("calico (felix)", __felix_version__,
                                              "https://github.com/projectcalico/calico")
         libcalico_version = \
-            utils.get_github_library_version("libcalico",
+            utils.get_github_library_version("libcalico", __libcalico_version__,
                                              "https://github.com/projectcalico/libcalico")
         libnetwork_version = \
-            utils.get_github_library_version("libnetwork-plugin",
+            utils.get_github_library_version("libnetwork-plugin", __libnetwork_plugin_version__,
                                              "https://github.com/projectcalico/libnetwork-plugin")
 
     release_data["versions"] = {"version": new_version,
@@ -133,8 +145,8 @@ def start_release():
     bullet("Creating a candidate release branch called "
            "'%s-candidate'." % new_version)
     if arguments['--force']:
-        subprocess.call("git branch -D %s-candidate" % new_version, shell=True)
-    subprocess.call("git checkout -b %s-candidate" % new_version, shell=True)
+        run("git branch -D %s-candidate" % new_version)
+    run("git checkout -b %s-candidate" % new_version)
 
     # Update the code tree
     utils.update_files(CANDIDATE_VERSION_REPLACE, release_data["versions"])
@@ -145,13 +157,13 @@ def start_release():
 
     bullet("Adding, committing and pushing the updated files to "
            "origin/%s-candidate" % new_version)
-    subprocess.call("git add --all", shell=True)
-    subprocess.call('git commit -m "Update version strings for release '
-           'candidate %s"' % new_version, shell=True)
+    run("git add --all")
+    run('git commit -m "Update version strings for release '
+           'candidate %s"' % new_version)
     if arguments['--force']:
-        subprocess.call("git push -f origin %s-candidate" % new_version, shell=True)
+        run("git push -f origin %s-candidate" % new_version)
     else:
-        subprocess.call("git push origin %s-candidate" % new_version, shell=True)
+        run("git push origin %s-candidate" % new_version)
     actions()
     bullet("Create a DockerHub release called '%s'" % new_version)
     bullet("Monitor the semaphore, CircleCI and Docker builds for this branch "
@@ -183,11 +195,10 @@ def cut_release():
     actions()
     bullet("Add, commit and push the updated files to "
            "origin/%s-candidate" % new_version)
-    bullet("git add --all", level=1)
-    bullet('git commit -m "Update version strings for release '
-           '%s"' % new_version, level=1)
-    bullet("git push origin %s-candidate" % new_version, level=1)
-    bullet("[ideally squash the two commits into one]", level=1)
+    run("git add --all")
+    run('git commit -m "Update version strings for release '
+       '%s"' % new_version)
+    run("git push origin %s-candidate" % new_version)
     bullet("Monitor the semaphore, CircleCI and Docker builds for this branch "
            "until all have successfully completed.  Fix any issues with the "
            "build.")
@@ -220,11 +231,12 @@ def change_to_master():
     actions()
     bullet("Delete the DockerHub build for this release")
     bullet("Checkout the master branch, and ensure it is up to date")
-    bullet("git checkout master", level=1)
-    bullet("git pull origin master", level=1)
+    run("git checkout master")
+    run('git pull origin master')
     bullet("Delete the origin/%s-candidate branch" % new_version)
-    bullet("git branch -D %s-candidate" % new_version, level=1)
-    bullet("git push origin :%s-candidate" % new_version, level=1)
+    run("git branch -D %s-candidate" % new_version)
+    run("git push origin :%s-candidate" % new_version)
+
     next("Once complete, re-run the script.")
 
 
@@ -244,9 +256,9 @@ def update_master():
     actions()
     bullet("Self review the latest changes to master")
     bullet("Push the changes to origin/master")
-    bullet("git add --all", level=1)
-    bullet('git commit -m "Update docs to version %s"' % new_version, level=1)
-    bullet("git push origin master", level=1)
+    run("git add --all")
+    run('git commit -m "Update docs to version %s"' % new_version)
+    run("git push origin master")
     bullet("Verify builds are working")
     next("Once complete, re-run the script")
 
@@ -282,8 +294,7 @@ def do_steps():
         release_data["step-number"] = step
     utils.save_release_data(release_data)
 
-
 if __name__ == "__main__":
     arguments = docopt(__doc__)
-
+    utils.arguments = arguments
     do_steps()

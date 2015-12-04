@@ -11,7 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
+import sys
+import os
+import stat
+import socket
+import signal
+
+import docker
+from subprocess32 import call
+from netaddr import IPAddress
+from prettytable import PrettyTable
+
+from . import __rkt_plugin_version__, __kubernetes_plugin_version__
+from pycalico.datastore_datatypes import IPPool
+from pycalico.datastore_datatypes import BGPPeer
+from pycalico.datastore import (ETCD_AUTHORITY_ENV,
+                                ETCD_AUTHORITY_DEFAULT)
+from pycalico.netns import remove_veth
+from pycalico.util import get_host_ips
+from connectors import client
+from connectors import docker_client
+from utils import REQUIRED_MODULES
+from utils import hostname
+from utils import print_paragraph
+from utils import get_container_ipv_from_arguments
+from utils import validate_ip, validate_asn, convert_asn_to_asplain
+from utils import URLGetter
+from checksystem import check_system
+
+__doc__ = """
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
@@ -53,39 +81,13 @@ Options:
   --kubernetes              Download and install the Kubernetes plugin.
   --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
                             to install when using the --kubernetes option.
-                            [default: v0.6.0]
+                            [default: %s]
   --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
                             Calico's libnetwork driver.
                             [default: calico/node-libnetwork:latest]
-"""
-import sys
-import os
-import stat
-import socket
-import signal
-
-import docker
-from subprocess32 import call
-from netaddr import IPAddress
-from prettytable import PrettyTable
-
-from pycalico.datastore_datatypes import IPPool
-from pycalico.datastore_datatypes import BGPPeer
-from pycalico.datastore import (ETCD_AUTHORITY_ENV,
-                                ETCD_AUTHORITY_DEFAULT)
-from pycalico.netns import remove_veth
-from pycalico.util import get_host_ips
-from connectors import client
-from connectors import docker_client
-from utils import DOCKER_ORCHESTRATOR_ID, REQUIRED_MODULES
-from utils import hostname
-from utils import print_paragraph
-from utils import get_container_ipv_from_arguments
-from utils import validate_ip, validate_asn, convert_asn_to_asplain
-from utils import URLGetter
-from checksystem import check_system
+""" % __kubernetes_plugin_version__
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
@@ -97,7 +99,7 @@ KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/rele
 KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
 KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
 
-RKT_PLUGIN_VERSION = 'v0.1.0'
+RKT_PLUGIN_VERSION = __rkt_plugin_version__
 RKT_BINARY_URL = 'https://github.com/projectcalico/calico-rkt/releases/download/%s/calico_rkt' % RKT_PLUGIN_VERSION
 RKT_PLUGIN_DIR = '/usr/lib/rkt/plugins/net/'
 RKT_PLUGIN_DIR_BACKUP = '/etc/rkt-plugins/calico/'

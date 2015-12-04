@@ -1,1 +1,6 @@
 __version__ = "0.12.0-dev"
+__kubernetes_plugin_version__ = "v0.6.0"
+__rkt_plugin_version__ = "v0.1.0"
+__libnetwork_plugin_version__ = "v0.6.0"
+__libcalico_version__ = "v0.6.0"
+__felix_version__ = "1.2.1"
