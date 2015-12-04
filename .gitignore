@@ -2,6 +2,7 @@ build
 dist
 venv
 env
+certs
 .idea
 *.pyc
 *~

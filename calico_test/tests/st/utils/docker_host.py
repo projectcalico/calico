@@ -16,7 +16,8 @@ import os
 from subprocess import CalledProcessError
 from functools import partial
 
-from utils import get_ip, log_and_run, retry_until_success
+from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
+                  ETCD_CA, ETCD_KEY, ETCD_CERT
 from workload import Workload
 from network import DockerNetwork
 
@@ -42,11 +43,15 @@ class DockerHost(object):
 
         if dind:
             log_and_run("docker rm -f %s || true" % self.name)
+            # Pass the certs directory as a volume since the etcd SSL/TLS
+            # environment variables use the full path on the host.
             log_and_run("docker run --privileged -tid "
                         "-v %s/docker:/usr/local/bin/docker "
+                        "-v %s/certs:%s/certs "
                         "-v %s:/code --name %s "
                         "calico/dind:latest docker daemon --storage-driver=aufs %s" %
-                    (CHECKOUT_DIR, CHECKOUT_DIR, self.name, additional_docker_options))
+                    (CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR,
+                     self.name, additional_docker_options))
 
             self.ip = log_and_run("docker inspect --format "
                               "'{{.NetworkSettings.Networks.bridge.IPAddress}}' %s" % self.name)
@@ -96,10 +101,19 @@ class DockerHost(object):
         whitespace removed.
         """
         calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
-        etcd_auth = "ETCD_AUTHORITY=%s:2379" % get_ip()
+
+        etcd_auth = "%s:2379" % get_ip()
         # Export the environment, in case the command has multiple parts, e.g.
         # use of | or ;
-        calicoctl = "export %s; %s" % (etcd_auth, calicoctl)
+        #
+        # Pass in all etcd params, the values will be empty if not set anyway
+        calicoctl = "export ETCD_AUTHORITY=%s; " \
+                    "export ETCD_SCHEME=%s; " \
+                    "export ETCD_CA_CERT_FILE=%s; " \
+                    "export ETCD_CERT_FILE=%s; " \
+                    "export ETCD_KEY_FILE=%s; %s" % \
+                    (etcd_auth, ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY,
+                     calicoctl)
         return self.execute(calicoctl + " " + command)
 
     def start_calico_node(self, options=""):

@@ -2,5 +2,8 @@
 exec 2>&1
 sed "s/HOSTNAME/$HOSTNAME/" /templates/bird_aggr.toml.template > /conf.d/bird_aggr.toml
 sed "s/HOSTNAME/$HOSTNAME/" /templates/bird6_aggr.toml.template > /conf.d/bird6_aggr.toml
-exec confd -confdir=/ -interval=5 -watch --log-level=debug -node ${ETCD_AUTHORITY}
+exec confd -confdir=/ -interval=5 -watch --log-level=debug \
+           -node ${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} -client-key=${ETCD_KEY_FILE} \
+           -client-cert=${ETCD_CERT_FILE} -client-ca-keys=${ETCD_CA_CERT_FILE}
+           scheme=${ETCD_SCHEME:=http}
 
