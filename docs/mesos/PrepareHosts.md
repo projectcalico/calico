@@ -1,5 +1,14 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.13.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Mesos Host Preparation
-#### Follow this guide to ensure your hosts are compatible with a Mesos + Calico Deployment 
+
+Follow this tutorial to ensure your hosts are compatible with a Mesos + Calico Deployment.
 
 ## 1. Set & verify fully qualified domain name
 These instructions assume each host can reach other hosts using their fully qualified domain names (FQDN).  To check the FQDN on a host use
@@ -38,7 +47,7 @@ Example `firewalld` config
     $ sudo systemctl restart firewalld
 
 ## 4. Optional: Configure Firewall for etcd & zookeeper
-Etcd uses tcp over ports 2379 and 4001, ZooKeeper uses tcp over port 2181, and Marathon uses tcp over port 8080. In the next Core Services Prepearation Guide, we will run these services on the master, and will open those ports now. Wherever you choose to run these services, be sure to open these ports as well:
+Etcd uses tcp over ports 2379 and 4001, ZooKeeper uses tcp over port 2181, and Marathon uses tcp over port 8080. In the next tutorial, we will run these services on the master, and will open those ports now. Wherever you choose to run these services, be sure to open these ports as well:
 
 | Service Name | Port/protocol     |
 |--------------|-------------------|

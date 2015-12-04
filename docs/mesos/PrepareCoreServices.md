@@ -1,3 +1,11 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.13.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Prepare Core Services for Mesos + Calico Deployment
 *Most Mesos deployments will run these services on specific, dedicated machines chosen to maximize availability.
 For the purposes of this demo, we will quickly launch them as docker containers on our Master.*
@@ -35,7 +43,7 @@ Mesos uses ZooKeeper to elect and keep track of the leading master in the cluste
     $ sudo docker pull jplock/zookeeper:3.4.5
     $ sudo docker run --detach --name zookeeper -p 2181:2181 jplock/zookeeper:3.4.5
 
-*If you have a firewall configured on the host running ZooKeeper, open port 2181 to allow incoming and outgoing tcp traffic. See our [Host Preparation Guide](PrepareHosts.md) for more details on firewall configuration.*
+*If you have a firewall configured on the host running ZooKeeper, open port 2181 to allow incoming and outgoing tcp traffic. See our [Mesos Host Preparation tutorial](PrepareHosts.md) for more details on firewall configuration.*
 
 ## 3. Launch etcd
 Calico uses etcd as its data store and communication mechanism among Calico components.
@@ -54,7 +62,7 @@ If you have SELinux policy enforced, you must perform the following step:
 
     $ sudo chcon -Rt svirt_sandbox_file_t /var/etcd
 
-*If you have a firewall configured on the host running etcd, open ports 2379 and 4001 to allow incoming and outgoing tcp traffic. See our [Host Preparation Guide](PrepareHosts.md) for more details on firewall configuration.*
+*If you have a firewall configured on the host running etcd, open ports 2379 and 4001 to allow incoming and outgoing tcp traffic. See our [Mesos Host Preparation tutorial](PrepareHosts.md) for more details on firewall configuration.*
 
 ## 4. Next Steps 
 With your core services running, you're ready to [Install Calico](README.md#3-calico)

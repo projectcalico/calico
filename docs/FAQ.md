@@ -52,10 +52,10 @@ isolated layer 2 network, like a rack in your server room or an entire data
 center.  Access to that network is via a router, which also is the default 
 router for all the container hosts.
 
-If this describes your infrastructure, [this guide](ExternalConnectivity.md) 
-explains in more detail what to do. Otherwise, detailed datacenter networking 
-recommendations are given in the main 
-[Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
+If this describes your infrastructure, the 
+[External Connectivity tutorial](ExternalConnectivity.md) explains in more detail
+what to do. Otherwise, detailed datacenter networking recommendations are given
+in the main [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/) 
 to discuss your environment.
 
@@ -74,7 +74,7 @@ Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 
 Remember: the security profile for the container will need to allow traffic to the 
 internet as well. You can read about how to configure security profiles in the 
-[Advanced Network Policy](AdvancedNetworkPolicy.md) guide.
+[Advanced Network Policy tutorial](AdvancedNetworkPolicy.md).
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
 As discussed, the recommended way to get traffic to containers that 

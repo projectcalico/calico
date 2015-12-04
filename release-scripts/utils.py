@@ -29,6 +29,12 @@ INIT_VERSION = re.compile(r'__version__\s*=\s*"(.*)"')
 VERSION_RE = re.compile(r'^v(\d+)\.(\d+)\.(\d+)$')
 VERSION_NAME_RE = re.compile(r'^v(\d+)\.(\d+)\.(\d+)[.-](\w+)$')
 
+# Regex for MD file URL matching
+MD_URL_RE = re.compile(r'\[([^\[\]]*)\]\(([^()]*)\)')
+
+# Regex for matching the main README.
+README_RE = re.compile(r'https://github\.com/projectcalico/calico\-docker/blob/.*/README\.md')
+
 # Files to include in the list of files to automatically update.  All file
 # paths are relative to the project root.
 UPDATE_FILES_STATIC = [PATH_MAIN_README,
@@ -378,3 +384,98 @@ def check_or_exit(msg):
             print_warning("Please complete the required steps and then "
                           "re-run the script.")
             sys.exit(1)
+
+
+def validate_markdown_uris():
+    """
+    Validate that all of the URIs in the markdown files are accessible.
+    """
+    print "Validating URIs in markdown files"
+    all_valid = True
+    all_md_files = [f for f in get_update_file_list() if f.endswith(".md")]
+    for filename in all_md_files:
+        lines = load_file(filename)
+        found_analytic_url = False
+        for line in lines:
+            for name, uri in MD_URL_RE.findall(line):
+                if name == "Analytics":
+                    found_analytic_url = True
+                    validate_analytics_url(filename, uri)
+                valid = validate_uri(filename, uri)
+                all_valid = all_valid and valid
+        if not found_analytic_url:
+            print_bullet("%s: No analytics URL in file" % filename)
+    if not all_valid:
+        print_warning("Errors detected in markdown file URIs.  Please correct "
+                      "the errors highlighted above and then re-run the"
+                      "script.")
+        sys.exit(1)
+    print "Validation complete"
+
+
+def validate_uri(filename, uri):
+    """
+    Validate a URI exists, either by checking the file exists, or by checking
+    the URL is accessbile.
+    :param filename:  The filename of the MD file containing the URI.
+    :param uri:  The URI to validate (either a web URL, or a filename)
+    :return:  True if URI is valid and accessible
+    """
+    if uri.startswith("http"):
+        # Validating a URL.  Don't validate the shield URLs.
+        if uri.startswith("https://img.shields.io"):
+            return True
+
+        # There should no calico-docker URL except for:
+        # - The README URLs which we skip since these are auto-generated
+        # - Issues (which we can validate)
+        # - Releases (which we can validate)
+        # Everything else should be specified with a relative path.
+        if (uri.startswith("https://github.com/projectcalico/calico-docker") or
+            uri.startswith("https://www.github.com/projectcalico/calico-docker")):
+
+            if README_RE.match(uri):
+                return True
+
+            if ((uri.find("/calico-docker/issues") < 0) and
+                (uri.find("/calico-docker/releases") < 0)):
+                print_bullet("%s: Do not specify calico-docker file using a URL, "
+                             "specify using a relative path: %s" % (filename, uri))
+                return False
+
+        if not url_exists(uri):
+            print_bullet("%s: URL is not valid: %s" % (filename, uri))
+            return False
+        else:
+            return True
+    else:
+        # Validating a file.
+        uri_parts = uri.split("#")
+        relative_filename = uri_parts[0]
+        path = os.path.normpath(os.path.join(PATH_ROOT,
+                                             os.path.dirname(filename),
+                                             relative_filename))
+        if not os.path.exists(path):
+            print_bullet("%s: Referenced file does not exist: %s" % (filename, uri))
+            return False
+        else:
+            return True
+
+
+def validate_analytics_url(filename, analytics_url):
+    """
+    Validate the anaylytics URL is correct. The URL is fixed format which
+    includes the MD filename.
+
+    :param filename:  The filename of the MD file containing the URI.
+    :param url:  The analytics URL to validate.
+    :return:  True if URL is valid and accessible
+    """
+    expected_url = "https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/%s?pixel" % filename
+    if analytics_url != expected_url:
+        print_bullet("%s: Anayltics URL is incorrect, should be %s" % (filename, expected_url))
+        return False
+    else:
+        return True
+
+    return False

@@ -6,7 +6,7 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Configuration of BGP peering
+# BGP Configuration
 
 By default, when running Calico on Docker, a full BGP mesh is used to
 distribute routes between all of the Calico nodes.  This approach has scale

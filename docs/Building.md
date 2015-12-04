@@ -6,7 +6,7 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Building and testing Calico Docker
+# Building and testing calico-docker images
 
 This document describes how to build the `calicoctl` binary and the `calico/node` Docker image, and how to run the Calico Docker test suites.
 
