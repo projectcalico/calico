@@ -122,8 +122,10 @@ def validate_arguments(arguments):
     """
     # Validate IPs
     ip_ok = arguments.get("--ip") is None or \
+            arguments.get("--ip") is "" or \
             validate_ip(arguments.get("--ip"), 4)
     ip6_ok = arguments.get("--ip6") is None or \
+             arguments.get("--ip6") is "" or \
              validate_ip(arguments.get("--ip6"), 6)
     container_ip_ok = arguments.get("<IP>") is None or \
                       validate_ip(arguments["<IP>"], 4) or \
