@@ -160,7 +160,10 @@ To enable TLS support:
 
   .. note:: In systems that use ``calicoctl node`` (such as Docker, Kubernetes
             and other container orchestrators), you should use the
-            ``calicoctl`` tool to configure TLS.
+            ``calicoctl`` tool to configure TLS.  See the `Etcd Secure Cluster`_
+            document in the projectcalico/calico-docker GitHub repo for details.
+
+.. _`Etcd Secure Cluster`: https://github.com/projectcalico/calico-docker/blob/master/docs/EtcdSecureCluster.md
 
   * Generate a certificate and key pair for each Felix.
 
