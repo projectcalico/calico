@@ -25,6 +25,7 @@ from itertools import chain
 import logging
 
 from calico.felix import futils
+from calico.calcollections import SetDelta
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
 from calico.felix.actor import actor_message, Actor
 from calico.felix.refcount import ReferenceManager, RefCountedActor
@@ -55,23 +56,18 @@ class IpsetManager(ReferenceManager):
         # EndpointData "structs" indexed by EndpointId.
         self.endpoint_data_by_ep_id = {}
 
-        # Main index.  Since an IP address can be assigned to multiple
-        # endpoints, we need to track which endpoints reference an IP.  When
-        # we find the set of endpoints with an IP is empty, we remove the
-        # ip from the tag.
-        # ip_owners_by_tag[tag][ip] = set([(profile_id, combined_id),
-        #                                  (profile_id, combined_id2), ...]) |
-        #                             (profile_id, combined_id)
-        # Here "combined_id" is an EndpointId object.
-        self.ip_owners_by_tag = defaultdict(lambda: defaultdict(lambda: None))
+        # Main index.  Tracks which IPs are currently in each tag.
+        self.tag_membership_index = TagMembershipIndex()
+        # Take copies of the key functions; avoids messy long lines.
+        self._add_mapping = self.tag_membership_index.add_mapping
+        self._remove_mapping = self.tag_membership_index.remove_mapping
 
         # Set of EndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
-        # Set of tag IDs that may be out of sync. Accumulated by the
-        # index-update functions. We apply the updates in _finish_msg_batch().
-        # May include non-live tag IDs.
-        self._dirty_tags = set()
+        # One-way flag set when we know the datamodel is in sync.  We can't
+        # rewrite any ipsets before we're in sync or we risk omitting some
+        # values.
         self._datamodel_in_sync = False
 
     def _create(self, tag_id):
@@ -94,36 +90,37 @@ class IpsetManager(ReferenceManager):
         # programming, after which it will call us back to tell us it is ready.
         # We can't use self._dirty_tags to defer this in case the set becomes
         # unreferenced before _finish_msg_batch() is called.
-        self._update_active_ipset(tag_id)
-
-    def _update_active_ipset(self, tag_id):
-        """
-        Replaces the members of the identified TagIpset with the
-        current set.
-
-        :param tag_id: The ID of the tag, must be an active tag.
-        """
         assert self._is_starting_or_live(tag_id)
         assert self._datamodel_in_sync
         active_ipset = self.objects_by_id[tag_id]
-        members = frozenset(self.ip_owners_by_tag.get(tag_id, {}).iterkeys())
+        members = self.tag_membership_index.members(tag_id)
         active_ipset.replace_members(members, async=True)
 
     def _update_dirty_active_ipsets(self):
         """
-        Updates the members of any live ActiveIpsets that are marked dirty.
+        Updates the members of any live TagIpsets that are dirty.
 
-        Clears the set of dirty tags as a side-effect.
+        Clears the index of dirty TagIpsets as a side-effect.
         """
+        tag_index = self.tag_membership_index
+        ips_added, ips_removed = tag_index.get_and_reset_changes_by_tag()
         num_updates = 0
-        for tag_id in self._dirty_tags:
+        for tag_id, removed_ips in ips_removed.iteritems():
             if self._is_starting_or_live(tag_id):
-                self._update_active_ipset(tag_id)
+                assert self._datamodel_in_sync
+                active_ipset = self.objects_by_id[tag_id]
+                active_ipset.remove_members(removed_ips, async=True)
+                num_updates += 1
+            self._maybe_yield()
+        for tag_id, added_ips in ips_added.iteritems():
+            if self._is_starting_or_live(tag_id):
+                assert self._datamodel_in_sync
+                active_ipset = self.objects_by_id[tag_id]
+                active_ipset.add_members(added_ips, async=True)
                 num_updates += 1
             self._maybe_yield()
         if num_updates > 0:
-            _log.info("Sent updates to %s updated tags", num_updates)
-        self._dirty_tags.clear()
+            _log.info("Sent %s updates to updated tags", num_updates)
 
     @property
     def nets_key(self):
@@ -320,79 +317,20 @@ class IpsetManager(ReferenceManager):
         # from one profile to another but keeps the same tag.
         for profile_id, tag in added_tags:
             for ip in new_ips:
-                self._add_mapping(tag, profile_id,  endpoint_id, ip)
+                self._add_mapping(tag, profile_id, endpoint_id, ip)
         # Change IPs in unchanged tags.
         added_ips = new_ips - old_ips
         removed_ips = old_ips - new_ips
         for profile_id, tag in unchanged_tags:
             for ip in removed_ips:
-                self._remove_mapping(tag, profile_id,  endpoint_id, ip)
+                self._remove_mapping(tag, profile_id, endpoint_id, ip)
             for ip in added_ips:
-                self._add_mapping(tag, profile_id,  endpoint_id, ip)
+                self._add_mapping(tag, profile_id, endpoint_id, ip)
         # Remove *all* *old* IPs from removed tags.  For a deletion, only this
         # loop will fire.
         for profile_id, tag in removed_tags:
             for ip in old_ips:
                 self._remove_mapping(tag, profile_id, endpoint_id, ip)
-
-    def _add_mapping(self, tag_id, profile_id, endpoint_id, ip_address):
-        """
-        Adds the given tag->IP->profile->endpoint mapping to the index.
-        Marks the tag as dirty if the update resulted in the IP being
-        newly added.
-
-        :param str tag_id: Tag ID
-        :param str profile_id: Profile ID
-        :param EndpointId endpoint_id: ID of the endpoint
-        :param str ip_address: IP address to add
-        """
-        ip_added = not bool(self.ip_owners_by_tag[tag_id][ip_address])
-        owners = self.ip_owners_by_tag[tag_id][ip_address]
-        new_mapping = (profile_id, endpoint_id)
-        if not owners:
-            self.ip_owners_by_tag[tag_id][ip_address] = new_mapping
-        elif isinstance(owners, set):
-            owners.add(new_mapping)
-        else:
-            self.ip_owners_by_tag[tag_id][ip_address] = set([
-                owners,
-                new_mapping
-            ])
-
-        if ip_added:
-            self._dirty_tags.add(tag_id)
-
-    def _remove_mapping(self, tag_id, profile_id, endpoint_id, ip_address):
-        """
-        Removes the tag->IP->profile->endpoint mapping from index.
-        Marks the tag as dirty if the update resulted in the IP being
-        removed.
-
-        :param str tag_id: Tag ID
-        :param str profile_id: Profile ID
-        :param EndpointId endpoint_id: ID of the endpoint
-        :param str ip_address: IP address to remove
-        """
-        owners = self.ip_owners_by_tag[tag_id][ip_address]
-        removed_mapping = (profile_id, endpoint_id)
-        if owners == removed_mapping:
-            # This was the sole owner of the IP in the tag, remove it.
-            _log.debug("%s was sole owner of IP %s, IP no longer in tag",
-                       removed_mapping, ip_address)
-            del self.ip_owners_by_tag[tag_id][ip_address]
-            if not self.ip_owners_by_tag[tag_id]:
-                _log.debug("Tag %s now empty, removing", tag_id)
-                del self.ip_owners_by_tag[tag_id]
-            self._dirty_tags.add(tag_id)
-        elif isinstance(owners, set):
-            assert len(owners) != 1, ("ip_owners_by_tag entry should never "
-                                      "be a set with 1 entry")
-            _log.debug("Tag %s still contains IP %s", tag_id, ip_address)
-            owners.discard(removed_mapping)
-            if len(owners) == 1:
-                _log.debug("IP %s now only has one owner, replacing set with "
-                           "single tuple", ip_address)
-                self.ip_owners_by_tag[tag_id][ip_address] = owners.pop()
 
     def _add_profile_index(self, prof_ids, endpoint_id):
         """
@@ -430,6 +368,134 @@ class IpsetManager(ReferenceManager):
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
         self._update_dirty_active_ipsets()
+
+
+class TagMembershipIndex(object):
+    """Indexes tag memberships to allow efficient calculation of changes."""
+    def __init__(self):
+        # Main index.  Since an IP address can be assigned to multiple
+        # endpoints, we need to track which endpoints reference an IP.  When
+        # we find the set of endpoints with an IP is empty, we remove the
+        # ip from the tag.
+        # ip_owners_by_tag[tag][ip] = set([(profile_id, combined_id),
+        #                                  (profile_id, combined_id2), ...]) |
+        #                             (profile_id, combined_id)
+        # Here "combined_id" is an EndpointId object.
+        self.ip_owners_by_tag = defaultdict(lambda: defaultdict(lambda: None))
+        # IPs added and removed since the last reset.
+        self.ips_added_by_tag = defaultdict(set)
+        self.ips_removed_by_tag = defaultdict(set)
+
+    def add_mapping(self, tag_id, profile_id, endpoint_id, ip_address):
+        """
+        Adds the given tag->IP->profile->endpoint mapping to the index.
+        Marks the tag as dirty if the update resulted in the IP being
+        newly added.
+
+        :param str tag_id: Tag ID
+        :param str profile_id: Profile ID
+        :param EndpointId endpoint_id: ID of the endpoint
+        :param str ip_address: IP address to add
+        """
+        if not self.ip_owners_by_tag[tag_id][ip_address]:
+            self._on_ip_added(ip_address, tag_id)
+        owners = self.ip_owners_by_tag[tag_id][ip_address]
+        new_mapping = (profile_id, endpoint_id)
+        if not owners:
+            self.ip_owners_by_tag[tag_id][ip_address] = new_mapping
+        elif isinstance(owners, set):
+            owners.add(new_mapping)
+        else:
+            self.ip_owners_by_tag[tag_id][ip_address] = set([
+                owners,
+                new_mapping
+            ])
+
+    def remove_mapping(self, tag_id, profile_id, endpoint_id, ip_address):
+        """
+        Removes the tag->IP->profile->endpoint mapping from index.
+        Marks the tag as dirty if the update resulted in the IP being
+        removed.
+
+        :param str tag_id: Tag ID
+        :param str profile_id: Profile ID
+        :param EndpointId endpoint_id: ID of the endpoint
+        :param str ip_address: IP address to remove
+        """
+        owners = self.ip_owners_by_tag[tag_id][ip_address]
+        removed_mapping = (profile_id, endpoint_id)
+        if owners == removed_mapping:
+            # This was the sole owner of the IP in the tag, remove it.
+            _log.debug("%s was sole owner of IP %s, IP no longer in tag",
+                       removed_mapping, ip_address)
+            del self.ip_owners_by_tag[tag_id][ip_address]
+            if not self.ip_owners_by_tag[tag_id]:
+                _log.debug("Tag %s now empty, removing", tag_id)
+                del self.ip_owners_by_tag[tag_id]
+            self._on_ip_removed(ip_address, tag_id)
+        else:
+            assert isinstance(owners, set), (
+                "Expected owners of IP %s to be %s or a set but got %s" %
+                (ip_address, removed_mapping, owners)
+            )
+            assert len(owners) > 1, ("ip_owners_by_tag entry should never "
+                                     "be a set with <=1 entry")
+            assert removed_mapping in owners, (
+                "Owners set for IP %s should contain %s" %
+                (ip_address, removed_mapping)
+            )
+            _log.debug("Tag %s still contains IP %s", tag_id, ip_address)
+            owners.remove(removed_mapping)
+            if len(owners) == 1:
+                _log.debug("IP %s now only has one owner, replacing set with "
+                           "single tuple", ip_address)
+                self.ip_owners_by_tag[tag_id][ip_address] = owners.pop()
+
+    def _on_ip_added(self, ip_address, tag_id):
+        """
+        Track the addition of an IP address to the given tag.
+
+        Only affects the ips_(added|removed)_by_tag mappings.  An
+        addition following a removal cleans up the removal.
+        """
+        _log.debug("IP %s added to tag %s", ip_address, tag_id)
+        # Track the addition.
+        self.ips_added_by_tag[tag_id].add(ip_address)
+        # The addition invalidates any previous removal; clean that up.
+        removed_ips_for_tag = self.ips_removed_by_tag[tag_id]
+        removed_ips_for_tag.discard(ip_address)
+        if not removed_ips_for_tag:
+            del self.ips_removed_by_tag[tag_id]
+
+    def _on_ip_removed(self, ip_address, tag_id):
+        """
+        Track the removal of an IP address to the given tag.
+
+        Only affects the ips_(added|removed)_by_tag mappings.  A
+        removal following an addition cleans up the addition.
+        """
+        _log.debug("IP %s removed from tag %s", ip_address, tag_id)
+        # Track the removal.
+        self.ips_removed_by_tag[tag_id].add(ip_address)
+        # The addition invalidates any previous addition; clean that up.
+        added_ips_for_tag = self.ips_added_by_tag[tag_id]
+        added_ips_for_tag.discard(ip_address)
+        if not added_ips_for_tag:
+            del self.ips_added_by_tag[tag_id]
+
+    def members(self, tag_id):
+        members = self.ip_owners_by_tag.get(tag_id, {}).keys()
+        return members
+
+    def get_and_reset_changes_by_tag(self):
+        """ Get the deltas accumulated since the last reset.
+        :return: tuple of two dicts.  The first contains the added IPs by tag,
+                 the second contains the removed IPs by tag.
+        """
+        added_and_removed = self.ips_added_by_tag, self.ips_removed_by_tag
+        self.ips_added_by_tag = defaultdict(set)
+        self.ips_removed_by_tag = defaultdict(set)
+        return added_and_removed
 
 
 class EndpointData(object):
@@ -501,11 +567,10 @@ class IpsetActor(Actor):
         super(IpsetActor, self).__init__(qualifier=qualifier)
 
         self._ipset = ipset
-        # Members - which entries should be in the ipset.  None means
-        # "unknown", but this is updated immediately on actor startup.
+        # Members - which entries should be in the ipset.
         self.members = None
-        # Members which really are in the ipset; again None means "unknown".
-        self.programmed_members = None
+        # SetDelta, used to track a sequence of changes.
+        self.changes = None
 
         self._force_reprogram = True
         self.stopped = False
@@ -529,17 +594,35 @@ class IpsetActor(Actor):
         return set([self._ipset.set_name, self._ipset.temp_set_name])
 
     @actor_message()
-    def replace_members(self, members, force_reprogram=False):
+    def replace_members(self, members):
         """
         Replace the members of this ipset with the supplied set.
 
-        :param set[str]|frozenset[str] members: IP address strings. Must be a
-        copy (as this routine keeps a link to it).
+        :param set[str]|list[str] members: The IP address strings.  This
+               method takes a copy of the contents.
         """
         _log.info("Replacing members of ipset %s", self.name)
-        assert isinstance(members, (set, frozenset))
-        self.members = members
-        self._force_reprogram |= force_reprogram
+        self.members = set(members)
+        self._force_reprogram = True  # Force a full rewrite of the set.
+        self.changes = SetDelta(self.members)  # Any changes now obsolete.
+
+    @actor_message()
+    def add_members(self, new_members):
+        _log.debug("Adding %s to tag ipset %s", new_members, self.name)
+        assert self.members is not None, (
+            "add_members() called before init by replace_members()"
+        )
+        for member in new_members:
+            self.changes.add(member)
+
+    @actor_message()
+    def remove_members(self, removed_members):
+        _log.debug("Removing %s from tag ipset %s", removed_members, self.name)
+        assert self.members is not None, (
+            "remove_members() called before init by replace_members()"
+        )
+        for member in removed_members:
+            self.changes.remove(member)
 
     def _finish_msg_batch(self, batch, results):
         _log.debug("IpsetActor._finish_msg_batch() called")
@@ -547,28 +630,41 @@ class IpsetActor(Actor):
             self._sync_to_ipset()
 
     def _sync_to_ipset(self):
-        if len(self.members) > self._ipset.max_elem:
-            _log.error("ipset %s exceeds maximum size %s.  ipset will not"
+        _log.debug("Syncing %s to kernel", self.name)
+        if self.changes.resulting_size > self._ipset.max_elem:
+            _log.error("ipset %s exceeds maximum size %s.  ipset will not "
                        "be updated until size drops below %s.",
                        self.ipset_name, self._ipset.max_elem,
                        self._ipset.max_elem)
             return
-        # Defer to our helper to actually make the changes.
+
+        if not self._force_reprogram:
+            # Just an incremental update, try to apply it as a delta.
+            if not self.changes.empty:
+                _log.debug("Normal update, attempting to apply as a delta:"
+                           "added=%s, removed=%s", self.changes.added_entries,
+                           self.changes.removed_entries)
+                try:
+                    self._ipset.apply_changes(self.changes.added_entries,
+                                              self.changes.removed_entries)
+                except FailedSystemCall as e:
+                    _log.error("Failed to update ipset %s, attempting to "
+                               "do a full rewrite RC=%s, err=%s",
+                               self.name, e.retcode, e.stderr)
+                    self._force_reprogram = True
+
+        # Either we're now in sync or we're about to try rewriting the ipset
+        # as a whole.  Either way, apply the changes to the members set.
+        self.changes.apply_and_reset()
+
         if self._force_reprogram:
+            # Initial update or post-failure, completely replace the ipset's
+            # contents with an atomic swap.
             _log.debug("Replacing content of ipset %s with %s", self,
                        self.members)
             self._ipset.replace_members(self.members)
-        elif self.programmed_members != self.members:
-            assert self.programmed_members is not None
-            _log.debug("Updating ipset %s to %s", self, self.members)
-            self._ipset.update_members(self.programmed_members, self.members)
-        else:
-            _log.debug("Ipset %s already in correct state", self)
-
-        # Now in correct state, with programmed_members matching members, and
-        # no need for a forced reprogram.
-        self.programmed_members = self.members
-        self._force_reprogram = False
+            self._force_reprogram = False
+        _log.debug("Finished syncing %s to kernel", self.name)
 
 
 class TagIpset(IpsetActor, RefCountedActor):
@@ -659,26 +755,19 @@ class Ipset(object):
         input_lines = [self._create_cmd(self.set_name)]
         self._exec_and_commit(input_lines)
 
-    def update_members(self, old_members, new_members):
+    def apply_changes(self, added_entries, removed_entries):
         """
         Update the ipset with changes to members. The set must exist.
+
+        :raises FailedSystemCall if the update fails.
         """
-        assert isinstance(old_members, (set, frozenset))
-        assert isinstance(new_members, (set, frozenset))
-        assert len(new_members) <= self.max_elem
-        try:
-            input_lines = ["del %s %s" % (self.set_name, m)
-                           for m in (old_members - new_members)]
-            input_lines += ["add %s %s" % (self.set_name, m)
-                            for m in (new_members - old_members)]
-            _log.info("Making %d changes (new size %d) to ipset %s",
-                      len(input_lines), len(new_members), self.set_name)
-            self._exec_and_commit(input_lines)
-        except FailedSystemCall as err:
-            # An error; log it and try nuking the ipset to continue.
-            _log.error("Failed to update ipset %s (%s) - retrying",
-                       self.set_name, err.stderr)
-            self.replace_members(new_members)
+        input_lines = ["del %s %s" % (self.set_name, m)
+                       for m in removed_entries]
+        input_lines += ["add %s %s" % (self.set_name, m)
+                        for m in added_entries]
+        _log.info("Making %d changes to ipset %s",
+                  len(input_lines), self.set_name)
+        self._exec_and_commit(input_lines)
 
     def replace_members(self, members):
         """

@@ -136,6 +136,7 @@ class TestIpsetManager(BaseTestCase):
             self.mgr._maybe_start("tag-123")
             self.assertFalse(m_maybe_start.called)
             self.mgr.on_datamodel_in_sync(async=True)
+            self.mgr.on_datamodel_in_sync(async=True)  # No-op
             self.step_mgr()
             self.mgr._maybe_start("tag-123")
             self.assertEqual(m_maybe_start.mock_calls,
@@ -175,7 +176,7 @@ class TestIpsetManager(BaseTestCase):
         self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
             EP_ID_1_1: EP_DATA_1_1,
         })
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.1": ("prof1", EP_ID_1_1),
             }
@@ -183,7 +184,7 @@ class TestIpsetManager(BaseTestCase):
 
     def assert_index_empty(self):
         self.assertEqual(self.mgr.endpoint_data_by_ep_id, {})
-        self.assertEqual(self.mgr.ip_owners_by_tag, {})
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {})
 
     def test_change_ip(self):
         # Initial set-up.
@@ -194,7 +195,7 @@ class TestIpsetManager(BaseTestCase):
         self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1_NEW_IP, async=True)
         self.step_mgr()
 
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.2": ("prof1", EP_ID_1_1),
                 "10.0.0.3": ("prof1", EP_ID_1_1),
@@ -210,7 +211,7 @@ class TestIpsetManager(BaseTestCase):
         # Add a tag, keep a tag.
         self.mgr.on_tags_update("prof1", ["tag1", "tag2"], async=True)
         self.step_mgr()
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.1": ("prof1", EP_ID_1_1),
             },
@@ -223,7 +224,7 @@ class TestIpsetManager(BaseTestCase):
         # Remove a tag.
         self.mgr.on_tags_update("prof1", ["tag2"], async=True)
         self.step_mgr()
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag2": {
                 "10.0.0.1": ("prof1", EP_ID_1_1),
             }
@@ -232,12 +233,11 @@ class TestIpsetManager(BaseTestCase):
         # Delete the tags:
         self.mgr.on_tags_update("prof1", None, async=True)
         self.step_mgr()
-        self.assertEqual(self.mgr.ip_owners_by_tag, {})
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {})
         self.assertEqual(self.mgr.tags_by_prof_id, {})
 
     def step_mgr(self):
         self.step_actor(self.mgr)
-        self.assertEqual(self.mgr._dirty_tags, set())
 
     def test_update_profile_and_ips(self):
         # Initial set-up.
@@ -249,7 +249,7 @@ class TestIpsetManager(BaseTestCase):
         self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1_NEW_PROF_IP, async=True)
         self.step_mgr()
 
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag3": {
                 "10.0.0.3": ("prof3", EP_ID_1_1)
             }
@@ -297,7 +297,7 @@ class TestIpsetManager(BaseTestCase):
             EP_ID_1_1: EP_DATA_1_1,
             EP_ID_2_1: EP_DATA_2_1,
         })
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.1": set([
                     ("prof1", EP_ID_1_1),
@@ -309,7 +309,7 @@ class TestIpsetManager(BaseTestCase):
         # Second profile tags arrive:
         self.mgr.on_tags_update("prof2", ["tag1", "tag2"], async=True)
         self.step_mgr()
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.1": set([
                     ("prof1", EP_ID_1_1),
@@ -328,7 +328,7 @@ class TestIpsetManager(BaseTestCase):
         self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
             EP_ID_1_1: EP_DATA_1_1,
         })
-        self.assertEqual(self.mgr.ip_owners_by_tag, {
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.1": set([
                     ("prof1", EP_ID_1_1),
@@ -344,9 +344,9 @@ class TestIpsetManager(BaseTestCase):
         self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
         self.step_mgr()
         self.assertEqual(self.mgr.endpoint_data_by_ep_id, {})
-        self.assertEqual(self.mgr.ip_owners_by_tag, {},
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {},
                          "ip_owners_by_tag should be empty, not %s" %
-                         pformat(self.mgr.ip_owners_by_tag))
+                         pformat(self.mgr.tag_membership_index.ip_owners_by_tag))
 
     def on_ref_acquired(self, tag_id, ipset):
         self.acquired_refs[tag_id] = ipset
@@ -404,19 +404,26 @@ class TestIpsetManager(BaseTestCase):
                          ]))
 
     def test_update_dirty(self):
-        self.mgr.on_datamodel_in_sync(async=True)
-        self.step_mgr()
-        self.mgr._dirty_tags.add("tag-123")
+        self.mgr._datamodel_in_sync = True
         m_ipset = Mock(spec=TagIpset)
         self.mgr.objects_by_id["tag-123"] = m_ipset
         with patch.object(self.mgr, "_is_starting_or_live",
                           autospec=True) as m_sol:
             m_sol.return_value = True
-            self.mgr._update_dirty_active_ipsets()
-            self.assertEqual(
-                m_ipset.replace_members.mock_calls,
-                [call(frozenset(), async=True)]
-            )
+            with patch.object(self.mgr.tag_membership_index,
+                              "get_and_reset_changes_by_tag",
+                              autospec=True) as m_get_and_reset:
+                m_get_and_reset.return_value = ({"tag-123": set(["10.0.0.1"])},
+                                                {"tag-123": set(["10.0.0.2"])})
+                self.mgr._update_dirty_active_ipsets()
+                self.assertEqual(
+                    m_ipset.add_members.mock_calls,
+                    [call(set(["10.0.0.1"]), async=True)]
+                )
+                self.assertEqual(
+                    m_ipset.remove_members.mock_calls,
+                    [call(set(["10.0.0.2"]), async=True)]
+                )
 
     def _notify_ready(self, tags):
         for tag in tags:
@@ -468,64 +475,76 @@ class TestIpsetActor(BaseTestCase):
         self.actor = IpsetActor(self.ipset)
 
     def test_sync_to_ipset(self):
-        members1 = set(["1.2.3.4", "2.3.4.5"])
-        members2 = set(["10.1.2.3"])
-        members3 = set(["9.9.9.9"])
+        members1 = ["1.2.3.4", "2.3.4.5"]
+        members2 = ["1.2.3.6", "2.3.4.5"]
 
-        # Cause a full update - first time.
-        _log.debug("Initial resync of ipset will happen")
-        self.actor.members = members1
-        self.actor._sync_to_ipset()
-        self.ipset.replace_members.assert_called_once_with(members1)
-        self.assertFalse(self.ipset.update_members.called)
-        self.assertEqual(self.actor.members, members1)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        # Each call to replace members causes a full update.
+        _log.info("Calling replace_members() once...")
+        self.actor.replace_members(members1, async=True)
+        self.step_actor(self.actor)
+        self.ipset.replace_members.assert_called_once_with(set(members1))
+        self.assertFalse(self.ipset.apply_changes.called)
+        self.assertEqual(self.actor.members, set(members1))
         self.assertFalse(self.actor._force_reprogram)
         self.ipset.reset_mock()
 
-        # Calls update_members
-        _log.debug("Call to update_members should happen")
-        self.actor.programmed_members = members1
-        self.actor.members = members2
-        self.actor._sync_to_ipset()
+        _log.info("Calling replace_members() second time..")
+        self.actor.replace_members(members2, async=True)
+        self.step_actor(self.actor)
+        self.ipset.replace_members.assert_called_once_with(set(members2))
+        self.assertFalse(self.ipset.apply_changes.called)
+        self.assertEqual(self.actor.members, set(members2))
+        self.assertFalse(self.actor._force_reprogram)
+        self.ipset.reset_mock()
+
+        _log.info("Calling replace_members() third time with mixed "
+                  "add/remove..")
+        self.actor.add_members(["5.6.7.8"], async=True)  # Ignored
+        self.actor.remove_members(["1.2.3.6"], async=True)
+        self.actor.replace_members(members1, async=True)
+        self.actor.add_members(["6.7.8.9"], async=True)  # Should apply
+        self.actor.remove_members(["2.3.4.5"], async=True)
+        self.step_actor(self.actor)
+        self.ipset.replace_members.assert_called_once_with(set([
+            "6.7.8.9",
+            "1.2.3.4",
+        ]))
+        self.assertFalse(self.ipset.apply_changes.called)
+        self.assertEqual(self.actor.members, set([
+            "6.7.8.9",
+            "1.2.3.4",
+        ]))
+        self.assertFalse(self.actor._force_reprogram)
+        self.ipset.reset_mock()
+
+        _log.info("Calling add/remove.")
+        self.actor.add_members(["5.6.7.8"], async=True)
+        self.actor.remove_members(["1.2.3.4"], async=True)
+        self.step_actor(self.actor)
         self.assertFalse(self.ipset.replace_members.called)
-        self.ipset.update_members.assert_called_once_with(members1, members2)
-        self.assertEqual(self.actor.members, members2)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        self.assertEqual(self.ipset.apply_changes.mock_calls, [
+            call(set(["5.6.7.8"]), set(["1.2.3.4"]))
+        ])
+        self.assertEqual(self.actor.members, set([
+            "6.7.8.9",
+            "5.6.7.8",
+        ]))
         self.assertFalse(self.actor._force_reprogram)
         self.ipset.reset_mock()
 
-        # Does nothing - already in correct state
-        _log.debug("Already in correct state (programmed_members matches)")
-        self.actor.programmed_members = members2
-        self.actor.members = members2
-        self.actor._sync_to_ipset()
-        self.assertFalse(self.ipset.replace_members.called)
-        self.assertFalse(self.ipset.update_members.called)
-        self.assertEqual(self.actor.members, members2)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
+        _log.info("Calling add/remove with failure.")
+        self.ipset.apply_changes.side_effect = FailedSystemCall(
+            "", [], 1, "", ""
+        )
+        self.actor.add_members(["6.7.8.10"], async=True)
+        self.actor.remove_members(["5.6.7.8"], async=True)
+        self.step_actor(self.actor)
+        self.assertEqual(self.ipset.replace_members.mock_calls,
+                         [
+                             call(set(["6.7.8.9", "6.7.8.10"]))
+                         ])
+        self.assertEqual(self.actor.members, set(["6.7.8.9", "6.7.8.10"]))
         self.assertFalse(self.actor._force_reprogram)
-        self.ipset.reset_mock()
-
-        # Cause a full update - forced.
-        _log.debug("Force a full ipset update")
-        self.actor._force_reprogram = True
-        self.actor.members = members3
-        self.actor._sync_to_ipset()
-        self.ipset.replace_members.assert_called_once_with(members3)
-        self.assertFalse(self.ipset.update_members.called)
-        self.assertEqual(self.actor.members, members3)
-        self.assertEqual(self.actor.programmed_members, self.actor.members)
-        self.assertFalse(self.actor._force_reprogram)
-        self.ipset.reset_mock()
-
-        # Cause an assert - programmed_members is None, but no resync required.
-        _log.debug("Force a full ipset update")
-        self.actor._force_reprogram = False
-        self.actor.members = members3
-        self.actor.programmed_members = None
-        with self.assertRaises(AssertionError):
-            self.actor._sync_to_ipset()
         self.ipset.reset_mock()
 
     def test_members_too_big(self):
@@ -533,7 +552,7 @@ class TestIpsetActor(BaseTestCase):
         self.actor.replace_members(members, async=True)
         self.step_actor(self.actor)
         # Check we return early without updating programmed_members.
-        self.assertEqual(self.actor.programmed_members, None)
+        self.assertTrue(self.actor._force_reprogram)
 
     def test_owned_ipset_names(self):
         self.assertEqual(self.actor.owned_ipset_names(),
@@ -616,58 +635,27 @@ class TestIpset(BaseTestCase):
         self.assertEqual(m_check_call.mock_calls, exp_calls)
 
     @patch("calico.felix.futils.check_call", autospec=True)
-    def test_update_members(self, m_check_call):
-        old = set(["10.0.0.2"])
-        new = set(["10.0.0.1", "10.0.0.2"])
-        self.ipset.update_members(old, new)
-
-        old = set(["10.0.0.1", "10.0.0.2"])
-        new = set(["10.0.0.1", "1.2.3.4"])
-
-        self.ipset.update_members(old, new)
-
-        calls = [call(["ipset", "restore"],
-                      input_str='add foo 10.0.0.1\nCOMMIT\n'),
-                 call(["ipset", "restore"],
-                      input_str='del foo 10.0.0.2\n'
-                                 'add foo 1.2.3.4\n'
-                                 'COMMIT\n')]
-
-        self.assertEqual(m_check_call.call_count, 2)
-        m_check_call.assert_has_calls(calls)
+    def test_apply_changes(self, m_check_call):
+        added = set(["10.0.0.2"])
+        removed = set(["10.0.0.1"])
+        self.ipset.apply_changes(added, removed)
+        self.assertEqual(
+            m_check_call.mock_calls,
+            [call(["ipset", "restore"],
+                   input_str='del foo 10.0.0.1\n'
+                             'add foo 10.0.0.2\n'
+                             'COMMIT\n')]
+        )
 
     @patch("calico.felix.futils.check_call", autospec=True,
-           side_effect=iter([
-               FailedSystemCall("Blah", [], None, None, "err"),
-               None,
-               FailedSystemCall("No ipset", [], 1, None, "does not exist"),
-               None]))
-    def test_update_members_err(self, m_check_call):
+           side_effect=FailedSystemCall("Blah", [], None, None, "err"))
+    def test_apply_changes_err(self, m_check_call):
         # First call to update_members will fail, leading to a retry.
-        old = set(["10.0.0.2"])
-        new = set(["10.0.0.1"])
-        self.ipset.update_members(old, new)
-
-        calls = [
-            call(["ipset", "restore"],
-                  input_str='del foo 10.0.0.2\n'
-                            'add foo 10.0.0.1\n'
-                            'COMMIT\n'),
-            call(["ipset", "destroy", "foo-tmp"]),
-            call(["ipset", "list", "foo"]),
-            call(["ipset", "restore"],
-                 input_str='create foo hash:ip family inet '
-                           'maxelem 1048576 --exist\n'
-                           'create foo-tmp hash:ip family inet '
-                           'maxelem 1048576 --exist\n'
-                           'flush foo-tmp\n'
-                           'add foo-tmp 10.0.0.1\n'
-                           'swap foo foo-tmp\n'
-                           'destroy foo-tmp\n'
-                           'COMMIT\n')
-        ]
-
-        self.assertEqual(m_check_call.mock_calls, calls)
+        added = set(["10.0.0.2"])
+        removed = set(["10.0.0.1"])
+        self.assertRaises(FailedSystemCall,
+                          self.ipset.apply_changes,
+                          added, removed)
 
     @patch("calico.felix.futils.check_call", autospec=True)
     def test_ensure_exists(self, m_check_call):
