@@ -110,9 +110,9 @@ Calico supports etcd's TLS-based security model, which supports the encryption
              name-based ``subjectAltNames``, allowing for multiple domain names
              to be embedded in the certificate.
 
-             For more details of the restictions, see `this github issue`_
+             For more details of the restrictions, see `this GitHub issue`_
 
-.. _this github issue: https://github.com/projectcalico/calico/issues/933
+.. _this GitHub issue: https://github.com/projectcalico/calico/issues/933
 
 To enable TLS support:
 
@@ -155,12 +155,11 @@ To enable TLS support:
 
   * Restart neutron-server.
 
-* For distributions of Calico that use native packaging rather than the
-  ``calicoctl`` tool (e.g. OpenStack), configure each Felix with its own key
-  and certificate:
+* Unless your Calico system uses ``calicoctl node`` to install and configure
+  Felix, configure each Felix with its own key and certificate:
 
-  .. note:: For distributions that use ``calicoctl`` (such as Docker,
-            Kubernetes and other container orchestrators), you should use the
+  .. note:: In systems that use ``calicoctl node`` (such as Docker, Kubernetes
+            and other container orchestrators), you should use the
             ``calicoctl`` tool to configure TLS.
 
   * Generate a certificate and key pair for each Felix.
