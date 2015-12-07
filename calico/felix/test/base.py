@@ -17,13 +17,13 @@ import logging
 import sys
 import gc
 
+from calico.felix.config import Config
 import gevent
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
 else:
     import unittest
-
 import mock
 
 _log = logging.getLogger(__name__)
@@ -74,3 +74,22 @@ class JSONString(object):
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.json_obj)
+
+
+def load_config(filename, path="calico/felix/test/data/", env_dict=None,
+                host_dict=None, global_dict=None):
+    if env_dict is None:
+        env_dict = {}
+    if host_dict is None:
+        host_dict = {}
+    if global_dict is None:
+        global_dict = {}
+
+    with mock.patch.dict("os.environ", env_dict):
+        with mock.patch('calico.common.complete_logging'):
+            config = Config(path+filename)
+
+    with mock.patch('calico.common.complete_logging'):
+        config.report_etcd_config(host_dict, global_dict)
+
+    return config
