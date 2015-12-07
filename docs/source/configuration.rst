@@ -81,12 +81,12 @@ The full list of parameters which can be set is as follows.
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdScheme                  | http                           | The protocol type (http or https) of the etcd node or proxy that Felix connects to.       |
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
-| EtcdKeyFile                 | None                           | The full path to the etcd public key file for using etcd with SSL.                        |
+| EtcdKeyFile                 | None                           | The full path to the etcd public key file, as described in :ref:`usingtlswithetcd`        |
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
-| EtcdCertFile                | None                           | The full path to the etcd certificate file for using etcd with SSL.                       |
+| EtcdCertFile                | None                           | The full path to the etcd certificate file, as described in :ref:`usingtlswithetcd`       |
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
-| EtcdCaFile                  | None                           | The full path to the etcd Certificate Authority certificate file for using etcd with SSL  |
-|                             |                                | certificate verification.                                                                 |
+| EtcdCaFile                  | None                           | The full path to the etcd Certificate Authority certificate file, as described in         |
+|                             |                                | :ref:`usingtlswithetcd`                                                                   |
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | DefaultEndpointToHostAction | DROP                           | By default Calico blocks traffic from endpoints to the host itself by using an iptables   |
 |                             |                                | DROP action.  If you want to allow some or all traffic from endpoint to host then set     |

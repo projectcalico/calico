@@ -78,9 +78,122 @@ traffic that should be allowed.
 Securing etcd
 -------------
 
+Limiting network access to etcd
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Calico uses etcd to store and forward the configuration of the network from
 plugin to the Felix agent.  By default, etcd is writable by anyone with
 access to its REST interface.  We plan to use the RBAC feature of an upcoming
 etcd release to improve this dramatically.  However, until that work is done,
 we recommend blocking access to etcd from all but the IP range(s) used by the
 compute nodes and plugin.
+
+.. _usingtlswithetcd:
+
+Using TLS to encrypt and authenticate communication with etcd
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Calico supports etcd's TLS-based security model, which supports the encryption
+(and authentication) of traffic between Calico components and the etcd cluster.
+
+.. warning:: Calico's TLS support uses the Python urllib3 library.
+             Unfortunately, we've seen issues with TLS in some of the common
+             versions of urllib3 including the version that ships with
+             Ubuntu 14.04 (1.7.1) and versions 1.11-1.12.  Version 1.13
+             appears to work well.
+
+             In addition, no versions of urllib3 support using IP addresses
+             in the ``subjectAltName`` field of a TLS certificate.  An IP
+             address can still be used in the common name (CN) field but
+             this restriction prevents the creation of a certificate that
+             contains multiple IP addresses.  urllib3 does support domain
+             name-based ``subjectAltNames``, allowing for multiple domain names
+             to be embedded in the certificate.
+
+             For more details of the restrictions, see `this GitHub issue`_
+
+.. _this GitHub issue: https://github.com/projectcalico/calico/issues/933
+
+To enable TLS support:
+
+* Follow the instructions in the `etcd security guide`_ to create a certificate
+  authority and enable TLS in etcd.  We recommend enabling both client and
+  peer authentication.  This will enable security between Calico and etcd as
+  well as between different nodes in the etcd cluster.
+
+  .. note:: etcd proxies communicate with the cluster as peers so they need to
+            have peer certificates.
+
+* Issue a private key and client certificate for each Calico component.  In
+  OpenStack, you'll need one certificate for each control node and one for
+  each compute node.
+
+* If using OpenStack, configure each Neutron control node to use TLS:
+
+  * Put the PEM-encoded private key and certificates in a secure place that is
+    only accessible by the user that Neutron will run as.
+
+    .. note:: Each control node should have its own private key and
+              certificate.  The certificate encodes the IP address or
+              hostname of the owner.
+
+  * Modify ``/etc/neutron/plugins/ml2_conf.ini`` to include a ``[calico]``
+    section that tells it where to find the key and certificates::
+
+      [calico]
+      etcd_key_file=<location of PEM-encoded private key>
+      etcd_cert_file=<location of PEM-encoded client certificate>
+      etcd_ca_cert_file=<location of PEM-encoded CA certificate>
+
+    .. note:: Calico will validate the etcd server's certificate against the
+              ``etcd_host`` configuration parameter.  ``etcd_host`` defaults
+              to "localhost".  Issuing a certificate for "localhost" doesn't
+              tie the certificate to any particular server.  Therefore, even
+              if you're connecting to the local server, you may wish to issue
+              the certificate for the server's domain name and configure
+              ``etcd_host`` to match.
+
+  * Restart neutron-server.
+
+* Unless your Calico system uses ``calicoctl node`` to install and configure
+  Felix, configure each Felix with its own key and certificate:
+
+  .. note:: In systems that use ``calicoctl node`` (such as Docker, Kubernetes
+            and other container orchestrators), you should use the
+            ``calicoctl`` tool to configure TLS.
+
+  * Generate a certificate and key pair for each Felix.
+
+  * Put the PEM-encoded private key and certificates in a secure place that is
+    only accessible by the root user.  For example, create a directory
+    ``/etc/calico/secure``::
+
+      $ mkdir -p /etc/calico/secure
+      $ chown -R root:root /etc/calico/secure
+      $ chmod 0700 /etc/calico/secure
+
+    .. note:: Each Felix-controlled node should have its own private key and
+              certificate.  The certificate encodes the IP address or
+              hostname of the owner.
+
+  * Modify Felix's configuration file ``/etc/calico/felix.cfg`` to tell it
+    where to find the key and certificates::
+
+      [global]
+      EtcdScheme = https
+      EtcdKeyFile = <location of PEM-encoded private key>
+      EtcdCertFile = <location of PEM-encoded client certificate>
+      EtcdCaFile = <location of PEM-encoded CA certificate>
+      ...
+
+    .. note:: Calico will validate the etcd server's certificate against the
+              host part of the ``EtcdAddr`` configuration parameter.
+              ``EtcdAddr`` defaults to "localhost:4001".  Issuing a
+              certificate for "localhost" doesn't tie the certificate to any
+              particular server.  Therefore, even if you're connecting to the
+              local server, you may wish to issue the certificate for the
+              server's domain name and configure ``EtcdAddr`` to match.
+
+  * Restart Felix.
+
+.. _`etcd security guide`: https://coreos.com/etcd/docs/latest/security.html
