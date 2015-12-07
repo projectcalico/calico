@@ -1,10 +1,13 @@
 # Prepare Core Services for Mesos + Calico Deployment
-*Most Mesos clusters will run these services on specific, dedicated machines chosen to maximize availability.*
+*Most Mesos deployments will run these services on specific, dedicated machines chosen to maximize availability.
+For the purposes of this demo, we will quickly launch them as docker containers on our Master.*
 
-## Docker
+## 1. Install Docker
 
-- **Docker must be installed on each Mesos Agent** that is deploying calico via the packaged Calico container (recommended). Users who prefer to [run Calico as a baremetal service](#) do not need to install Docker on each Agent.
-- **Docker must be installed on Mesos Master** if etcd and ZooKeeper are being deployed as Docker containers. Users who are running etcd / ZooKeeper elsewhere do not need to install Docker on each Master.
+- **Docker must be installed on each Mesos Agent** that is:
+    - deploying calico via the packaged Calico container (recommended). Users who prefer to run Calico as a baremetal service (coming soon!) do not need to install Docker on each Agent, or...
+    - that will be launching Docker containers through Mesos.
+- **Docker must be installed on Mesos Master** if etcd and ZooKeeper are being deployed as Docker containers, as we do in this demo. Users who are running etcd / ZooKeeper elsewhere do not need to install Docker on each Master.
 
 Run the following commands to install Docker:
 
@@ -26,7 +29,7 @@ Then log out (`exit`) and log back in to pick up your new group association.  Ve
 
     $ docker ps
 
-## ZooKeeper
+## 2. Launch ZooKeeper
 Mesos uses ZooKeeper to elect and keep track of the leading master in the cluster.
 
     $ sudo docker pull jplock/zookeeper:3.4.5
@@ -34,7 +37,7 @@ Mesos uses ZooKeeper to elect and keep track of the leading master in the cluste
 
 *If you have a firewall configured on the host running ZooKeeper, open port 2181 to allow incoming and outgoing tcp traffic. See our [Host Preparation Guide](PrepareHosts.md) for more details on firewall configuration.*
 
-## etcd
+## 3. Launch etcd
 Calico uses etcd as its data store and communication mechanism among Calico components.
 
 etcd needs your fully qualified domain name to start correctly.
@@ -52,4 +55,8 @@ If you have SELinux policy enforced, you must perform the following step:
     $ sudo chcon -Rt svirt_sandbox_file_t /var/etcd
 
 *If you have a firewall configured on the host running etcd, open ports 2379 and 4001 to allow incoming and outgoing tcp traffic. See our [Host Preparation Guide](PrepareHosts.md) for more details on firewall configuration.*
+
+## 4. Next Steps 
+With your core services running, you're ready to [Install Calico](README.md#3-calico)
+
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/PrepareCoreServices.md?pixel)](https://github.com/igrigorik/ga-beacon)
