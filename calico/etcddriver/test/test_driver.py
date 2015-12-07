@@ -388,7 +388,15 @@ class TestEtcdDriverFV(TestCase):
             # The watcher has code to detect tight loops, vary the duration
             # between timeouts/exceptions so that we trigger that on the first
             # loop.
-            m_mon.side_effect = iter([0.1, 0.2, 10, 20, 30, 40, 50])
+            m_mon.side_effect = iter([
+                0.1,  # ReadTimeoutError req_end_time
+                0.1,  # req_start_time
+                0.2,  # HTTPError req_end_time
+                0.2,  # req_start_time
+                30,  # HTTPException req_end_time
+                40,  # req_start_time
+                50,  # socket.error req_end_time
+            ])
             # For coverage: Nothing happens for a while, poll times out.
             watcher_req.respond_with_exception(
                 ReadTimeoutError(Mock(), "", "")
