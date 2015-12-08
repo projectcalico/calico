@@ -141,3 +141,4 @@
 - Ensure that metadata is not blocked by over-restrictive rules on outbound
   traffic
 - Updates and clarifications to documentation
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico/CHANGES.md?pixel)](https://github.com/igrigorik/ga-beacon)

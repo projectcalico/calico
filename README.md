@@ -114,3 +114,4 @@ dependencies for.
 For example, if you want to work on Felix, you will want to set it to `felix`.
 With that set, you can then run `pip install -e .`, which will install the
 subset of the dependencies needed for those components.
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
