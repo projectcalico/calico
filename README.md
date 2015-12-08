@@ -47,3 +47,4 @@ To build the Calico Networking Plugin for rkt locally, clone this repository and
 ## Networking Behavior
 
 In rkt deployments, Calico will allocate an available IP within the specified subnet pool and enforce the default Calico networking rules on containers. The default behavior is to allow traffic only from other containers in the network. For each network with a unique `"name"` parameter (as shown above), Calico will create a single profile that will be applied to each container added to that network.
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-rkt/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
