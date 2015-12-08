@@ -38,6 +38,7 @@ See 'calicoctl <command> --help' to read about a specific subcommand.
 """
 
 import sys
+import signal
 import traceback
 
 from docopt import docopt
@@ -56,6 +57,13 @@ import calico_ctl.version
 import calico_ctl.config
 import calico_ctl.ipam
 from calico_ctl.utils import print_paragraph
+
+
+def keyboard_interrupt_handler(signal, frame):
+    print('Aborted command.')
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, keyboard_interrupt_handler)
 
 
 if __name__ == '__main__':
