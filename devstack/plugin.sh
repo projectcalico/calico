@@ -128,6 +128,16 @@ cgroup_device_acl = [
 ]
 EOF
 
+		    # Use the Calico plugin.  We make this change here, instead
+		    # of putting 'Q_PLUGIN=calico' in the settings file,
+		    # because the latter would require adding Calico plugin
+		    # support to the core DevStack repository.
+		    iniset $NEUTRON_CONF DEFAULT core_plugin calico
+
+		    # Reset service_plugins to be empty, as the Calico plugin
+		    # itself supports the 'router' extension.
+		    inidelete $NEUTRON_CONF DEFAULT service_plugins
+
 		    # Propagate ENABLE_DEBUG_LOG_LEVEL to neutron.conf, so that
 		    # it applies to the Calico DHCP agent on each compute node.
 		    iniset $NEUTRON_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL

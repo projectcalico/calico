@@ -53,24 +53,8 @@ fi
 # a value that Devstack will not recognize.
 Q_AGENT=calico
 
-# The following variables specify what will go into ml2_conf.ini for
-# the type_drivers, mechanism_drivers and tenant_network_types
-# settings.  For Calico networking we want to use the 'calico'
-# mechanism driver and the 'local' network type.
-Q_ML2_PLUGIN_TYPE_DRIVERS=local
-Q_ML2_PLUGIN_MECHANISM_DRIVERS=calico
-Q_ML2_TENANT_NETWORK_TYPE=local
-
 # Calico does not use namespaces.
 Q_USE_NAMESPACE=False
-
-# Setting ENABLED_TENANT_TUNNELS to False is needed to prevent
-# Devstack's ML2 setup from defaulting to setup (Q_TUNNEL_TYPES) for
-# GRE tunneling.  Setting ENABLED_TENANT_VLANS isn't strictly needed,
-# but we do it for consistency as it seems to form a pair with
-# ENABLED_TENANT_TUNNELS.
-ENABLE_TENANT_TUNNELS=False
-ENABLE_TENANT_VLANS=False
 
 # Devstack normally creates some initial Neutron networks for VMs to
 # attach to.  But it can't easily be made to do this in the way that
