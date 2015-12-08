@@ -1,41 +1,70 @@
-.PHONY: all binary ut clean
+.PHONY: all binary test plugin ipam ut clean
 
-BUILD_FILES=Dockerfile requirements.txt
+SRCFILES=$(shell find calico_cni)
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+
 
 default: all
-all: test
-binary: dist/calico_rkt
-test: ut
+all: binary test
+binary: dist/calico dist/calico-ipam
+test: ut fv
+plugin: dist/calico
+ipam: dist/calico-ipam
 
-# Build a new docker image to be used by binary or tests
-rktbuild.created: $(BUILD_FILES)
-	docker build -t calico/rkt-build .
-	touch rktbuild.created
 
-dist/calico_rkt: rktbuild.created
+# Builds the Calico CNI plugin binary.
+dist/calico: $(SRCFILES) 
+	# Make sure the output directory exists.
 	mkdir -p dist
 	chmod 777 `pwd`/dist
-	
-	# Build the rkt plugin
+
+	# Pull the build container.
+	docker pull calico/build:latest
+
+	# Build the CNI plugin
 	docker run \
 	-u user \
-	-v `pwd`/calico_rkt:/code/calico_rkt \
 	-v `pwd`/dist:/code/dist \
-	-e PYTHONPATH=/code/calico_rkt \
-	calico/rkt-build pyinstaller calico_rkt/calico_rkt.py -a -F -s --clean
+	-v `pwd`/calico_cni:/code/calico_cni \
+	calico/build pyinstaller calico_cni/calico_cni.py -a -F -s -n calico --clean
 
-ut: dist/calico_rkt
-	docker run --rm -v `pwd`/calico_rkt:/code/calico_rkt \
-	-v `pwd`/nose.cfg:/code/nose.cfg \
-	calico/rkt-build bash -c \
-	'>/dev/null 2>&1 & PYTHONPATH=/code/calico_rkt \
-	nosetests calico_rkt/tests -c nose.cfg'
+dist/calico-ipam: $(SRCFILES)
+	mkdir -p dist
+	chmod 777 `pwd`/dist
+
+	# Build the CNI IPAM plugin
+	docker run \
+	-u user \
+	-v `pwd`/dist:/code/dist \
+	-v `pwd`/calico_cni:/code/calico_cni \
+	calico/build pyinstaller calico_cni/ipam.py -a -F -s -n calico-ipam --clean
+
+# Run the unit tests.
+ut: 
+	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
+	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
+	calico/test \
+	nosetests calico_cni/tests/unit -c nose.cfg
+
+fv: 
+	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
+	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
+	calico/test \
+	nosetests calico_cni/tests/fv -c nose.cfg
 
 clean:
 	-rm -f *.created
 	find . -name '*.pyc' -exec rm -f {} +
 	-rm -rf dist
-	-docker rm -f calico-build
-	-docker rmi calico/rkt-build
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
+
+
+## Run etcd in a container. Generally useful.
+run-etcd:
+	@-docker rm -f calico-etcd
+	docker run --detach \
+	--net=host \
+	--name calico-etcd quay.io/coreos/etcd:v2.2.2 \
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
