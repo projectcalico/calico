@@ -317,7 +317,7 @@ class TestEtcdWatcher(BaseTestCase):
         m_begin.wait.assert_called_once_with()
         self.assertTrue(self.watcher._been_in_sync)
         self.assertEqual(self.m_splitter.on_datamodel_in_sync.mock_calls,
-                         [call(async=True)])
+                         [call()])
         self.assertEqual(self.m_hosts_ipset.replace_members.mock_calls,
                          [call(frozenset([]), async=True)])
 
@@ -382,7 +382,6 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_splitter.on_endpoint_update.assert_called_once_with(
             EndpointId("h1", "o1", "w1", "e1"),
             VALID_ENDPOINT,
-            async=True,
         )
 
     def test_endpoint_set_bad_json(self):
@@ -391,7 +390,6 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_splitter.on_endpoint_update.assert_called_once_with(
             EndpointId("h1", "o1", "w1", "e1"),
             None,
-            async=True,
         )
 
     def test_endpoint_set_invalid(self):
@@ -400,58 +398,50 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_splitter.on_endpoint_update.assert_called_once_with(
             EndpointId("h1", "o1", "w1", "e1"),
             None,
-            async=True,
         )
 
     def test_rules_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
                       value=RULES_STR)
         self.m_splitter.on_rules_update.assert_called_once_with("prof1",
-                                                                RULES,
-                                                                async=True)
+                                                                RULES)
 
     def test_rules_set_bad_json(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
                       value="{")
         self.m_splitter.on_rules_update.assert_called_once_with("prof1",
-                                                                None,
-                                                                async=True)
+                                                                None,)
 
     def test_rules_set_invalid(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
                       value='{}')
         self.m_splitter.on_rules_update.assert_called_once_with("prof1",
-                                                                None,
-                                                                async=True)
+                                                                None,)
 
     def test_tags_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/tags", "set",
                       value=TAGS_STR)
         self.m_splitter.on_tags_update.assert_called_once_with("prof1",
-                                                               TAGS,
-                                                               async=True)
+                                                               TAGS)
 
     def test_tags_set_bad_json(self):
         self.dispatch("/calico/v1/policy/profile/prof1/tags", "set",
                       value="{")
         self.m_splitter.on_tags_update.assert_called_once_with("prof1",
-                                                               None,
-                                                               async=True)
+                                                               None)
 
     def test_tags_set_invalid(self):
         self.dispatch("/calico/v1/policy/profile/prof1/tags", "set",
                       value="[{}]")
         self.m_splitter.on_tags_update.assert_called_once_with("prof1",
-                                                               None,
-                                                               async=True)
+                                                               None)
 
     def test_tags_del(self):
         """
         Test tag-only deletion.
         """
         self.dispatch("/calico/v1/policy/profile/profA/tags", action="delete")
-        self.m_splitter.on_tags_update.assert_called_once_with("profA", None,
-                                                               async=True)
+        self.m_splitter.on_tags_update.assert_called_once_with("profA", None)
         self.assertFalse(self.m_splitter.on_rules_update.called)
 
     def test_rules_del(self):
@@ -459,8 +449,7 @@ class TestEtcdWatcher(BaseTestCase):
         Test rules-only deletion.
         """
         self.dispatch("/calico/v1/policy/profile/profA/rules", action="delete")
-        self.m_splitter.on_rules_update.assert_called_once_with("profA", None,
-                                                                async=True)
+        self.m_splitter.on_rules_update.assert_called_once_with("profA", None)
         self.assertFalse(self.m_splitter.on_tags_update.called)
 
     def test_endpoint_del(self):
@@ -472,7 +461,6 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_splitter.on_endpoint_update.assert_called_once_with(
             EndpointId("h1", "o1", "w1", "e1"),
             None,
-            async=True,
         )
 
     def test_host_ip_set(self):
@@ -532,12 +520,12 @@ class TestEtcdWatcher(BaseTestCase):
     def test_ipam_pool_set(self):
         self.dispatch("/calico/v1/ipam/v4/pool/1234", action="set", value="{}")
         self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
-                         [call("1234", None, async=True)])
+                         [call("1234", None)])
 
     def test_ipam_pool_del(self):
         self.dispatch("/calico/v1/ipam/v4/pool/1234", action="delete")
         self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
-                         [call("1234", None, async=True)])
+                         [call("1234", None)])
 
     @patch("os._exit", autospec=True)
     @patch("gevent.sleep", autospec=True)

@@ -414,8 +414,7 @@ class InterfaceWatcher(Actor):
                     # The interface is down; make sure the other actors know
                     # about it.
                     self.update_splitter.on_interface_update(ifname,
-                                                             iface_up=False,
-                                                             async=True)
+                                                             iface_up=False)
                     # Remove any record we had of the interface so that, when
                     # it goes back up, we'll report that.
                     if_last_flags.pop(ifname, None)
@@ -434,8 +433,7 @@ class InterfaceWatcher(Actor):
                     _log.debug("New network interface : %s %x", ifname, flags)
                     if_last_flags[ifname] = flags
                     self.update_splitter.on_interface_update(ifname,
-                                                             iface_up=True,
-                                                             async=True)
+                                                             iface_up=True)
 
 
 class BadKernelConfig(Exception):
