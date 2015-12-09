@@ -92,7 +92,7 @@ MASTER_CHECK_INTERVAL_SECS = 5
 
 # We wait for a short period of time before we initialize our state to avoid
 # problems with Neutron forking.
-STARTUP_DELAY_SECS = 30
+STARTUP_DELAY_SECS = 10
 
 # A single security profile.
 SecurityProfile = namedtuple(

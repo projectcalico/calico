@@ -21,7 +21,9 @@ calico.election
 Calico election code.
 """
 from greenlet import GreenletExit
+import os
 import random
+import re
 import etcd
 import eventlet
 import logging
@@ -93,7 +95,7 @@ class Elector(object):
                     pass
                 # In case we're repeatedly failing, sleep a little before we
                 # retry.
-                retry_time = 1 + (5 * random.random())
+                retry_time = 1 + random.random()
                 _log.info("Retrying leader election in %.1f seconds",
                           retry_time)
                 eventlet.sleep(retry_time)
@@ -125,6 +127,10 @@ class Elector(object):
             return
 
         _log.debug("ID of elected master is : %s", response.value)
+        if response.value:
+            # If we happen to be on the same server, check if the master
+            # process is still alive.
+            self._check_master_process(response.value)
 
         while not self._stopped:
             # We know another instance is the master. Wait until something
@@ -148,13 +154,47 @@ class Elector(object):
                 # Something bad and unexpected. Log and reconnect.
                 self._log_exception("wait for master change", e)
                 return
-
+            _log.debug("Election key action: %s; new value %s",
+                       response.action, response.value)
             if (response.action in ETCD_DELETE_ACTIONS or
                     response.value is None):
                 # Deleted - try and become the master.
                 _log.info("Leader etcd key went away, attempting to become "
                           "the elected master")
                 self._become_master()
+
+    def _check_master_process(self, master_id):
+        """_check_master_process
+
+        If the master happens to be on our host, checks if its process is
+        still alive.  If it is not, cleans up the now-stale election key.
+
+        :param master_id: Value loaded from the election key.
+        """
+        # Defensive. In case we ever change the master ID format, only parse
+        # it if it looks like what we expect.
+        match = re.match(r"^(?P<host>[^:]+):(?P<pid>\d+)$", master_id)
+        if not match:
+            _log.warn("Unable to parse master ID: %r.", master_id)
+            return
+        host = match.group("host")
+        pid = int(match.group("pid"))
+        _log.debug("Parsed key as host = %s, PID = %s", host, pid)
+        if host == self._server_id:
+            # Check if the PID is still running.
+            _log.debug("Previous master was on this server %s", host)
+            if os.path.exists("/proc/%s" % pid):
+                _log.debug("Master still running")
+            else:
+                _log.warn("Master was on this server but cannot find its "
+                          "PID in /proc.  Removing stale election key.")
+                try:
+                    self._etcd_client.delete(self._key,
+                                             prevValue=master_id)
+                except etcd.EtcdException as e:
+                    _log.warn("Failed to remove stale key from dead "
+                              "master: %r", e)
+                raise RestartElection()
 
     def _become_master(self):
         """
@@ -185,21 +225,26 @@ class Elector(object):
 
         self._master = True
 
-        while not self._stopped:
-            try:
-                self._etcd_client.write(self._key,
-                                        self.id_string,
-                                        ttl=self._ttl,
-                                        prevValue=self.id_string,
-                                        timeout=self._interval)
-            except Exception as e:
-                # This is a pretty broad except statement, but anything going
-                # wrong means this instance gives up being the master.
-                self._master = False
-                self._log_exception("renew master role", e)
-                raise RestartElection()
-
-            eventlet.sleep(self._interval)
+        try:
+            while not self._stopped:
+                try:
+                    _log.info("Refreshing master role")
+                    self._etcd_client.write(self._key,
+                                            self.id_string,
+                                            ttl=self._ttl,
+                                            prevValue=self.id_string,
+                                            timeout=self._interval)
+                    _log.info("Refreshed master role")
+                except Exception as e:
+                    # This is a pretty broad except statement, but anything
+                    # going wrong means this instance gives up being the
+                    # master.
+                    self._log_exception("renew master role", e)
+                    raise RestartElection()
+                eventlet.sleep(self._interval)
+        finally:
+            _log.info("Exiting master refresh loop, no longer the master")
+            self._master = False
         raise RestartElection()
 
     def _log_exception(self, failed_to, exc):
@@ -226,6 +271,7 @@ class Elector(object):
         return "%s:%d" % (self._server_id, os.getpid())
 
     def _attempt_step_down(self):
+        self._master = False
         try:
             self._etcd_client.delete(self._key,
                                      prevValue=self.id_string,

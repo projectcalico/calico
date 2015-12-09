@@ -196,3 +196,37 @@ class TestElection(unittest.TestCase):
 
         # We are no longer the master, after error.
         self.assertFalse(elector.master())
+
+    @mock.patch("os.path.exists")
+    def test_check_master_process_died(self, m_exists):
+        m_exists.return_value = False
+        client = mock.Mock()
+        elector = election.Elector(client, "server-id", "/bloop",
+                                   interval=5, ttl=15)
+        client.delete.side_effect = stub_etcd.EtcdKeyNotFound()
+        self.assertRaises(election.RestartElection,
+                          elector._check_master_process, "server-id:1234")
+        self.assertEqual(
+            client.delete.mock_calls,
+            [
+                mock.call("/bloop", prevValue="server-id:1234")
+            ]
+        )
+
+    @mock.patch("os.path.exists")
+    def test_check_master_process_other_server(self, m_exists):
+        m_exists.return_value = False
+        client = mock.Mock()
+        elector = election.Elector(client, "server-id", "/bloop",
+                                   interval=5, ttl=15)
+        elector._check_master_process("other-server:1234")
+        self.assertEqual(client.delete.mock_calls, [])
+
+    @mock.patch("os.path.exists")
+    def test_check_master_process_still_alive(self, m_exists):
+        m_exists.return_value = True
+        client = mock.Mock()
+        elector = election.Elector(client, "server-id", "/bloop",
+                                   interval=5, ttl=15)
+        elector._check_master_process("server-id:1234")
+        self.assertEqual(client.delete.mock_calls, [])
