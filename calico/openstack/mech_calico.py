@@ -855,7 +855,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     self.transport.write_port_to_etcd(
                         port, prev_index=endpoint.modified_index
                     )
-                except etcd.EtcdCompareFailed:
+                except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
@@ -982,7 +982,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         prev_rules_index=etcd_profile.rules_modified_index,
                         prev_tags_index=etcd_profile.tags_modified_index,
                     )
-                except etcd.EtcdCompareFailed:
+                except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
