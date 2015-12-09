@@ -38,3 +38,10 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         cmd.append('--enable-ra')
 
         return cmd
+
+    def _iter_hosts(self):
+        # we only care about ports on the same node as the dhcp agent
+        # so remove the rest
+        self.network.ports = [p for p in self.network.ports
+                              if p['binding:host_id'] == self.conf.host]
+        return super(DnsmasqRouted, self)._iter_hosts()
