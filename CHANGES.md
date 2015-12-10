@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.2
+
+- Don't report port deletion as an error status.
+- Improve leader election performance after restart.
+- Catch additional python-etcd exceptions.
+- Reduce election refresh interval.
+- Resolve "Felix dies if interface missing" on Alpine Linux.
+- Rebase to latest 2015.1.2 and 2014.2.4 upstream Ubuntu packages.
+
 ## 1.2.1
 
 - Fix Felix ipset exception when using IPIP.

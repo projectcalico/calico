@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.2.1
+Version:        1.2.2
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -210,6 +210,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Dec 10 2015 Matt Dupre <matt@projectcalico.org> 1.2.2-1
+  - Don't report port deletion as an error status.
+  - Improve leader election performance after restart.
+  - Catch additional python-etcd exceptions.
+  - Reduce election refresh interval.
+  - Resolve "Felix dies if interface missing" on Alpine Linux.
+  - Rebase to latest 2015.1.2 and 2014.2.4 upstream Ubuntu packages.
+
 * Fri Nov 13 2015 Matt Dupre <matt@projectcalico.org> 1.2.1-1
   - Fix Felix ipset exception when using IPIP.
   - Use iptables protocol numbers not names.

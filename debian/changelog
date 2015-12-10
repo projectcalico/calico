@@ -1,3 +1,14 @@
+calico (1.2.2-1) trusty; urgency=medium
+
+  * Don't report port deletion as an error status.
+  * Improve leader election performance after restart.
+  * Catch additional python-etcd exceptions.
+  * Reduce election refresh interval.
+  * Resolve "Felix dies if interface missing" on Alpine Linux.
+  * Rebase to latest 2015.1.2 and 2014.2.4 upstream Ubuntu packages.
+
+ -- Matt Dupre <matt@projectcalico.org>  Thu, 10 Dec 2015 19:30:40 +0000
+
 calico (1.2.1-1) trusty; urgency=medium
 
   * Fix Felix ipset exception when using IPIP.
