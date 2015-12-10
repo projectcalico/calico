@@ -1,8 +1,8 @@
 [template]
 src = "bird6.toml.template"
-dest = "/conf.d/bird6.toml"
+dest = "/etc/calico/confd/conf.d/bird6.toml"
 prefix = "/calico/bgp/v1/global"
 keys = [
     "/node_mesh"
 ]
-reload_cmd = "sv restart confd"
+reload_cmd = "/usr/local/bin/restart-calico-confd"

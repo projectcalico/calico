@@ -7,7 +7,7 @@ if [ "$CALICO_NETWORKING" == "false" ]; then
 else
     # Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
     # felix to start.  Don't fail startup if this confd execution fails.
-    confd -confdir=. -onetime -node=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} \
+    confd -confdir=/etc/calico/confd -onetime -node=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} \
           -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
           -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} || true
 fi

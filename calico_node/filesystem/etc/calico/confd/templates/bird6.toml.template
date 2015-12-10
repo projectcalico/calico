@@ -1,6 +1,6 @@
 [template]
-src = "bird.cfg.{{if (json (getv "/node_mesh")).enabled}}mesh{{else}}no-mesh{{end}}.template"
-dest = "/config/bird.cfg"
+src = "bird6.cfg.{{if (json (getv "/node_mesh")).enabled}}mesh{{else}}no-mesh{{end}}.template"
+dest = "/etc/calico/confd/config/bird6.cfg"
 prefix = "/calico/bgp/v1"
 keys = [
     {{if (json (getv "/node_mesh")).enabled}}"/host"{{else}}"/host/{{getenv "HOSTNAME"}}"{{end}},

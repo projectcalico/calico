@@ -1,6 +1,6 @@
 [template]
 src = "bird_aggr.cfg.template"
-dest = "/config/bird6_aggr.cfg"
+dest = "/etc/calico/confd/config/bird6_aggr.cfg"
 prefix = "/calico/ipam/v2/host/HOSTNAME/ipv6/block"
 keys = [
     "/",
