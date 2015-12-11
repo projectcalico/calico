@@ -1,6 +1,6 @@
 [template]
 src = "bird_ipam.cfg.template"
-dest = "/config/bird_ipam.cfg"
+dest = "/etc/calico/confd/config/bird_ipam.cfg"
 prefix = "/calico/v1/ipam/v4"
 keys = [
     "/pool",
