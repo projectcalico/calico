@@ -33,6 +33,7 @@ from netaddr import IPAddress, IPNetwork
 from calico_ctl import endpoint
 from pycalico import netns
 from pycalico.datastore_datatypes import IPPool, Endpoint
+from pycalico.ipam import AlreadyAssignedError
 
 from connectors import client
 from connectors import docker_client
@@ -79,24 +80,20 @@ def validate_arguments(arguments):
             validate_ip(requested_ip, 6) or
             validate_cidr(requested_ip) or
             requested_ip.lower() in ('ipv4', 'ipv6')):
-        sys.exit('Invalid IP address specified. Argument must be an IP, '
-                 'a cidr, "ipv4" or "ipv6". '
-                 '"{0}" was given'.format(requested_ip))
+        print_paragraph("Invalid IP address specified.  Argument must be a "
+                        "valid IP or CIDR.")
+        sys.exit(1)
 
     # Validate POOL
     if requested_ip is not None and '/' in requested_ip:
-        try:
-            requested_pool = IPNetwork(requested_ip)
-        except TypeError:
-            sys.exit('Invalid cidr specified for desired pool. '
-                     '"{0}" was given."'.format(pool))
+        requested_pool = IPNetwork(requested_ip)
 
         try:
-            pool = client.get_ip_pool_config(requested_pool.version,
-                                             requested_pool)
+            client.get_ip_pool_config(requested_pool.version, requested_pool)
         except KeyError:
-            sys.exit('Invalid cidr specified for desired pool. '
-                     'No pool found for "{0}"'.format(requested_pool))
+            print_paragraph("Invalid CIDR specified for desired pool. "
+                            "No pool found for {0}.".format(requested_pool))
+            sys.exit(1)
 
 
     # Validate PROFILE
@@ -523,8 +520,11 @@ def get_ip_and_pool(ip):
         pool = get_pool_or_exit(ip)
 
         # Assign the IP
-        if not client.assign_address(pool, ip):
-            print "IP address is already assigned in pool %s " % pool
+        try:
+            client.assign_ip(ip, None, {})
+        except AlreadyAssignedError:
+            print_paragraph("IP address is already assigned in pool "
+                            "%s." % pool)
             sys.exit(1)
 
     return (ip, pool)

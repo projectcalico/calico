@@ -23,6 +23,7 @@ from calico_ctl.bgp import *
 from calico_ctl import container
 from calico_ctl import utils
 from pycalico.datastore_datatypes import Endpoint, IPPool
+from pycalico.ipam import AlreadyAssignedError
 
 
 class TestContainer(unittest.TestCase):
@@ -200,7 +201,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_client.get_default_next_hops.called)
-        self.assertTrue(m_client.assign_address.called)
+        self.assertTrue(m_client.assign_ip.called)
         self.assertTrue(m_client.release_ips.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -214,12 +215,12 @@ class TestContainer(unittest.TestCase):
         """
         Test container_add when an ip address is already assigned in pool
 
-        client.assign_address returns an empty list.
+        client.assign_ip returns an empty list.
         Assert that the system then exits and all expected calls are made
         """
         # Set up mock object
         m_client.get_endpoint.side_effect = KeyError
-        m_client.assign_address.return_value = []
+        m_client.assign_ip.side_effect = AlreadyAssignedError
 
         # Call method under test expecting a SystemExit
         self.assertRaises(SystemExit, container.container_add,
@@ -367,7 +368,7 @@ class TestContainer(unittest.TestCase):
             orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
-        m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
+        m_client.assign_ip.assert_called_once_with(ip_addr, None, {})
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
@@ -422,7 +423,7 @@ class TestContainer(unittest.TestCase):
             orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
-        self.assertFalse(m_client.assign_address.called)
+        self.assertFalse(m_client.assign_ip.called)
         m_client.auto_assign_ips.assert_called_once_with(1, 0, None, {},
                                                          pool=(None, None))
         m_endpoint.ipv4_nets.add.assert_called_once_with(IPNetwork(ip_addr))
@@ -477,7 +478,7 @@ class TestContainer(unittest.TestCase):
             orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
-        m_client.assign_address.assert_called_once_with(pool_return, ip_addr)
+        m_client.assign_ip.assert_called_once_with(ip_addr, None, {})
         m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
         m_client.update_endpoint.assert_called_once_with(m_endpoint)
         m_netns.ns_veth_exists.assert_called_once_with(m_namespace, interface)
@@ -532,7 +533,7 @@ class TestContainer(unittest.TestCase):
             orchestrator_id=utils.DOCKER_ORCHESTRATOR_ID,
             workload_id=666
         )
-        self.assertFalse(m_client.assign_address.called)
+        self.assertFalse(m_client.assign_ip.called)
         m_client.auto_assign_ips.assert_called_once_with(0, 1, None, {},
                                                          pool=(None, None))
         m_endpoint.ipv6_nets.add.assert_called_once_with(IPNetwork(ip_addr))
@@ -581,7 +582,7 @@ class TestContainer(unittest.TestCase):
         container.container_ip_add(container_name, ip, interface)
 
         # Assert
-        self.assertFalse(m_client.assign_address.called)
+        self.assertFalse(m_client.assign_ip.called)
         m_enforce_root.assert_called_once_with()
         m_ippool.assert_called_once_with(ip)
         m_get_container_info_or_exit.assert_called_once_with(container_name)
@@ -670,7 +671,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         m_print_container_not_in_calico_msg.assert_called_once_with(container_name)
-        self.assertFalse(m_client.assign_address.called)
+        self.assertFalse(m_client.assign_ip.called)
         self.assertFalse(m_get_pool_or_exit.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -678,13 +679,13 @@ class TestContainer(unittest.TestCase):
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
-    def test_container_ip_add_fail_assign_address(
+    def test_container_ip_add_fail_assign_ip(
             self, m_netns, m_client, m_get_container_info_or_exit,
             m_get_pool_or_exit, m_enforce_root):
         """
         Test for container_ip_add when the client cannot assign an IP
 
-        client.assign_address returns an empty list.
+        client.assign_ip returns an empty list.
         Assert that the system then exits and all expected calls are made
         """
         # Set up mock objects
@@ -692,7 +693,7 @@ class TestContainer(unittest.TestCase):
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
         }
-        m_client.assign_address.return_value = []
+        m_client.assign_ip.side_effect = AlreadyAssignedError
 
         # Set up arguments to pass to method under test
         container_name = 'container1'
@@ -747,7 +748,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
-        self.assertTrue(m_client.assign_address.called)
+        self.assertTrue(m_client.assign_ip.called)
         m_client.release_ips.assert_called_once_with({IPAddress(ip)})
         self.assertFalse(m_ns_veth_exists.called)
         self.assertFalse(m_netns_add_ip_to_ns_veth.called)
@@ -798,7 +799,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
-        self.assertTrue(m_client.assign_address.called)
+        self.assertTrue(m_client.assign_ip.called)
         m_ns_veth_exists.assert_called_once_with(m_namespace, interface)
         self.assertTrue(m_netns_add_ip_to_ns_veth.called)
         m_endpoint.ipv4_nets.remove.assert_called_once_with(
@@ -855,7 +856,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
-        self.assertTrue(m_client.assign_address.called)
+        self.assertTrue(m_client.assign_ip.called)
         m_ns_veth_exists.assert_called_once_with(m_namespace, interface)
         self.assertTrue(m_netns_add_ip_to_ns_veth.called)
         m_endpoint.ipv6_nets.remove.assert_called_once_with(
@@ -900,7 +901,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
-        self.assertTrue(m_client.assign_address.called)
+        self.assertTrue(m_client.assign_ip.called)
         self.assertFalse(m_netns_add_ip_to_ns_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
@@ -941,7 +942,7 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
-        self.assertTrue(m_client.assign_address.called)
+        self.assertTrue(m_client.assign_ip.called)
         m_netns.ns_veth_exists.assert_called_once_with(m_namespace, bad_if)
         self.assertFalse(m_netns.add_ip_to_ns_veth.called)
 
