@@ -6,4 +6,5 @@ keys = [
     {{if (json (getv "/node_mesh")).enabled}}"/host"{{else}}"/host/{{getenv "HOSTNAME"}}"{{end}},
     "/global"
 ]
+check_cmd = "bird -p -c {{"{{"}}.src{{"}}"}}"
 reload_cmd = "pkill -HUP bird || true"
