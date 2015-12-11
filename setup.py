@@ -1,4 +1,4 @@
-np#!/usr/bin/env python
+#!/usr/bin/env python
 
 # Copyright (c) 2014, 2015 Metaswitch Networks
 # All Rights Reserved.
