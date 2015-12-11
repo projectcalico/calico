@@ -169,6 +169,14 @@ class Config(object):
                            "localhost:4001", sources=[ENV, FILE])
         self.add_parameter("FelixHostname", "Felix compute host hostname",
                            socket.gethostname(), sources=[ENV, FILE])
+        self.add_parameter("EtcdScheme", "Protocol type for http or https",
+                           "http", sources=[ENV, FILE])
+        self.add_parameter("EtcdKeyFile", "Path to etcd key file",
+                           "none", sources=[ENV, FILE])
+        self.add_parameter("EtcdCertFile", "Path to etcd certificate file",
+                           "none", sources=[ENV, FILE])
+        self.add_parameter("EtcdCaFile", "Path to etcd CA certificate file",
+                           "none", sources=[ENV, FILE])
 
         self.add_parameter("StartupCleanupDelay",
                            "Delay before cleanup starts",
@@ -189,6 +197,9 @@ class Config(object):
                            "an endpoint to the host.", "DROP")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
+        self.add_parameter("EtcdDriverLogFilePath",
+                           "Path to log file for etcd driver",
+                           "/var/log/calico/felix-etcd.log")
         self.add_parameter("LogSeverityFile",
                            "Log severity for logging to file", "INFO")
         self.add_parameter("LogSeveritySys",
@@ -214,6 +225,12 @@ class Config(object):
         self.add_parameter("EndpointReportingDelaySecs",
                            "Minimum delay between per-endpoint status reports",
                            1, value_is_int=True)
+        self.add_parameter("MaxIpsetSize",
+                           "Maximum size of the ipsets that Felix uses to "
+                           "represent profile tag memberships.  Should be set "
+                           "to a value larger than the expected number of "
+                           "IP addresses using a single tag.",
+                           2**20, value_is_int=True)
 
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
@@ -273,6 +290,10 @@ class Config(object):
         """
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.HOSTNAME = self.parameters["FelixHostname"].value
+        self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
+        self.ETCD_KEY_FILE = self.parameters["EtcdKeyFile"].value
+        self.ETCD_CERT_FILE = self.parameters["EtcdCertFile"].value
+        self.ETCD_CA_FILE = self.parameters["EtcdCaFile"].value
         self.STARTUP_CLEANUP_DELAY = \
             self.parameters["StartupCleanupDelay"].value
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
@@ -284,6 +305,7 @@ class Config(object):
         self.DEFAULT_INPUT_CHAIN_ACTION = \
             self.parameters["DefaultEndpointToHostAction"].value
         self.LOGFILE = self.parameters["LogFilePath"].value
+        self.DRIVERLOGFILE = self.parameters["EtcdDriverLogFilePath"].value
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
@@ -296,6 +318,7 @@ class Config(object):
             self.parameters["EndpointReportingEnabled"].value
         self.ENDPOINT_REPORT_DELAY = \
             self.parameters["EndpointReportingDelaySecs"].value
+        self.MAX_IPSET_SIZE = self.parameters["MaxIpsetSize"].value
         self.IPTABLES_GENERATOR_PLUGIN = \
             self.parameters["IptablesGeneratorPlugin"].value
 
@@ -313,7 +336,8 @@ class Config(object):
         common.complete_logging(self.LOGFILE,
                                 self.LOGLEVFILE,
                                 self.LOGLEVSYS,
-                                self.LOGLEVSCR)
+                                self.LOGLEVSCR,
+                                gevent_in_use=True)
 
         if final:
             # Log configuration - the whole lot of it.
@@ -401,6 +425,56 @@ class Config(object):
             raise ConfigException("Invalid port in field",
                                   self.parameters["EtcdAddr"])
 
+        # Set default or python None value for each etcd "none" config value
+        if self.ETCD_SCHEME.lower() == "none":
+            self.ETCD_SCHEME = "http"
+        if self.ETCD_KEY_FILE.lower() == "none":
+            self.ETCD_KEY_FILE = None
+        if self.ETCD_CERT_FILE.lower() == "none":
+            self.ETCD_CERT_FILE = None
+        if self.ETCD_CA_FILE == "none":
+            self.ETCD_CA_FILE = None
+
+        if self.ETCD_SCHEME == "https":
+            # key and certificate must be both specified or both not specified
+            if bool(self.ETCD_KEY_FILE) != bool(self.ETCD_CERT_FILE):
+                if not self.ETCD_KEY_FILE:
+                    raise ConfigException("Missing etcd key file. Key and "
+                                          "certificate must both be specified "
+                                          "or both be blank.",
+                                          self.parameters["EtcdKeyFile"])
+                else:
+                    raise ConfigException("Missing etcd certificate. Key and "
+                                          "certificate must both be specified "
+                                          "or both be blank.",
+                                          self.parameters["EtcdCertFile"])
+
+            # Make sure etcd key and certificate are readable
+            if self.ETCD_KEY_FILE and self.ETCD_CERT_FILE:
+                if not (os.path.isfile(self.ETCD_KEY_FILE) and
+                        os.access(self.ETCD_KEY_FILE, os.R_OK)):
+                    raise ConfigException("Cannot read key file. Key file "
+                                          "must be a readable path.",
+                                          self.parameters["EtcdKeyFile"])
+                if not (os.path.isfile(self.ETCD_CERT_FILE) and
+                        os.access(self.ETCD_CERT_FILE, os.R_OK)):
+                    raise ConfigException("Cannot read cert file. Cert file "
+                                          "must be a readable path.",
+                                          self.parameters["EtcdCertFile"])
+
+            # If Certificate Authority cert provided, check it's readable
+            if (self.ETCD_CA_FILE and
+                    not (os.path.isfile(self.ETCD_CA_FILE) and
+                         os.access(self.ETCD_CA_FILE, os.R_OK))):
+                raise ConfigException("Missing CA certificate or file is "
+                                      "unreadable. Value must be readable "
+                                      "file path.",
+                                      self.parameters["EtcdCaFile"])
+        elif self.ETCD_SCHEME != "http":
+            raise ConfigException("Invalid protocol scheme. Value must be one "
+                                  "of: \"\", \"http\", \"https\".",
+                                  self.parameters["EtcdScheme"])
+
         try:
             self.LOGLEVFILE = LOGLEVELS[self.LOGLEVFILE.lower()]
         except KeyError:
@@ -419,10 +493,12 @@ class Config(object):
             raise ConfigException("Invalid log level",
                                   self.parameters["LogSeverityScreen"])
 
-        # Log file may be "None" (the literal string, case insensitive). In
+        # Log files may be "None" (the literal string, case insensitive). In
         # this case no log file should be written.
         if self.LOGFILE.lower() == "none":
             self.LOGFILE = None
+        if self.DRIVERLOGFILE.lower() == "none":
+            self.DRIVERLOGFILE = None
 
         if self.METADATA_IP.lower() == "none":
             # Metadata is not required.
@@ -461,16 +537,20 @@ class Config(object):
             log.warning("Endpoint status delay is negative, defaulting to 1.")
             self.ENDPOINT_REPORT_DELAY = 1
 
+        if self.MAX_IPSET_SIZE <= 0:
+            log.warning("Max ipset size is non-positive, defaulting to 2^20.")
+            self.MAX_IPSET_SIZE = 2**20
+
         if not final:
             # Do not check that unset parameters are defaulted; we have more
             # config to read.
             return
 
-        for name, parameter in self.parameters.iteritems():
+        for parameter in self.parameters.itervalues():
             if parameter.value is None:
                 # No value, not even a default
                 raise ConfigException("Missing undefaulted value",
-                                      self.parameters["InterfacePrefix"])
+                                      parameter)
 
     def _warn_unused_cfg(self, cfg_dict, source):
         # Warn about any unexpected items - i.e. ones we have not used.

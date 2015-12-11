@@ -63,6 +63,8 @@ class EndpointManager(ReferenceManager):
         # increffed.
         self.local_endpoint_ids = set()
 
+        self._data_model_in_sync = False
+
     def _create(self, combined_id):
         """
         Overrides ReferenceManager._create()
@@ -84,26 +86,21 @@ class EndpointManager(ReferenceManager):
         obj.on_endpoint_update(ep, async=True)
 
     @actor_message()
-    def apply_snapshot(self, endpoints_by_id):
-        # Tell the dispatch chains about the local endpoints in advance so
-        # that we don't flap the dispatch chain at start-of-day.
-        local_iface_name_to_ep_id = {}
-        for ep_id, ep in endpoints_by_id.iteritems():
-            if ep and ep_id.host == self.config.HOSTNAME and ep.get("name"):
-                local_iface_name_to_ep_id[ep.get("name")] = ep_id
-        self.dispatch_chains.apply_snapshot(local_iface_name_to_ep_id.keys(),
-                                            async=True)
-        # Then update/create endpoints and work out which endpoints have been
-        # deleted.
-        missing_endpoints = set(self.endpoints_by_id.keys())
-        for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            self.on_endpoint_update(endpoint_id, endpoint,
-                                    force_reprogram=True)
-            missing_endpoints.discard(endpoint_id)
-            self._maybe_yield()
-        for endpoint_id in missing_endpoints:
-            self.on_endpoint_update(endpoint_id, None)
-            self._maybe_yield()
+    def on_datamodel_in_sync(self):
+        if not self._data_model_in_sync:
+            _log.info("%s: First time we've been in-sync with the datamodel,"
+                      "sending snapshot to DispatchChains.", self)
+            self._data_model_in_sync = True
+
+            # Tell the dispatch chains about the local endpoints in advance so
+            # that we don't flap the dispatch chain at start-of-day.  Note:
+            # the snapshot may contain information that is ahead of the
+            # state that our individual LocalEndpoint actors are sending to the
+            # DispatchChains actor.  That is OK!  The worst that can happen is
+            # that a LocalEndpoint undoes part of our update and then goes on
+            # to re-apply the update when it catches up to the snapshot.
+            local_ifaces = frozenset(self.endpoint_id_by_iface_name.keys())
+            self.dispatch_chains.apply_snapshot(local_ifaces, async=True)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
@@ -221,7 +218,6 @@ class LocalEndpoint(RefCountedActor):
         self._chains_programmed = False
         self._iptables_in_sync = False
         self._device_in_sync = False
-        self._device_has_been_in_sync = False
 
         # Oper-state of the Linux interface.
         self._device_is_up = None  # Unknown
@@ -353,35 +349,33 @@ class LocalEndpoint(RefCountedActor):
             _log.debug("Status reporting disabled. Not reporting status.")
             return
 
-        if (self._device_is_up and
-                self._iptables_in_sync and
-                self._device_in_sync and
-                self._admin_up):
-            _log.debug("In sync and device is up.  Reporting status as up.")
-            status = ENDPOINT_STATUS_UP
+        if not self._device_is_up:
+            # Check this first because we won't try to sync the device if it's
+            # oper down.
+            reason = "Interface is oper-down"
+            status = ENDPOINT_STATUS_DOWN
         elif not self.endpoint:
-            _log.debug("No endpoint data (yet), reporting status as down.")
+            reason = "No endpoint data"
             status = ENDPOINT_STATUS_DOWN
         elif not self._iptables_in_sync:
-            _log.warning("iptables not in sync, reporting error.")
+            # Definitely an error, the iptables command failed.
+            reason = "Failed to update iptables"
             status = ENDPOINT_STATUS_ERROR
         elif not self._device_in_sync:
-            # Avoid reporting an error on the first programming attempt, which
-            # may fail as the interface is coming up.
-            if self._device_has_been_in_sync:
-                _log.debug("Device out of sync but we've seen it up before, "
-                           "mark as error.")
-                status = ENDPOINT_STATUS_ERROR
-            else:
-                _log.debug("Device out of sync but we've never seen up "
-                           "before, assuming it's down.")
-                status = ENDPOINT_STATUS_DOWN
-        else:
-            # Either we're admin down and in sync or the device is oper-down.
-            _log.debug("Interface is oper-down.  Reporting status as down.")
+            reason = "Failed to update device config"
+            status = ENDPOINT_STATUS_ERROR
+        elif not self._admin_up:
+            # After the tests for being in sync because we handle admin down
+            # by removing the configuration from the dataplane.
+            reason = "Endpoint is admin down"
             status = ENDPOINT_STATUS_DOWN
+        else:
+            # All checks passed.  We're up!
+            reason = "In sync and device is up"
+            status = ENDPOINT_STATUS_UP
 
         if self._unreferenced or status != self._last_status:
+            _log.info("%s: updating status to %s", reason, status)
             if self._unreferenced:
                 _log.debug("Unreferenced, reporting status = None")
                 status_dict = None
@@ -428,7 +422,10 @@ class LocalEndpoint(RefCountedActor):
                 if self._device_is_up is None:
                     _log.debug("Learned interface name, checking if device "
                                "is up.")
-                    self._device_is_up = devices.interface_up(self._iface_name)
+                    self._device_is_up = (
+                        devices.interface_exists(self._iface_name) and
+                        devices.interface_up(self._iface_name)
+                    )
 
             # Check if the profile ID or IP addresses have changed, requiring
             # a refresh of the dataplane.
@@ -491,7 +488,7 @@ class LocalEndpoint(RefCountedActor):
         try:
             self.iptables_updater.delete_chains(
                 self.iptables_generator.endpoint_chain_names(self._suffix),
-                async=True)
+                async=False)
         except FailedSystemCall:
             _log.exception("Failed to delete chains for %s", self)
         else:
@@ -501,12 +498,11 @@ class LocalEndpoint(RefCountedActor):
     def _configure_interface(self):
         """
         Applies sysctls and routes to the interface.
-
-        :param: bool mac_changed: Has the MAC address changed since it was last
-                     configured? If so, we reconfigure ARP for the interface in
-                     IPv4 (ARP does not exist for IPv6, which uses neighbour
-                     solicitation instead).
         """
+        if not self._device_is_up:
+            _log.debug("Device is known to be down, skipping attempt to "
+                       "configure it.")
+            return
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)
@@ -524,7 +520,7 @@ class LocalEndpoint(RefCountedActor):
                                self.endpoint["mac"],
                                reset_arp=reset_arp)
 
-        except (IOError, FailedSystemCall):
+        except (IOError, FailedSystemCall) as e:
             if not devices.interface_exists(self._iface_name):
                 _log.info("Interface %s for %s does not exist yet",
                           self._iface_name, self.combined_id)
@@ -532,13 +528,19 @@ class LocalEndpoint(RefCountedActor):
                 _log.info("Interface %s for %s is not up yet",
                           self._iface_name, self.combined_id)
             else:
-                # Interface flapped back up after we failed?
-                _log.warning("Failed to configure interface %s for %s",
-                             self._iface_name, self.combined_id)
+                # Either the interface flapped back up after the failure (in
+                # which case we'll retry when the event reaches us) or there
+                # was a genuine failure due to bad data or some other factor.
+                #
+                # Since the former is fairly common, we log at warning level
+                # rather than error, which avoids false positives.
+                _log.warning("Failed to configure interface %s for %s: %r.  "
+                             "Either the interface is flapping or it is "
+                             "misconfigured.", self._iface_name,
+                             self.combined_id, e)
         else:
             _log.info("Interface %s configured", self._iface_name)
             self._device_in_sync = True
-            self._device_has_been_in_sync = True
 
     def _deconfigure_interface(self):
         """
@@ -549,8 +551,8 @@ class LocalEndpoint(RefCountedActor):
         except (IOError, FailedSystemCall):
             if not devices.interface_exists(self._iface_name):
                 # Deleted under our feet - so the rules are gone.
-                _log.debug("Interface %s for %s deleted",
-                           self._iface_name, self.combined_id)
+                _log.info("Interface %s for %s already deleted",
+                          self._iface_name, self.combined_id)
             else:
                 # An error deleting the routes. Log and continue.
                 _log.exception("Cannot delete routes for interface %s for %s",
@@ -558,7 +560,6 @@ class LocalEndpoint(RefCountedActor):
         else:
             _log.info("Interface %s deconfigured", self._iface_name)
             self._device_in_sync = True
-            self._device_has_been_in_sync = True
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.

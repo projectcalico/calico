@@ -7,6 +7,17 @@
 # script as './run-unit-test.sh -r'.
 set -e
 
+if [ -n "$VIRTUAL_ENV" ]; then
+  echo "run-unit-test.sh cannot be run from within a virtualenv"
+  exit 1
+fi
+
 coverage erase
+
 tox "$@"
+
+# Make sure we run the following coverage html command with the recent
+# coverage.
+source .tox/py27/bin/activate
 coverage html
+deactivate

@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import socket
+import subprocess
 from datetime import datetime
 import json
 import logging
@@ -19,19 +21,27 @@ import logging
 from etcd import EtcdResult, EtcdException
 import etcd
 from gevent.event import Event
+import gevent
 from mock import Mock, call, patch, ANY
 
 from calico.datamodel_v1 import EndpointId
+from calico.etcddriver.protocol import MessageReader, MessageWriter, \
+    MSG_TYPE_CONFIG_LOADED, MSG_TYPE_STATUS, STATUS_RESYNC, MSG_KEY_STATUS, \
+    MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
+    MSG_KEY_HOST_CONFIG, MSG_KEY_GLOBAL_CONFIG, MSG_TYPE_CONFIG, \
+    MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, MSG_KEY_SEV_SYSLOG, \
+    STATUS_IN_SYNC, SocketClosed
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
-from calico.felix.fetcd import (_FelixEtcdWatcher, ResyncRequired, EtcdAPI,
+from calico.felix.fetcd import (_FelixEtcdWatcher, EtcdAPI,
     die_and_restart, EtcdStatusReporter, combine_statuses)
 from calico.felix.splitter import UpdateSplitter
 from calico.felix.test.base import BaseTestCase, JSONString
 
 _log = logging.getLogger(__name__)
 
+patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
 VALID_ENDPOINT = {
     "state": "active",
@@ -60,71 +70,89 @@ ETCD_ADDRESS = 'localhost:4001'
 
 
 class TestEtcdAPI(BaseTestCase):
+    def setUp(self):
+        super(TestEtcdAPI, self).setUp()
+        self.m_config = Mock(spec=Config)
+        self.m_config.ETCD_ADDR = ETCD_ADDRESS
+        self.m_config.ETCD_SCHEME = "http"
+        self.m_config.ETCD_KEY_FILE = None
+        self.m_config.ETCD_CERT_FILE = None
+        self.m_config.ETCD_CA_FILE = None
+        self.m_hosts_ipset = Mock(spec=IpsetActor)
+        with patch("calico.felix.fetcd._FelixEtcdWatcher",
+                   autospec=True) as m_etcd_watcher:
+            with patch("gevent.spawn", autospec=True) as m_spawn:
+                self.api = EtcdAPI(self.m_config, self.m_hosts_ipset)
+        self.m_spawn = m_spawn
+        self.m_etcd_watcher = m_etcd_watcher.return_value
+        self.m_etcd_watcher.load_config = Mock(spec=Event)
+        self.m_etcd_watcher.begin_polling = Mock(spec=Event)
+        self.m_etcd_watcher.configured = Mock(spec=Event)
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
-    def test_create(self, m_spawn, m_etcd_watcher):
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        m_etcd_watcher.assert_has_calls([
-            call(m_config, m_hosts_ipset).link(api._on_worker_died),
-            call(m_config, m_hosts_ipset).start(),
+    def test_create(self):
+        self.m_etcd_watcher.assert_has_calls([
+            call.link(self.api._on_worker_died),
+            call.start(),
         ])
-        m_spawn.assert_has_calls([
-            call(api._periodically_resync),
-            call(api._periodically_resync).link_exception(api._on_worker_died)
+        self.m_spawn.assert_has_calls([
+            call(self.api._periodically_resync),
+            call(self.api._periodically_resync).link_exception(
+                self.api._on_worker_died)
         ])
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
     @patch("gevent.sleep", autospec=True)
-    def test_periodic_resync_mainline(self, m_sleep, m_spawn, m_etcd_watcher):
+    def test_periodic_resync_mainline(self, m_sleep):
+        self.m_config.RESYNC_INTERVAL = 10
         m_configured = Mock(spec=Event)
-        m_etcd_watcher.return_value.configured = m_configured
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        m_config.RESYNC_INTERVAL = 10
-        with patch.object(api, "force_resync") as m_force_resync:
+        self.m_etcd_watcher.configured = m_configured
+        with patch.object(self.api, "force_resync") as m_force_resync:
             m_force_resync.side_effect = ExpectedException()
-            self.assertRaises(ExpectedException, api._periodically_resync)
+            self.assertRaises(ExpectedException,
+                              self.api._periodically_resync)
         m_configured.wait.assert_called_once_with()
         m_sleep.assert_called_once_with(ANY)
         sleep_time = m_sleep.call_args[0][0]
         self.assertTrue(sleep_time >= 10)
         self.assertTrue(sleep_time <= 12)
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
     @patch("gevent.sleep", autospec=True)
-    def test_periodic_resync_disabled(self, m_sleep, m_spawn, m_etcd_watcher):
-        m_etcd_watcher.return_value.configured = Mock(spec=Event)
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        m_config.RESYNC_INTERVAL = 0
-        with patch.object(api, "force_resync") as m_force_resync:
+    def test_periodic_resync_disabled(self, m_sleep):
+        self.m_config.RESYNC_INTERVAL = 0
+        self.m_etcd_watcher.configured = Mock(spec=Event)
+        with patch.object(self.api, "force_resync") as m_force_resync:
             m_force_resync.side_effect = Exception()
-            api._periodically_resync()
+            self.api._periodically_resync()
 
-    @patch("calico.felix.fetcd._FelixEtcdWatcher", autospec=True)
-    @patch("gevent.spawn", autospec=True)
-    def test_force_resync(self, m_spawn, m_etcd_watcher):
-        m_config = Mock(spec=Config)
-        m_config.ETCD_ADDR = ETCD_ADDRESS
-        m_config.REPORT_ENDPOINT_STATUS = True
-        m_hosts_ipset = Mock(spec=IpsetActor)
-        api = EtcdAPI(m_config, m_hosts_ipset)
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
-        with patch.object(api, "status_reporter") as m_status_rep:
-            api.force_resync(async=True)
-            self.step_actor(api)
+    def test_force_resync(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        with patch.object(self.api, "status_reporter") as m_status_rep:
+            self.api.force_resync(async=True)
+            self.step_actor(self.api)
         m_status_rep.resync.assert_called_once_with(async=True)
-        self.assertTrue(m_etcd_watcher.return_value.resync_after_current_poll)
+        self.assertTrue(self.m_etcd_watcher.resync_requested)
+
+    def test_load_config(self):
+        result = self.api.load_config(async=True)
+        self.step_actor(self.api)
+        conf = result.get()
+        self.assertEqual(conf, self.m_etcd_watcher.configured)
+        self.m_etcd_watcher.load_config.set.assert_called_once_with()
+
+    def test_start_watch(self):
+        m_splitter = Mock()
+        self.api.load_config(async=True)
+        result = self.api.start_watch(m_splitter, async=True)
+        self.step_actor(self.api)
+        self.m_etcd_watcher.load_config.set.assert_called_once_with()
+        self.assertEqual(self.m_etcd_watcher.splitter, m_splitter)
+        self.m_etcd_watcher.begin_polling.set.assert_called_once_with()
+
+    @patch("sys.exit", autospec=True)
+    def test_on_worker_died(self, m_exit):
+        glet = gevent.spawn(lambda: None)
+        glet.link(self.api._on_worker_died)
+        glet.join(1)
+        m_exit.assert_called_once_with(1)
 
 
 class ExpectedException(Exception):
@@ -139,6 +167,10 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_config.HOSTNAME = "hostname"
         self.m_config.IFACE_PREFIX = "tap"
         self.m_config.ETCD_ADDR = ETCD_ADDRESS
+        self.m_config.ETCD_SCHEME = "http"
+        self.m_config.ETCD_KEY_FILE = None
+        self.m_config.ETCD_CERT_FILE = None
+        self.m_config.ETCD_CA_FILE = None
         self.m_hosts_ipset = Mock(spec=IpsetActor)
         self.m_api = Mock(spec=EtcdAPI)
         self.m_status_rep = Mock(spec=EtcdStatusReporter)
@@ -148,114 +180,201 @@ class TestEtcdWatcher(BaseTestCase):
                                          self.m_hosts_ipset)
         self.m_splitter = Mock(spec=UpdateSplitter)
         self.watcher.splitter = self.m_splitter
-        self.client = Mock()
-        self.watcher.client = self.client
+        self.m_reader = Mock(spec=MessageReader)
+        self.m_writer = Mock(spec=MessageWriter)
+        self.watcher._msg_reader = self.m_reader
+        self.watcher._msg_writer = self.m_writer
+        self.m_driver_proc = Mock(spec=subprocess.Popen)
+        self.watcher._driver_process = self.m_driver_proc
 
-    @patch("gevent.sleep", autospec=True)
-    @patch("calico.felix.fetcd._build_config_dict", autospec=True)
+    def test_run(self):
+        with patch.object(self.watcher.load_config, "wait") as m_wait:
+            with patch.object(self.watcher, "_start_driver") as m_start:
+                m_reader = Mock()
+                m_writer = Mock()
+                m_start.return_value = (m_reader, m_writer)
+                m_reader.new_messages.side_effect = ExpectedException()
+                self.assertRaises(ExpectedException, self.watcher._run)
+        self.assertEqual(m_wait.mock_calls, [call()])
+
     @patch("calico.felix.fetcd.die_and_restart", autospec=True)
-    def test_load_config(self, m_die, m_build_dict, m_sleep):
-        # First call, loads the config.
-        global_cfg = {"foo": "bar"}
-        m_build_dict.side_effect = iter([
-            # First call, global-only.
-            global_cfg,
-            # Second call, no change.
-            global_cfg,
-            # Third call, change of config.
-            {"foo": "baz"}, {"biff": "bop"}])
-        self.client.read.side_effect = iter([
-            # First time round the loop, fail to read global config, should
-            # retry.
-            etcd.EtcdKeyNotFound,
-            # Then get the global config but there's not host-only config.
-            None, etcd.EtcdKeyNotFound,
-            # Twice...
-            None, etcd.EtcdKeyNotFound,
-            # Then some host-only config shows up.
-            None, None])
-
-        # First call.
-        self.watcher._load_config()
-
-        m_sleep.assert_called_once_with(5)
-        self.assertFalse(m_die.called)
-
-        m_report = self.m_config.report_etcd_config
-        rpd_host_cfg, rpd_global_cfg = m_report.mock_calls[0][1]
-        self.assertEqual(rpd_host_cfg, {})
-        self.assertEqual(rpd_global_cfg, global_cfg)
-        self.assertTrue(rpd_host_cfg is not self.watcher.last_host_config)
-        self.assertTrue(rpd_global_cfg is not self.watcher.last_global_config)
-        self.assertEqual(rpd_host_cfg, self.watcher.last_host_config)
-        self.assertEqual(rpd_global_cfg, self.watcher.last_global_config)
-
-        self.assertEqual(self.watcher.last_host_config, {})
-        self.assertEqual(self.watcher.last_global_config, global_cfg)
-        self.watcher.configured.set()  # Normally done by the caller.
-        self.client.read.assert_has_calls([
-            call("/calico/v1/config", recursive=True),
-            call("/calico/v1/host/hostname/config", recursive=True),
+    def test_read_loop(self, m_die):
+        self.m_reader.new_messages.side_effect = iter([
+            iter([]),
+            iter([(MSG_TYPE_STATUS, {MSG_KEY_STATUS: STATUS_RESYNC})])
         ])
+        self.m_driver_proc.poll.side_effect = iter([
+            None, 1
+        ])
+        m_die.side_effect = ExpectedException()
+        with patch.object(self.watcher, "_dispatch_msg_from_driver") as m_disp:
+            self.assertRaises(ExpectedException,
+                              self.watcher._loop_reading_from_driver)
+        self.assertEqual(m_disp.mock_calls,
+                         [call(MSG_TYPE_STATUS,
+                               {MSG_KEY_STATUS: STATUS_RESYNC})])
 
-        # Second call, no change.
-        self.watcher._load_config()
-        self.assertFalse(m_die.called)
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_read_loop_socket_error(self, m_die):
+        self.m_reader.new_messages.side_effect = SocketClosed()
+        m_die.side_effect = ExpectedException
+        self.assertRaises(ExpectedException,
+                          self.watcher._loop_reading_from_driver)
+        self.assertEqual(m_die.mock_calls, [call()])
 
-        # Third call, should detect the config change and die.
-        self.watcher._load_config()
-        m_die.assert_called_once_with()
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_read_loop_resync(self, m_die):
+        self.m_reader.new_messages.side_effect = iter([iter([]), iter([])])
+        self.m_driver_proc.poll.side_effect = iter([None, 1])
+        self.watcher.resync_requested = True
+        m_die.side_effect = ExpectedException()
+        self.assertRaises(ExpectedException,
+                          self.watcher._loop_reading_from_driver)
 
-    def test_on_snapshot_loaded(self):
-        m_response = Mock()
+    def test_dispatch_from_driver(self):
+        for msg_type, expected_method in [
+                (MSG_TYPE_UPDATE, "_on_update_from_driver"),
+                (MSG_TYPE_CONFIG_LOADED, "_on_config_loaded_from_driver"),
+                (MSG_TYPE_STATUS, "_on_status_from_driver"),]:
+            with patch.object(self.watcher, expected_method) as m_meth:
+                msg = Mock()
+                self.watcher._dispatch_msg_from_driver(msg_type, msg)
+                self.assertEqual(m_meth.mock_calls, [call(msg)])
 
-        endpoint_on_host = Mock()
-        endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
-                                "orch/wlid/endpoint/epid")
-        endpoint_on_host.value = ENDPOINT_STR
+    def test_dispatch_from_driver_unexpected(self):
+        self.assertRaises(RuntimeError,
+                          self.watcher._dispatch_msg_from_driver,
+                          "unknown", {})
 
-        bad_endpoint_on_host = Mock()
-        bad_endpoint_on_host.key = ("/calico/v1/host/hostname/workload/"
-                                    "orch/wlid/endpoint/epid2")
-        bad_endpoint_on_host.value = ENDPOINT_STR[:10]
+    @patch("gevent.sleep")
+    def test_dispatch_yield(self, m_sleep):
+        for _ in xrange(399):
+            with patch.object(self.watcher, "_on_update_from_driver") as m_upd:
+                msg = Mock()
+                self.watcher._dispatch_msg_from_driver(MSG_TYPE_UPDATE, msg)
+        self.assertEqual(m_sleep.mock_calls, [call(0.000001)])
 
-        endpoint_not_on_host = Mock()
-        endpoint_not_on_host.key = ("/calico/v1/host/other/workload/"
-                                    "orch/wlid/endpoint/epid")
-        endpoint_not_on_host.value = ENDPOINT_STR
+    def test_on_update_from_driver(self):
+        self.watcher.read_count = 999
+        self.watcher.configured.set()
+        with patch.object(self.watcher, "begin_polling") as m_begin:
+            self.watcher._on_update_from_driver({
+                MSG_KEY_TYPE: MSG_TYPE_UPDATE,
+                MSG_KEY_KEY: "/calico/v1/Ready",
+                MSG_KEY_VALUE: "true",
+            })
+        m_begin.wait.assert_called_once_with()
 
-        still_ready = Mock()
-        still_ready.key = ("/calico/v1/Ready")
-        still_ready.value = "true"
-
-        m_response.children = [
-            endpoint_on_host,
-            bad_endpoint_on_host,
-            endpoint_not_on_host,
-            still_ready,
-        ]
-        with patch.object(self.watcher,
-                          "clean_up_endpoint_statuses") as m_clean:
-            self.watcher._on_snapshot_loaded(m_response)
-
-        # Cleanup should only get the endpoints on our host.
-        m_clean.assert_called_once_with(
-            set([EndpointId("hostname", "orch", "wlid", "epid")])
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_on_config_loaded(self, m_die):
+        self.m_config.DRIVERLOGFILE = "/tmp/driver.log"
+        global_config = {"InterfacePrefix": "tap"}
+        local_config = {"LogSeverityFile": "DEBUG"}
+        self.watcher._on_config_loaded_from_driver({
+            MSG_KEY_GLOBAL_CONFIG: global_config,
+            MSG_KEY_HOST_CONFIG: local_config,
+        })
+        self.assertTrue(self.watcher.configured.is_set())
+        self.assertEqual(
+            self.m_config.report_etcd_config.mock_calls,
+            [call(local_config, global_config)]
         )
+        self.assertEqual(
+            self.m_writer.send_message.mock_calls,
+            [call(MSG_TYPE_CONFIG,
+                  {
+                      MSG_KEY_LOG_FILE: "/tmp/driver.log",
+                      MSG_KEY_SEV_FILE: self.m_config.LOGLEVFILE,
+                      MSG_KEY_SEV_SCREEN: self.m_config.LOGLEVSCR,
+                      MSG_KEY_SEV_SYSLOG: self.m_config.LOGLEVSYS,
+                  })]
+        )
+        self.assertEqual(m_die.mock_calls, [])
 
-    def test_resync_flag(self):
-        self.watcher.resync_after_current_poll = True
-        self.watcher.next_etcd_index = 1
-        self.assertRaises(ResyncRequired,
-                          self.watcher.wait_for_etcd_event)
-        self.assertFalse(self.watcher.resync_after_current_poll)
+        # Check a subsequent config change results in Felix dying.
+        global_config = {"InterfacePrefix": "not!tap"}
+        local_config = {"LogSeverityFile": "not!DEBUG"}
+        self.watcher._on_config_loaded_from_driver({
+            MSG_KEY_GLOBAL_CONFIG: global_config,
+            MSG_KEY_HOST_CONFIG: local_config,
+        })
+        self.assertEqual(m_die.mock_calls, [call()])
 
-    def test_ready_flag_set(self):
-        self.dispatch("/calico/v1/Ready", "set", value="true")
-        self.assertRaises(ResyncRequired, self.dispatch,
-                          "/calico/v1/Ready", "set", value="false")
-        self.assertRaises(ResyncRequired, self.dispatch,
-                          "/calico/v1/Ready", "set", value="foo")
+    def test_on_status_from_driver(self):
+        self.watcher._on_status_from_driver({
+            MSG_KEY_STATUS: STATUS_RESYNC
+        })
+        self.assertFalse(self.watcher._been_in_sync)
+
+        with patch.object(self.watcher, "begin_polling") as m_begin:
+            # Two calls but second should be ignored...
+            self.watcher._on_status_from_driver({
+                MSG_KEY_STATUS: STATUS_IN_SYNC
+            })
+            self.watcher._on_status_from_driver({
+                MSG_KEY_STATUS: STATUS_IN_SYNC
+            })
+        m_begin.wait.assert_called_once_with()
+        self.assertTrue(self.watcher._been_in_sync)
+        self.assertEqual(self.m_splitter.on_datamodel_in_sync.mock_calls,
+                         [call(async=True)])
+        self.assertEqual(self.m_hosts_ipset.replace_members.mock_calls,
+                         [call(frozenset([]), async=True)])
+
+    @patch("subprocess.Popen")
+    @patch("socket.socket")
+    @patch("os.unlink")
+    def test_start_driver(self, m_unlink, m_socket, m_popen):
+        m_sck = Mock()
+        m_socket.return_value = m_sck
+        m_conn = Mock()
+        m_sck.accept.return_value = m_conn, None
+        reader, writer = self.watcher._start_driver()
+        self.assertEqual(m_socket.mock_calls[0], call(socket.AF_UNIX,
+                                                      socket.SOCK_STREAM))
+        self.assertEqual(m_sck.bind.mock_calls,
+                         [call("/run/felix-driver.sck")])
+        self.assertEqual(m_sck.listen.mock_calls, [call(1)])
+        self.assertEqual(m_popen.mock_calls[0],
+                         call([ANY, "-m", "calico.etcddriver",
+                               "/run/felix-driver.sck"]))
+        self.assertEqual(m_unlink.mock_calls,
+                         [call("/run/felix-driver.sck")] * 2)
+        self.assertTrue(isinstance(reader, MessageReader))
+        self.assertTrue(isinstance(writer, MessageWriter))
+
+    @patch("subprocess.Popen")
+    @patch("socket.socket")
+    @patch("os.unlink")
+    def test_start_driver_unlink_fail(self, m_unlink, m_socket, m_popen):
+        m_unlink.side_effect = OSError()
+        m_sck = Mock()
+        m_socket.return_value = m_sck
+        m_conn = Mock()
+        m_sck.accept.return_value = m_conn, None
+        reader, writer = self.watcher._start_driver()
+        self.assertTrue(isinstance(reader, MessageReader))
+        self.assertTrue(isinstance(writer, MessageWriter))
+
+    def test_update_hosts_ipset_not_in_sync(self):
+        self.watcher._update_hosts_ipset()
+        self.assertEqual(self.m_hosts_ipset.mock_calls, [])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_config_set(self, m_die):
+        self.watcher.last_global_config = {}
+        self.dispatch("/calico/v1/config/InterfacePrefix",
+                      "set", value="foo")
+        self.assertEqual(m_die.mock_calls, [call()])
+
+    @patch("calico.felix.fetcd.die_and_restart", autospec=True)
+    def test_host_config_set(self, m_die):
+        self.watcher.last_host_config = {}
+        self.dispatch("/calico/v1/host/notourhostname/config/InterfacePrefix",
+                      "set", value="foo")
+        self.dispatch("/calico/v1/host/hostname/config/InterfacePrefix",
+                      "set", value="foo")
+        self.assertEqual(m_die.mock_calls, [call()])
 
     def test_endpoint_set(self):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
@@ -283,60 +402,6 @@ class TestEtcdWatcher(BaseTestCase):
             None,
             async=True,
         )
-
-    def test_parent_dir_delete(self):
-        """
-        Test that deletions of parent directories of endpoints are
-        correctly handled.
-        """
-        # This additional  endpoint should be ignored by the deletes below.
-        self.dispatch("/calico/v1/host/h2/workload/o1/w2/endpoint/e2",
-                      "set", value=ENDPOINT_STR)
-        for path in ["/calico/v1/host/h1",
-                     "/calico/v1/host/h1/workload",
-                     "/calico/v1/host/h1/workload/o1",
-                     "/calico/v1/host/h1/workload/o1/w1",
-                     "/calico/v1/host/h1/workload/o1/w1/endpoint"]:
-            # Create endpoints in the cache.
-            self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
-                          "set", value=ENDPOINT_STR)
-            self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e2",
-                          "set", value=ENDPOINT_STR)
-            # This endpoint should not get cleaned up if only workload w1 is
-            # deleted...
-            self.dispatch("/calico/v1/host/h1/workload/o1/w3/endpoint/e3",
-                          "set", value=ENDPOINT_STR)
-
-            self.assertEqual(self.watcher.endpoint_ids_per_host, {
-                "h1": set([EndpointId("h1", "o1", "w1", "e1"),
-                           EndpointId("h1", "o1", "w1", "e2"),
-                           EndpointId("h1", "o1", "w3", "e3")]),
-                "h2": set([EndpointId("h2", "o1", "w2", "e2")]),
-            })
-            self.m_splitter.on_endpoint_update.reset_mock()
-            # Delete one of its parent dirs, should delete the endpoint.
-            self.dispatch(path, "delete")
-            exp_calls = [
-                call(EndpointId("h1", "o1", "w1", "e1"), None, async=True),
-                call(EndpointId("h1", "o1", "w1", "e2"), None, async=True),
-            ]
-            if path < "/calico/v1/host/h1/workload/o1/w1":
-                # Should also delete workload w3.
-                exp_calls.append(call(EndpointId("h1", "o1", "w3", "e3"),
-                                      None, async=True))
-            self.m_splitter.on_endpoint_update.assert_has_calls(exp_calls,
-                                                                any_order=True)
-            # Cache should be cleaned up.
-            exp_cache = {"h2": set([EndpointId("h2", "o1", "w2", "e2")])}
-            if path >= "/calico/v1/host/h1/workload/o1/w1":
-                # Should not have deleted workload w3.  Add it in.
-                exp_cache["h1"] = set([EndpointId("h1", "o1", "w3", "e3")])
-            self.assertEqual(self.watcher.endpoint_ids_per_host, exp_cache)
-
-            # Then simulate another delete, should have no effect.
-            self.m_splitter.on_endpoint_update.reset_mock()
-            self.dispatch(path, "delete")
-            self.assertFalse(self.m_splitter.on_endpoint_update.called)
 
     def test_rules_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
@@ -380,30 +445,6 @@ class TestEtcdWatcher(BaseTestCase):
                                                                None,
                                                                async=True)
 
-    def test_dispatch_delete_resync(self):
-        """
-        Test dispatcher is correctly configured to trigger resync for
-        expected paths.
-        """
-        for key in ["/calico/v1",
-                    "/calico/v1/host",
-                    "/calico/v1/policy",
-                    "/calico/v1/policy/profile",
-                    "/calico/v1/config",
-                    "/calico/v1/config/Foo",
-                    "/calico/v1/Ready",]:
-            self.assertRaises(ResyncRequired, self.dispatch, key, "delete")
-
-    def test_per_profile_del(self):
-        """
-        Test profile deletion triggers deletion for tags and rules.
-        """
-        self.dispatch("/calico/v1/policy/profile/profA", action="delete")
-        self.m_splitter.on_tags_update.assert_called_once_with("profA", None,
-                                                               async=True)
-        self.m_splitter.on_rules_update.assert_called_once_with("profA", None,
-                                                                async=True)
-
     def test_tags_del(self):
         """
         Test tag-only deletion.
@@ -438,6 +479,7 @@ class TestEtcdWatcher(BaseTestCase):
         """
         Test set for the IP of a host.
         """
+        self.watcher._been_in_sync = True
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.replace_members.assert_called_once_with(
@@ -461,6 +503,7 @@ class TestEtcdWatcher(BaseTestCase):
         """
         Test set for the IP of a host.
         """
+        self.watcher._been_in_sync = True
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.reset_mock()
@@ -475,6 +518,7 @@ class TestEtcdWatcher(BaseTestCase):
         """
         Test set for the IP of a host.
         """
+        self.watcher._been_in_sync = True
         self.dispatch("/calico/v1/host/foo/bird_ip",
                       action="set", value="10.0.0.1")
         self.m_hosts_ipset.reset_mock()
@@ -485,25 +529,15 @@ class TestEtcdWatcher(BaseTestCase):
             async=True,
         )
 
-    def test_host_del_clears_ip(self):
-        """
-        Test set for the IP of a host.
-        """
-        self.dispatch("/calico/v1/host/foo/bird_ip",
-                      action="set", value="10.0.0.1")
-        self.m_hosts_ipset.reset_mock()
-        self.dispatch("/calico/v1/host/foo",
-                      action="delete")
-        self.m_hosts_ipset.replace_members.assert_called_once_with(
-            frozenset([]),
-            async=True,
-        )
+    def test_ipam_pool_set(self):
+        self.dispatch("/calico/v1/ipam/v4/pool/1234", action="set", value="{}")
+        self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
+                         [call("1234", None, async=True)])
 
-    def test_config_update_triggers_resync(self):
-        self.assertRaises(ResyncRequired, self.dispatch,
-                          "/calico/v1/config/Foo", "set", "bar")
-        self.assertRaises(ResyncRequired, self.dispatch,
-                          "/calico/v1/host/foo/config/Foo", "set", "bar")
+    def test_ipam_pool_del(self):
+        self.dispatch("/calico/v1/ipam/v4/pool/1234", action="delete")
+        self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
+                         [call("1234", None, async=True)])
 
     @patch("os._exit", autospec=True)
     @patch("gevent.sleep", autospec=True)
@@ -522,48 +556,6 @@ class TestEtcdWatcher(BaseTestCase):
         m_response.value = value
         self.watcher.dispatcher.handle_event(m_response)
 
-    def test_clean_up_endpoint_status(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
-        ep_id = EndpointId("hostname",
-                           "openstack",
-                           "workloadid",
-                           "endpointid")
-
-        empty_dir = Mock()
-        empty_dir.key = ("/calico/felix/v1/host/hostname/workload/"
-                         "openstack/foobar")
-        empty_dir.dir = True
-
-        missing_ep = Mock()
-        missing_ep.key = ("/calico/felix/v1/host/hostname/workload/"
-                          "openstack/aworkload/endpoint/anendpoint")
-
-        self.client.read.return_value.leaves = [
-            empty_dir,
-            missing_ep,
-        ]
-        self.watcher.clean_up_endpoint_statuses(set([ep_id]))
-
-        # Missing endpoint should have been marked for cleanup.
-        self.m_status_rep.mark_endpoint_dirty.assert_called_once_with(
-            EndpointId("hostname",
-                       "openstack",
-                       "aworkload",
-                       "anendpoint"),
-            async=True
-        )
-
-    def test_clean_up_endpoint_status_not_found(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
-        self.client.read.side_effect = etcd.EtcdKeyNotFound()
-        self.watcher.clean_up_endpoint_statuses(set())
-        self.assertFalse(self.m_status_rep.mark_endpoint_dirty.called)
-
-    def test_clean_up_endpoint_status_disabled(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = False
-        self.client.read.side_effect = self.failureException
-        self.watcher.clean_up_endpoint_statuses(set())
-
 
 class TestEtcdReporting(BaseTestCase):
     def setUp(self):
@@ -571,6 +563,10 @@ class TestEtcdReporting(BaseTestCase):
         self.m_config = Mock()
         self.m_config.IFACE_PREFIX = "tap"
         self.m_config.ETCD_ADDR = "localhost:4001"
+        self.m_config.ETCD_SCHEME = "http"
+        self.m_config.ETCD_KEY_FILE = None
+        self.m_config.ETCD_CERT_FILE = None
+        self.m_config.ETCD_CA_FILE = None
         self.m_config.HOSTNAME = "hostname"
         self.m_config.RESYNC_INTERVAL = 0
         self.m_config.REPORTING_INTERVAL_SECS = 1
@@ -644,6 +640,10 @@ class TestEtcdStatusReporter(BaseTestCase):
         super(TestEtcdStatusReporter, self).setUp()
         self.m_config = Mock(spec=Config)
         self.m_config.ETCD_ADDR = ETCD_ADDRESS
+        self.m_config.ETCD_SCHEME = "http"
+        self.m_config.ETCD_KEY_FILE = None
+        self.m_config.ETCD_CERT_FILE = None
+        self.m_config.ETCD_CA_FILE = None
         self.m_config.HOSTNAME = "foo"
         self.m_config.REPORT_ENDPOINT_STATUS = True
         self.m_config.ENDPOINT_REPORT_DELAY = 1
@@ -728,6 +728,12 @@ class TestEtcdStatusReporter(BaseTestCase):
         # Nothing queued.
         self.assertEqual(self.rep._newer_dirty_endpoints, set())
         self.assertEqual(self.rep._older_dirty_endpoints, set())
+
+    def test_mark_endpoint_dirty_already_dirty(self):
+        endpoint_id = EndpointId("a", "b", "c", "d")
+        self.rep._older_dirty_endpoints.add(endpoint_id)
+        self.rep._mark_endpoint_dirty(endpoint_id)
+        self.assertFalse(endpoint_id in self.rep._newer_dirty_endpoints)
 
     def test_on_endpoint_status_failure(self):
         # Send in an endpoint status update.
@@ -829,3 +835,58 @@ class TestEtcdStatusReporter(BaseTestCase):
             self.assertEqual(result, expected,
                              "Expected %r and %r to combine to %s but got %r" %
                              (lhs, rhs, expected, result))
+
+    def test_clean_up_endpoint_status(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        ep_id = EndpointId("foo",
+                           "openstack",
+                           "workloadid",
+                           "endpointid")
+
+        empty_dir = Mock()
+        empty_dir.key = ("/calico/felix/v1/host/foo/workload/"
+                         "openstack/foobar")
+        empty_dir.dir = True
+
+        missing_ep = Mock()
+        missing_ep.key = ("/calico/felix/v1/host/foo/workload/"
+                          "openstack/aworkload/endpoint/anendpoint")
+
+        self.m_client.read.return_value.leaves = [
+            empty_dir,
+            missing_ep,
+        ]
+        with patch.object(self.rep, "_mark_endpoint_dirty") as m_mark:
+            self.rep.clean_up_endpoint_statuses(async=True)
+            self.step_actor(self.rep)
+
+            # Missing endpoint should have been marked for cleanup.
+            m_mark.assert_called_once_with(
+                EndpointId("foo",
+                           "openstack",
+                           "aworkload",
+                           "anendpoint")
+            )
+
+    def test_clean_up_endpoint_status_etcd_error(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        with patch.object(self.rep, "_attempt_cleanup") as m_clean:
+            m_clean.side_effect = EtcdException()
+            self.rep.clean_up_endpoint_statuses(async=True)
+            self.step_actor(self.rep)
+            self.assertTrue(self.rep._cleanup_pending)
+
+    def test_clean_up_endpoint_status_not_found(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.m_client.read.side_effect = etcd.EtcdKeyNotFound()
+        with patch.object(self.rep, "_mark_endpoint_dirty") as m_mark:
+            self.rep.clean_up_endpoint_statuses(async=True)
+            self.step_actor(self.rep)
+            self.assertFalse(m_mark.called)
+
+    def test_clean_up_endpoint_status_disabled(self):
+        self.m_config.REPORT_ENDPOINT_STATUS = False
+        self.m_client.read.side_effect = self.failureException
+        self.rep.clean_up_endpoint_statuses(async=True)
+        self.step_actor(self.rep)
+

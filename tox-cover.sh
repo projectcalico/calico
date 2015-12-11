@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/bin/bash
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,4 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from calico.test import lib
+# This script wraps the nosetests and coverage commands to allow the
+# concurrency mode to be specified when collecting coverage.
+set -x
+set -e
+
+# Coverage requires a full path.
+nosetests=$(which nosetests)
+coverage run --append --concurrency $1 "$nosetests" $2
+

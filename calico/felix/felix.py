@@ -75,7 +75,7 @@ def _main_greenlet(config):
         v4_filter_updater = IptablesUpdater("filter", ip_version=4,
                                             config=config)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4, config=config)
-        v4_ipset_mgr = IpsetManager(IPV4)
+        v4_ipset_mgr = IpsetManager(IPV4, config)
         v4_masq_manager = MasqueradeManager(IPV4, v4_nat_updater)
         v4_rules_manager = RulesManager(config,
                                         4,
@@ -92,11 +92,8 @@ def _main_greenlet(config):
         v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
         v6_filter_updater = IptablesUpdater("filter", ip_version=6,
                                             config=config)
-        v6_ipset_mgr = IpsetManager(IPV6)
-        v6_rules_manager = RulesManager(config,
-                                        6,
-                                        v6_filter_updater,
-                                        v6_ipset_mgr)
+        v6_ipset_mgr = IpsetManager(IPV6, config)
+        v6_rules_manager = RulesManager(6, v6_filter_updater, v6_ipset_mgr)
         v6_dispatch_chains = DispatchChains(config, 6, v6_filter_updater)
         v6_ep_manager = EndpointManager(config,
                                         IPV6,
@@ -209,7 +206,7 @@ def _main_greenlet(config):
 
 def main():
     # Initialise the logging with default parameters.
-    common.default_logging()
+    common.default_logging(gevent_in_use=True)
 
     # Create configuration, reading defaults from file if it exists.
     parser = optparse.OptionParser()
@@ -228,7 +225,8 @@ def main():
             common.complete_logging("/var/log/calico/felix.log",
                                     logging.DEBUG,
                                     logging.DEBUG,
-                                    logging.DEBUG)
+                                    logging.DEBUG,
+                                    gevent_in_use=True)
         except Exception:
             pass
 

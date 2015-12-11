@@ -20,7 +20,7 @@ Tests of endpoint module.
 """
 from contextlib import nested
 import logging
-from calico.felix.endpoint import EndpointManager
+from calico.felix.endpoint import EndpointManager, LocalEndpoint
 from calico.felix.fetcd import EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
@@ -37,6 +37,133 @@ from calico.felix import futils
 from calico.datamodel_v1 import EndpointId
 
 _log = logging.getLogger(__name__)
+
+mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
+
+ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
+
+
+class TestEndpointManager(BaseTestCase):
+    def setUp(self):
+        super(TestEndpointManager, self).setUp()
+        self.config = load_config("felix_default.cfg", global_dict={
+            "FelixHostname": "hostname"})
+        self.m_updater = Mock(spec=IptablesUpdater)
+        self.m_dispatch = Mock(spec=DispatchChains)
+        self.m_rules_mgr = Mock(spec=RulesManager)
+        self.m_status_reporter = Mock(spec=EtcdStatusReporter)
+        self.mgr = EndpointManager(self.config, "IPv4", self.m_updater,
+                                   self.m_dispatch, self.m_rules_mgr,
+                                   self.m_status_reporter)
+        self.mgr.get_and_incref = Mock()
+        self.mgr.decref = Mock()
+
+    def test_create(self):
+        obj = self.mgr._create(ENDPOINT_ID)
+        self.assertTrue(isinstance(obj, LocalEndpoint))
+
+    def test_on_started(self):
+        ep = {"name": "tap1234"}
+        self.mgr.on_endpoint_update(ENDPOINT_ID,
+                                    ep,
+                                    async=True)
+        self.step_actor(self.mgr)
+        m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr._on_object_started(ENDPOINT_ID, m_endpoint)
+        self.assertEqual(
+            m_endpoint.on_endpoint_update.mock_calls,
+            [mock.call(ep, async=True)]
+        )
+
+    def test_on_datamodel_in_sync(self):
+        ep = {"name": "tap1234"}
+        self.mgr.on_endpoint_update(ENDPOINT_ID,
+                                    ep,
+                                    async=True)
+        self.step_actor(self.mgr)
+        self.mgr.on_datamodel_in_sync(async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(
+            self.m_dispatch.apply_snapshot.mock_calls,
+            [mock.call(frozenset(["tap1234"]), async=True)]
+        )
+        # Second call should have no effect.
+        self.m_dispatch.apply_snapshot.reset_mock()
+        self.mgr.on_datamodel_in_sync(async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(self.m_dispatch.apply_snapshot.mock_calls, [])
+
+    def test_endpoint_update_not_our_host(self):
+        ep = {"name": "tap1234"}
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            self.mgr.on_endpoint_update(EndpointId("notus", "b", "c", "d"),
+                                        ep,
+                                        async=True)
+            self.step_actor(self.mgr)
+        self.assertFalse(m_sol.called)
+
+    def test_endpoint_live_obj(self):
+        ep = {"name": "tap1234"}
+        # First send in an update to trigger creation.
+        self.mgr.on_endpoint_update(ENDPOINT_ID, ep, async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(self.mgr.get_and_incref.mock_calls,
+                         [mock.call(ENDPOINT_ID)])
+        m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
+        # Then send a second update to check that it gets passed on to the
+        # LocalEndpoint.
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            m_sol.return_value = True
+            self.mgr.on_endpoint_update(ENDPOINT_ID, ep, async=True)
+            self.step_actor(self.mgr)
+        self.assertEqual(m_sol.mock_calls, [mock.call(ENDPOINT_ID)])
+        self.assertEqual(m_endpoint.on_endpoint_update.mock_calls,
+                         [mock.call(ep, force_reprogram=False,
+                                    async=True)])
+        self.assertTrue(ENDPOINT_ID in self.mgr.local_endpoint_ids)
+        # Finally, send in a deletion.
+        m_endpoint.on_endpoint_update.reset_mock()
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            m_sol.return_value = True
+            self.mgr.on_endpoint_update(ENDPOINT_ID, None, async=True)
+            self.step_actor(self.mgr)
+        self.assertEqual(m_endpoint.on_endpoint_update.mock_calls,
+                         [mock.call(None, force_reprogram=False,
+                                    async=True)])
+        self.assertEqual(self.mgr.decref.mock_calls, [mock.call(ENDPOINT_ID)])
+        self.assertFalse(ENDPOINT_ID in self.mgr.local_endpoint_ids)
+
+    def test_on_interface_update_unknown(self):
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            self.mgr.on_interface_update("foo", True, async=True)
+            self.step_actor(self.mgr)
+        self.assertFalse(m_sol.called)
+
+    def test_on_interface_update_known(self):
+        ep = {"name": "tap1234"}
+        m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            m_sol.return_value = True
+            self.mgr.on_endpoint_update(ENDPOINT_ID, ep, async=True)
+            self.mgr.on_interface_update("tap1234", True, async=True)
+            self.step_actor(self.mgr)
+        self.assertEqual(
+            m_endpoint.on_interface_update.mock_calls,
+            [mock.call(True, async=True)]
+        )
+
+    def test_on_interface_update_known_but_not_live(self):
+        ep = {"name": "tap1234"}
+        m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            m_sol.return_value = False
+            self.mgr.on_endpoint_update(ENDPOINT_ID, ep, async=True)
+            self.mgr.on_interface_update("tap1234", True, async=True)
+            self.step_actor(self.mgr)
+        self.assertEqual(m_endpoint.on_interface_update.mock_calls, [])
 
 
 class TestLocalEndpoint(BaseTestCase):
@@ -86,11 +213,15 @@ class TestLocalEndpoint(BaseTestCase):
         with nested(
                 mock.patch('calico.felix.devices.set_routes'),
                 mock.patch('calico.felix.devices.configure_interface_ipv4'),
+                mock.patch('calico.felix.devices.interface_exists'),
                 mock.patch('calico.felix.devices.interface_up'),
-        ) as [m_set_routes, m_conf, m_iface_up]:
+        ) as [m_set_routes, m_conf, m_iface_exists, m_iface_up]:
+            m_iface_exists.return_value = True
             m_iface_up.return_value = True
+
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
+
             self.assertEqual(local_ep._mac, data['mac'])
             m_conf.assert_called_once_with(iface)
             m_set_routes.assert_called_once_with(ip_type,
@@ -159,8 +290,10 @@ class TestLocalEndpoint(BaseTestCase):
         with nested(
                 mock.patch('calico.felix.devices.set_routes'),
                 mock.patch('calico.felix.devices.configure_interface_ipv6'),
+                mock.patch('calico.felix.devices.interface_exists'),
                 mock.patch('calico.felix.devices.interface_up'),
-        ) as [m_set_routes, m_conf, m_iface_up]:
+        ) as [m_set_routes, m_conf, m_iface_exists, m_iface_up]:
+                m_iface_exists.return_value = True
                 m_iface_up.return_value = True
                 local_ep.on_endpoint_update(data, async=True)
                 self.step_actor(local_ep)
@@ -244,13 +377,9 @@ class TestLocalEndpoint(BaseTestCase):
                 local_ep.on_endpoint_update(data, async=True)
                 self.step_actor(local_ep)
                 self.assertEqual(local_ep._mac, data['mac'])
-                m_conf.assert_called_once_with(iface)
-                m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
-                                                     iface,
-                                                     data['mac'],
-                                                     reset_arp=True)
-                self.assertTrue(local_ep._device_in_sync)
+                self.assertFalse(m_conf.called)
+                self.assertFalse(m_set_routes.called)
+                self.assertFalse(local_ep._device_in_sync)
 
         # Now pretend to get an interface update - does all the same work.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
@@ -294,12 +423,9 @@ class TestLocalEndpoint(BaseTestCase):
                 local_ep.on_endpoint_update(data, async=True)
                 self.step_actor(local_ep)
                 self.assertEqual(local_ep._mac, data['mac'])
-                m_conf.assert_called_once_with(iface, None)
-                m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
-                                                     iface,
-                                                     data['mac'],
-                                                     reset_arp=False)
+                self.assertFalse(m_conf.called)
+                self.assertFalse(m_set_routes.called)
+                self.assertFalse(local_ep._device_in_sync)
 
         # Now pretend to get an interface update - does all the same work.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
@@ -421,6 +547,18 @@ class TestLocalEndpoint(BaseTestCase):
             combined_id, futils.IPV4, {'status': 'down'}, async=True
         )
 
+    def test_maybe_update_status_missing_endpoint(self):
+        self.config.REPORT_ENDPOINT_STATUS = True
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+        local_ep._device_is_up = True
+        local_ep._maybe_update_status()
+        self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
+            combined_id, futils.IPV4, {'status': 'down'}, async=True
+        )
+
     def test_maybe_update_status_iptables_failure(self):
         self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
@@ -428,9 +566,9 @@ class TestLocalEndpoint(BaseTestCase):
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "active"}
+        local_ep._device_is_up = True
         local_ep._iptables_in_sync = False
         local_ep._device_in_sync = True
-        local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, futils.IPV4, {'status': 'error'}, async=True
@@ -444,26 +582,11 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "active"}
         local_ep._iptables_in_sync = True
+        local_ep._device_is_up = True
         local_ep._device_in_sync = False
-        local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, futils.IPV4, {'status': 'error'}, async=True
-        )
-
-    def test_maybe_update_status_device_failure_first_time(self):
-        self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
-        ip_type = futils.IPV4
-        local_ep = self.get_local_endpoint(combined_id, ip_type)
-        local_ep.endpoint = {"state": "active"}
-        local_ep._iptables_in_sync = True
-        local_ep._device_in_sync = False
-        local_ep._device_has_been_in_sync = False
-        local_ep._maybe_update_status()
-        self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
-            combined_id, futils.IPV4, {'status': 'down'}, async=True
         )
 
     def test_maybe_update_status_iptables_up(self):
@@ -476,7 +599,6 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._device_is_up = True
         local_ep._iptables_in_sync = True
         local_ep._device_in_sync = True
-        local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, futils.IPV4, {'status': 'up'}, async=True
@@ -492,7 +614,6 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep._device_is_up = True
         local_ep._iptables_in_sync = True
         local_ep._device_in_sync = True
-        local_ep._device_has_been_in_sync = True
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, futils.IPV4, {'status': 'down'}, async=True
@@ -507,8 +628,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep.endpoint = {"state": "active"}
         local_ep._device_is_up = False
         local_ep._iptables_in_sync = True
-        local_ep._device_in_sync = True
-        local_ep._device_has_been_in_sync = True
+        local_ep._device_in_sync = False
         local_ep._maybe_update_status()
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, futils.IPV4, {'status': 'down'}, async=True

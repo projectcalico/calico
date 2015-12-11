@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+np#!/usr/bin/env python
 
 # Copyright (c) 2014, 2015 Metaswitch Networks
 # All Rights Reserved.
@@ -77,13 +77,11 @@ setuptools.setup(
         'console_scripts': [
             'calico-felix = calico.felix.felix:main',
         ],
-        'neutron.ml2.mechanism_drivers': [
-            'calico = calico.openstack.mech_calico:CalicoMechanismDriver',
-        ],
         'calico.felix.iptables_generator': [
             'default = '
             'calico.felix.plugins.fiptgenerator:FelixIptablesGenerator',
         ],
     },
+    scripts=['utils/calico-diags'],
     install_requires=collect_requirements()
 )

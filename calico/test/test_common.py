@@ -20,7 +20,6 @@ Test common utility code.
 """
 import copy
 from collections import namedtuple
-import eventlet
 import logging
 import mock
 import sys
@@ -685,19 +684,6 @@ class TestCommon(unittest.TestCase):
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid tag"):
             common.validate_tags(profile_id, ["value", "bad value"])
-
-    def test_greenlet_id(self):
-        def greenlet_run():
-            tid = common.greenlet_id()
-            return tid
-
-        tid = common.greenlet_id()
-        child = eventlet.spawn(greenlet_run)
-        child_tid = child.wait()
-        new_tid = common.greenlet_id()
-
-        self.assertTrue(child_tid > tid)
-        self.assertEqual(tid, new_tid)
 
     def test_validate_ipam_pool(self):
         self.assert_ipam_pool_valid({"cidr": "10/16", "foo": "bar"},

@@ -48,15 +48,31 @@ class TestDevices(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_configure_global_kernel_config(self):
-        with mock.patch("calico.felix.devices._read_proc_sys",
-                        autospec=True, return_value="1") as m_read_proc_sys:
-            with mock.patch("calico.felix.devices._write_proc_sys",
-                            autospec=True) as m_write_proc_sys:
-                devices.configure_global_kernel_config()
+    @mock.patch("os.path.exists", autospec=True, return_value=True)
+    @mock.patch("calico.felix.devices._write_proc_sys",
+                autospec=True)
+    @mock.patch("calico.felix.devices._read_proc_sys",
+                autospec=True, return_value="1")
+    def test_configure_global_kernel_config(self,
+                                            m_read_proc_sys,
+                                            m_write_proc_sys,
+                                            m_exists):
+        devices.configure_global_kernel_config()
         m_write_proc_sys.assert_called_once_with(
             "/proc/sys/net/ipv4/conf/default/rp_filter", "1"
         )
+
+    @mock.patch("os.path.exists", autospec=True, return_value=False)
+    @mock.patch("calico.felix.devices._write_proc_sys",
+                autospec=True)
+    @mock.patch("calico.felix.devices._read_proc_sys",
+                autospec=True, return_value="1")
+    def test_configure_global_kernel_config_no_sysfs(self,
+                                                     m_read_proc_sys,
+                                                     m_write_proc_sys,
+                                                     m_exists):
+        self.assertRaises(devices.BadKernelConfig,
+                          devices.configure_global_kernel_config)
 
     def test_configure_global_kernel_config_bad_rp_filter(self):
         with mock.patch("calico.felix.devices._read_proc_sys",
@@ -74,35 +90,14 @@ class TestDevices(unittest.TestCase):
         self.assertEqual(result, "1")
 
     def test_interface_exists(self):
-        tap = "tap" + str(uuid.uuid4())[:11]
-
-        args = []
-        retcode = 1
-        stdout = ""
-
-        # Check we correctly handle error messages for a missing interface,
-        # and do so for all supported flavors of Linux.
-        error_messages = [
-            "Device \"%s\" does not exist." % tap,  # Ubuntu/RHEL
-            "ip: can't find device '%s'" % tap,     # Alpine
-        ]
-
-        for stderr in error_messages:
-	    err = futils.FailedSystemCall("From test", args, retcode, stdout, stderr)
-
-	    with mock.patch('calico.felix.futils.check_call', side_effect=err):
-	        self.assertFalse(devices.interface_exists(tap))
-	        futils.check_call.assert_called_with(["ip", "link", "list", tap])
-
-        with mock.patch('calico.felix.futils.check_call'):
-            self.assertTrue(devices.interface_exists(tap))
-            futils.check_call.assert_called_with(["ip", "link", "list", tap])
-
-        stderr = "Another error."
-        err = futils.FailedSystemCall("From test", args, retcode, stdout, stderr)
-        with mock.patch('calico.felix.futils.check_call', side_effect=err):
-            with self.assertRaises(futils.FailedSystemCall):
-                devices.interface_exists(tap)
+        with mock.patch("os.path.exists", autospec=True) as m_exists:
+            m_exists.return_value = False
+            self.assertFalse(devices.interface_exists("tap1234"))
+            m_exists.return_value = True
+            self.assertTrue(devices.interface_exists("tap1234"))
+        self.assertEqual(m_exists.mock_calls,
+                         [mock.call("/sys/class/net/tap1234"),
+                          mock.call("/sys/class/net/tap1234")])
 
     def test_add_route(self):
         tap = "tap" + str(uuid.uuid4())[:11]
@@ -355,7 +350,7 @@ class TestDevices(unittest.TestCase):
                                    str(proxy_target), "dev", if_name])]
             m_check_call.assert_has_calls(ip_calls)
 
-    def test_interface_up1(self):
+    def test_interface_up_iface_up(self):
         """
         Test that interface_up returns True when an interface is up.
         """
@@ -363,18 +358,18 @@ class TestDevices(unittest.TestCase):
 
         with mock.patch('__builtin__.open') as open_mock:
             open_mock.return_value = mock.MagicMock(spec=file)
-            file_handle = open_mock.return_value.__enter__.return_value
-            file_handle.read.return_value = '0x1003\n'
+            file_obj = open_mock.return_value.__enter__.return_value
+            file_obj.read.return_value = 'up\n'
 
             is_up = devices.interface_up(tap)
 
             open_mock.assert_called_with(
-                '/sys/class/net/%s/flags' % tap, 'r'
+                '/sys/class/net/%s/operstate' % tap, 'r'
             )
-            self.assertTrue(file_handle.read.called)
+            self.assertTrue(file_obj.read.called)
             self.assertTrue(is_up)
 
-    def test_interface_up2(self):
+    def test_interface_up_iface_down(self):
         """
         Test that interface_up returns False when an interface is down.
         """
@@ -383,12 +378,12 @@ class TestDevices(unittest.TestCase):
         with mock.patch('__builtin__.open') as open_mock:
             open_mock.return_value = mock.MagicMock(spec=file)
             file_handle = open_mock.return_value.__enter__.return_value
-            file_handle.read.return_value = '0x1002\n'
+            file_handle.read.return_value = 'down\n'
 
             is_up = devices.interface_up(tap)
 
             open_mock.assert_called_with(
-                '/sys/class/net/%s/flags' % tap, 'r'
+                '/sys/class/net/%s/operstate' % tap, 'r'
             )
             self.assertTrue(file_handle.read.called)
             self.assertFalse(is_up)

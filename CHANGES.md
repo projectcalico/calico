@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0-dev
+
+- Felix now parses the etcd snapshot in parallel with the event stream;
+  this dramatically increases scale when under load.
+
 ## 1.2.2
 
 - Don't report port deletion as an error status.
@@ -147,3 +152,4 @@
 - Ensure that metadata is not blocked by over-restrictive rules on outbound
   traffic
 - Updates and clarifications to documentation
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico/CHANGES.md?pixel)](https://github.com/igrigorik/ga-beacon)

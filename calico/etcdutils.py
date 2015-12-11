@@ -1,8 +1,10 @@
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+from collections import namedtuple
 
 import logging
 import re
 import etcd
+import os
 from socket import timeout as SocketTimeout
 import time
 
@@ -54,6 +56,12 @@ class PathDispatcher(object):
             node["delete"] = on_del
 
     def handle_event(self, response):
+        """
+        :param EtcdEvent|EtcdResponse: Either a python-etcd response object
+               for a watch response or an instance of our dedicated EtcdEvent
+               class, which we use when deserialising an event that came over
+               the etcd driver socket.
+        """
         _log.debug("etcd event %s for key %s", response.action, response.key)
         key_parts = response.key.strip("/").split("/")
         self._handle(key_parts, response, self.handler_root, {})
@@ -80,15 +88,27 @@ class PathDispatcher(object):
                        action, response.key, handler_node)
 
 
+EtcdEvent = namedtuple("EtcdEvent", ["action", "key", "value"])
+
+
 class EtcdClientOwner(object):
     """
     Base class for objects that own an etcd Client.  Supports
     reconnecting, optionally copying the cluster ID.
     """
 
-    def __init__(self, etcd_authority):
+    def __init__(self,
+                 etcd_authority,
+                 etcd_scheme="http",
+                 etcd_key=None,
+                 etcd_cert=None,
+                 etcd_ca=None):
         super(EtcdClientOwner, self).__init__()
         self.etcd_authority = etcd_authority
+        self.etcd_scheme = etcd_scheme
+        self.etcd_key = etcd_key
+        self.etcd_cert = etcd_cert
+        self.etcd_ca = etcd_ca
         self.client = None
         self.reconnect()
 
@@ -109,9 +129,17 @@ class EtcdClientOwner(object):
         else:
             _log.info("(Re)connecting to etcd. No previous cluster ID.")
             old_cluster_id = None
+
+        key_pair = None
+        if self.etcd_cert and self.etcd_key:
+            key_pair = (self.etcd_cert, self.etcd_key)
+
         self.client = etcd.Client(
             host=host,
             port=port,
+            protocol=self.etcd_scheme,
+            cert=key_pair,
+            ca_cert=self.etcd_ca,
             expected_cluster_id=old_cluster_id
         )
 
@@ -124,8 +152,16 @@ class EtcdWatcher(EtcdClientOwner):
 
     def __init__(self,
                  etcd_authority,
-                 key_to_poll):
-        super(EtcdWatcher, self).__init__(etcd_authority)
+                 key_to_poll,
+                 etcd_scheme="http",
+                 etcd_key=None,
+                 etcd_cert=None,
+                 etcd_ca=None):
+        super(EtcdWatcher, self).__init__(etcd_authority,
+                                          etcd_scheme=etcd_scheme,
+                                          etcd_key=etcd_key,
+                                          etcd_cert=etcd_cert,
+                                          etcd_ca=etcd_ca)
         self.key_to_poll = key_to_poll
         self.next_etcd_index = None
 
@@ -308,7 +344,7 @@ class EtcdWatcher(EtcdClientOwner):
         Abstract:
 
         Called before the initial dump is loaded and passed to
-        _process_initial_dump().
+        _on_snapshot_loaded().
         """
         pass
 

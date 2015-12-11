@@ -72,6 +72,10 @@ class TestBasic(BaseTestCase):
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
         env_dict = {
             "FELIX_ETCDADDR": "localhost:4001",
+            "FELIX_ETCDSCHEME": "http",
+            "FELIX_ETCDKEYFILE": "none",
+            "FELIX_ETCDCERTFILE": "none",
+            "FELIX_ETCDCAFILE": "none",
             "FELIX_HOSTNAME": "myhost",
             "FELIX_INTERFACEPREFIX": "tap",
             "FELIX_METADATAIP": "10.0.0.1",

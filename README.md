@@ -1,4 +1,6 @@
-[![Coverage Status](https://coveralls.io/repos/projectcalico/calico/badge.svg?branch=HEAD&service=github)](https://coveralls.io/github/projectcalico/calico?branch=HEAD)
+[![Coverage Status](https://coveralls.io/repos/projectcalico/calico/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico?branch=master)
+[![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
+[![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 # Project Calico
 
 Project Calico represents a new approach to virtual networking, based on the
@@ -90,13 +92,14 @@ is outside the scope of this article.  If you want to work on Docker
 integration please see the
 [calico-docker](https://github.com/projectcalico/calico-docker) repo.
 
-To run the unit tests, you'll also need to type:
+If you want to run the unit tests, first install dependencies:
 
-    pip install tox
+    apt-get install git libffi-dev libyajl2 python-dev python-pip
+    pip install coverage tox
 
-Then, still at the root of the calico directory, run:
+Then, still at the root of the Calico directory (not inside a virtualenv), run:
 
-    tox
+    ./run-unit-test.sh -r
 
 Tox runs the tests under Python 2.6, 2.7 and PyPy, which you will need to [install separately](http://pypy.readthedocs.org/en/latest/install.html).
 
@@ -111,3 +114,4 @@ dependencies for.
 For example, if you want to work on Felix, you will want to set it to `felix`.
 With that set, you can then run `pip install -e .`, which will install the
 subset of the dependencies needed for those components.
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

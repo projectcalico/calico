@@ -34,10 +34,11 @@ _log = logging.getLogger(__name__)
 FELIX_PFX = "felix-"
 IPSET_PREFIX = {IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-"}
 IPSET_TMP_PREFIX = {IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-"}
+DEFAULT_IPSET_SIZE = 2**20
 
 
 class IpsetManager(ReferenceManager):
-    def __init__(self, ip_type):
+    def __init__(self, ip_type, config):
         """
         Manages all the ipsets for tags for either IPv4 or IPv6.
 
@@ -46,6 +47,7 @@ class IpsetManager(ReferenceManager):
         super(IpsetManager, self).__init__(qualifier=ip_type)
 
         self.ip_type = ip_type
+        self._config = config
 
         # State.
         # Tag IDs indexed by profile IDs
@@ -70,12 +72,21 @@ class IpsetManager(ReferenceManager):
         # index-update functions. We apply the updates in _finish_msg_batch().
         # May include non-live tag IDs.
         self._dirty_tags = set()
-        self._force_reprogram = False
+        self._datamodel_in_sync = False
 
     def _create(self, tag_id):
         active_ipset = TagIpset(futils.uniquely_shorten(tag_id, 16),
-                                   self.ip_type)
+                                self.ip_type,
+                                max_elem=self._config.MAX_IPSET_SIZE)
         return active_ipset
+
+    def _maybe_start(self, obj_id):
+        if self._datamodel_in_sync:
+            _log.debug("Datamodel is in-sync, deferring to superclass.")
+            return super(IpsetManager, self)._maybe_start(obj_id)
+        else:
+            _log.info("Delaying startup of tag %s because datamodel is"
+                      "not in sync.", obj_id)
 
     def _on_object_started(self, tag_id, active_ipset):
         _log.debug("TagIpset actor for %s started", tag_id)
@@ -93,11 +104,10 @@ class IpsetManager(ReferenceManager):
         :param tag_id: The ID of the tag, must be an active tag.
         """
         assert self._is_starting_or_live(tag_id)
+        assert self._datamodel_in_sync
         active_ipset = self.objects_by_id[tag_id]
         members = frozenset(self.ip_owners_by_tag.get(tag_id, {}).iterkeys())
-        active_ipset.replace_members(members,
-                                     force_reprogram=self._force_reprogram,
-                                     async=True)
+        active_ipset.replace_members(members, async=True)
 
     def _update_dirty_active_ipsets(self):
         """
@@ -105,11 +115,14 @@ class IpsetManager(ReferenceManager):
 
         Clears the set of dirty tags as a side-effect.
         """
+        num_updates = 0
         for tag_id in self._dirty_tags:
             if self._is_starting_or_live(tag_id):
                 self._update_active_ipset(tag_id)
+                num_updates += 1
             self._maybe_yield()
-        _log.info("Sent updates to %s updated tags", len(self._dirty_tags))
+        if num_updates > 0:
+            _log.info("Sent updates to %s updated tags", num_updates)
         self._dirty_tags.clear()
 
     @property
@@ -118,41 +131,11 @@ class IpsetManager(ReferenceManager):
         return nets
 
     @actor_message()
-    def apply_snapshot(self, tags_by_prof_id, endpoints_by_id):
-        """
-        Apply a snapshot read from etcd, replacing existing state.
-
-        :param tags_by_prof_id: A dict mapping security profile ID to a list of
-            profile tags.
-        :param endpoints_by_id: A dict mapping EndpointId objects to endpoint
-            data dicts.
-        """
-        _log.info("Applying tags snapshot. %s tags, %s endpoints",
-                  len(tags_by_prof_id), len(endpoints_by_id))
-        missing_profile_ids = set(self.tags_by_prof_id.keys())
-        for profile_id, tags in tags_by_prof_id.iteritems():
-            assert tags is not None
-            self.on_tags_update(profile_id, tags)
-            missing_profile_ids.discard(profile_id)
-            self._maybe_yield()
-        for profile_id in missing_profile_ids:
-            self.on_tags_update(profile_id, None)
-            self._maybe_yield()
-        del missing_profile_ids
-        missing_endpoints = set(self.endpoint_data_by_ep_id.keys())
-        for endpoint_id, endpoint in endpoints_by_id.iteritems():
-            assert endpoint is not None
-            endpoint_data = self._endpoint_data_from_dict(endpoint_id,
-                                                          endpoint)
-            self._on_endpoint_data_update(endpoint_id, endpoint_data)
-            missing_endpoints.discard(endpoint_id)
-            self._maybe_yield()
-        for endpoint_id in missing_endpoints:
-            self._on_endpoint_data_update(endpoint_id, EMPTY_ENDPOINT_DATA)
-            self._maybe_yield()
-        self._force_reprogram = True
-        _log.info("Tags snapshot applied: %s tags, %s endpoints",
-                  len(tags_by_prof_id), len(endpoints_by_id))
+    def on_datamodel_in_sync(self):
+        if not self._datamodel_in_sync:
+            _log.info("Datamodel now in sync, uncorking updates to TagIpsets")
+            self._datamodel_in_sync = True
+            self._maybe_start_all()
 
     @actor_message()
     def cleanup(self):
@@ -447,7 +430,6 @@ class IpsetManager(ReferenceManager):
         """
         super(IpsetManager, self)._finish_msg_batch(batch, results)
         self._update_dirty_active_ipsets()
-        self._force_reprogram = False
 
 
 class EndpointData(object):
@@ -565,6 +547,12 @@ class IpsetActor(Actor):
             self._sync_to_ipset()
 
     def _sync_to_ipset(self):
+        if len(self.members) > self._ipset.max_elem:
+            _log.error("ipset %s exceeds maximum size %s.  ipset will not"
+                       "be updated until size drops below %s.",
+                       self.ipset_name, self._ipset.max_elem,
+                       self._ipset.max_elem)
+            return
         # Defer to our helper to actually make the changes.
         if self._force_reprogram:
             _log.debug("Replacing content of ipset %s with %s", self,
@@ -588,7 +576,7 @@ class TagIpset(IpsetActor, RefCountedActor):
     Specialised, RefCountedActor managing a single tag's ipset.
     """
 
-    def __init__(self, tag, ip_type):
+    def __init__(self, tag, ip_type, max_elem=DEFAULT_IPSET_SIZE):
         """
         :param str tag: Name of tag that this ipset represents.  Note: not
             the name of the ipset itself.  The name of the ipset is derived
@@ -600,7 +588,7 @@ class TagIpset(IpsetActor, RefCountedActor):
         tmpname = tag_to_ipset_name(ip_type, tag, tmp=True)
         family = "inet" if ip_type == IPV4 else "inet6"
         # Helper class, used to do atomic rewrites of ipsets.
-        ipset = Ipset(name, tmpname, family, "hash:ip")
+        ipset = Ipset(name, tmpname, family, "hash:ip", max_elem=max_elem)
         super(TagIpset, self).__init__(ipset, qualifier=tag)
 
         # Notified ready?
@@ -631,7 +619,7 @@ class Ipset(object):
     (Synchronous) wrapper around an ipset, supporting atomic rewrites.
     """
     def __init__(self, ipset_name, temp_ipset_name, ip_family,
-                 ipset_type="hash:ip"):
+                 ipset_type="hash:ip", max_elem=DEFAULT_IPSET_SIZE):
         """
         :param str ipset_name: name of the primary ipset.  Must be less than
             32 chars.
@@ -645,10 +633,14 @@ class Ipset(object):
         self.type = ipset_type
         assert ip_family in ("inet", "inet6")
         self.family = ip_family
+        self.max_elem = max_elem
 
-    def exists(self):
+    def exists(self, temp_set=False):
         try:
-            futils.check_call(["ipset", "list", self.set_name])
+            futils.check_call(
+                ["ipset", "list",
+                 self.temp_set_name if temp_set else self.set_name]
+            )
         except FailedSystemCall as e:
             if e.retcode == 1 and "does not exist" in e.stderr:
                 return False
@@ -673,6 +665,7 @@ class Ipset(object):
         """
         assert isinstance(old_members, (set, frozenset))
         assert isinstance(new_members, (set, frozenset))
+        assert len(new_members) <= self.max_elem
         try:
             input_lines = ["del %s %s" % (self.set_name, m)
                            for m in (old_members - new_members)]
@@ -699,12 +692,30 @@ class Ipset(object):
         # swap it into place and then delete the old ipset.
         _log.info("Rewriting ipset %s with %d members", self, len(members))
         assert isinstance(members, (set, frozenset))
-        input_lines = [
-            # Ensure both the main set and the temporary set exist.
-            self._create_cmd(self.set_name),
+        assert len(members) <= self.max_elem
+        # Try to destroy the temporary set so that we get to recreate it below,
+        # possibly with new parameters.
+        if futils.call_silent(["ipset", "destroy", self.temp_set_name]) != 0:
+            if self.exists(temp_set=True):
+                _log.error("Failed to delete temporary ipset %s.  Subsequent "
+                           "commands may fail.",
+                           self.temp_set_name)
+        if not self.exists():
+            # Ensure the main set exists so we can re-use the atomic swap
+            # code below.
+            _log.debug("Main set doesn't exist, creating it...")
+            input_lines = [self._create_cmd(self.set_name)]
+        else:
+            # Avoid trying to create the main set in case we try to create it
+            # with differing parameters (which fails even with the --exist
+            # flag).
+            _log.debug("Main set exists, skipping create.")
+            input_lines = []
+        input_lines += [
+            # Ensure the temporary set exists.
             self._create_cmd(self.temp_set_name),
-            # Flush the temporary set.  This is a no-op unless we had a
-            # left-over temporary set before.
+            # Flush the temporary set.  This is a no-op unless we failed to
+            # delete the set above.
             "flush %s" % self.temp_set_name,
         ]
         # Add all the members to the temporary set,
@@ -731,8 +742,8 @@ class Ipset(object):
         :returns an ipset restore line to create the given ipset iff it
             doesn't exist.
         """
-        return ("create %s %s family %s --exist" %
-                (name, self.type, self.family))
+        return ("create %s %s family %s maxelem %s --exist" %
+                (name, self.type, self.family, self.max_elem))
 
     def delete(self):
         """

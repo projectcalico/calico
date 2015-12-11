@@ -26,6 +26,8 @@ else:
     import unittest
 import mock
 
+mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
+
 _log = logging.getLogger(__name__)
 
 
@@ -74,6 +76,10 @@ class JSONString(object):
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.json_obj)
+
+
+class ExpectedException(Exception):
+    pass
 
 
 def load_config(filename, path="calico/felix/test/data/", env_dict=None,

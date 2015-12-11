@@ -43,6 +43,7 @@ class RulesManager(ReferenceManager):
         self.iptables_updater = iptables_updater
         self.ipset_manager = ipset_manager
         self.rules_by_profile_id = {}
+        self._datamodel_in_sync = False
 
     def _create(self, profile_id):
         return ProfileRules(self.iptables_generator,
@@ -57,18 +58,32 @@ class RulesManager(ReferenceManager):
                    profile_or_none)
         active_profile.on_profile_update(profile_or_none, async=True)
 
+    def _maybe_start(self, obj_id, in_sync=False):
+        """
+        Override: gates starting the ProfileRules on being in sync.
+
+        :param obj_id: The ID of the object (profile) that we'd like to start.
+        :param in_sync: True if we know that this profile is in-sync even if
+               we might not have received the global in-sync message.
+        """
+        in_sync |= self._datamodel_in_sync
+        if in_sync or obj_id in self.rules_by_profile_id:
+            # Either we're globally in-sync or we've explicitly heard about
+            # this profile so we know it is in sync.  Defer to the superclass.
+            _log.debug("Profile %s is in-sync, deferring to superclass.",
+                       obj_id)
+            return super(RulesManager, self)._maybe_start(obj_id)
+        else:
+            _log.info("Delaying startup of profile %s because datamodel is"
+                      "not in sync.", obj_id)
+
     @actor_message()
-    def apply_snapshot(self, rules_by_profile_id):
-        _log.info("Rules manager applying snapshot; %s rules",
-                  len(rules_by_profile_id))
-        missing_ids = set(self.rules_by_profile_id.keys())
-        for profile_id, profile in rules_by_profile_id.iteritems():
-            self.on_rules_update(profile_id, profile,
-                                 force_reprogram=True)  # Skips queue
-            missing_ids.discard(profile_id)
-            self._maybe_yield()
-        for dead_profile_id in missing_ids:
-            self.on_rules_update(dead_profile_id, None)
+    def on_datamodel_in_sync(self):
+        if not self._datamodel_in_sync:
+            _log.info("%s: datamodel now in sync, unblocking profile startup",
+                      self)
+            self._datamodel_in_sync = True
+            self._maybe_start_all()
 
     @actor_message()
     def on_rules_update(self, profile_id, profile, force_reprogram=False):
@@ -84,6 +99,12 @@ class RulesManager(ReferenceManager):
             ap = self.objects_by_id[profile_id]
             ap.on_profile_update(profile, force_reprogram=force_reprogram,
                                  async=True)
+        elif profile_id in self.objects_by_id:
+            _log.debug("Checking if the update allows us to start profile %s",
+                       profile_id)
+            # Pass in_sync=True because we now explicitly know this profile is
+            # in sync, even if this is a deletion.
+            self._maybe_start(profile_id, in_sync=True)
 
 
 class ProfileRules(RefCountedActor):
@@ -207,7 +228,8 @@ class ProfileRules(RefCountedActor):
                                    self.id)
                 else:
                     self._dirty = False
-            elif not self._ipset_refs.ready:
+            else:
+                assert not self._ipset_refs.ready
                 _log.info("Can't program rules %s yet, waiting on ipsets",
                           self.id)
 

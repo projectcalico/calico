@@ -49,6 +49,7 @@ class DispatchChains(Actor):
         self.ifaces = set()
         self.programmed_leaf_chains = set()
         self._dirty = False
+        self._datamodel_in_sync = False
 
     @actor_message()
     def apply_snapshot(self, ifaces):
@@ -64,6 +65,10 @@ class DispatchChains(Actor):
         # we resync and it stops the iptables layer from marking our chain as
         # missing.
         self._dirty = True
+
+        if not self._datamodel_in_sync:
+            _log.info("Datamodel in sync, unblocking dispatch chain updates")
+            self._datamodel_in_sync = True
 
     @actor_message()
     def on_endpoint_added(self, iface_name):
@@ -103,7 +108,7 @@ class DispatchChains(Actor):
             self._dirty = True
 
     def _finish_msg_batch(self, batch, results):
-        if self._dirty:
+        if self._dirty and self._datamodel_in_sync:
             _log.debug("Interface mapping changed, reprogramming chains.")
             self._reprogram_chains()
             self._dirty = False
