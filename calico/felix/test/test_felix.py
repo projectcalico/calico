@@ -76,7 +76,7 @@ class TestBasic(BaseTestCase):
             "FELIX_ETCDKEYFILE": "none",
             "FELIX_ETCDCERTFILE": "none",
             "FELIX_ETCDCAFILE": "none",
-            "FELIX_HOSTNAME": "myhost",
+            "FELIX_FELIXHOSTNAME": "myhost",
             "FELIX_INTERFACEPREFIX": "tap",
             "FELIX_METADATAIP": "10.0.0.1",
             "FELIX_METADATAPORT": "1234",

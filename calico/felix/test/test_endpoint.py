@@ -46,8 +46,8 @@ ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
 class TestEndpointManager(BaseTestCase):
     def setUp(self):
         super(TestEndpointManager, self).setUp()
-        self.config = load_config("felix_default.cfg", global_dict={
-            "FelixHostname": "hostname"})
+        self.config = load_config("felix_default.cfg", env_dict={
+            "FELIX_FELIXHOSTNAME": "hostname"})
         self.m_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)

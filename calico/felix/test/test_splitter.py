@@ -21,7 +21,7 @@ Tests of the actor that splits update messages to multiple manager actors.
 import mock
 from calico.felix.masq import MasqueradeManager
 
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.splitter import UpdateSplitter, CleanupManager
 
 
