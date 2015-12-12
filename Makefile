@@ -113,8 +113,8 @@ run-etcd:
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379" \
+	--listen-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379"
 
 ## Run etcd in a container with SSL verification. Used primarily by STs.
 run-etcd-ssl: certs/.certificates.created
