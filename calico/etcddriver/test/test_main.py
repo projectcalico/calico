@@ -20,6 +20,7 @@ Test __main__ module.
 """
 
 import logging
+import socket
 from unittest import TestCase
 
 import sys
@@ -33,7 +34,7 @@ class TestMain(TestCase):
         assert "calico.etcddriver.__main__" not in sys.modules
 
     @patch("os.getppid", autospec=True)
-    @patch("socket.socket", autospec=True)
+    @patch("socket.socket", spec=socket.socket)  # mock bug prevents autospec
     @patch("calico.common.default_logging", autospec=True)
     @patch("calico.etcddriver.driver.EtcdDriver", autospec=True)
     def test_mainline(self, m_driver_cls, m_logging, m_socket, m_ppid):
@@ -53,7 +54,7 @@ class TestMain(TestCase):
                                syslog_executable_name="calico-felix-etcd")])
 
     @patch("os.getppid", autospec=True)
-    @patch("socket.socket", autospec=True)
+    @patch("socket.socket", spec=socket.socket)  # mock bug prevents autospec
     @patch("calico.common.default_logging", autospec=True)
     @patch("calico.etcddriver.driver.EtcdDriver", autospec=True)
     def test_reparent(self, m_driver_cls, m_logging, m_socket, m_ppid):
@@ -68,7 +69,7 @@ class TestMain(TestCase):
                           call.stop()])
 
     @patch("os.getppid", autospec=True)
-    @patch("socket.socket", autospec=True)
+    @patch("socket.socket", spec=socket.socket)  # mock bug prevents autospec
     @patch("calico.common.default_logging", autospec=True)
     @patch("calico.etcddriver.driver.EtcdDriver", autospec=True)
     def test_connection_failure(self, m_driver_cls, m_logging, m_socket,

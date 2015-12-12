@@ -17,80 +17,51 @@
 felix.splitter
 ~~~~~~~~~~~~~
 
-Simple object that just splits notifications out for IPv4 and IPv6.
+Function for fanning our updates to the IPv4 and IPv6 versions of
+the manager classes.
 """
-import functools
 import logging
+import os
+
+import functools
 import gevent
+
 from calico.felix.actor import Actor, actor_message
 
 _log = logging.getLogger(__name__)
 
 
-class UpdateSplitter(Actor):
+class UpdateSplitter(object):
     """
-    Actor that takes the role of message broker, farming updates out to IPv4
-    and IPv6-specific actors.
+    Fans out notifications for IPv4 and IPv6 to the relevant actors.
 
-    Users of the API should follow this contract:
+    Historical note: this used to be a fully-fledged Actor but that
+    significantly increases the number of messages we send per update.
 
-    (1) send an apply_snapshot message containing a complete and consistent
-        snapshot of the data model.
-    (2) send in-order updates via the on_xyz_update messages.
-    (3) at any point, repeat from (1)
+    Thread safety: this object is accessed from multiple threads,
+    which is safe because it doesn't have any mutable state.
     """
-    def __init__(self, config, ipsets_mgrs, rules_managers, endpoint_managers,
-                 iptables_updaters, ipv4_masq_manager):
+    def __init__(self, managers):
         super(UpdateSplitter, self).__init__()
-        self.config = config
-        self.ipsets_mgrs = ipsets_mgrs
-        self.iptables_updaters = iptables_updaters
-        self.rules_mgrs = rules_managers
-        self.endpoint_mgrs = endpoint_managers
-        self.ipv4_masq_manager = ipv4_masq_manager
-        self._cleanup_scheduled = False
+        self.managers = managers
 
-    @actor_message()
+        self.in_sync_mgrs = self._managers_with("on_datamodel_in_sync")
+        self.rules_upd_mgrs = self._managers_with("on_rules_update")
+        self.tags_upd_mgrs = self._managers_with("on_tags_update")
+        self.iface_upd_mgrs = self._managers_with("on_interface_update")
+        self.ep_upd_mgrs = self._managers_with("on_endpoint_update")
+        self.ipam_upd_mgrs = self._managers_with("on_ipam_pool_updated")
+
+    def _managers_with(self, method_name):
+        return [m for m in self.managers if hasattr(m, method_name)]
+
     def on_datamodel_in_sync(self):
         """
         Called when the data-model is known to be in-sync.
         """
-        for mgr in self.ipsets_mgrs + self.rules_mgrs + self.endpoint_mgrs:
+        for mgr in self.in_sync_mgrs:
             mgr.on_datamodel_in_sync(async=True)
 
-        # Now we're in sync, give the managers some time to get their house in
-        # order, then trigger the start-of-day cleanup.
-        if not self._cleanup_scheduled:
-            _log.info("No cleanup scheduled, scheduling one.")
-            gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
-                               functools.partial(self.trigger_cleanup,
-                                                 async=True))
-            self._cleanup_scheduled = True
-
-    @actor_message()
-    def trigger_cleanup(self):
-        """
-        Called from a separate greenlet, asks the managers to clean up
-        unused ipsets and iptables.
-        """
-        self._cleanup_scheduled = False
-        _log.info("Triggering a cleanup of orphaned ipsets/chains")
-        # Need to clean up iptables first because they reference ipsets
-        # and force them to stay alive.
-        for ipt_updater in self.iptables_updaters:
-            ipt_updater.cleanup(async=False)
-        # It's still worth a try to clean up any ipsets that we can.
-        for ipset_mgr in self.ipsets_mgrs:
-            ipset_mgr.cleanup(async=False)
-
-        # We've cleaned up any unused ipsets and iptables.   Let any plugins
-        # know in case they want to take any action.
-        for plugin_name, plugin in self.config.plugins.iteritems():
-            _log.info("Invoking cleanup_complete for plugin %s",
-                      plugin_name)
-            plugin.cleanup_complete(self.config)
-
-    @actor_message()
     def on_rules_update(self, profile_id, rules):
         """
         Process an update to the rules of the given profile.
@@ -99,10 +70,9 @@ class UpdateSplitter(Actor):
             or None if the rules have been deleted.
         """
         _log.info("Profile update: %s", profile_id)
-        for rules_mgr in self.rules_mgrs:
-            rules_mgr.on_rules_update(profile_id, rules, async=True)
+        for mgr in self.rules_upd_mgrs:
+            mgr.on_rules_update(profile_id, rules, async=True)
 
-    @actor_message()
     def on_tags_update(self, profile_id, tags):
         """
         Called when the given tag list has changed or been deleted.
@@ -111,21 +81,20 @@ class UpdateSplitter(Actor):
             deleted.
         """
         _log.info("Tags for profile %s updated", profile_id)
-        for ipset_mgr in self.ipsets_mgrs:
-            ipset_mgr.on_tags_update(profile_id, tags, async=True)
+        for mgr in self.tags_upd_mgrs:
+            mgr.on_tags_update(profile_id, tags, async=True)
 
-    @actor_message()
     def on_interface_update(self, name, iface_up):
         """
         Called when an interface state has changed.
 
         :param str name: Interface name
+        :param bool iface_up: True if the interface is up, False if notF.
         """
         _log.info("Interface %s state changed", name)
-        for endpoint_mgr in self.endpoint_mgrs:
-            endpoint_mgr.on_interface_update(name, iface_up, async=True)
+        for mgr in self.iface_upd_mgrs:
+            mgr.on_interface_update(name, iface_up, async=True)
 
-    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
         Process an update to the given endpoint.  endpoint may be None if
@@ -135,12 +104,74 @@ class UpdateSplitter(Actor):
         :param dict endpoint: Endpoint data dict
         """
         _log.debug("Endpoint update for %s.", endpoint_id)
-        for ipset_mgr in self.ipsets_mgrs:
-            ipset_mgr.on_endpoint_update(endpoint_id, endpoint, async=True)
-        for endpoint_mgr in self.endpoint_mgrs:
-            endpoint_mgr.on_endpoint_update(endpoint_id, endpoint, async=True)
+        for mgr in self.ep_upd_mgrs:
+            mgr.on_endpoint_update(endpoint_id, endpoint, async=True)
+
+    def on_ipam_pool_update(self, pool_id, pool):
+        """
+        Fan out an update to the given IPAM pool.
+
+        :param pool_id: Opaque ID of the pool
+        :param pool: Either a dict representing the pool or None for a
+               deletion.
+        """
+        _log.info("IPAM pool %s updated", pool_id)
+        for mgr in self.ipam_upd_mgrs:
+            mgr.on_ipam_pool_updated(pool_id, pool, async=True)
+
+
+class CleanupManager(Actor):
+    """
+    Manages the post-graceful restart cleanup scheduling.
+
+    This is a pretty trivial Actor in that its only state is a
+    single one-way flag but making it an Actor lets us re-use
+    the UpdateSplitter logic to fan out the on_datamodel_in_sync()
+    call.
+    """
+    def __init__(self, config, iptables_updaters, ipsets_mgrs):
+        super(CleanupManager, self).__init__()
+        self.config = config
+        self.iptables_updaters = iptables_updaters
+        self.ipsets_mgrs = ipsets_mgrs
+        self._cleanup_done = False
 
     @actor_message()
-    def on_ipam_pool_update(self, pool_id, pool):
-        _log.info("IPAM pool %s updated", pool_id)
-        self.ipv4_masq_manager.on_ipam_pool_updated(pool_id, pool, async=True)
+    def on_datamodel_in_sync(self):
+        if not self._cleanup_done:
+            # Datamodel in sync for the first time.  Give the managers some
+            # time to finish processing, then trigger cleanup.
+            self._cleanup_done = True
+            _log.info("No cleanup scheduled, scheduling one.")
+            gevent.spawn_later(self.config.STARTUP_CLEANUP_DELAY,
+                               functools.partial(self._do_cleanup,
+                                                 async=True))
+        self._cleanup_done = True
+
+    @actor_message()
+    def _do_cleanup(self):
+        try:
+            _log.info("Triggering a cleanup of orphaned ipsets/chains")
+            # Need to clean up iptables first because they reference ipsets
+            # and force them to stay alive.  Note: we use async=False to
+            # ensure that the cleanup is complete before we start the
+            # ipsets cleanup.
+            for ipt_updater in self.iptables_updaters:
+                ipt_updater.cleanup(async=False)
+            _log.info("iptables cleanup complete, moving on to ipsets")
+            for ipset_mgr in self.ipsets_mgrs:
+                ipset_mgr.cleanup(async=False)
+
+            # We've cleaned up any unused ipsets and iptables.   Let any plugins
+            # know in case they want to take any action.
+            for plugin_name, plugin in self.config.plugins.iteritems():
+                _log.info("Invoking cleanup_complete for plugin %s",
+                          plugin_name)
+                plugin.cleanup_complete(self.config)
+        except:
+            _log.exception("Failed to cleanup iptables or ipsets state, "
+                           "exiting")
+            os._exit(1)
+            raise  # Keep linter happy.
+
+

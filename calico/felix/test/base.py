@@ -20,10 +20,8 @@ import gc
 from calico.felix.config import Config
 import gevent
 
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
+import unittest2
+
 import mock
 
 mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
@@ -31,7 +29,7 @@ mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
 _log = logging.getLogger(__name__)
 
 
-class BaseTestCase(unittest.TestCase):
+class BaseTestCase(unittest2.TestCase):
 
     def setUp(self):
         self._exit_patch = mock.patch("calico.felix.actor._exit",

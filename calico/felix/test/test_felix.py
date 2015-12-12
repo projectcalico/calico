@@ -94,14 +94,3 @@ class TestBasic(BaseTestCase):
         m_iface_up.assert_called_once_with("tunl0")
         m_configure_global_kernel_config.assert_called_once_with()
 
-        # Check all IptablesUpdaters get passed to the splitter, which handles
-        # cleanup.
-        _, args, _ = m_UpdateSplitter.mock_calls[0]
-        updaters = args[4]  # List of IptablesUpdaters should be the 5th arg.
-        # But check that it contains what we expect.
-        self.assertEqual(updaters[0], m_IptablesUpdater.return_value)
-        num_ipt_upds = len([c for c in m_IptablesUpdater.mock_calls
-                            if c[0] == ""])
-        self.assertEqual(len(updaters), num_ipt_upds,
-                         "Number of IptablesUpdaters passed to UpdateSplitter"
-                         "not the same as number that were created.")

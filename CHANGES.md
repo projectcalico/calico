@@ -4,6 +4,8 @@
 
 - Felix now parses the etcd snapshot in parallel with the event stream;
   this dramatically increases scale when under load.
+- Removed support for Python 2.6.  python-etcd no longer supports 2.6
+  as of 0.4.3.
 
 ## 1.2.2
 
