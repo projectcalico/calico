@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import print_function
+
 import socket
 import os
 import sys
@@ -38,18 +40,19 @@ def enforce_root():
     :return: Nothing. sys.exit if not running as root.
     """
     if os.geteuid() != 0:
-        print >> sys.stderr, "This command must be run as root."
+        print("This command must be run as root.", file=sys.stderr)
         sys.exit(2)
 
 
-def print_paragraph(msg):
+def print_paragraph(msg, file=sys.stdout):
     """
     Print a fixed width (80 chars) paragraph of text.
     :param msg: The msg to print.
+    :param file: The text stream to write to (default sys.stdout)
     :return: None.
     """
-    print "\n".join(textwrap.wrap(msg, width=80))
-    print
+    print("\n".join(textwrap.wrap(msg, width=80)), file=file)
+    print("", file=file)
 
 
 def escape_etcd(path):
