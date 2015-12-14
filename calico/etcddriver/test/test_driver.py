@@ -28,6 +28,8 @@ from httplib import HTTPException
 from unittest import TestCase
 
 import sys
+
+import time
 from mock import Mock, patch, call
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import TimeoutError, HTTPError, ReadTimeoutError
@@ -59,6 +61,8 @@ class TestEtcdDriverFV(TestCase):
         self.resync_etcd = StubEtcd()
 
         self.driver = EtcdDriver(sck)
+        self.orig_next_watcher_event = self.driver._next_watcher_event
+        self.driver._next_watcher_event = self._next_watcher_event
         self.msg_reader = StubMessageReader(sck)
         self.msg_writer = StubMessageWriter(sck)
         self.driver._msg_reader = self.msg_reader
@@ -71,6 +75,20 @@ class TestEtcdDriverFV(TestCase):
         self._logging_patch = patch("calico.etcddriver.driver."
                                     "complete_logging", autospec=True)
         self._logging_patch.start()
+
+    def _next_watcher_event(self):
+        self._resync_thread_waiting = True
+        try:
+            return self.orig_next_watcher_event()
+        finally:
+            self._resync_thread_waiting = False
+
+    def wait_for_resync_thread_to_be_waiting(self):
+        start_time = time.time()
+        while not self._resync_thread_waiting:
+            time.sleep(0.01)
+            if time.time() > start_time + 1:
+                self.fail("Timed out waiting for resync thread to be waiting")
 
     def test_mainline_resync(self):
         """
@@ -249,22 +267,30 @@ class TestEtcdDriverFV(TestCase):
             VERSION_DIR, recursive=True, timeout=90, wait_index=15
         )
 
+        # For determinism, wait until the resync thread is waiting for an
+        # event from the watcher.
+        self.wait_for_resync_thread_to_be_waiting()
+
         # Send a resync request from Felix.
         self.msg_reader.send_msg(MSG_TYPE_RESYNC, {})
 
-        # Respond to the watcher, this should trigger the resync.
-        watcher_req.respond_with_value(
-            "/calico/v1/adir/ekey",
-            "e",
-            mod_index=15,
-            action="set"
-        )
-        self.assert_msg_to_felix(MSG_TYPE_UPDATE, {
-            MSG_KEY_KEY: "/calico/v1/adir/ekey",
-            MSG_KEY_VALUE: "e",
-        })
-        self.assert_flush_to_felix()
+        # Then, for determinism, wait for the reader to set its flag
+        start_time = time.time()
+        while not self.driver._resync_requested:
+            time.sleep(0.01)
+            if time.time() > start_time + 1:
+                self.fail("_resync_requested not set.")
 
+        # Respond to the watcher.  We use a directory deletion so that the
+        # resync thread will squash the update.
+        watcher_req.respond_with_value(
+            "/calico/v1/somedir",
+            value=None,
+            mod_index=15,
+            action="delete",
+            dir=True,
+        )
+        self.assert_flush_to_felix()
         self.assert_status_message(STATUS_WAIT_FOR_READY)
 
         # Re-do the config handshake.
