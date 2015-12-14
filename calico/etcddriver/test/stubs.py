@@ -24,6 +24,8 @@ import threading
 import logging
 from Queue import Queue, Empty
 
+import time
+
 from calico.etcddriver.protocol import (
     MessageReader, MessageWriter, MSG_KEY_TYPE
 )
@@ -114,22 +116,35 @@ class PipeFile(object):
         self.queue = Queue()
         self.buf = None
         self._finished = False
+        self.read_in_progress = False
 
     def read(self, length):
-        data = ""
-        if not self.buf:
-            self.buf = self.queue.get()
-        while len(data) < length:
-            if isinstance(self.buf, BaseException):
-                raise self.buf
-            data += self.buf[:length - len(data)]
-            self.buf = self.buf[length - len(data):]
+        try:
+            self.read_in_progress = True
+            data = ""
             if not self.buf:
-                try:
-                    self.buf = self.queue.get_nowait()
-                except Empty:
-                    break
-        return data
+                self.buf = self.queue.get()
+            while len(data) < length:
+                if isinstance(self.buf, BaseException):
+                    raise self.buf
+                data += self.buf[:length - len(data)]
+                self.buf = self.buf[length - len(data):]
+                if not self.buf:
+                    try:
+                        self.buf = self.queue.get_nowait()
+                    except Empty:
+                        break
+            return data
+        finally:
+            self.read_in_progress = False
+
+    def wait_for_read(self):
+        """Waits until a read is in progress."""
+        start_time = time.time()
+        while not self.read_in_progress:
+            time.sleep(0.01)
+            if time.time() > start_time + 1:
+                raise AssertionError("No read before timeout")
 
     def write(self, data):
         self.queue.put(data)
