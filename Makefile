@@ -252,5 +252,5 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 
 setup-env:
 	virtualenv venv
-	venv/bin/pip install --upgrade -r build_calicoctl/requirements.txt
+	venv/bin/pip install --upgrade -r calicoctl/requirements.txt
 	@echo "run\n. venv/bin/activate"
