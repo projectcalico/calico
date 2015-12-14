@@ -247,6 +247,7 @@ class EtcdDriver(object):
         _log.info("Config loaded; continuing.")
 
         while not self._stop_event.is_set():
+            _log.info("Stop event not set, starting new resync...")
             self._reset_resync_thread_stats()
             loop_start = monotonic_time()
             try:
@@ -302,6 +303,7 @@ class EtcdDriver(object):
             finally:
                 self._first_resync = False
                 self._resync_requested = False
+        _log.info("Stop event set, exiting resync loop.")
 
     def _wait_for_config(self):
         while not self._config_received.is_set():
@@ -579,7 +581,7 @@ class EtcdDriver(object):
                 raise ResyncRequested()
             self._maybe_log_resync_thread_stats()
             try:
-                event = self._watcher_queue.get(timeout=1)
+                event = self._next_watcher_event()
             except Empty:
                 pass
             else:
@@ -603,6 +605,14 @@ class EtcdDriver(object):
                                                      ev_mod)
             for child_key in deleted_keys:
                 self._on_key_updated(child_key, None)
+
+    def _next_watcher_event(self):
+        """Get the next event from the watcher queue
+
+        This is mostly here to allow it to be hooked in the UTs.
+
+        :raises Empty if there is no event within the timeout."""
+        return self._watcher_queue.get(timeout=1)
 
     def _ensure_watcher_running(self, snapshot_index):
         """
@@ -643,16 +653,21 @@ class EtcdDriver(object):
             self._watcher_stop_event = None
 
     def get_etcd_connection(self):
+        port = self._etcd_url_parts.port or 2379
         if self._etcd_url_parts.scheme == "https":
+            _log.debug("Getting new HTTPS connection to %s:%s",
+                       self._etcd_url_parts.hostname, port)
             return HTTPSConnectionPool(self._etcd_url_parts.hostname,
-                                       self._etcd_url_parts.port or 2379,
+                                       port,
                                        key_file=self._etcd_key_file,
                                        cert_file=self._etcd_cert_file,
                                        ca_certs=self._etcd_ca_file,
                                        maxsize=1)
         else:
+            _log.debug("Getting new HTTP connection to %s:%s",
+                       self._etcd_url_parts.hostname, port)
             return HTTPConnectionPool(self._etcd_url_parts.hostname,
-                                      self._etcd_url_parts.port or 2379,
+                                      port,
                                       maxsize=1)
 
     def _on_key_updated(self, key, value):
