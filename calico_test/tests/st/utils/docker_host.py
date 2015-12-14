@@ -193,8 +193,8 @@ class DockerHost(object):
 
     def cleanup(self):
         """
-        Clean up this host, including removing any containers is created.  This
-        is necessary especially for Docker-in-Docker so we don't leave dangling
+        Clean up this host, including removing any containers created.  This is
+        necessary especially for Docker-in-Docker so we don't leave dangling
         volumes.
         :return:
         """
