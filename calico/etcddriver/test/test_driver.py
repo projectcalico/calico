@@ -134,6 +134,7 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_VALUE: "b",
         })
         # Respond to the watcher with another event.
+        snap_stream.wait_for_read()
         watcher_req.respond_with_value(
             "/calico/v1/adir2/dkey",
             "d",
@@ -348,6 +349,7 @@ class TestEtcdDriverFV(TestCase):
 
         # Respond to the watcher, this should get merged into the event
         # stream at some point later.
+        snap_stream.wait_for_read()
         watcher_req.respond_with_value(
             "/calico/v1/adir/bkey",
             "b",
@@ -664,6 +666,9 @@ class TestEtcdDriverFV(TestCase):
             MSG_KEY_KEY: "/calico/v1/adir/akey",
             MSG_KEY_VALUE: "akey's value",
         })
+        # Wait until the driver is blocked on the next read.  This makes the
+        # test deterministic.
+        snap_stream.wait_for_read()
         return snap_stream, req
 
     def assert_status_message(self, status):
