@@ -38,7 +38,7 @@ from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import install_global_rules
-from calico.felix.splitter import UpdateSplitter
+from calico.felix.splitter import UpdateSplitter, CleanupManager
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.devices import InterfaceWatcher
@@ -98,21 +98,26 @@ def _main_greenlet(config):
                                         v6_dispatch_chains,
                                         v6_rules_manager,
                                         etcd_api.status_reporter)
-
-        update_splitter = UpdateSplitter(config,
-                                         [v4_ipset_mgr, v6_ipset_mgr],
-                                         [v4_rules_manager, v6_rules_manager],
-                                         [v4_ep_manager, v6_ep_manager],
-                                         [v4_filter_updater,
-                                          v6_filter_updater,
-                                          v6_raw_updater,
-                                          v4_nat_updater],
-                                         v4_masq_manager)
+        cleanup_mgr = CleanupManager(
+            config,
+            [v4_filter_updater, v6_filter_updater, v4_nat_updater],
+            [v4_ipset_mgr, v6_ipset_mgr]
+        )
+        update_splitter = UpdateSplitter(
+            [
+                v4_ipset_mgr, v6_ipset_mgr,
+                v4_rules_manager, v6_rules_manager,
+                v4_ep_manager, v6_ep_manager,
+                v6_raw_updater,
+                v4_masq_manager,
+                cleanup_mgr,
+            ]
+        )
         iface_watcher = InterfaceWatcher(update_splitter)
 
         _log.info("Starting actors.")
         hosts_ipset_v4.start()
-        update_splitter.start()
+        cleanup_mgr.start()
 
         v4_filter_updater.start()
         v4_nat_updater.start()
@@ -133,7 +138,7 @@ def _main_greenlet(config):
 
         top_level_actors = [
             hosts_ipset_v4,
-            update_splitter,
+            cleanup_mgr,
 
             v4_nat_updater,
             v4_filter_updater,

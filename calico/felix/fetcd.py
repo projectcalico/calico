@@ -521,7 +521,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             # cleanup.
             self.begin_polling.wait()  # Make sure splitter is set.
             self._been_in_sync = True
-            self.splitter.on_datamodel_in_sync(async=True)
+            self.splitter.on_datamodel_in_sync()
             if self._config.REPORT_ENDPOINT_STATUS:
                 self._status_reporter.clean_up_endpoint_statuses(async=True)
             self._update_hosts_ipset()
@@ -588,7 +588,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.debug("Endpoint %s updated", combined_id)
         _stats.increment("Endpoint created/updated")
         endpoint = parse_endpoint(self._config, combined_id, response.value)
-        self.splitter.on_endpoint_update(combined_id, endpoint, async=True)
+        self.splitter.on_endpoint_update(combined_id, endpoint)
 
     def on_endpoint_delete(self, response, hostname, orchestrator,
                            workload_id, endpoint_id):
@@ -597,7 +597,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                                  endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
         _stats.increment("Endpoint deleted")
-        self.splitter.on_endpoint_update(combined_id, None, async=True)
+        self.splitter.on_endpoint_update(combined_id, None)
 
     def on_rules_set(self, response, profile_id):
         """Handler for rules updates, passes the update to the splitter."""
@@ -605,13 +605,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _stats.increment("Rules created/updated")
         rules = parse_rules(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
-        self.splitter.on_rules_update(profile_id, rules, async=True)
+        self.splitter.on_rules_update(profile_id, rules)
 
     def on_rules_delete(self, response, profile_id):
         """Handler for rules deletes, passes the update to the splitter."""
         _log.debug("Rules for %s deleted", profile_id)
         _stats.increment("Rules deleted")
-        self.splitter.on_rules_update(profile_id, None, async=True)
+        self.splitter.on_rules_update(profile_id, None)
 
     def on_tags_set(self, response, profile_id):
         """Handler for tags updates, passes the update to the splitter."""
@@ -619,13 +619,13 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _stats.increment("Tags created/updated")
         rules = parse_tags(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
-        self.splitter.on_tags_update(profile_id, rules, async=True)
+        self.splitter.on_tags_update(profile_id, rules)
 
     def on_tags_delete(self, response, profile_id):
         """Handler for tags deletes, passes the update to the splitter."""
         _log.debug("Tags for %s deleted", profile_id)
         _stats.increment("Tags deleted")
-        self.splitter.on_tags_update(profile_id, None, async=True)
+        self.splitter.on_tags_update(profile_id, None)
 
     def on_host_ip_set(self, response, hostname):
         if not self._config.IP_IN_IP_ENABLED:
@@ -682,11 +682,11 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_ipam_v4_pool_set(self, response, pool_id):
         _stats.increment("IPAM pool created/updated")
         pool = parse_ipam_pool(pool_id, response.value)
-        self.splitter.on_ipam_pool_update(pool_id, pool, async=True)
+        self.splitter.on_ipam_pool_update(pool_id, pool)
 
     def on_ipam_v4_pool_delete(self, response, pool_id):
         _stats.increment("IPAM pool deleted")
-        self.splitter.on_ipam_pool_update(pool_id, None, async=True)
+        self.splitter.on_ipam_pool_update(pool_id, None)
 
 
 class EtcdStatusReporter(EtcdClientOwner, Actor):
