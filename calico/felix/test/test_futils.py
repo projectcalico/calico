@@ -20,12 +20,8 @@ Test Felix utils.
 """
 import logging
 import mock
-import sys
 
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
+import unittest2
 
 import calico.felix.futils as futils
 
@@ -51,7 +47,7 @@ UNIQUE_SHORTEN_TESTS = [
 ]
 
 
-class TestFutils(unittest.TestCase):
+class TestFutils(unittest2.TestCase):
     def setUp(self):
         pass
 
@@ -73,8 +69,8 @@ class TestFutils(unittest.TestCase):
 
     def test_bad_check_call(self):
         # Test an invalid command - must parse but not return anything.
+        args = ["ls", "wibble_wobble"]
         try:
-            args = ["ls", "wibble_wobble"]
             futils.check_call(args)
             self.assertTrue(False)
         except futils.FailedSystemCall as e:
@@ -141,7 +137,7 @@ class TestFutils(unittest.TestCase):
                          (s, expected, result))
 
 
-class TestStats(unittest.TestCase):
+class TestStats(unittest2.TestCase):
     def setUp(self):
         futils._registered_diags = []
         self.sc = futils.StatCounter("foo")
@@ -160,21 +156,22 @@ class TestStats(unittest.TestCase):
         self.assertEqual(self.sc.stats["baz"], 3)
         m_log = mock.Mock(spec=logging.Logger)
         self.sc._dump(m_log)
-        m_log.assert_has_calls([
-            mock.call.info("%s: %s", "bar", 2),
-            mock.call.info("%s: %s", "baz", 3),
+        self.assertEqual(m_log.info.mock_calls, [
+            mock.call("%s: %s", "bar", 2),
+            mock.call("%s: %s", "baz", 3),
         ])
 
     def test_dump_diags(self):
         with mock.patch("calico.felix.futils.stat_log") as m_log:
             self.sc.increment("bar")
             futils.dump_diags()
-            m_log.assert_has_calls([
-                mock.call.info("=== DIAGNOSTICS ==="),
-                mock.call.info("--- %s ---", "foo"),
-                mock.call.info("%s: %s", "bar", 1),
-                mock.call.info("=== END OF DIAGNOSTICS ==="),
-            ], any_order=True)
+            self.assertEqual(m_log.info.mock_calls,
+                             [
+                                 mock.call("=== DIAGNOSTICS ==="),
+                                 mock.call("--- %s ---", "foo"),
+                                 mock.call("%s: %s", "bar", 1),
+                                 mock.call("=== END OF DIAGNOSTICS ==="),
+                             ])
 
     def test_dump_diags_process(self):
         process_results = [

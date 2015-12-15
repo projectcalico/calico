@@ -98,8 +98,6 @@ class TestDispatchChains(BaseTestCase):
         ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
-
-        self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
             args, to_updates, from_updates, to_chain_names,
@@ -192,8 +190,6 @@ class TestDispatchChains(BaseTestCase):
         ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
-
-        self.iptables_updater.assertCalledOnce()
         args = self.iptables_updater.rewrite_chains.call_args
         self.assert_iptables_update(
             args,
