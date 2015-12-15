@@ -49,7 +49,12 @@ For example, to run `calicoctl node`, you would call something like this:
 ```
 sudo ETCD_SCHEME=https ETCD_KEY_FILE=/path/to/client.key \
      ETCD_CA_CERT_FILE=/path/to/ca.crt ETCD_CERT_FILE=/path/to/client.crt \
-     ETCD_AUTHORITY=127.0.0.1:2379 dist/calicoctl node
+     ETCD_AUTHORITY=127.0.0.1:2379 calicoctl node
+```
+Alternatively, if you have previously defined/exported your environment
+variables, you can run `sudo` with the `-E` flag to pass in your environment:
+```
+sudo -E calicoctl node
 ```
 
 Here's a list of commands that must be run as root:
