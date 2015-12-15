@@ -21,6 +21,6 @@ RUN /build.sh
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's the thing they're most likely to change.
 COPY filesystem /
-COPY restart-calico-confd /usr/local/bin
+COPY restart-calico-confd /usr/local/bin/
 
 CMD ["/sbin/start_runit"]
