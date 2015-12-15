@@ -6,43 +6,44 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Set up Calico on Ubuntu using Vagrant
+# Running the Calico tutorials on Ubuntu using Vagrant and VirtualBox
 
 These instructions allow you to set up an Ubuntu cluster ready to network Docker containers with 
 [Calico Docker networking][calico-networking] using Vagrant.
 
-## Streamlined setup
+## 1. Streamlined setup of the VMs
 
-1) Install dependencies
+### 1.1 Install dependencies
 
 * [VirtualBox][virtualbox] 5.0.0 or greater.
 * [Vagrant][vagrant] 1.7.4 or greater.
 * [Git][git]
 
 <!--- master only -->
-2) Clone this project
+### 1.2 Clone this project
 
     git clone https://github.com/projectcalico/calico-docker.git
 <!--- else
-2) Clone this project, and checkout the **release** release
+### 1.2 Clone this project, and checkout the **release** release
 
     git clone https://github.com/projectcalico/calico-docker.git
     git checkout tags/**release**
 <!--- end of master only -->
     
-3) There are two demonstration options depending on whether you are running with libnetwork or the
-   default Docker networking.  Select the required demonstration by changing into the appropriate directory:
+### 1.3 Startup and SSH
 
-  - For Docker default networking
-  
-    ```cd calico-docker/docs/getting-started/default-networking/vagrant-ubuntu```
-    
-  - For libnetwork
-  
-    ```cd calico-docker/docs/getting-started/libnetwork/vagrant-ubuntu```
-    
-4) Startup and SSH
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the networking option
+by changing into the appropriate directory.
 
+For Calico as a Docker network plugin
+  
+    cd calico-docker/docs/calico-with-docker/docker-network-plugin/vagrant-ubuntu
+
+For Calico without Docker networking
+  
+    cd calico-docker/docs/calico-with-docker/without-docker-networking/vagrant-ubuntu
+        
 Use vagrant to create and boot your VMs.
 
     vagrant up
@@ -54,7 +55,7 @@ To connect to your servers
     * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
     * run `vagrant putty <hostname>`
 
-5) Verify environment
+### 1.4 Verify environment
 
 You should now have two Ubuntu servers, with Etcd running on the first server.
 
@@ -80,15 +81,16 @@ And finally check that Docker is running on both hosts by running
 
     docker ps
 
-## Try out Calico Networking
+## 2. Try out Calico Networking
 
 Now you have a basic two node Ubuntu cluster setup and you are ready to try Calico networking.
 
-You can now run through the standard Calico demonstration.  There are two demonstration options depending on 
-whether you are running with libnetwork or the default Docker networking.
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the instructions based on 
+the networking option that you chose in step (3).
 
-- [demonstration with Docker default networking](default-networking/Demonstration.md)
-- [demonstration with libnetwork](libnetwork/Demonstration.md)
+- [Calico as a Docker network plugin walkthrough](docker-network-plugin/README.md) 
+- [Calico without Docker networking walkthrough](without-docker-networking/README.md)  
 
 [libnetwork]: https://github.com/docker/libnetwork
 [experimental-channel]: https://github.com/docker/docker/tree/master/experimental
@@ -96,4 +98,4 @@ whether you are running with libnetwork or the default Docker networking.
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
 [calico-networking]: https://github.com/projectcalico/calico-docker
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/VagrantUbuntu.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/VagrantUbuntu.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -6,16 +6,16 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Running calico-docker on DigitalOcean
+# Running the Calico tutorials on DigitalOcean
 Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you 
 can also run Calico within a public cloud such as DigitalOcean.  The following instructions show how to network 
 containers using Calico routing and the Calico security model on DigitalOcean.
 
-## Getting Started
+## Getting Started with Digital Ocean
 These instructions assume a total of two DigitalOcean hosts running CoreOS. For more general background, see the 
 [CoreOS on DigitalOcean documentation][coreos-digitalocean].
 
-## Spinning up the VMs
+## 1. Spinning up the VMs
 From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
 
 In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this 
@@ -37,13 +37,13 @@ You should now see something similar to the following:
 
 Before selecting "Create Droplet", you will need to specify the User Data.  
 
-There are two demonstration options depending on whether you are running with libnetwork or the 
-default Docker networking.  Select the appropriate User Data based on the demonstration option.
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the cloud-config based on 
+the networking option that you choose.
 
-- [User Data for Docker default networking](default-networking/cloud-config) 
-- [User Data for libnetwork](libnetwork/cloud-config) 
-    
-
+- [User Data for Calico as a Docker network plugin](docker-network-plugin/cloud-config) 
+- [User Data for Calico without Docker networking](without-docker-networking/cloud-config)  
+  
 For the first droplet `calico-01`, paste in the cloud config from
 `user-data-first`.
 
@@ -56,8 +56,8 @@ pasting it in:
 - Replace all instances of `172.17.8.101` with the private IPv4 address of `calico-01`.
 
 
-# Running the demonstration
-You can now run through the standard Calico demonstration.  You will require
+## 2. Running through the worked example
+You can now run through the standard Calico worked example.  You will require
 SSH access to the nodes.
 
 SSH into each Calico host you created using the IP addresses found in the 
@@ -66,14 +66,15 @@ Droplets section of the Web Console:
 ssh core@<ip>
 ```
 
-> When running the demonstrations, be sure to follow the additional 
-> instructions for configuring `ipip` and `nat-outgoing`. 
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the instructions based on 
+the networking option that you chose for the cloud config in step (1).
 
-There are two demonstration options depending on whether you are running with 
-libnetwork or the default Docker networking.
+> In the worked example, be sure to follow the additional instructions for
+configuring `ipip` and `nat-outgoing`. 
 
-- [demonstration with Docker default networking](default-networking/Demonstration.md)
-- [demonstration with libnetwork](libnetwork/Demonstration.md) 
+- [Calico as a Docker network plugin walkthrough](docker-network-plugin/README.md) 
+- [Calico without Docker networking walkthrough](without-docker-networking/README.md)  
 
 ## (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in DigitalOcean can be exposed to the internet.  Since the containers 
@@ -134,4 +135,4 @@ curl http://<host public ip>:80
 ```
 
 [coreos-digitalocean]: https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/DigitalOcean.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/DigitalOcean.md?pixel)](https://github.com/igrigorik/ga-beacon)

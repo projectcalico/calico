@@ -7,11 +7,23 @@
 <!--- end of master only -->
 
 # Logging
-All components log to directories under `/var/log/calico` inside the calico-node container. By default this is mapped to the `/var/log/calico` directory on the host but can be changed when using `calicoctl` by passing in the `--log-dir` parameter.
 
-By default, each component (below) logs to its own directory. Files are automatically rotated, and by default 10 files of 1MB each are kept. The current log file is called `current` and rotated files have @ followed by a timestamp detailing when the files was rotated in [tai64n](http://cr.yp.to/libtai/tai64.html#tai64n) format.
+## The calico-node container
 
-All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html). Each component can be configured by dropping a file named `config` into that component's logging directory.
+The components in the calico-node container all log to the directories under
+`/var/log/calico` inside the container.  By default this is mapped to the
+`/var/log/calico` directory on the host but can be changed by specifying a
+`--log-dir` parameter on the `calicoctl node` command.
+
+By default, each component (below) logs to its own directory. Files are
+automatically rotated, and by default 10 files of 1MB each are kept. The
+current log file is called `current` and rotated files have @ followed by a
+timestamp detailing when the files was rotated in [tai64n](http://cr.yp.to/libtai/tai64.html#tai64n) format.
+
+All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html). 
+Each component can be configured by dropping a file named `config` into that
+component's logging directory.
+
 e.g. to configure bird to only log 4 files of 10KB each
 ```
 #/var/log/calico/bird/config
@@ -19,50 +31,71 @@ s10000
 n4
 ```
 
-svlogd can also be configured to forward logs to syslog, to prefix each line and to filter logs. See the [documentation](http://smarden.org/runit/svlogd.8.html) for further details.
+svlogd can also be configured to forward logs to syslog, to prefix each line
+and to filter logs. See the [documentation](http://smarden.org/runit/svlogd.8.html)
+for further details.
 
-## Bird/Bird6
-Bird and Bird6 are used for distributing IPv4 and IPv6 routes between Calico enabled hosts.
+See the following sub-sections for details on configuring the log level for 
+each calico-node component.
 
-Directory | Default level
---- | ---
-`bird` and `bird6` | `debug`
-
-To change the level, edit the config file at `node_filesystem/templates/bird.cfg.template` by following the [documentation](http://bird.network.cz/?get_doc&f=bird-3.html). This will require a rebuild of the calico-node image.
-
-## Felix
-Felix is the primary Calico agent that runs on each machine that hosts endpoints.
+### Bird/Bird6
+Bird and Bird6 are used for distributing IPv4 and IPv6 routes between Calico
+enabled hosts.
 
 Directory | Default level
 --- | ---
-`felix` | `DEBUG`
+`bird` and `bird6` | `info`
 
-Log can be changed by writing to etcd using the following key `/calico/v1/config/LogSeverityScreen`
-Valid values are detailed in the [documentation](http://docs.projectcalico.org/en/latest/configuration.html)
+Use the `calicoctl config bgp loglevel` command on any host to change the
+log level across all BGP nodes, _or_ use the `calicoctl config node bgp loglevel`
+command on a specific host to change the log level for that specific BGP node.
 
+Valid log levels are:  none, debug and info.  e.g.
 
-## confd
-confd generates configuration files for Felix and Bird.
+        calicoctl config bgp loglevel none
+        calicoctl config node bgp loglevel debug
+
+### Felix
+Felix is the primary Calico agent that runs on each machine that hosts
+endpoints.  Felix is responsible for the programming of iptables rules on the
+host.
+
+Directory | Default level
+--- | ---
+`felix` | `info`
+
+Use the `calicoctl config felix loglevel` command on any host to change the
+log level on all Felix instances.
+
+Valid log levels are:  none, debug, info, warning, error, critical
+
+        calicoctl config felix loglevel error
+
+### confd
+The confd agent generates configuration files for Felix and Bird using
+configuration data present in the etcd datastore.
 
 Directory | Default level
 --- | ---
 `confd` | `DEBUG`
 
-To change the log level, edit the node_filesystem/etc/service/confd/run and rebuild the calico-node image.
+To change the log level, edit the node_filesystem/etc/service/confd/run and
+rebuild the calico-node image.
 
-For more information on the allowed levels, see the [documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
+For more information on the allowed levels, see the
+[documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
 
 
-## Docker Driver
-The Docker driver receives requests from the Docker daemon for configuring networks.
+## Docker network and IPAM driver
+When running Calico as a Docker network plugin (i.e. using the `--libnetwork`
+option on the `calicoctl node` command), the Calico driver is run in a separate
+calico-libnetwork container.
 
-It's implemented using [Flask](http://flask.pocoo.org/) and [Gunicorn](http://gunicorn.org/). Gunicorn error and access logs are combined with the Flask application logs in a single file.
+The logs may be viewed running the standard `docker logs` command for this
+container.  e.g.
 
-Directory | Default level
---- | ---
-`dockerdriver` | `INFO`
+    docker logs calico-libnetwork
 
-To change the Gunicorn log level, edit the node_filesystem/etc/service/calico-driver/run and rebuild the calico-node image. See the Gunicorn [documentation](http://gunicorn-docs.readthedocs.org/en/latest/settings.html#loglevel) for more details.
-
-To configure the logging for the driver itself, edit the Python code in calico_containers/docker_plugin.py. For more information see the flask [documentation](http://flask.pocoo.org/docs/0.10/errorhandling/). Again, this requires a rebuild of the calico-node image.
+For details on how to change the log levels for the plugin, please view the
+[libnetwork-plugin documentation](https://github.com/projectcalico/libnetwork-plugin/blob/master/README.md).
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/logging.md?pixel)](https://github.com/igrigorik/ga-beacon)

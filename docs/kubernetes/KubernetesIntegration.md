@@ -8,7 +8,7 @@
 
 # Add Calico to an Existing Kubernetes Cluster 
 
-This guide will describe the steps required to install Calico on an existing Kubernetes cluster.
+This tutorial will describe the steps required to install Calico on an existing Kubernetes cluster.
 
 ## Requirements
 - An existing Kubernetes cluster running Kubernetes >= v1.0
@@ -20,7 +20,7 @@ There are two components of a Calico / Kubernetes integration.
 - The Calico per-node docker container, [`calico/node`](https://hub.docker.com/r/calico/node/)
 - The [calico-kubernetes](https://github.com/projectcalico/calico-kubernetes) network plugin.
 
-> In addition, Calico relies on `etcd` for a distributed data storage.  This guide does not cover configuring `etcd`.
+> In addition, Calico relies on `etcd` for a distributed data storage.  This tutorial does not cover configuring `etcd`.
 
 The `calico/node` docker container must be run on the Kubernetes master and each Kubernetes node in your cluster, as it contains the BGP agent necessary for Calico routing to occur.
 The `calico-kubernetes` plugin integrates directly with the Kubernetes `kubelet` process on each node to discover which pods have been created, and adds them to Calico networking.
@@ -58,7 +58,7 @@ DEFAULT_POLICY=allow
 CALICO_IPAM=true
 KUBE_AUTH_TOKEN=<INSERT_AUTH_TOKEN>
 ```
-> Supported configuration options are discussed in the [configuration guide](PluginConfiguration.md).
+> Supported configuration options are discussed in the [Configuring the Calico Kubernetes Plugin tutorial](PluginConfiguration.md).
 
 ## Configuring Kubernetes
 #### Configuring the Kubelet 

@@ -6,30 +6,38 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Calico with Docker default networking
+# Calico without Docker networking (i.e. `--net=none`)
 
-This demonstration uses Docker's standard networking infrastructure, requiring you to explicitly add a created container into a Calico network.
+This tutorial describes how to set up a Calico cluster in a Docker environment
+without Docker networking (i.e. --net=none).  With this option, Docker creates 
+a container with its own network stack, but not to take any steps to configure
+its network.  Rather than have Docker configure the network, in this tutorial
+we use the `calicoctl` command line tool to add a container into a Calico 
+network: adding the required interface and routes in to the container, and 
+configuring Calico with the correct endpoint information.
 
-## Environment
-This demonstration makes some assumptions about the environment you have.
-See [Environment Setup](EnvironmentSetup.md) for instructions on getting an 
-appropriate environment.
+## 1. Environment setup
+
+To run through the worked example in this tutorial you will to set up two hosts
+with a number of installation dependencies.
+
+Follow the instructions in one of the tutorials below to set up a virtualized
+environment using Vagrant or a cloud service - be sure to follow the
+appropriate instructions for using _Calico without Docker networking_.
+
+- [Vagrant install with CoreOS](../VagrantCoreOS.md)
+- [Vagrant install with Ubuntu](../VagrantUbuntu.md)
+- [Amazon Web Services (AWS)](../AWS.md)
+- [Google Compute Engine (GCE)](../GCE.md)
+- [DigitalOcean](../DigitalOcean.md)
+
+Altenatively, you can manually configure your hosts.
+- [Manual setup](ManualSetup.md)
 
 If you have everything set up properly you should have `calicoctl` in your 
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
 
-
-## Running in the cloud (AWS / DigitalOcean / GCE)
-
-If you are running in the cloud, you will need to configure an IP Pool with
-the `ipip` and `nat-outgoing` options.
-
-On either node:
-
-    calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-
-
-## Starting Calico services<a id="calico-services"></a>
+## 2. Starting Calico services
 
 Once you have your cluster up and running, start calico on all the nodes
 
@@ -51,9 +59,19 @@ You should see output like this on each node
     CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
     ffe6cb403e9b        calico/node:latest              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
 
-## Networking containers.
+## 3. Running in the cloud (AWS / DigitalOcean / GCE)
 
-### Starting containers
+If you are not running in the cloud you may skip this step and jump to step 4.
+
+If you are running in the cloud, you will need to first configure an IP Pool
+with the `ipip` and `nat-outgoing` options.
+
+On either node:
+
+    calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
+    
+## 4. Starting containers
+
 Let's go ahead and start a few containers on each host.
 
 On calico-01
@@ -67,7 +85,8 @@ On calico-02
     docker run --net=none --name workload-D -tid busybox
     docker run --net=none --name workload-E -tid busybox
 
-### Adding Calico networking
+## 5. Adding Calico networking
+
 Now that docker is running the containers, we can use `calicoctl` to add 
 networking to them.
 
@@ -114,7 +133,8 @@ On calico-02:
  where the container is hosted.*
 
 
-### Testing it
+## 6. Validation
+
 By default, profiles are configured so that their members can communicate with 
 one another, but workloads in other profiles cannot reach them. A, C and E are 
 all in the same profile so should be able to ping each other.  B and D are in 
@@ -140,5 +160,12 @@ For example:
 
     calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1
 
-See the [IPv6 demonstration](DemonstrationIPv6.md) for a worked example.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/default-networking/Demonstration.md?pixel)](https://github.com/igrigorik/ga-beacon)
+See the [IPv6 worked example](IPv6.md) for a worked example.
+
+## Advanced network policy
+
+For details about advanced policy options read the 
+[Advanced Network Policy tutorial](../../AdvancedNetworkPolicy.md).
+
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/without-docker-networking/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+

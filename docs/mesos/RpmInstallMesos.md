@@ -1,5 +1,13 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.13.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Create and Install the Mesos + Net-Modules RPM
-This guide will walk you through building and installing Mesos + Net-Modules from RPMs. These RPMs will automate the installation of everything needed to run Mesos + Net-Modules in your cluster.
+This tutorial will walk you through building and installing Mesos + Net-Modules from RPMs. These RPMs will automate the installation of everything needed to run Mesos + Net-Modules in your cluster.
 
 ## Build and Install the RPM
 The Mesos + Net-Modules RPMs can easily be built and installed via the [net-modules repository](https://github.com/mesosphere/net-modules).
@@ -18,7 +26,7 @@ We will be need to set the correct environment variables for the master. These e
 
 First, you will need set the ZooKeeper URL in `/etc/mesos/zk`. Modify the line to include the IP address of the host where ZooKeeper is running.
 
-> Follow our [Core Services Preparation Guide](PrepareCoreServices.md) if you do not already have an instance of ZooKeeper running.
+> Follow our [Core Services Preparation tutorial](PrepareCoreServices.md) if you do not already have an instance of ZooKeeper running.
 
 The value in `/etc/mesos-master/quorum` may need to change depending on how many master hosts you have in your cluster. Mesos recommends that the quorum count is at least 1/2 the number of master hosts running. 
 
@@ -34,7 +42,10 @@ We will be need to set the correct environment variables for each agent. These e
 
 Append the following lines to `/etc/default/mesos-slave` on each of your agent hosts. 
 
-> Note, Mesos does not install `/calico/modules.json`, which is specified with the environment variable `MESOS_MODULES`. Follow one of our [Calico installation guides](https://github.com/projectcalico/calico-docker/tree/master/docs/mesos#calico) to ensure that `modules.json` is placed correctly.
+> Note, Mesos does not install `/calico/modules.json`, which is specified with 
+the environment variable `MESOS_MODULES`. Follow one of our 
+[Calico installation tutorials](README.md) to ensure that `modules.json` is placed
+correctly.
 
     MESOS_RESOURCES="ports(*):[31000-31100]"
     MESOS_MODULES=file:///calico/modules.json

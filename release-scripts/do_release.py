@@ -112,6 +112,9 @@ def start_release():
          "the master branch.")
     utils.check_or_exit("Are you currently on the correct revision")
 
+    # Before asking for version info, perform validation on the current code.
+    utils.validate_markdown_uris()
+
     old_version = utils.get_calicoctl_version()
     para("Current version is: %s" % old_version)
 

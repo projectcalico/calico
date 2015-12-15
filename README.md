@@ -9,13 +9,35 @@
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 <!--- end of master only -->
 
-# Calico on Docker
-As well as providing networking for OpenStack VMs, Calico can provide
-networking for containers in a Docker environment.  Each container gets its 
-own IP and fine grain security policy.  In addition, Calico can be deployed 
-without encapsulation or overlays to provide high performance at massive 
-scales.  For more information on Project Calico see 
-http://www.projectcalico.org/learn/.
+# Calico for containers
+Calico provides a highly scalable networking solution for connecting data 
+center workloads (containers, VMs, or bare metal).  It is based on the same 
+scalable IP networking principles as the internet: providing connectivity using
+a pure Layer 3 approach.  Calico can be deployed without encapsulation or 
+overlays to provide high performance at massive scales.
+
+Read more about it on the [Project Calico website](http://www.projectcalico.org).
+
+When using Calico networking in containerized environments, each container
+gets its own IP and fine grain security policy.  A `calico-node` service runs
+on each node which handles all of the necessary IP routing, installation of 
+policy rules, and distribution of routes across the cluster of nodes.
+
+This repository contains:
+-  The `calico-node` container Dockerfile and build environment.  It contains
+  the configuration and "glue" that pull together four separate processes to
+  provide Calico networking:
+  * Felix, the Calico worker process
+  * BIRD, the route distribution process
+    (there are separate processes for IPv4 and IPv6)
+  * Confd, a templating process to auto-generate configuration for BIRD
+-  A command line tool, `calicoctl`, which makes it easy to configure 
+   and start the Calico service listed above, and allows you to interact with 
+   the datastore (etcd) to define and apply rich security policy to the 
+   containers you create.
+-  Documentation and getting started tutorials for various different deployment
+   options.
+-  Build, test and release frameworks.
 
 Development is very active at the moment so please Star this project and check 
 back often.
@@ -26,89 +48,57 @@ We welcome questions/comments/feedback (and pull requests).
 * [Technical Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
 * [Slack Calico Users Channel](https://calicousers.slack.com) ([Sign up](https://calicousers-slackin.herokuapp.com))
 * IRC - [#calico](https://kiwiirc.com/client/irc.freenode.net/#calico)
-* For Calico-on-Docker specific issues, please [raise issues][raise-issues] on 
+* For issues related to Calico in a containerized environment, please 
+[raise issues](https://github.com/projectcalico/calico-docker/issues/new) on 
 GitHub.
 
-## How does it work?
+## Getting started
 
-Calico provides a highly scalable networking solution for connecting data 
-center workloads (containers, VMs, or bare metal).  It is based on the same 
-scalable IP networking principles as the internet, providing connectivity using
-standard IP routing and isolation between workloads (or other fine grained
-policy) using iptables programmed at the source and destination workloads.
+To get started using Calico, we recommend running through one or more of the 
+available tutorials linked below.
 
-Read more about it on the [Project Calico website][project-calico].
+These tutorials will help you understand the different environment options when 
+using Calico.  In most cases we provide worked examples using manual setup on
+your own servers, a quick set-up in a virtualized environment using Vagrant and
+a number of cloud services.
 
-Project Calico uses [etcd][etcd] to distribute information about workloads, 
-endpoints (a specific networking interface associated with a workload),
-and policy to each Docker host.
+- [Calico as a Docker network plugin](docs/calico-with-docker/docker-network-plugin/README.md)
+- [Calico without Docker networking](docs/calico-with-docker/without-docker-networking/README.md)
+- [Calico with Kubernetes](docs/kubernetes/README.md)
+- [Calico with Mesos](docs/mesos/README.md)
+- [Calico with Docker Swarm](docs/calico-with-docker/docker-network-plugin/CalicoSwarm.md)
 
-The `calico-node` service is a worker that configures the network endpoints 
-for containers, handles IP routing, and installs policy rules.  It runs in its 
-own Docker container, and comprises
-- Felix, the Calico worker process
-- BIRD, the route distribution process
+## Further reading
 
-We provide a command line tool, `calicoctl`, which makes it easy to configure 
-and start the Calico services listed above, and allows you to interact with 
-the etcd datastore to define and apply network and security policy to the 
-containers you create. Using `calicoctl`, you can provision Calico nodes, 
-endpoints, and define and manage a rich set of security policy. 
+You can read more about Calico networking in a containerized environment in
+the material listed below.
 
-## Getting Started
+  - **Learn how to configure Calico features in a deployment**
+    - [`calicoctl` Reference Guide](docs/calicoctl.md) explains how the 
+      `calicoctl` command line tool can be used to manage your Calico cluster
+    - [Logging](docs/logging.md) describes how to set logging 
+      levels and choose where Calico logs should be stored
+    - [Advanced Network Policy](docs/AdvancedNetworkPolicy.md) describes how 
+      to configure security policy between Calico endpoints and other networks
+    - [BGP Configuration](docs/bgp.md) explains how to manage the BGP peering
+      for integration of a Calico cluster in your network
+    - [External Connectivity](docs/ExternalConnectivity.md) describes how to
+      configure external connectivity for hosts on their own Layer 2 segment
+  - **Learn how Calico works under the covers**
+    - [Anatomy of a calico-node container](docs/Components.md) to understand
+      the key components that make up the `calico/node` service. 
+    - [etcd Directory Structure](docs/etcdStructure.md) for viewing how Calico 
+      stores data for network and endpoint configurations
+    - [Lifecycle of a container](docs/DockerContainerLifecycle.md) 
+      shows you what happens using Calico without Docker networking.
+  - **Learn how to get involved with Calico builds and lower level integrations**
+    - [Calico Repositories](docs/RepoStructure.md) to see the
+      collection of Calico related respoitories that collectively provide the
+      networking, tools, and orchestration integrations.
+    - [Building and testing calico-docker images](docs/Building.md) to build a Calico setup on your local 
+      machine for development and testing 
+  - **FAQ and Troubleshooting**
+    - [FAQ](docs/FAQ.md)
+    - [Troubleshooting](docs/Troubleshooting.md)
 
-To get started using, we recommend running through one or more of the available 
-[demonstrations](#demonstrations) described below.
-
-If you would like to get involved writing code for calico-docker, or if you 
-need to build binaries specific to your OS, checkout out the 
-[Building and testing guide](docs/Building.md).
-
-### Demonstrations
-
-Worked examples are available for demonstrating Calico networking with the 
-following different networking options:
-
-- [Demonstration with Docker default networking](docs/getting-started/default-networking/Demonstration.md)
-- [Demonstration with libnetwork](docs/getting-started/libnetwork/Demonstration.md)
-
-See the [Networking options](#networking-options) below for more details on 
-each of these different networking options.
-
-With each of these tutorials we provide details for running the demonstration 
-using manual setup on your own servers, or with a quick set-up in a virtualized
-environment using Vagrant, or a number of cloud services.
-
-We also provide the following additional demonstration: 
-- [Calico and Kubernetes](docs/kubernetes/README.md)
-- [Calico and Mesos](docs/mesos/README.md)
-
-
-### Networking options
-
-#### Docker default networking
-
-This uses Docker's standard networking infrastructure, requiring you to 
-explicitly add a created container into a Calico network.
-
-This is compatible with all Docker versions from 1.6 onwards.
-
-#### Docker with libnetwork
-
-Docker's native [libnetwork network driver][libnetwork] is available in the 
-Docker 1.9 release currently undergoing development.
-
-Setup of the libnetwork environment is a little more involved since it requires
-the current master (1.9.dev) builds of Docker, and the use of etcd as a
-datastore for Docker clustering.
-
-## FAQ 
-For more information on what you can do with Calico, please visit the 
-[frequently asked questions](docs/FAQ.md) page. 
-
-
-[libnetwork]: https://github.com/docker/libnetwork
-[raise-issues]: https://github.com/projectcalico/calico-docker/issues/new
-[project-calico]: http://www.projectcalico.org
-[etcd]: https://github.com/coreos/etcd
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

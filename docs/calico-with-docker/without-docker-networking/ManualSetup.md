@@ -6,62 +6,39 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Preparing the environment for Docker default networking
+# Preparing the environment for Calico without Docker networking
 
-The basic Calico demonstration is run on two Linux servers that have a number
-of installation requirements.
+The worked example in the _Calico without Docker networking tutorial_ is run on
+two Linux servers that have a number of installation requirements.
 
-This document describes how to get a working environment for the demonstration.
-
-Follow instructions using either the [Automated setup](#automated-setup) for
-fast setup in a virtualized environment, or [Manual Setup](#manual-setup) if,
-for example, you are installing on bare metal servers or would like to
-understand the process in more detail.
-
-Once you have the environment set up, you can run through the 
-[demonstration](Demonstration.md).
-
-## Automated setup
-
-The worked examples below allow you to quickly set up a virtualized environment
-using Vagrant or a cloud service - be sure to follow the appropriate instructions
-for using the default Docker networking.
-
-- [Vagrant install with CoreOS](../VagrantCoreOS.md)
-- [Vagrant install with Ubuntu](../VagrantUbuntu.md)
-- [Amazon Web Services (AWS)](../AWS.md)
-- [Google Compute Engine (GCE)](../GCE.md)
-- [DigitalOcean](../DigitalOcean.md)
+This tutorial describes how to manually configure a working environment for
+the example.
 
 # Manual Setup
 
-## Summary
-
-The two Linux servers require a recent version of Linux with a few network 
-network related kernel modules to be loaded. The easiest way to ensure this and
-that the servers meet the requirements is to run `calicoctl checksystem`
-
-The servers also need:
-- Docker to be running - since the Calico agent is packaged as a Docker 
-container.
-- An Etcd cluster - which Calico uses for coordinating state between the nodes.
-- The `calicoctl` to be placed in the `$PATH`.
-
 ## Requirements
 
-For the demonstration, you just need 2 servers (bare metal or VMs) with a 
-modern 64-bit Linux OS and IP connectivity between them.
+You will need 2 servers (bare metal or VMs) with a  modern 64-bit Linux OS 
+and IP connectivity between them.
 
 We recommend configuring the hosts with the hostname `calico-01` and 
-`calico-02`.  The demonstration will refer to these hostnames.
+`calico-02`.  The tutorial will refer to these hostnames.
 
 They must have the following software installed:
+
 - Docker v1.6 or greater: [Docker][docker]
 - etcd installed and available on each node: [etcd documentation][etcd]
 - `ipset`, `iptables`, and `ip6tables` kernel modules.
+- The `calicoctl` binary in your path (see below)
 
-> NOTE: If you are running etcd with SSL/TLS, see the (Etcd Secure Cluster)[../../EtcdSecureCluster.md]
+You will also need an etcd cluster which Calico uses for coordinating state
+between the nodes.  This may installed on one or both of the two servers for
+the worked example.  See the [etcd documentation][etcd] for details on setting
+up a cluster.
+
+> NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster](../../EtcdSecureCluster.md)
 > page.
+
 ### Docker permissions
 
 Running Docker is much easier if your user has permissions to run Docker 
@@ -95,7 +72,7 @@ run `calicoctl node` the first time.  Select the appropriate versions of the
 ## Final checks
 
 Verify the hostnames.  If they don't match the recommended names above then
-you'll need to adjust the demonstration instructions accordingly.
+you'll need to adjust the tutorial instructions accordingly.
 
 Check that the hosts have IP addresses assigned, and that your hosts can ping
 one another.
@@ -105,7 +82,12 @@ the current etcd version if etcd is available.
 
     curl -L http://127.0.0.1:2379/version
     
+## Continue with the worked example
+
+With the environment set up, you can run through the remainder of the worked
+example in the [Calico without Docker networking tutorial](README.md).
+
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-docker/releases/
 [docker]: http://www.docker.com
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/default-networking/EnvironmentSetup.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/without-docker-networking/ManualSetup.md?pixel)](https://github.com/igrigorik/ga-beacon)

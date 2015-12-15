@@ -188,12 +188,8 @@ docker network create -d calico net1
 docker network create -d calico --ipam-driver calico net2
 ```
 
-If you create a network that does not use the Calico IPAM driver, IP assignment
-is handled by the default built-in bridge driver.
-
-If you create a network using the Calico IPAM driver, IP assignment is handled
-by Calico.  IPs are assigned from the available set of configured IP pools.
-
+Read our [Calico as a Docker network plugin tutorial](../calico-with-docker/docker-network-plugin/README.md)
+for more details.
 
 ### calicoctl node stop 
 This command is used to stop a `calico/node` instance.  If there are endpoints 

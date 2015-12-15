@@ -1,5 +1,13 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.13.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Manually Add Calico Networking to Mesos
-This guide will walk you through manually adding Calico networking to your Mesos deployment. You must follow these steps on *each Agent in your cluster*. 
+This tutorial will walk you through manually adding Calico networking to your Mesos deployment. You must follow these steps on *each Agent in your cluster*. 
 
 ## Download the Calico Mesos Plugin
 The Calico-Mesos plugin is available for download from the [calico-mesos repository releases](https://github.com/projectcalico/calico-mesos/releases). In this example, we will install the binary in the `/calico` directory.
@@ -45,7 +53,7 @@ The last component required for Calico networking in Mesos is `calico-node`, a D
  
 `calico-node` can easily be launched via `calicoctl`, Calico's command line tool. When doing so, we must point `calicoctl` to our running instance of etcd, by setting the `ECTD_AUTHORITY` environment variable.
 
-> Follow our [Core Services Preparation Guide](PrepareCoreServices.md) if you do not already have an instance of etcd running.
+> Follow our [Core Services Preparation tutorial](PrepareCoreServices.md) if you do not already have an instance of etcd running.
 
     $ wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl
     $ chmod +x calicoctl

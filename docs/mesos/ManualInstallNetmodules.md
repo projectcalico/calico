@@ -1,5 +1,13 @@
+<!--- master only -->
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+>
+> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.13.0/README.md).
+<!--- else
+> You are viewing the calico-docker documentation for release **release**.
+<!--- end of master only -->
+
 # Manually Install Mesos + Netmodules
-This guide will walk you through building and installing Mesos + Net-Modules from source. It assumes that you already have seperately installed and started your Mesos Masters (which don't require any modifications for compatibility with Calico).
+This tutorial will walk you through building and installing Mesos + Net-Modules from source. It assumes that you already have seperately installed and started your Mesos Masters (which don't require any modifications for compatibility with Calico).
 
 ## 1. Install Dependencies
 Netmodules and Mesos both make use of the `protobuf`, `boost`, and `glog` libraries. To function correctly, Mesos and Netmodules must be built with identical compilations of these libraries. A standard Mesos installation will include bundled versions, so we'll compile Mesos with unbundled versions to ensure that netmodules is using precisely the same library as Mesos. First, download the libraries:
@@ -54,7 +62,7 @@ $ sudo ETCD_AUTHORITY=<ETCD-IP:PORT> /usr/local/sbin/mesos-slave \
 --isolation=com_mesosphere_mesos_NetworkIsolator \
 --hooks=com_mesosphere_mesos_NetworkHook
 ```
-We provide the `ETCD_AUTHORITY` environment to variable here to allow the  `calico_mesos` plugin to function properly when called by `mesos-slave`. Be sure to replace it with the address of your running etcd server. [See our Core Services guide for info on how to launch etcd](PrepareCoreServices.md#3-launch-etcd). 
+We provide the `ETCD_AUTHORITY` environment to variable here to allow the  `calico_mesos` plugin to function properly when called by `mesos-slave`. Be sure to replace it with the address of your running etcd server. See our [Prepare Core Services for Mesos + Calico Deployment tutorial](PrepareCoreServices.md#3-launch-etcd) for info on how to launch etcd. 
 
 Be sure to direct Mesos to the correct path of your `modules.json` file, or [create one if you haven't already done so](ManualInstallCalico.md#create-the-modulesjson-configuration-file).
 

@@ -7,11 +7,12 @@
 <!--- end of master only -->
 
 # Integration with an AWS Kubernetes cluster
-This guide will walk you through how to use Calico Networking with an existing AWS Kubernetes cluster.
+This tutorial will walk you through how to use Calico Networking with an 
+existing AWS Kubernetes cluster.
 
 ## Requirements
 * A working Kubernetes Deployment on AWS with a Kubernetes master and one or more nodes (minions)
-    - We recommend the [Kubernetes instructions for AWS](https://github.com/kubernetes/kubernetes/blob/release-1.0/docs/getting-started-guides/aws.md). This guide was created with the `kube-up` script in mind.
+    - We recommend the [Kubernetes instructions for AWS](https://github.com/kubernetes/kubernetes/blob/release-1.0/docs/getting-started-guides/aws.md). This tutorial was created with the `kube-up` script in mind.
 * SSH access to your Kubernetes master and nodes
     - Unless otherwise specified, the `kube-up` script will create a `kube_aws_rsa` private key in the `~/.ssh` folder which you can use to access your AWS Instances.
     - SSH in with the following command `ssh -i </path/to/key> ubuntu@<PUBLIC_IP>`

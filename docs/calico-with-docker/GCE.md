@@ -6,12 +6,12 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Running Calico on GCE
+# Running the Calico tutorials on GCE
 Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you 
 can also run Calico within a public cloud such as Google Compute Engine (GCE). The following instructions show how to 
 network containers using Calico routing and the Calico security model on GCE.
 
-## Getting started with GCE
+## 1. Getting started with GCE
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see 
 [the CoreOS on GCE documentation][coreos-gce].
 
@@ -35,7 +35,7 @@ And set a default zone
 ```
 gcloud config set compute/zone us-central1-a
 ```
-## Setting up GCE networking
+### 1.1 Setting up GCE networking
 GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between 
 containers on different hosts:
 ```
@@ -46,14 +46,15 @@ You can verify the rule with this command:
 gcloud compute firewall-rules list
 ```
 
-## Spinning up the VMs
+## 2. Spinning up the VMs
 Create the VMs by passing in a cloud-init file.
 
-There are two demonstration options depending on whether you are running with libnetwork or the 
-default Docker networking.  Select the appropriate cloud-config based on the demonstration option.
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the cloud-config based on 
+the networking option that you choose.
 
-- [User Data for Docker default networking](default-networking/cloud-config) 
-- [User Data for libnetwork](libnetwork/cloud-config)  
+- [User Data for Calico as a Docker network plugin](docker-network-plugin/cloud-config) 
+- [User Data for Calico without Docker networking](without-docker-networking/cloud-config)  
   
 A different file is used for the two servers.    
 - For the first server, use the `user-data-first`
@@ -84,8 +85,8 @@ gcloud compute instances create \
 ```
 
 
-# Running the demonstration
-You can now run through the standard Calico demonstration.  You will require
+## 3.  Running through the worked example
+You can now run through the standard Calico worked example.  You will require
 SSH access to the nodes.
 
 SSH into each node using gcloud (names are calico-1 and calico-2):
@@ -93,14 +94,15 @@ SSH into each node using gcloud (names are calico-1 and calico-2):
 gcloud compute ssh <instance name>
 ```
 
-> When running the demonstrations, be sure to follow the additional 
-> instructions for configuring `ipip` and `nat-outgoing`. 
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the instructions based on 
+the networking option that you chose for the cloud config in step (2).
 
-There are two demonstration options depending on whether you are running with 
-libnetwork or the default Docker networking.
+> In the worked example, be sure to follow the additional instructions for
+configuring `ipip` and `nat-outgoing`. 
 
-- [demonstration with Docker default networking](default-networking/Demonstration.md)
-- [demonstration with libnetwork](libnetwork/Demonstration.md) 
+- [Calico as a Docker network plugin walkthrough](docker-network-plugin/README.md) 
+- [Calico without Docker networking walkthrough](without-docker-networking/README.md)  
 
 ## (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in GCE can be exposed to the internet.  Since the containers have IP 
@@ -166,4 +168,4 @@ curl http://<host public ip>:80
 
 [coreos-gce]: https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/
 [gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/GCE.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/GCE.md?pixel)](https://github.com/igrigorik/ga-beacon)

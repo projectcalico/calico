@@ -6,12 +6,14 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
-# Running calico-docker on AWS
-Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you 
-can also run Calico within a public cloud such as Amazon Web Services (AWS).  The following instructions show how to 
-network containers using Calico routing and the Calico security model on AWS.
+# Running the Calico tutorials on AWS
+Calico is designed to provide high performance massively scalable virtual
+networking for private data centers. But you can also run Calico within a 
+public cloud such as Amazon Web Services (AWS).  The following instructions 
+show how to network containers using Calico routing and the Calico security 
+model on AWS.
 
-## Getting started with AWS
+## 1. Getting started with AWS
 These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see 
 [the CoreOS on AWS EC2 documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
 
@@ -38,7 +40,7 @@ commands.  This can be set in the Services>IAM>Users User configuration page of 
 For more information on configuration and keys, see Amazon's 
 [Configuring the AWS Command Line Interface][configure-aws-cli].
 
-## Setting up AWS networking
+## 2. Setting up AWS networking
 Before you can use Calico to network your containers, you first need to configure AWS to allow your hosts to talk to 
 each other.
 
@@ -46,6 +48,7 @@ A Virtual Private Cloud (VPC) is required on AWS in order to configure Calico ne
 automatically attach to when they are created. 
 
 To check if you have a default VPC, run the following command, then save VPC ID as an environment variable to use later.
+
 ```
 aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"
 
@@ -56,7 +59,7 @@ VPC_ID=<VpcId>
 If you do not have a default VPC or you would like to create a VPC specifically for your hosts that have Calico-networked containers, follow 
 the instructions below.
 
-### Creating an AWS VPC
+### 2.1 Creating an AWS VPC
 > NOTE: This step is only required if you do not have a default VPC or if you would like 
 > to create a new VPC explicitly for your Calico hosts.  Skip to Configuring Key Pair and 
 > Security Group if this does not apply to you.
@@ -105,7 +108,7 @@ aws ec2 create-route --route-table-id $ROUTE_TABLE_ID --destination-cidr-block 0
   --gateway-id $GATEWAY_ID
 ```
 
-### Configuring Key Pair and Security Group
+### 2.2 Configuring Key Pair and Security Group
 Create a Key Pair to use for ssh access to the instances. The following command will generate a key for you.
 ```
 aws ec2 create-key-pair --key-name mykey --output text
@@ -138,15 +141,16 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
   --source-group $SECURITY_GROUP_ID  --protocol all --port all
 ```
 
-## Spinning up the VMs
+## 3. Spinning up the VMs
 Create the two Calico Docker hosts by passing in a `cloud-config` file. 
 
-There are two demonstration options depending on whether you are running with libnetwork or the 
-default Docker networking.  Select the appropriate cloud-config based on the demonstration option.
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the cloud-config based on 
+the networking option that you choose.
 
-- [User Data for Docker default networking](default-networking/cloud-config)
-- [User Data for libnetwork](libnetwork/cloud-config)
-  
+- [User Data for Calico as a Docker network plugin](docker-network-plugin/cloud-config) 
+- [User Data for Calico without Docker networking](without-docker-networking/cloud-config)  
+    
 A different file is used for the two servers.
 - For the first server, use the `user-data-first`
 - For the second server, use the `user-data-others`
@@ -190,8 +194,8 @@ aws ec2 run-instances \
 #  Include the subnet param above if using a non-default VPC
 ```
 
-# Running the demonstration
-You can now run through the standard Calico demonstration.  You will require
+## 4. Running through the worked example
+You can now run through the standard Calico worked example.  You will require
 SSH access to the nodes.
 
 SSH into a node with the mykey.pem and username core. The public IP addresses 
@@ -200,15 +204,16 @@ of your instances can be found on your AWS EC2 dashboard.
 ssh -i mykey.pem core@<PUBLIC IP>
 ```
 
-> When running the demonstrations, be sure to follow the additional 
-> instructions for configuring `ipip` and `nat-outgoing`. 
+There are two worked examples you can follow: Calico as a Docker network
+plugin, or Calico without Docker networking.  Select the instructions based on 
+the networking option that you chose for the cloud config in step (3).
 
-There are two demonstration options depending on whether you are running with 
-libnetwork or the default Docker networking.
+> In the worked example, be sure to follow the additional instructions for
+configuring `ipip` and `nat-outgoing`. 
 
-- [demonstration with Docker default networking](default-networking/Demonstration.md)
-- [demonstration with libnetwork](libnetwork/Demonstration.md) 
-
+- [Calico as a Docker network plugin walkthrough](docker-network-plugin/README.md) 
+- [Calico without Docker networking walkthrough](without-docker-networking/README.md)  
+  
 # (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in AWS can be exposed to the internet.  Since the containers have IP 
 addresses in the private IP range, traffic to the container must be routed using a NAT and an appropriate Calico 
@@ -335,5 +340,5 @@ For high traffic deployments, this should greatly increase the performance of
 traffic between your Calico containers.
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
-[configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/getting-started/AWS.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-calico-with-docker.html
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/AWS.md?pixel)](https://github.com/igrigorik/ga-beacon)
