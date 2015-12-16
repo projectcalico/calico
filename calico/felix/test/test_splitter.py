@@ -67,7 +67,7 @@ class TestUpdateSplitter(BaseTestCase):
 
         # Confirm that the rules update propagates.
         for mgr in self.rules_mgrs:
-            mgr.on_rules_update.assertCalledOnceWith(
+            mgr.on_rules_update.assert_called_once_with(
                 profile, rules, async=True
             )
 
@@ -84,7 +84,7 @@ class TestUpdateSplitter(BaseTestCase):
 
         # Confirm that the rules update propagates.
         for mgr in self.ipsets_mgrs:
-            mgr.on_tags_update.assertCalledOnceWith(
+            mgr.on_tags_update.assert_called_once_with(
                 profile, tags, async=True
             )
 
@@ -100,7 +100,9 @@ class TestUpdateSplitter(BaseTestCase):
 
         # Confirm that the interface update propagates.
         for mgr in self.endpoint_mgrs:
-            mgr.on_interface_update.assertCalledOnceWith(interface)
+            mgr.on_interface_update.assert_called_once_with(interface,
+                                                            True,
+                                                            async=True)
 
     def test_endpoint_updates_propagate(self):
         """
@@ -115,11 +117,11 @@ class TestUpdateSplitter(BaseTestCase):
 
         # Confirm that the endpoint update propagates.
         for mgr in self.ipsets_mgrs:
-            mgr.on_endpoint_update.assertCalledOnceWith(
+            mgr.on_endpoint_update.assert_called_once_with(
                 endpoint, endpoint_object, async=True
             )
         for mgr in self.endpoint_mgrs:
-            mgr.on_endpoint_update.assertCalledOnceWith(
+            mgr.on_endpoint_update.assert_called_once_with(
                 endpoint, endpoint_object, async=True
             )
 
@@ -135,7 +137,7 @@ class TestUpdateSplitter(BaseTestCase):
         s.on_ipam_pool_update(pool_id, pool)
 
         # Confirm that the pool update propagates
-        self.masq_manager.on_ipam_pool_updated.assertCalledOnceWith(
+        self.masq_manager.on_ipam_pool_updated.assert_called_once_with(
             pool_id, pool, async=True
         )
 
