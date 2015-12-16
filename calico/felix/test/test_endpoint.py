@@ -343,8 +343,7 @@ class TestLocalEndpoint(BaseTestCase):
             self.step_actor(local_ep)
             m_set_routes.assert_called_once_with(ip_type, set(),
                                                  data["name"], None)
-            self.assertRaises(AssertionError,
-                              local_ep._finish_msg_batch, [], [])
+            local_ep._finish_msg_batch([], [])  # Should be ignored
             self.m_manager.on_object_cleanup_complete.assert_called_once_with(
                 local_ep._id,
                 local_ep,
