@@ -285,6 +285,9 @@ def get_github_library_version(name, current, url):
     :return:
     """
     while True:
+        # For the release, make sure the default versions do not include "-dev"
+        if current.endswith("-dev"):
+            current = current[:-4]
         version = raw_input("Version of %s [currently %s]?: " % (name, current))
         if not version:
             # Default to current if user just presses enter

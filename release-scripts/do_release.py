@@ -91,6 +91,18 @@ MASTER_VERSION_REPLACE = [
     (re.compile(r'__version__\s*=\s*".*"'),
      '__version__ = "{version-no-v}-dev"'),
 
+    (re.compile(r'__libnetwork_plugin_version__\s*=\s*".*"'),
+     '__libnetwork_plugin_version__ = "{libnetwork-version}-dev"'),
+
+    (re.compile(r'__libcalico_version__\s*=\s*".*"'),
+     '__libcalico_version__ = "{libcalico-version}-dev"'),
+
+    (re.compile(r'__felix_version__\s*=\s*".*"'),
+     '__felix_version__ = "{calico-version}-dev"'),
+
+    (re.compile(r'__kubernetes_plugin_version__\s*=\s*".*"'),
+     '__kubernetes_plugin_version__ = "{kubernetes-version}"'),
+
     (re.compile(r'https://github\.com/projectcalico/calico\-docker/blob/.*/README\.md'),
      'https://github.com/projectcalico/calico-docker/blob/{version}/README.md')
 ]
@@ -107,6 +119,7 @@ def start_release():
     Start the release process, asking user for version information.
     :return:
     """
+    para("Step 1 of 5: Create and push release branch with new versions.")
     para("Your git repository should be checked out to the correct revision "
          "that you want to cut a release with.  This is usually the HEAD of "
          "the master branch.")
@@ -183,7 +196,9 @@ def start_release():
     else:
         run("git push origin %s-candidate" % new_version)
     actions()
-    bullet("Create a DockerHub release called '%s'" % new_version)
+    bullet("Create a DockerHub calico/node release tagged '%s'.  Use the "
+           "candidate branch as the name and /calico_node as the Dockerfile "
+           "location" % new_version)
     bullet("Monitor the semaphore, CircleCI and Docker builds for this branch "
            "until all have successfully completed.  Fix any issues with the "
            "build.")
@@ -202,6 +217,7 @@ def cut_release():
     """
     The candidate branch has been tested, so cut the actual release.
     """
+    para("Step 2 of 5: Push final branch, then cut release with binary.")
     utils.check_or_exit("Have you successfully tested your release candidate")
 
     # Update the code tree once more to set the final GitHub URLs
@@ -210,17 +226,20 @@ def cut_release():
     new_version = release_data["versions"]["version"]
     para("The codebase has been updated to reference the GitHub release "
          "artifacts.")
-    actions()
-    bullet("Add, commit and push the updated files to "
+    bullet("Adding, committing and pushing the updated files to "
            "origin/%s-candidate" % new_version)
     run("git add --all")
     run('git commit -m "Update version strings for release '
        '%s"' % new_version)
     run("git push origin %s-candidate" % new_version)
+
+    actions()
     bullet("Monitor the semaphore, CircleCI and Docker builds for this branch "
            "until all have successfully completed.  Fix any issues with the "
            "build.")
-    bullet("Create a Pull Request and review the changes")
+    bullet("Create a Pull Request against master and review the changes (or "
+           "run `git diff origin/master` from the candidate branch). Delete "
+           "the pull request after comparing.")
     bullet("Create a GitHub release called '%s'" % new_version)
 
     para("Attach the calicoctl binary to the release.  It can be downloaded "
@@ -241,19 +260,20 @@ def change_to_master():
     """
     Version has been releases and tested.
     """
+    para("Step 3 of 5: Remove candidate branch.")
     utils.check_or_exit("Have you successfully tested the release")
 
     new_version = release_data["versions"]["version"]
     para("The release is now complete.  We now need to update the master "
          "branch and do some general branch and build tidyup.")
-    actions()
-    bullet("Delete the DockerHub build for this release")
-    bullet("Checkout the master branch, and ensure it is up to date")
+    para("Checkout the master branch, and ensure it is up to date")
     run("git checkout master")
     run('git pull origin master')
-    bullet("Delete the origin/%s-candidate branch" % new_version)
+    para("Delete the origin/%s-candidate branch" % new_version)
     run("git branch -D %s-candidate" % new_version)
     run("git push origin :%s-candidate" % new_version)
+    actions()
+    bullet("Delete the DockerHub build for this release")
 
     next("Once complete, re-run the script.")
 
@@ -262,6 +282,7 @@ def update_master():
     """
     Master branch is now checked out and needs updating.
     """
+    para("Step 4 of 5: Commit versions and push changes to master.")
     utils.check_or_exit("Is your git repository now on master")
 
     # Update the master files.
@@ -271,12 +292,15 @@ def update_master():
     new_version = release_data["versions"]["version"]
     para("The master codebase has now been updated to reference the latest "
          "release.")
-    actions()
-    bullet("Self review the latest changes to master")
-    bullet("Push the changes to origin/master")
+    para("Commit changes to master")
     run("git add --all")
     run('git commit -m "Update docs to version %s"' % new_version)
-    run("git push origin master")
+
+    actions()
+    bullet("Self review the latest changes to master")
+    bullet("Run: git diff origin/master", level=1)
+    bullet("Push changes to master")
+    bullet("Run: git push origin master", level=1)
     bullet("Verify builds are working")
     next("Once complete, re-run the script")
 
@@ -285,7 +309,8 @@ def complete():
     """
     Show complete message
     """
-    utils.check_or_exit("Have you pushed the version update to master?")
+    para("Step 5 of 5: Complete release.")
+    utils.check_or_exit("Have you pushed the version updates to master?")
 
     warning("Release process is now complete.")
 
