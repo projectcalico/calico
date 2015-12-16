@@ -92,13 +92,13 @@ MASTER_VERSION_REPLACE = [
      '__version__ = "{version-no-v}-dev"'),
 
     (re.compile(r'__libnetwork_plugin_version__\s*=\s*".*"'),
-     '__libnetwork_plugin_version__ = "{libnetwork-version}"'),
+     '__libnetwork_plugin_version__ = "{libnetwork-version}-dev"'),
 
     (re.compile(r'__libcalico_version__\s*=\s*".*"'),
-     '__libcalico_version__ = "{libcalico-version}"'),
+     '__libcalico_version__ = "{libcalico-version}-dev"'),
 
     (re.compile(r'__felix_version__\s*=\s*".*"'),
-     '__felix_version__ = "{calico-version}"'),
+     '__felix_version__ = "{calico-version}-dev"'),
 
     (re.compile(r'__kubernetes_plugin_version__\s*=\s*".*"'),
      '__kubernetes_plugin_version__ = "{kubernetes-version}"'),
