@@ -1,6 +1,0 @@
-PyInstaller==2.1
-git+https://github.com/projectcalico/libcalico@v0.1.3
-nose==1.3.1
-nose-timer
-nose-parameterized
-mock==1.0.1
