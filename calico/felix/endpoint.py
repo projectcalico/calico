@@ -268,6 +268,7 @@ class LocalEndpoint(RefCountedActor):
         """
         _log.info("Endpoint %s received interface kick: %s",
                   self.combined_id, iface_up)
+        assert not self._unreferenced, "Interface kick after unreference"
 
         # Use a flag so that we coalesce any duplicate updates in
         # _finish_msg_batch.
@@ -280,6 +281,7 @@ class LocalEndpoint(RefCountedActor):
         Overrides RefCountedActor:on_unreferenced.
         """
         _log.info("%s now unreferenced, cleaning up", self)
+        assert not self._unreferenced, "Duplicate on_unreferenced() call"
 
         # We should be deleted before being unreferenced.
         assert self.endpoint is None or (self._pending_endpoint is None and
@@ -290,12 +292,11 @@ class LocalEndpoint(RefCountedActor):
 
     def _finish_msg_batch(self, batch, results):
         if self._cleaned_up:
-            # We could just ignore this but it suggests that the
-            # EndpointManager is bugged.
-            raise AssertionError(
-                "Unexpected update to %s (%s) after being unreferenced" %
-                (self, self.__dict__)
-            )
+            # This can occur if we get a callback from a profile via the
+            # RefHelper after we've already been deleted.
+            _log.warn("_finish_msg_batch() called after being unreferenced,"
+                      "ignoring.  Batch: %s", batch)
+            return
 
         if self._endpoint_update_pending:
             # Copy the pending update into our data structures.  May work out
