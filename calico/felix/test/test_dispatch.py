@@ -18,20 +18,12 @@ felix.test.test_dispatch
 
 Tests of the actor that controls the top-level dispatch chain.
 """
-import collections
 from pprint import pformat
-
 import mock
 
-from calico.felix.test.base import BaseTestCase
-from calico.felix.dispatch import (
-    DispatchChains, CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
-)
-
-
-# A mocked config object for use with interface_to_suffix.
-Config = collections.namedtuple('Config', ['IFACE_PREFIX', 'METADATA_IP', 'METADATA_PORT'])
-
+from calico.felix.test.base import BaseTestCase, load_config
+from calico.felix.dispatch import DispatchChains
+from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
 
 class TestDispatchChains(BaseTestCase):
     """
@@ -40,7 +32,8 @@ class TestDispatchChains(BaseTestCase):
     def setUp(self):
         super(TestDispatchChains, self).setUp()
         self.iptables_updater = mock.MagicMock()
-        self.config = Config('tap', None, 8775)
+        self.config = load_config("felix_default.cfg", global_dict={
+            "MetadataPort": "8775"})
 
     def getDispatchChain(self):
         return DispatchChains(
@@ -77,7 +70,10 @@ class TestDispatchChains(BaseTestCase):
         """
         Tests that a snapshot with metadata works OK.
         """
-        self.config = Config('tap', '127.0.0.1', 8775)
+        self.config = load_config("felix_default.cfg", global_dict={
+            "MetadataPort": "8775",
+            "MetadataAddr": "127.0.0.1"})
+
         d = self.getDispatchChain()
 
         ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
@@ -88,13 +84,14 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
-            '--append felix-FROM-ENDPOINT --jump DROP',
+            '--append felix-FROM-ENDPOINT --jump DROP -m comment '
+            '--comment "From unknown endpoint"',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
-            '--append felix-TO-ENDPOINT --jump DROP',
+            '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"',
         ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
@@ -138,32 +135,32 @@ class TestDispatchChains(BaseTestCase):
                 '--append felix-TO-ENDPOINT --out-interface tapb+ --goto felix-TO-EP-PFX-b',
                 # If there's only one, we don't.
                 '--append felix-TO-ENDPOINT --out-interface tapc --goto felix-to-c',
-                '--append felix-TO-ENDPOINT --jump DROP'],
+                '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"'],
             'felix-FROM-ENDPOINT': [
                 '--append felix-FROM-ENDPOINT --in-interface tapa+ --goto felix-FROM-EP-PFX-a',
                 '--append felix-FROM-ENDPOINT --in-interface tapb+ --goto felix-FROM-EP-PFX-b',
                 '--append felix-FROM-ENDPOINT --in-interface tapc --goto felix-from-c',
-                '--append felix-FROM-ENDPOINT --jump DROP'],
+                '--append felix-FROM-ENDPOINT --jump DROP -m comment --comment "From unknown endpoint"'],
             'felix-FROM-EP-PFX-a': [
                 # Per-prefix chain has one entry per endpoint.
                 '--append felix-FROM-EP-PFX-a --in-interface tapa1 --goto felix-from-a1',
                 '--append felix-FROM-EP-PFX-a --in-interface tapa2 --goto felix-from-a2',
                 '--append felix-FROM-EP-PFX-a --in-interface tapa3 --goto felix-from-a3',
                 # And a trailing drop.
-                '--append felix-FROM-EP-PFX-a --jump DROP'],
+                '--append felix-FROM-EP-PFX-a --jump DROP -m comment --comment "From unknown endpoint"'],
             'felix-FROM-EP-PFX-b': [
                 '--append felix-FROM-EP-PFX-b --in-interface tapb1 --goto felix-from-b1',
                 '--append felix-FROM-EP-PFX-b --in-interface tapb2 --goto felix-from-b2',
-                '--append felix-FROM-EP-PFX-b --jump DROP'],
+                '--append felix-FROM-EP-PFX-b --jump DROP -m comment --comment "From unknown endpoint"'],
             'felix-TO-EP-PFX-a': [
                 '--append felix-TO-EP-PFX-a --out-interface tapa1 --goto felix-to-a1',
                 '--append felix-TO-EP-PFX-a --out-interface tapa2 --goto felix-to-a2',
                 '--append felix-TO-EP-PFX-a --out-interface tapa3 --goto felix-to-a3',
-                '--append felix-TO-EP-PFX-a --jump DROP'],
+                '--append felix-TO-EP-PFX-a --jump DROP -m comment --comment "To unknown endpoint"'],
             'felix-TO-EP-PFX-b': [
                 '--append felix-TO-EP-PFX-b --out-interface tapb1 --goto felix-to-b1',
                 '--append felix-TO-EP-PFX-b --out-interface tapb2 --goto felix-to-b2',
-                '--append felix-TO-EP-PFX-b --jump DROP']
+                '--append felix-TO-EP-PFX-b --jump DROP -m comment --comment "To unknown endpoint"']
         })
 
     def test_applying_snapshot_clean(self):
@@ -180,13 +177,13 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
-            '--append felix-FROM-ENDPOINT --jump DROP',
+            '--append felix-FROM-ENDPOINT --jump DROP -m comment --comment "From unknown endpoint"',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
-            '--append felix-TO-ENDPOINT --jump DROP',
+            '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"',
         ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
@@ -218,13 +215,13 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
-            '--append felix-FROM-ENDPOINT --jump DROP',
+            '--append felix-FROM-ENDPOINT --jump DROP -m comment --comment "From unknown endpoint"',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
-            '--append felix-TO-ENDPOINT --jump DROP',
+            '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"',
         ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
@@ -255,10 +252,10 @@ class TestDispatchChains(BaseTestCase):
         self.step_actor(d)
 
         from_updates = [
-            '--append felix-FROM-ENDPOINT --jump DROP',
+            '--append felix-FROM-ENDPOINT --jump DROP -m comment --comment "From unknown endpoint"',
         ]
         to_updates = [
-            '--append felix-TO-ENDPOINT --jump DROP',
+            '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"',
         ]
         from_chain_names = set()
         to_chain_names = set()
@@ -291,13 +288,13 @@ class TestDispatchChains(BaseTestCase):
             '--append felix-FROM-ENDPOINT --in-interface tapabcdef --goto felix-from-abcdef',
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
-            '--append felix-FROM-ENDPOINT --jump DROP',
+            '--append felix-FROM-ENDPOINT --jump DROP -m comment --comment "From unknown endpoint"',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tapabcdef --goto felix-to-abcdef',
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
-            '--append felix-TO-ENDPOINT --jump DROP',
+            '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"',
         ]
         from_chain_names = set(['felix-from-abcdef', 'felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-abcdef', 'felix-to-123456', 'felix-to-b7d849'])
@@ -346,12 +343,12 @@ class TestDispatchChains(BaseTestCase):
         from_updates = [
             '--append felix-FROM-ENDPOINT --in-interface tap123456 --goto felix-from-123456',
             '--append felix-FROM-ENDPOINT --in-interface tapb7d849 --goto felix-from-b7d849',
-            '--append felix-FROM-ENDPOINT --jump DROP',
+            '--append felix-FROM-ENDPOINT --jump DROP -m comment --comment "From unknown endpoint"',
         ]
         to_updates = [
             '--append felix-TO-ENDPOINT --out-interface tap123456 --goto felix-to-123456',
             '--append felix-TO-ENDPOINT --out-interface tapb7d849 --goto felix-to-b7d849',
-            '--append felix-TO-ENDPOINT --jump DROP',
+            '--append felix-TO-ENDPOINT --jump DROP -m comment --comment "To unknown endpoint"',
         ]
         from_chain_names = set(['felix-from-123456', 'felix-from-b7d849'])
         to_chain_names = set(['felix-to-123456', 'felix-to-b7d849'])

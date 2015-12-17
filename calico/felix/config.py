@@ -29,11 +29,14 @@ import os
 import ConfigParser
 import logging
 import socket
+import pkg_resources
 
 from calico import common
 
 # Logger
 log = logging.getLogger(__name__)
+
+FELIX_IPT_GENERATOR_PLUGIN_NAME = "calico.felix.iptables_generator"
 
 # Convert log level names into python log levels.
 LOGLEVELS = {"none":      None,
@@ -52,7 +55,7 @@ ENV = "Environment variable"
 FILE = "Configuration file"
 GLOBAL_ETCD = "Global etcd configuration"
 LOCAL_ETCD = "Host specific etcd configuration"
-DEFAULT_SOURCES = [ ENV, FILE, GLOBAL_ETCD, LOCAL_ETCD ]
+DEFAULT_SOURCES = [ENV, FILE, GLOBAL_ETCD, LOCAL_ETCD]
 
 
 class ConfigException(Exception):
@@ -160,6 +163,7 @@ class Config(object):
         :raises EtcdException
         """
         self.parameters = {}
+        self.plugins = {}
 
         self.add_parameter("EtcdAddr", "Address and port for etcd",
                            "localhost:4001", sources=[ENV, FILE])
@@ -228,10 +232,32 @@ class Config(object):
                            "IP addresses using a single tag.",
                            2**20, value_is_int=True)
 
+        # The following setting determines which flavour of Iptables Generator
+        # plugin is loaded.  Note: this plugin support is currently highly
+        # experimental and may change significantly, or be removed completed,
+        # in future releases. This config attribute is therefore not yet
+        # publicly documented.
+        self.add_parameter("IptablesGeneratorPlugin",
+                           "Which IptablesGenerator Plugin to use.",
+                           "default")
+
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
         self._read_cfg_file(config_path)
         self._finish_update(final=False)
+
+        # Load the iptables generator plugin.
+        self.plugins["iptables_generator"] = _load_plugin(
+            FELIX_IPT_GENERATOR_PLUGIN_NAME,
+            self.IPTABLES_GENERATOR_PLUGIN
+        )()
+
+        # Give plugins the opportunity to register any plugin specific
+        # config attributes.   We've already loaded environment variables and
+        # the configuration file at this point, so plugin specific attributes
+        # will only be settable via etcd.
+        for plugin in self.plugins.itervalues():
+            plugin.register_config(self)
 
     def add_parameter(self, name, description, default, **kwargs):
         """
@@ -259,7 +285,8 @@ class Config(object):
         configuration load fails, and not having the log file early enough is
         worse.
 
-        :param final: Have we completed (rather than just read env and config file)
+        :param final: Have we completed (rather than just read env and config
+                      file)
         """
         self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.HOSTNAME = self.parameters["FelixHostname"].value
@@ -267,9 +294,11 @@ class Config(object):
         self.ETCD_KEY_FILE = self.parameters["EtcdKeyFile"].value
         self.ETCD_CERT_FILE = self.parameters["EtcdCertFile"].value
         self.ETCD_CA_FILE = self.parameters["EtcdCaFile"].value
-        self.STARTUP_CLEANUP_DELAY = self.parameters["StartupCleanupDelay"].value
+        self.STARTUP_CLEANUP_DELAY = \
+            self.parameters["StartupCleanupDelay"].value
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
-        self.REFRESH_INTERVAL = self.parameters["IptablesRefreshInterval"].value
+        self.REFRESH_INTERVAL = \
+            self.parameters["IptablesRefreshInterval"].value
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
@@ -282,15 +311,26 @@ class Config(object):
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
         self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
         self.IP_IN_IP_MTU = self.parameters["IpInIpMtu"].value
-        self.REPORTING_INTERVAL_SECS = self.parameters["ReportingIntervalSecs"].value
+        self.REPORTING_INTERVAL_SECS = \
+            self.parameters["ReportingIntervalSecs"].value
         self.REPORTING_TTL_SECS = self.parameters["ReportingTTLSecs"].value
         self.REPORT_ENDPOINT_STATUS = \
             self.parameters["EndpointReportingEnabled"].value
         self.ENDPOINT_REPORT_DELAY = \
             self.parameters["EndpointReportingDelaySecs"].value
         self.MAX_IPSET_SIZE = self.parameters["MaxIpsetSize"].value
+        self.IPTABLES_GENERATOR_PLUGIN = \
+            self.parameters["IptablesGeneratorPlugin"].value
 
         self._validate_cfg(final=final)
+
+        for plugin in self.plugins.itervalues():
+            # Plugins don't get loaded and registered until we've read config
+            # from the environment and file.   This means that they don't get
+            # passed config until the final time through this function.
+            assert final, "Plugins should only be loaded on the final " \
+                          "config pass"
+            plugin.store_and_validate_config(self)
 
         # Update logging.
         common.complete_logging(self.LOGFILE,
@@ -537,3 +577,31 @@ class Config(object):
         except socket.gaierror:
             raise ConfigException("Invalid or unresolvable value",
                                   self.parameters[name])
+
+
+def _load_plugin(plugin_entry_point, flavor):
+    """
+    Load a plugin for the specified entry point.   A package that implements a
+    plugin exposes one or more named implementations (flavors) of one of more
+    plugin entry points.  For example, the core Felix package registers a
+    "default" implementation / flavor of the "calico.felix.iptables_generator"
+    entry point (in setup.py).   There may be multiple packages installed, each
+    offering different flavours of a given entry point.
+
+    :param plugin_entry_point: The entry point for which we wish to load a
+        plugin implementation.   E.g. "calico.felix.iptables_generator"
+    :param flavor: The flavor / named implementation of the entry point we wish
+        to load.  E.g. "default"
+    :return: If an implementation of the requested entry point is available
+        that matches the requested flavor then this function loads it and
+        returns the function mapped by the entry point.   Otherwise this
+        function raises ImportError.
+    """
+    for v in pkg_resources.iter_entry_points(plugin_entry_point, flavor):
+        entry_point = v.load()
+        log.info("Successfully loaded %s plugin: %s" %
+                 (plugin_entry_point, flavor))
+        return entry_point
+    raise ImportError(
+        'No plugin called "{0:s}" has been registered for entrypoint "{1:s}".'.
+        format(flavor, plugin_entry_point))

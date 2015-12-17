@@ -27,7 +27,7 @@ from calico.felix.futils import FailedSystemCall
 from calico.felix.ipsets import IpsetManager, TagIpset
 from calico.felix.profilerules import ProfileRules, RulesManager
 
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 
 
 _log = logging.getLogger(__name__)
@@ -100,9 +100,10 @@ RULES_2_CHAINS = {
 class TestRulesManager(BaseTestCase):
     def setUp(self):
         super(TestRulesManager, self).setUp()
+        self.config = load_config("felix_default.cfg")
         self.m_updater = Mock(spec=IptablesUpdater)
         self.m_ipset_mgr = Mock(spec=IpsetManager)
-        self.mgr = RulesManager(4, self.m_updater, self.m_ipset_mgr)
+        self.mgr = RulesManager(self.config, 4, self.m_updater, self.m_ipset_mgr)
 
     def test_create(self):
         pr = self.mgr._create("profile-id")
@@ -210,10 +211,14 @@ class TestRulesManager(BaseTestCase):
 class TestProfileRules(BaseTestCase):
     def setUp(self):
         super(TestProfileRules, self).setUp()
+
+        self.config = load_config("felix_default.cfg")
+
         self.m_mgr = Mock(spec=RulesManager)
         self.m_ipt_updater = Mock(spec=IptablesUpdater)
         self.m_ips_mgr = Mock(spec=IpsetManager)
-        self.rules = ProfileRules("prof1", 4, self.m_ipt_updater,
+        self.rules = ProfileRules(self.config.plugins["iptables_generator"],
+                                  "prof1", 4, self.m_ipt_updater,
                                   self.m_ips_mgr)
         self.rules._manager = self.m_mgr
         self.rules._id = "prof1"

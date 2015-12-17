@@ -77,6 +77,10 @@ setuptools.setup(
         'console_scripts': [
             'calico-felix = calico.felix.felix:main',
         ],
+        'calico.felix.iptables_generator': [
+            'default = '
+            'calico.felix.plugins.fiptgenerator:FelixIptablesGenerator',
+        ],
     },
     scripts=['utils/calico-diags'],
     install_requires=collect_requirements()

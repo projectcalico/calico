@@ -17,6 +17,7 @@ import logging
 import sys
 import gc
 
+from calico.felix.config import Config
 import gevent
 
 import unittest2
@@ -77,3 +78,22 @@ class JSONString(object):
 
 class ExpectedException(Exception):
     pass
+
+
+def load_config(filename, path="calico/felix/test/data/", env_dict=None,
+                host_dict=None, global_dict=None):
+    if env_dict is None:
+        env_dict = {}
+    if host_dict is None:
+        host_dict = {}
+    if global_dict is None:
+        global_dict = {}
+
+    with mock.patch.dict("os.environ", env_dict):
+        with mock.patch('calico.common.complete_logging'):
+            config = Config(path+filename)
+
+    with mock.patch('calico.common.complete_logging'):
+        config.report_etcd_config(host_dict, global_dict)
+
+    return config

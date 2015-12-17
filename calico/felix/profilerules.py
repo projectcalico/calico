@@ -21,8 +21,6 @@ ProfileRules actor, handles local profile chains.
 
 import logging
 from calico.felix.actor import actor_message
-from calico.felix.frules import (profile_to_chain_name,
-                                 rules_to_chain_rewrite_lines)
 from calico.felix.futils import FailedSystemCall
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 
@@ -38,8 +36,9 @@ class RulesManager(ReferenceManager):
     This class ensures that rules chains are properly quiesced
     before their Actors are deleted.
     """
-    def __init__(self, ip_version, iptables_updater, ipset_manager):
+    def __init__(self, config, ip_version, iptables_updater, ipset_manager):
         super(RulesManager, self).__init__(qualifier="v%d" % ip_version)
+        self.iptables_generator = config.plugins["iptables_generator"]
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
         self.ipset_manager = ipset_manager
@@ -47,7 +46,8 @@ class RulesManager(ReferenceManager):
         self._datamodel_in_sync = False
 
     def _create(self, profile_id):
-        return ProfileRules(profile_id,
+        return ProfileRules(self.iptables_generator,
+                            profile_id,
                             self.ip_version,
                             self.iptables_updater,
                             self.ipset_manager)
@@ -111,10 +111,12 @@ class ProfileRules(RefCountedActor):
     """
     Actor that owns the per-profile rules chains.
     """
-    def __init__(self, profile_id, ip_version, iptables_updater, ipset_mgr):
+    def __init__(self, iptables_generator, profile_id, ip_version,
+                 iptables_updater, ipset_mgr):
         super(ProfileRules, self).__init__(qualifier=profile_id)
         assert profile_id is not None
 
+        self.iptables_generator = iptables_generator
         self.id = profile_id
         self.ip_version = ip_version
         self._ipset_mgr = ipset_mgr
@@ -131,13 +133,6 @@ class ProfileRules(RefCountedActor):
         self._cleaned_up = False
         self._dead = False
         self._dirty = True
-
-        self.chain_names = {
-            "inbound": profile_to_chain_name("inbound", profile_id),
-            "outbound": profile_to_chain_name("outbound", profile_id),
-        }
-        _log.info("Profile %s has chain names %s",
-                  profile_id, self.chain_names)
 
     @actor_message()
     def on_profile_update(self, profile, force_reprogram=False):
@@ -242,10 +237,11 @@ class ProfileRules(RefCountedActor):
         """
         Removes our chains from the dataplane, blocks until complete.
         """
-        chains = set(self.chain_names.values())
         # Need to block here: have to wait for chains to be deleted
         # before we can decref our ipsets.
-        self._iptables_updater.delete_chains(chains, async=False)
+        self._iptables_updater.delete_chains(
+            self.iptables_generator.profile_chain_names(self.id),
+            async=False)
 
     def _update_chains(self):
         """
@@ -260,27 +256,26 @@ class ProfileRules(RefCountedActor):
         _log.info("%s Programming iptables with our chains.", self)
         assert self._pending_profile is not None, \
                "_update_chains called with no _pending_profile"
-        updates = {}
-        for direction in ("inbound", "outbound"):
-            chain_name = self.chain_names[direction]
-            _log.info("Updating %s chain %r for profile %s",
-                      direction, chain_name, self.id)
-            _log.debug("Profile %s: %s", self.id, self._profile)
-            rules_key = "%s_rules" % direction
-            new_rules = self._pending_profile.get(rules_key, [])
-            tag_to_ip_set_name = {}
-            for tag, ipset in self._ipset_refs.iteritems():
-                tag_to_ip_set_name[tag] = ipset.ipset_name
-            updates[chain_name] = rules_to_chain_rewrite_lines(
-                chain_name,
-                new_rules,
-                self.ip_version,
-                tag_to_ip_set_name,
-                on_allow="RETURN",
-                comment_tag=self.id)
+
+        tag_to_ip_set_name = {}
+        for tag, ipset in self._ipset_refs.iteritems():
+            tag_to_ip_set_name[tag] = ipset.ipset_name
+
+        _log.info("Updating chains for profile %s", self.id)
+        _log.debug("Profile %s: %s", self.id, self._profile)
+
+        updates, deps = self.iptables_generator.profile_updates(
+            self.id,
+            self._pending_profile,
+            self.ip_version,
+            tag_to_ip_set_name,
+            on_allow="RETURN",
+            comment_tag=self.id)
+
         _log.debug("Queueing programming for rules %s: %s", self.id,
                    updates)
-        self._iptables_updater.rewrite_chains(updates, {}, async=False)
+
+        self._iptables_updater.rewrite_chains(updates, deps, async=False)
 
 
 def extract_tags_from_profile(profile):
@@ -296,3 +291,7 @@ def extract_tags_from_profile(profile):
 def extract_tags_from_rule(rule):
     return set(rule[key] for key in ["src_tag", "dst_tag"]
                if key in rule and rule[key] is not None)
+
+
+class UnsupportedICMPType(Exception):
+    pass

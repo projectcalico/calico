@@ -24,7 +24,8 @@ import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
     CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_FROM_LEAF, CHAIN_TO_LEAF,
-    chain_names, interface_to_suffix
+    CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX,
+    interface_to_suffix
 )
 
 _log = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class DispatchChains(Actor):
         self.config = config
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
+        self.iptables_generator = self.config.plugins["iptables_generator"]
         self.ifaces = set()
         self.programmed_leaf_chains = set()
         self._dirty = False
@@ -221,7 +223,10 @@ class DispatchChains(Actor):
                 # that the endpoint-specific chain will return to our parent
                 # rather than to this chain.
                 ep_suffix = interface_to_suffix(self.config, iface)
-                to_chain_name, from_chain_name = chain_names(ep_suffix)
+
+                to_chain_name = CHAIN_TO_PREFIX + ep_suffix
+                from_chain_name = CHAIN_FROM_PREFIX + ep_suffix
+
                 from_upds.append("--append %s --in-interface %s --goto %s" %
                                  (disp_from_chain, iface, from_chain_name))
                 from_deps.add(from_chain_name)
@@ -231,13 +236,35 @@ class DispatchChains(Actor):
 
             if not use_root_chain:
                 # Add a default drop to the end of the leaf chain.
-                from_upds.append("--append %s --jump DROP" % disp_from_chain)
-                to_upds.append("--append %s --jump DROP" % disp_to_chain)
+                # Add a default drop to the end of the leaf chain.
+                from_upds.extend(
+                    self.iptables_generator.drop_rules(
+                        self.ip_version,
+                        disp_from_chain,
+                        None,
+                        "From unknown endpoint"))
+                to_upds.extend(
+                    self.iptables_generator.drop_rules(
+                        self.ip_version,
+                        disp_to_chain,
+                        None,
+                        "To unknown endpoint"))
 
         # Both TO and FROM chains end with a DROP so that interfaces that
         # we don't know about yet can't bypass our rules.
-        root_from_upds.append("--append %s --jump DROP" % CHAIN_FROM_ENDPOINT)
-        root_to_upds.append("--append %s --jump DROP" % CHAIN_TO_ENDPOINT)
+        root_from_upds.extend(
+            self.iptables_generator.drop_rules(
+                self.ip_version,
+                CHAIN_FROM_ENDPOINT,
+                None,
+                "From unknown endpoint"))
+        root_to_upds.extend(
+            self.iptables_generator.drop_rules(
+                self.ip_version,
+                CHAIN_TO_ENDPOINT,
+                None,
+                "To unknown endpoint"))
+
         chains_to_delete = self.programmed_leaf_chains - new_leaf_chains
 
         return chains_to_delete, dependencies, updates, new_leaf_chains

@@ -21,7 +21,7 @@ Tests of endpoint module.
 from contextlib import nested
 import logging
 from calico.felix.endpoint import EndpointManager, LocalEndpoint
-from calico.felix.fetcd import EtcdAPI, EtcdStatusReporter
+from calico.felix.fetcd import EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.futils import FailedSystemCall
@@ -30,9 +30,8 @@ from calico.felix.profilerules import RulesManager
 import mock
 from mock import Mock
 
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.test import stub_utils
-from calico.felix import config
 from calico.felix import endpoint
 from calico.felix import futils
 from calico.datamodel_v1 import EndpointId
@@ -47,13 +46,13 @@ ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
 class TestEndpointManager(BaseTestCase):
     def setUp(self):
         super(TestEndpointManager, self).setUp()
-        self.m_config = Mock(spec=config.Config)
-        self.m_config.HOSTNAME = "hostname"
+        self.config = load_config("felix_default.cfg", env_dict={
+            "FELIX_FELIXHOSTNAME": "hostname"})
         self.m_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_status_reporter = Mock(spec=EtcdStatusReporter)
-        self.mgr = EndpointManager(self.m_config, "IPv4", self.m_updater,
+        self.mgr = EndpointManager(self.config, "IPv4", self.m_updater,
                                    self.m_dispatch, self.m_rules_mgr,
                                    self.m_status_reporter)
         self.mgr.get_and_incref = Mock()
@@ -170,9 +169,8 @@ class TestEndpointManager(BaseTestCase):
 class TestLocalEndpoint(BaseTestCase):
     def setUp(self):
         super(TestLocalEndpoint, self).setUp()
-        self.m_config = Mock(spec=config.Config)
-        self.m_config.IFACE_PREFIX = "tap"
-        self.m_config.REPORT_ENDPOINT_STATUS = False
+        self.config = load_config("felix_default.cfg", global_dict={
+            "EndpointReportingEnabled": "False"})
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch_chains = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
@@ -180,7 +178,7 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_status_rep = Mock(spec=EtcdStatusReporter)
 
     def get_local_endpoint(self, combined_id, ip_type):
-        local_endpoint = endpoint.LocalEndpoint(self.m_config,
+        local_endpoint = endpoint.LocalEndpoint(self.config,
                                                 combined_id,
                                                 ip_type,
                                                 self.m_iptables_updater,
@@ -538,7 +536,7 @@ class TestLocalEndpoint(BaseTestCase):
         self.assertFalse(local_ep._device_in_sync)
 
     def test_maybe_update_status_missing_deps(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -549,7 +547,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_missing_endpoint(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -561,7 +559,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_iptables_failure(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -576,7 +574,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_device_failure(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -591,7 +589,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_iptables_up(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -606,7 +604,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_admin_down(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -621,7 +619,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_oper_down(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -636,7 +634,7 @@ class TestLocalEndpoint(BaseTestCase):
         )
 
     def test_maybe_update_status_iptables_unreferenced(self):
-        self.m_config.REPORT_ENDPOINT_STATUS = True
+        self.config.REPORT_ENDPOINT_STATUS = True
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -646,76 +644,3 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_status_rep.on_endpoint_status_changed.assert_called_once_with(
             combined_id, futils.IPV4, None, async=True
         )
-
-
-class TestEndpoint(BaseTestCase):
-    def test_get_endpoint_rules(self):
-        to_pfx = '--append felix-to-abcd'
-        from_pfx = '--append felix-from-abcd'
-        expected_result = (
-            {
-                'felix-from-abcd': 
-                [
-                    # Always start with a 0 MARK.
-                    from_pfx + ' --jump MARK --set-mark 0',
-                    # From chain polices the MAC address.
-                    from_pfx + ' --match mac ! --mac-source aa:22:33:44:55:66 '
-                               '--jump DROP --match comment --comment '
-                               '"Incorrect source MAC"',
-
-                    # Jump to the first profile.
-                    from_pfx + ' --jump felix-p-prof-1-o',
-                    # Short-circuit: return if the first profile matched.
-                    from_pfx + ' --match mark --mark 1/1 --match comment '
-                               '--comment "Profile accepted packet" '
-                               '--jump RETURN',
-
-                    # Jump to second profile.
-                    from_pfx + ' --jump felix-p-prof-2-o',
-                    # Return if the second profile matched.
-                    from_pfx + ' --match mark --mark 1/1 --match comment '
-                               '--comment "Profile accepted packet" '
-                               '--jump RETURN',
-
-                    # Drop the packet if nothing matched.
-                    from_pfx + ' --jump DROP -m comment --comment '
-                               '"Default DROP if no match (endpoint e1):"'
-                ],
-                'felix-to-abcd': 
-                [
-                    # Always start with a 0 MARK.
-                    to_pfx + ' --jump MARK --set-mark 0',
-
-                    # Jump to first profile and return iff it matched.
-                    to_pfx + ' --jump felix-p-prof-1-i',
-                    to_pfx + ' --match mark --mark 1/1 --match comment '
-                             '--comment "Profile accepted packet" '
-                             '--jump RETURN',
-
-                    # Jump to second profile and return iff it matched.
-                    to_pfx + ' --jump felix-p-prof-2-i',
-                    to_pfx + ' --match mark --mark 1/1 --match comment '
-                             '--comment "Profile accepted packet" '
-                             '--jump RETURN',
-
-                    # Drop anything that doesn't match.
-                    to_pfx + ' --jump DROP -m comment --comment '
-                             '"Default DROP if no match (endpoint e1):"'
-                ]
-            },
-            {
-                # From chain depends on the outbound profiles.
-                'felix-from-abcd': set(['felix-p-prof-1-o',
-                                        'felix-p-prof-2-o']),
-                # To chain depends on the inbound profiles.
-                'felix-to-abcd': set(['felix-p-prof-1-i',
-                                      'felix-p-prof-2-i'])
-            }
-        )
-        result = endpoint._get_endpoint_rules("e1", "abcd",
-                                              "aa:22:33:44:55:66",
-                                              ["prof-1", "prof-2"])
-
-        # Log the whole diff if the comparison fails.
-        self.maxDiff = None
-        self.assertEqual(result, expected_result)

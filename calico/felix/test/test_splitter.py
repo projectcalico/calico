@@ -21,7 +21,7 @@ Tests of the actor that splits update messages to multiple manager actors.
 import mock
 from calico.felix.masq import MasqueradeManager
 
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.splitter import UpdateSplitter, CleanupManager
 
 
@@ -145,8 +145,9 @@ class TestUpdateSplitter(BaseTestCase):
 class TestCleanupManager(BaseTestCase):
     def setUp(self):
         super(TestCleanupManager, self).setUp()
-        m_config = mock.Mock()
-        m_config.STARTUP_CLEANUP_DELAY = 12
+
+        self.config = load_config("felix_default.cfg",
+                                  host_dict={"StartupCleanupDelay": 12})
 
         # We need to check the order between the iptables and ipsets cleanup
         # calls so make sure they have a common root mock.
@@ -154,7 +155,7 @@ class TestCleanupManager(BaseTestCase):
         self.m_ipt_updr = self.m_root_mock.m_ipt_updr
         self.m_ips_mgr = self.m_root_mock.m_ips_mgr
 
-        self.mgr = CleanupManager(m_config,
+        self.mgr = CleanupManager(self.config,
                                   [self.m_ipt_updr],
                                   [self.m_ips_mgr])
 

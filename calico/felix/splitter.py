@@ -161,8 +161,17 @@ class CleanupManager(Actor):
             _log.info("iptables cleanup complete, moving on to ipsets")
             for ipset_mgr in self.ipsets_mgrs:
                 ipset_mgr.cleanup(async=False)
+
+            # We've cleaned up any unused ipsets and iptables.   Let any plugins
+            # know in case they want to take any action.
+            for plugin_name, plugin in self.config.plugins.iteritems():
+                _log.info("Invoking cleanup_complete for plugin %s",
+                          plugin_name)
+                plugin.cleanup_complete(self.config)
         except:
             _log.exception("Failed to cleanup iptables or ipsets state, "
                            "exiting")
             os._exit(1)
             raise  # Keep linter happy.
+
+

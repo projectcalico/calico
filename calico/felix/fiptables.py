@@ -30,7 +30,7 @@ from gevent import subprocess
 import gevent
 import sys
 
-from calico.felix import frules, futils
+from calico.felix import futils
 from calico.felix.actor import (
     Actor, actor_message, ResultOrExc, SplitBatchAndRetry
 )
@@ -102,6 +102,8 @@ class IptablesUpdater(Actor):
                                                         (ip_version, table))
         self.table = table
         self.refresh_interval = config.REFRESH_INTERVAL
+        self.iptables_generator = config.plugins["iptables_generator"]
+        self.ip_version = ip_version
         if ip_version == 4:
             self._restore_cmd = "iptables-restore"
             self._save_cmd = "iptables-save"
@@ -632,14 +634,14 @@ class IptablesUpdater(Actor):
                 #   that we now know the state of that chain and we should not
                 #   wait for the end of graceful restart to clean it up.
                 modified_chains.add(chain)
-                input_lines.extend(_stub_drop_rules(chain))
+                input_lines.extend(self._stub_drop_rules(chain))
 
         # Generate rules to stub out chains that we're about to delete, just
         # in case the delete fails later on.  Stubbing it out also stops it
         # from referencing other chains, accidentally keeping them alive.
         for chain in self._txn.chains_to_delete:
             modified_chains.add(chain)
-            input_lines.extend(_stub_drop_rules(chain))
+            input_lines.extend(self._stub_drop_rules(chain))
 
         # Now add the actual chain updates.
         for chain, chain_updates in self._txn.updates.iteritems():
@@ -686,7 +688,7 @@ class IptablesUpdater(Actor):
         for chain_name in chains:
             # Stub the chain
             input_lines.append(":%s -" % chain_name)
-            input_lines.extend(_stub_drop_rules(chain_name))
+            input_lines.extend(self._stub_drop_rules(chain_name))
             found_chain_to_stub = True
         input_lines.append("COMMIT")
         if found_chain_to_stub:
@@ -755,6 +757,19 @@ class IptablesUpdater(Actor):
             else:
                 self._stats.increment("iptables success")
                 success = True
+
+    def _stub_drop_rules(self, chain):
+        """
+        :return: List of rule fragments to replace the given chain with a
+            single drop rule.
+        """
+        fragment = ["--flush %s" % chain]
+        fragment.extend(self.iptables_generator.drop_rules(
+            self.ip_version,
+            chain,
+            None,
+            'WARNING Missing chain'))
+        return fragment
 
 
 class _Transaction(object):
@@ -934,16 +949,6 @@ class _Transaction(object):
         referenced by anything else.
         """
         return set(self.requiring_chns.keys())
-
-
-def _stub_drop_rules(chain):
-    """
-    :return: List of rule fragments to replace the given chain with a
-        single drop rule.
-    """
-    return ["--flush %s" % chain,
-            frules.commented_drop_fragment(chain,
-                                           'WARNING Missing chain DROP:')]
 
 
 def _extract_our_chains(table, raw_ipt_save_output):

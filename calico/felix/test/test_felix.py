@@ -20,13 +20,12 @@ Top level tests for Felix.
 """
 import logging
 import gevent
-from calico.felix import config
 import mock
 import sys
 
 import calico.felix.test.stub_etcd as stub_etcd
 import calico.felix.felix as felix
-from calico.felix.test.base import BaseTestCase
+from calico.felix.test.base import BaseTestCase, load_config
 
 # Logger
 log = logging.getLogger(__name__)
@@ -34,6 +33,7 @@ log = logging.getLogger(__name__)
 
 class TestException(Exception):
     pass
+
 
 class TestBasic(BaseTestCase):
     def setUp(self):
@@ -70,22 +70,25 @@ class TestBasic(BaseTestCase):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
-        m_config = mock.Mock(spec=config.Config)
-        m_config.ETCD_ADDR = "localhost:4001"
-        m_config.ETCD_SCHEME = "http"
-        m_config.ETCD_KEY_FILE = "none"
-        m_config.ETCD_CERT_FILE = "none"
-        m_config.ETCD_CA_FILE = "none"
-        m_config.HOSTNAME = "myhost"
-        m_config.IFACE_PREFIX = "tap"
-        m_config.METADATA_IP = "10.0.0.1"
-        m_config.METADATA_PORT = 1234
-        m_config.IP_IN_IP_ENABLED = True
-        m_config.IP_IN_IP_MTU = 1480
-        m_config.DEFAULT_INPUT_CHAIN_ACTION = "RETURN"
+        env_dict = {
+            "FELIX_ETCDADDR": "localhost:4001",
+            "FELIX_ETCDSCHEME": "http",
+            "FELIX_ETCDKEYFILE": "none",
+            "FELIX_ETCDCERTFILE": "none",
+            "FELIX_ETCDCAFILE": "none",
+            "FELIX_FELIXHOSTNAME": "myhost",
+            "FELIX_INTERFACEPREFIX": "tap",
+            "FELIX_METADATAIP": "10.0.0.1",
+            "FELIX_METADATAPORT": "1234",
+            "FELIX_IPINIPENABLED": "True",
+            "FELIX_IPINIPMTU": "1480",
+            "FELIX_DEFAULTINPUTCHAINACTION": "RETURN"
+        }
+        config = load_config("felix_missing.cfg", env_dict=env_dict)
+
         with gevent.Timeout(5):
             self.assertRaises(TestException,
-                              felix._main_greenlet, m_config)
+                              felix._main_greenlet, config)
         m_load.assert_called_once_with(async=False)
         m_iface_exists.assert_called_once_with("tunl0")
         m_iface_up.assert_called_once_with("tunl0")
