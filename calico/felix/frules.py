@@ -119,8 +119,12 @@ MARK:
 
 """
 import logging
+
+import time
+
 from calico.felix import devices
 from calico.felix import futils
+from calico.felix.futils import FailedSystemCall
 from calico.felix.ipsets import HOSTS_IPSET_V4
 
 _log = logging.getLogger(__name__)
@@ -163,27 +167,21 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # then this string is "tap+".
     iface_match = config.IFACE_PREFIX + "+"
 
-    iptables_generator = config.plugins["iptables_generator"]
-
     # If enabled, create the IP-in-IP device
     if config.IP_IN_IP_ENABLED:
         _log.info("IP-in-IP enabled, ensuring device exists.")
-        if not devices.interface_exists(IP_IN_IP_DEV_NAME):
-            # Make sure the IP-in-IP device exists; since we use the global
-            # device, this command actually creates it as a side-effect of
-            # initialising the kernel module rather than explicitly creating
-            # it.
-            _log.info("Tunnel device didn't exist; creating.")
-            futils.check_call(["ip", "tunnel", "add", IP_IN_IP_DEV_NAME,
-                               "mode", "ipip"])
-        futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "mtu",
-                           str(config.IP_IN_IP_MTU)])
-        if not devices.interface_up(IP_IN_IP_DEV_NAME):
-            _log.info("Tunnel device wasn't up; enabling.")
-            futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
+        try:
+            _configure_ipip_device(config)
+        except FailedSystemCall:
+            # We've seen this fail occasionally if the kernel is concurrently
+            # starting the tunl0 device.  Retry.
+            _log.exception("Failed to configure IPIP device, retrying...")
+            time.sleep(1)
+            _configure_ipip_device(config)
 
     # Ensure that Calico-controlled IPv6 hosts cannot spoof their IP addresses.
     # (For IPv4, this is controlled by a per-interface sysctl.)
+    iptables_generator = config.plugins["iptables_generator"]
     v6_raw_prerouting_chain, v6_raw_prerouting_deps = (
         iptables_generator.raw_rpfilter_failed_chain(ip_version=6)
     )
@@ -248,6 +246,26 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
         iptables_updater.ensure_rule_inserted(
             "FORWARD --jump %s" % CHAIN_FORWARD,
             async=False)
+
+
+def _configure_ipip_device(config):
+    """Creates and enables the IPIP tunnel device.
+    :raises FailedSystemCall on failure.
+    """
+    if not devices.interface_exists(IP_IN_IP_DEV_NAME):
+        # Make sure the IP-in-IP device exists; since we use the global
+        # device, this command actually creates it as a side-effect of
+        # initialising the kernel module rather than explicitly creating
+        # it.
+        _log.info("Tunnel device didn't exist; creating.")
+        futils.check_call(["ip", "tunnel", "add", IP_IN_IP_DEV_NAME,
+                           "mode", "ipip"])
+    futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "mtu",
+                       str(config.IP_IN_IP_MTU)])
+    if not devices.interface_up(IP_IN_IP_DEV_NAME):
+        _log.info("Tunnel device wasn't up; enabling.")
+        futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
+    _log.info("Configured IPIP device.")
 
 
 def interface_to_suffix(config, iface_name):
