@@ -45,4 +45,41 @@ a.)  We've bundled Mesos with netmodules into a convenient RPM - follow the [Mes
 
 b.) Already have mesos installed? Netmodules can be compiled onto an existing mesos deployment so long as all the mesos source files are present (therefore, unfortunately at this time, netmodules can not be added to mesos when installed via the mesosphere rpm releases). Follow the [manual netmodules compilation guide](ManualInstallNetmodules.md) to install it.
 
+## 5. Launching Tasks
+Calico is compatible with all frameworks which use the new NetworkInfo protobuf when launching tasks. Marathon has introduced limited support for this. For an early peek, use `djosborne/marathon:ip_per_task`:
+```
+$ docker run \
+-e MARATHON_MASTER=zk://<ZOOKEEPER-IP>:2181/mesos \
+-e MARATHON_ZK=zk://<ZOOKEEPER-IP>:2181/marathon \
+-p 8080:8080 \
+djosborne/marathon:ip_per_task
+```
+This version of Marathon supports two new fields in an application's JSON file:
+
+- `ipAddress`: Specifiying this field grants the application an IP Address networked by Calico.
+- `group`: Groups are roughly equivalent to Calico Profiles. The default implementation isolates applications so they can only communicate with other applications in the same group. Assign a task the static `public` group to allow it to communicate with any other application.
+
+The Marathon UI has does not yet include a field for specifiying NetworkInfo, so we'll use the command line to launch an app with Marathon's REST API. Below is a sample `app.json` file that is configured to receive an address from Calico:
+```
+{
+    "id":"/calico-apps",
+    "apps": [
+        {
+            "id": "hello-world-1",
+            "cmd": "ifconfig && sleep 30",
+            "cpus": 0.1,
+            "mem": 64.0,
+            "ipAddress": {
+                "groups": ["my-group-1"]
+            }
+        }
+    ]
+}
+```
+
+Send the `app.json` to marathon to launch it:
+```
+$ curl -X PUT -H "Content-Type: application/json" http://localhost:8080/v2/groups/calico-apps  -d @app.json
+```
+
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
