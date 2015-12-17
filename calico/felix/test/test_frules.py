@@ -22,6 +22,7 @@ import logging
 from mock import Mock, patch, call
 from calico.felix import frules
 from calico.felix.fiptables import IptablesUpdater
+from calico.felix.futils import FailedSystemCall
 from calico.felix.test.base import BaseTestCase, load_config
 
 _log = logging.getLogger(__name__)
@@ -122,3 +123,18 @@ class TestRules(BaseTestCase):
                 call("FORWARD --jump felix-FORWARD", async=False),
             ]
         )
+
+    def test_install_global_rules_retries_ipip(self):
+        m_config = Mock()
+        m_config.IFACE_PREFIX = "tap"
+        m_config.IP_IN_IP_ENABLED = True
+        with patch("calico.felix.frules._configure_ipip_device") as m_ipip:
+            m_ipip.side_effect = FailedSystemCall("", [], 1, "", "")
+            self.assertRaises(FailedSystemCall,
+                              frules.install_global_rules,
+                              m_config, None, None, None, None)
+            self.assertEqual(m_ipip.mock_calls,
+                             [
+                                 call(m_config),
+                                 call(m_config)
+                             ])
