@@ -17,7 +17,7 @@ import socket
 
 
 # Calico Configuration Constants
-ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
+ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
 
 # System Specific Constants
 ORCHESTRATOR_ID = "cni"

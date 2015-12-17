@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import json
 import sys
 import logging
 from cloghandler import ConcurrentRotatingFileHandler
@@ -71,6 +72,24 @@ def parse_cni_args(cni_args):
         args_to_return[k.strip()] = v.strip()
     _log.debug("Parsed CNI_ARGS: %s", args_to_return)
     return args_to_return
+
+
+def print_cni_error(code, message, details=None):
+    """Print an error response formatted according to the CNI spec.
+
+    :param code: Error code to return (int)
+    :param message: Short error message to return.
+    :param details: Detailed error message to return.
+    :return: None
+    """
+    error_response = {
+        "cniVersion": "0.1.0",
+        "code": code,
+        "msg": message,
+        "details": details
+    }
+    _log.error("CNI Error:\n%s", json.dumps(error_response, indent=2))
+    print(json.dumps(error_response))
 
 
 def get_identifier():

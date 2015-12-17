@@ -20,7 +20,7 @@ import sys
 from netaddr import IPNetwork
 
 from pycalico.ipam import IPAMClient
-from util import configure_logging
+from util import configure_logging, print_cni_error
 from constants import *
 
 LOG_FILENAME = "ipam.log"
@@ -160,22 +160,21 @@ def _exit_on_error(code, message, details=""):
     :param details: Detailed error message to return.
     :return:
     """
-    _log.error("Exiting with: `%s: %s`", message, details)
-    print json.dumps({"code": code, "msg": message, "details": details})
+    print_cni_error(code, message, details)
     sys.exit(code)
 
 
 if __name__ == '__main__':
+    # Read config file from stdin.
+    _log.debug("Reading config from stdin")
+    conf_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
+    config = json.loads(conf_raw)
+
     # Setup logger
     configure_logging(_log, LOG_FILENAME)
 
     # Get copy of environment.
     env = os.environ.copy()
-
-    # Read config file from stdin.
-    _log.debug("Reading config from stdin")
-    conf_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
-    config = json.loads(conf_raw)
 
     # Create plugin instance.
     plugin = IpamPlugin(config, env)

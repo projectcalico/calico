@@ -19,9 +19,9 @@ from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.util import validate_characters
 
+# Use the same logger as calico_cni.
 LOG_FILENAME = "cni.log"
-_log = logging.getLogger(__name__)
-configure_logging(_log, LOG_FILENAME)
+_log = logging.getLogger("calico_cni")
 
 
 class BasePolicyDriver(object):
