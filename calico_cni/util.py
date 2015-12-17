@@ -20,6 +20,10 @@ from cloghandler import ConcurrentRotatingFileHandler
 from constants import * 
 from subprocess32 import check_output
 
+from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
+
+_log = logging.getLogger("calico_cni")
+
 
 def configure_logging(logger, log_filename, log_level=logging.INFO, log_dir=LOG_DIR):
     """Configures logging for given logger using the given filename.
@@ -92,6 +96,21 @@ def print_cni_error(code, message, details=None):
     print(json.dumps(error_response))
 
 
+def handle_datastore_error(func):
+    """
+    Decorator which handles errors connecting to etcd.
+    """
+    def wrapped(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except DataStoreError, e:
+            # Hit a datastore error - log and exit.
+            print_cni_error(ERR_CODE_DATASTORE, 
+                    "Error accessing datastore", e.message)
+            sys.exit(ERR_CODE_DATASTORE)
+    return wrapped
+
+
 def get_identifier():
     """
     Returns an appropriate identifier for use in logging.
@@ -144,9 +163,3 @@ class IdentityFilter(logging.Filter):
     def filter(self, record):
         record.identity = self.identity
         return True
-
-
-# Set up logger for util.py
-LOG_FILENAME = "cni.log"
-_log = logging.getLogger(__name__)
-configure_logging(_log, LOG_FILENAME)

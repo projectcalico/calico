@@ -24,8 +24,9 @@ from netaddr import IPNetwork, AddrFormatError
 from pycalico import netns
 from pycalico.netns import Namespace, remove_veth, CalledProcessError
 from pycalico.datastore import DatastoreClient
-from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
-from util import configure_logging, parse_cni_args, print_cni_error
+from pycalico.datastore_errors import MultipleEndpointsMatch
+from util import (configure_logging, parse_cni_args, print_cni_error, 
+        handle_datastore_error)
 from constants import *
 
 import policy_drivers
@@ -518,6 +519,7 @@ class CniPlugin(object):
 
         return driver
 
+    @handle_datastore_error
     def _get_endpoint(self):
         """Gets endpoint matching the container_id.
 
@@ -535,11 +537,6 @@ class CniPlugin(object):
                 orchestrator_id=ORCHESTRATOR_ID,
                 workload_id=self.container_id
             )
-        except DataStoreError, e:
-            print_cni_error(ERR_CODE_ETCD_UNAVAILABLE, 
-                                       "Unable to access etcd", 
-                                       e.message)
-            sys.exit(ERR_CODE_ETCD_UNAVAILABLE)
         except KeyError:
             _log.debug("No endpoint found matching ID %s", self.container_id)
             endpoint = None

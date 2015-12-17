@@ -235,8 +235,10 @@ class CniPluginFvTest(unittest.TestCase):
         """
         # Configure.
         self.command = CNI_CMD_ADD
-        ipam_stdout = json.dumps({"code": 1, "message": "msg", "details": ""})
-        self.set_ipam_result(1, ipam_stdout, "")
+        ipam_stdout = json.dumps({"code": ERR_CODE_GENERIC, 
+                                  "message": "msg", 
+                                  "details": ""})
+        self.set_ipam_result(ERR_CODE_GENERIC, ipam_stdout, "")
 
         # Create plugin.
         p = self.create_plugin()
@@ -339,7 +341,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, ERR_CODE_ETCD_UNAVAILABLE)
+        assert_equal(rc, ERR_CODE_DATASTORE)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 

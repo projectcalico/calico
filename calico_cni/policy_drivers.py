@@ -20,7 +20,6 @@ from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.util import validate_characters
 
 # Use the same logger as calico_cni.
-LOG_FILENAME = "cni.log"
 _log = logging.getLogger("calico_cni")
 
 
