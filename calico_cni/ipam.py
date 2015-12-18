@@ -23,9 +23,12 @@ from pycalico.ipam import IPAMClient
 from util import configure_logging, print_cni_error
 from constants import *
 
-LOG_FILENAME = "ipam.log"
 
-_log = logging.getLogger(__name__)
+# Logging config.
+LOG_FILENAME = "ipam.log"
+_log = logging.getLogger("calico_cni")
+
+# Access to Calico Datastore.
 datastore_client = IPAMClient()
 
 
@@ -177,7 +180,7 @@ if __name__ == '__main__':
     # log level provided in the network configuration file.
     configure_logging(_log, LOG_FILENAME, 
                       log_level=log_level, 
-                      stderr_level=log_level)
+                      stderr_level=logging.INFO)
 
     # Get copy of environment.
     env = os.environ.copy()

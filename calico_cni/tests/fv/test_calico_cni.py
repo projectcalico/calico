@@ -20,17 +20,17 @@ from mock import patch, MagicMock, call, ANY
 from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
-from constants import *
 
 import pycalico.netns
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import IPPool, Endpoint
 from pycalico.datastore_errors import DataStoreError 
 
-import calico_cni, container_engines
-from calico_cni import CniPlugin
-from policy_drivers import DefaultPolicyDriver, KubernetesDefaultPolicyDriver 
-from container_engines import DockerEngine
+from calico_cni import calico_cni, container_engines
+from calico_cni.calico_cni import CniPlugin
+from calico_cni.constants import *
+from calico_cni.policy_drivers import DefaultPolicyDriver, KubernetesDefaultPolicyDriver 
+from calico_cni.container_engines import DockerEngine
 
 
 class CniPluginFvTest(unittest.TestCase):

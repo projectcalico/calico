@@ -18,9 +18,9 @@ import json
 import unittest
 from mock import patch, MagicMock, Mock, call
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
-from constants import *
 
-from util import *
+from calico_cni.constants import *
+from calico_cni.util import *
 
 
 class UtilTest(unittest.TestCase):

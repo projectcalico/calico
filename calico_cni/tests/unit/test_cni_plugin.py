@@ -20,15 +20,14 @@ from mock import patch, MagicMock, Mock, call
 from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
-from constants import *
 
 import pycalico.netns
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import IPPool, Endpoint
 
-import calico_cni 
-from calico_cni import CniPlugin
-from policy_drivers import DefaultPolicyDriver 
+from calico_cni.constants import *
+from calico_cni.calico_cni import CniPlugin
+from calico_cni.policy_drivers import DefaultPolicyDriver 
 
 
 class CniPluginTest(unittest.TestCase):
@@ -124,7 +123,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._execute()
         self.plugin.delete.assert_called_once_with()
 
-    @patch("calico_cni.json", autospec=True)
+    @patch("calico_cni.calico_cni.json", autospec=True)
     def test_add_mainline(self, m_json): 
         # Mock out _assign_ips.
         ip4 = IPNetwork("10.0.0.1/32")
@@ -160,7 +159,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
         m_json.dumps.assert_called_once_with(ipam_response)
 
-    @patch("calico_cni.netns", autospec=True)
+    @patch("calico_cni.calico_cni.netns", autospec=True)
     def test_delete_mainline(self, m_netns):
         # Mock out _release_ip.
         self.plugin._release_ip = MagicMock(spec=self.plugin._release_ip)
@@ -210,7 +209,7 @@ class CniPluginTest(unittest.TestCase):
         # Call _release_ip.
         self.plugin._release_ip(env)
 
-    @patch("calico_cni.Popen", autospec=True)
+    @patch("calico_cni.calico_cni.Popen", autospec=True)
     def test_call_ipam_plugin_mainline(self, m_popen):
         # Mock _find_ipam_plugin.
         plugin_path = "/opt/bin/cni/calico-ipam"

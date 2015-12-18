@@ -22,7 +22,7 @@ from subprocess32 import check_output
 
 from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
 
-_log = logging.getLogger(__name__)
+_log = logging.getLogger("calico_cni")
 
 
 def configure_logging(logger, log_filename, log_level=logging.INFO, 
@@ -71,8 +71,11 @@ def parse_cni_args(cni_args):
     # Dictionary to return.
     args_to_return = {}
 
+    _log.debug("Parsing CNI_ARGS: %s", cni_args)
     for k,v in CNI_ARGS_RE.findall(cni_args):
+        _log.debug("\tCNI_ARG: %s=%s", k, v)
         args_to_return[k.strip()] = v.strip()
+    _log.debug("Parsed CNI_ARGS: %s", args_to_return)
     return args_to_return
 
 

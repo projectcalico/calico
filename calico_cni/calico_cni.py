@@ -34,7 +34,7 @@ from container_engines import DefaultEngine, DockerEngine
 
 # Logging configuration.
 LOG_FILENAME = "cni.log"
-_log = logging.getLogger(__name__)
+_log = logging.getLogger("calico_cni")
 
 
 class CniPlugin(object):
@@ -82,9 +82,7 @@ class CniPlugin(object):
         Name of the interface to create within the container.
         """
 
-        _log.debug("Parsing CNI_ARGS: %s", env[CNI_ARGS_ENV])
         self.cni_args = parse_cni_args(env[CNI_ARGS_ENV])
-        _log.debug("Got CNI_ARGS: %s", self.cni_args)
         """
         Dictionary of additional CNI arguments provided via
         the CNI_ARGS environment variable.
