@@ -63,7 +63,8 @@ test-circle: binary
 	-v $(CIRCLE_TEST_REPORTS):/circle_output \
 	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
 	calico/test sh -c \
-	'	nosetests calico_cni/tests -c nose.cfg \
+	'>/dev/null 2>&1 & \
+	cd calico_cni; nosetests tests -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
