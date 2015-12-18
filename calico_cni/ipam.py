@@ -77,7 +77,7 @@ class IpamPlugin(object):
                     "Invalid command: %s" % self.command
     
             # Release IPs using the container_id as the handle.
-            _log.info("Releasing address on container %s", 
+            _log.info("Releasing addresses on container %s", 
                     self.container_id)
             try:
                 datastore_client.release_ip_by_handle(handle_id=self.container_id)
@@ -164,6 +164,7 @@ def _exit_on_error(code, message, details=""):
     :return:
     """
     print_cni_error(code, message, details)
+    _log.debug("Exiting with rc=%s", code)
     sys.exit(code)
 
 

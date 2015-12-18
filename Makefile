@@ -28,6 +28,7 @@ dist/calico: $(SRCFILES)
 	-v `pwd`/calico_cni:/code/calico_cni \
 	calico/build pyinstaller calico_cni/calico_cni.py -a -F -s -n calico --clean
 
+# Makes the IPAM plugin.
 dist/calico-ipam: $(SRCFILES)
 	mkdir -p dist
 	chmod 777 `pwd`/dist
@@ -46,11 +47,25 @@ ut:
 	calico/test \
 	nosetests calico_cni/tests/unit -c nose.cfg
 
+# Run the fv tests.
 fv: 
 	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
 	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
 	calico/test \
 	nosetests calico_cni/tests/fv -c nose.cfg
+
+# Makes tests on Circle CI.
+test-circle: binary
+	# Can't use --rm on circle
+	# Circle also requires extra options for reporting.
+	docker run \
+	-v `pwd`:/code \
+	-v $(CIRCLE_TEST_REPORTS):/circle_output \
+	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
+	calico/test sh -c \
+	'	nosetests calico_cni/tests -c nose.cfg \
+	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
+	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
 clean:
 	-rm -f *.created
