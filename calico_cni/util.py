@@ -22,10 +22,11 @@ from subprocess32 import check_output
 
 from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
 
-_log = logging.getLogger("calico_cni")
+_log = logging.getLogger(__name__)
 
 
-def configure_logging(logger, log_filename, log_level=logging.INFO, log_dir=LOG_DIR):
+def configure_logging(logger, log_filename, log_level=logging.INFO, 
+        stderr_level=logging.ERROR, log_dir=LOG_DIR):
     """Configures logging for given logger using the given filename.
 
     :return None.
@@ -53,7 +54,7 @@ def configure_logging(logger, log_filename, log_level=logging.INFO, log_dir=LOG_
 
     # Attach a stderr handler to the log.
     stderr_hdlr = logging.StreamHandler(sys.stderr)
-    stderr_hdlr.setLevel(log_level)
+    stderr_hdlr.setLevel(stderr_level)
     stderr_hdlr.setFormatter(formatter)
     logger.addHandler(stderr_hdlr)
 
@@ -70,11 +71,8 @@ def parse_cni_args(cni_args):
     # Dictionary to return.
     args_to_return = {}
 
-    _log.debug("Parsing CNI_ARGS: %s", cni_args)
     for k,v in CNI_ARGS_RE.findall(cni_args):
-        _log.debug("\tParsed CNI_ARG: %s=%s", k, v)
         args_to_return[k.strip()] = v.strip()
-    _log.debug("Parsed CNI_ARGS: %s", args_to_return)
     return args_to_return
 
 
@@ -102,7 +100,7 @@ def handle_datastore_error(func):
     """
     def wrapped(*args, **kwargs):
         try:
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
         except DataStoreError, e:
             # Hit a datastore error - log and exit.
             print_cni_error(ERR_CODE_DATASTORE, 
@@ -127,31 +125,6 @@ def get_identifier():
                                     "UnknownId")[:8]
     return identifier
     
-
-def _log_interfaces(namespace):
-    """
-    Log interface state in namespace and default namespace.
-
-    :param namespace
-    :type namespace str
-    """
-    try:
-        if _log.isEnabledFor(logging.DEBUG):
-            interfaces = check_output(['ip', 'addr'])
-            _log.debug("Interfaces in default namespace:\n%s", interfaces)
-
-            namespaces = check_output(['ip', 'netns', 'list'])
-            _log.debug("Namespaces:\n%s", namespaces)
-
-            cmd = ['ip', 'netns', 'exec', str(namespace), 'ip', 'addr']
-            namespace_interfaces = check_output(cmd)
-
-            _log.debug("Interfaces in namespace %s:\n%s",
-                         namespace, namespace_interfaces)
-    except BaseException:
-        # Don't exit if we hit an error logging out the interfaces.
-        _log.exception("Ignoring error logging interfaces")
-
 
 class IdentityFilter(logging.Filter):
     """

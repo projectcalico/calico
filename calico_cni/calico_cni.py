@@ -82,7 +82,9 @@ class CniPlugin(object):
         Name of the interface to create within the container.
         """
 
+        _log.debug("Parsing CNI_ARGS: %s", env[CNI_ARGS_ENV])
         self.cni_args = parse_cni_args(env[CNI_ARGS_ENV])
+        _log.debug("Got CNI_ARGS: %s", self.cni_args)
         """
         Dictionary of additional CNI arguments provided via
         the CNI_ARGS environment variable.
@@ -170,8 +172,8 @@ class CniPlugin(object):
                       "with host networking.", self.container_id)
             sys.exit(0)
 
-        _log.info("Configuring networking for container: %s", 
-                  self.container_id)
+        _log.info("Configuring network '%s' for container: %s", 
+                  self.network_name, self.container_id)
 
         _log.debug("Checking for existing Calico endpoint")
         endpoint = self._get_endpoint()
@@ -260,7 +262,8 @@ class CniPlugin(object):
 
         :return: None.
         """
-        _log.info("Remove networking from container: %s", self.container_id)
+        _log.info("Remove network '%s' from container: %s", 
+                self.network_name, self.container_id)
 
         # Step 1: Remove any IP assignments.
         self._release_ip(self.env)

@@ -170,8 +170,14 @@ if __name__ == '__main__':
     conf_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
     config = json.loads(conf_raw)
 
-    # Setup logger
-    configure_logging(_log, LOG_FILENAME)
+    # Get the log level from the config file, default to INFO.
+    log_level = config.get(LOG_LEVEL_KEY, "INFO").upper()
+
+    # Setup logger. We log to file and to stderr based on the 
+    # log level provided in the network configuration file.
+    configure_logging(_log, LOG_FILENAME, 
+                      log_level=log_level, 
+                      stderr_level=log_level)
 
     # Get copy of environment.
     env = os.environ.copy()
