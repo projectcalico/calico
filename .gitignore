@@ -6,3 +6,4 @@ env
 *.pyc
 *~
 *.created
+.coverage
