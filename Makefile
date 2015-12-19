@@ -55,7 +55,7 @@ fv:
 	nosetests calico_cni/tests/fv -c nose.cfg
 
 # Makes tests on Circle CI.
-test-circle: binary
+test-circle: 
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
@@ -64,7 +64,7 @@ test-circle: binary
 	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
 	calico/test sh -c \
 	'>/dev/null 2>&1 & \
-	cd calico_cni; nosetests tests -c nose.cfg \
+	cd calico_cni; nosetests tests/unit tests/fv -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
