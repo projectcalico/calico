@@ -43,6 +43,34 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(expected_result, test_result)
 
     @parameterized.expand([
+        (["1.2.3.4"], 4, True),
+        (["1.2.3.4"], None, True),
+        (["aa:bb::zz"], 6, False),
+        (["aa:bb::zz"], None, False),
+        (["10.0.0.1", "11.0.0.1", "11.0.0.1"], 4, True),
+        (["10.0.0.1", "11.0.0.1", "11.0.0.1"], None, True),
+        (["1111:2222:3333:4444:5555:6666:7777:8888", "a::b"], 6, True),
+        (["1111:2222:3333:4444:5555:6666:7777:8888", "a::b", "1234::1"],
+                                                                    None, True),
+        (["127.1.0.1", "dead:beef"], None, False),
+        (["aa:bb::zz"], 4, False),
+        (["1.2.3.4"], 6, False),
+        (["0bad:beef", "1.2.3.4"], 4, False),
+        (["0bad:beef", "1.2.3.4"], 6, False),
+        (["0bad:beef", "1.2.3.4"], None, False),
+    ])
+    def test_validate_cidr_versions(self, cidr_list, ip_version, expected_result):
+        """
+        Test validate_cidr_versions function in calico_ctl utils
+        """
+        # Call method under test
+        test_result = utils.validate_cidr_versions(cidr_list,
+                                                   ip_version=ip_version)
+
+        # Assert
+        self.assertEqual(expected_result, test_result)
+
+    @parameterized.expand([
         ('1.2.3.4', 4, True),
         ('1.2.3.4', 6, False),
         ('1.2.3.4', 4, True),

@@ -31,6 +31,7 @@ class TestProfile(unittest.TestCase):
         ({'<SRCCIDR>':'127.a.0.1'}, True),
         ({'<DSTCIDR>':'aa:bb::zz'}, True),
         ({'<SRCCIDR>':'1.2.3.4', '<DSTCIDR>':'1.2.3.4'}, False),
+        ({'<SRCCIDR>':'1.2.3.4', '<DSTCIDR>':'dead::beef'}, True),
         ({'<ICMPCODE>':'5'}, False),
         ({'<ICMPTYPE>':'16'}, False),
         ({'<ICMPCODE>':100, '<ICMPTYPE>':100}, False),
