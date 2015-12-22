@@ -142,6 +142,7 @@ st: run-etcd dist/calicoctl docker calico_test/.calico_test.created busybox.tar 
 	           --net=host \
 	           --privileged \
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
+	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v `pwd`:/code \
@@ -164,6 +165,7 @@ st-ssl: run-etcd-ssl dist/calicoctl docker calico_test/.calico_test.created busy
 	           --net=host \
 	           --privileged \
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
+	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e ETCD_SCHEME=https \
 	           -e ETCD_CA_CERT_FILE=`pwd`/certs/ca.crt \
 	           -e ETCD_CERT_FILE=`pwd`/certs/client.crt \

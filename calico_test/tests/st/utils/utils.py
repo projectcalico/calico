@@ -15,6 +15,7 @@ import logging
 import socket
 from time import sleep
 import os
+import pdb
 from subprocess import check_output, STDOUT
 from subprocess import CalledProcessError
 from exceptions import CommandExecError
@@ -98,6 +99,30 @@ def retry_until_success(function, retries=10, ex_class=Exception):
             return result
 
 
+def debug_failures(fn):
+    """
+    Decorator function to decorate assertion methods to pause the live system
+    when an assertion fails, allowing the user to debug the problem.
+    :param fn: The function to decorate.
+    :return: The decorated function.
+    """
+    def wrapped(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            if (os.getenv("DEBUG_FAILURES") != None and
+                os.getenv("DEBUG_FAILURES").lower() == "true"):
+                logger.error("TEST FAILED:\n%s\nEntering DEBUG mode."
+                             % e.message)
+                pdb.set_trace()
+            else:
+                raise e
+    return wrapped
+
+
+@debug_failures
 def check_bird_status(host, expected):
     """
     Check the BIRD status on a particular host to see if it contains the
@@ -152,6 +177,8 @@ def check_bird_status(host, expected):
                   "Output: \n%s" % (ipaddr, peertype, state, output)
             raise AssertionError(msg)
 
+
+@debug_failures
 def assert_number_endpoints(host, expected):
     """
     Check that a host has the expected number of endpoints in Calico
@@ -179,6 +206,7 @@ def assert_number_endpoints(host, expected):
               "Expected: %s; Actual: %s" % (expected, actual)
         raise AssertionError(msg)
 
+@debug_failures
 def assert_profile(host, profile_name):
     """
     Check that profile is registered in Calico
@@ -218,6 +246,7 @@ def get_profile_name(host, network):
     # We are only inspecting 1, so use the first entry.
     return info[0]["Id"]
 
+@debug_failures
 def assert_network(host, network):
     """
     Checks that the given network is in Docker
