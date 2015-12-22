@@ -59,11 +59,12 @@ class TestAutoAssignIp(TestBase):
 
             host.remove_workloads()
 
-            # Test that recreating gives the same results (same IPs)
+            # Test that recreating returns the next two IPs (IPs are not
+            # reassigned automatically unless we have run out of IPs).
             workloads = self._setup_env(host, count=2, ip="ipv4")
 
-            workloads[0].assert_can_ping("192.168.0.1", retries=3)
-            workloads[1].assert_can_ping("192.168.0.0", retries=3)
+            workloads[0].assert_can_ping("192.168.0.2", retries=3)
+            workloads[1].assert_can_ping("192.168.0.3", retries=3)
 
     @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_add_autoassigned_ipv6(self):
@@ -82,11 +83,12 @@ class TestAutoAssignIp(TestBase):
 
             host.remove_workloads()
 
-            # Test that recreating gives the same results (same IPs)
+            # Test that recreating returns the next two IPs (IPs are not
+            # reassigned automatically unless we have run out of IPs).
             workloads = self._setup_env(host, count=2, ip="ipv6")
 
-            workloads[0].assert_can_ping("fd80:24e2:f998:72d6::1", retries=3)
-            workloads[1].assert_can_ping("fd80:24e2:f998:72d6::", retries=3)
+            workloads[0].assert_can_ping("fd80:24e2:f998:72d6::2", retries=3)
+            workloads[1].assert_can_ping("fd80:24e2:f998:72d6::3", retries=3)
 
     def test_add_autoassigned_pool_ipv4(self):
         """
