@@ -114,7 +114,7 @@ The STs require root access to run, so run them with sudo.
 
 The STs require a number of Python packages to be installed.  You can install these using
 
-    pip install -r build_calicoctl/requirements.txt
+    pip install -r calicoctl/requirements.txt
 
 #### The full ST suite
 
