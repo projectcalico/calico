@@ -7,6 +7,17 @@ if [ "$CALICO_NETWORKING" == "false" ]; then
 else
     # Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
     # felix to start.  Don't fail startup if this confd execution fails.
+    #
+    # First generate the BIRD aggregation TOML file from the template by
+    # switching out the hostname.
+    sed "s/HOSTNAME/$HOSTNAME/" /etc/calico/confd/templates/bird_aggr.toml.template > /etc/calico/confd/conf.d/bird_aggr.toml
+    sed "s/HOSTNAME/$HOSTNAME/" /etc/calico/confd/templates/bird6_aggr.toml.template > /etc/calico/confd/conf.d/bird6_aggr.toml
+
+    # Run confd twice.  Our confd TOML files are also generated from confd, so
+    # running twice ensures our starting configuration is correct.
+    confd -confdir=/etc/calico/confd -onetime -node=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} \
+          -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
+          -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} || true
     confd -confdir=/etc/calico/confd -onetime -node=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} \
           -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
           -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} || true
