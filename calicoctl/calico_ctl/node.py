@@ -283,6 +283,9 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         else:
             print "No IP provided. Using detected IP: %s" % ip
 
+    # Verify that IPs are not already in use by another host.
+    error_if_bgp_ip_conflict(ip, ip6)
+
     # Verify that the chosen IP exists on the current host
     warn_if_unknown_ip(ip, ip6)
 
@@ -677,15 +680,16 @@ def warn_if_hostname_conflict(ip):
     :return: Nothing
     """
     # If there's already a calico-node container on this host, they're probably
-    # just re-running node to update one of the ip addresses, so skip..
+    # just re-running node to update one of the ip addresses, so skip.
     try:
-        current_ipv4, _ = client.get_host_bgp_ips(hostname)
+        current_ipv4, ipv6 = client.get_host_bgp_ips(hostname)
     except KeyError:
         # No other machine has registered configuration under this hostname.
         # This must be a new host with a unique hostname, which is the
         # expected behavior.
         pass
     else:
+        print "IPv4 is %s, IPv6 is %s" % (current_ipv4, ipv6)
         if current_ipv4 != "" and current_ipv4 != ip:
             hostname_warning = "WARNING: Hostname '%s' is already in use " \
                                "with IP address %s. Calico requires each " \
@@ -703,6 +707,52 @@ def warn_if_hostname_conflict(ip):
                 # Couldn't connect to docker to confirm calico-node is running.
                 print_paragraph(hostname_warning)
 
+def error_if_bgp_ip_conflict(ip, ip6):
+    """
+    Prints an error message and exits if either of the IPv4 or IPv6 addresses
+    is already in use by another calico BGP host.
+
+    :param ip: User-provided IPv4 address to start this node with.
+    :param ip6: User-provided IPv6 address to start this node with.
+    :return: Nothing
+    """
+    ip_list = []
+    if ip:
+        ip_list.append(ip)
+    if ip6:
+        ip_list.append(ip6)
+    try:
+        # Get hostname of host that already uses the given IP, if it exists
+        ip_conflicts = client.get_hostnames_from_ips(ip_list)
+    except KeyError:
+        # No hosts have been configured in etcd, so there cannot be a conflict
+        return
+
+    if ip_conflicts.keys():
+        ip_error = "ERROR: IP address %s is already in use by host %s. " \
+                   "Calico requires each compute host to have a unique IP. " \
+                   "If this is your first time running 'calicoctl node' on " \
+                   "this host, ensure that another host is not already using " \
+                   "the same IP address."
+        try:
+            if ip_conflicts[ip] != hostname:
+                ip_error = ip_error % (ip, str(ip_conflicts[ip]))
+                print_paragraph(ip_error)
+                sys.exit(1)
+        except KeyError:
+            # IP address was not found in ip-host dictionary
+            pass
+        try:
+            if ip6 and ip_conflicts[ip6] != hostname:
+                ip_error = ip_error % (ip6, str(ip_conflicts[ip6]))
+                print_paragraph(ip_error)
+                sys.exit(1)
+        except KeyError:
+            # IP address was not found in ip-host dictionary
+            pass
+
+
+#TODO: Write UTs
 
 def _find_or_pull_node_image(image_name):
     """

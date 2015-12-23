@@ -30,6 +30,7 @@ from pycalico.datastore import (ETCD_AUTHORITY_DEFAULT, ETCD_SCHEME_DEFAULT,
 from calico_ctl import node
 from calico_ctl.node import (ETCD_CA_CERT_NODE_FILE, ETCD_CERT_NODE_FILE,
                              ETCD_KEY_NODE_FILE, CALICO_NETWORKING_DEFAULT)
+import calico_ctl
 
 class TestAttachAndStream(unittest.TestCase):
 
@@ -172,6 +173,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
@@ -181,9 +183,11 @@ class TestNode(unittest.TestCase):
     def test_node_dockerless_start(self, m_attach_and_stream,
                                    m_find_or_pull_node_image, m_docker,
                                    m_docker_client, m_client, m_install_plugin,
-                                   m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                                   m_get_host_ips, m_setup_ip, m_check_system,
-                                   m_os_makedirs, m_os_path_exists):
+                                   m_error_if_bgp_ip_conflict,
+                                   m_warn_if_hostname_conflict,
+                                   m_warn_if_unknown_ip, m_get_host_ips,
+                                   m_setup_ip, m_check_system, m_os_makedirs,
+                                   m_os_path_exists):
         """
         Test that the node_start function performs all necessary configurations
         without making Docker calls when runtime=none.
@@ -241,6 +245,7 @@ class TestNode(unittest.TestCase):
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
+        m_error_if_bgp_ip_conflict.assert_called_once_with(ip_2, ip6)
         m_client.get_ip_pools.assert_has_calls([call(4), call(6)])
         m_client.ensure_global_config.assert_called_once_with()
         m_client.create_host.assert_called_once_with(
@@ -264,6 +269,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
@@ -273,9 +279,9 @@ class TestNode(unittest.TestCase):
     def test_node_start(self, m_attach_and_stream,
                         m_find_or_pull_node_image, m_docker,
                         m_docker_client, m_client, m_install_plugin,
-                        m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                        m_get_host_ips, m_setup_ip, m_check_system,
-                        m_os_makedirs, m_os_path_exists):
+                        m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
+                        m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
+                        m_check_system, m_os_makedirs, m_os_path_exists):
         """
         Test that the node_Start function does not make Docker calls
         function returns
@@ -335,6 +341,7 @@ class TestNode(unittest.TestCase):
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
+        m_error_if_bgp_ip_conflict.assert_called_once_with(ip_2, ip6)
         m_client.get_ip_pools.assert_has_calls([call(4), call(6)])
         m_client.ensure_global_config.assert_called_once_with()
         m_client.create_host.assert_called_once_with(
@@ -373,6 +380,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
@@ -382,6 +390,7 @@ class TestNode(unittest.TestCase):
     def test_node_start_secure(self, m_attach_and_stream,
                                m_find_or_pull_node_image, m_docker,
                                m_docker_client, m_client, m_install_plugin,
+                               m_error_if_bgp_ip_conflict,
                                m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
                                m_get_host_ips, m_setup_ip, m_check_system,
                                m_os_getenv, m_os_makedirs, m_os_path_exists):
@@ -482,6 +491,7 @@ class TestNode(unittest.TestCase):
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
+        m_error_if_bgp_ip_conflict.assert_called_once_with(ip_2, ip6)
         m_client.get_ip_pools.assert_has_calls([call(4), call(6)])
         m_client.ensure_global_config.assert_called_once_with()
         m_client.create_host.assert_called_once_with(node.hostname, ip_2, ip6,
@@ -533,11 +543,12 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     def test_node_start_call_backup_kube_directory(
             self, m_install_plugin, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
-            m_os_makedirs, m_os_path_exists):
+            m_error_if_bgp_ip_conflict, m_warn_if_unknown_ip, m_get_host_ips,
+            m_setup_ip, m_check_system, m_os_makedirs, m_os_path_exists):
         """
         Test that node_start calls the backup kuberentes plugin directory
         when install_kubernetes cannot access the default kubernetes directory
@@ -578,11 +589,12 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     def test_node_start_call_backup_rkt_directory(
-            self, m_install_plugin, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
-            m_check_system, m_os_makedirs, m_os_path_exists):
+            self, m_install_plugin, m_error_if_bgp_ip_conflict,
+            m_warn_if_hostname_conflict, m_warn_if_unknown_ip, m_get_host_ips,
+            m_setup_ip, m_check_system, m_os_makedirs, m_os_path_exists):
         """
         Test that node_start calls the backup kuberentes plugin directory
         when install_kubernetes cannot access the default kubernetes directory
@@ -621,13 +633,14 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_start_remove_container_error(
             self, m_docker_client, m_client, m_install_plugin,
-            m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-            m_get_host_ips, m_setup_ip, m_check_system,
+            m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
+            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):
         """
         Test that the docker client raises an APIError when it fails to
@@ -663,13 +676,14 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_start_no_detected_ips(
             self, m_docker_client, m_client, m_install_plugin,
-            m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-            m_get_host_ips, m_setup_ip, m_check_system,
+            m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
+            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists, m_sys_exit):
         """
         Test that system exits when no ip is provided and host ips cannot be
@@ -705,13 +719,14 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_start_create_default_ip_pools(
             self, m_docker_client, m_client, m_install_plugin,
-            m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-            m_get_host_ips, m_setup_ip, m_check_system,
+            m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
+            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):
         """
         Test that the client creates default ipv4 and ipv6 pools when the
@@ -880,7 +895,9 @@ class TestNode(unittest.TestCase):
     @patch("calico_ctl.node.URLGetter", autospec=True)
     @patch("calico_ctl.node.os", autospec=True)
     def test_install_plugin(self, m_os, m_url_getter):
-        # Test installation of Kubernetes plugin
+        """
+        Test installation of Kubernetes plugin
+        """
         url = "http://somefake/url"
         path = "/path/to/downloaded/binary/"
 
@@ -889,3 +906,52 @@ class TestNode(unittest.TestCase):
 
         # Assert the file URL was downloaded.
         m_url_getter().retrieve.assert_called_once_with(url, path + "calico")
+
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("sys.exit", autospec=True)
+    def test_error_if_bgp_ipv4_conflict_no_conflict(self, m_exit, m_client):
+        """
+        Test check that node IP is not already in use by another node, no error.
+        """
+        m_client.get_hostnames_from_ips = Mock()
+        m_client.get_hostnames_from_ips.return_value = {}
+        node.error_if_bgp_ip_conflict("10.0.0.1", "abcd::beef")
+        self.assertFalse(m_exit.called)
+
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.utils.get_hostname", autospec=True)
+    @patch("sys.exit", autospec=True)
+    def test_error_if_ip_conflict_ipv6_key_error(self, m_exit, m_hostname,
+                                                 m_client):
+        """
+        Test that function accepts IP being owned by same host.
+        """
+        calico_ctl.node.hostname = "host"
+        m_client.get_hostnames_from_ips = Mock()
+        m_client.get_hostnames_from_ips.return_value = {"10.0.0.1":"host"}
+        node.error_if_bgp_ip_conflict("10.0.0.1", "abcd::beef")
+        self.assertFalse(m_exit.called)
+
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.utils.get_hostname", autospec=True)
+    def test_error_when_bgp_ipv4_conflict(self, m_hostname, m_client):
+        """
+        Test that function exits when another node already uses ipv4 addr.
+        """
+        calico_ctl.node.hostname = "not_host"
+        m_client.get_hostnames_from_ips = Mock()
+        m_client.get_hostnames_from_ips.return_value = {"10.0.0.1":"host"}
+        self.assertRaises(SystemExit, node.error_if_bgp_ip_conflict,
+                          "10.0.0.1", None)
+
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.utils.get_hostname", autospec=True)
+    def test_error_when_bgp_ipv6_conflict(self, m_hostname, m_client):
+        """
+        Test that function exits when another node already uses ipv6 addr.
+        """
+        calico_ctl.node.hostname = "not_host"
+        m_client.get_hostnames_from_ips = Mock()
+        m_client.get_hostnames_from_ips.return_value = {"abcd::beef":"host"}
+        self.assertRaises(SystemExit, node.error_if_bgp_ip_conflict,
+                          None, "abcd::beef")
