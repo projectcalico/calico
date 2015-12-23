@@ -63,8 +63,8 @@ class TestAutoAssignIp(TestBase):
             # reassigned automatically unless we have run out of IPs).
             workloads = self._setup_env(host, count=2, ip="ipv4")
 
-            workloads[0].assert_can_ping("192.168.0.2", retries=3)
-            workloads[1].assert_can_ping("192.168.0.3", retries=3)
+            workloads[0].assert_can_ping("192.168.0.3", retries=3)
+            workloads[1].assert_can_ping("192.168.0.2", retries=3)
 
     @unittest.skipUnless(HOST_IPV6, "Host does not have an IPv6 address")
     def test_add_autoassigned_ipv6(self):
@@ -87,8 +87,8 @@ class TestAutoAssignIp(TestBase):
             # reassigned automatically unless we have run out of IPs).
             workloads = self._setup_env(host, count=2, ip="ipv6")
 
-            workloads[0].assert_can_ping("fd80:24e2:f998:72d6::2", retries=3)
-            workloads[1].assert_can_ping("fd80:24e2:f998:72d6::3", retries=3)
+            workloads[0].assert_can_ping("fd80:24e2:f998:72d6::3", retries=3)
+            workloads[1].assert_can_ping("fd80:24e2:f998:72d6::2", retries=3)
 
     def test_add_autoassigned_pool_ipv4(self):
         """
