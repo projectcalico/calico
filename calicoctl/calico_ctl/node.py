@@ -689,7 +689,6 @@ def warn_if_hostname_conflict(ip):
         # expected behavior.
         pass
     else:
-        print "IPv4 is %s, IPv6 is %s" % (current_ipv4, ipv6)
         if current_ipv4 != "" and current_ipv4 != ip:
             hostname_warning = "WARNING: Hostname '%s' is already in use " \
                                "with IP address %s. Calico requires each " \
