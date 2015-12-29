@@ -27,7 +27,7 @@ We'll install the CNI network configuration file to `/etc/cni/net.d/`. Create a 
     "etcd_authority": "<host>:<port>",
     "log_level": "info",
     "ipam": {
-        "type": "calico-ipam",
+        "type": "calico-ipam"
     }
 }
 ```

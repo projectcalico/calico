@@ -31,7 +31,7 @@ For example:
     "name": "example_net",
     "type": "calico",
     "ipam": {
-        "type": "calico-ipam",
+        "type": "calico-ipam"
     }
 }
 ```
