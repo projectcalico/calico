@@ -16,7 +16,7 @@ import os
 import sys
 import json
 import unittest
-from mock import patch, MagicMock, Mock, call
+from mock import patch, MagicMock, Mock, call, ANY
 from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
@@ -500,3 +500,46 @@ class CniPluginTest(unittest.TestCase):
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
+    def test_create_endpoint(self):
+        # Mock.
+        ip4 = IPNetwork("10.0.0.1")
+        ip_list = [ip4]
+        endpoint = MagicMock(spec=Endpoint)
+        self.plugin._client.create_endpoint.return_value = endpoint
+
+        # Call.
+        ep = self.plugin._create_endpoint(ip_list)
+
+        # Assert.
+        self.plugin._client.create_endpoint.assert_called_once_with(ANY, "cni",
+                self.container_id, ip_list)
+        assert_equal(ep, endpoint)
+
+    def test_create_endpoint_error(self):
+        # Mock.
+        ip4 = IPNetwork("10.0.0.1")
+        ip_list = [ip4]
+        self.plugin._client.create_endpoint.side_effect = KeyError
+        self.plugin._release_ip = MagicMock(spec=self.plugin._release_ip)
+
+        # Call.
+        with assert_raises(SystemExit) as err:
+           self.plugin._create_endpoint(ip_list)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+        expected_env = self.env.copy()
+        expected_env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
+        self.plugin._release_ip.assert_called_once_with(expected_env)
+
+    def test_remove_endpoint(self):
+        # Call
+        self.plugin._remove_endpoint()
+
+        # Assert
+        self.plugin._client.remove_workload.assert_called_once_with(hostname=ANY,
+                workload_id=self.container_id, orchestrator_id="cni")
+
+    def test_remove_endpoint_does_not_exist(self):
+        self.plugin._client.remove_workload.side_effect = KeyError 
+        self.plugin._remove_endpoint()
