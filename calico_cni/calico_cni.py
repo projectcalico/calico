@@ -471,23 +471,17 @@ class CniPlugin(object):
         return endpoint
 
     def _remove_veth(self, endpoint):
-        """Remove the veth from given endpoint
+        """Remove the veth from given endpoint.
 
-        Handles errors and logs warnings if operation was unsuccessful
-
-        :return: Boolean - True if veth was removed, False if veth 
-        could not be removed
+        Handles any errors encountered while removing the endpoint.
         """
         _log.info("Removing veth for endpoint: %s", endpoint.name)
         try:
-            if not netns.remove_veth(endpoint.name):
-                _log.warning("Veth %s does not exist", endpoint.name)
-                return False
+            removed = netns.remove_veth(endpoint.name)
+            _log.debug("Successfully removed endpoint %s? %s", 
+                       endpoint.name, removed)
         except CalledProcessError:
             _log.warning("Unable to remove veth %s", endpoint.name)
-            return False
-
-        return True
 
     def _get_container_engine(self):
         """Returns a container engine based on the CNI configuration arguments.

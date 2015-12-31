@@ -24,10 +24,13 @@ from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 import pycalico.netns
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import IPPool, Endpoint
+from pycalico.datastore_errors import MultipleEndpointsMatch
 
 from calico_cni.constants import *
-from calico_cni.calico_cni import CniPlugin
-from calico_cni.policy_drivers import DefaultPolicyDriver, ApplyProfileError 
+from calico_cni.calico_cni import CniPlugin, main
+from calico_cni.policy_drivers import (DefaultPolicyDriver, ApplyProfileError, 
+                        KubernetesDefaultPolicyDriver)
+from calico_cni.container_engines import DockerEngine, DefaultEngine 
 
 
 class CniPluginTest(unittest.TestCase):
@@ -500,7 +503,7 @@ class CniPluginTest(unittest.TestCase):
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
-    def test_create_endpoint(self):
+    def test_create_endpoint_mainline(self):
         # Mock.
         ip4 = IPNetwork("10.0.0.1")
         ip_list = [ip4]
@@ -524,7 +527,7 @@ class CniPluginTest(unittest.TestCase):
 
         # Call.
         with assert_raises(SystemExit) as err:
-           self.plugin._create_endpoint(ip_list)
+            self.plugin._create_endpoint(ip_list)
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
@@ -532,7 +535,7 @@ class CniPluginTest(unittest.TestCase):
         expected_env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
         self.plugin._release_ip.assert_called_once_with(expected_env)
 
-    def test_remove_endpoint(self):
+    def test_remove_endpoint_mainline(self):
         # Call
         self.plugin._remove_endpoint()
 
@@ -541,5 +544,171 @@ class CniPluginTest(unittest.TestCase):
                 workload_id=self.container_id, orchestrator_id="cni")
 
     def test_remove_endpoint_does_not_exist(self):
+        """
+        Make sure we handle this case gracefully - no exception raised.
+        """
         self.plugin._client.remove_workload.side_effect = KeyError 
         self.plugin._remove_endpoint()
+
+    @patch("calico_cni.calico_cni.os", autospec=True)
+    @patch("calico_cni.calico_cni.Namespace", autospec=True)
+    def test_provision_veth_mainline(self, m_ns, m_os):
+        # Mock
+        endpoint = MagicMock(spec=Endpoint)
+        mac = "aa:bb:cc:dd:ee:ff"
+        endpoint.provision_veth.return_value = mac
+        m_os.path.abspath.return_value = "/path/to/netns"
+
+        # Call method
+        self.plugin._provision_veth(endpoint)
+
+        # Assert.
+        assert_equal(endpoint.mac, mac)
+        m_ns.assert_called_once_with("/path/to/netns")
+        endpoint.provision_veth.assert_called_once_with(m_ns("/path/to/netns"), "eth0")
+        self.plugin._client.set_endpoint.assert_called_once_with(endpoint)
+
+    @patch("calico_cni.calico_cni.os", autospec=True)
+    @patch("calico_cni.calico_cni.Namespace", autospec=True)
+    @patch("calico_cni.calico_cni.print_cni_error", autospec=True)
+    def test_provision_veth_error(self, m_print, m_ns, m_os):
+        # Mock
+        endpoint = MagicMock(spec=Endpoint)
+        endpoint.name = "cali12345"
+        m_os.path.abspath.return_value = "/path/to/netns"
+        endpoint.provision_veth.side_effect = CalledProcessError(1, "cmd", 3)
+
+        # Mock out cleanup methods.
+        self.plugin._remove_endpoint = MagicMock(spec=self.plugin._remove_endpoint)
+        self.plugin._release_ip = MagicMock(spec=self.plugin._release_ip)
+
+        # Call method
+        with assert_raises(SystemExit) as err:
+            self.plugin._provision_veth(endpoint)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+        # Assert.
+        m_ns.assert_called_once_with("/path/to/netns")
+        endpoint.provision_veth.assert_called_once_with(m_ns("/path/to/netns"), "eth0")
+        assert_false(self.plugin._client.set_endpoint.called)
+        self.plugin._remove_endpoint.assert_called_once_with()
+        self.plugin._release_ip.assert_called_once_with(ANY)
+
+    @patch("calico_cni.calico_cni.netns", autospec=True)
+    def test_remove_veth_mainline(self, m_netns):
+        # Mock
+        endpoint = MagicMock(spec=Endpoint)
+        endpoint.name = "cali12345"
+
+        # Call
+        self.plugin._remove_veth(endpoint)
+
+        # Assert
+        m_netns.remove_veth.assert_called_once_with(endpoint.name)
+
+    @patch("calico_cni.calico_cni.netns", autospec=True)
+    def test_remove_veth_error(self, m_netns):
+        """
+        Make sure we handle errors gracefully - don't re-raise.
+        """
+        # Mock
+        endpoint = MagicMock(spec=Endpoint)
+        endpoint.name = "cali12345"
+        m_netns.remove_veth.side_effect = CalledProcessError(1, "cmd2", 3)
+
+        # Call
+        self.plugin._remove_veth(endpoint)
+
+    def test_get_container_engine_docker(self):
+        self.plugin.cni_args = {K8S_POD_NAME: "podname"}
+        eng = self.plugin._get_container_engine()
+        assert_true(isinstance(eng, DockerEngine))
+
+    def test_get_policy_driver_default_k8s(self):
+        self.plugin.cni_args = {K8S_POD_NAME: "podname"}
+        driver = self.plugin._get_policy_driver()
+        assert_true(isinstance(driver, KubernetesDefaultPolicyDriver))
+
+    @patch("calico_cni.calico_cni.policy_drivers", autospec=True)
+    def test_get_policy_driver_value_error(self, m_drivers):
+        # Mock
+        m_drivers.DefaultPolicyDriver.side_effect = ValueError
+
+        # Call
+        with assert_raises(SystemExit) as err:
+            self.plugin._get_policy_driver()
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_get_endpoint_mainline(self):
+        # Mock
+        endpoint = MagicMock(spec=Endpoint)
+        self.plugin._client.get_endpoint.return_value = endpoint
+
+        # Call
+        ep = self.plugin._get_endpoint()
+
+        # Assert
+        assert_equal(ep, endpoint)
+        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
+                orchestrator_id="cni", workload_id=self.plugin.container_id)
+
+    def test_get_endpoint_no_endpoint(self):
+        # Mock
+        self.plugin._client.get_endpoint.side_effect = KeyError
+
+        # Call
+        ep = self.plugin._get_endpoint()
+
+        # Assert
+        assert_equal(ep, None)
+        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
+                orchestrator_id="cni", workload_id=self.plugin.container_id)
+
+    def test_get_endpoint_multiple_endpoints(self):
+        # Mock
+        self.plugin._client.get_endpoint.side_effect = MultipleEndpointsMatch 
+
+        # Call
+        with assert_raises(SystemExit) as err:
+            self.plugin._get_endpoint()
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+        # Assert
+        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
+                orchestrator_id="cni", workload_id=self.plugin.container_id)
+
+    @patch("calico_cni.calico_cni.os", autospec=True)
+    def test_find_ipam_plugin(self, m_os):
+        # Mock
+        m_os.path.isfile.side_effect = iter([False, True])  # Second time returns true.
+        m_os.path.join.side_effect = lambda x,y: x + y
+        m_os.path.abspath.side_effect = lambda x: x
+        self.plugin.cni_path="/opt/bin/cni/:/opt/cni/bin/"
+
+        # Call
+        path = self.plugin._find_ipam_plugin()
+
+        # Assert
+        assert_equal(path, "/opt/cni/bin/calico-ipam")
+
+    @patch("calico_cni.calico_cni.os", autospec=True)
+    @patch("calico_cni.calico_cni.sys", autospec=True)
+    @patch("calico_cni.calico_cni.CniPlugin", autospec=True)
+    @patch("calico_cni.calico_cni.configure_logging", autospec=True)
+    def test_main(self, m_conf_log, m_plugin, m_sys, m_os):
+        # Mock
+        m_os.environ = self.env
+        m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
+        m_plugin(self.env, self.network_config).execute.return_value = 0
+        m_plugin.reset_mock()
+
+        # Call
+        main()
+
+        # Assert
+        m_plugin.assert_called_once_with(self.network_config, self.env)
+        m_conf_log.assert_called_once_with(ANY, "cni.log", log_level="INFO")
+        m_sys.exit.assert_called_once_with(0)
