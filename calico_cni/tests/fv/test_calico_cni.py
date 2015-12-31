@@ -235,10 +235,6 @@ class CniPluginFvTest(unittest.TestCase):
         """
         # Configure.
         self.command = CNI_CMD_ADD
-        ipam_stdout = json.dumps({"code": ERR_CODE_GENERIC, 
-                                  "message": "msg", 
-                                  "details": ""})
-        self.set_ipam_result(ERR_CODE_GENERIC, ipam_stdout, "")
 
         # Create plugin.
         p = self.create_plugin()
@@ -247,13 +243,10 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, ERR_CODE_GENERIC)
+        assert_equal(rc, 0)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
-
-        # Assert a profile was not set.
-        assert_false(self.client.append_profiles_to_endpoint.called)
 
     def test_add_ipam_error_missing_ip(self):
         """

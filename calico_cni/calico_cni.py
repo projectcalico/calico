@@ -209,7 +209,7 @@ class CniPlugin(object):
         try:
             self.policy_driver.apply_profile(endpoint)
         except policy_drivers.ApplyProfileError, e:
-            _log.error("Failed to create set profile for endpoint %s",
+            _log.error("Failed to apply profile to endpoint %s",
                        endpoint.name)
             self._remove_veth(endpoint)
             self._remove_endpoint()
@@ -233,22 +233,27 @@ class CniPlugin(object):
         try:
             ip4 = next(iter(endpoint.ipv4_nets))
         except StopIteration:
-            # No IPv4 address on existing endpoint.
-            _log.error("No IPV4 address attached to existing endpoint")
-            print_cni_error(ERR_CODE_GENERIC, 
-                    "Cannot add network - no IPv4 address")
-            sys.exit(ERR_CODE_GENERIC)
+            # No IPv4 address on this endpoint.
+            _log.warning("No IPV4 address attached to existing endpoint")
+            ip4 = IPNetwork("0.0.0.0/32")
 
         try:
             ip6 = next(iter(endpoint.ipv6_nets))
         except StopIteration:
-            # Not all deployments will use IPv6 - don't treat this as an error,
-            # but log a warning and use an null IPv6 address.
+            # No IPv6 address on this endpoint.
             _log.warning("No IPV6 address attached to existing endpoint")
             ip6 = IPNetwork("::/128")
 
         # Apply a new profile to this endpoint.
-        self.policy_driver.apply_profile(endpoint)
+        try:
+            self.policy_driver.apply_profile(endpoint)
+        except policy_drivers.ApplyProfileError, e:
+            # Hit an exception applying the profile.  We haven't configured
+            # anything, so we don't need to clean anything up.  Just exit.
+            _log.error("Failed to apply profile to endpoint %s",
+                       endpoint.name)
+            print_cni_error(ERR_CODE_GENERIC, e.message)
+            sys.exit(ERR_CODE_GENERIC)
 
         return {"ip4": {"ip": str(ip4.cidr)}, 
                 "ip6": {"ip": str(ip6.cidr)}}
@@ -466,23 +471,17 @@ class CniPlugin(object):
         return endpoint
 
     def _remove_veth(self, endpoint):
-        """Remove the veth from given endpoint
+        """Remove the veth from given endpoint.
 
-        Handles errors and logs warnings if operation was unsuccessful
-
-        :return: Boolean - True if veth was removed, False if veth 
-        could not be removed
+        Handles any errors encountered while removing the endpoint.
         """
         _log.info("Removing veth for endpoint: %s", endpoint.name)
         try:
-            if not netns.remove_veth(endpoint.name):
-                _log.warning("Veth %s does not exist", endpoint.name)
-                return False
+            removed = netns.remove_veth(endpoint.name)
+            _log.debug("Successfully removed endpoint %s? %s", 
+                       endpoint.name, removed)
         except CalledProcessError:
             _log.warning("Unable to remove veth %s", endpoint.name)
-            return False
-
-        return True
 
     def _get_container_engine(self):
         """Returns a container engine based on the CNI configuration arguments.
