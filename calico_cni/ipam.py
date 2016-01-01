@@ -28,9 +28,6 @@ from constants import *
 LOG_FILENAME = "ipam.log"
 _log = logging.getLogger("calico_cni")
 
-# Access to Calico Datastore.
-datastore_client = IPAMClient()
-
 
 class IpamPlugin(object):
     def __init__(self, config, environment):
@@ -52,6 +49,12 @@ class IpamPlugin(object):
         self.container_id = None
         """
         Identifier for the container for which we are performing IPAM.
+        """
+
+        self.datastore_client = IPAMClient()
+        """
+        Access to the datastore client.  Relies on ETCD_AUTHORITY environment
+        variable being set by the calling plugin.
         """
 
         # Validate the given config and environment and set fields
@@ -80,7 +83,7 @@ class IpamPlugin(object):
             _log.info("Releasing addresses on container %s", 
                     self.container_id)
             try:
-                datastore_client.release_ip_by_handle(handle_id=self.container_id)
+                self.datastore_client.release_ip_by_handle(handle_id=self.container_id)
             except KeyError:
                 _log.warning("No IPs assigned to container_id %s", 
                         self.container_id)
@@ -96,7 +99,7 @@ class IpamPlugin(object):
         ipv6 = IPNetwork("::") 
         pool = (ipv4_pool, ipv6_pool)
         try:
-            ipv4_addrs, ipv6_addrs = datastore_client.auto_assign_ips(
+            ipv4_addrs, ipv6_addrs = self.datastore_client.auto_assign_ips(
                 num_v4=1, num_v6=1, handle_id=handle_id, attributes=None,
                 pool=pool
             )
@@ -135,7 +138,7 @@ class IpamPlugin(object):
     
         # Check the given environment contains the required fields.
         try:
-            self.command = env[CNI_COMMAND_ENV]
+            self.command = self.env[CNI_COMMAND_ENV]
         except KeyError:
             _exit_on_error(code=ERR_CODE_INVALID_ARGUMENT,
                            message="Arguments Invalid",
@@ -148,7 +151,7 @@ class IpamPlugin(object):
                                details="Invalid command '%s'" % self.command)
 
         try:
-            self.container_id = env[CNI_CONTAINERID_ENV]
+            self.container_id = self.env[CNI_CONTAINERID_ENV]
         except KeyError:
             _exit_on_error(code=ERR_CODE_INVALID_ARGUMENT,
                            message="Arguments Invalid",
@@ -168,7 +171,7 @@ def _exit_on_error(code, message, details=""):
     sys.exit(code)
 
 
-if __name__ == '__main__':
+def main():
     # Read config file from stdin.
     _log.debug("Reading config from stdin")
     conf_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
@@ -197,3 +200,7 @@ if __name__ == '__main__':
         _exit_on_error(ERR_CODE_UNHANDLED,
               message="Unhandled Exception",
               details=e.message)
+
+
+if __name__ == '__main__': # pragma: no cover
+    main()

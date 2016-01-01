@@ -3,7 +3,6 @@
 SRCFILES=$(shell find calico_cni)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
-
 default: all
 all: binary test
 binary: dist/calico dist/calico-ipam
