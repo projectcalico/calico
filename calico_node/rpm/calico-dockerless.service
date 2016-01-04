@@ -1,8 +1,6 @@
 [Unit]
 Description=Dockerless Calico
-Requires=calico-dockerless-confd.service
-Requires=calico-dockerless-bird.service
-Requires=calico-felix.service
+Requires=calico-dockerless-confd.service calico-dockerless-bird.service calico-felix.service
 Before=calico-dockerless-confd.service
 Before=calico-dockerless-bird.service
 
