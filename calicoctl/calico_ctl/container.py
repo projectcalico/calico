@@ -32,7 +32,7 @@ from subprocess import CalledProcessError
 from netaddr import IPAddress, IPNetwork
 from calico_ctl import endpoint
 from pycalico import netns
-from pycalico.datastore_datatypes import IPPool, Endpoint
+from pycalico.datastore_datatypes import Endpoint
 from pycalico.ipam import AlreadyAssignedError
 
 from connectors import client
