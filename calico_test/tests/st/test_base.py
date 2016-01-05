@@ -16,7 +16,7 @@ import subprocess
 from unittest import TestCase
 
 from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
-                                  ETCD_KEY)
+                                  ETCD_KEY, debug_failures)
 import logging
 
 HOST_IPV6 = get_ip(v6=True)
@@ -56,6 +56,7 @@ class TestBase(TestCase):
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
 
+    @debug_failures
     def assert_connectivity(self, pass_list, fail_list=None):
         """
         Assert partial connectivity graphs between workloads.
@@ -74,6 +75,7 @@ class TestBase(TestCase):
             for dest in fail_list:
                 source.assert_cant_ping(dest.ip)
 
+    @debug_failures
     def assert_ip_connectivity(self, workload_list, ip_pass_list,
                                ip_fail_list=None):
         """

@@ -16,7 +16,7 @@ import logging
 
 from netaddr import IPAddress
 
-from utils import retry_until_success
+from utils import retry_until_success, debug_failures
 from network import DockerNetwork
 from exceptions import CommandExecError
 NET_NONE = "none"
@@ -97,6 +97,7 @@ class Workload(object):
         ping = partial(self.execute, command)
         return ping
 
+    @debug_failures
     def assert_can_ping(self, ip, retries=0):
         """
         Execute a ping from this workload to the ip. Assert than a workload
@@ -116,6 +117,7 @@ class Workload(object):
         except CommandExecError:
             raise AssertionError("%s cannot ping %s" % (self, ip))
 
+    @debug_failures
     def assert_cant_ping(self, ip, retries=0):
         """
         Execute a ping from this workload to the ip.  Assert that the workload
