@@ -82,7 +82,7 @@ class CniPlugin(object):
         Name of the interface to create within the container.
         """
 
-        self.cni_args = parse_cni_args(env[CNI_ARGS_ENV])
+        self.cni_args = parse_cni_args(env.get(CNI_ARGS_ENV, ""))
         """
         Dictionary of additional CNI arguments provided via
         the CNI_ARGS environment variable.
