@@ -25,6 +25,9 @@ Usage:
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
            [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
            [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
+      icmpv6 [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+             [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+             [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
       [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
       [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
     )]
@@ -35,6 +38,9 @@ Usage:
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
            [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
            [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
+      icmpv6 [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+             [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+             [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
       [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
       [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
     )])
@@ -67,8 +73,9 @@ from pycalico.datastore import Rules
 
 from connectors import client
 from utils import print_paragraph
-from pycalico.util import validate_characters, validate_ports, validate_icmp_type
-from utils import validate_cidr
+from pycalico.util import (validate_characters, validate_ports,
+                           validate_icmp_type)
+from utils import validate_cidr, validate_cidr_versions
 
 
 def validate_arguments(arguments):
@@ -103,8 +110,10 @@ def validate_arguments(arguments):
 
     # Validate IPs
     cidr_ok = True
+    cidr_list = []
     for arg in ["<SRCCIDR>", "<DSTCIDR>"]:
         if arguments.get(arg) is not None:
+            cidr_list.append(arguments[arg])
             cidr_ok = validate_cidr(arguments[arg])
             if not cidr_ok:
                 break
@@ -123,6 +132,16 @@ def validate_arguments(arguments):
             if not ports_ok:
                 break
 
+    cidr_versions_ok = True
+    if cidr_list:
+        ip_version = None
+        if arguments.get("icmp"):
+            ip_version = 4
+        elif arguments.get("icmpv6"):
+            ip_version = 6
+        cidr_versions_ok = validate_cidr_versions(cidr_list,
+                                                  ip_version=ip_version)
+
     # Print error message
     if not profile_ok:
         print_paragraph("Profile names must be < 40 character long and can "
@@ -137,10 +156,12 @@ def validate_arguments(arguments):
         print "Invalid ICMP type or ICMP code specified."
     if not ports_ok:
         print "Invalid SRCPORTS or DSTPORTS specified."
+    if not cidr_versions_ok:
+        print "Invalid or unmatching IP versions for SRCCIDR/DSTCIDR."
 
     # Exit if not valid
     if not (profile_ok and tag_src_ok and tag_dst_ok
-            and cidr_ok and icmp_ok and ports_ok):
+            and cidr_ok and icmp_ok and ports_ok and cidr_versions_ok):
         sys.exit(1)
 
 
@@ -184,6 +205,8 @@ def profile(arguments):
                 protocol = "udp"
             elif arguments.get("icmp"):
                 protocol = "icmp"
+            elif arguments.get("icmpv6"):
+                protocol = "icmpv6"
             else:
                 protocol = None
             src_ports = parse_ports(arguments.get("<SRCPORTS>"))

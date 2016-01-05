@@ -107,6 +107,31 @@ def validate_cidr(cidr):
         return False
 
 
+def validate_cidr_versions(cidrs, ip_version=None):
+    """
+    Validate CIDR versions match each other and (if specified) the given IP
+    version.
+
+    :param cidrs: List of CIDRs whose versions need verification
+    :param ip_version: Expected IP version that CIDRs should use (4, 6, or None)
+                       If None, CIDRs should all have same IP version
+    :return: Boolean: True if versions match each other and ip_version,
+                      False otherwise
+    """
+    try:
+        for cidr in cidrs:
+            network = netaddr.IPNetwork(cidr)
+            if ip_version is None:
+                ip_version = network.version
+            elif ip_version != network.version:
+                return False
+    except (AddrFormatError, ValueError):
+        # Some versions of Netaddr have a bug causing them to return a
+        # ValueError rather than an AddrFormatError, so catch both.
+        return False
+    return True
+
+
 def validate_ip(ip_addr, version):
     """
     Validate that ip_addr is a valid IPv4 or IPv6 address
