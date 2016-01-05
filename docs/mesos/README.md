@@ -54,13 +54,13 @@ a.)  We've bundled Mesos with netmodules into a convenient RPM - follow the [Mes
 b.) Already have mesos installed? Netmodules can be compiled onto an existing mesos deployment so long as all the mesos source files are present (therefore, unfortunately at this time, netmodules can not be added to mesos when installed via the mesosphere rpm releases). Follow the [Manually Install Mesos + Netmodules tutorial](ManualInstallNetmodules.md) to install it.
 
 ## 5. Launching Tasks
-Calico is compatible with all frameworks which use the new NetworkInfo protobuf when launching tasks. Marathon has introduced limited support for this. For an early peek, use `djosborne/marathon:ip_per_task`:
+Calico is compatible with all frameworks which use the new NetworkInfo protobuf when launching tasks. Marathon has introduced limited support for this. For an early peek, use `mesosphere/marathon:v0.14.0-RC2`:
 ```
 $ docker run \
 -e MARATHON_MASTER=zk://<ZOOKEEPER-IP>:2181/mesos \
 -e MARATHON_ZK=zk://<ZOOKEEPER-IP>:2181/marathon \
 -p 8080:8080 \
-djosborne/marathon:ip_per_task
+mesosphere/marathon:v0.14.0-RC2
 ```
 This version of Marathon supports two new fields in an application's JSON file:
 
