@@ -1,0 +1,27 @@
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/kubernetes/kubernetes
+After=calico-node.service
+Requires=calico-node.service
+
+[Service]
+EnvironmentFile=/etc/network-environment
+ExecStart=/usr/bin/kubelet \
+--address=0.0.0.0 \
+--allow-privileged=true \
+--cluster-dns=10.100.0.10 \
+--cluster-domain=cluster.local \
+--config=/etc/kubernetes/manifests \
+--hostname-override=${DEFAULT_IPV4} \
+--api-servers=https://${KUBERNETES_MASTER}:443 \
+--kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml \
+--tls-private-key-file=/etc/kubernetes/ssl/worker-key.pem \
+--tls-cert-file=/etc/kubernetes/ssl/worker.pem \
+--logtostderr=true \
+--network-plugin=cni \
+--network-plugin-dir=/etc/cni/net.d
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy
+spec:
+  hostNetwork: true
+  containers:
+  - name: kube-proxy
+    image: gcr.io/google_containers/hyperkube:v1.1.2
+    command:
+    - /hyperkube
+    - proxy
+    - --master=https://<KUBERNETES_MASTER>
+    - --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml
+    - --proxy-mode=iptables
+    securityContext:
+      privileged: true
+    volumeMounts:
+      - mountPath: /etc/ssl/certs
+        name: "ssl-certs"
+      - mountPath: /etc/kubernetes/worker-kubeconfig.yaml
+        name: "kubeconfig"
+        readOnly: true
+      - mountPath: /etc/kubernetes/ssl
+        name: "etc-kube-ssl"
+        readOnly: true
+  volumes:
+    - name: "ssl-certs"
+      hostPath:
+        path: "/usr/share/ca-certificates"
+    - name: "kubeconfig"
+      hostPath:
+        path: "/etc/kubernetes/worker-kubeconfig.yaml"
+    - name: "etc-kube-ssl"
+      hostPath:
+        path: "/etc/kubernetes/ssl"

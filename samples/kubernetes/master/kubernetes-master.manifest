@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: kube-controller
+spec: 
+  hostNetwork: true
+  volumes:
+    - name: "etc-kubernetes"
+      hostPath:
+        path: "/etc/kubernetes"
+    - name: ssl-certs-kubernetes
+      hostPath:
+        path: /etc/kubernetes/ssl
+    - name: "ssl-certs-host"
+      hostPath:
+        path: "/usr/share/ca-certificates"
+    - name: "var-run-kubernetes"
+      hostPath:
+        path: "/var/run/kubernetes"
+    - name: "etcd-datadir"
+      hostPath:
+        path: "/var/lib/etcd"
+    - name: "usr"
+      hostPath:
+        path: "/usr"
+    - name: "lib64"
+      hostPath:
+        path: "/lib64"
+  containers: 
+    - name: etcd
+      image: gcr.io/google_containers/etcd:2.2.1
+      command:
+        - "/usr/local/bin/etcd"
+        - "--data-dir=/var/lib/etcd"
+        - "--advertise-client-urls=http://127.0.0.1:2379"
+        - "--listen-client-urls=http://127.0.0.1:2379"
+        - "--listen-peer-urls=http://127.0.0.1:2380"
+        - "--name=etcd"
+      volumeMounts:
+        - mountPath: /var/lib/etcd
+          name: "etcd-datadir"
+
+    - name: kube-apiserver
+      image: gcr.io/google_containers/hyperkube:v1.1.2
+      command: 
+        - /hyperkube
+        - apiserver
+        - --allow-privileged=true
+        - --bind-address=0.0.0.0
+        - --secure-port=443
+        - --etcd-servers=http://127.0.0.1:2379
+        - --service-cluster-ip-range=10.100.0.0/24
+        - --admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
+        - --service-account-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+        - --tls-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+        - --tls-cert-file=/etc/kubernetes/ssl/apiserver.pem
+        - --client-ca-file=/etc/kubernetes/ssl/ca.pem
+        - --logtostderr=true
+      ports:
+        - containerPort: 443
+          hostPort: 443
+          name: https
+        - containerPort: 8080
+          hostPort: 8080
+          name: local
+      volumeMounts:
+        - mountPath: /etc/kubernetes/ssl
+          name: ssl-certs-kubernetes
+          readOnly: true
+        - mountPath: /etc/ssl/certs
+          name: ssl-certs-host
+          readOnly: true
+        - mountPath: /etc/kubernetes
+          name: "etc-kubernetes"
+        - mountPath: /var/run/kubernetes
+          name: "var-run-kubernetes"
+
+    - name: kube-controller-manager
+      image: gcr.io/google_containers/hyperkube:v1.1.2
+      command:
+      - /hyperkube
+      - controller-manager
+      - --master=http://127.0.0.1:8080
+      - --service-account-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
+      - --root-ca-file=/etc/kubernetes/ssl/ca.pem
+      livenessProbe:
+        httpGet:
+          host: 127.0.0.1
+          path: /healthz
+          port: 10252s
+        initialDelaySeconds: 15
+        timeoutSeconds: 1
+      volumeMounts:
+      - mountPath: /etc/kubernetes/ssl
+        name: ssl-certs-kubernetes
+        readOnly: true
+      - mountPath: /etc/ssl/certs
+        name: ssl-certs-host
+        readOnly: true
+
+    - name: kube-scheduler
+      image: gcr.io/google_containers/hyperkube:v1.1.2
+      command:
+      - /hyperkube
+      - scheduler
+      - --master=http://127.0.0.1:8080
+      livenessProbe:
+        httpGet:
+          host: 127.0.0.1
+          path: /healthz
+          port: 10251
+        initialDelaySeconds: 15
+        timeoutSeconds: 1
+
+    - name: kube-proxy
+      image: gcr.io/google_containers/hyperkube:v1.1.2
+      command:
+      - /hyperkube
+      - proxy
+      - --master=http://127.0.0.1:8080
+      - --proxy-mode=iptables
+      securityContext:
+        privileged: true
+      volumeMounts:
+      - mountPath: /etc/ssl/certs
+        name: ssl-certs-host
+        readOnly: true

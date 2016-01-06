@@ -1,0 +1,6 @@
+# This host's IPv4 address (the source IP address used to reach other nodes
+# in the Kubernetes cluster).
+DEFAULT_IPV4=<KUBERNETES_MASTER>
+
+# IP and port of etcd instance used by Calico
+ETCD_AUTHORITY=<KUBERNETES_MASTER>:6666
