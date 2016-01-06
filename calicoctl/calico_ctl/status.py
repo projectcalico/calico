@@ -20,6 +20,7 @@ Description:
   and the BIRD routing daemon.
 """
 import re
+import sys
 
 from prettytable import PrettyTable
 from requests import ConnectionError
@@ -42,6 +43,7 @@ def status(arguments):
                                   docker_client.containers())
         if len(calico_node_info) == 0:
             print "calico-node container not running"
+            sys.exit(1)
         else:
             print "calico-node container is running. Status: %s" % \
                   calico_node_info[0]["Status"]
@@ -63,7 +65,7 @@ def status(arguments):
     except ConnectionError:
         print "Docker is not running"
         # TODO: Perform status checks in platform-independent way.
-        return
+        sys.exit(1)
 
 
 def pprint_bird_protocols(version):

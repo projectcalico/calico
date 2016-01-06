@@ -14,6 +14,7 @@
 
 from test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.exceptions import CommandExecError
 
 """
 Test calicoctl status
@@ -28,5 +29,20 @@ class TestStatus(TestBase):
         """
         Test that the status command can be executed.
         """
-        with DockerHost('host', dind=False, start_calico=False) as host:
+        with DockerHost('host', dind=False, start_calico=True) as host:
             host.calicoctl("status")
+
+    def test_status_fails(self):
+        """
+        Test that the status command fails when calico node is not running
+        """
+        with DockerHost('host', dind=False, start_calico=False) as host:
+            try:
+                host.calicoctl("status")
+            except CommandExecError as e:
+                self.assertEquals(e.returncode, 1)
+                self.assertEquals(e.output,
+                                  "calico-node container not running\n")
+            else:
+                raise AssertionError("'calicoctl status' did not exit with "
+                                     "code 1 when node was not running")
