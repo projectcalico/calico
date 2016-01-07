@@ -58,9 +58,9 @@ write_files:
         echo "Manifests not installed - installing."
 
         # Download config.
-        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-kubernetes/master/config/master/kubernetes-master.manifest
-        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-kubernetes/master/config/master/calico-etcd.manifest
-        sudo wget -N -P /etc/kubernetes/addons/ https://raw.githubusercontent.com/projectcalico/calico-kubernetes/master/config/master/dns/skydns.yaml
+        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.1-docs/samples/kubernetes/master/kubernetes-master.manifest
+        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.1-docs/samples/kubernetes/master/calico-etcd.manifest
+        sudo wget -N -P /etc/kubernetes/addons/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.1-docs/samples/kubernetes/master/dns/skydns.yaml
       fi
 
       # Insert the master's IP address into the manifest.
