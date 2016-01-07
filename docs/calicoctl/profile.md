@@ -46,6 +46,9 @@ Usage:
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
            [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
            [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
+      icmpv6 [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+             [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+             [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
       [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
       [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
     )])
@@ -254,7 +257,7 @@ You can configure rules to allow and/or deny specific traffic
 to and from your containers, based on a variety of criteria.
 
 You can filter traffic based on any combination of the following:
- - *Type* - udp, tcp, icmp (including icmp type and code)
+ - *Type* - udp, tcp, icmp/icmpv6 (including type and code)
  - *Source tag* - Profile tag, such as WEB_SERVER
  - *Source cidr* - such as 172.25.1.0/24
  - *Source port* - TCP/UDP only
@@ -299,6 +302,9 @@ calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
     icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
          [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
          [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
+    icmpv6 [(type <ICMPTYPE> [(code <ICMPCODE>)])]
+           [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
+           [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
     [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
     [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
   )]
@@ -314,6 +320,9 @@ calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
     <ICMPTYPE>: ICMP type number .
     <ICMPCODE>: Specific code number related to ICMP type.
 ```
+
+Note: Each IP address specified should match the IP version of each other IP 
+address and protocol in the rule.
 
 Examples:
 
