@@ -273,7 +273,8 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
 
     # Get IP address of host, if none was specified
     if not ip:
-        ips = get_host_ips(exclude=["^docker.*", "^cbr.*"])
+        ips = get_host_ips(exclude=["^docker.*", "^cbr.*",
+                                    "virbr.*", "lxcbr.*"])
         try:
             ip = ips.pop()
         except IndexError:
