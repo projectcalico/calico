@@ -20,9 +20,11 @@ Tests of iptables rules generation function.
 """
 import logging
 from mock import Mock, patch, call
+from netaddr import IPAddress
+
 from calico.felix import frules
 from calico.felix.fiptables import IptablesUpdater
-from calico.felix.futils import FailedSystemCall
+from calico.felix.futils import FailedSystemCall, IPV4
 from calico.felix.test.base import BaseTestCase, load_config
 
 _log = logging.getLogger(__name__)
@@ -36,6 +38,7 @@ class TestRules(BaseTestCase):
     def test_install_global_rules(self, m_ipset, m_devices, m_check_call):
         m_devices.interface_exists.return_value = False
         m_devices.interface_up.return_value = False
+        m_set_ips = m_devices.set_interface_ips
 
         env_dict = {
             "FELIX_ETCDADDR": "localhost:4001",
@@ -48,6 +51,7 @@ class TestRules(BaseTestCase):
             "FELIX_DEFAULTENDPOINTTOHOSTACTION": "RETURN"
         }
         config = load_config("felix_missing.cfg", env_dict=env_dict)
+        config.IP_IN_IP_ADDR = IPAddress("10.0.0.1")
 
         m_v4_upd = Mock(spec=IptablesUpdater)
         m_v6_upd = Mock(spec=IptablesUpdater)
@@ -81,6 +85,10 @@ class TestRules(BaseTestCase):
                 call(["ip", "link", "set", "tunl0", "mtu", "1480"]),
                 call(["ip", "link", "set", "tunl0", "up"]),
             ]
+        )
+        self.assertEqual(
+            m_set_ips.mock_calls,
+            [call(IPV4, "tunl0", set([IPAddress("10.0.0.1")]))]
         )
 
         expected_chains = {

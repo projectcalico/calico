@@ -24,6 +24,8 @@ import sys
 import uuid
 from contextlib import nested
 
+from netaddr import IPAddress
+
 if sys.version_info < (2, 7):
     import unittest2 as unittest
 else:
@@ -176,7 +178,7 @@ class TestDevices(unittest.TestCase):
 
         with mock.patch('calico.felix.futils.check_call',
                         return_value=futils.CommandOutput("", "")):
-            with mock.patch('calico.felix.devices.list_interface_ips',
+            with mock.patch('calico.felix.devices.list_interface_route_ips',
                             return_value=set()):
                 devices.set_routes(type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, len(calls))
@@ -192,7 +194,7 @@ class TestDevices(unittest.TestCase):
         mac = stub_utils.get_mac()
         with mock.patch('calico.felix.futils.check_call',
                         return_value=retcode):
-            with mock.patch('calico.felix.devices.list_interface_ips',
+            with mock.patch('calico.felix.devices.list_interface_route_ips',
                             return_value=ips):
                 devices.set_routes(type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, 0)
@@ -214,7 +216,7 @@ class TestDevices(unittest.TestCase):
                             interface])]
 
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            with mock.patch('calico.felix.devices.list_interface_ips',
+            with mock.patch('calico.felix.devices.list_interface_route_ips',
                             return_value=current_ips):
                 devices.set_routes(ip_type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, len(calls))
@@ -235,7 +237,7 @@ class TestDevices(unittest.TestCase):
                  mock.call(['arp', '-d', "3.4.5.6", '-i', interface]),
                  mock.call(["ip", "route", "del", "3.4.5.6", "dev", interface])]
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            with mock.patch('calico.felix.devices.list_interface_ips',
+            with mock.patch('calico.felix.devices.list_interface_route_ips',
                             return_value=current_ips):
                 devices.set_routes(type, ips, interface, mac, reset_arp=True)
                 self.assertEqual(futils.check_call.call_count, len(calls))
@@ -258,34 +260,114 @@ class TestDevices(unittest.TestCase):
                             interface])]
 
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            with mock.patch('calico.felix.devices.list_interface_ips',
+            with mock.patch('calico.felix.devices.list_interface_route_ips',
                             return_value=current_ips):
                 devices.set_routes(type, ips, interface, mac, reset_arp=True)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
                 m_remove_conntrack.assert_called_once_with(set(), 4)
 
-    def test_list_interface_ips(self):
+    def test_list_interface_no_ips(self):
+        retcode = futils.CommandOutput(
+            "7: tunl0@NONE: <NOARP,UP,LOWER_UP> mtu 1440 qdisc noqueue "
+            "state UNKNOWN group default\n"
+            "    link/ipip 0.0.0.0 brd 0.0.0.0\n",
+            ""
+        )
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=retcode) as m_check_call:
+            ips = devices.list_interface_ips(futils.IPV4, "tunl0")
+            self.assertEqual(
+                m_check_call.mock_calls,
+                [mock.call(["ip", "addr", "list", "dev", "tunl0"])]
+            )
+            self.assertEqual(ips, set())
+
+    def test_list_interface_with_ips(self):
+        retcode = futils.CommandOutput(
+            "7: tunl0@NONE: <NOARP,UP,LOWER_UP> mtu 1440 qdisc noqueue "
+            "state UNKNOWN group default\n"
+            "    link/ipip 0.0.0.0 brd 0.0.0.0\n"
+            "    inet 10.0.3.1/24 brd 10.0.3.255 scope global tunl0\n"
+            "    inet 10.0.3.2/24 brd 10.0.3.255 scope global tunl0\n",
+            ""
+        )
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=retcode) as m_check_call:
+            ips = devices.list_interface_ips(futils.IPV4, "tunl0")
+            self.assertEqual(
+                m_check_call.mock_calls,
+                [mock.call(["ip", "addr", "list", "dev", "tunl0"])]
+            )
+            self.assertEqual(ips, set([IPAddress("10.0.3.1"),
+                                       IPAddress("10.0.3.2")]))
+
+    def test_list_interface_v6_with_ips(self):
+        retcode = futils.CommandOutput(
+            "7: tunl0@NONE: <NOARP,UP,LOWER_UP> mtu 1440 qdisc noqueue "
+            "state UNKNOWN group default\n"
+            "    link/ipip 0.0.0.0 brd 0.0.0.0\n"
+            "    inet6 5678::/64 brd foobar scope global tunl0\n"
+            "    inet6 ABcd::/64 brd foobar scope global tunl0\n"
+            # Allow for dotted quad translated v4 addresses, just in case.
+            "    inet6 ::ffff:192.0.2.128/128 brd foobar scope global tunl0\n",
+            ""
+        )
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=retcode) as m_check_call:
+            ips = devices.list_interface_ips(futils.IPV6, "tunl0")
+            self.assertEqual(
+                m_check_call.mock_calls,
+                [mock.call(["ip", "-6", "addr", "list", "dev", "tunl0"])]
+            )
+            self.assertEqual(ips, set([IPAddress("5678::"),
+                                       IPAddress("abcd::"),
+                                       IPAddress("::ffff:c000:0280")]))
+
+    def test_set_interface_ips(self):
+        with mock.patch('calico.felix.futils.check_call',
+                        autospec=True) as m_check_call:
+            with mock.patch("calico.felix.devices.list_interface_ips",
+                            autospec=True) as m_list_ips:
+                m_list_ips.return_value = set([IPAddress("10.0.0.1"),
+                                               IPAddress("10.0.0.2")])
+                devices.set_interface_ips(
+                    futils.IPV4,
+                    "tunl0",
+                    set([IPAddress("10.0.0.2"),
+                         IPAddress("10.0.0.3")])
+                )
+                self.assertEqual(
+                    m_check_call.mock_calls,
+                    [
+                        mock.call(["ip", "addr", "del", "10.0.0.1", "dev",
+                                   "tunl0"]),
+                        mock.call(["ip", "addr", "add", "10.0.0.3", "dev",
+                                   "tunl0"]),
+                    ]
+                )
+
+    def test_list_interface_route_ips(self):
         type = futils.IPV4
         tap = "tap" + str(uuid.uuid4())[:11]
 
         retcode = futils.CommandOutput("", "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_interface_ips(type, tap)
+            ips = devices.list_interface_route_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertFalse(ips)
 
         stdout = "10.11.9.90  scope link"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_interface_ips(type, tap)
+            ips = devices.list_interface_route_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["10.11.9.90"]))
 
         stdout = "10.11.9.90  scope link\nblah-di-blah not valid\nx\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_interface_ips(type, tap)
+            ips = devices.list_interface_route_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["10.11.9.90"]))
 
@@ -293,14 +375,14 @@ class TestDevices(unittest.TestCase):
         stdout = "2001:: scope link\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_interface_ips(type, tap)
+            ips = devices.list_interface_route_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
 
         stdout = "2001:: scope link\n\n"
         retcode = futils.CommandOutput(stdout, "")
         with mock.patch('calico.felix.futils.check_call', return_value=retcode):
-            ips = devices.list_interface_ips(type, tap)
+            ips = devices.list_interface_route_ips(type, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "list", "dev", tap])
             self.assertEqual(ips, set(["2001::"]))
 

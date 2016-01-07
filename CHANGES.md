@@ -6,6 +6,8 @@
   this dramatically increases scale when under load.
 - Removed support for Python 2.6.  python-etcd no longer supports 2.6
   as of 0.4.3.
+- Add IpInIpTunnelAddr configuration parameter to allow the IP address of
+  the IPIP tunnel device to be set.
 
 ## 1.2.2
 

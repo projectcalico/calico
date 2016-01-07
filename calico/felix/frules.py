@@ -265,6 +265,13 @@ def _configure_ipip_device(config):
     if not devices.interface_up(IP_IN_IP_DEV_NAME):
         _log.info("Tunnel device wasn't up; enabling.")
         futils.check_call(["ip", "link", "set", IP_IN_IP_DEV_NAME, "up"])
+    # Allow an IP address to be added to the tunnel.  This is useful to
+    # allow the host to have an IP on a private IPIP network so that it can
+    # originate traffic and have it routed correctly.
+    _log.info("Setting IPIP device IP to %s", config.IP_IN_IP_ADDR)
+    tunnel_addrs = [config.IP_IN_IP_ADDR] if config.IP_IN_IP_ADDR else []
+    devices.set_interface_ips(futils.IPV4, IP_IN_IP_DEV_NAME,
+                              set(tunnel_addrs))
     _log.info("Configured IPIP device.")
 
 

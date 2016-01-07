@@ -212,6 +212,9 @@ class Config(object):
         self.add_parameter("IpInIpMtu",
                            "MTU to set on the IP-in-IP device", 1440,
                            value_is_int=True)
+        self.add_parameter("IpInIpTunnelAddr",
+                           "IPv4 address to set on the IP-in-IP device",
+                           "none")
         self.add_parameter("ReportingIntervalSecs",
                            "Status reporting interval in seconds",
                            30, value_is_int=True)
@@ -311,6 +314,7 @@ class Config(object):
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
         self.IP_IN_IP_ENABLED = self.parameters["IpInIpEnabled"].value
         self.IP_IN_IP_MTU = self.parameters["IpInIpMtu"].value
+        self.IP_IN_IP_ADDR = self.parameters["IpInIpTunnelAddr"].value
         self.REPORTING_INTERVAL_SECS = \
             self.parameters["ReportingIntervalSecs"].value
         self.REPORTING_TTL_SECS = self.parameters["ReportingTTLSecs"].value
@@ -512,6 +516,15 @@ class Config(object):
             if not common.validate_port(self.METADATA_PORT):
                 raise ConfigException("Invalid field value",
                                       self.parameters["MetadataPort"])
+
+        if self.IP_IN_IP_ADDR.lower() == "none":
+            # IP-in-IP tunnel address is not required.
+            self.IP_IN_IP_ADDR = None
+        else:
+            # IP-in-IP tunnel address must be a valid IP address if
+            # supplied.
+            self.IP_IN_IP_ADDR = self._validate_addr("IpInIpTunnelAddr",
+                                                     self.IP_IN_IP_ADDR)
 
         if self.DEFAULT_INPUT_CHAIN_ACTION not in ("DROP", "RETURN", "ACCEPT"):
             raise ConfigException(

@@ -19,17 +19,19 @@ felix.devices
 Utility functions for managing devices in Felix.
 """
 import logging
-from calico.felix.actor import Actor, actor_message
+import re
 import os
 import socket
 import struct
 
-from calico import common
-from calico.felix import futils
+from netaddr import IPAddress
 
-# Logger
+from calico import common
+from calico.felix.actor import Actor, actor_message
+from calico.felix import futils
 from calico.felix.futils import FailedSystemCall
 
+# Logger
 _log = logging.getLogger(__name__)
 
 
@@ -94,6 +96,55 @@ def interface_exists(interface):
 
 
 def list_interface_ips(ip_type, interface):
+    """
+    List the local IPs assigned to an interface.
+    :param str ip_type: IP type, either futils.IPV4 or futils.IPV6
+    :param str interface: Interface name
+    :returns: a set of all addresses directly assigned to the device.
+    """
+    assert ip_type in (futils.IPV4, futils.IPV6), (
+        "Expected an IP type, got %s" % ip_type
+    )
+    if ip_type == futils.IPV4:
+        data = futils.check_call(
+            ["ip", "addr", "list", "dev", interface]).stdout
+        regex = r'^    inet ([0-9.]+)'
+    else:
+        data = futils.check_call(
+            ["ip", "-6", "addr", "list", "dev", interface]).stdout
+        regex = r'^    inet6 ([0-9a-fA-F:.]+)'
+    # Search the output for lines beginning "    inet(6)".
+    ips = re.findall(regex, data, re.MULTILINE)
+    _log.debug("Interface %s has %s IPs %s", interface, ip_type, ips)
+    return set(IPAddress(ip) for ip in ips)
+
+
+def set_interface_ips(ip_type, interface, ips):
+    """
+    Set the IPs directly assigned to an interface.  Idempotent: does not
+    flap addresses if they're already in place.
+
+    :param str ip_type: IP type, either futils.IPV4 or futils.IPV6
+    :param str interface: Interface name
+    :param set[IPAddress] ips: The IPs to set or an empty set to remove all
+           IPs.
+    """
+    assert ip_type in (futils.IPV4, futils.IPV6), (
+        "Expected an IP type, got %s" % ip_type
+    )
+    old_ips = list_interface_ips(ip_type, interface)
+    ips_to_add = ips - old_ips
+    ips_to_remove = old_ips - ips
+    ip_cmd = ["ip", "-6"] if ip_type == futils.IPV6 else ["ip"]
+    for ip in ips_to_remove:
+        _log.info("Removing IP %s from interface %s", ip, interface)
+        futils.check_call(ip_cmd + ["addr", "del", str(ip), "dev", interface])
+    for ip in ips_to_add:
+        _log.info("Adding IP %s to interface %s", ip, interface)
+        futils.check_call(ip_cmd + ["addr", "add", str(ip), "dev", interface])
+
+
+def list_interface_route_ips(ip_type, interface):
     """
     List IP addresses for which there are routes to a given interface.
     :param str ip_type: IP type, either futils.IPV4 or futils.IPV6
@@ -237,7 +288,7 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
     if reset_arp and ip_type != futils.IPV4:
         raise ValueError("reset_arp may only be supplied for IPv4")
 
-    current_ips = list_interface_ips(ip_type, interface)
+    current_ips = list_interface_route_ips(ip_type, interface)
 
     removed_ips = (current_ips - ips)
     for ip in removed_ips:
