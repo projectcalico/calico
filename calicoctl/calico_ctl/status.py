@@ -25,8 +25,10 @@ import sys
 from prettytable import PrettyTable
 from requests import ConnectionError
 
-from connectors import docker_client
+from connectors import docker_client, client
+from utils import hostname
 
+from pycalico.datastore_errors import DataStoreError
 
 def status(arguments):
     """
@@ -37,6 +39,8 @@ def status(arguments):
     this file's docstring with docopt
     :return: None
     """
+    # Start by locating the calico-node container and querying the package
+    # summary file.
     try:
         calico_node_info = filter(lambda container: "/calico-node" in
                                   container["Names"],
@@ -57,15 +61,42 @@ def status(arguments):
 
             if result is not None:
                 print "Running felix version %s" % result.group(1)
-
-            print "\nIPv4 BGP status"
-            pprint_bird_protocols(4)
-            print "IPv6 BGP status"
-            pprint_bird_protocols(6)
     except ConnectionError:
         print "Docker is not running"
         # TODO: Perform status checks in platform-independent way.
         sys.exit(1)
+
+    # Now query the host BGP details.  If the AS number is not specified on the
+    # host then it must be inheriting the default.
+    try:
+        bgp_ipv4, bgp_ipv6 = client.get_host_bgp_ips(hostname)
+        bgp_as = client.get_host_as(hostname)
+        if bgp_as is None:
+            bgp_as = client.get_default_node_as()
+            bgp_as += " (inherited)"
+    except DataStoreError:
+        print "Error connecting to etcd."
+        bgp_ipv4 = bgp_ipv6 = "unknown"
+        bgp_as = "unknown"
+
+    # TODO: Add additional information to the BIRD section:
+    # TODO: - Include AS numbers of peers
+    # TODO: - Include host name of peers when the peer is a calico-node
+    # TODO: - Include details of peers configured multiple times
+
+    print "\nIPv4 BGP status"
+    if bgp_ipv4:
+        print "IP: %s    AS Number: %s" % (bgp_ipv4, bgp_as)
+        pprint_bird_protocols(4)
+    else:
+        print "No IPv4 address configured.\n"
+
+    print "IPv6 BGP status"
+    if bgp_ipv6:
+        print "IP: %s    AS Number: %s" % (bgp_ipv6, bgp_as)
+        pprint_bird_protocols(6)
+    else:
+        print "No IPv6 address configured.\n"
 
 
 def pprint_bird_protocols(version):

@@ -62,6 +62,7 @@ $ calicoctl status
 calico-node container is running. Status: Up 5 seconds
 
 IPv4 BGP status
+IP: 172.17.8.100    AS Number: 64511 (inherited)
 +--------------+-------------------+-------+----------+-------------+
 | Peer address |     Peer type     | State |  Since   |     Info    |
 +--------------+-------------------+-------+----------+-------------+
@@ -69,9 +70,7 @@ IPv4 BGP status
 +--------------+-------------------+-------+----------+-------------+
 
 IPv6 BGP status
-+--------------+-----------+-------+-------+------+
-| Peer address | Peer type | State | Since | Info |
-+--------------+-----------+-------+-------+------+
-+--------------+-----------+-------+-------+------+
+No IPv6 address configured.
+
 ```
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calicoctl/status.md?pixel)](https://github.com/igrigorik/ga-beacon)
