@@ -164,7 +164,9 @@ class CniPlugin(object):
 
         :return: None.
         """
-        # If this container uses host networking, don't network it.
+        # If this container uses host networking, don't network it.  
+        # This should only be hit when running in Kubernetes mode with
+        # docker - rkt doesn't call plugins when using host networking.
         if self.container_engine.uses_host_networking(self.container_id):
             _log.info("Cannot network container %s since it is configured "
                       "with host networking.", self.container_id)

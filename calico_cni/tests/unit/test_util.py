@@ -18,6 +18,7 @@ import json
 import unittest
 from mock import patch, MagicMock, Mock, call
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
+from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
 
 from calico_cni.constants import *
 from calico_cni.util import *
@@ -56,3 +57,26 @@ class UtilTest(unittest.TestCase):
         # Empty string with a single space.
         parsed = parse_cni_args(" ")
         assert_equal(parsed, {})
+
+    def test_handle_datastore_error(self):
+        def func():
+            # Simulate a DatastoreError in a wrapped function.
+            raise DataStoreError
+
+        wrapped = handle_datastore_error(func)
+        assert_raises(SystemExit, wrapped)
+
+    @patch("calico_cni.util.parse_cni_args", autospec=True)
+    def test_get_identifier_k8s(self, m_parse_cni_args):
+        m_parse_cni_args.return_value = {K8S_POD_NAME: "podname",
+                                         K8S_POD_NAMESPACE: "namespace"}
+        identifier = get_identifier()
+        assert_equal(identifier, "namespace/podname")
+
+    def test_identify_filter(self):
+        identity = "identity"
+        test_filter = IdentityFilter(identity)
+
+        record = MagicMock()
+        assert_true(test_filter.filter(record))
+        assert_equal(record.identity, identity)

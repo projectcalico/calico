@@ -163,6 +163,14 @@ class CniPluginTest(unittest.TestCase):
         m_json.dumps.assert_called_once_with(ipam_response)
 
     @patch("calico_cni.calico_cni.json", autospec=True)
+    def test_add_host_networking(self, m_json): 
+        # Mock out.
+        self.plugin.container_engine.uses_host_networking = MagicMock(return_value=True)
+
+        # Call method.
+        assert_raises(SystemExit, self.plugin.add)
+
+    @patch("calico_cni.calico_cni.json", autospec=True)
     def test_add_exists_new_network(self, m_json): 
         """
         Test add when the endpoint already exists, adding to a new 
