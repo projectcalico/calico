@@ -218,7 +218,7 @@ class CniPlugin(object):
             env = self.env.copy()
             env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
             self._release_ip(env)
-            print_cni_error(ERR_CODE_GENERIC, e.message)
+            print_cni_error(ERR_CODE_GENERIC, e.message, e.details)
             sys.exit(ERR_CODE_GENERIC)
 
         # Return the IPAM plugin's result.
@@ -432,7 +432,8 @@ class CniPlugin(object):
         :return: None
         """
         try:
-            _log.info("Removing endpoint from the Calico datastore")
+            _log.info("Removing Calico endpoint for container '%s'",
+                    self.container_id)
             self._client.remove_workload(hostname=HOSTNAME,
                                          orchestrator_id=ORCHESTRATOR_ID,
                                          workload_id=self.container_id)
@@ -514,11 +515,21 @@ class CniPlugin(object):
                 print_cni_error(ERR_CODE_GENERIC, e.message)
                 sys.exit(ERR_CODE_GENERIC)
         else:
-            _log.debug("Using Default Kubernetes Policy Driver")
-            driver = policy_drivers.KubernetesDefaultPolicyDriver(
-                    self.network_name
-            )
-
+            # Decide which Kubernetes driver to use.
+            policy_block = self.network_config.get(POLICY_KEY, {})
+            policy_type = policy_block.get("type")
+            if policy_type == POLICY_MODE_ANNOTATIONS: 
+                _log.debug("Using Kubernetes Annotation Policy Driver")
+                pod_name = self.cni_args[K8S_POD_NAME]
+                namespace = self.cni_args[K8S_POD_NAMESPACE]
+                driver = policy_drivers.KubernetesAnnotationDriver(
+                        pod_name, namespace, self.network_config
+                )
+            else:
+                _log.debug("Using Default Kubernetes Policy Driver")
+                driver = policy_drivers.KubernetesDefaultPolicyDriver(
+                        self.network_name
+                )
         return driver
 
     @handle_datastore_error

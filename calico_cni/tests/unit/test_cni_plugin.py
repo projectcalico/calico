@@ -29,7 +29,7 @@ from pycalico.datastore_errors import MultipleEndpointsMatch
 from calico_cni.constants import *
 from calico_cni.calico_cni import CniPlugin, main
 from calico_cni.policy_drivers import (DefaultPolicyDriver, ApplyProfileError, 
-                        KubernetesDefaultPolicyDriver)
+                        KubernetesDefaultPolicyDriver, KubernetesAnnotationDriver)
 from calico_cni.container_engines import DockerEngine, DefaultEngine 
 
 
@@ -634,9 +634,18 @@ class CniPluginTest(unittest.TestCase):
         assert_true(isinstance(eng, DockerEngine))
 
     def test_get_policy_driver_default_k8s(self):
-        self.plugin.cni_args = {K8S_POD_NAME: "podname"}
+        self.plugin.cni_args = {K8S_POD_NAME: "podname", 
+                                K8S_POD_NAMESPACE: "namespace"}
         driver = self.plugin._get_policy_driver()
         assert_true(isinstance(driver, KubernetesDefaultPolicyDriver))
+
+    def test_get_policy_driver_k8s_annotations(self):
+        self.plugin.cni_args = {K8S_POD_NAME: "podname", 
+                                K8S_POD_NAMESPACE: "namespace"}
+        self.plugin.network_config["policy"] = {"type": "k8s-annotations"}
+        driver = self.plugin._get_policy_driver()
+        assert_true(isinstance(driver, KubernetesAnnotationDriver))
+
 
     @patch("calico_cni.calico_cni.policy_drivers", autospec=True)
     def test_get_policy_driver_value_error(self, m_drivers):
