@@ -548,9 +548,10 @@ class TestContainer(unittest.TestCase):
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
+    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     def test_container_ip_add_ipv4_pool(
-            self, m_netns, m_client, m_get_container_info_or_exit,
-            m_enforce_root):
+            self, m_get_pool_or_exit, m_netns, m_client,
+            m_get_container_info_or_exit, m_enforce_root):
         """
         Test for container_ip_add with an CIDR/pool ip argument
 
@@ -564,7 +565,7 @@ class TestContainer(unittest.TestCase):
 
         m_client.get_endpoint.return_value = m_endpoint
         m_client.auto_assign_ips.return_value = ([ip_addr], [])
-        m_client.get_pool.return_value = pool_return
+        m_get_pool_or_exit.return_value = pool_return
         m_get_container_info_or_exit.return_value = {
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
