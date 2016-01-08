@@ -20,8 +20,8 @@ write_files:
         echo "Kubenetes not installed - installing."
 
         # Extract the Kubernetes binaries.
-        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.2/bin/linux/amd64/kubectl
-        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.2/bin/linux/amd64/kubelet
+        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubectl
+        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
         sudo chmod +x /opt/bin/kubelet /opt/bin/kubectl
       fi
 
@@ -67,7 +67,6 @@ write_files:
       echo "DEFAULT_IPV4: $DEFAULT_IPV4"
       sudo sed -i -e "s/<PRIVATE_IPV4>/$DEFAULT_IPV4/g" /etc/kubernetes/manifests/calico-etcd.manifest
 
-
 coreos:
   update:
     reboot-strategy: off
@@ -84,7 +83,7 @@ coreos:
 
         [Service]
         ExecStartPre=-/usr/bin/mkdir -p /opt/bin
-        ExecStartPre=-/usr/bin/wget -N -P /opt/bin https://github.com/kelseyhightower/setup-network-environment/releases/download/v1.0.0/setup-network-environment
+        ExecStartPre=-/usr/bin/wget -N -P /opt/bin https://github.com/kelseyhightower/setup-network-environment/releases/download/1.0.1/setup-network-environment
         ExecStartPre=-/usr/bin/chmod +x /opt/bin/setup-network-environment
         ExecStart=/opt/bin/setup-network-environment
         RemainAfterExit=yes
@@ -126,7 +125,7 @@ coreos:
         [Unit]
         Description=Kubernetes Kubelet
         Documentation=https://github.com/kubernetes/kubernetes
-        Requires=docker.service,kubernetes-install.service
+        Requires=docker.service kubernetes-install.service
         After=kubernetes-install.service
   
         [Service]
@@ -162,15 +161,17 @@ coreos:
       command: start
       content: |
         [Unit]
-        Description=calicoctl node
+        Description=Calico per-node agent
+        Documentation=https://github.com/projectcalico/calico-docker
         After=docker.service
         Requires=docker.service
         
         [Service]
         User=root
+        EnvironmentFile=/etc/network-environment
         Environment="ETCD_AUTHORITY=127.0.0.1:6666"
         PermissionsStartOnly=true
-        ExecStart=/opt/bin/calicoctl node --detach=false
+        ExecStart=/opt/bin/calicoctl node --ip=${DEFAULT_IPV4} --detach=false
         Restart=always
         RestartSec=10
     

@@ -24,21 +24,6 @@ write_files:
           }
       }
 
-  - path: /opt/bin/setup-network-environment.sh
-    owner: root
-    permissions: 0755
-    content: |
-      #! /usr/bin/bash
-      set -e
-
-      # Download binary 
-      mkdir -p /opt/bin
-      wget -N -P /opt/bin https://github.com/kelseyhightower/setup-network-environment/releases/download/v1.0.0/setup-network-environment
-      chmod +x /opt/bin/setup-network-environment
-
-      # Run setup-network-environment.
-      /opt/bin/setup-network-environment
-
   - path: /opt/bin/kubernetes-install.sh
     owner: root
     permissions: 0755
@@ -50,7 +35,7 @@ write_files:
         echo "Kubenetes not installed - installing."
 
         # Extract the Kubernetes binaries.
-        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.2/bin/linux/amd64/kubelet
+        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
         sudo chmod +x /opt/bin/kubelet
 
         # Create required folders
@@ -83,21 +68,52 @@ write_files:
         sudo chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
       fi
 
+  - path: /etc/kubernetes/ssl/worker-openssl.cnf
+    owner: root
+    permissions: 0755
+    content: |
+      [req]
+      req_extensions = v3_req
+      distinguished_name = req_distinguished_name
+      [req_distinguished_name]
+      [ v3_req ]
+      basicConstraints = CA:FALSE
+      keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+      subjectAltName = @alt_names
+      [alt_names]
+      IP.1 = $ENV::WORKER_IP 
+
+  - path: /etc/kubernetes/ssl/generate-tls-keys.sh
+    owner: root
+    permissions: 0755
+    content: |
+      #! /usr/bin/bash
+      # Generates a set of TLS keys for this node to access the API server.
+      set -e
+      
+      if [ ! -f /etc/kubernetes/ssl/worker.pem ]; then
+        echo "Generating TLS keys."
+        cd /etc/kubernetes/ssl
+        openssl genrsa -out worker-key.pem 2048
+        WORKER_IP=${1} openssl req -new -key worker-key.pem -out worker.csr -subj "/CN=worker" -config worker-openssl.cnf
+        WORKER_IP=${1} openssl x509 -req -in worker.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out worker.pem -days 365 -extensions v3_req -extfile worker-openssl.cnf
+      fi
+
+      # Set permissions.
+      sudo chmod 600 /etc/kubernetes/ssl/worker-key.pem
+      sudo chown root:root /etc/kubernetes/ssl/worker-key.pem
+
   - path: /etc/kubernetes/ssl/ca.pem
     owner: core
     permissions: 0644
     content: |
       <CA_CERT>
-  - path: /etc/kubernetes/ssl/worker.pem
+
+  - path: /etc/kubernetes/ssl/ca-key.pem
     owner: core
     permissions: 0644
     content: |
-      <WORKER_CERT>
-  - path: /etc/kubernetes/ssl/worker-key.pem
-    owner: root
-    permissions: 0600
-    content: |
-      <WORKER_KEY>
+      <CA_KEY_CERT>
 
   - path: /etc/kubernetes/worker-kubeconfig.yaml
     owner: root
@@ -108,7 +124,6 @@ write_files:
       clusters:
       - name: local
         cluster:
-          server: https://kubernetes-master
           certificate-authority: /etc/kubernetes/ssl/ca.pem
       users:
       - name: kubelet
@@ -134,11 +149,11 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google_containers/hyperkube:v1.1.2
+          image: gcr.io/google_containers/hyperkube:v1.1.3
           command:
           - /hyperkube
           - proxy
-          - --master=https://kubernetes-master:443
+          - --master=https://<KUBRNETES_MASTER>:443
           - --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml
           - --proxy-mode=iptables
           securityContext:
@@ -178,7 +193,25 @@ coreos:
         After=network-online.target
 
         [Service]
-        ExecStart=/opt/bin/setup-network-environment.sh
+        ExecStartPre=-/usr/bin/mkdir -p /opt/bin
+        ExecStartPre=-/usr/bin/wget -N -P /opt/bin https://github.com/kelseyhightower/setup-network-environment/releases/download/1.0.1/setup-network-environment
+        ExecStartPre=-/usr/bin/chmod +x /opt/bin/setup-network-environment
+        ExecStart=/opt/bin/setup-network-environment
+        RemainAfterExit=yes
+        Type=oneshot
+
+    - name: generate-tls-keys.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        Description=Generates TLS keys for this node
+        After=setup-network-environment.service
+        Requires=setup-network-environment.service
+
+        [Service]
+        EnvironmentFile=/etc/network-environment
+        ExecStart=/etc/kubernetes/ssl/generate-tls-keys.sh ${DEFAULT_IPV4}
         RemainAfterExit=yes
         Type=oneshot
 
@@ -217,15 +250,15 @@ coreos:
         [Unit]
         Description=Calico per-node agent
         Documentation=https://github.com/projectcalico/calico-docker
-        Requires=docker.service
         After=docker.service
+        Requires=docker.service
 
         [Service]
         User=root
         EnvironmentFile=/etc/network-environment
-        Environment=ETCD_AUTHORITY=<KUBERNETES_MASTER>:6666
+        Environment="ETCD_AUTHORITY=<KUBERNETES_MASTER>:6666"
         PermissionsStartOnly=true
-        ExecStart=/usr/bin/calicoctl node --ip=${DEFAULT_IPV4} --detach=false
+        ExecStart=/opt/bin/calicoctl node --ip=${DEFAULT_IPV4} --detach=false
         Restart=always
         RestartSec=10
 
@@ -239,8 +272,8 @@ coreos:
         [Unit]
         Description=Kubernetes Kubelet
         Documentation=https://github.com/kubernetes/kubernetes
-        After=calico-node.service
-        Requires=calico-node.service
+        After=calico-node.service generate-tls-keys.service
+        Requires=calico-node.service generate-tls-keys.service
 
         [Service]
         EnvironmentFile=/etc/network-environment
