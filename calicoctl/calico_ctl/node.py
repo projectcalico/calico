@@ -18,8 +18,10 @@ import socket
 import signal
 
 import docker
+import docker.errors
+import docker.utils
 from subprocess32 import call
-from netaddr import IPAddress
+from netaddr import IPAddress, AddrFormatError
 from prettytable import PrettyTable
 
 from . import __rkt_plugin_version__, __kubernetes_plugin_version__
@@ -246,9 +248,10 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     :return:  None.
     """
     # Normally, Felix will load the modules it needs, but when running inside a
-    # container it might not be able to so ensure the required modules are
+    # container it might not be able to do so. Ensure the required modules are
     # loaded each time the node starts.
-    # This is just a best error attempt, as the modules might be builtins.
+    # We only make a best effort attempt because the command may fail if the
+    # modules are built in.
     # We'll warn during the check_system() if the modules are unavailable.
     try:
         call(["modprobe", "-a"] + REQUIRED_MODULES)
@@ -325,6 +328,19 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
 
     client.ensure_global_config()
     client.create_host(hostname, ip, ip6, as_num)
+
+    # If IPIP is enabled, the host requires an IP address for its tunnel
+    # device, which is in an IPIP pool.  Without this, a host can't originate
+    # traffic to a pool address because the response traffic would not be
+    # routed via the tunnel (likely being dropped by RPF checks in the fabric).
+    ipv4_pools = client.get_ip_pools(4)
+    ipip_pools = [p for p in ipv4_pools if p.ipip]
+    if ipip_pools:
+        # IPIP is enabled, make sure the host has an address for its tunnel.
+        _ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
+    else:
+        # No IPIP pools, clean up any old address.
+        _remove_host_tunnel_addr()
 
     # Always try to convert the address(hostname) to an IP. This is a noop if
     # the address is already an IP address.  Note that the format of the authority
@@ -584,6 +600,11 @@ def node_remove(remove_endpoints):
 
     for endpoint in endpoints:
         remove_veth(endpoint.name)
+
+    # If the host had an IPIP tunnel address, release it back to the IPAM pool
+    # so that we don't leak it when we delete the config.
+    _remove_host_tunnel_addr()
+
     client.remove_host(hostname)
 
     print "Node configuration removed"
@@ -844,3 +865,110 @@ def install_plugin(plugin_dir, binary_url):
         except OSError:
             print "ERROR: Unable to set permissions on plugin %s" % binary_path
             sys.exit(1)
+
+
+def _ensure_host_tunnel_addr(ipv4_pools, ipip_pools):
+    """
+    Ensure the host has a valid IP address for its IPIP tunnel device.
+
+    This must be an IP address claimed from one of the IPIP pools.
+    Handles re-allocating the address if it finds an existing address
+    that is not from an IPIP pool.
+
+    :param ipv4_pools: List of all IPv4 pools.
+    :param ipip_pools: List of IPIP-enabled pools.
+    """
+    ip_addr = _get_host_tunnel_ip()
+    if ip_addr:
+        # Host already has a tunnel IP assigned, verify that it's still valid.
+        pool = _find_pool(ip_addr, ipv4_pools)
+        if pool and not pool.ipip:
+            # No longer an IPIP pool. Release the IP, it's no good to us.
+            client.release_ips({ip_addr})
+            ip_addr = None
+        elif not pool:
+            # Not in any IPIP pool.  IP must be stale.  Since it's not in any
+            # pool, we can't release it.
+            ip_addr = None
+    if not ip_addr:
+        # Either there was no IP or the IP needs to be replaced.  Try to
+        # get an IP from one of the IPIP-enabled pools.
+        _assign_host_tunnel_addr(ipip_pools)
+
+
+def _find_pool(ip_addr, ipv4_pools):
+    """
+    Find the pool containing the given IP.
+
+    :param ip_addr:  IP address to find.
+    :param ipv4_pools:  iterable containing IPPools.
+    :return: The pool, or None if not found
+    """
+    for pool in ipv4_pools:
+        if ip_addr in pool.cidr:
+            return pool
+    else:
+        return None
+
+
+def _assign_host_tunnel_addr(ipip_pools):
+    """
+    Claims an IPIP-enabled IP address from the first pool with some
+    space.
+
+    Stores the result in the host's config as its tunnel address.
+
+    Exits on failure.
+    :param ipip_pools:  List of IPPools to search for an address.
+    """
+    for ipip_pool in ipip_pools:
+        v4_addrs, _ = client.auto_assign_ips(
+            num_v4=1, num_v6=0,
+            handle_id=None,
+            attributes={},
+            pool=(ipip_pool, None),
+            host=hostname
+        )
+        if v4_addrs:
+            # Successfully allocated an address.  Unpack the list.
+            [ip_addr] = v4_addrs
+            break
+    else:
+        # Failed to allocate an address, the pools must be full.
+        print_paragraph(
+            "Failed to allocate an IP address from an IPIP-enabled pool "
+            "for the host's IPIP tunnel device.  Pools are likely "
+            "exhausted."
+        )
+        sys.exit(1)
+    # If we get here, we've allocated a new IPIP-enabled address,
+    # Store it in etcd so that Felix will pick it up.
+    client.set_per_host_config(hostname, "IpInIpTunnelAddr",
+                               str(ip_addr))
+
+
+def _remove_host_tunnel_addr():
+    """
+    Remove any existing IP address for this host's IPIP tunnel device.
+
+    Idempotent; does nothing if there is no IP assigned.  Releases the
+    IP from IPAM.
+    """
+    ip_addr = _get_host_tunnel_ip()
+    if ip_addr:
+        client.release_ips({ip_addr})
+    client.remove_per_host_config(hostname, "IpInIpTunnelAddr")
+
+
+def _get_host_tunnel_ip():
+    """
+    :return: The IPAddress of the host's IPIP tunnel or None if not
+             present/invalid.
+    """
+    raw_addr = client.get_per_host_config(hostname, "IpInIpTunnelAddr")
+    try:
+        ip_addr = IPAddress(raw_addr)
+    except (AddrFormatError, ValueError, TypeError):
+        # Either there's no address or the data is bad.  Treat as missing.
+        ip_addr = None
+    return ip_addr
