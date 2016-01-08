@@ -233,6 +233,27 @@ class TestConfig(unittest.TestCase):
             load_config("felix_missing.cfg", host_dict=cfg_dict)
         self.m_gethostbyname.assert_has_calls([mock.call("bloop")])
 
+    def test_bad_ipip_addr(self):
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IpInIpTunnelAddr": "bloop"}
+        with self.assertRaisesRegexp(
+                ConfigException,
+                "Invalid or unresolvable.*IpInIpTunnelAddr"):
+            load_config("felix_missing.cfg", host_dict=cfg_dict)
+        self.m_gethostbyname.assert_has_calls([mock.call("bloop")])
+
+    def test_none_string_ipip_addr(self):
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IpInIpTunnelAddr": "none"}
+        conf = load_config("felix_missing.cfg", host_dict=cfg_dict)
+        self.assertEqual(conf.IP_IN_IP_ADDR, None)
+
+    def test_none_ipip_addr(self):
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IpInIpTunnelAddr": None}
+        conf = load_config("felix_missing.cfg", host_dict=cfg_dict)
+        self.assertEqual(conf.IP_IN_IP_ADDR, None)
+
     def test_bad_log_level(self):
         for field in ("LogSeverityFile", "LogSeverityScreen", "LogSeveritySys"):
             cfg_dict = { "LogInterfacePrefix": "blah",

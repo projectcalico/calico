@@ -48,6 +48,7 @@ class TestBasic(BaseTestCase):
         else:
             sys.modules['etcd'] = self._real_etcd
 
+    @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
     @mock.patch("calico.felix.devices.configure_global_kernel_config",
                 autospec=True)
     @mock.patch("calico.felix.devices.interface_up",
@@ -66,10 +67,12 @@ class TestBasic(BaseTestCase):
                            m_IptablesUpdater, m_UpdateSplitter,
                            m_start, m_load,
                            m_ipset_4, m_check_call, m_iface_exists,
-                           m_iface_up, m_configure_global_kernel_config):
+                           m_iface_up, m_configure_global_kernel_config,
+                           m_list_interface_ips):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
+        m_list_interface_ips.return_value = set()
         env_dict = {
             "FELIX_ETCDADDR": "localhost:4001",
             "FELIX_ETCDSCHEME": "http",
