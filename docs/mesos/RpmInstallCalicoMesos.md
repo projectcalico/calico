@@ -20,25 +20,46 @@ This RPM installation includes and installs:
 - `calico.service`, a systemd service to ensure calico is always running
 
 ## 1. Download and Install the RPMs
+Extra Packages for Enterprise Linux (EPEL) must be installed before installing Mesos + Net-Modules. You can download this package by calling:
 
-    wget https://github.com/projectcalico/calico-mesos/releases/download/v0.1.3/calico-mesos-rpms.tar
-    tar -xvf calico-mesos-rpms.tgz
-    sudo yum install -y calico-mesos-rpms/*.rpm
+```
+sudo yum install -y epel-release
+sudo yum update
+```
 
-> Note, Extra Packages for Enterprise Linux (EPEL) must be installed before installing Mesos + Net-Modules. You can download this package by calling `sudo yum install epel-release`
+Now, download and install the RPMs:
+```
+wget https://github.com/projectcalico/calico-mesos/releases/download/v0.1.3/calico-mesos-rpms.tar
+tar -xvf calico-mesos-rpms.tgz
+sudo yum install -y calico-mesos-rpms/*.rpm
+```
 
 ## 2. Start Calico Services
-A systemd unit file has been provided to start the Calico processes needed by the calico_mesos plugin binary. When starting the calico-mesos service, the environment variable `ETCD_AUTHORITY` is used to point Calico to a running instance of etcd. This variable must be set in `/etc/default/mesos-slave`. Open this file and add the `ETCD_AUTHORITY` variable is set correctly, then run the following commands.
+A systemd unit file has been provided to start the Calico processes needed by the calico_mesos plugin binary. When starting the calico-mesos service, the environment variable `ETCD_AUTHORITY` is used to point Calico to a running instance of etcd. This variable must be set in `/etc/default/mesos-slave`.  Similarly, the `MASTER` variable should point at your ZooKeeper's IP address and port. 
 
-> Follow our [Mesos Cluster Preparation guide](MesosClusterPreparation.md#Install) if you do not already have an instance of etcd running to walk through installing etcd with Docker.
+Open `/etc/default/mesos-slave` set the`ETCD_AUTHORITY` and `MASTER` 
+variables to the correct values.  Your file should now look like this:
+```
+MASTER=zk://<ZOOKEEPER_IP>:<ZOOKEEPER_PORT>
+ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT>
+```
 
-    sudo systemctl start calico-mesos.service
-    sudo systemctl start mesos-slave.service
+> Follow our [Mesos Cluster Preparation guide](MesosClusterPreparation.md#install-zookeeper-and-etcd) if you do not already have instances of etcd and ZooKeeper running.
+
+
+Now start the services:
+
+```
+sudo systemctl start calico-mesos.service
+sudo systemctl start mesos-slave.service
+```
 
 Check that Calico and Mesos are both running:
 
-    sudo systemctl status calico-mesos.service
-    sudo systemctl status mesos-slave.service
+```
+sudo systemctl status calico-mesos.service
+sudo systemctl status mesos-slave.service
+```
 
 [calico-mesos]: https://github.com/projectcalico/calico-mesos/releases/latest
 
