@@ -138,6 +138,39 @@ MAX_MULTIPORT_ENTRIES = 15
 # Name of the global, stateless IP-in-IP device name.
 IP_IN_IP_DEV_NAME = "tunl0"
 
+# Rule to catch packets that are being sent down the IPIP tunnel from an
+# incorrect local IP address of the host.  This happens if:
+#
+# - the user explicitly binds their socket to the wrong source IP accidentally
+# - the user sends traffic to, for example, a Kubernetes service IP, which is
+#   implemented via NAT instead of routing, leading the kernel to choose the
+#   wrong source IP.
+#
+# We NAT the source of the packet to use the tunnel IP.  We assume that
+# non-local IPs have been correctly routed.  Since Calico-assigned IPs are
+# non-local (because they're down a veth), they won't get caught by the rule.
+# Other remote sources will only reach the tunnel if they're being NATted
+# already (for example, a Kubernetes "NodePort").  The kernel will then
+# choose the correct source on its own.
+POSTROUTING_LOCAL_NAT_FRAGMENT = (
+    "POSTROUTING "
+    # Only match if the packet is going out via the tunnel.
+    "--out-interface %s "
+    # Match packets that don't have the correct source address.  This matches
+    # local addresses (i.e. ones assigned to this host) limiting the match to
+    # the output interface (which we matched above as the tunnel).  Avoiding
+    # embedding the IP address lets us use a static rule, which is easier to
+    # manage.
+    "-m addrtype ! --src-type LOCAL --limit-iface-out "
+    # Only match if the IP is also some local IP on the box.  This prevents
+    # us from matching packets from workloads, which are remote as far as the
+    # routing table is concerned.
+    "-m addrtype --src-type LOCAL "
+    # NAT them to use the source IP of the tunnel.  Using MASQUERADE means
+    # the kernel chooses the source automatically.
+    "-j MASQUERADE" % IP_IN_IP_DEV_NAME
+)
+
 # Chain names
 CHAIN_TO_ENDPOINT = FELIX_PREFIX + "TO-ENDPOINT"
 CHAIN_FROM_ENDPOINT = FELIX_PREFIX + "FROM-ENDPOINT"
@@ -178,6 +211,23 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
             _log.exception("Failed to configure IPIP device, retrying...")
             time.sleep(1)
             _configure_ipip_device(config)
+
+    if config.IP_IN_IP_ENABLED and config.IP_IN_IP_ADDR:
+        # Add a rule to catch packets originated by this host that are going
+        # down the tunnel with the wrong source address.  NAT them to use the
+        # address of the tunnel device instead.  See comment on the constant
+        # for more details.
+        _log.info("IPIP enabled and tunnel address set: inserting MASQUERADE "
+                  "rule to ensure tunnelled packets have correct source.")
+        v4_nat_updater.ensure_rule_inserted(POSTROUTING_LOCAL_NAT_FRAGMENT,
+                                            async=False)
+    else:
+        # Clean up the rule that we insert above if IPIP is enabled.
+        _log.info("IPIP disabled or no tunnel address set: removing "
+                  "MASQUERADE rule.")
+        v4_nat_updater.ensure_rule_removed(POSTROUTING_LOCAL_NAT_FRAGMENT,
+                                           async=False)
+
 
     # Ensure that Calico-controlled IPv6 hosts cannot spoof their IP addresses.
     # (For IPv4, this is controlled by a per-interface sysctl.)
