@@ -160,7 +160,7 @@ We install netmodules as a plugin to allow Calico to interface with Mesos.
 
 ```
 # Download netmodules source
-git clone https://github.com/mesosphere/net-modules.git -b integration/0.26
+git clone https://github.com/mesosphere/net-modules.git
 cd net-modules/isolator
 
 # Configure and build
