@@ -64,21 +64,14 @@ There are several integrations available for Calico in a containerized
 environment.  The repositories below hold the plugin code for these 
 integrations.
 
- - [calico-kubernetes](https://github.com/projectcalico/calico-kubernetes): 
-   Implements the Calico plugin for running Calico with the 
-   [kubernetes](https://github.com/kubernetes/kubernetes) orchestrator. This is 
-   used when the Calico node is started with the `--kubernetes` flag, and
-   installed as a binary downloaded from a particular release.
-
- - [calico-mesos](https://github.com/projectcalico/calico-mesos): Implements 
+ - [calico-mesos](https://github.com/projectcalico/calico-mesos): Implements
    the Calico plugin for running Calico with the [mesos](https://github.com/apache/mesos) 
    orchestrator.  This plugin may be installed manually (from a binary attached
    to a relase), or as an RPM which can be created.
 
- - [calico-rkt](https://github.com/projectcalico/calico-rkt): Implements the 
-   Calico plugin for running Calico with the [rkt](https://github.com/coreos/rkt) 
-   orchestrator. This is used when the Calico node is started with the `--rkt` 
-   flag, and installed as a binary downloaded from a particular release.
+ - [calico-cni](https://github.com/projectcalico/calico-cni): Implements the
+   Calico plugin for running Calico with [rkt](https://github.com/coreos/rkt)
+   or the [kubernetes](https://github.com/kubernetes/kubernetes) orchestrator.
 
  - [libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin): 
    Implements Calico plugin support for the (libnetwork based) Docker 

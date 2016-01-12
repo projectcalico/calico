@@ -179,7 +179,6 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     @patch('calico_ctl.node.docker', autospec=True)
@@ -187,7 +186,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
     def test_node_dockerless_start(self, m_attach_and_stream,
                                    m_find_or_pull_node_image, m_docker,
-                                   m_docker_client, m_client, m_install_plugin,
+                                   m_docker_client, m_client,
                                    m_error_if_bgp_ip_conflict,
                                    m_warn_if_hostname_conflict,
                                    m_warn_if_unknown_ip, m_get_host_ips,
@@ -215,30 +214,11 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = True
-        kube_plugin_version = 'v0.2.1'
-        rkt = True
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        kube_plugin_version, rkt, libnetwork)
-
-        # Set up variables used in assertion statements
-        environment = [
-            "HOSTNAME=%s" % node.hostname,
-            "IP=%s" % ip_2,
-            "IP6=%s" % ip6,
-            "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
-            "FELIX_ETCDADDR=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
-            "CALICO_NETWORKING=%s" % node.CALICO_NETWORKING_DEFAULT,
-        ]
-        binds = {
-            log_dir:
-                {
-                    "bind": "/var/log/calico",
-                    "ro": False
-                }
-        }
+                        libnetwork)
 
         # Assert
         m_os_path_exists.assert_called_once_with(log_dir)
@@ -260,9 +240,6 @@ class TestNode(unittest.TestCase):
             node.hostname, ip_2, ip6, as_num
         )
 
-        url = node.KUBERNETES_BINARY_URL % kube_plugin_version
-        m_install_plugin.assert_has_calls([call(node.KUBERNETES_PLUGIN_DIR, url),
-                                           call(node.RKT_PLUGIN_DIR, node.RKT_BINARY_URL)])
         self.assertFalse(m_docker_client.remove_container.called)
         self.assertFalse(m_docker.utils.create_host_config.called)
         self.assertFalse(m_find_or_pull_node_image.called)
@@ -280,7 +257,6 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     @patch('calico_ctl.node.docker', autospec=True)
@@ -288,7 +264,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
     def test_node_start(self, m_attach_and_stream,
                         m_find_or_pull_node_image, m_docker,
-                        m_docker_client, m_client, m_install_plugin,
+                        m_docker_client, m_client,
                         m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
                         m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
                         m_check_system, m_ensure_host_tunnel_addr,
@@ -320,13 +296,11 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kube_plugin_version = 'v0.2.1'
-        rkt = True
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        kube_plugin_version, rkt, libnetwork)
+                        libnetwork)
 
         # Set up variables used in assertion statements
         environment = [
@@ -370,9 +344,6 @@ class TestNode(unittest.TestCase):
                                                           ipip_pools)
         assert_false(m_remove_host_tunnel_addr.called)
 
-        url = node.KUBERNETES_BINARY_URL % kube_plugin_version
-        m_install_plugin.assert_has_calls([call(node.KUBERNETES_PLUGIN_DIR, url),
-                                           call(node.RKT_PLUGIN_DIR, node.RKT_BINARY_URL)])
         m_docker_client.remove_container.assert_called_once_with(
             'calico-node', force=True
         )
@@ -405,7 +376,6 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     @patch('calico_ctl.node.docker', autospec=True)
@@ -413,7 +383,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
     def test_node_start_secure(self, m_attach_and_stream,
                                m_find_or_pull_node_image, m_docker,
-                               m_docker_client, m_client, m_install_plugin,
+                               m_docker_client, m_client,
                                m_error_if_bgp_ip_conflict,
                                m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
                                m_get_host_ips, m_setup_ip, m_check_system,
@@ -459,13 +429,11 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kube_plugin_version = 'v0.6.0'
-        rkt = True
         libnetwork_image = 'libnetwork_image'
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        kube_plugin_version, rkt, libnetwork_image)
+                        libnetwork_image)
 
         # Set up variables used in assertion statements
         environment_node = [
@@ -528,11 +496,6 @@ class TestNode(unittest.TestCase):
                                                      as_num)
         assert_true(m_remove_host_tunnel_addr.called)
 
-        url = node.KUBERNETES_BINARY_URL % kube_plugin_version
-        m_install_plugin.assert_has_calls([
-            call(node.KUBERNETES_PLUGIN_DIR, url),
-            call(node.RKT_PLUGIN_DIR, node.RKT_BINARY_URL)
-        ])
         m_docker_client.remove_container.assert_has_calls([
             call('calico-node', force=True),
             call('calico-libnetwork', force=True)
@@ -567,51 +530,6 @@ class TestNode(unittest.TestCase):
                                                 call(container2)])
         m_attach_and_stream.assert_called_once_with(container1)
 
-    @patch('os.path.exists', autospec=True)
-    @patch('os.makedirs', autospec=True)
-    @patch('calico_ctl.node.check_system', autospec=True)
-    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
-    @patch('calico_ctl.node.get_host_ips', autospec=True)
-    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
-    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
-    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
-    def test_node_start_call_backup_kube_directory(
-            self, m_install_plugin, m_warn_if_hostname_conflict,
-            m_error_if_bgp_ip_conflict, m_warn_if_unknown_ip, m_get_host_ips,
-            m_setup_ip, m_check_system, m_os_makedirs, m_os_path_exists):
-        """
-        Test that node_start calls the backup kuberentes plugin directory
-        when install_kubernetes cannot access the default kubernetes directory
-        """
-        # Set up mock objects
-        m_os_path_exists.return_value = True
-        m_get_host_ips.return_value = ['1.1.1.1']
-        m_install_plugin.side_effect = OSError
-        m_check_system.return_value = [True, True, True]
-
-        # Set up arguments
-        node_image = "node_image"
-        runtime = 'docker'
-        log_dir = './log_dir'
-        ip = ''
-        ip6 = 'aa:bb::zz'
-        as_num = ''
-        detach = False
-        kube_plugin_version = 'v0.2.1'
-        rkt = False
-        libnetwork = False
-
-        # Test expecting OSError exception
-        self.assertRaises(OSError, node.node_start,
-                          node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          kube_plugin_version, rkt, libnetwork)
-
-        url = node.KUBERNETES_BINARY_URL % kube_plugin_version
-        m_install_plugin.assert_has_calls([
-            call(node.KUBERNETES_PLUGIN_DIR, url),
-            call(node.KUBERNETES_PLUGIN_DIR_BACKUP, url)
-        ])
 
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
@@ -621,55 +539,10 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
-    def test_node_start_call_backup_rkt_directory(
-            self, m_install_plugin, m_error_if_bgp_ip_conflict,
-            m_warn_if_hostname_conflict, m_warn_if_unknown_ip, m_get_host_ips,
-            m_setup_ip, m_check_system, m_os_makedirs, m_os_path_exists):
-        """
-        Test that node_start calls the backup kuberentes plugin directory
-        when install_kubernetes cannot access the default kubernetes directory
-        """
-        # Set up mock objects
-        m_os_path_exists.return_value = True
-        m_get_host_ips.return_value = ['1.1.1.1']
-        m_install_plugin.side_effect = OSError
-        m_check_system.return_value = [True, True, True]
-
-        # Set up arguments
-        node_image = "node_image"
-        runtime = 'docker'
-        log_dir = './log_dir'
-        ip = ''
-        ip6 = 'aa:bb::zz'
-        as_num = ''
-        detach = False
-        kube_plugin_version = None
-        rkt = True
-        libnetwork = False
-
-        # Test expecting OSError exception
-        self.assertRaises(OSError, node.node_start,
-                          node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          kube_plugin_version, rkt, libnetwork)
-        m_install_plugin.assert_has_calls([
-            call(node.RKT_PLUGIN_DIR, node.RKT_BINARY_URL),
-            call(node.RKT_PLUGIN_DIR_BACKUP, node.RKT_BINARY_URL)
-        ])
-
-    @patch('os.path.exists', autospec=True)
-    @patch('os.makedirs', autospec=True)
-    @patch('calico_ctl.node.check_system', autospec=True)
-    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
-    @patch('calico_ctl.node.get_host_ips', autospec=True)
-    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
-    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
-    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_start_remove_container_error(
-            self, m_docker_client, m_client, m_install_plugin,
+            self, m_docker_client, m_client,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):
@@ -690,14 +563,12 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kube_plugin_version = 'v0.2.1'
-        rkt = False
         libnetwork = False
 
         # Testing expecting APIError exception
         self.assertRaises(APIError, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          kube_plugin_version, rkt, libnetwork)
+                          libnetwork)
 
     @patch('sys.exit', autospec=True)
     @patch('os.path.exists', autospec=True)
@@ -708,11 +579,10 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_start_no_detected_ips(
-            self, m_docker_client, m_client, m_install_plugin,
+            self, m_docker_client, m_client,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists, m_sys_exit):
@@ -732,13 +602,11 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kube_plugin_version = 'v0.2.1'
-        rkt = False
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        kube_plugin_version, rkt, libnetwork)
+                        libnetwork)
 
         # Assert
         m_sys_exit.assert_called_once_with(1)
@@ -751,11 +619,10 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
-    @patch('calico_ctl.node.install_plugin', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_node_start_create_default_ip_pools(
-            self, m_docker_client, m_client, m_install_plugin,
+            self, m_docker_client, m_client,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):
@@ -775,13 +642,11 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        kube_plugin_version = 'v0.2.1'
-        rkt = False
         libnetwork = False
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        kube_plugin_version, rkt, libnetwork)
+                        libnetwork)
 
         # Assert
         m_client.add_ip_pool.assert_has_calls([
@@ -926,20 +791,6 @@ class TestNode(unittest.TestCase):
             m_docker_client.inspect_container.return_value = {"State": {"Running": test}}
             self.assertEquals(node._container_running("container1"), test)
 
-    @patch("calico_ctl.node.URLGetter", autospec=True)
-    @patch("calico_ctl.node.os", autospec=True)
-    def test_install_plugin(self, m_os, m_url_getter):
-        """
-        Test installation of Kubernetes plugin
-        """
-        url = "http://somefake/url"
-        path = "/path/to/downloaded/binary/"
-
-        # Run method
-        node.install_plugin(path, url)
-
-        # Assert the file URL was downloaded.
-        m_url_getter().retrieve.assert_called_once_with(url, path + "calico")
 
     @patch("calico_ctl.node.client", autospec=True)
     @patch("sys.exit", autospec=True)

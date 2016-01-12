@@ -40,7 +40,7 @@ After a short delay, the kubelet on your master will automatically create a cont
 
 Next, use `calicoctl` to spin up the `calico/node` container and install the Calico [network plugin](https://github.com/projectcalico/calico-kubernetes) for Kubernetes. 
 ```
-sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node
 ```
 
 Then you will need to set up an IP pool with IP-in-IP enabled. This is a [necessary step](../FAQ.md#can-i-run-calico-in-a-public-cloud-environment) in any public cloud environment.
@@ -76,7 +76,7 @@ Hold on to this token, as you will need it to configure your nodes.
 ## Configuring the Nodes
 On each node, use `calicoctl` to spin up the `calico/node` container and install the Calico [network plugin](https://github.com/projectcalico/calico-kubernetes) for Kubernetes. 
 ```
-sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node --kubernetes
+sudo ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl node
 ```
 
 To start using the Calico network plugin, we will need to modify the existing kubelet process on each of your nodes.

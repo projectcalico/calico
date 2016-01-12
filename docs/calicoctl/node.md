@@ -33,8 +33,7 @@ calicoctl node commands.
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-    [--detach=<DETACH>] [--rkt]
-    [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
+    [--detach=<DETACH>]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node remove [--remove-endpoints]
@@ -68,11 +67,6 @@ Options:
   --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
-  --kubernetes              Download and install the Kubernetes plugin.
-  --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
-                            to install when using the --kubernetes option.
-                            [default: v0.3.0]
-  --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
                             Calico's libnetwork driver.
@@ -105,8 +99,7 @@ Command syntax:
 ```
 calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] 
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-    [--detach=<DETACH>] [--rkt]
-    [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
+    [--detach=<DETACH>]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
 
     <IP>: Unique IPv4 address associated with an interface on the host machine.
@@ -124,8 +117,6 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     <LIBNETWORK_IMAGE_NAME>: Desired calico/node-libnetwork Docker image to use when 
                              using the Docker libnetwork driver.
 
-    --kubernetes: Download and install the kubernetes plugin.
-    --rkt: Download and install the rkt plugin.
     --libnetwork: Download and run the calico/node-libnetwork Docker image.
 ```
 
@@ -142,12 +133,6 @@ The `--ip` and `--ip6` flags should be used to specify a unique IP address that
 is owned by an interface on this Calico host system.  These IP addresses are 
 used to identify source addresses for BGP peering, allowing an interface 
 through the host system over which traffic will flow to the workloads.
-
-The `--kubernetes` flag configures your Calico node with the Calico Kubernetes 
-plugin.  This allows you to run Calico with the Kubernetes orchestrator.
-
-The `--rkt` flag configures your Calico node with the Calico rkt plugin, which 
-allows you to run Calico with the rkt orchestrator.
 
 The `--detach` option should be used if you are adding Calico to an init system.
 
