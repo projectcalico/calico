@@ -78,8 +78,6 @@ class TestUtils(unittest.TestCase):
         ('aa:bb::ff', 4, False),
         ('aa:bb::ff', 6, True),
         ('1111:2222:3333:4444:5555:6666:7777:8888', 6, True),
-        ('4294967295', 4, True),
-        ('5000000000', 4, False)
     ])
     def test_validate_ip(self, ip, version, expected_result):
         """

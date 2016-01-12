@@ -22,7 +22,7 @@ from subprocess import CalledProcessError
 from calico_ctl.bgp import *
 from calico_ctl import container
 from calico_ctl import utils
-from pycalico.datastore_datatypes import Endpoint, IPPool
+from pycalico.datastore_datatypes import Endpoint
 from pycalico.ipam import AlreadyAssignedError
 
 
@@ -545,13 +545,13 @@ class TestContainer(unittest.TestCase):
                                                           interface)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.IPPool', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
+    @patch('calico_ctl.container.get_pool_by_cidr_or_exit', autospec=True)
     def test_container_ip_add_ipv4_pool(
-            self, m_netns, m_client, m_get_container_info_or_exit,
-            m_ippool, m_enforce_root):
+            self, m_get_pool_by_cidr_or_exit, m_netns, m_client,
+            m_get_container_info_or_exit, m_enforce_root):
         """
         Test for container_ip_add with an CIDR/pool ip argument
 
@@ -565,7 +565,7 @@ class TestContainer(unittest.TestCase):
 
         m_client.get_endpoint.return_value = m_endpoint
         m_client.auto_assign_ips.return_value = ([ip_addr], [])
-        m_ippool.return_value = pool_return
+        m_get_pool_by_cidr_or_exit.return_value = pool_return
         m_get_container_info_or_exit.return_value = {
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
@@ -584,7 +584,6 @@ class TestContainer(unittest.TestCase):
         # Assert
         self.assertFalse(m_client.assign_ip.called)
         m_enforce_root.assert_called_once_with()
-        m_ippool.assert_called_once_with(ip)
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
