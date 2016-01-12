@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import unittest
+
+from netaddr import IPNetwork, IPAddress
 from requests import Response
 import signal
 import os
@@ -21,6 +23,7 @@ import sys
 from docker.errors import APIError
 from docker import Client as DockerClient
 from mock import patch, Mock, call
+from nose.tools import *
 from nose_parameterized import parameterized
 from pycalico.datastore import (ETCD_AUTHORITY_DEFAULT, ETCD_SCHEME_DEFAULT,
                                 ETCD_KEY_FILE_ENV, ETCD_CERT_FILE_ENV,
@@ -31,6 +34,8 @@ from calico_ctl import node
 from calico_ctl.node import (ETCD_CA_CERT_NODE_FILE, ETCD_CERT_NODE_FILE,
                              ETCD_KEY_NODE_FILE, CALICO_NETWORKING_DEFAULT)
 import calico_ctl
+from pycalico.datastore_datatypes import IPPool
+
 
 class TestAttachAndStream(unittest.TestCase):
 
@@ -265,6 +270,8 @@ class TestNode(unittest.TestCase):
 
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
+    @patch('calico_ctl.node._remove_host_tunnel_addr', autospec=True)
+    @patch('calico_ctl.node._ensure_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
@@ -282,7 +289,9 @@ class TestNode(unittest.TestCase):
                         m_docker_client, m_client, m_install_plugin,
                         m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
                         m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
-                        m_check_system, m_os_makedirs, m_os_path_exists):
+                        m_check_system, m_ensure_host_tunnel_addr,
+                        m_remove_host_tunnel_addr, m_os_makedirs,
+                        m_os_path_exists):
         """
         Test that the node_Start function does not make Docker calls
         function returns
@@ -296,6 +305,10 @@ class TestNode(unittest.TestCase):
         container = {'Id': 666}
         m_docker_client.create_container.return_value = container
         m_check_system.return_value = [True, True, True]
+        ipv4_pools = [IPPool(IPNetwork("10.0.0.0/16")),
+                      IPPool(IPNetwork("10.1.0.0/16"), ipip=True)]
+        ipip_pools = [IPPool(IPNetwork("10.1.0.0/16"), ipip=True)]
+        m_client.get_ip_pools.return_value = ipv4_pools
 
         # Set up arguments
         node_image = 'node_image'
@@ -349,6 +362,9 @@ class TestNode(unittest.TestCase):
         m_client.create_host.assert_called_once_with(
             node.hostname, ip_2, ip6, as_num
         )
+        m_ensure_host_tunnel_addr.assert_called_once_with(ipv4_pools,
+                                                          ipip_pools)
+        assert_false(m_remove_host_tunnel_addr.called)
 
         url = node.KUBERNETES_BINARY_URL % kube_plugin_version
         m_install_plugin.assert_has_calls([call(node.KUBERNETES_PLUGIN_DIR, url),
@@ -377,6 +393,8 @@ class TestNode(unittest.TestCase):
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('os.getenv', autospec=True)
+    @patch('calico_ctl.node._remove_host_tunnel_addr', autospec=True)
+    @patch('calico_ctl.node._ensure_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
@@ -395,7 +413,9 @@ class TestNode(unittest.TestCase):
                                m_error_if_bgp_ip_conflict,
                                m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
                                m_get_host_ips, m_setup_ip, m_check_system,
-                               m_os_getenv, m_os_makedirs, m_os_path_exists):
+                               m_ensure_host_tunnel_addr,
+                               m_remove_host_tunnel_addr, m_os_getenv,
+                               m_os_makedirs, m_os_path_exists):
         """
         Test that the node_start function passes in correct values when
         secure etcd environment variables are present.
@@ -411,6 +431,7 @@ class TestNode(unittest.TestCase):
         m_docker.utils.create_host_config.return_value = 'host_config'
         m_os_path_exists.return_value = True
         m_check_system.return_value = [True, True, True]
+        m_client.get_ip_pools.return_value = []
 
         etcd_ca_path = "/path/to/ca.crt"
         etcd_cert_path = "/path/to/cert.crt"
@@ -499,6 +520,7 @@ class TestNode(unittest.TestCase):
         m_client.ensure_global_config.assert_called_once_with()
         m_client.create_host.assert_called_once_with(node.hostname, ip_2, ip6,
                                                      as_num)
+        assert_true(m_remove_host_tunnel_addr.called)
 
         url = node.KUBERNETES_BINARY_URL % kube_plugin_version
         m_install_plugin.assert_has_calls([
@@ -809,10 +831,12 @@ class TestNode(unittest.TestCase):
             # Call method under test expecting an exception
             self.assertRaises(APIError, node.node_stop, True)
 
+    @patch('calico_ctl.node._remove_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node.remove_veth', autospec=True)
     @patch('calico_ctl.node._container_running', autospec=True, return_value=False)
     @patch('calico_ctl.node.client', autospec=True)
-    def test_node_remove(self, m_client, m_cont_running, m_veth):
+    def test_node_remove(self, m_client, m_cont_running, m_veth,
+                         m_remove_tunnel_addr):
         """
         Test the client removes the host when node_remove called, and that
         endpoints are removed when remove_endpoints flag is set.
@@ -830,6 +854,7 @@ class TestNode(unittest.TestCase):
         m_client.remove_host.assert_called_once_with(node.hostname)
         m_veth.assert_has_calls([call("vethname1"), call("vethname2")])
         m_cont_running.assert_has_calls([call("calico-node"), call("calico-libnetwork")])
+        assert_equal(m_remove_tunnel_addr.mock_calls, [call()])
 
     @patch('calico_ctl.node.remove_veth', autospec=True)
     @patch('calico_ctl.node._container_running', autospec=True, return_value=True)
@@ -958,3 +983,91 @@ class TestNode(unittest.TestCase):
         m_client.get_hostnames_from_ips.return_value = {"abcd::beef":"host"}
         self.assertRaises(SystemExit, node.error_if_bgp_ip_conflict,
                           None, "abcd::beef")
+
+    @patch("calico_ctl.node._get_host_tunnel_ip", autospec=True)
+    @patch("calico_ctl.node._assign_host_tunnel_addr", autospec=True)
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.utils.get_hostname", autospec=True)
+    def test_ensure_host_tunnel_addr_no_ip(self, m_hostname, m_client,
+                                           m_assign_host_tunnel_addr,
+                                           m_get_tunnel_host_ip):
+        m_get_tunnel_host_ip.return_value = None
+        ipv4_pools = [IPPool("10.0.0.0/16"),
+                      IPPool("10.1.0.0/16", ipip=True)]
+        ipip_pools = [IPPool("10.1.0.0/16", ipip=True)]
+        calico_ctl.node._ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
+        assert_equal(m_assign_host_tunnel_addr.mock_calls, [call(ipip_pools)])
+
+    @patch("calico_ctl.node._get_host_tunnel_ip", autospec=True)
+    @patch("calico_ctl.node._assign_host_tunnel_addr", autospec=True)
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.utils.get_hostname", autospec=True)
+    def test_ensure_host_tunnel_addr_non_ipip(self, m_hostname, m_client,
+                                              m_assign_host_tunnel_addr,
+                                              m_get_tunnel_host_ip):
+        m_get_tunnel_host_ip.return_value = IPAddress("10.0.0.1")
+        ipv4_pools = [IPPool("10.0.0.0/16"),
+                      IPPool("10.1.0.0/16", ipip=True)]
+        ipip_pools = [IPPool("10.1.0.0/16", ipip=True)]
+        calico_ctl.node._ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
+        assert_equal(m_client.release_ips.mock_calls,
+                     [call({IPAddress("10.0.0.1")})])
+        assert_equal(m_assign_host_tunnel_addr.mock_calls, [call(ipip_pools)])
+
+    @patch("calico_ctl.node._get_host_tunnel_ip", autospec=True)
+    @patch("calico_ctl.node._assign_host_tunnel_addr", autospec=True)
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.utils.get_hostname", autospec=True)
+    def test_ensure_host_tunnel_addr_bad_ip(self, m_hostname, m_client,
+                                            m_assign_host_tunnel_addr,
+                                            m_get_tunnel_host_ip):
+        m_get_tunnel_host_ip.return_value = IPAddress("11.0.0.1")
+        ipv4_pools = [IPPool("10.0.0.0/16"),
+                      IPPool("10.1.0.0/16", ipip=True)]
+        ipip_pools = [IPPool("10.1.0.0/16", ipip=True)]
+        calico_ctl.node._ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
+        assert_equal(m_assign_host_tunnel_addr.mock_calls, [call(ipip_pools)])
+
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.node.hostname", autospec=True)
+    def test_assign_host_tunnel_addr(self, m_hostname, m_client):
+        # First pool full, IP allocated from second pool.
+        m_client.auto_assign_ips.side_effect = iter([
+            ([], []),
+            ([IPAddress("10.0.0.1")], [])
+        ])
+        ipip_pools = [IPPool("10.1.0.0/16", ipip=True),
+                      IPPool("10.0.0.0/16", ipip=True)]
+        calico_ctl.node._assign_host_tunnel_addr(ipip_pools)
+        assert_equal(
+            m_client.set_per_host_config.mock_calls,
+            [call(m_hostname, "IpInIpTunnelAddr", "10.0.0.1")]
+        )
+
+    @patch("sys.exit", autospec=True)
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.node.hostname", autospec=True)
+    def test_assign_host_tunnel_addr_none_available(self, m_hostname,
+                                                    m_client, m_exit):
+        # First pool full, IP allocated from second pool.
+        m_client.auto_assign_ips.side_effect = iter([
+            ([], []),
+            ([], [])
+        ])
+        ipip_pools = [IPPool("10.1.0.0/16", ipip=True),
+                      IPPool("10.0.0.0/16", ipip=True)]
+        m_exit.side_effect = Exception
+        assert_raises(Exception, calico_ctl.node._assign_host_tunnel_addr,
+                      ipip_pools)
+        assert_equal(m_exit.mock_calls, [call(1)])
+
+    @patch("calico_ctl.node._get_host_tunnel_ip", autospec=True)
+    @patch("calico_ctl.node.client", autospec=True)
+    @patch("calico_ctl.node.hostname", autospec=True)
+    def test_remove_host_tunnel_addr(self, m_hostname, m_client, m_get_ip):
+        ip_address = IPAddress("10.0.0.1")
+        m_get_ip.return_value = ip_address
+        calico_ctl.node._remove_host_tunnel_addr()
+        assert_equal(m_client.release_ips.mock_calls, [call({ip_address})])
+        assert_equal(m_client.remove_per_host_config.mock_calls,
+                     [call(m_hostname, "IpInIpTunnelAddr")])
