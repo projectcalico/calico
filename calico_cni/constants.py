@@ -48,6 +48,12 @@ K8S_POD_INFRA_CONTAINER_ID = "K8S_POD_INFRA_CONTAINER_ID"
 # configuration file.
 ETCD_AUTHORITY_KEY = "etcd_authority"
 LOG_LEVEL_KEY = "log_level"
+POLICY_KEY = "policy"
+
+# Constants for getting policy specific information 
+# from the policy dictionary in the network config file.
+API_ROOT_KEY = "k8s_api_root"
+AUTH_TOKEN_KEY = "k8s_auth_token"
 
 # Default ETCD_AUTHORITY.
 DEFAULT_ETCD_AUTHORITY="127.0.0.1:2379"
@@ -60,6 +66,8 @@ ERR_CODE_INVALID_ARGUMENT = 102
 ERR_CODE_DATASTORE = 200
 ERR_CODE_FAILED_ASSIGNMENT = 300
 
+# Policy modes.
+POLICY_MODE_ANNOTATIONS = "k8s-annotations"
 
 # Logging Configuration
 LOG_DIR = "/var/log/calico/cni"

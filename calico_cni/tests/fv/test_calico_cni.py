@@ -21,15 +21,15 @@ from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 
-import pycalico.netns
 from pycalico.datastore import DatastoreClient
-from pycalico.datastore_datatypes import IPPool, Endpoint
+from pycalico.datastore_datatypes import Endpoint, Rule, Rules
 from pycalico.datastore_errors import DataStoreError 
 
 from calico_cni import calico_cni, container_engines
 from calico_cni.calico_cni import CniPlugin
 from calico_cni.constants import *
-from calico_cni.policy_drivers import DefaultPolicyDriver, KubernetesDefaultPolicyDriver 
+from calico_cni.policy_drivers import (DefaultPolicyDriver, 
+        KubernetesDefaultPolicyDriver, KubernetesAnnotationDriver)
 from calico_cni.container_engines import DockerEngine
 
 
@@ -52,6 +52,7 @@ class CniPluginFvTest(unittest.TestCase):
         self.cni_args = ""
         self.cni_path = "/usr/bin/rkt/"
         self.cni_netns = "netns"
+        self.policy = {} 
 
         # Mock out the datastore client.
         self.client = MagicMock(spec=DatastoreClient)
@@ -85,8 +86,9 @@ class CniPluginFvTest(unittest.TestCase):
             "name": self.network_name, 
             "type": self.plugin_type,
             "ipam": {
-                "type": self.ipam_type,
-            }
+                "type": self.ipam_type
+            },
+            "policy": self.policy
         }
 
         self.env = {
@@ -134,6 +136,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Mock DatastoreClient such that no endpoints exist.
         self.client.get_endpoint.side_effect = KeyError
 
+        # Mock profile such that it doesn't exist.
+        self.client.profile_exists.return_value = False
+
         # Execute.
         rc = p.execute()
         
@@ -177,6 +182,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Mock DatastoreClient such that no endpoints exist.
         self.client.get_endpoint.side_effect = KeyError
 
+        # Mock profile such that it doesn't exist.
+        self.client.profile_exists.return_value = False
+
         # Execute.
         rc = p.execute()
         
@@ -193,6 +201,75 @@ class CniPluginFvTest(unittest.TestCase):
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
                 profile_names=[self.network_name],
+                endpoint_id=self.client.create_endpoint().endpoint_id
+        )
+
+    @patch("calico_cni.policy_drivers.requests", autospec=True)
+    def test_add_mainline_kubernetes_annotations(self, m_requests):
+        """
+        Tests add functionality using Kubernetes annotation policy driver. 
+        """
+        # Configure.
+        self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=defaultns"
+        self.command = CNI_CMD_ADD
+        ip4 = "10.0.0.1/32"
+        ip6 = "0:0:0:0:0:ffff:a00:1"
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
+                                  "ip6": {"ip": ip6}})
+        self.set_ipam_result(0, ipam_stdout, "")
+        self.policy = {"type": "k8s-annotations"}
+
+        # Set up docker client response.
+        inspect_result = {"HostConfig": {"NetworkMode": ""}}
+        self.m_docker_client().inspect_container.return_value = inspect_result
+
+        # Create plugin.
+        p = self.create_plugin()
+        assert_true(isinstance(p.container_engine, DockerEngine))
+
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
+        # Mock profile such that it doesn't exist.
+        self.client.profile_exists.return_value = False
+
+        # Mock the API response.
+        response = MagicMock()
+        response.status_code = 200
+        api_pod = {"kind": "pod", 
+                   "metadata": {
+                   "annotations": {"projectcalico.org/policy": "allow from label X=Y"},
+                   "labels": {"a":"b", "c":"d"}}}
+        response.text = json.dumps(api_pod)
+        m_requests.Session().__enter__().get.return_value = response
+
+        # Execute.
+        rc = p.execute()
+        
+        # Assert success.
+        assert_equal(rc, 0)
+
+        # Assert the correct policy driver was chosen.
+        assert_true(isinstance(p.policy_driver, KubernetesAnnotationDriver)) 
+
+        # Assert an endpoint was created.
+        self.client.create_endpoint.assert_called_once_with(ANY, 
+                "cni", self.container_id, [IPNetwork(ip4)])
+
+        # Assert profile was created.
+        self.client.create_profile.assert_called_once_with(
+                "defaultns_podname",
+                Rules(id="defaultns_podname",
+                    inbound_rules=[Rule(action="allow", src_tag="defaultns_X_Y")],
+                    outbound_rules=[Rule(action="allow")])
+        )
+
+        # Assert tags were added.
+        self.client.profile_update_tags.assert_called_once_with(self.client.get_profile())
+
+        # Assert a profile was applied.
+        self.client.append_profiles_to_endpoint.assert_called_once_with(
+                profile_names=["defaultns_podname"],
                 endpoint_id=self.client.create_endpoint().endpoint_id
         )
 
