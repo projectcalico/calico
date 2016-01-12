@@ -41,7 +41,7 @@ spec:
           name: "etcd-datadir"
 
     - name: kube-apiserver
-      image: gcr.io/google_containers/hyperkube:v1.1.2
+      image: gcr.io/google_containers/hyperkube:v1.1.3
       command: 
         - /hyperkube
         - apiserver
@@ -76,7 +76,7 @@ spec:
           name: "var-run-kubernetes"
 
     - name: kube-controller-manager
-      image: gcr.io/google_containers/hyperkube:v1.1.2
+      image: gcr.io/google_containers/hyperkube:v1.1.3
       command:
       - /hyperkube
       - controller-manager
@@ -99,7 +99,7 @@ spec:
         readOnly: true
 
     - name: kube-scheduler
-      image: gcr.io/google_containers/hyperkube:v1.1.2
+      image: gcr.io/google_containers/hyperkube:v1.1.3
       command:
       - /hyperkube
       - scheduler
@@ -113,7 +113,7 @@ spec:
         timeoutSeconds: 1
 
     - name: kube-proxy
-      image: gcr.io/google_containers/hyperkube:v1.1.2
+      image: gcr.io/google_containers/hyperkube:v1.1.3
       command:
       - /hyperkube
       - proxy

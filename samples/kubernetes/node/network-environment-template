@@ -7,9 +7,3 @@ KUBERNETES_MASTER=<KUBERNETES_MASTER>
 
 # IP and port of etcd instance used by Calico
 ETCD_AUTHORITY=<KUBERNETES_MASTER>:6666
-
-# URL to access the Kubernetes apiserver
-KUBE_API_ROOT=https://<KUBERNETES_MASTER>:443/api/v1/
-
-# Service account token used to access the Kubernetes API
-KUBE_AUTH_TOKEN="<AUTH_TOKEN>"
