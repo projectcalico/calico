@@ -1,8 +1,8 @@
-calico (1.3.0~pre.5) trusty; urgency=medium
+calico (1.3.0~pre.6) trusty; urgency=medium
 
   * Pre-release of 1.3.0.
 
- -- Matt Dupre <matt@projectcalico.org>  Fri, 11 Dec 2015 16:22:41 +0000
+ -- Matt Dupre <matt@projectcalico.org>  Tue, 12 Jan 2016 19:13:08 +0000
 
 calico (1.2.2-1) trusty; urgency=medium
 

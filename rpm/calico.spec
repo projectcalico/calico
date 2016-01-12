@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.3.0
-Release:        0.5.pre%{?dist}
+Release:        0.6.pre%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -145,7 +145,7 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Fri Dec 11 2015 Matt Dupre <matt@projectcalico.org> 1.3.0-0.5.pre
+* Tue Jan 12 2016 Matt Dupre <matt@projectcalico.org> 1.3.0-0.6.pre
   - Pre-release of 1.3.0.
 
 * Thu Dec 10 2015 Matt Dupre <matt@projectcalico.org> 1.2.2-1
