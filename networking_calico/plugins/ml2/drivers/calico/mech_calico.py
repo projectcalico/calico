@@ -35,6 +35,7 @@ import eventlet
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants
 from neutron.common.exceptions import PortNotFound
+from neutron.common.exceptions import SubnetNotFound
 from neutron.common import topics
 from neutron import context as ctx
 from neutron.db import models_v2
@@ -551,14 +552,48 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
 
+    @retry_on_cluster_id_change
+    @requires_state
     def create_subnet_postcommit(self, context):
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
 
+        # Re-read the subnet from the DB.  This ensures that a change to the
+        # same subnet can't be processed by another controller process while
+        # we're writing the effects of this call into etcd.
+        subnet = context.current
+        plugin_context = context._plugin_context
+        with self._txn_from_context(plugin_context, tag="create-subnet"):
+            subnet = self.db.get_subnet(plugin_context, subnet['id'])
+            if subnet['enable_dhcp']:
+                # Pass relevant subnet info to the transport layer.
+                self.transport.subnet_created(subnet)
+
+    @retry_on_cluster_id_change
+    @requires_state
     def update_subnet_postcommit(self, context):
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
 
+        # Re-read the subnet from the DB.  This ensures that a change to the
+        # same subnet can't be processed by another controller process while
+        # we're writing the effects of this call into etcd.
+        subnet = context.current
+        plugin_context = context._plugin_context
+        with self._txn_from_context(plugin_context, tag="update-subnet"):
+            subnet = self.db.get_subnet(plugin_context, subnet['id'])
+            if subnet['enable_dhcp']:
+                # Pass relevant subnet info to the transport layer.
+                self.transport.subnet_created(subnet)
+            else:
+                # Tell transport layer that subnet has been deleted.
+                self.transport.subnet_deleted(subnet['id'])
+
+    @retry_on_cluster_id_change
+    @requires_state
     def delete_subnet_postcommit(self, context):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
+
+        # Pass on to the transport layer.
+        self.transport.subnet_deleted(context.current['id'])
 
     # Idealised method forms.
     @retry_on_cluster_id_change
@@ -630,7 +665,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
         original = context.original
 
-        # Abort early if we're manging non-endpoint ports.
+        # Abort early if we're managing non-endpoint ports.
         if not self._port_is_endpoint_port(port):
             return
 
@@ -894,10 +929,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     admin_context = ctx.get_admin_context()
 
                     try:
-                        # First, resync endpoints.
+                        # First, resync subnets.
+                        self.resync_subnets(admin_context)
+
+                        # Next, resync endpoints.
                         self.resync_endpoints(admin_context)
 
-                        # Second, profiles.
+                        # Next, profiles.
                         self.resync_profiles(admin_context)
 
                         # Now, set the config flags.
@@ -920,6 +958,134 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             raise
         else:
             LOG.warning("Periodic resync thread exiting.")
+
+    def resync_subnets(self, context):
+        """Handles periodic resynchronization for subnets."""
+        LOG.info("Resyncing subnets")
+
+        # Work out all the subnets in etcd. Do this outside a database
+        # transaction to try to ensure that anything that gets created is in
+        # our Neutron snapshot.
+        etcd_subnets = list(self.transport.get_subnets())
+        etcd_ids = set(ep.id for ep in etcd_subnets)
+
+        # Then, grab all the DHCP-enabled subnets from Neutron.
+        with self._txn_from_context(context, "resync-subnets"):
+            neutron_ids = set([subnet['id']
+                               for subnet in self.db.get_subnets(context)
+                               if subnet['enable_dhcp']])
+
+        missing_ids = neutron_ids - etcd_ids
+        extra_ids = etcd_ids - neutron_ids
+        common_ids = etcd_ids & neutron_ids
+
+        if missing_ids or extra_ids:
+            LOG.warning("Missing subnets: %s", missing_ids)
+            LOG.warning("Extra subnets: %s", extra_ids)
+
+        # First, handle the extra subnets.
+        subnets_to_delete = [s for s in etcd_subnets if s.id in extra_ids]
+        self._resync_extra_subnets(subnets_to_delete)
+
+        # Next, the missing subnets.
+        self._resync_missing_subnets(context, missing_ids)
+
+        # Finally, scan each of the subnets in common_ids. Work out if there
+        # are any differences. If there are, write out to etcd.
+        common_subnets = (s for s in etcd_subnets if s.id in common_ids)
+        self._resync_changed_subnets(context, common_subnets)
+
+    def _resync_extra_subnets(self, subnets_to_delete):
+        """Atomically delete subnets that are in etcd, but shouldn't be.
+
+        :param subnets_to_delete: An iterable of Subnet objects to be
+            deleted.
+        :returns: Nothing.
+        """
+        for subnet in subnets_to_delete:
+            try:
+                self.transport.atomic_delete_subnet(subnet)
+            except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
+                # If the atomic CAD doesn't successfully delete, that's ok, it
+                # means the subnet was created or updated elsewhere.
+                LOG.info('Subnet %s was deleted elsewhere', subnet)
+                continue
+
+    def _resync_missing_subnets(self, context, missing_subnet_ids):
+        """Resync missing subnets.
+
+        For each missing subnet, do a quick subnet creation. This takes out a
+        DB transaction and regains all the subnets. Note that this transaction
+        is potentially held for quite a while.
+
+        :param context: A Neutron DB context.
+        :param missing_subnet_ids: A set of IDs for subnets missing from etcd.
+        :returns: Nothing.
+        """
+        with self._txn_from_context(context, tag="resync-subnet-missing"):
+            missing_subnets = self.db.get_subnets(
+                context, filters={'id': missing_subnet_ids}
+            )
+
+            for subnet in missing_subnets:
+                # Fill out other information we need on the subnet and write to
+                # etcd.
+                self.transport.subnet_created(subnet)
+
+    def _resync_changed_subnets(self, context, common_subnets):
+        """_resync_changed_subnets
+
+        Reconcile all changed subnets by checking whether Neutron and etcd
+        agree.
+
+        :param context: A Neutron DB context.
+        :param common_subnets: An iterable of Subnet objects that should
+            be checked for changes.
+        :returns: Nothing.
+        """
+        for subnet in common_subnets:
+            # Get the subnet data from etcd.
+            try:
+                etcd_subnet = self.transport.get_subnet_data(subnet)
+            except etcd.EtcdKeyNotFound:
+                # The subnet is gone. That's fine.
+                LOG.info("Failed to resync deleted subnet %s", subnet.id)
+                continue
+
+            with self._txn_from_context(context, tag="resync-subnets-changed"):
+                try:
+                    neutron_subnet = self.db.get_subnet(context, subnet.id)
+                except SubnetNotFound:
+                    # The subnet got deleted.
+                    LOG.info("Failed to resync deleted subnet %s", subnet.id)
+                    continue
+
+            # Get the data for both.
+            try:
+                etcd_data = json.loads(etcd_subnet.data)
+            except (ValueError, TypeError):
+                # If the JSON data is bad, we need to fix it up. Set a value
+                # that is impossible for Neutron to be returning: nothing at
+                # all.
+                LOG.warning("Bad JSON data for subnet %s", subnet.id)
+                etcd_data = None
+
+            neutron_data = t_etcd.subnet_etcd_data(neutron_subnet)
+
+            if etcd_data != neutron_data:
+                # Write to etcd.
+                LOG.warning("etcd copy of subnet %s inconsistent with " +
+                            "Neutron DB, resyncing", subnet.id)
+                try:
+                    self.transport.subnet_created(
+                        neutron_subnet,
+                        prev_index=subnet.modified_index
+                    )
+                except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
+                    # If someone wrote to etcd they probably have more recent
+                    # data than us, let it go.
+                    LOG.info("Atomic CAS failed, no action.")
+                    continue
 
     def resync_endpoints(self, context):
         """Handles periodic resynchronization for endpoints."""
@@ -1019,7 +1185,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         for endpoint in ports_to_delete:
             try:
                 self.transport.atomic_delete_endpoint(endpoint)
-            except (ValueError, etcd.EtcdKeyNotFound):
+            except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the endpoint was created or updated elsewhere.
                 LOG.info('Endpoint %s was deleted elsewhere', endpoint)

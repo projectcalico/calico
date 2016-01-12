@@ -4,7 +4,7 @@ Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
 Version:        1.0.1
-Release:        0.5.pre1%{?dist}
+Release:        0.6.pre1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
 Source0:        networking-calico-%{version}.tar.gz
@@ -34,6 +34,8 @@ Requires:       calico-common, calico-felix, networking-calico, openstack-neutro
 This package provides the pieces needed on a compute node.
 
 %files -n calico-compute
+%defattr(-,root,root,-)
+/usr/bin/calico-dhcp-agent
 
 %post -n calico-compute
 if [ $1 -eq 1 ] ; then
@@ -111,5 +113,18 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Jan 21 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.0.1-0.6.pre1
+  - devstack/bootstrap.sh: Don't set SERVICE_HOST
+  - Various leader election improvements
+  - Remove 'sqlalchemy' from requirements.txt
+  - Handle EtcdKeyNotFound in addition to EtcdCompareFailed
+  - Fix deadlock in status reporting
+  - Reduce election refresh interval, handle EtcdEventIndexCleared
+  - Add TLS support to the Neutron driver's etcd connection
+  - Skip all ports in DHCP agents on different hosts
+  - Decouple status reporting from etcd polling
+  - Use standard logging in test code, instead of print
+  - New DHCP agent driven by etcd data instead of by Neutron RPC
+
 * Thu Nov 19 2015 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.0.1-0.5.pre1
   - First release of RPM packaging for networking-calico.

@@ -21,6 +21,7 @@
 import collections
 import functools
 import json
+import netaddr
 import re
 import socket
 import weakref
@@ -103,6 +104,9 @@ Profile = collections.namedtuple(
         'tags_data',
         'rules_data',
     ]
+)
+Subnet = collections.namedtuple(
+    'Subnet', ['id', 'modified_index', 'data']
 )
 
 
@@ -244,6 +248,33 @@ class CalicoTransportEtcd(object):
         )
 
     @_handling_etcd_exceptions
+    def subnet_created(self, subnet, prev_index=None):
+        """Write data to etcd to describe a DHCP-enabled subnet."""
+        LOG.info("Write subnet %s %s to etcd", subnet['id'], subnet['cidr'])
+        data = subnet_etcd_data(subnet)
+
+        # python-etcd doesn't keyword argument properly.
+        kwargs = {}
+        if prev_index is not None:
+            kwargs['prevIndex'] = prev_index
+
+        self.client.write(datamodel_v1.key_for_subnet(subnet['id']),
+                          json.dumps(data),
+                          **kwargs)
+
+    @_handling_etcd_exceptions
+    def subnet_deleted(self, subnet_id):
+        """Delete data from etcd for a subnet that is no longer wanted."""
+        LOG.info("Deleting subnet %s", subnet_id)
+        # Delete the etcd key for this endpoint.
+        key = datamodel_v1.key_for_subnet(subnet_id)
+        try:
+            self.client.delete(key)
+        except etcd.EtcdKeyNotFound:
+            # Already gone, treat as success.
+            LOG.debug("Key %s, which we were deleting, disappeared", key)
+
+    @_handling_etcd_exceptions
     def endpoint_created(self, port):
         """Write appropriate data to etcd for an endpoint creation event."""
         # Write etcd data for the new endpoint.
@@ -316,6 +347,80 @@ class CalicoTransportEtcd(object):
             # TODO(nj) Set this flag only once we're really ready!
             LOG.info('%s -> true', datamodel_v1.READY_KEY)
             self.client.write(datamodel_v1.READY_KEY, 'true')
+
+    @_handling_etcd_exceptions
+    def get_subnet_data(self, subnet):
+        """Get data for an subnet out of etcd.
+
+        This should be used on subnets returned from functions like
+        ``get_subnets``.
+
+        :param subnet: A ``Subnet`` class.
+        :return: A ``Subnet`` class with ``data`` not None.
+        """
+        LOG.debug("Getting subnet %s", subnet.id)
+
+        result = self.client.read(datamodel_v1.key_for_subnet(subnet.id),
+                                  timeout=ETCD_TIMEOUT)
+        return Subnet(
+            id=subnet.id,
+            modified_index=result.modifiedIndex,
+            data=result.value,
+        )
+
+    @_handling_etcd_exceptions
+    def get_subnets(self):
+        """Get information about every subnet in etcd.
+
+        Returns a generator of ``Subnet`` objects.
+        """
+        LOG.info("Scanning etcd for all subnets")
+
+        try:
+            result = self.client.read(
+                datamodel_v1.SUBNET_DIR, recursive=True, timeout=ETCD_TIMEOUT
+            )
+        except etcd.EtcdKeyNotFound:
+            # No key yet, which is totally fine: just exit.
+            LOG.info("No subnet key present.")
+            return
+
+        nodes = result.children
+
+        for node in nodes:
+            subnet_id = node.key.split("/")[-1]
+            LOG.debug("Found subnet %s", subnet_id)
+            yield Subnet(
+                id=subnet_id,
+                modified_index=node.modifiedIndex,
+                data=None,
+            )
+
+    @_handling_etcd_exceptions
+    def atomic_delete_subnet(self, subnet):
+        """Atomically delete a given subnet.
+
+        This method tolerates attempting to delete keys that are already
+        missing, otherwise allows exceptions from etcd to bubble up.
+        """
+        LOG.info(
+            "Atomically deleting subnet id %s, modified %s",
+            subnet.id,
+            subnet.modified_index
+        )
+
+        try:
+            self.client.delete(
+                datamodel_v1.key_for_subnet(subnet.id),
+                prevIndex=subnet.modified_index,
+                timeout=ETCD_TIMEOUT,
+            )
+        except etcd.EtcdKeyNotFound:
+            # Trying to delete stuff that doesn't exist is ok, but log it.
+            LOG.info(
+                "Subnet %s was already deleted, nothing to do.",
+                subnet.id
+            )
 
     @_handling_etcd_exceptions
     def get_endpoint_data(self, endpoint):
@@ -885,6 +990,14 @@ def _neutron_rule_to_etcd_rule(rule):
     return etcd_rule
 
 
+def subnet_etcd_data(subnet):
+    data = {'cidr': str(netaddr.IPNetwork(subnet['cidr'])),
+            'gateway_ip': subnet['gateway_ip']}
+    if subnet['dns_nameservers']:
+        data['dns_servers'] = subnet['dns_nameservers']
+    return data
+
+
 def port_etcd_key(port):
     """Determine what the etcd key is for a port."""
     return datamodel_v1.key_for_endpoint(port['binding:host_id'],
@@ -907,22 +1020,37 @@ def port_etcd_data(port):
     # TODO(MD4) Check the old version writes 'profile_id' in a form
     # that translation code in common.validate_endpoint() will work.
 
-    # Collect IPv4 and IPv6 addresses.  On the way, also set the
+    # Collect IPv4 and IPv6 addresses and subnet IDs.  On the way, also set the
     # corresponding gateway fields.  If there is more than one IPv4 or IPv6
     # gateway, the last one (in port['fixed_ips']) wins.
     ipv4_nets = []
     ipv6_nets = []
+    ipv4_subnet_ids = []
+    ipv6_subnet_ids = []
     for ip in port['fixed_ips']:
         if ':' in ip['ip_address']:
             ipv6_nets.append(ip['ip_address'] + '/128')
+            ipv6_subnet_ids.append(ip['subnet_id'])
             if ip['gateway'] is not None:
                 data['ipv6_gateway'] = ip['gateway']
         else:
             ipv4_nets.append(ip['ip_address'] + '/32')
+            ipv4_subnet_ids.append(ip['subnet_id'])
             if ip['gateway'] is not None:
                 data['ipv4_gateway'] = ip['gateway']
     data['ipv4_nets'] = ipv4_nets
     data['ipv6_nets'] = ipv6_nets
+    data['ipv4_subnet_ids'] = ipv4_subnet_ids
+    data['ipv6_subnet_ids'] = ipv6_subnet_ids
+
+    # Propagate the port's FQDN.
+    dns_assignment = port.get('dns_assignment')
+    if dns_assignment:
+        # Note: the Neutron server generates a list of assignment entries, one
+        # for each fixed IP, but all with the same FQDN, for slightly
+        # historical reasons.  We're fine getting the FQDN from the first
+        # entry.
+        data['fqdn'] = dns_assignment[0]['fqdn']
 
     # Return that data.
     return data

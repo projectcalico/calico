@@ -14,7 +14,7 @@ fi
 
 if $CALICO_COMPUTE_ONLY; then
     # Explicitly enable the services that we need for compute only.
-    ENABLED_SERVICES=n-cpu,neutron,q-dhcp,n-api-meta,calico,calico-bird
+    ENABLED_SERVICES=n-cpu,neutron,calico-dhcp,n-api-meta,calico,calico-bird
 else
     # Disable services that Devstack starts by default, but that we
     # don't need for Calico networking demonstration: 'dstat' is a
@@ -27,10 +27,10 @@ else
 
     # Enable services that Devstack doesn't enable by default, but
     # that we _do_ want for Calico demonstration: 'q-svc' is the
-    # Neutron server; 'q-dhcp' means the Neutron DHCP agent; and
+    # Neutron server; 'calico-dhcp' means the Calico DHCP agent; and
     # 'n-api-meta' is the Nova metadata API service.
     enable_service q-svc
-    enable_service q-dhcp
+    enable_service calico-dhcp
     enable_service n-api-meta
 
     # When we later launch Felix (Calico's agent), we do that as a
