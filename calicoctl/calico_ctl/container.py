@@ -507,7 +507,7 @@ def get_ip_and_pool(ip):
         pool = get_pool_or_exit(ip)
     elif ip is not None and '/' in ip:
         cidr = IPNetwork(ip)
-        pool = get_pool_or_exit(IPAddress(cidr.first))
+        pool = get_pool_by_cidr_or_exit(cidr)
         if IPNetwork(ip).version == 4:
             result = assign_any(1, 0, pool=(pool, None))
             ip = result[0][0]
@@ -529,6 +529,15 @@ def get_ip_and_pool(ip):
             sys.exit(1)
 
     return (ip, pool)
+
+
+def get_pool_by_cidr_or_exit(cidr):
+    pools = client.get_ip_pools(cidr.version)
+    for pool in pools:
+        if pool.cidr == cidr:
+            return pool
+    print "%s is not found" % cidr
+    sys.exit(1)
 
 
 def get_pool_or_exit(ip):
