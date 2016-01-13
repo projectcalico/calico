@@ -51,7 +51,7 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'\*\*release\*\*'),
      '{version}'),
 
-    (re.compile('http://www\.projectcalico\.org/latest/calicoctl'),
+    (re.compile('http://www\.projectcalico\.org/builds/calicoctl'),
      'http://www.projectcalico.org/builds/calicoctl?circleci-branch={version}-candidate'),
 
     (re.compile(r'git\+https://github\.com/projectcalico/calico\.git'),
@@ -80,7 +80,7 @@ CANDIDATE_VERSION_REPLACE = [
 # The final version replace handles migrating the dynamic (temporary) URLs to
 # point to the Git archives.
 FINAL_VERSION_REPLACE = [
-    (re.compile('http://www\.projectcalico\.org/latest/calicoctl\?circleci\-branch=.*\-candidate'),
+    (re.compile('http://www\.projectcalico\.org/builds/calicoctl\?circleci\-branch=.*\-candidate'),
      'https://github.com/projectcalico/calico-docker/releases/download/{version}/calicoctl'),
 ]
 
