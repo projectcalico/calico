@@ -1,0 +1,126 @@
+#cloud-config
+---
+write_files:
+  # Network config file for the Calico CNI plugin.
+  - path: /etc/cni/net.d/10-calico.conf 
+    owner: root
+    permissions: 0755
+    content: |
+      {
+          "name": "calico-k8s-network",
+          "type": "calico",
+          "etcd_authority": "172.18.18.101:2379",
+          "log_level": "info",
+          "ipam": {
+              "type": "calico-ipam"
+          }
+      }
+
+  # Kubeconfig file. 
+  - path: /etc/kubernetes/worker-kubeconfig.yaml
+    owner: root
+    permissions: 0755
+    content: |
+      apiVersion: v1
+      kind: Config
+      clusters:
+      - name: local
+        cluster:
+          server: http://172.18.18.101:8080
+      users:
+      - name: kubelet
+      contexts:
+      - context:
+          cluster: local
+          user: kubelet
+        name: kubelet-context
+      current-context: kubelet-context
+
+coreos:
+  etcd2:
+    proxy: on 
+    listen-client-urls: http://localhost:2379
+    initial-cluster: etcdserver=http://172.18.18.101:2380
+  fleet:
+    metadata: "role=node"
+    etcd_servers: "http://localhost:2379"
+  update:
+    reboot-strategy: off
+  units:
+    - name: etcd2.service
+      command: start
+    - name: fleet.service
+      command: start
+    - name: calico-node.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        Description=calicoctl node
+        After=docker.service
+        Requires=docker.service
+        
+        [Service]
+        User=root
+        Environment=ETCD_AUTHORITY=172.18.18.101:2379
+        PermissionsStartOnly=true
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
+        ExecStart=/opt/bin/calicoctl node --detach=false
+        Restart=always
+        RestartSec=10
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: kubelet.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        Description=Kubernetes Kubelet
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
+        ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico 
+        ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico-ipam 
+        ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
+        ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico-ipam
+        ExecStart=/opt/bin/kubelet \
+        --address=0.0.0.0 \
+        --allow-privileged=true \
+        --cluster-dns=10.100.0.10 \
+        --cluster-domain=cluster.local \
+        --config=/etc/kubernetes/manifests \
+        --hostname-override=$private_ipv4 \
+        --api-servers=http://172.18.18.101:8080 \
+        --network-plugin-dir=/etc/cni/net.d \
+        --network-plugin=cni \
+        --logtostderr=true
+        Restart=always
+        RestartSec=10
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: kube-proxy.service
+      command: start
+      content: |
+        [Unit]
+        Description=Kubernetes Proxy
+        Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+        Requires=kubelet.service
+        After=kubelet.service
+        [Service]
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
+        ExecStart=/opt/bin/kube-proxy \
+        --master=http://172.18.18.101:8080 \
+        --proxy-mode=iptables \
+        --logtostderr=true
+        Restart=always
+        RestartSec=10
