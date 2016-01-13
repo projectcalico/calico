@@ -342,13 +342,8 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         # No IPIP pools, clean up any old address.
         _remove_host_tunnel_addr()
 
-    # Always try to convert the address(hostname) to an IP. This is a noop if
-    # the address is already an IP address.  Note that the format of the authority
-    # string has already been validated.
+    # The format of the authority string has already been validated.
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
-    etcd_authority_address, etcd_authority_port = etcd_authority.split(':')
-    etcd_authority = '%s:%s' % (socket.gethostbyname(etcd_authority_address),
-                                etcd_authority_port)
 
     # Get etcd SSL environment variables if they exist
     etcd_scheme = os.getenv(ETCD_SCHEME_ENV, ETCD_SCHEME_DEFAULT)
