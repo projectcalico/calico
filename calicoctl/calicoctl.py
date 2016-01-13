@@ -97,29 +97,32 @@ if __name__ == '__main__':
 
     # Dispatch the appropriate subcommand
     try:
-        command = command_args['<command>']
+        try:
+            command = command_args['<command>']
 
-        # Look for a python file in the calico_ctl module which
-        # shares the same name as the input command
-        command_module = getattr(calico_ctl, command)
+            # Look for a python file in the calico_ctl module which
+            # shares the same name as the input command
+            command_module = getattr(calico_ctl, command)
 
-        # The command module should have a function the same name as the
-        # command.  This protects against trying to run an invalid command that
-        # happens to have the same name as a non-command module.
-        if not hasattr(command_module, command):
+            # The command module should have a function the same name as the
+            # command.  This protects against trying to run an invalid command that
+            # happens to have the same name as a non-command module.
+            if not hasattr(command_module, command):
+                docopt(__doc__, options_first=True, argv=['--help'])
+                sys.exit(1)
+
+            # docopt the arguments through that module's docstring
+            arguments = docopt(command_module.__doc__, argv=argv)
+
+            # Call the dispatch function in that module which should also have
+            # the same name
+            cmd = getattr(command_module, command)
+        except AttributeError:
+            # Unrecognized submodule. Show main help message
             docopt(__doc__, options_first=True, argv=['--help'])
             sys.exit(1)
-
-        # docopt the arguments through that module's docstring
-        arguments = docopt(command_module.__doc__, argv=argv)
-
-        # Call the dispatch function in that module which should also have
-        # the same name
-        getattr(command_module, command)(arguments)
-    except AttributeError:
-        # Unrecognized submodule. Show main help message
-        docopt(__doc__, options_first=True, argv=['--help'])
-        sys.exit(1)
+        else:
+            cmd(arguments)
     except SystemExit:
         raise
     except DataStoreError as e:
