@@ -167,5 +167,12 @@ See the [IPv6 worked example](IPv6.md) for a worked example.
 For details about advanced policy options read the 
 [Advanced Network Policy tutorial](../../AdvancedNetworkPolicy.md).
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/without-docker-networking/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
 
+## Further reading
+
+For details on configuring Calico for different network topologies and to
+learn more about Calico under-the-covers please refer to the 
+[Further Reading](../../../README.md#further-reading) section on the main
+documentation README.
+
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/without-docker-networking/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
