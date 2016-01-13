@@ -8,20 +8,41 @@
 
 # BGP Configuration
 
-By default, when running Calico on Docker, a full BGP mesh is used to
-distribute routes between all of the Calico nodes.  This approach has scale
-limitations, and alternative topologies would be recommended for building a
-large scale network.
-
 This document describes the commands available in calicoctl for managing BGP.
+It covers configuration of:
 
-The calicoctl tool allows you to configure three types of BGP peer.  The first
-is the full node-to-node BGP mesh which is configured automatically and can be
-enabled and disabled globally.  The second are global peers, these are peers
-that are common to all Calico nodes.  The third are node specific peers, these
-are peers specific to a particular Calico node.  All three types of peer work
-in unison, so the automatic mesh, global and node-specific peers will all be
-established on a node when configured.
+-  Global default node AS Number
+-  The full node-to-node mesh
+-  Global BGP Peers
+-  Node-specific BGP Peers
+
+The global default node AS Number is the AS Number used by the BGP agent on a
+Calico node when it has not been explicitly specified.  Setting this value
+simplifies configuration when your network topology allows all of your Calico
+nodes to use the same AS Number.
+
+The full node-to-node mesh option provides a mechanism to automatically 
+configure peering between all Calico nodes.  When enabled, each Calico node
+automatically sets up a BGP peering with every other Calico node in the
+network.  By default this is enabled.  However, the full node-to-node mesh is
+only useful for small scale deployments and where all Calico nodes are on the
+same L2 network.  We generally expect the full node-to-node mesh to be disabled
+and explicit BGP peering configured.
+
+Explicit BGP peers may be configured globally or for a particular node.
+
+A global BGP peer is a BGP agent that peers with every Calico node in the 
+network.  A typical use case for a global peer might be a mid-scale
+deployment where all of the Calico nodes are on the same L2 network and are
+each peering with the same Route Reflector (or set of Route Reflectors).
+
+At scale, different network topologies come in to play.  For example, in the 
+[AS Per Rack model](http://docs.projectcalico.org/en/latest/l3-interconnectFabric.html#the-as-per-rack-model)
+discussed in the main Project Calico documentation, each Calico node peers with
+a Route Reflector in the Top of Rack (ToR) switch.  In this case the BGP
+peerings are configured on a per-node basis (i.e. these are node-specific
+peers).  In the AS Per Rack model, each Calico node in a rack will be
+configured with a node-specific peering to the ToR Route Reflector.
 
 
 ### Configuring the default node AS number

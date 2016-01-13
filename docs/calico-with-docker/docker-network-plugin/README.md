@@ -258,5 +258,12 @@ it is possible to apply advanced policy to the network.
 For more details, read  
 [Accessing Calico policy with Calico as a network plugin](AdvancedPolicy.md).
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/docker-network-plugin/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
 
+## Further reading
+
+For details on configuring Calico for different network topologies and to
+learn more about Calico under-the-covers please refer to the 
+[Further Reading](../../../README.md#further-reading) section on the main
+documentation README.
+
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/docker-network-plugin/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

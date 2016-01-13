@@ -15,6 +15,11 @@ main Calico processes such as Felix and the BIRD BGP routing daemon.  The
 calico/node container is required to be running on every compute host for 
 Calico networking.
 
+The `calicoctl node bgp` commands can be used to configure BGP peering for the
+node.  For an overview of BGP configuration, read the
+[BGP tutorial](../bgp.md), which covers in more detail all available BGP
+related commands, including use cases.
+
 Read the [calicoctl command line interface user reference](../calicoctl.md) 
 for a full list of calicoctl commands.
 
