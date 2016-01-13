@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Deploying a Dockerized Mesos Cluster with Calico.
@@ -162,7 +162,7 @@ Next, download the unit files
 
 `calicoctl` is a small CLI tool to control your Calico network.  It's used to start Calico services on your compute host, as well as inspect and modify Calico configuration.
 
-    curl -L -O https://github.com/projectcalico/calico-docker/releases/download/v0.8.0/calicoctl
+    curl -L -O https://github.com/projectcalico/calico-containers/releases/download/v0.8.0/calicoctl
     chmod +x calicoctl
     sudo cp calicoctl /usr/bin/
 
@@ -217,4 +217,4 @@ At time of writing Marathon still uses the old Mesos networking, rather than Cal
 [mesos]: https://mesos.apache.org/
 [net-modules]: https://github.com/mesosphere/net-modules
 [docker]: https://www.docker.com/
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/DockerizedDeployment.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/DockerizedDeployment.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -81,7 +81,7 @@ CANDIDATE_VERSION_REPLACE = [
 # point to the Git archives.
 FINAL_VERSION_REPLACE = [
     (re.compile('http://www\.projectcalico\.org/builds/calicoctl\?circleci\-branch=.*\-candidate'),
-     'https://github.com/projectcalico/calico-docker/releases/download/{version}/calicoctl'),
+     'https://github.com/projectcalico/calico-containers/releases/download/{version}/calicoctl'),
 ]
 
 
@@ -104,7 +104,7 @@ MASTER_VERSION_REPLACE = [
      '__kubernetes_plugin_version__ = "{kubernetes-version}"'),
 
     (re.compile(r'https://github\.com/projectcalico/calico\-docker/blob/.*/README\.md'),
-     'https://github.com/projectcalico/calico-docker/blob/{version}/README.md')
+     'https://github.com/projectcalico/calico-containers/blob/{version}/README.md')
 ]
 
 
@@ -147,7 +147,7 @@ def start_release():
 
 
     if not (calico_version and libcalico_version and libnetwork_version and kubernetes_version):
-        para("To pin the calico libraries used by calico-docker, please specify "
+        para("To pin the calico libraries used by calico-containers, please specify "
              "the name of the requested versions as they appear in the GitHub "
              "releases.")
 
@@ -209,7 +209,7 @@ def start_release():
     bullet("CoreOS default networking", level=1)
     para("Follow the URL below to view the correct demonstration instructions "
          "for this release candidate.")
-    bullet("https://github.com/projectcalico/calico-docker/tree/%s-candidate" % new_version)
+    bullet("https://github.com/projectcalico/calico-containers/tree/%s-candidate" % new_version)
     next("Once you have completed the testing, re-run the script.")
 
 

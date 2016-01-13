@@ -1,14 +1,14 @@
 <!--- master only -->
-> ![warning](images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Calico Repositories
 
-## The calico-docker repository
+## The calico-containers repository
 
 This respository contains the following:
 
@@ -26,7 +26,7 @@ This respository contains the following:
   Calico with Docker.  The [`calico_test` directory](../calico_test) contains 
   the Docker file and associated files for the `calico/test image`.  This 
   includes a set of utility Python files for running STs.  This image is used 
-  by the calico-docker STs and UTs.
+  by the calico-containers STs and UTs.
 - UTs testing calicoctl, STs testing single host and multihost systems
   using calicoctl and calico/node to create Calico networked containers.  These
   tests run within the `calico/test` Docker image.  See the [`tests` directory](../tests)
@@ -87,4 +87,4 @@ integrations.
    Docker image (available on DockerHub).  When Calico node is started with the
    `--libnetwork` flag, a separate container is launched running the driver.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/RepoStructure.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/RepoStructure.md?pixel)](https://github.com/igrigorik/ga-beacon)

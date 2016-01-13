@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Calico as a Docker network plugin.
@@ -266,4 +266,4 @@ learn more about Calico under-the-covers please refer to the
 [Further Reading](../../../README.md#further-reading) section on the main
 documentation README.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/docker-network-plugin/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/docker-network-plugin/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

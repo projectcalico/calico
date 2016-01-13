@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # External Connectivity - Hosts on their own Layer 2 segment
@@ -55,4 +55,4 @@ detailed datacenter networking recommendations are given in the main
 [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/ExternalConnectivity.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/ExternalConnectivity.md?pixel)](https://github.com/igrigorik/ga-beacon)

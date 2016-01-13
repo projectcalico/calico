@@ -55,7 +55,7 @@ Please raise any encountered issues, or message us on [calico-slack](https://cal
 7. Install the additional binaries for Dockerless-calico:
     ```
     # calicoctl
-    curl -L https://github.com/projectcalico/calico-docker/releases/download/v0.13.0/calicoctl -o /usr/local/bin/calicoctl
+    curl -L https://github.com/projectcalico/calico-containers/releases/download/v0.13.0/calicoctl -o /usr/local/bin/calicoctl
     chmod +x /usr/local/bin/calicoctl
     
     # bird
@@ -108,4 +108,4 @@ systemctl start calico-dockerless
 ```
 
 [libvirt-wiki]: http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/DockerlessCalicoManual.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/DockerlessCalicoManual.md?pixel)](https://github.com/igrigorik/ga-beacon)

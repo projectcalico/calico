@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Mesos Cluster and Master Preparation
@@ -128,4 +128,4 @@ sudo systemctl restart firewalld
 # Next Steps 
 With your Master configured, you're ready to [Install Calico](README.md#2-install-mesos-slave-netmodules-and-calico).
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/MesosClusterPreparation.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/MesosClusterPreparation.md?pixel)](https://github.com/igrigorik/ga-beacon)
