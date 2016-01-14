@@ -4,40 +4,40 @@ envExport:
       charm: "cs:trusty/cinder-32"
       num_units: 1
       annotations:
-        "gui-x": "1045.973572253264"
-        "gui-y": "544.8983810601128"
+        "gui-x": "0"
+        "gui-y": "500"
     "neutron-calico":
       charm: "cs:~project-calico/trusty/neutron-calico-8"
       num_units: 0
       annotations:
-        "gui-x": "832.4871538385408"
-        "gui-y": "175.1290576399046"
+        "gui-x": "500"
+        "gui-y": "500"
     mysql:
       charm: "cs:trusty/mysql-31"
       num_units: 1
       annotations:
-        "gui-x": "946.0883464963425"
-        "gui-y": "371.8920951236375"
+        "gui-x": "250"
+        "gui-y": "0"
     "rabbitmq-server":
       charm: "cs:trusty/rabbitmq-server-42"
       num_units: 1
       annotations:
-        "gui-x": "746.3178949824998"
-        "gui-y": "371.8920951236375"
+        "gui-x": "250"
+        "gui-y": "500"
     keystone:
       charm: "cs:trusty/keystone-31"
       num_units: 1
       annotations:
-        "gui-x": "646.4326692255784"
-        "gui-y": "544.8983810601128"
+        "gui-x": "500"
+        "gui-y": "250"
       options:
         "admin-password": "openstack"
     glance:
       charm: "cs:trusty/glance-28"
       num_units: 1
       annotations:
-        "gui-x": "746.3178949824998"
-        "gui-y": "717.904666996588"
+        "gui-x": "0"
+        "gui-y": "0"
       to:
         - "rabbitmq-server=0"
     "openstack-dashboard":
@@ -46,22 +46,22 @@ envExport:
       options:
         "ubuntu-theme": "no"
       annotations:
-        "gui-x": "846.2031207394211"
-        "gui-y": "544.8983810601128"
+        "gui-x": "750"
+        "gui-y": "0"
       to:
         - "rabbitmq-server=0"
     etcd:
       charm: "cs:trusty/etcd-3"
       num_units: 1
       annotations:
-        "gui-x": "1120.2440237671067"
-        "gui-y": "544.8983810601128"
+        "gui-x": "750"
+        "gui-y": "250"
     bird:
       charm: "cs:~project-calico/trusty/bird-2"
       num_units: 1
       annotations:
-        "gui-x": "1145.8587980101852"
-        "gui-y": "371.89209512363743"
+        "gui-x": "750"
+        "gui-y": "500"
       to:
         - "rabbitmq-server=0"
     "nova-cloud-controller":
@@ -70,8 +70,8 @@ envExport:
       options:
         "network-manager": Neutron
       annotations:
-        "gui-x": "1045.973572253264"
-        "gui-y": "198.88580918716224"
+        "gui-x": "250"
+        "gui-y": "250"
     "neutron-api":
       charm: "cs:~landscape/trusty/neutron-api-21"
       num_units: 1
@@ -79,14 +79,14 @@ envExport:
         "neutron-plugin": Calico
         "neutron-security-groups": true
       annotations:
-        "gui-x": "946.0883464963425"
-        "gui-y": "717.904666996588"
+        "gui-x": "500"
+        "gui-y": "0"
     "nova-compute":
       branch: "lp:~gnuoy/charms/trusty/nova-compute/1515570"
       num_units: 2
       annotations:
-        "gui-x": "605.289700869386"
-        "gui-y": "209.8677680711291"
+        "gui-x": "0"
+        "gui-y": "250"
   relations:
     - - "nova-cloud-controller:image-service"
       - "glance:image-service"
