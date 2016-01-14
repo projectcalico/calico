@@ -248,7 +248,9 @@ class TestNode(unittest.TestCase):
                                                check_docker=False)
         m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*",
-                                                        "virbr.*", "lxcbr.*"])
+                                                        "virbr.*", "lxcbr.*",
+                                                        "veth.*", "cali.*",
+                                                        "tunl.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
         m_error_if_bgp_ip_conflict.assert_called_once_with(ip_2, ip6)
@@ -353,7 +355,9 @@ class TestNode(unittest.TestCase):
                                                check_docker=True)
         m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*",
-                                                        "virbr.*", "lxcbr.*"])
+                                                        "virbr.*", "lxcbr.*",
+                                                        "veth.*", "cali.*",
+                                                        "tunl.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
         m_error_if_bgp_ip_conflict.assert_called_once_with(ip_2, ip6)
@@ -512,7 +516,9 @@ class TestNode(unittest.TestCase):
                                                check_docker=True)
         m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*",
-                                                        "virbr.*", "lxcbr.*"])
+                                                        "virbr.*", "lxcbr.*",
+                                                        "veth.*", "cali.*",
+                                                        "tunl.*"])
         m_warn_if_unknown_ip.assert_called_once_with(ip_2, ip6)
         m_warn_if_hostname_conflict.assert_called_once_with(ip_2)
         m_error_if_bgp_ip_conflict.assert_called_once_with(ip_2, ip6)
