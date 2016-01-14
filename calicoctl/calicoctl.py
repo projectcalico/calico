@@ -60,7 +60,7 @@ from calico_ctl.utils import print_paragraph
 
 # TODO: Implement secure platform support for urllib3. Temporarily ignore
 # insecure platform warnings when running calicoctl commands with secure etcd.
-# See https://github.com/projectcalico/calico-docker/issues/682
+# See https://github.com/projectcalico/calico-containers/issues/682
 import logging
 logging.captureWarnings(True)
 

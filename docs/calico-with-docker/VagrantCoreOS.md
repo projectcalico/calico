@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Running the Calico tutorials on CoreOS using Vagrant and VirtualBox
@@ -22,11 +22,11 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 <!--- master only -->
 ### 1.2 Clone this project
 
-    git clone https://github.com/projectcalico/calico-docker.git
+    git clone https://github.com/projectcalico/calico-containers.git
 <!--- else
 ### 1.2 Clone this project, and checkout the **release** release
 
-    git clone https://github.com/projectcalico/calico-docker.git
+    git clone https://github.com/projectcalico/calico-containers.git
     git checkout tags/**release**
 <!--- end of master only -->
     
@@ -38,11 +38,11 @@ by changing into the appropriate directory.
 
 For Calico as a Docker network plugin
   
-    cd calico-docker/docs/calico-with-docker/docker-network-plugin/vagrant-coreos
+    cd calico-containers/docs/calico-with-docker/docker-network-plugin/vagrant-coreos
 
 For Calico without Docker networking
   
-    cd calico-docker/docs/calico-with-docker/without-docker-networking/vagrant-coreos
+    cd calico-containers/docs/calico-with-docker/without-docker-networking/vagrant-coreos
        
 Run
 
@@ -93,9 +93,9 @@ the networking option that you chose in step (3).
 - [Calico without Docker networking walkthrough](without-docker-networking/README.md)  
 
 
-[calico-networking]: https://github.com/projectcalico/calico-docker
+[calico-networking]: https://github.com/projectcalico/calico-containers
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [using-coreos]: http://coreos.com/docs/using-coreos/
 [git]: http://git-scm.com/
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/calico-with-docker/VagrantCoreOS.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/VagrantCoreOS.md?pixel)](https://github.com/igrigorik/ga-beacon)

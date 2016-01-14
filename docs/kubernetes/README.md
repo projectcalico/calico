@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Kubernetes with Calico networking
@@ -19,4 +19,4 @@ To build a new Kubernetes cluster with Calico networking, try one of the followi
 - [AWS Cluster Integration](AWSIntegration.md)
 - [DigitalOcean + Fedora](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/fedora/fedora-calico.md)
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Manually Install Calico and Mesos on Agent
@@ -101,7 +101,7 @@ The last Calico component required for Calico networking in Mesos is `calico-nod
 
 ```
 sudo yum install -y wget
-wget https://github.com/projectcalico/calico-docker/releases/download/v0.9.0/calicoctl
+wget https://github.com/projectcalico/calico-containers/releases/download/v0.9.0/calicoctl
 chmod +x calicoctl
 sudo ETCD_AUTHORITY=<IP of host with etcd>:4001 ./calicoctl node
 ```
@@ -186,4 +186,4 @@ We provide the `ETCD_AUTHORITY` environment variable here to allow the  `calico_
 ## 9. Launch Tasks
 With your cluster up and running, you can now [Launch Tasks with Calico Networking using Marathon](README.md#3-launching-tasks).
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/mesos/ManualInstallCalicoMesos.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/ManualInstallCalicoMesos.md?pixel)](https://github.com/igrigorik/ga-beacon)

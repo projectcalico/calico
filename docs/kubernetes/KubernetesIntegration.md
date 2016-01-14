@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Add Calico to an Existing Kubernetes Cluster 
@@ -25,7 +25,7 @@ There are two components of a Calico / Kubernetes integration.
 The `calico/node` docker container must be run on the Kubernetes master and each Kubernetes node in your cluster, as it contains the BGP agent necessary for Calico routing to occur.
 The `calico-kubernetes` plugin integrates directly with the Kubernetes `kubelet` process on each node to discover which pods have been created, and adds them to Calico networking.
 
-We recommend using the latest version of [calicoctl](https://github.com/projectcalico/calico-docker/releases/latest) to install both `calico/node` and `calico-kubernetes` on each of your nodes.
+We recommend using the latest version of [calicoctl](https://github.com/projectcalico/calico-containers/releases/latest) to install both `calico/node` and `calico-kubernetes` on each of your nodes.
 
 ## Installing Calico Componenets
 #### 1. Install Calico
@@ -75,4 +75,4 @@ In order to use Calico policy with Kubernetes, the `kube-proxy` component must b
 There are two ways to enable this behavior.
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
 - Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)

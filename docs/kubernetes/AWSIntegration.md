@@ -1,9 +1,9 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
-> View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.14.0/README.md).
+> View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
-> You are viewing the calico-docker documentation for release **release**.
+> You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
 # Integration with an AWS Kubernetes cluster
@@ -103,7 +103,7 @@ sudo systemctl restart kubelet
 
 ### Node connectivity workaround
 
-As a temporary workaround to issue [projectcalico/calico-docker#426](https://github.com/projectcalico/calico-docker/issues/426), the following manual steps must be run on each node:
+As a temporary workaround to issue [projectcalico/calico-containers#426](https://github.com/projectcalico/calico-containers/issues/426), the following manual steps must be run on each node:
 
 ```
 mkdir -p /etc/iproute2
@@ -140,4 +140,4 @@ Create the pod with `kubectl create -f busybox.yaml`
 And check its Calico endpoint with `ETCD_AUTHORITY=<MASTER_IPV4>:6666 calicoctl endpoint show --detailed`.  You should see that both an IP address and a profile have been assigned to the pod.
 
 For more information on programming Calico Policy in Kubernetes, see our [Kubernetes Policy docs](KubernetesPolicy.md).
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/AWSIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/AWSIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
