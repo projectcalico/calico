@@ -20,23 +20,12 @@ from nose_parameterized import parameterized
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Endpoint, Rule, Rules
 
+from calico_cni.constants import ERR_CODE_GENERIC
 from calico_cni.policy_drivers import (ApplyProfileError, 
-                        BasePolicyDriver,
+                        get_policy_driver,
                         DefaultPolicyDriver,
                         KubernetesDefaultPolicyDriver,
                         KubernetesAnnotationDriver)
-
-class BasePolicyDriverTest(unittest.TestCase):
-    def setUp(self):
-        self.driver = BasePolicyDriver() 
-
-        # Mock the DatastoreClient
-        self.client = MagicMock(spec=DatastoreClient)
-        self.driver._client = self.client
-
-    def test_not_implenented(self):
-        assert_raises(NotImplementedError, self.driver.generate_rules)
-        assert_raises(NotImplementedError, self.driver.remove_profile)
 
 
 class DefaultPolicyDriverTest(unittest.TestCase):
@@ -138,10 +127,13 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         self.pod_name = "podname"
         self.namespace = "namespace"
         self.profile_name = "namespace_podname"
+        self.auth_token = "authtoken12345"
+        self.api_root = "https://10.100.0.1:443/api/v1/"
         self.network_config = {
                 "policy": {}
         }
-        self.driver = KubernetesAnnotationDriver(self.pod_name, self.namespace, self.network_config)
+        self.driver = KubernetesAnnotationDriver(self.pod_name, self.namespace,
+                self.auth_token, self.api_root)
         assert_equal(self.driver.profile_name, self.profile_name)
 
         # Mock the DatastoreClient
@@ -349,3 +341,35 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
 
         # Should be None
         assert_equal(annotations, None)
+
+class GetPolicyDriverTest(unittest.TestCase): 
+
+    def test_get_policy_driver_default_k8s(self):
+        k8s_pod_name = "podname"
+        k8s_namespace = "namespace"
+        config = {"name": "testnetwork"}
+        driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        assert_true(isinstance(driver, KubernetesDefaultPolicyDriver))
+
+    def test_get_policy_driver_k8s_annotations(self):
+        k8s_pod_name = "podname"
+        k8s_namespace = "namespace"
+        config = {"name": "testnetwork"}
+        config["policy"] = {"type": "k8s-annotations"}
+        driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        assert_true(isinstance(driver, KubernetesAnnotationDriver))
+
+    @patch("calico_cni.policy_drivers.DefaultPolicyDriver", autospec=True)
+    def test_get_policy_driver_value_error(self, m_driver):
+        # Mock
+        m_driver.side_effect = ValueError
+        k8s_pod_name = None
+        k8s_namespace = None 
+        config = {"name": "testnetwork"}
+
+        # Call
+        with assert_raises(SystemExit) as err:
+            get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
