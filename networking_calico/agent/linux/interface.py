@@ -1,4 +1,4 @@
-# Copyright 2015 Metaswitch Networks
+# Copyright 2015-2016 Metaswitch Networks
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -85,7 +85,7 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
             net = netaddr.IPNetwork(ip_cidr)
             LOG.debug("=> real cidr %s" % net.cidr)
             try:
-                device.route.delete_onlink_route(net.cidr)
+                device.route.delete_onlink_route(str(net.cidr))
             except RuntimeError:
                 LOG.debug("Subnet route %s did not exist" % net.cidr)
 
