@@ -69,9 +69,10 @@ integrations.
    orchestrator.  This plugin may be installed manually (from a binary attached
    to a relase), or as an RPM which can be created.
 
- - [calico-cni](https://github.com/projectcalico/calico-cni): Implements the
-   Calico plugin for running Calico with [rkt](https://github.com/coreos/rkt)
-   or the [kubernetes](https://github.com/kubernetes/kubernetes) orchestrator.
+ - [calico-cni](https://github.com/projectcalico/calico-cni): Implements the 
+   Calico plugin for running Calico with any orchestrator that uses the 
+   [Container Network Interface](https://github.com/appc/cni), including [rkt](https://github.com/coreos/rkt)
+   and [Kubernetes](https://github.com/kubernetes/kubernetes)
 
  - [libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin): 
    Implements Calico plugin support for the (libnetwork based) Docker 

@@ -33,7 +33,7 @@ These instructions allow you to set up a Kubernetes v1.1.3 cluster with [Calico 
 
 Change into the appropriate directory for this guide:
   
-    cd calico-containers/docs/kubernetes/vagrant-coreos
+    cd calico-containers/docs/cni/kubernetes/vagrant-coreos
        
 Run
 
