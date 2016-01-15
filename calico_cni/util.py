@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import errno
 import os
 import json
 import sys
 import logging
 from cloghandler import ConcurrentRotatingFileHandler
 from constants import * 
-from subprocess32 import check_output
 
-from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
+from pycalico.datastore_errors import DataStoreError
 
 _log = logging.getLogger("calico_cni")
 
@@ -42,21 +42,21 @@ def configure_logging(logger, log_filename, log_level=logging.INFO,
     identity = get_identifier()
     identity_filter = IdentityFilter(identity=identity)
 
-    # Create a log handler and formtter and apply to _log.
-    hdlr = ConcurrentRotatingFileHandler(filename=log_path,
-                                         maxBytes=1000000,
-                                         backupCount=5)
-    hdlr.addFilter(identity_filter)
+    # Create a log handler and formatter and apply to _log.
+    handler = ConcurrentRotatingFileHandler(filename=log_path,
+                                            maxBytes=1000000,
+                                            backupCount=5)
+    handler.addFilter(identity_filter)
     formatter = logging.Formatter(LOG_FORMAT)
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
     logger.setLevel(log_level)
 
     # Attach a stderr handler to the log.
-    stderr_hdlr = logging.StreamHandler(sys.stderr)
-    stderr_hdlr.setLevel(stderr_level)
-    stderr_hdlr.setFormatter(formatter)
-    logger.addHandler(stderr_hdlr)
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(stderr_level)
+    stderr_handler.setFormatter(formatter)
+    logger.addHandler(stderr_handler)
 
 
 def parse_cni_args(cni_args):
@@ -72,7 +72,7 @@ def parse_cni_args(cni_args):
     args_to_return = {}
 
     _log.debug("Parsing CNI_ARGS: %s", cni_args)
-    for k,v in CNI_ARGS_RE.findall(cni_args):
+    for k, v in CNI_ARGS_RE.findall(cni_args):
         _log.debug("\tCNI_ARG: %s=%s", k, v)
         args_to_return[k.strip()] = v.strip()
     _log.debug("Parsed CNI_ARGS: %s", args_to_return)
@@ -106,9 +106,10 @@ def handle_datastore_error(func):
             return func(*args, **kwargs)
         except DataStoreError, e:
             # Hit a datastore error - log and exit.
-            print_cni_error(ERR_CODE_DATASTORE, 
-                    "Error accessing datastore", e.message)
-            sys.exit(ERR_CODE_DATASTORE)
+            print_cni_error(ERR_CODE_GENERIC, 
+                            "Error accessing datastore", 
+                            e.message)
+            sys.exit(ERR_CODE_GENERIC)
     return wrapped
 
 
@@ -134,8 +135,19 @@ class IdentityFilter(logging.Filter):
     Filter class to impart contextual identity information onto loggers.
     """
     def __init__(self, identity):
+        logging.Filter.__init__(self)
         self.identity = identity
 
     def filter(self, record):
         record.identity = self.identity
         return True
+
+
+class CniError(Exception):
+    def __init__(self, code, msg, details=""):
+        self.code = code
+        self.msg = msg
+        self.details = details 
+
+    def __str__(self):
+        return "(%s) %s" % (self.code, self.msg)

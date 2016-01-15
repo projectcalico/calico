@@ -16,14 +16,13 @@ import re
 import socket
 
 
-# Calico Configuration Constants
-ETCD_AUTHORITY_ENV = "ETCD_AUTHORITY"
-
 # System Specific Constants
 ORCHESTRATOR_ID = "cni"
 HOSTNAME = socket.gethostname()
 
-# Regex to parse CNI_ARGS.
+# Regex to parse CNI_ARGS.  Looks for key value pairs separated by an equals
+# sign and followed either the end of the string, or a colon (indicating 
+# that there is another CNI_ARG key/value pair.
 CNI_ARGS_RE = re.compile("([a-zA-Z0-9/\.\-\_ ]+)=([a-zA-Z0-9/\.\-\_ ]+)(?:;|$)")
 
 # Constants for accessing environment variables. The following
@@ -55,16 +54,8 @@ POLICY_KEY = "policy"
 API_ROOT_KEY = "k8s_api_root"
 AUTH_TOKEN_KEY = "k8s_auth_token"
 
-# Default ETCD_AUTHORITY.
-DEFAULT_ETCD_AUTHORITY="127.0.0.1:2379"
-
 # CNI Error Codes for Calico
-ERR_CODE_UNSUPP_CNI_VERSION = 1
-ERR_CODE_GENERIC = 100
-ERR_CODE_UNHANDLED = 101
-ERR_CODE_INVALID_ARGUMENT = 102
-ERR_CODE_DATASTORE = 200
-ERR_CODE_FAILED_ASSIGNMENT = 300
+ERR_CODE_GENERIC = 100   # Use this for all errors.
 
 # Policy modes.
 POLICY_MODE_ANNOTATIONS = "k8s-annotations"

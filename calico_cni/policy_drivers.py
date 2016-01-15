@@ -14,10 +14,11 @@
 
 import os
 import re
+import sys
 import json
 import logging
 import requests
-from util import configure_logging
+from util import configure_logging, print_cni_error
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.datastore_errors import MultipleEndpointsMatch
@@ -30,26 +31,28 @@ from policy_parser import PolicyParser
 _log = logging.getLogger("calico_cni")
 
 
-class BasePolicyDriver(object):
+class DefaultPolicyDriver(object):
     """
-    Abstract base class of a CNI Policy Driver.
-
-    The CNI Policy Driver is responsible for applying network policy to
-    networked containers and creating/applying Calico profiles to Calico
-    endpoints.
+    Implements default network policy for a generic CNI plugin.
     """
-    def __init__(self):
+    def __init__(self, network_name):
 
         self._client = DatastoreClient()
         """
         DatastoreClient for access to the Calico datastore.
         """
 
-        self.profile_name = None
+        self.profile_name = network_name
         """
-        Name of profile for attach to endpoint. Must be set in init function
-        of subclass.
+        Name of profile for attach to endpoint.
         """
+
+        # Validate the given network name to make sure it is compatible with
+        # Calico policy.
+        if not validate_characters(network_name):
+            raise ValueError("Invalid characters detected in the given network "
+                             "name, %s. Only letters a-z, numbers 0-9, and "
+                             "symbols _.- are supported.", network_name)
 
     def apply_profile(self, endpoint):
         """Sets a profile for the networked container on the given endpoint.
@@ -94,43 +97,6 @@ class BasePolicyDriver(object):
             raise ApplyProfileError(e.message)
 
     def remove_profile(self):
-        """Remove the profile if there are no endpoints attached.
-
-        :return: None
-        """
-        raise NotImplementedError("Must implement method in subclass")
-
-    def generate_rules(self):
-        """Generates Calico Rules
-
-        :rtype: Calico Rules datatype or None
-        :return: rules - contains inbound and outbound policy rules; None
-        uses default rules
-        """
-        raise NotImplementedError("Must implement method in subclass")
-
-    def generate_tags(self):
-        """Generates Calico Tags for a profile.
-
-        :rtype List
-        :return: List of tags to apply to this profile.
-        """
-        return []
-
-
-class DefaultPolicyDriver(BasePolicyDriver):
-    """
-    Implements default network policy for a generic CNI plugin.
-    """
-    def __init__(self, network_name):
-        BasePolicyDriver.__init__(self)
-        if not validate_characters(network_name):
-            raise ValueError("Invalid characters detected in the given network "
-                             "name, %s. Only letters a-z, numbers 0-9, and "
-                             "symbols _.- are supported.", network_name)
-        self.profile_name = network_name
-
-    def remove_profile(self):
         """Right now this function is a no-op.
 
         Need to think more about how to handle the race condition that exists
@@ -152,6 +118,14 @@ class DefaultPolicyDriver(BasePolicyDriver):
         :return: None - use default rules
         """
         return None
+
+    def generate_tags(self):
+        """Generates Calico Tags for a profile.
+
+        :rtype List
+        :return: List of tags to apply to this profile.
+        """
+        return []
 
 
 class KubernetesDefaultPolicyDriver(DefaultPolicyDriver):
@@ -176,20 +150,18 @@ class KubernetesDefaultPolicyDriver(DefaultPolicyDriver):
                       outbound_rules=[allow])
         return rules
 
+
 class KubernetesAnnotationDriver(DefaultPolicyDriver):
     """
     Implements network policy for Kubernetes using annotations.
     """
-    def __init__(self, pod_name, namespace, network_config):
+    def __init__(self, pod_name, namespace, auth_token, api_root): 
         self.pod_name = pod_name
         self.namespace = namespace 
-        self.network_config = network_config
-        self.policy_config = network_config[POLICY_KEY]
         self.policy_parser = PolicyParser(namespace) 
-        self.auth_token = self.policy_config.get(AUTH_TOKEN_KEY)
+        self.auth_token = auth_token 
+        self.api_root = api_root 
         self.profile_name = "%s_%s" % (namespace, pod_name)
-        self.api_root = self.policy_config.get(API_ROOT_KEY, 
-                                               "https://10.100.0.1:443/api/v1")
         self._annotation_key = "projectcalico.org/policy"
         self.ns_tag = self._escape_chars("namespace=%s" % self.namespace)
         self.pod = None
@@ -342,3 +314,50 @@ class ApplyProfileError(Exception):
     def __init__(self, msg=None, details=None):
         Exception.__init__(self, msg)
         self.details = details
+
+
+def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
+    """Returns a policy driver based on CNI configuration arguments.
+
+    :return: a policy driver 
+    """
+    # Extract policy config and network name.
+    policy_config = net_config.get(POLICY_KEY, {})
+    network_name = net_config["name"]
+    policy_type = policy_config.get("type")
+
+    # Determine which policy driver to use.
+    if k8s_pod_name:
+        # Runing under Kubernetes - decide which Kubernetes driver to use.
+        if policy_type == POLICY_MODE_ANNOTATIONS: 
+            _log.debug("Using Kubernetes Annotation Policy Driver")
+            assert k8s_namespace, "Missing Kubernetes namespace"
+            k8s_auth_token = policy_config.get(AUTH_TOKEN_KEY)
+            k8s_api_root = policy_config.get(API_ROOT_KEY, 
+                                             "https://10.100.0.1:443/api/v1/")
+            driver_cls = KubernetesAnnotationDriver
+            driver_args = [k8s_pod_name, 
+                           k8s_namespace, 
+                           k8s_auth_token,
+                           k8s_api_root]
+        else:
+            _log.debug("Using Default Kubernetes Policy Driver")
+            driver_cls = KubernetesDefaultPolicyDriver
+            driver_args = [network_name]
+    else:
+        _log.debug("Using default policy driver")
+        driver_cls = DefaultPolicyDriver
+        driver_args = [network_name]
+
+    # Create an instance of the driver class.
+    try:
+        _log.debug("Creating instance of %s with args %s", 
+                   driver_cls, driver_args)
+        driver = driver_cls(*driver_args)
+    except ValueError as e:
+        # ValueError raised because profile name passed into
+        # policy driver contains illegal characters.
+        print_cni_error(ERR_CODE_GENERIC, e.message)
+        sys.exit(ERR_CODE_GENERIC)
+
+    return driver

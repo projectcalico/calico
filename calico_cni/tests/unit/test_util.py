@@ -17,6 +17,7 @@ import sys
 import json
 import unittest
 from mock import patch, MagicMock, Mock, call
+from nose_parameterized import parameterized
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 from pycalico.datastore_errors import DataStoreError, MultipleEndpointsMatch
 
@@ -67,11 +68,18 @@ class UtilTest(unittest.TestCase):
         assert_raises(SystemExit, wrapped)
 
     @patch("calico_cni.util.parse_cni_args", autospec=True)
+    def test_get_identifier(self, m_parse_cni_args):
+        m_parse_cni_args.return_value = {}
+        identifier = get_identifier()
+        assert_equal(identifier, "UnknownI")
+
+    @patch("calico_cni.util.parse_cni_args", autospec=True)
     def test_get_identifier_k8s(self, m_parse_cni_args):
         m_parse_cni_args.return_value = {K8S_POD_NAME: "podname",
                                          K8S_POD_NAMESPACE: "namespace"}
         identifier = get_identifier()
         assert_equal(identifier, "namespace/podname")
+
 
     def test_identify_filter(self):
         identity = "identity"
@@ -80,3 +88,22 @@ class UtilTest(unittest.TestCase):
         record = MagicMock()
         assert_true(test_filter.filter(record))
         assert_equal(record.identity, identity)
+
+    @patch("calico_cni.util.os", autospec=True)
+    @patch("calico_cni.util.get_identifier", autospec=True)
+    @patch("calico_cni.util.ConcurrentRotatingFileHandler", autospec=True)
+    def test_configure_logging(self, m_file_handler, m_get_id, m_os):
+        log = MagicMock()
+        filename = "filename.log"
+        path ="/some/path/to/filename.log"
+        m_os.path.exists.return_value = False
+        m_os.path.join.return_value = path 
+        configure_logging(log, filename)
+        m_os.makedirs.assert_called_once_with("/var/log/calico/cni")
+
+    @parameterized.expand([
+        (CniError(1, "one", "won"), "(1) one"),
+        (CniError(2, "two", None), "(2) two")
+    ])
+    def test_stringify_cnierror(self, e, expected):
+        assert_equal(str(e), expected)

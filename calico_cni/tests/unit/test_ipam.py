@@ -28,6 +28,7 @@ from pycalico.datastore_datatypes import IPPool, Endpoint
 from pycalico.datastore_errors import MultipleEndpointsMatch
 
 from calico_cni.constants import *
+from calico_cni.util import CniError
 from calico_cni.ipam import IpamPlugin, _exit_on_error, main 
 
 
@@ -61,7 +62,7 @@ class CniIpamTest(unittest.TestCase):
         }
 
         # Create the CniPlugin to test.
-        self.plugin = IpamPlugin(self.network_config, self.env)
+        self.plugin = IpamPlugin(self.env)
 
         # Mock out the datastore client.
         self.m_datastore_client = MagicMock(spec=IPAMClient)
@@ -77,12 +78,12 @@ class CniIpamTest(unittest.TestCase):
         self.plugin._assign_address.return_value = ip4, ip6
 
         # Call 
-        self.plugin.execute()
+        ret = self.plugin.execute()
 
         # Assert
         expected = json.dumps({"ip4": {"ip": "1.2.3.4/32"}, 
                                "ip6": {"ip": "ba:ad::be:ef/128"}})
-        assert_equal(m_stdout.getvalue().strip(), expected)
+        assert_equal(ret, expected)
 
     @patch('sys.stdout', new_callable=StringIO)
     def test_execute_del_mainline(self, m_stdout):
@@ -136,10 +137,10 @@ class CniIpamTest(unittest.TestCase):
         handle_id = "abcdef12345"
 
         # Call
-        with assert_raises(SystemExit) as err:
+        with assert_raises(CniError) as err:
             self.plugin._assign_address(handle_id)
         e = err.exception
-        assert_equal(e.code, ERR_CODE_FAILED_ASSIGNMENT)
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
     @patch("calico_cni.ipam._exit_on_error", autospec=True)
     def test_assign_address_no_ipv4(self, m_exit):
@@ -152,10 +153,12 @@ class CniIpamTest(unittest.TestCase):
         handle_id = "abcdef12345"
 
         # Call
-        ret_ip4, ret_ip6 = self.plugin._assign_address(handle_id)
+        with assert_raises(CniError) as err:
+            self.plugin._assign_address(handle_id)
+        e = err.exception
 
         # Assert
-        m_exit.assert_called_once_with(code=ERR_CODE_FAILED_ASSIGNMENT, message=ANY, details=ANY)
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
     @patch("calico_cni.ipam._exit_on_error", autospec=True)
     def test_assign_address_no_ipv6(self, m_exit):
@@ -168,41 +171,42 @@ class CniIpamTest(unittest.TestCase):
         handle_id = "abcdef12345"
 
         # Call
-        ret_ip4, ret_ip6 = self.plugin._assign_address(handle_id)
+        with assert_raises(CniError) as err:
+            self.plugin._assign_address(handle_id)
+        e = err.exception
 
         # Assert
-        m_exit.assert_called_once_with(code=ERR_CODE_FAILED_ASSIGNMENT, message=ANY, details=ANY)
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
-
-    def test_parse_config_no_command(self):
+    def test_parse_environment_no_command(self):
         # Delete command.
-        del self.plugin.env[CNI_COMMAND_ENV]
+        del self.env[CNI_COMMAND_ENV]
 
         # Call
-        with assert_raises(SystemExit) as err:
-            self.plugin._parse_config()
+        with assert_raises(CniError) as err:
+            self.plugin._parse_environment(self.env)
         e = err.exception
-        assert_equal(e.code, ERR_CODE_INVALID_ARGUMENT)
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
-    def test_parse_config_invalid_command(self):
+    def test_parse_environment_invalid_command(self):
         # Change command.
-        self.plugin.env[CNI_COMMAND_ENV] = "invalid"
+        self.env[CNI_COMMAND_ENV] = "invalid"
 
         # Call
-        with assert_raises(SystemExit) as err:
-            self.plugin._parse_config()
+        with assert_raises(CniError) as err:
+            self.plugin._parse_environment(self.env)
         e = err.exception
-        assert_equal(e.code, ERR_CODE_INVALID_ARGUMENT)
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
-    def test_parse_config_invalid_container_id(self):
+    def test_parse_environment_invalid_container_id(self):
         # Delete container ID.
-        del self.plugin.env[CNI_CONTAINERID_ENV] 
+        del self.env[CNI_CONTAINERID_ENV] 
 
         # Call
-        with assert_raises(SystemExit) as err:
-            self.plugin._parse_config()
+        with assert_raises(CniError) as err:
+            self.plugin._parse_environment(self.env)
         e = err.exception
-        assert_equal(e.code, ERR_CODE_INVALID_ARGUMENT)
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
     def test_exit_on_error(self):
         with assert_raises(SystemExit) as err:
@@ -224,23 +228,41 @@ class CniIpamTest(unittest.TestCase):
         main()
 
         # Assert
-        m_plugin.assert_called_once_with(self.network_config, self.env)
-        m_plugin(self.env, self.network_config).execute.assert_called_once_with()
+        m_plugin.assert_called_once_with(self.env)
+        m_plugin(self.env).execute.assert_called_once_with()
 
     @patch("calico_cni.ipam.os", autospec=True)
     @patch("calico_cni.ipam.sys", autospec=True)
     @patch("calico_cni.ipam.IpamPlugin", autospec=True)
     @patch("calico_cni.ipam.configure_logging", autospec=True)
     @patch("calico_cni.ipam._exit_on_error", autospec=True)
-    def test_main_execute_error(self, m_exit, m_conf_log, m_plugin, m_sys, m_os):
+    def test_main_execute_cni_error(self, m_exit, m_conf_log, m_plugin, m_sys, m_os):
         # Mock
         m_os.environ = self.env
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
         m_plugin.reset_mock()
-        m_plugin(self.network_config, self.env).execute.side_effect = Exception
+        m_plugin(self.env).execute.side_effect = CniError(50, "Message", "Details") 
 
         # Call
         main()
 
         # Assert
-        m_exit.assert_called_once_with(ERR_CODE_UNHANDLED, message=ANY, details=ANY)
+        m_exit.assert_called_once_with(50, "Message", "Details")
+
+    @patch("calico_cni.ipam.os", autospec=True)
+    @patch("calico_cni.ipam.sys", autospec=True)
+    @patch("calico_cni.ipam.IpamPlugin", autospec=True)
+    @patch("calico_cni.ipam.configure_logging", autospec=True)
+    @patch("calico_cni.ipam._exit_on_error", autospec=True)
+    def test_main_execute_unhandled_error(self, m_exit, m_conf_log, m_plugin, m_sys, m_os):
+        # Mock
+        m_os.environ = self.env
+        m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
+        m_plugin.reset_mock()
+        m_plugin(self.env).execute.side_effect = Exception
+
+        # Call
+        main()
+
+        # Assert
+        m_exit.assert_called_once_with(ERR_CODE_GENERIC, message=ANY, details=ANY)

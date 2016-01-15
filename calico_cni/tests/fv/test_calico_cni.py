@@ -25,7 +25,7 @@ from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Endpoint, Rule, Rules
 from pycalico.datastore_errors import DataStoreError 
 
-from calico_cni import calico_cni, container_engines
+from calico_cni import calico_cni, container_engines, ipam
 from calico_cni.calico_cni import CniPlugin
 from calico_cni.constants import *
 from calico_cni.policy_drivers import (DefaultPolicyDriver, 
@@ -46,7 +46,7 @@ class CniPluginFvTest(unittest.TestCase):
         self.command = None
         self.network_name = "calico-fv"
         self.plugin_type = "calico"
-        self.ipam_type = "calico-ipam"
+        self.ipam_type = "not-calico-ipam"
         self.container_id = "ff3afbd1-17ad-499d-b514-72438c009e81"
         self.cni_ifname = "eth0"
         self.cni_args = ""
@@ -74,12 +74,17 @@ class CniPluginFvTest(unittest.TestCase):
         self.m_docker_client = MagicMock(self.docker_client)
         container_engines.Client = self.m_docker_client
 
+        self.ipam_plugin_client = ipam.IPAMClient
+        self.m_ipam_plugin_client = MagicMock(self.ipam_plugin_client)
+        ipam.IPAMClient = self.m_ipam_plugin_client
+
     def tearDown(self):
         # Reset module mocks.
         calico_cni.Popen = self.m_popen
         calico_cni.os = self.os
         calico_cni.netns = self.m_netns
         container_engines.Client = self.docker_client
+        ipam.IPAMClient = self.ipam_plugin_client
 
     def create_plugin(self):
         self.network_config = {
@@ -140,11 +145,8 @@ class CniPluginFvTest(unittest.TestCase):
         self.client.profile_exists.return_value = False
 
         # Execute.
-        rc = p.execute()
+        p.execute()
         
-        # Assert success.
-        assert_equal(rc, 0)
-
         # Assert the correct policy driver was chosen.
         assert_true(isinstance(p.policy_driver, DefaultPolicyDriver)) 
 
@@ -186,11 +188,8 @@ class CniPluginFvTest(unittest.TestCase):
         self.client.profile_exists.return_value = False
 
         # Execute.
-        rc = p.execute()
+        p.execute()
         
-        # Assert success.
-        assert_equal(rc, 0)
-
         # Assert the correct policy driver was chosen.
         assert_true(isinstance(p.policy_driver, KubernetesDefaultPolicyDriver)) 
 
@@ -244,11 +243,8 @@ class CniPluginFvTest(unittest.TestCase):
         m_requests.Session().__enter__().get.return_value = response
 
         # Execute.
-        rc = p.execute()
+        p.execute()
         
-        # Assert success.
-        assert_equal(rc, 0)
-
         # Assert the correct policy driver was chosen.
         assert_true(isinstance(p.policy_driver, KubernetesAnnotationDriver)) 
 
@@ -294,11 +290,13 @@ class CniPluginFvTest(unittest.TestCase):
         self.m_docker_client().inspect_container.return_value = inspect_result
 
         # Execute.
-        rc = p.execute()
-        
-        # Assert success.
-        assert_equal(rc, 0)
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
+        # Assert success.
+        assert_equal(e.code, 0)
+        
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called)
 
@@ -312,16 +310,25 @@ class CniPluginFvTest(unittest.TestCase):
         """
         # Configure.
         self.command = CNI_CMD_ADD
+        ip4 = "10.0.0.1/32"
+        ip6 = "0:0:0:0:0:ffff:a00:1"
+        ipam_stdout = json.dumps({"code": 100, "msg": "Test IPAM error"})
+        self.set_ipam_result(100, ipam_stdout, "")
+
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
 
         # Create plugin.
         p = self.create_plugin()
 
         # Execute.
-        rc = p.execute()
-        
-        # Assert failure.
-        assert_equal(rc, 0)
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
+        # Assert success.
+        assert_equal(e.code, ERR_CODE_GENERIC)
+        
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
 
@@ -346,11 +353,13 @@ class CniPluginFvTest(unittest.TestCase):
         self.client.get_endpoint.side_effect = KeyError
 
         # Execute.
-        rc = p.execute()
-        
-        # Assert failure.
-        assert_equal(rc, ERR_CODE_GENERIC)
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
+        # Assert failure.
+        assert_equal(e.code, ERR_CODE_GENERIC)
+        
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
 
@@ -377,11 +386,13 @@ class CniPluginFvTest(unittest.TestCase):
         self.client.get_endpoint.side_effect = KeyError
 
         # Execute.
-        rc = p.execute()
-        
-        # Assert failure.
-        assert_equal(rc, ERR_CODE_GENERIC)
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
+        # Assert failure.
+        assert_equal(e.code, ERR_CODE_GENERIC)
+        
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
 
@@ -408,11 +419,13 @@ class CniPluginFvTest(unittest.TestCase):
         p = self.create_plugin()
 
         # Execute.
-        rc = p.execute()
-        
-        # Assert failure.
-        assert_equal(rc, ERR_CODE_DATASTORE)
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
+        # Assert failure.
+        assert_equal(e.code, ERR_CODE_GENERIC)
+        
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
 
@@ -443,11 +456,13 @@ class CniPluginFvTest(unittest.TestCase):
         p.policy_driver._client.append_profiles_to_endpoint.side_effect = MagicMock(side_effect=KeyError)
 
         # Execute.
-        rc = p.execute()
-        
-        # Assert failure.
-        assert_equal(rc, ERR_CODE_GENERIC)
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
+        # Assert failure.
+        assert_equal(e.code, ERR_CODE_GENERIC)
+        
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
                 "cni", self.container_id, [IPNetwork(ip4)])
@@ -478,9 +493,6 @@ class CniPluginFvTest(unittest.TestCase):
         # Execute.
         rc = p.execute()
 
-        # Assert.
-        assert_equal(rc, 0)
-
     def test_delete_no_endpoint(self):
         """
         Tests CNI delete with no endpoint. 
@@ -498,7 +510,9 @@ class CniPluginFvTest(unittest.TestCase):
         p = self.create_plugin()
 
         # Execute.
-        rc = p.execute()
+        with assert_raises(SystemExit) as err:
+            p.execute()
+        e = err.exception
 
-        # Assert.
-        assert_equal(rc, 0)
+        # Assert success.
+        assert_equal(e.code, 0)

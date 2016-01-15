@@ -19,19 +19,7 @@ from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 from docker import Client
 from docker.errors import APIError
 
-from calico_cni.container_engines import DockerEngine, DefaultEngine, BaseContainerEngine 
-
-
-class BaseEngineTest(unittest.TestCase):
-    def setUp(self):
-        """
-        Per-test setup method.
-        """
-        self.engine = BaseContainerEngine()
-        self.engine._client = MagicMock(spec=Client)
-
-    def test_not_implemented(self):
-        assert_raises(NotImplementedError, self.engine.uses_host_networking, "1234")
+from calico_cni.container_engines import DockerEngine, DefaultEngine, get_container_engine
 
 
 class DockerEngineTest(unittest.TestCase):
@@ -40,7 +28,6 @@ class DockerEngineTest(unittest.TestCase):
         Per-test setup method.
         """
         self.engine = DockerEngine()
-        self.engine._client = MagicMock(spec=Client)
 
     def test_uses_host_networking(self):
         # Mock inspect.
@@ -55,11 +42,12 @@ class DockerEngineTest(unittest.TestCase):
         # Assert
         assert_true(result)
 
-    def test__docker_inspect(self):
+    @patch("calico_cni.container_engines.Client", autospec=True)
+    def test__docker_inspect(self, m_client):
         # Mock
         container_id = "12345"
         info = "some info"
-        self.engine._client.inspect_container.return_value = info
+        m_client().inspect_container.return_value = info
 
         # Call
         result = self.engine._docker_inspect(container_id)
@@ -67,25 +55,31 @@ class DockerEngineTest(unittest.TestCase):
         # Assert
         assert_equal(result, info)
 
-    def test__docker_inspect_error(self):
+    @patch("calico_cni.container_engines.Client", autospec=True)
+    def test__docker_inspect_error(self, m_client):
         # Mock
         container_id = "12345"
         response = MagicMock()
         response.status_code = 300 
         explanation = "explanation"
         msg = "message"
-        self.engine._client.inspect_container.side_effect = APIError(msg, response, explanation) 
+        m_client().inspect_container.side_effect = APIError(msg, response, explanation) 
 
         # Call
         assert_raises(KeyError, self.engine._docker_inspect, container_id)
 
-    def test__docker_inspect_error_not_found(self):
+    @patch("calico_cni.container_engines.Client", autospec=True)
+    def test__docker_inspect_error_not_found(self, m_client):
         # Mock
         container_id = "12345"
         response = MagicMock()
         response.status_code = 404 
         explanation = "explanation"
-        self.engine._client.inspect_container.side_effect = APIError(1, response, explanation) 
+        m_client().inspect_container.side_effect = APIError(1, response, explanation) 
 
         # Call
         assert_raises(KeyError, self.engine._docker_inspect, container_id)
+
+    def test_get_container_engine_docker(self):
+        eng = get_container_engine(True)
+        assert_true(isinstance(eng, DockerEngine))

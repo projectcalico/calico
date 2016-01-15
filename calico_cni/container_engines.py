@@ -24,24 +24,10 @@ DOCKER_HOST_ENV = "DOCKER_HOST"
 DOCKER_SOCKET = "unix://var/run/docker.sock"
 DOCKER_VERSION = "1.16"
 
-
-LOG_FILENAME = "cni.log"
-_log = logging.getLogger(__name__)
-configure_logging(_log, LOG_FILENAME)
+_log = logging.getLogger("calico_cni")
 
 
-class BaseContainerEngine(object):
-    """
-    Abstract base class for interacting with containerizers.
-    """
-    def uses_host_networking(self, container_id):
-        """
-        Whether or not this container is networking using host 
-        networking.
-        """
-        raise NotImplementedError()
-
-class DefaultEngine(BaseContainerEngine):
+class DefaultEngine(object):
     """
     Implements default container engine for a generic CNI plugin.
     """
@@ -51,15 +37,11 @@ class DefaultEngine(BaseContainerEngine):
         """
         return False
 
-class DockerEngine(BaseContainerEngine):
+
+class DockerEngine(DefaultEngine):
     """
     Implemented container engine for Docker.
     """
-    def __init__(self):
-        BaseContainerEngine.__init__(self)
-        self._client = Client(version=DOCKER_VERSION,
-                    base_url=os.getenv(DOCKER_HOST_ENV, DOCKER_SOCKET))
-
     def uses_host_networking(self, container_id):
         """
         Use docker inspect to determine if this container has been 
@@ -78,7 +60,9 @@ class DockerEngine(BaseContainerEngine):
         Throws a KeyError if the container cannot be inspected.
         """
         try:
-            info = self._client.inspect_container(container_id)
+            client = Client(version=DOCKER_VERSION, 
+                            base_url=os.getenv(DOCKER_HOST_ENV, DOCKER_SOCKET))
+            info = client.inspect_container(container_id)
         except APIError, e:
             if e.response.status_code == 404:
                 _log.error("Container `%s` was not found.", container_id)
@@ -86,3 +70,17 @@ class DockerEngine(BaseContainerEngine):
                 _log.error(e.message)
             raise KeyError("Unable to inspect container.")
         return info
+
+
+def get_container_engine(kubernetes):
+    """Returns a container engine based on the CNI configuration arguments.
+
+    :param kubernetes - True if running in Kubernetes.
+    :return: a container engine 
+    """
+    if kubernetes: 
+        _log.debug("Using Kubernetes + Docker container engine")
+        return DockerEngine()
+    else:
+        _log.debug("Using default container engine")
+        return DefaultEngine()
