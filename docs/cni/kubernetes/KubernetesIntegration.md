@@ -8,30 +8,34 @@
 
 # Add Calico to an Existing Kubernetes Cluster 
 
-This tutorial will describe the steps required to install Calico on an existing Kubernetes cluster.
+This document describes the steps required to install Calico on an existing
+Kubernetes cluster.
 
 ## Requirements
-- An existing Kubernetes cluster running Kubernetes >= v1.0
+- An existing Kubernetes cluster running Kubernetes >= v1.1
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
+  - Calico can share the etcd cluster used by Kubernetes, but it's recommended
+  that a separate cluster is set up.
 
 ## About the Calico Components
 
 There are two components of a Calico / Kubernetes integration.
 - The Calico per-node docker container, [`calico/node`](https://hub.docker.com/r/calico/node/)
-- The [calico-kubernetes](https://github.com/projectcalico/calico-kubernetes) network plugin.
+- The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin.
+ - This is the combination of a binary executable and a configuration file.
 
-> In addition, Calico relies on `etcd` for a distributed data storage.  This tutorial does not cover configuring `etcd`.
+The `calico/node` docker container must be run on the Kubernetes master and each
+Kubernetes node in your cluster, as it contains the BGP agent necessary for Calico routing to occur.
 
-The `calico/node` docker container must be run on the Kubernetes master and each Kubernetes node in your cluster, as it contains the BGP agent necessary for Calico routing to occur.
-The `calico-kubernetes` plugin integrates directly with the Kubernetes `kubelet` process on each node to discover which pods have been created, and adds them to Calico networking.
-
-We recommend using the latest version of [calicoctl](https://github.com/projectcalico/calico-containers/releases/latest) to install both `calico/node` and `calico-kubernetes` on each of your nodes.
+The `calico-cni` plugin integrates directly with the Kubernetes `kubelet` process
+on each node to discover which pods have been created, and adds them to Calico networking.
 
 ## Installing Calico Componenets
-#### 1. Install Calico
-Each Kubernetes node requires both the `calico/node` container as well as the `calico-kubernetes` plugin.  Kubernetes masters do not need the `calico-kubernetes` plugin installed, but may do so if pods will be scheduled on the master.
+### 1. Run `calico/node` and configure the node.
+The Kubernetes master and each Kubernetes node require the `calico/node` container.
+Each node must also be recorded in the Calico datastore. Running the container and
+storing the required information can be achieved using the `calicoctl` utility.
 
-The following set of commands will install both `calico/node` and the `calico-kubernetes` plugin on a machine.
 ```
 # Download and install `calicoctl`
 wget http://www.projectcalico.org/latest/calicoctl 
@@ -41,37 +45,116 @@ sudo chmod +x calicoctl
 sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node
 ```
 
-#### 2. Configure the Network Plugin 
-The Calico network plugin for Kubernetes uses the `calico_kubernetes.ini` file to read in user configuration.
+See the [`calicoctl node` documentation](https://github.com/projectcalico/calico-containers/blob/master/docs/calicoctl/node.md#calicoctl-node)
+for more information.
 
-Create a file called `calico_kubernetes.ini` in the same directory as the Calico plugin.
-- Default: `/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/calico_kubernetes.ini`
-- CoreOS: `/etc/kubelet-plugins/calico/calico_kubernetes.ini`
+#### Example systemd unit file (calico-node.service)
+If you're using systemd as your init system then the following service file can be used.
+```
+[Unit]
+Description=calicoctl node
+After=docker.service
+Requires=docker.service
 
-Your configuration file will look something like this:
+[Service]
+User=root
+Environment=ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT>
+PermissionsStartOnly=true
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://github.com/projectcalico/calico-containers/releases/download/v0.14.0/calicoctl
+ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
+ExecStart=/opt/bin/calicoctl node --detach=false
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
 ```
-[config]
-ETCD_AUTHORITY=kubernetes-master:6666
-KUBE_API_ROOT=https://kubernetes-master:443/api/v1/
-DEFAULT_POLICY=allow
-CALICO_IPAM=true
-KUBE_AUTH_TOKEN=<INSERT_AUTH_TOKEN>
+> Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
+
+### 2. Download and configure the `calico-cni` plugin
+The Kubernetes `kubelet` calls out to the `calico-cni` plugin.
+
+Download it and make sure it's executable
 ```
-> Supported configuration options are discussed in the [Configuring the Calico Kubernetes Plugin tutorial](PluginConfiguration.md).
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico
+chmod +x /opt/cni/bin/calico
+```
+It's recommended that this is done as part of job that manages the `kubelet` process (see below)
+
+The `calico-cni` plugin requires a standard CNI config file.
+
+```
+mkdir -p /etc/cni/net.d
+$ cat >/etc/cni/net.d/10-calico.conf <<EOF
+{
+    "name": "calico-k8s-network",
+    "type": "calico",
+    "etcd_authority": "<ETCD_IP>:<ETCD_PORT>",
+    "log_level": "info",
+    "ipam": {
+        "type": "calico-ipam"
+    }
+}
+EOF
+```
+> Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
 ## Configuring Kubernetes
-#### Configuring the Kubelet 
-Once the Calico network plugin has been installed, and the `calico/node` container started, you will need to configure the Kubelet to use the Calico network plugin when starting pods. 
+### Configuring the Kubelet
+The Kubelet needs to be configured to use the Calico network plugin when starting pods.
 
-The `kubelet` can be configured to use Calico by starting it with the `--network-plugin=calico` option.
+The `kubelet` can be configured to use Calico by starting it with the following options
+- `--network-plugin=cni`
+- `--network-plugin-dir=/etc/cni/net.d`
 
-On CoreOS machines, the Calico network plugin is installed to the `/etc/kubelet-plugins` directory, and so an additional flag is necessary to inform the `kubelet` of the location of the plugin.  On CoreOS, include the `--network-plugin-dir=/etc/kubelet-plugins` option when starting the `kubelet`.
-> Note: the `--network-plugin-dir=` option is only available in Kubernetes >= v1.1.0
+See the [`kubelet` documentation](http://kubernetes.io/v1.1/docs/admin/kubelet.html)
+for more details.
 
-#### Configuring the Kube-Proxy
-In order to use Calico policy with Kubernetes, the `kube-proxy` component must be configured to leave the source address of service bound traffic intact.  This feature is first officially supported in Kubernetes v1.1.0.
+#### Example systemd unit file (kubelet.service)
+```
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/kubernetes/kubernetes
+After=calico-node.service
+Requires=calico-node.service
 
-There are two ways to enable this behavior.
+[Service]
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
+ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico
+ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
+ExecStart=/opt/bin/kubelet \
+--address=0.0.0.0 \
+--allow-privileged=true \
+--cluster-dns=10.100.0.10 \
+--cluster-domain=cluster.local \
+--config=/etc/kubernetes/manifests \
+--hostname-override=$private_ipv4 \
+--api-servers=http://<API SERVER IP>:8080 \
+--network-plugin-dir=/etc/cni/net.d \
+--network-plugin=cni \
+--logtostderr=true
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+This unit file ensures that the `kubelet` binary and the `calico` plugin are present.
+
+### Configuring the Kube-Proxy
+In order to use Calico policy with Kubernetes, the `kube-proxy` component must
+be configured to leave the source address of service bound traffic intact.
+This feature is first officially supported in Kubernetes v1.1.0 and as of v1.1.3 is the default.
+
+We highly recommend using the latest stable Kubernetes release, but if you're using an older release
+there are two ways to enable this behavior.
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
-- Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
+- Option 2: Annotate the Kubernetes Node API object with
+`net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
+
+See the [kube-proxy documentation](http://kubernetes.io/v1.1/docs/admin/kube-proxy.html)
+for more details.
+
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
