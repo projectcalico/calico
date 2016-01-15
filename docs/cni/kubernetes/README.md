@@ -16,9 +16,13 @@ To build a new Kubernetes cluster with Calico networking, try one of the followi
 - [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
 - [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
 - [CoreOS Vagrant](VagrantCoreOS.md)
+- [CoreOS on GCE](GCE.md)
 - [CoreOS on AWS](AWSIntegration.md)
 
 # Kubernetes with Calico policy
 Calico can provide network policy for Kubernetes clusters.  This feature is currently experimental and disabled by default. [The policy documentation](Policy.md) explains how to enable and use Calico policy in a Kubernetes cluster.
+
+# Requirements
+- The kube-proxy should be started in `iptables` proxy mode.  Userspace mode may work for some deployments, but is not recommended. 
 
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -31,10 +31,20 @@ These instructions allow you to set up a Kubernetes v1.1.3 cluster with [Calico 
     
 ### 1.3 Startup and SSH
 
-Change into the appropriate directory for this guide:
+Edit `calico-containers/docs/cni/cloud-config/node-config.yaml` and uncomment the line in `/etc/hosts` so that the nodes can resolve the hostname `kubernetes-master`.  The line should look like this:
+```
+172.18.18.101   kubernetes-master
+```
+
+Edit `calico-containers/docs/cni/cloud-config/master-config.yaml` and comment the following line in `calico-node.service` to disabled IP-in-IP, which is not needed for this guide.
+```
+ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
+```
+
+Change into the directory for this guide:
   
     cd calico-containers/docs/cni/kubernetes/vagrant-coreos
-       
+
 Run
 
     vagrant up

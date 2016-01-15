@@ -42,12 +42,12 @@ Vagrant.configure("2") do |config|
                                             "gcr.io/google_containers/exechealthz:1.0"]
         host.vm.provision :file, :source => "../manifests/skydns.yaml", :destination => "/home/core/skydns.yaml"
         host.vm.provision :file, :source => "../manifests/guestbook.yaml", :destination => "/home/core/guestbook.yaml"
-        host.vm.provision :file, :source => "../cloud-config/master-config-template.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :file, :source => "../cloud-config/master-config.yaml", :destination => "/tmp/vagrantfile-user-data"
         host.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       else
         # Configure a node.
 	host.vm.provision :docker, images: ["busybox:latest", "gcr.io/google_containers/pause:0.8.0"]
-        host.vm.provision :file, :source => "../cloud-config/node-config-template.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :file, :source => "../cloud-config/node-config.yaml", :destination => "/tmp/vagrantfile-user-data"
         host.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       end
     end

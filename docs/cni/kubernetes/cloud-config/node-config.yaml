@@ -1,6 +1,17 @@
 #cloud-config
 ---
 write_files:
+  - path: /etc/hosts 
+    owner: root
+    permissions: 0600
+    content: |
+      # Uncomment the following line when running on Vagrant, or another
+      # provider that does not contain a DNS serivce with which to 
+      # resolve the hostname `kubernetes-master`
+      #
+      # 172.18.18.101   kubernetes-master
+      127.0.0.1       localhost
+
   # Network config file for the Calico CNI plugin.
   - path: /etc/cni/net.d/10-calico.conf 
     owner: root
@@ -9,7 +20,7 @@ write_files:
       {
           "name": "calico-k8s-network",
           "type": "calico",
-          "etcd_authority": "172.18.18.101:2379",
+          "etcd_authority": "kubernetes-master:2379",
           "log_level": "info",
           "ipam": {
               "type": "calico-ipam"
@@ -26,7 +37,7 @@ write_files:
       clusters:
       - name: local
         cluster:
-          server: http://172.18.18.101:8080
+          server: http://kubernetes-master:8080
       users:
       - name: kubelet
       contexts:
@@ -40,7 +51,7 @@ coreos:
   etcd2:
     proxy: on 
     listen-client-urls: http://localhost:2379
-    initial-cluster: etcdserver=http://172.18.18.101:2380
+    initial-cluster: etcdserver=http://kubernetes-master:2380
   fleet:
     metadata: "role=node"
     etcd_servers: "http://localhost:2379"
@@ -62,11 +73,11 @@ coreos:
         
         [Service]
         User=root
-        Environment=ETCD_AUTHORITY=172.18.18.101:2379
+        Environment=ETCD_AUTHORITY=kubernetes-master:2379
         PermissionsStartOnly=true
         ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
-        ExecStart=/opt/bin/calicoctl node --detach=false
+        ExecStart=/opt/bin/calicoctl node --ip=$private_ipv4 --detach=false
         Restart=always
         RestartSec=10
 
@@ -97,7 +108,7 @@ coreos:
         --cluster-domain=cluster.local \
         --config=/etc/kubernetes/manifests \
         --hostname-override=$private_ipv4 \
-        --api-servers=http://172.18.18.101:8080 \
+        --api-servers=http://kubernetes-master:8080 \
         --network-plugin-dir=/etc/cni/net.d \
         --network-plugin=cni \
         --logtostderr=true
@@ -119,7 +130,7 @@ coreos:
         ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
-        --master=http://172.18.18.101:8080 \
+        --master=http://kubernetes-master:8080 \
         --proxy-mode=iptables \
         --logtostderr=true
         Restart=always
