@@ -10,7 +10,7 @@ any orchestrator which makes use of the [CNI networking specification][cni].
 
 This repository includes a top-level CNI networking plugin, as well as a CNI IPAM plugin which makes use of Calico IPAM.
 
-The [calico-containers repository](calico-containers) contains getting started guides for a number of scenarios, as well as more detailed documentation regarding our CNI integration. 
+The [calico-containers repository][calico-containers] contains getting started guides for a number of scenarios, as well as more detailed documentation regarding our CNI integration. 
 
 To learn more about CNI, visit the [appc/cni][cni] repo.
 
