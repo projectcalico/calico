@@ -35,6 +35,7 @@ ROOT_DIR = "/calico"
 # Current versions
 FELIX_VERSION = "/v1"
 OPENSTACK_VERSION = "/v1"
+DHCP_VERSION = "/v1"
 
 # OpenStack data is stored under this path.
 OPENSTACK_DIR = ROOT_DIR + "/openstack"
@@ -85,6 +86,10 @@ ENDPOINT_STATUS_UP = "up"
 ENDPOINT_STATUS_DOWN = "down"
 ENDPOINT_STATUS_ERROR = "error"
 
+# Information intended for use by the DHCP agent.
+DHCP_DIR = ROOT_DIR + "/dhcp" + DHCP_VERSION
+SUBNET_DIR= DHCP_DIR + "/subnet"
+
 
 def dir_for_host(hostname):
     return HOST_DIR + "/%s" % hostname
@@ -125,6 +130,10 @@ def key_for_profile_tags(profile_id):
 
 def key_for_config(config_name):
     return CONFIG_DIR + "/%s" % config_name
+
+
+def key_for_subnet(subnet_id):
+    return SUBNET_DIR + "/%s" % subnet_id
 
 
 def get_profile_id_for_profile_dir(key):
