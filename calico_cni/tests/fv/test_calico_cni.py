@@ -516,3 +516,38 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert success.
         assert_equal(e.code, 0)
+
+
+class CniPluginFvWithIpamTest(CniPluginFvTest):
+    """
+    Runs tests from CniPluginFvTest but using calico-ipam.
+
+    Exercises the ipam.IpamPlugin code.
+    """
+    def setUp(self):
+        CniPluginFvTest.setUp(self)
+        self.ipam_type = "calico-ipam"
+
+    def set_ipam_result(self, rc, stdout, stderr):
+        """
+        Set up the correct mocks based on the desired stdout.
+        """
+        if stdout and not rc:
+            # A successful add response.
+            ip4 = json.loads(stdout)["ip4"]["ip"]
+            ip6 = json.loads(stdout)["ip6"]["ip"]
+            ip4s = [ip4] if ip4 else []
+            ip6s = [ip6] if ip6 else []
+            self.m_ipam_plugin_client().auto_assign_ips.return_value = ip4s, ip6s
+ 
+    def test_add_ipam_error(self):
+        # Mock out auto_assign_ips to throw an error.
+        self.m_ipam_plugin_client().auto_assign_ips.side_effect = RuntimeError
+
+        # Assert we handle the error properly in calling code.
+        CniPluginFvTest.test_add_ipam_error(self)
+
+    def test_add_ipam_error_invalid_response(self):
+        # Not applicable.
+        pass
+

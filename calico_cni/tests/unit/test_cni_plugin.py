@@ -471,7 +471,7 @@ class CniPluginTest(unittest.TestCase):
         rc, result = self.plugin._call_ipam_plugin(env)
 
         # Assert.
-        expected = {"code": 150, "msg": "message", "details": "details"}
+        expected = '{"msg": "message", "code": 150, "details": "details"}'
         assert_equal(rc, 150)
         assert_equal(result, expected)
 
