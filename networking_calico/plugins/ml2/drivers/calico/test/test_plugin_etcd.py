@@ -23,6 +23,7 @@ import json
 import unittest
 
 import eventlet
+import logging
 import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
@@ -33,6 +34,8 @@ from calico.etcdutils import ResyncRequired
 from calico.monotonic import monotonic_time
 import networking_calico.plugins.ml2.drivers.calico.mech_calico as mech_calico
 import networking_calico.plugins.ml2.drivers.calico.t_etcd as t_etcd
+
+_log = logging.getLogger(__name__)
 
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
@@ -85,7 +88,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             if self.reset_etcd_after == 0:
                 self.etcd_data = {}
                 self.reset_etcd_after = None
-                print("etcd reset")
+                _log.info("etcd reset")
                 self.assert_etcd_writes_deletes = False
 
     def check_etcd_write(self, key, value, **kwargs):
@@ -99,7 +102,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Confirm that, if prevIndex is provided, its value is not None.
         self.assertTrue(kwargs.get('prevIndex', 0) is not None)
 
-        print("etcd write: %s\n%s" % (key, value))
+        _log.info("etcd write: %s = %s", key, value)
         self.etcd_data[key] = value
         try:
             self.recent_writes[key] = json.loads(value)
@@ -109,7 +112,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
     def check_etcd_delete(self, key, **kwargs):
         """Print each etcd delete as it occurs."""
         self.maybe_reset_etcd()
-        print("etcd delete: %s" % key)
+        _log.info("etcd delete: %s", key)
         if kwargs.get('recursive', False):
             keylen = len(key) + 1
             for k in self.etcd_data.keys():
@@ -164,7 +167,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 raise lib.m_etcd.EtcdKeyNotFound()
 
         # Print and return the result object.
-        print("etcd read: %s\nvalue: %s" % (key, read_result.value))
+        _log.info("etcd read: %s; value: %s", key, read_result.value)
 
         if recursive:
             # Also see if this key has any children, and read those.
@@ -220,7 +223,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def test_etcd_reset(self):
         for n in range(1, 20):
-            print("\nReset etcd data after %s reads/writes/deletes\n" % n)
+            _log.info("Reset etcd data after %s reads/writes/deletes", n)
             self.reset_etcd_after = n
             self.test_start_two_ports()
             self.etcd_data = {}
@@ -275,7 +278,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Allow it to run again, this time auditing against the etcd data that
         # was written on the first iteration.
-        print("\nResync with existing etcd data\n")
+        _log.info("Resync with existing etcd data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
@@ -293,7 +296,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.osdb_ports = [lib.port2]
 
         # Do another resync - expect no changes to the etcd data.
-        print("\nResync with existing etcd data\n")
+        _log.info("Resync with existing etcd data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
@@ -357,7 +360,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # old host felix-host-1.  The effect will be as though we've
         # missed a further update that moved port1 back to felix-host-1; this
         # resync will now discover that.
-        print("\nResync with existing etcd data\n")
+        _log.info("Resync with existing etcd data")
         self.osdb_ports[0]['binding:host_id'] = 'felix-host-1'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         expected_writes = {
@@ -546,7 +549,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites(expected_writes)
 
         # Resync with all latest data - expect no etcd writes or deletes.
-        print("\nResync with existing etcd data\n")
+        _log.info("Resync with existing etcd data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([]))
@@ -603,7 +606,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Resync with only the last port.  Expect the first two ports to be
         # cleaned up.
         self.osdb_ports = [context.original]
-        print("\nResync with existing etcd data\n")
+        _log.info("Resync with existing etcd data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([
@@ -641,7 +644,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             {'subnet_id': '10.65.0/24',
              'ip_address': '10.65.0.188'}
         ]
-        print("\nResync with edited data\n")
+        _log.info("Resync with edited data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         expected_writes = {
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'

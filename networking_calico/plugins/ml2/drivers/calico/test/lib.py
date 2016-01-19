@@ -21,8 +21,16 @@ Common code for Neutron driver UT.
 import eventlet
 import eventlet.queue
 import inspect
+import logging
 import mock
 import sys
+
+# When you're working on a test and need to see logging - both from the test
+# code and the code _under_ test - uncomment the following line.
+#
+# logging.basicConfig(level=logging.INFO)
+
+_log = logging.getLogger(__name__)
 
 sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()
@@ -177,7 +185,7 @@ class Lib(object):
 
     def setUp(self):
         # Announce the current test case.
-        print("\nTEST CASE: %s" % self.id())
+        _log.info("TEST CASE: %s", self.id())
 
         # Hook eventlet.
         self.setUp_eventlet()
@@ -320,9 +328,11 @@ class Lib(object):
             # Add it to the dict of sleepers, together with the waking up time.
             self.sleepers[queue] = self.current_time + secs
 
-            print("T=%s: %s: Start sleep for %ss until T=%s" % (
-                self.current_time, queue.stack, secs, self.sleepers[queue]
-            ))
+            _log.info("T=%s: %s: Start sleep for %ss until T=%s",
+                      self.current_time,
+                      queue.stack,
+                      secs,
+                      self.sleepers[queue])
 
             # Do a zero time real sleep, to allow other threads to run.
             self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
@@ -377,7 +387,7 @@ class Lib(object):
     # Tear down after each test case.
     def tearDown(self):
 
-        print("\nClean up remaining green threads...")
+        _log.info("Clean up remaining green threads...")
 
         for thread in self.threads:
             thread.kill()
@@ -400,7 +410,7 @@ class Lib(object):
     def simulated_time_advance(self, secs):
 
         while (secs > 0):
-            print("T=%s: Want to advance by %s" % (self.current_time, secs))
+            _log.info("T=%s: Want to advance by %s", self.current_time, secs)
 
             # Determine the time to advance to in this iteration: either the
             # full time that we've been asked for, or the time at which the
@@ -415,14 +425,15 @@ class Lib(object):
             # Advance to the determined time.
             secs -= (wake_up_time - self.current_time)
             self.current_time = wake_up_time
-            print("T=%s" % self.current_time)
+            _log.info("T=%s", self.current_time)
 
             # Wake up all sleepers that should now wake up.
             for queue in self.sleepers.keys():
                 if self.sleepers[queue] <= self.current_time:
-                    print("T=%s >= %s: %s: Wake up!" % (self.current_time,
-                                                        self.sleepers[queue],
-                                                        queue.stack))
+                    _log.info("T=%s >= %s: %s: Wake up!",
+                              self.current_time,
+                              self.sleepers[queue],
+                              queue.stack)
                     del self.sleepers[queue]
                     queue.put_nowait(TIMEOUT_VALUE)
 
