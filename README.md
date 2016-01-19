@@ -64,7 +64,7 @@ a number of cloud services.
 
 - [Calico as a Docker network plugin](docs/calico-with-docker/docker-network-plugin/README.md)
 - [Calico without Docker networking](docs/calico-with-docker/without-docker-networking/README.md)
-- [Calico with Kubernetes](docs/kubernetes/README.md)
+- [Calico with Kubernetes](docs/cni/kubernetes/README.md)
 - [Calico with Mesos](docs/mesos/README.md)
 - [Calico with Docker Swarm](docs/calico-with-docker/docker-network-plugin/CalicoSwarm.md)
 

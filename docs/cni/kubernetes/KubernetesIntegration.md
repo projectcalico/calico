@@ -76,7 +76,7 @@ The Kubernetes `kubelet` calls out to the `calico-cni` plugin.
 
 Download it and make sure it's executable
 ```
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico
 chmod +x /opt/cni/bin/calico
 ```
 It's recommended that this is done as part of job that manages the `kubelet` process (see below)
@@ -119,9 +119,9 @@ After=calico-node.service
 Requires=calico-node.service
 
 [Service]
-ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.1.4/bin/linux/amd64/kubelet
 ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
 ExecStart=/opt/bin/kubelet \
 --address=0.0.0.0 \
@@ -146,7 +146,7 @@ This unit file ensures that the `kubelet` binary and the `calico` plugin are pre
 ### Configuring the Kube-Proxy
 In order to use Calico policy with Kubernetes, the `kube-proxy` component must
 be configured to leave the source address of service bound traffic intact.
-This feature is first officially supported in Kubernetes v1.1.0 and as of v1.1.3 is the default.
+This feature is first officially supported in Kubernetes v1.1.0 and as of v1.1.4 is the default.
 
 We highly recommend using the latest stable Kubernetes release, but if you're using an older release
 there are two ways to enable this behavior.

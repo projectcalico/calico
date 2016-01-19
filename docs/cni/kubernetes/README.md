@@ -13,11 +13,15 @@ To start using Calico Networking in your existing Kubernetes cluster, check out 
 
 To build a new Kubernetes cluster with Calico networking, try one of the following guides:
 
-- [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
-- [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
+Quick-start guides:
 - [CoreOS Vagrant](VagrantCoreOS.md)
 - [CoreOS on GCE](GCE.md)
-- [CoreOS on AWS](AWSIntegration.md)
+- [CoreOS on AWS](AWS.md)
+
+Bare-metal guides:
+- [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
+- [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
+
 
 # Kubernetes with Calico policy
 Calico can provide network policy for Kubernetes clusters.  This feature is currently experimental and disabled by default. [The policy documentation](Policy.md) explains how to enable and use Calico policy in a Kubernetes cluster.

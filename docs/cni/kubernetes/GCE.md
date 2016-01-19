@@ -8,7 +8,7 @@
 
 # Deploying Calico and Kubernetes on GCE 
 
-These instructions allow you to set up a Kubernetes v1.1.3 cluster with Calico networking on GCE using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
+These instructions allow you to set up a Kubernetes cluster with Calico networking on GCE using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
 
 ## 1. Getting started with GCE
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see 
@@ -92,7 +92,7 @@ The following steps configure remote kubectl access to your cluster.
 
 Download `kubectl`
 ```
-wget https://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.1.4/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
@@ -101,7 +101,7 @@ The following command sets up SSH forwarding of port 8080 to your master node so
 gcloud compute ssh kubernetes-master --ssh-flag="-nNT" --ssh-flag="-L 8080:localhost:8080" &
 ```
 
-Verify that you can access the Kubernetes API
+Verify that you can access the Kubernetes API.  The following command should return a list of Kubernetes nodes.
 ```
 ./kubectl get nodes
 ```
@@ -114,9 +114,15 @@ Deploy the SkyDNS application using the provided Kubernetes manifest.
 kubectl create -f manifests/skydns.yaml
 ```
 
-Check that the DNS pod and Service are running in the kube-system namespace.
+Check that the DNS pod is running. It may take up to two minutes for the pod to start, after which the following command should show the `kube-dns-v9-xxxx` pod in `Running` state.
 ```
-kubectl get pod,svc --all-namespaces
+kubectl get pods --all-namespaces
+```
+
+>The output of the above command should resemble the following table.  Note the `Running` status:
+```
+NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
+kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
 ```
 
 ### 3.3 Deploying the guestbook application.
@@ -127,10 +133,11 @@ Create the guestbook application pods and services using the provided manifest.
 ./kubectl create -f manifests/guestbook.yaml
 ```
 
-Check that the redis-master, redis-slave, and frontend pods and services are running correctly.
+Check that the redis-master, redis-slave, and frontend pods are running correctly.  After a few minutes, the following command should show all pods in `Running` state.
 ```
-./kubectl get pods,svc
+./kubectl get pods
 ```
+> Note: The guestbook demo relies on a number of docker images which may take up to 5 minutes to download.
 
 The guestbook application uses a NodePort service to expose the frontend outside of the cluster.  You'll need to allow this port outside of the cluster with a firewall-rule.
 ```
