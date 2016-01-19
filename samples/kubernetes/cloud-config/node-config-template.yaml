@@ -63,8 +63,8 @@ write_files:
 
         # Install the CNI plugin.
         sudo mkdir -p /opt/cni/bin/
-        sudo wget -N -P /opt/cni/bin/ https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico
-        sudo wget -N -P /opt/cni/bin/ https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico-ipam
+        sudo wget -N -P /opt/cni/bin/ https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico
+        sudo wget -N -P /opt/cni/bin/ https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico-ipam
         sudo chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
       fi
 
