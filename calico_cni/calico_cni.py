@@ -370,13 +370,16 @@ class CniPlugin(object):
             except CniError as e:
                 # We hit a CNI error - return the appropriate CNI formatted
                 # error dictionary.
-                response = {"code": e.code, "msg": e.msg, "details": e.details}
+                response = json.dumps({"code": e.code, 
+                                       "msg": e.msg, 
+                                       "details": e.details})
                 code = e.code
         else:
             _log.debug("Using binary plugin")
             code, response = self._call_binary_ipam_plugin(env)
 
         # Return the IPAM return code and output.
+        _log.debug("IPAM response (rc=%s): %s", code, response)
         return code, response
 
     def _call_binary_ipam_plugin(self, env):
