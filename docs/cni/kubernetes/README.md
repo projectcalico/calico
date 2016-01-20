@@ -19,8 +19,8 @@ Quick-start guides:
 - [CoreOS on AWS](AWS.md)
 
 Bare-metal guides:
-- [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
-- [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
+- [CoreOS bare-metal](https://github.com/caseydavenport/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
+- [Ubuntu bare-metal](https://github.com/caseydavenport/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
 
 
 # Kubernetes with Calico policy

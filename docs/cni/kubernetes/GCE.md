@@ -84,6 +84,11 @@ gcloud compute instances create \
   --image coreos-stable-835-9-0-v20151208 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config/node-config.yaml
+
+You should have SSH access to your machines using the following command:
+```
+gcloud compute ssh <INSTANCE NAME>
+```
 ```
 
 ## 3. Using your cluster
@@ -98,7 +103,7 @@ chmod +x ./kubectl
 
 The following command sets up SSH forwarding of port 8080 to your master node so that you can run `kubectl` commands on your local machine.
 ```
-gcloud compute ssh kubernetes-master --ssh-flag="-nNT" --ssh-flag="-L 8080:localhost:8080" &
+gcloud compute ssh kubernetes-master --quiet --ssh-flag="-nNT" --ssh-flag="-L 8080:localhost:8080" &
 ```
 
 Verify that you can access the Kubernetes API.  The following command should return a list of Kubernetes nodes.
@@ -106,18 +111,25 @@ Verify that you can access the Kubernetes API.  The following command should ret
 ./kubectl get nodes
 ```
 
+>If successful, the above command shoud output something like this:
+```
+NAME       LABELS                            STATUS AGE
+10.240.0.3 kubernetes.io/hostname=10.240.0.3 Ready  14m
+```
+
 ### 3.2 Deploying SkyDNS
 You now have a basic Kubernetes cluster deployed using Calico networking.  Most Kubernetes deployments use SkyDNS for Kubernetes service discovery.  The following steps configure the SkyDNS service.
 
 Deploy the SkyDNS application using the provided Kubernetes manifest.
 ```
-kubectl create -f manifests/skydns.yaml
+./kubectl create -f manifests/skydns.yaml
 ```
 
 Check that the DNS pod is running. It may take up to two minutes for the pod to start, after which the following command should show the `kube-dns-v9-xxxx` pod in `Running` state.
 ```
-kubectl get pods --all-namespaces
+./kubectl get pods --namespace=kube-system
 ```
+> Note: The kube-dns-v9 pod is deployed in the `kube-system` namespace.  As such, we we must include the `--namespace=kube-system` option when using kubectl.
 
 >The output of the above command should resemble the following table.  Note the `Running` status:
 ```
@@ -125,7 +137,7 @@ NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
 kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
 ```
 
-### 3.3 Deploying the guestbook application.
+### 3.3 Deploying the guestbook application
 You're now ready to deploy applications on your Cluster.  The following steps describe how to deploy the Kubernetes [guestbook application][guestbook].
 
 Create the guestbook application pods and services using the provided manifest.
@@ -145,7 +157,18 @@ gcloud compute firewall-rules create allow-kubectl --allow tcp:30001
 ```
 > In a production deployment, it is recommended to use a GCE [LoadBalancer][loadbalancers] service which automatically deploys a GCE load-balancer and configures a public IP address for the service.
 
-You should now be able to access the guestbook application from a browser at `http://<MASTER IP>:30001`.
+You can find your master's public IP with the following command:
+```
+gcloud compute instances describe kubernetes-master | grep natIP
+```
+
+You should now be able to access the guestbook application from a browser at `http://<MASTER_IP>:30001`.
+
+### 3.4 Next Steps
+
+Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
+
+You can also take a look at how you can use Calico [network policy on Kubernetes](Policy.md).
 
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
@@ -153,4 +176,7 @@ You should now be able to access the guestbook application from a browser at `ht
 [gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/
 [guestbook]: https://github.com/kubernetes/kubernetes/blob/master/examples/guestbook/README.md
 [loadbalancers]: http://kubernetes.io/v1.0/docs/user-guide/services.html#type-loadbalancer
+[examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
+
+
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/GCE.md?pixel)](https://github.com/igrigorik/ga-beacon)

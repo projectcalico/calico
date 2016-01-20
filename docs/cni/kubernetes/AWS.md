@@ -214,13 +214,14 @@ You now have a basic Kubernetes cluster deployed using Calico networking.  Most 
 
 Deploy the SkyDNS application using the provided Kubernetes manifest.
 ```
-kubectl create -f manifests/skydns.yaml
+./kubectl create -f manifests/skydns.yaml
 ```
 
 Check that the DNS pod is running. It may take up to two minutes for the pod to start, after which the following command should show the `kube-dns-v9-xxxx` pod in `Running` state.
 ```
-kubectl get pods --all-namespaces
+./kubectl get pods --namespace=kube-system
 ```
+> Note: The kube-dns-v9 pod is deployed in the `kube-system` namespace.  As such, we we must include the `--namespace=kube-system` option when using kubectl.
 
 >The output of the above command should resemble the following table.  Note the `Running` status:
 ```
@@ -228,7 +229,7 @@ NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
 kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
 ```
 
-### 4.3 Deploying the guestbook application.
+### 4.3 Deploying the guestbook application
 You're now ready to deploy applications on your Cluster.  The following steps describe how to deploy the Kubernetes [guestbook application][guestbook].
 
 Create the guestbook application pods and services using the provided manifest.
@@ -252,10 +253,18 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 
 You should now be able to access the guestbook application from a browser at `http://<MASTER IP>:30001`.
 
+### 4.4 Next Steps
+
+Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
+
+You can also take a look at how you can use Calico [network policy on Kubernetes](Policy.md).
+
+
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
 [configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-calico-with-docker.html
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [guestbook]: https://github.com/kubernetes/kubernetes/blob/master/examples/guestbook/README.md
 [loadbalancers]: http://kubernetes.io/v1.0/docs/user-guide/services.html#type-loadbalancer
+[examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
 
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/AWS.md?pixel)](https://github.com/igrigorik/ga-beacon)
