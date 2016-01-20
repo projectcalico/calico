@@ -29,4 +29,7 @@ Calico can provide network policy for Kubernetes clusters.  This feature is curr
 # Requirements
 - The kube-proxy should be started in `iptables` proxy mode.  Userspace mode may work for some deployments, but is not recommended. 
 
+# Troubleshooting 
+- [Troubleshooting](Troubleshooting.md)
+
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
