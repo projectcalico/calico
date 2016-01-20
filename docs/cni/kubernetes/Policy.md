@@ -20,13 +20,13 @@ Without annotation-based policy enabled, Calico follows the [Kubernetes networki
 When Calico's annotation-based policy is enabled: 
 - Pods will be, by default, isolated by namespace boundaries. Only pods in the same namespace can communicate.
 - Annotations can be used to expose access to pods outside of their namespace. 
-- Annotations can be used to futher isolate pods within their namespace.
+- Annotations can be used to further isolate pods within their namespace.
 - Pods in the `kube-system` namespace (such as SkyDNS), are accessible to the rest of the cluster.  
 
 Since pods are, by default, isolated by namespace boundaries, they will:
-- not be accessible by pods outside of their namespace unless explicitly allowed via annoations.  
-- not be accessible via Kubernetes service IPs, NodePort services, or LoadBalancer services unless specificaly allowed using an annotation.
-- not be accessible by the compute hosts in your cluster unless specificaly allowed using an annotation. 
+- not be accessible by pods outside of their namespace unless explicitly allowed via annotations.  
+- not be accessible via Kubernetes service IPs, NodePort services, or LoadBalancer services unless specifically allowed using an annotation.
+- not be accessible by the compute hosts in your cluster unless specifically allowed using an annotation. 
 
 ## Enabling annotation-based policy
 To enable annotation-based policy, add the `policy` section to your CNI network config file as shown.
@@ -72,7 +72,7 @@ allow icmp [type <ICMPTYPE [code <ICMPCODE>]] [from [label <KEY>=<VAL>] [cidr <C
 When `k8s-annotations` policy is enabled, Calico will reject incoming connections to pods from outside of their
 namespace. 
 
-The RecplicationController manifest in this example shows how to use annotations to expose pods outside of their namespace. 
+The ReplicationController manifest in this example shows how to use annotations to expose pods outside of their namespace. 
 
 This allows:
 - incoming connections from pods in other namespaces.

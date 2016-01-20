@@ -30,7 +30,7 @@ Kubernetes node in your cluster, as it contains the BGP agent necessary for Cali
 The `calico-cni` plugin integrates directly with the Kubernetes `kubelet` process
 on each node to discover which pods have been created, and adds them to Calico networking.
 
-## Installing Calico Componenets
+## Installing Calico Components
 ### 1. Run `calico/node` and configure the node.
 The Kubernetes master and each Kubernetes node require the `calico/node` container.
 Each node must also be recorded in the Calico datastore. Running the container and
