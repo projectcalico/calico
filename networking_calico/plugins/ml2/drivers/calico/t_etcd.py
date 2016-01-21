@@ -824,7 +824,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
                 continue
 
         # Find any removed endpoints.
-        for host, endpoints in self._endpoints_by_host.iteritems():
+        for host, endpoints in self._endpoints_by_host.items():
             current_endpoints = endpoints_by_host.get(host, set())
             removed_endpoints = endpoints - current_endpoints
             for endpoint_id in removed_endpoints:
