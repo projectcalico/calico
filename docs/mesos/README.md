@@ -23,7 +23,7 @@ At this time, we do not support adding netmodules to an existing mesos
 cluster.
 
 ###  Launching Tasks with Calico + Mesos
-IP-Per-Container Networking with Calico is an opt-in feature for Mesos Frameworks that launch tasks with [Networkinfo](https://github.com/apache/mesos/blob/0.26.0-rc3/include/mesos/mesos.proto#L1383). This means that your favorite Mesos Frameworks will not work with Calico until they have opted to include Networkinfo when launching tasks. Currently, this is limited to Mesos tasks launched via Marathon, with support for more frameworks growing. 
+IP-Per-Container Networking with Calico is an opt-in feature for Mesos Frameworks that launch tasks with [Networkinfo](https://github.com/apache/mesos/blob/0.26.0/include/mesos/mesos.proto#L1383). This means that your favorite Mesos Frameworks will not work with Calico until they have opted to include Networkinfo when launching tasks. Currently, this is limited to Mesos tasks launched via Marathon, with support for more frameworks growing. 
 
 Since the Mesos Docker Containerizer does not support Module hooks, external networking is incompatible with docker containers in 0.26. Modifications are being made to the Mesos Containerizer to launch docker containers in future versions of Mesos, which will work with Calico out of the box going forward.
 
@@ -45,13 +45,16 @@ The [Calico-Mesos RPM Installation Guide](RpmInstallCalicoMesos.md) serves as th
 ### b.) Manual
 For an in-depth walkthrough of the full installation procedure performed by the RPMs, see the [Calico-Mesos Manual Install Guide](ManualInstallCalicoMesos.md).
 
-### c.) Dockerized Deployment
+### c.) Dockerized Deployment (Automated)
 For those of you that don't want to install mesos onto your hosts, 
 we've dockerized the services and already included Calico in them. 
-See the [Dockerized Mesos Guide](DockerizedDeployment.md) for info on how to get up and running, fast.
+Check out the [Vagrant Dockerized Mesos Guide](DockerizedVagrant.md) for info on how to get up and running, fast.
+
+### d.) Dockerized Deployment (Manual)
+To run the dockerized mesos cluster by hand, check out the [Dockerized Mesos Guide](DockerizedDeployment.md).
 
 ## 3. Launching Tasks
-Calico is compatible with all frameworks which use the new NetworkInfo protobuf when launching tasks. Marathon has introduced limited support for this. For an early peek at using this , use `mesosphere/marathon:v0.14.0-RC2`.
+Calico is compatible with all frameworks which use the new NetworkInfo protobuf when launching tasks. Marathon has introduced limited support for this. For an early peek at using this , use `mesosphere/marathon:v0.14.0`.
 
 But first, you'll need to open tcp port 8080 on your firewall 
 Marathon port on your firewall to connect to Marathon. 
@@ -69,7 +72,7 @@ docker run \
 -e MARATHON_MASTER=zk://<ZOOKEEPER-IP>:2181/mesos \
 -e MARATHON_ZK=zk://<ZOOKEEPER-IP>:2181/marathon \
 -p 8080:8080 \
-mesosphere/marathon:v0.14.0-RC2
+mesosphere/marathon:v0.14.0
 ```
 This version of Marathon supports two new fields in an application's JSON file:
 
@@ -105,5 +108,5 @@ curl -X PUT -H "Content-Type: application/json" http://localhost:8080/v2/groups/
 [mesos]: https://mesos.apache.org/
 [net-modules]: https://github.com/mesosphere/net-modules
 [docker]: https://www.docker.com/
-[marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0-RC1/docs/docs/ip-per-task.md
+[marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0/docs/docs/ip-per-task.md
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
