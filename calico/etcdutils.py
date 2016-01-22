@@ -1,12 +1,15 @@
-# Copyright (c) Metaswitch Networks 2015. All rights reserved.
+# Copyright (c) Metaswitch Networks 2015-2016. All rights reserved.
 from collections import namedtuple
 
+import functools
+import json
 import logging
 import re
 import etcd
 import os
 from socket import timeout as SocketTimeout
 import time
+from types import StringTypes
 
 from urllib3 import Timeout
 from urllib3.exceptions import ReadTimeoutError
@@ -402,3 +405,77 @@ def delete_empty_parents(client, child_dir, root_key, timeout=DEFAULT_TIMEOUT):
 
 class ResyncRequired(Exception):
     pass
+
+
+def intern_dict(d, fields_to_intern=None):
+    """
+    Return a copy of the input dict where all its string/unicode keys
+    are interned, optionally interning some of its values too.
+
+    Caveat: assumes that it is safe to convert the keys and interned values
+    to str by calling .encode("utf8") on each string.
+
+    :param dict[StringTypes,...] d: Input dict.
+    :param set[StringTypes] fields_to_intern: set of field names whose values
+        should also be interned.
+    :return: new dict with interned keys/values.
+    """
+    fields_to_intern = fields_to_intern or set()
+    out = {}
+    for k, v in d.iteritems():
+        # We can't intern unicode strings, as returned by etcd but all our
+        # keys should be ASCII anyway.  Use the utf8 encoding just in case.
+        k = intern(k.encode("utf8"))
+        if k in fields_to_intern:
+            if isinstance(v, StringTypes):
+                v = intern(v.encode("utf8"))
+            elif isinstance(v, list):
+                v = intern_list(v)
+        out[k] = v
+    return out
+
+
+def intern_list(l):
+    """
+    Returns a new list with interned versions of the input list's contents.
+
+    Non-strings are copied to the new list verbatim.  Returned strings are
+    encoded using .encode("utf8").
+    """
+    out = []
+    for item in l:
+        if isinstance(item, StringTypes):
+            item = intern(item.encode("utf8"))
+        out.append(item)
+    return out
+
+
+# Intern JSON keys as we load them to reduce occupancy.
+FIELDS_TO_INTERN = set([
+    # Endpoint dicts.  It doesn't seem worth interning items like the MAC
+    # address or TAP name, which are rarely (if ever) shared.
+    "profile_id",
+    "profile_ids",
+    "state",
+    "ipv4_gateway",
+    "ipv6_gateway",
+
+    # Rules dicts.
+    "protocol",
+    "src_tag",
+    "dst_tag",
+    "action",
+])
+json_decoder = json.JSONDecoder(
+    object_hook=functools.partial(intern_dict,
+                                  fields_to_intern=FIELDS_TO_INTERN)
+)
+
+
+def safe_decode_json(raw_json, log_tag=None):
+    try:
+        return json_decoder.decode(raw_json)
+    except (TypeError, ValueError):
+        _log.warning("Failed to decode JSON for %s: %r.  Returning None.",
+                     log_tag, raw_json)
+        return None
