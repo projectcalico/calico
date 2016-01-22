@@ -2,7 +2,7 @@
 """do_release.py
 
 Usage:
-  do_release.py [--force] [--dry-run] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION KUBERNETES_VERSION]
+  do_release.py [--force] [--dry-run] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION]
 
 Options:
   -h --help     Show this screen.
@@ -22,8 +22,6 @@ from utils import run
 from calico_ctl import __libnetwork_plugin_version__
 from calico_ctl import __libcalico_version__
 from calico_ctl import __felix_version__
-from calico_ctl import __kubernetes_plugin_version__
-
 
 # The candidate version replacement performs most of the required version
 # replacements, but replaces build artifact URLs with a dynamic URL that
@@ -41,12 +39,6 @@ CANDIDATE_VERSION_REPLACE = [
 
     (re.compile(r'__felix_version__\s*=\s*".*"'),
      '__felix_version__ = "{calico-version}"'),
-
-    (re.compile(r'__kubernetes_plugin_version__\s*=\s*".*"'),
-     '__kubernetes_plugin_version__ = "{kubernetes-version}"'),
-
-    (re.compile(r'raw.githubusercontent.com/projectcalico/calico-kubernetes/[^\/]+/'),
-     'raw.githubusercontent.com/projectcalico/calico-kubernetes/{kubernetes-version}/'),
 
     (re.compile(r'\*\*release\*\*'),
      '{version}'),
@@ -100,9 +92,6 @@ MASTER_VERSION_REPLACE = [
     (re.compile(r'__felix_version__\s*=\s*".*"'),
      '__felix_version__ = "{calico-version}-dev"'),
 
-    (re.compile(r'__kubernetes_plugin_version__\s*=\s*".*"'),
-     '__kubernetes_plugin_version__ = "{kubernetes-version}"'),
-
     (re.compile(r'https://github\.com/projectcalico/calico\-docker/blob/.*/README\.md'),
      'https://github.com/projectcalico/calico-containers/blob/{version}/README.md')
 ]
@@ -143,10 +132,9 @@ def start_release():
     calico_version = arguments["CALICO_VERSION"]
     libcalico_version = arguments["LIBCALICO_VERSION"]
     libnetwork_version = arguments["LIBNETWORK_VERSION"]
-    kubernetes_version = arguments["KUBERNETES_VERSION"]
 
 
-    if not (calico_version and libcalico_version and libnetwork_version and kubernetes_version):
+    if not (calico_version and libcalico_version and libnetwork_version):
         para("To pin the calico libraries used by calico-containers, please specify "
              "the name of the requested versions as they appear in the GitHub "
              "releases.")
@@ -161,16 +149,11 @@ def start_release():
             utils.get_github_library_version("libnetwork-plugin", __libnetwork_plugin_version__,
                                              "https://github.com/projectcalico/libnetwork-plugin")
 
-        kubernetes_version = \
-            utils.get_github_library_version("kubernetes-plugin", __kubernetes_plugin_version__,
-                                             "https://github.com/projectcalico/calico-kubernetes")
-
     release_data["versions"] = {"version": new_version,
                                 "version-no-v": new_version[1:],
                                 "calico-version": calico_version,
                                 "libcalico-version": libcalico_version,
                                 "libnetwork-version": libnetwork_version,
-                                "kubernetes-version": kubernetes_version,
                                 }
 
     bullet("Creating a candidate release branch called "
