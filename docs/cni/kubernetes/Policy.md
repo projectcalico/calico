@@ -1,5 +1,5 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-docker source tree.
 >
 > View the calico-docker documentation for the latest release [here](https://github.com/projectcalico/calico-docker/blob/v0.13.0/README.md).
 <!--- else
@@ -230,4 +230,4 @@ spec:
 
 [k8s-network-model]: https://github.com/kubernetes/kubernetes/blob/master/docs/design/networking.md#networking
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-docker/docs/kubernetes/KubernetesPolicy.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/Policy.md?pixel)](https://github.com/igrigorik/ga-beacon)

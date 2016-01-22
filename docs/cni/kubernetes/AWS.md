@@ -1,5 +1,5 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
 > View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else

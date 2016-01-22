@@ -1,5 +1,5 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
 > View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.13.0/README.md).
 <!--- else
@@ -166,4 +166,4 @@ You can also take a look at how you can use Calico [network policy on Kubernetes
 [guestbook]: https://github.com/kubernetes/kubernetes/blob/master/examples/guestbook/README.md
 [examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/VagrantCoreOS.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/VagrantCoreOS.md?pixel)](https://github.com/igrigorik/ga-beacon)

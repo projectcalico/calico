@@ -1,5 +1,5 @@
 <!--- master only -->
-> ![warning](../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
+> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
 > View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
@@ -45,7 +45,7 @@ sudo chmod +x calicoctl
 sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node
 ```
 
-See the [`calicoctl node` documentation](https://github.com/projectcalico/calico-containers/blob/master/docs/calicoctl/node.md#calicoctl-node)
+See the [`calicoctl node` documentation](../../calicoctl/node.md#calicoctl-node)
 for more information.
 
 #### Example systemd unit file (calico-node.service)
@@ -157,4 +157,4 @@ there are two ways to enable this behavior.
 See the [kube-proxy documentation](http://kubernetes.io/v1.1/docs/admin/kube-proxy.html)
 for more details.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
