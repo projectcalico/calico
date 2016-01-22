@@ -33,7 +33,7 @@ VERSION_NAME_RE = re.compile(r'^v(\d+)\.(\d+)\.(\d+)[.-](\w+)$')
 MD_URL_RE = re.compile(r'\[([^\[\]]*)\]\(([^()]*)\)')
 
 # Regex for matching the main README.
-README_RE = re.compile(r'https://github\.com/projectcalico/calico\-docker/blob/.*/README\.md')
+README_RE = re.compile(r'https://github\.com/projectcalico/calico\-containers/blob/.*/README\.md')
 
 # Files to include in the list of files to automatically update.  All file
 # paths are relative to the project root.
