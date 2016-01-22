@@ -428,6 +428,8 @@ def validate_uri(filename, uri):
         # Validating a URL.  Don't validate the shield URLs.
         if uri.startswith("https://img.shields.io"):
             return True
+        if uri.startswith("https://badge.imagelayers.io"):
+            return True
 
         # There should no calico-containers URL except for:
         # - The README URLs which we skip since these are auto-generated
