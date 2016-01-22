@@ -1,0 +1,73 @@
+#cloud-config
+---
+write_files:
+  - path: /home/core/get_rkt.sh
+    permissions: 777
+    owner: root
+    content: |
+      #!/usr/bin/bash -e
+      # REMOVE WHEN COREOS SHIPS with rkt v0.16.0
+      # Add /opt/bin to the _front_ of the PATH.
+      # Can't directly write to .profile since it's a symlink to a RO filesystem      
+      rm /home/core/.bashrc
+      echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
+      echo "Defaults  secure_path=/opt/bin:$PATH" >>/etc/sudoers.d/path
+      mkdir -p /opt/bin
+      curl -L https://github.com/coreos/rkt/releases/download/v0.16.0/rkt-v0.16.0.tar.gz | tar --strip-components=1 --overwrite -zxv -C /opt/bin
+
+coreos:
+  update:
+    reboot-strategy: off
+  etcd2:
+    name: "etcdserver"
+    listen-client-urls: http://0.0.0.0:2379
+    advertise-client-urls: http://$private_ipv4:2379
+    initial-cluster: etcdserver=http://$private_ipv4:2380
+    initial-advertise-peer-urls: http://$private_ipv4:2380
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    listen-peer-urls: http://0.0.0.0:2380    
+  units:
+    - name: "etcd2.service"
+      command: "start"
+    - name: calico-download.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        Description=Download calico
+        After=network-online.target docker.service pre-release-rkt.service
+        Requires=network-online.target docker.service pre-release-rkt.service
+        
+        [Service]
+        User=root
+        ExecStartPre=/usr/bin/mkdir -p /opt/bin
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
+        ExecStartPre=/usr/bin/docker pull calico/node:latest
+        ExecStartPre=/usr/bin/mkdir -p /etc/rkt/net.d
+        ExecStartPre=/usr/bin/chmod a+w /etc/rkt/net.d
+        ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico
+        ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico
+        ExecStartPre=/opt/bin/rkt --insecure-options=image fetch docker://nginx
+        ExecStartPre=/opt/bin/rkt --insecure-options=image fetch docker://busybox
+        ExecStart=/usr/bin/true
+        RemainAfterExit=yes
+        Type=oneshot
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: pre-release-rkt.service
+      command: start
+      content: |-
+        [Unit]
+        Description=Download an early version of RKT - REMOVE WHEN COREOS SHIPS rkt v0.16.0
+        Wants=network-online.target
+        After=network-online.target
+
+        [Service]
+        User=root
+        RemainAfterExit=yes
+        Type=oneshot
+        ExecStartPre=/home/core/get_rkt.sh
+        ExecStart=/usr/bin/true
+

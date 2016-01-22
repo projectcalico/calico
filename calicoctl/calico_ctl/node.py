@@ -24,7 +24,6 @@ from subprocess32 import call
 from netaddr import IPAddress, AddrFormatError
 from prettytable import PrettyTable
 
-from . import __rkt_plugin_version__, __kubernetes_plugin_version__
 from pycalico.datastore_datatypes import IPPool
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
@@ -48,8 +47,7 @@ __doc__ = """
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-    [--detach=<DETACH>] [--rkt]
-    [(--kubernetes [--kube-plugin-version=<KUBE_PLUGIN_VERSION])]
+    [--detach=<DETACH>]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node remove [--remove-endpoints]
@@ -83,31 +81,17 @@ Options:
   --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
-  --kubernetes              Download and install the Kubernetes plugin.
-  --kube-plugin-version=<KUBE_PLUGIN_VERSION> Version of the Kubernetes plugin
-                            to install when using the --kubernetes option.
-                            [default: %s]
-  --rkt                     Download and install the rkt plugin.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
                             Calico's libnetwork driver.
                             [default: calico/node-libnetwork:latest]
-""" % __kubernetes_plugin_version__
+"""
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
 CALICO_NETWORKING_ENV = "CALICO_NETWORKING"
 CALICO_NETWORKING_DEFAULT = "true"
-
-KUBERNETES_BINARY_URL = 'https://github.com/projectcalico/calico-kubernetes/releases/download/%s/calico_kubernetes'
-KUBERNETES_PLUGIN_DIR = '/usr/libexec/kubernetes/kubelet-plugins/net/exec/calico/'
-KUBERNETES_PLUGIN_DIR_BACKUP = '/etc/kubelet-plugins/calico/'
-
-RKT_PLUGIN_VERSION = __rkt_plugin_version__
-RKT_BINARY_URL = 'https://github.com/projectcalico/calico-rkt/releases/download/%s/calico_rkt' % RKT_PLUGIN_VERSION
-RKT_PLUGIN_DIR = '/usr/lib/rkt/plugins/net/'
-RKT_PLUGIN_DIR_BACKUP = '/etc/rkt-plugins/calico/'
 
 ETCD_KEY_NODE_FILE = "/etc/calico/certs/key.pem"
 ETCD_CERT_NODE_FILE = "/etc/calico/certs/cert.crt"
@@ -211,8 +195,6 @@ def node(arguments):
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
 
-        kubernetes_version = None if not arguments.get("--kubernetes") \
-                                else arguments.get("--kube-plugin-version")
         libnetwork_image = None if not arguments.get("--libnetwork") \
                                 else arguments.get("--libnetwork-image")
         node_start(ip=arguments.get("--ip"),
@@ -222,13 +204,11 @@ def node(arguments):
                    ip6=arguments.get("--ip6"),
                    as_num=as_num,
                    detach=detach,
-                   kubernetes_version=kubernetes_version,
-                   rkt=arguments.get("--rkt"),
                    libnetwork_image=libnetwork_image)
 
 
 def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-               kubernetes_version, rkt, libnetwork_image):
+               libnetwork_image):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -240,9 +220,6 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     the global default value will be used.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
-    :param kubernetes_version: The version of the calico-kubernetes plugin to
-     install, or None if the plugin should not be installed.
-    :param rkt: True to install the rkt plugin, False otherwise.
     :param libnetwork_image: The name of the Calico libnetwork driver image to
     use.  None, if not using libnetwork.
     :return:  None.
@@ -296,26 +273,6 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
 
     # Warn if this hostname conflicts with an existing host
     warn_if_hostname_conflict(ip)
-
-    # Install Kubernetes plugin
-    if kubernetes_version:
-        # Build a URL based on the provided Kubernetes_version.
-        url = KUBERNETES_BINARY_URL % kubernetes_version
-        try:
-            # Attempt to install to the default Kubernetes directory
-            install_plugin(KUBERNETES_PLUGIN_DIR, url)
-        except OSError:
-            # Use the backup directory
-            install_plugin(KUBERNETES_PLUGIN_DIR_BACKUP, url)
-
-    # Install rkt plugin
-    if rkt:
-        try:
-            # Attempt to install to the default rkt directory
-            install_plugin(RKT_PLUGIN_DIR, RKT_BINARY_URL)
-        except OSError:
-            # Use the backup directory
-            install_plugin(RKT_PLUGIN_DIR_BACKUP, RKT_BINARY_URL)
 
     # Set up etcd
     ipv4_pools = client.get_ip_pools(4)
@@ -832,35 +789,6 @@ def _attach_and_stream(container):
         # Could either be this process is being killed, or output generator
         # raises an exception.
         docker_client.stop(container)
-
-
-def install_plugin(plugin_dir, binary_url):
-    """
-    Downloads a plugin to the specified directory.
-    :param plugin_dir: Desired download destination for the plugin.
-    :param binary_url: Download the plugin from this url.
-    :return: Nothing
-    """
-    if not os.path.exists(plugin_dir):
-        os.makedirs(plugin_dir)
-    binary_path = plugin_dir + 'calico'
-    getter = URLGetter()
-    try:
-        getter.retrieve(binary_url, binary_path)
-    except IOError:
-        # We were unable to download the binary.  This may be because the
-        # user provided an invalid calico-kubernetes version.
-        print "ERROR: Couldn't download the plugin from %s" % binary_url
-        sys.exit(1)
-    else:
-        # Download successful - change permissions to allow execution.
-        try:
-            st = os.stat(binary_path)
-            executable_permissions = st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-            os.chmod(binary_path, executable_permissions)
-        except OSError:
-            print "ERROR: Unable to set permissions on plugin %s" % binary_path
-            sys.exit(1)
 
 
 def _ensure_host_tunnel_addr(ipv4_pools, ipip_pools):
