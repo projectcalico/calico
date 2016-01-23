@@ -11,37 +11,33 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
 import os
-import stat
-import socket
 import signal
+import sys
 
 import docker
 import docker.errors
 import docker.utils
-from subprocess32 import call
 from netaddr import IPAddress, AddrFormatError
 from prettytable import PrettyTable
-
-from pycalico.datastore_datatypes import IPPool
-from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_KEY_FILE_ENV, ETCD_CERT_FILE_ENV,
                                 ETCD_CA_CERT_FILE_ENV, ETCD_SCHEME_ENV,
                                 ETCD_SCHEME_DEFAULT)
-
+from pycalico.datastore_datatypes import BGPPeer
+from pycalico.datastore_datatypes import IPPool
 from pycalico.netns import remove_veth
 from pycalico.util import get_host_ips
+from subprocess32 import call
+
+from checksystem import check_system
 from connectors import client
 from connectors import docker_client
 from utils import REQUIRED_MODULES
+from utils import get_container_ipv_from_arguments
 from utils import hostname
 from utils import print_paragraph
-from utils import get_container_ipv_from_arguments
 from utils import validate_ip, validate_asn, convert_asn_to_asplain
-from utils import URLGetter
-from checksystem import check_system
 
 __doc__ = """
 Usage:
@@ -69,12 +65,13 @@ Options:
   --detach=<DETACH>         Set "true" to run Calico service as detached,
                             "false" to run in the foreground.  When using
                             libnetwork, this may not be set to "false".
+                            When using --runtime=rkt, --detach is always false.
                             [default: true]
   --runtime=<RUNTIME>       Specify how Calico services should be
-                            launched.  When set to "docker", services will be
-                            launched via the calico-node container, whereas a
-                            value of "none" will not launch them at all.
-                            [default: docker]
+                            launched.  When set to "docker" or "rkt", services
+                            will be launched via the calico-node container,
+                            whereas a value of "none" will not launch them at
+                            all. [default: docker]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
@@ -125,7 +122,7 @@ def validate_arguments(arguments):
     peer_ip_ok = arguments.get("<PEER_IP>") is None or \
                  validate_ip(arguments["<PEER_IP>"], 4) or \
                  validate_ip(arguments["<PEER_IP>"], 6)
-    runtime_ok = arguments.get("--runtime") in [None, "none", "docker"]
+    runtime_ok = arguments.get("--runtime") in [None, "none", "docker", "rkt"]
 
     asnum_ok = True
     asnum = arguments.get("<AS_NUM>") or arguments.get("--as")
@@ -153,7 +150,7 @@ def validate_arguments(arguments):
     if not detach_libnetwork_ok:
         print "The only valid value for --detach is 'true' when using libnetwork"
     if not runtime_ok:
-        print "Runtime must be 'docker' or 'none'."
+        print "Runtime must be 'docker', 'rkt' or 'none'."
 
     # Exit if not valid argument
     if not (ip_ok and ip6_ok and container_ip_ok and peer_ip_ok and asnum_ok
@@ -336,15 +333,19 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         felix_envs.append("FELIX_ETCDCERTFILE=%s" % ETCD_CERT_NODE_FILE)
 
     if runtime == 'docker':
-        _start_node_container(ip, ip6, log_dir, node_image, detach, etcd_envs,
-                              felix_envs, etcd_volumes, etcd_binds)
+        _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs,
+                                     felix_envs, etcd_volumes, etcd_binds)
         if libnetwork_image:
             _start_libnetwork_container(libnetwork_image, etcd_envs,
                                         etcd_volumes, etcd_binds)
+    if runtime == 'rkt':
+        _start_node_container_rkt(ip, ip6, node_image, etcd_envs, felix_envs,
+                                  etcd_volumes, etcd_binds)
 
 
-def _start_node_container(ip, ip6, log_dir, node_image, detach, etcd_envs,
-                          felix_envs, etcd_volumes, etcd_binds):
+
+def _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs,
+                                 felix_envs, etcd_volumes, etcd_binds):
     """
     Start the main Calico node container.
 
@@ -412,6 +413,60 @@ def _start_node_container(ip, ip6, log_dir, node_image, detach, etcd_envs,
 
     if not detach:
         _attach_and_stream(container)
+
+
+def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
+                                 felix_envs, etcd_volumes, etcd_binds):
+    """
+    Start the main Calico node container using rkt
+
+    :param ip:  The IPv4 address of the host.
+    :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param node_image:  The calico-node image to use.
+    :param etcd_envs: Etcd environment variables to pass into the container
+    :param felix_envs: Felix environment variables to pass into the container
+    :param etcd_volumes: List of mount_paths for etcd files to mount on the
+    container
+    :param etcd_binds: Dictionary of host file and mount file pairs for etcd
+    files to mount on the container
+    :return: None.
+    """
+    calico_networking = os.getenv(CALICO_NETWORKING_ENV,
+                                  CALICO_NETWORKING_DEFAULT)
+
+    environment = [
+        "CALICO_DISABLE_FILE_LOGGING=true",
+        "HOSTNAME=%s" % hostname,
+        "IP=%s" % ip,
+        "IP6=%s" % (ip6 or ""),
+        "CALICO_NETWORKING=%s" % calico_networking
+    ] + etcd_envs + felix_envs
+
+    # TODO No support for SSL (etcd binds) yet
+    
+    env_commands = []
+    for env_var in environment:
+        env_commands += ["--set-env=%s" % (env_var)]
+
+    # Maybe in future we'll want to have a configurable path for the
+    # stage1-fly.aci but for now use the following algorithm
+    # 1) If there is a file in the current directory, use that.
+    # 2) Otherwise use the file from the default location.
+    #
+    # This allows the image to be overridden (e.g. if using a custom version of
+    # rkt on CoreOS where the default file can't be updated)
+    stage1_filename = "stage1-fly.aci"
+    if os.path.isfile(stage1_filename):
+        stage1_path = stage1_filename
+    else:
+        stage1_path = "/usr/share/rkt/stage1-fly.aci"
+
+    rkt_command = ["rkt", "run",
+         "--stage1-image=%s" % stage1_path,
+         "--insecure-options=image"] + env_commands + ["docker://%s" % node_image]
+
+    print " ".join(rkt_command)
+    call(rkt_command)
 
 
 def _start_libnetwork_container(libnetwork_image, etcd_envs, etcd_volumes,

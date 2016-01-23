@@ -8,8 +8,8 @@
 
 # Calico Networking with rkt
 
-This tutorial describes how to set up a Calico cluster in a mixed Docker and rkt environment.
-Docker is used for running the Calico components but workloads are run under rkt.
+This tutorial describes how to set up a Calico cluster in a pure rkt environment.
+rkt is used for running both the Calico components and the workloads.
 
 ## 1. Environment setup
 
@@ -71,40 +71,34 @@ You should also verify each host can access etcd.  The following will return an 
 
     curl -L http://localhost:2379/version
 
-And finally check that Docker is running on both hosts by running
-
-    docker ps
-
 
 ## 2. Starting Calico services
 
-Once you have your cluster up and running, start calico on all the nodes
+Once you have your cluster up and running, start Calico on all the nodes.
+Because `rkt` doesn't support daemonizing containers directly, we'll use [systemd-run][systemd-run]
+to create a systemd service.
 
-On calico-01
+Run the following command on both hosts
 
-    sudo calicoctl node
+    sudo systemd-run --unit=calico-node calicoctl node  --runtime=rkt
 
-On calico-02
 
-    sudo calicoctl node
+You can check that it's running under `rkt`
 
-This will start a container on each host. Check they are running
+	$ sudo rkt list
+	UUID            APP     IMAGE NAME                              STATE   NETWORKS
+	bc13af40        node    registry-1.docker.io/calico/node:latest running
 
-    docker ps
 
-You should see output like this on each node
-
-    vagrant@calico-01:~$ docker ps
-    CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
-    ffe6cb403e9b        calico/node:latest              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
+You can check the logs of the running Calico components using `journalctl -u calico-node`
 
 ## 3. Create the networks
 
-You can configure multiple networks when using rkt and each network is represented by a configuration file in 
-/etc/rkt/net.d/. Connections to a given container are only allowed from containers on the same network. 
+You can configure multiple networks when using rkt. Each network is represented by a configuration file in
+`/etc/rkt/net.d/``. Connections to a given container are only allowed from containers on the same network.
 Containers on multiple networks can be accessed by containers on each network that it is connected to.
 
-To define a rkt network for Calico, create a configuration file in /etc/rkt/net.d/.
+To define a rkt network for Calico, create a configuration file in `/etc/rkt/net.d/`.
 - Each network should be given a unique "name"
 - To use Calico networking, specify "type": "calico"
 - To use Calico IPAM, specify "type": "calico-ipam" in the "ipam" section.
@@ -140,22 +134,20 @@ With the networks created, let's start a container on `calico-01`
 ### On calico-01
 Create a webserver using an `nginx` container. We'll put this on `net1` network.
 
-Because `rkt` doesn't support daemonizing containers directly, we'll use [systemd-run][systemd-run]
-to create a transient systemd service.
+We'll use systemd run to create the webserver service.
 
-    sudo systemd-run rkt run --store-only=true --insecure-options=image --net=net1 --mount volume=myvol,target=/var/run --volume=myvol,kind=empty docker://nginx
+    sudo systemd-run --unit=nginx rkt run --store-only=true --insecure-options=image --net=net1 --mount volume=myvol,target=/var/run --volume=myvol,kind=empty docker://nginx
  
- This will produce output like
 
-    Running as unit run-16961.service.
-    
  Normal [systemd commands][systemd-run] can then be used to get the status of the container and view its logs. 
  
- We can then use `rkt list` to show the IP address
+ I can take a moment to download the container. After it's come up use `rkt list` to show the IP address.
+ Check the status using `sudo rkt list` or `sudo journalctl -u nginx`
   
     $ sudo rkt list
 	UUID            APP     IMAGE NAME                                      STATE   NETWORKS
-	592b9eec        nginx   registry-1.docker.io/library/nginx:latest       running net1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
+	65f026a5        node    registry-1.docker.io/calico/node:latest         running
+	b2dd9cff        nginx   registry-1.docker.io/library/nginx:latest       running net1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
 
  
  So we can see that we now have an `nginx` container running on the network `net1` with an IP address of `192.168.0.0`
@@ -199,7 +191,7 @@ Expected output
     
 
 This command runs the `wget` command in a busybox container, telling `wget` to be quiet, to only wait a second for a response and to output to stdout. 
-Stderr is redirected to /dev/null as we're not interested in the logs from `rkt` for this command.
+Stderr is redirected to `/dev/null` as we're not interested in the logs from `rkt` for this command.
 
 You can repeat this command on calico-01 and check that access works the same from any server in your cluster.
 
