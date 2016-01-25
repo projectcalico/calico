@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2014, 2015 Metaswitch Networks
+# Copyright (c) 2014-2016 Metaswitch Networks
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -473,49 +473,6 @@ def logging_exceptions(fn):
             log.exception("Exception in wrapped function %s", fn)
             raise
     return wrapped
-
-
-def intern_dict(d, fields_to_intern=None):
-    """
-    Return a copy of the input dict where all its string/unicode keys
-    are interned, optionally interning some of its values too.
-
-    Caveat: assumes that it is safe to convert the keys and interned values
-    to str by calling .encode("utf8") on each string.
-
-    :param dict[StringTypes,...] d: Input dict.
-    :param set[StringTypes] fields_to_intern: set of field names whose values
-        should also be interned.
-    :return: new dict with interned keys/values.
-    """
-    fields_to_intern = fields_to_intern or set()
-    out = {}
-    for k, v in d.iteritems():
-        # We can't intern unicode strings, as returned by etcd but all our
-        # keys should be ASCII anyway.  Use the utf8 encoding just in case.
-        k = intern(k.encode("utf8"))
-        if k in fields_to_intern:
-            if isinstance(v, StringTypes):
-                v = intern(v.encode("utf8"))
-            elif isinstance(v, list):
-                v = intern_list(v)
-        out[k] = v
-    return out
-
-
-def intern_list(l):
-    """
-    Returns a new list with interned versions of the input list's contents.
-
-    Non-strings are copied to the new list verbatim.  Returned strings are
-    encoded using .encode("utf8").
-    """
-    out = []
-    for item in l:
-        if isinstance(item, StringTypes):
-            item = intern(item.encode("utf8"))
-        out.append(item)
-    return out
 
 
 def iso_utc_timestamp():

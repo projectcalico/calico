@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2015 Metaswitch Networks
+# Copyright 2015-2016 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ felix.fetcd
 Our API to etcd.  Contains function to synchronize felix with etcd
 as well as reporting our status into etcd.
 """
-import functools
 import os
 import random
 import json
@@ -49,11 +48,12 @@ from calico.etcddriver.protocol import (
     MSG_TYPE_STATUS, MSG_KEY_STATUS, MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE,
     MSG_KEY_CA_FILE, SocketClosed)
 from calico.etcdutils import (
-    EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent
+    EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent,
+    safe_decode_json, intern_list
 )
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (
-    intern_dict, intern_list, logging_exceptions, iso_utc_timestamp, IPV4,
+    logging_exceptions, iso_utc_timestamp, IPV4,
     IPV6, StatCounter
 )
 from calico.monotonic import monotonic_time
@@ -903,28 +903,6 @@ def die_and_restart():
     os._exit(1)
 
 
-# Intern JSON keys as we load them to reduce occupancy.
-FIELDS_TO_INTERN = set([
-    # Endpoint dicts.  It doesn't seem worth interning items like the MAC
-    # address or TAP name, which are rarely (if ever) shared.
-    "profile_id",
-    "profile_ids",
-    "state",
-    "ipv4_gateway",
-    "ipv6_gateway",
-
-    # Rules dicts.
-    "protocol",
-    "src_tag",
-    "dst_tag",
-    "action",
-])
-json_decoder = json.JSONDecoder(
-    object_hook=functools.partial(intern_dict,
-                                  fields_to_intern=FIELDS_TO_INTERN)
-)
-
-
 def parse_endpoint(config, combined_id, raw_json):
     endpoint = safe_decode_json(raw_json,
                                 log_tag="endpoint %s" % combined_id.endpoint)
@@ -983,12 +961,3 @@ def parse_ipam_pool(pool_id, raw_json):
         return None
     else:
         return pool
-
-
-def safe_decode_json(raw_json, log_tag=None):
-    try:
-        return json_decoder.decode(raw_json)
-    except (TypeError, ValueError):
-        _log.warning("Failed to decode JSON for %s: %r.  Returning None.",
-                     log_tag, raw_json)
-        return None
