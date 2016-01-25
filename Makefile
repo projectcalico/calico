@@ -22,7 +22,6 @@ dist/calico: $(SRCFILES)
 
 	# Build the CNI plugin
 	docker run \
-	-u user \
 	-v `pwd`/dist:/code/dist \
 	-v `pwd`/calico_cni:/code/calico_cni \
 	calico/build pyinstaller calico_cni/calico_cni.py -a -F -s -n calico --clean
@@ -34,7 +33,6 @@ dist/calico-ipam: $(SRCFILES)
 
 	# Build the CNI IPAM plugin
 	docker run \
-	-u user \
 	-v `pwd`/dist:/code/dist \
 	-v `pwd`/calico_cni:/code/calico_cni \
 	calico/build pyinstaller calico_cni/ipam.py -a -F -s -n calico-ipam --clean
