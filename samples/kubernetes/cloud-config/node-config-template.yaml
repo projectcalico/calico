@@ -54,12 +54,12 @@ write_files:
         echo "Calico not installed - installing."
        
         # Install the `calicoctl` binary
-        wget https://github.com/projectcalico/calico-docker/releases/download/v0.13.0/calicoctl
+        wget https://github.com/projectcalico/calico-docker/releases/download/v0.14.0/calicoctl
         chmod +x calicoctl
         sudo mv calicoctl /opt/bin
 
         # Fetch the calico/node container
-        sudo docker pull calico/node:v0.13.0
+        sudo docker pull calico/node:v0.14.0
 
         # Install the CNI plugin.
         sudo mkdir -p /opt/cni/bin/
