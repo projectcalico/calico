@@ -26,17 +26,10 @@ test_image: calico_test/.calico_test.created ## Create the calico/test image
 test: st ut              ## Run all the tests
 
 dist/calicoctl: $(CALICOCTL_FILE) 
-	mkdir -p dist
-	chmod 777 dist
-
-	# Ignore errors on both docker commands. CircleCI throws an benign error
+	# Ignore errors on docker command. CircleCI throws an benign error
 	# from the use of the --rm flag
 
-	# mount calico_containers and dist under /code work directory.  Don't use /code
-	# as the mountpoint directly since the host permissions may not allow the
-	# `user` account in the container to write to it.
-	-docker run -v `pwd`/calicoctl:/code/calicoctl \
-	 -v `pwd`/dist:/code/dist --rm \
+	-docker run -v `pwd`:/code --rm \
 	 calico/build \
 	 pyinstaller calicoctl/calicoctl.py -ayF
 
