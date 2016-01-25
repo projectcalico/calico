@@ -1,4 +1,4 @@
-.PHONEY: all binary node_image test_image build_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
+.PHONEY: all binary node_image test_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
 
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -9,9 +9,6 @@ HOST_CHECKOUT_DIR?=$(shell pwd)
 
 CALICOCTL_DIR=calicoctl
 CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py)
-
-BUILD_DIR=$(CALICOCTL_DIR)
-BUILD_FILES=$(BUILD_DIR)/Dockerfile $(BUILD_DIR)/requirements.txt
 
 TEST_CONTAINER_DIR=calico_test
 TEST_CONTAINER_FILES=$(shell find calico_test/ -type f ! -name '*.created')
@@ -25,15 +22,10 @@ default: help
 all: test                ## Run all the tests
 binary: dist/calicoctl   ## Create the calicoctl binary
 node_image: calico_node/.calico_node.created ## Create the calico/node image
-build_image: calicoctl/.calico_build.created ## Create the calico/build image
 test_image: calico_test/.calico_test.created ## Create the calico/test image
 test: st ut              ## Run all the tests
 
-calicoctl/.calico_build.created: $(BUILD_FILES)
-	cd calicoctl && docker build -t calico/build:latest .
-	touch calicoctl/.calico_build.created
-
-dist/calicoctl: $(CALICOCTL_FILE) calicoctl/.calico_build.created
+dist/calicoctl: $(CALICOCTL_FILE) 
 	mkdir -p dist
 	chmod 777 dist
 
@@ -233,7 +225,6 @@ clean:
 	-rm -f *.tar
 	-docker rm -f calico-node
 	-docker rmi calico/node
-	-docker rmi calico/build
 	-docker rmi calico/test
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 

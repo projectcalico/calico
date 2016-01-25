@@ -1,9 +1,0 @@
-docopt==0.6.2
-PyInstaller==2.1
-six==1.9.0
-docker-py==1.2.1
-sh==1.11
-prettytable==0.7.2
-netaddr==0.7.15
-git+https://github.com/projectcalico/libcalico.git
-ConcurrentLogHandler
