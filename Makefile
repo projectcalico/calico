@@ -77,7 +77,7 @@ routereflector.tar:
 
 ## Download the latest docker binary
 docker:
-	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 -o docker
+	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.1 -o docker
 	chmod +x docker
 
 ## Run the UTs in a container.
@@ -173,37 +173,11 @@ semaphore:
 	# Clean up unwanted files to free disk space.
 	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
 
-	# Caching - From http://tschottdorf.github.io/cockroach-docker-circleci-continuous-integration/
-	#find . -exec touch -t 201401010000 {} \;
-	#for x in $(git ls-tree --full-tree --name-only -r HEAD); do touch -t  $(date -d "$(git log -1 --format=%ci "${x}")" +%y%m%d%H%M.%S) "${x}"; done
-
-	# "Upgrade" docker
-	docker version
-	stop docker
-	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.0 -o /usr/bin/docker
-	cp /usr/bin/docker .
-	start docker
-
-	# Use the cache
-	#cp $SEMAPHORE_CACHE_DIR/busybox.tar calico_containers || true
-	#docker load --input $SEMAPHORE_CACHE_DIR/calico-node.tar || true
-	#docker load --input $SEMAPHORE_CACHE_DIR/calico-build.tar || true
-
 	# Make sure semaphore has the modules loaded that we need.
 	modprobe -a ip6_tables xt_set
 
 	# Actually run the tests (refreshing the images as required)
 	make st
-
-	# Run subset of STs with secure etcd
-	#TODO Fix secure STs
-	#ST_TO_RUN=tests/st/no_orchestrator/ make st-ssl
-	#ST_TO_RUN=tests/st/bgp/test_route_reflector_cluster.py make st-ssl
-
-	# Store off the images if the tests passed.
-	#cp calico_containers/calico-node.tar $SEMAPHORE_CACHE_DIR
-	#cp calico_containers/busybox.tar $SEMAPHORE_CACHE_DIR
-	#docker save --output $SEMAPHORE_CACHE_DIR/calico-build.tar calico/build
 
 ## Run a Docker in Docker (DinD) container.
 create-dind: docker
