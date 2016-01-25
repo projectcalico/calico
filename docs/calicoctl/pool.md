@@ -80,7 +80,7 @@ Examples:
 $ calicoctl pool add 192.168.0.0/16
 
 # Add two pools to Calico with IP-over-IP encapsulation and NAT
-$ calicoctl pool add 192.168.0.0/16 172.24.10.0/24 --ip --nat-outgoing
+$ calicoctl pool add 192.168.0.0/16 172.24.10.0/24 --ipip --nat-outgoing
 ```
 
 ### calicoctl pool remove
