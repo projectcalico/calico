@@ -17,9 +17,6 @@ dist/calico: $(SRCFILES)
 	mkdir -p dist
 	chmod 777 `pwd`/dist
 
-	# Pull the build container.
-	docker pull calico/build:latest
-
 	# Build the CNI plugin
 	docker run \
 	-v `pwd`/dist:/code/dist \
