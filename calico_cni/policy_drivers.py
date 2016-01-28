@@ -13,19 +13,18 @@
 # limitations under the License.
 
 import os
-import re
 import sys
 import json
 import logging
 import requests
-from util import configure_logging, print_cni_error
+from calico_cni.util import print_cni_error
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.util import validate_characters
 
-from constants import *
-from policy_parser import PolicyParser
+from calico_cni.constants import *
+import calico_cni.policy_parser
 
 # Use the same logger as calico_cni.
 _log = logging.getLogger("calico_cni")
@@ -158,7 +157,7 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
     def __init__(self, pod_name, namespace, auth_token, api_root): 
         self.pod_name = pod_name
         self.namespace = namespace 
-        self.policy_parser = PolicyParser(namespace) 
+        self.policy_parser = calico_cni.policy_parser.PolicyParser(namespace)
         self.auth_token = auth_token 
         self.api_root = api_root 
         self.profile_name = "%s_%s" % (namespace, pod_name)

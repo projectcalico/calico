@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import errno
 import os
 import json
 import sys
 import logging
 from cloghandler import ConcurrentRotatingFileHandler
-from constants import * 
+from calico_cni.constants import *
 
 from pycalico.datastore_errors import DataStoreError
 
