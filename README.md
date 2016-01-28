@@ -31,7 +31,7 @@ For more information see [the Project Calico website](http://www.projectcalico.o
 To get started on [OpenStack](http://www.openstack.org/) follow the
 instructions [in our docs](http://docs.projectcalico.org/en/latest/openstack.html).
 To get started on [Docker](http://www.docker.com/) follow the instructions
-[in the calico-docker repo](https://github.com/projectcalico/calico-docker/blob/master/README.md).
+[in the calico-containers repo](https://github.com/projectcalico/calico-containers/blob/master/README.md).
 
 Technical documentation is at <http://docs.projectcalico.org/>. For
 information about contributing to Calico itself, see the section titled
