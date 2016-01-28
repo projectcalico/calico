@@ -127,6 +127,7 @@ class ProfileRules(RefCountedActor):
         self._pending_profile = None
         # Currently-programmed profile dictionary.
         self._profile = None
+        self._required_tags = set()
 
         # State flags.
         self._notified_ready = False
@@ -193,15 +194,14 @@ class ProfileRules(RefCountedActor):
         else:
             if self._pending_profile != self._profile:
                 _log.debug("Profile data changed, updating ipset references.")
-                old_tags = extract_tags_from_profile(self._profile)
-                new_tags = extract_tags_from_profile(self._pending_profile)
-                removed_tags = old_tags - new_tags
-                added_tags = new_tags - old_tags
-                for tag in removed_tags:
-                    _log.debug("Queueing ipset for tag %s for decref", tag)
-                    self._ipset_refs.discard_ref(tag)
-                for tag in added_tags:
+                # Make sure that all the new tags are active.  We can't
+                # discard unneeded tags until we've updated iptables.
+                self._required_tags = extract_tags_from_profile(
+                    self._pending_profile
+                )
+                for tag in self._required_tags:
                     _log.debug("Requesting ipset for tag %s", tag)
+                    # Note: acquire_ref() is a no-op if already acquired.
                     self._ipset_refs.acquire_ref(tag)
                 self._dirty = True
                 self._profile = self._pending_profile
@@ -216,6 +216,9 @@ class ProfileRules(RefCountedActor):
                     _log.error("Failed to program profile chain %s; error: %r",
                                self, e)
                 else:
+                    # Now we've updated iptables, we can tell the RefHelper
+                    # to discard the tags we no longer need.
+                    self._ipset_refs.replace_all(self._required_tags)
                     self._dirty = False
             elif not self._dirty:
                 _log.debug("No changes to program.")
@@ -227,6 +230,7 @@ class ProfileRules(RefCountedActor):
                     _log.exception("Failed to delete chains for profile %s",
                                    self.id)
                 else:
+                    self._ipset_refs.discard_all()
                     self._dirty = False
             else:
                 assert not self._ipset_refs.ready

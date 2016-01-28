@@ -314,10 +314,18 @@ class TestProfileRules(BaseTestCase):
         deletes that would normally be squashed trigger a retry.
         """
         # First delete fails.
+        self.rules.on_profile_update(RULES_1, async=True)
+        self.step_actor(self.rules)
+        self._process_ipset_refs(set(["dst-tag", "src-tag"]))
         self.m_ipt_updater.delete_chains.side_effect = \
             FailedSystemCall("fail", ["foo"], 1, "", "")
         self.rules.on_profile_update(None, async=True)
-        self.step_actor(self.rules)
+        real_discard_all = self.rules._ipset_refs.discard_all
+        with patch.object(self.rules._ipset_refs, "discard_all",
+                          wraps=real_discard_all) as m_discard:
+            self.step_actor(self.rules)
+        # Failure should prevent freeing of ipset refs.
+        self.assertEqual(m_discard.mock_calls, [])
         self._process_ipset_refs(set([]))
         self.m_ipt_updater.delete_chains.assert_called_once_with(
             set(RULES_1_CHAINS.keys()), async=False)
@@ -329,7 +337,10 @@ class TestProfileRules(BaseTestCase):
         self.m_ipt_updater.reset_mock()
         self.m_ipt_updater.delete_chains.side_effect = None
         self.rules.on_profile_update(None, async=True)
-        self.step_actor(self.rules)
+        with patch.object(self.rules._ipset_refs, "discard_all",
+                          wraps=real_discard_all) as m_discard:
+            self.step_actor(self.rules)
+        self.assertEqual(m_discard.mock_calls, [call()])
         self._process_ipset_refs(set([]))
         self.m_ipt_updater.delete_chains.assert_called_once_with(
             set(RULES_1_CHAINS.keys()), async=False)
@@ -344,14 +355,20 @@ class TestProfileRules(BaseTestCase):
         self.step_actor(self.rules)
         self.rules.on_profile_update(RULES_2, async=True)
         self.step_actor(self.rules)
-        # Old src-tag tag should get removed.
-        expected_tags = set(["src-tag-added", "dst-tag"])
+        # New tag should be added but old tag shouldn't be removed until
+        # iptables updated.
+        expected_tags = set(["src-tag", "src-tag-added", "dst-tag"])
         self.assertEqual(self.rules._ipset_refs.required_refs,
                          expected_tags)
         # But the ref helper will already have sent an incref for "src-tag".
         self._process_ipset_refs(expected_tags | set(["src-tag"]))
         self.m_ipt_updater.rewrite_chains.assert_called_once_with(
             RULES_2_CHAINS, {}, async=False)
+        # Processing the ipset refs triggers iptables update, which triggers
+        # tag to be freed.
+        expected_tags = set(["src-tag-added", "dst-tag"])
+        self.assertEqual(self.rules._ipset_refs.required_refs,
+                         expected_tags)
 
     def test_early_unreferenced(self):
         """
