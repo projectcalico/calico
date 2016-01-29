@@ -82,7 +82,7 @@ Options:
 This command performs two actions:
 
 1. Initialize this host for Calico by setting first-time config in etcd.
-2. (Optional) Start the `calico/node` Docker container. By default
+2. (Optional) Start the `calico/node` container. By default
 (or via `--runtime=docker`) the `calicoctl node` does this by downloading
 the `calico/node` Docker image and running it in a container.
 
@@ -113,8 +113,7 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
                (default: /var/log/calico)
     <DETACH>: Boolean to have calico/node run as detached (true) or in the foreground (false).
               (default: true)
-    <KUBE_PLUGIN_VERSION>: The version of the `calico-kubernetes` plugin to install.
-    <LIBNETWORK_IMAGE_NAME>: Desired calico/node-libnetwork Docker image to use when 
+    <LIBNETWORK_IMAGE_NAME>: Desired calico/node-libnetwork Docker image to use when
                              using the Docker libnetwork driver.
 
     --libnetwork: Download and run the calico/node-libnetwork Docker image.
@@ -123,6 +122,9 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
 When running the `calicoctl node` command with the `--libnetwork` plugin, the 
 command starts a container using the `calico/node-libnetwork` Docker image in 
 addition to starting the `calico/node` Docker image.
+
+The `--runtime=rkt` setting can be used to start the Calico services in a rkt
+container.
 
 The `--runtime=none` setting can be used to prevent Calico from launching the
 calico-node Docker container, instead allowing you to run the core processes

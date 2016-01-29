@@ -8,12 +8,14 @@ write_files:
       #!/usr/bin/bash -e
       # REMOVE WHEN COREOS SHIPS with rkt v0.16.0
       # Add /opt/bin to the _front_ of the PATH.
-      # Can't directly write to .profile since it's a symlink to a RO filesystem      
+      # Can't directly write to .profile since it's a symlink to a RO filesystem
       rm /home/core/.bashrc
       echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
       echo "Defaults  secure_path=/opt/bin:$PATH" >>/etc/sudoers.d/path
       mkdir -p /opt/bin
       curl -L https://github.com/coreos/rkt/releases/download/v0.16.0/rkt-v0.16.0.tar.gz | tar --strip-components=1 --overwrite -zxv -C /opt/bin
+      ln -s /opt/bin/stage1-fly.aci /home/core
+      ln -s /opt/bin/stage1-fly.aci /
 
 coreos:
   update:
@@ -33,19 +35,19 @@ coreos:
         Description=Download calico
         After=network-online.target docker.service pre-release-rkt.service
         Requires=network-online.target docker.service pre-release-rkt.service
-        
+
         [Service]
         User=root
         ExecStartPre=/usr/bin/mkdir -p /opt/bin
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/wget -N -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
-        ExecStartPre=/usr/bin/docker pull calico/node:latest
         ExecStartPre=/usr/bin/mkdir -p /etc/rkt/net.d
         ExecStartPre=/usr/bin/chmod a+w /etc/rkt/net.d
         ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico
         ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico
         ExecStartPre=/opt/bin/rkt --insecure-options=image fetch docker://nginx
         ExecStartPre=/opt/bin/rkt --insecure-options=image fetch docker://busybox
+        ExecStartPre=/opt/bin/rkt --insecure-options=image fetch docker://calico/node
         ExecStart=/usr/bin/true
         RemainAfterExit=yes
         Type=oneshot
@@ -66,4 +68,3 @@ coreos:
         Type=oneshot
         ExecStartPre=/home/core/get_rkt.sh
         ExecStart=/usr/bin/true
-
