@@ -12,25 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
 import json
 import unittest
-from mock import patch, MagicMock, call, ANY
-from netaddr import IPAddress, IPNetwork
-from subprocess32 import CalledProcessError, Popen, PIPE
+
+from mock import patch, MagicMock, ANY
+from netaddr import IPNetwork
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
-
 from pycalico.datastore import DatastoreClient
-from pycalico.datastore_datatypes import Endpoint, Rule, Rules
-from pycalico.datastore_errors import DataStoreError 
+from pycalico.datastore_datatypes import Rule, Rules
+from pycalico.datastore_errors import DataStoreError
 
-from calico_cni import calico_cni, container_engines, ipam
-from calico_cni.calico_cni import CniPlugin
+import calico
+import ipam
+from calico_cni import container_engines
 from calico_cni.constants import *
-from calico_cni.policy_drivers import (DefaultPolicyDriver, 
-        KubernetesDefaultPolicyDriver, KubernetesAnnotationDriver)
 from calico_cni.container_engines import DockerEngine
+from calico_cni.policy_drivers import (DefaultPolicyDriver,
+        KubernetesDefaultPolicyDriver, KubernetesAnnotationDriver)
 
 
 class CniPluginFvTest(unittest.TestCase):
@@ -58,17 +56,17 @@ class CniPluginFvTest(unittest.TestCase):
         self.client = MagicMock(spec=DatastoreClient)
 
         # Setup module mocks.
-        self.popen = calico_cni.Popen
+        self.popen = calico.Popen
         self.m_popen = MagicMock(spec=self.popen)
-        calico_cni.Popen = self.m_popen
+        calico.Popen = self.m_popen
 
-        self.os = calico_cni.os
+        self.os = calico.os
         self.m_os = MagicMock(spec=self.os)
-        calico_cni.os = self.m_os
+        calico.os = self.m_os
 
-        self.netns = calico_cni.netns
+        self.netns = calico.netns
         self.m_netns = MagicMock(spec=self.netns)
-        calico_cni.netns = self.m_netns
+        calico.netns = self.m_netns
 
         self.docker_client = container_engines.Client
         self.m_docker_client = MagicMock(self.docker_client)
@@ -80,9 +78,9 @@ class CniPluginFvTest(unittest.TestCase):
 
     def tearDown(self):
         # Reset module mocks.
-        calico_cni.Popen = self.m_popen
-        calico_cni.os = self.os
-        calico_cni.netns = self.m_netns
+        calico.Popen = self.m_popen
+        calico.os = self.os
+        calico.netns = self.m_netns
         container_engines.Client = self.docker_client
         ipam.IPAMClient = self.ipam_plugin_client
 
@@ -106,7 +104,7 @@ class CniPluginFvTest(unittest.TestCase):
         }
 
         # Create the CniPlugin to test.
-        plugin = CniPlugin(self.network_config, self.env)
+        plugin = calico.CniPlugin(self.network_config, self.env)
 
         # Mock out the datastore client.
         plugin._client = self.client

@@ -12,26 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
 import json
 import unittest
-from mock import patch, MagicMock, Mock, call, ANY
-from netaddr import IPAddress, IPNetwork
-from subprocess32 import CalledProcessError, Popen, PIPE
-from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 
-import pycalico.netns
+from mock import patch, MagicMock, ANY
+from netaddr import IPNetwork
+from nose.tools import assert_equal, assert_false, assert_raises
 from pycalico.datastore import DatastoreClient
-from pycalico.datastore_datatypes import IPPool, Endpoint
+from pycalico.datastore_datatypes import Endpoint
 from pycalico.datastore_errors import MultipleEndpointsMatch
+from subprocess32 import CalledProcessError, Popen, PIPE
 
 from calico_cni.constants import *
-from calico_cni.calico_cni import CniPlugin, main
-from calico_cni.policy_drivers import (DefaultPolicyDriver, ApplyProfileError, 
-                        KubernetesDefaultPolicyDriver, KubernetesAnnotationDriver)
-from calico_cni.container_engines import DockerEngine, DefaultEngine 
+from calico_cni.policy_drivers import (DefaultPolicyDriver, ApplyProfileError)
 from calico_cni.util import CniError
+from calico import main, CniPlugin
 
 
 class CniPluginTest(unittest.TestCase):
@@ -93,7 +88,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin.execute()
         self.plugin.delete.assert_called_once_with()
 
-    @patch("calico_cni.calico_cni.json", autospec=True)
+    @patch("calico.json", autospec=True)
     def test_add_mainline(self, m_json): 
         # Mock out _assign_ips.
         ip4 = IPNetwork("10.0.0.1/32")
@@ -126,7 +121,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
         m_json.dumps.assert_called_once_with(ipam_response)
 
-    @patch("calico_cni.calico_cni.json", autospec=True)
+    @patch("calico.json", autospec=True)
     def test_add_host_networking(self, m_json): 
         # Mock out.
         self.plugin.container_engine.uses_host_networking = MagicMock(return_value=True)
@@ -134,7 +129,7 @@ class CniPluginTest(unittest.TestCase):
         # Call method.
         assert_raises(SystemExit, self.plugin.add)
 
-    @patch("calico_cni.calico_cni.json", autospec=True)
+    @patch("calico.json", autospec=True)
     def test_add_exists_new_network(self, m_json): 
         """
         Test add when the endpoint already exists, adding to a new 
@@ -167,7 +162,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
         m_json.dumps.assert_called_once_with(expected)
 
-    @patch("calico_cni.calico_cni.json", autospec=True)
+    @patch("calico.json", autospec=True)
     def test_add_profile_error(self, m_json): 
         """
         Test add when the endpoint does not exist, error applying profile.
@@ -209,7 +204,7 @@ class CniPluginTest(unittest.TestCase):
         # Call method.
         assert_raises(SystemExit, self.plugin.add)
 
-    @patch("calico_cni.calico_cni.json", autospec=True)
+    @patch("calico.json", autospec=True)
     def test_add_exists_new_network_profile_error(self, m_json): 
         """
         Test add when the endpoint already exists, adding to a new 
@@ -231,7 +226,7 @@ class CniPluginTest(unittest.TestCase):
         # Call method.
         assert_raises(SystemExit, self.plugin.add)
 
-    @patch("calico_cni.calico_cni.json", autospec=True)
+    @patch("calico.json", autospec=True)
     def test_add_exists_no_ips(self, m_json): 
         """
         Tests add to new network when endpoint exists,
@@ -251,7 +246,7 @@ class CniPluginTest(unittest.TestCase):
         # Assert profile add is called.
         self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
 
-    @patch("calico_cni.calico_cni.netns", autospec=True)
+    @patch("calico.netns", autospec=True)
     def test_delete_mainline(self, m_netns):
         # Mock out _release_ip.
         self.plugin._release_ip = MagicMock(spec=self.plugin._release_ip)
@@ -275,7 +270,7 @@ class CniPluginTest(unittest.TestCase):
         m_netns.remove_veth.assert_called_once_with("cali12345")
         self.plugin.policy_driver.remove_profile.assert_called_once_with()
 
-    @patch("calico_cni.calico_cni.netns", autospec=True)
+    @patch("calico.netns", autospec=True)
     def test_delete_no_endpoint(self, m_netns):
         # Mock out _release_ip.
         self.plugin._release_ip = MagicMock(spec=self.plugin._release_ip)
@@ -428,7 +423,7 @@ class CniPluginTest(unittest.TestCase):
         # Call _release_ip.
         self.plugin._release_ip(env)
 
-    @patch("calico_cni.calico_cni.IpamPlugin", autospec=True)
+    @patch("calico.IpamPlugin", autospec=True)
     def test_call_ipam_plugin_calico_mainline(self, m_ipam_plugin):
         # Mock _find_ipam_plugin.
         plugin_path = "/opt/bin/cni/calico-ipam"
@@ -452,7 +447,7 @@ class CniPluginTest(unittest.TestCase):
         assert_equal(rc, 0)
         assert_equal(result, out)
 
-    @patch("calico_cni.calico_cni.IpamPlugin", autospec=True)
+    @patch("calico.IpamPlugin", autospec=True)
     def test_call_ipam_plugin_calico_error(self, m_ipam_plugin):
         # Mock _find_ipam_plugin.
         plugin_path = "/opt/bin/cni/calico-ipam"
@@ -475,7 +470,7 @@ class CniPluginTest(unittest.TestCase):
         assert_equal(rc, 150)
         assert_equal(result, expected)
 
-    @patch("calico_cni.calico_cni.Popen", autospec=True)
+    @patch("calico.Popen", autospec=True)
     def test_call_ipam_plugin_binary_mainline(self, m_popen):
         # Mock _find_ipam_plugin.
         plugin_path = "/opt/bin/cni/calico-ipam"
@@ -509,7 +504,7 @@ class CniPluginTest(unittest.TestCase):
         m_proc.communicate.assert_called_once_with(json.dumps(self.plugin.network_config))
         assert_equal(result, stdout)
 
-    @patch("calico_cni.calico_cni.Popen", autospec=True)
+    @patch("calico.Popen", autospec=True)
     def test_call_ipam_plugin_binary_missing(self, m_popen):
         """
         Unable to find IPAM plugin.
@@ -575,8 +570,8 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._client.remove_workload.side_effect = KeyError 
         self.plugin._remove_workload()
 
-    @patch("calico_cni.calico_cni.os", autospec=True)
-    @patch("calico_cni.calico_cni.Namespace", autospec=True)
+    @patch("calico.os", autospec=True)
+    @patch("calico.Namespace", autospec=True)
     def test_provision_veth_mainline(self, m_ns, m_os):
         # Mock
         endpoint = MagicMock(spec=Endpoint)
@@ -593,9 +588,9 @@ class CniPluginTest(unittest.TestCase):
         endpoint.provision_veth.assert_called_once_with(m_ns("/path/to/netns"), "eth0")
         self.plugin._client.set_endpoint.assert_called_once_with(endpoint)
 
-    @patch("calico_cni.calico_cni.os", autospec=True)
-    @patch("calico_cni.calico_cni.Namespace", autospec=True)
-    @patch("calico_cni.calico_cni.print_cni_error", autospec=True)
+    @patch("calico.os", autospec=True)
+    @patch("calico.Namespace", autospec=True)
+    @patch("calico.print_cni_error", autospec=True)
     def test_provision_veth_error(self, m_print, m_ns, m_os):
         # Mock
         endpoint = MagicMock(spec=Endpoint)
@@ -620,7 +615,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._remove_workload.assert_called_once_with()
         self.plugin._release_ip.assert_called_once_with(ANY)
 
-    @patch("calico_cni.calico_cni.netns", autospec=True)
+    @patch("calico.netns", autospec=True)
     def test_remove_veth_mainline(self, m_netns):
         # Mock
         endpoint = MagicMock(spec=Endpoint)
@@ -632,7 +627,7 @@ class CniPluginTest(unittest.TestCase):
         # Assert
         m_netns.remove_veth.assert_called_once_with(endpoint.name)
 
-    @patch("calico_cni.calico_cni.netns", autospec=True)
+    @patch("calico.netns", autospec=True)
     def test_remove_veth_error(self, m_netns):
         """
         Make sure we handle errors gracefully - don't re-raise.
@@ -684,7 +679,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
                 orchestrator_id="cni", workload_id=self.plugin.container_id)
 
-    @patch("calico_cni.calico_cni.os", autospec=True)
+    @patch("calico.os", autospec=True)
     def test_find_ipam_plugin(self, m_os):
         # Mock
         m_os.path.isfile.side_effect = iter([False, True])  # Second time returns true.
@@ -698,10 +693,10 @@ class CniPluginTest(unittest.TestCase):
         # Assert
         assert_equal(path, "/opt/cni/bin/calico-ipam")
 
-    @patch("calico_cni.calico_cni.os", autospec=True)
-    @patch("calico_cni.calico_cni.sys", autospec=True)
-    @patch("calico_cni.calico_cni.CniPlugin", autospec=True)
-    @patch("calico_cni.calico_cni.configure_logging", autospec=True)
+    @patch("calico.os", autospec=True)
+    @patch("calico.sys", autospec=True)
+    @patch("calico.CniPlugin", autospec=True)
+    @patch("calico.configure_logging", autospec=True)
     def test_main(self, m_conf_log, m_plugin, m_sys, m_os):
         # Mock
         m_os.environ = self.env
@@ -717,10 +712,10 @@ class CniPluginTest(unittest.TestCase):
         m_conf_log.assert_called_once_with(ANY, "cni.log", log_level="INFO")
         m_sys.exit.assert_called_once_with(0)
 
-    @patch("calico_cni.calico_cni.os", autospec=True)
-    @patch("calico_cni.calico_cni.sys", autospec=True)
-    @patch("calico_cni.calico_cni.CniPlugin", autospec=True)
-    @patch("calico_cni.calico_cni.configure_logging", autospec=True)
+    @patch("calico.os", autospec=True)
+    @patch("calico.sys", autospec=True)
+    @patch("calico.CniPlugin", autospec=True)
+    @patch("calico.configure_logging", autospec=True)
     def test_main_sys_exit(self, m_conf_log, m_plugin, m_sys, m_os):
         """Test main() SystemExit handling"""
         # Mock out _execute to throw SystemExit
@@ -735,10 +730,10 @@ class CniPluginTest(unittest.TestCase):
         # Assert
         m_sys.exit.assert_called_once_with(5)
 
-    @patch("calico_cni.calico_cni.os", autospec=True)
-    @patch("calico_cni.calico_cni.sys", autospec=True)
-    @patch("calico_cni.calico_cni.CniPlugin", autospec=True)
-    @patch("calico_cni.calico_cni.configure_logging", autospec=True)
+    @patch("calico.os", autospec=True)
+    @patch("calico.sys", autospec=True)
+    @patch("calico.CniPlugin", autospec=True)
+    @patch("calico.configure_logging", autospec=True)
     def test_main_unhandled_exception(self, m_conf_log, m_plugin, m_sys, m_os):
         """Test main() unhandled Exception"""
         # Mock out _execute to throw SystemExit

@@ -25,7 +25,6 @@ Usage: parse (allow|deny) [(
 import docopt
 import logging
 import re
-from netaddr import IPNetwork, AddrFormatError
 from pycalico.datastore_datatypes import Rule
 
 _log = logging.getLogger(__name__)

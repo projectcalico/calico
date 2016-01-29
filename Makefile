@@ -13,40 +13,29 @@ ipam: dist/calico-ipam
 
 # Builds the Calico CNI plugin binary.
 dist/calico: $(SRCFILES) 
-	# Make sure the output directory exists.
-	mkdir -p dist
-	chmod 777 `pwd`/dist
-
-	# Build the CNI plugin
-	docker run \
-	-v `pwd`/dist:/code/dist \
-	-v `pwd`/calico_cni:/code \
-	calico/build pyinstaller calico_cni.py -a -F -s -n calico --clean
+	docker run  --rm \
+	-v `pwd`:/code \
+	calico/build \
+	pyinstaller calico.py -ayF
 
 # Makes the IPAM plugin.
 dist/calico-ipam: $(SRCFILES)
-	mkdir -p dist
-	chmod 777 `pwd`/dist
-
-	# Build the CNI IPAM plugin
-	docker run \
-	-v `pwd`/dist:/code/dist \
-	-v `pwd`/calico_cni:/code \
-	calico/build pyinstaller ipam.py -a -F -s -n calico-ipam --clean
+	docker run --rm \
+	-v `pwd`:/code \
+	calico/build \
+	pyinstaller ipam.py -ayF -n calico-ipam
 
 # Run the unit tests.
-ut: 
-	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
-	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
+ut:
+	docker run --rm -v `pwd`:/code \
 	calico/test \
-	nosetests calico_cni/tests/unit -c nose.cfg
+	nosetests tests/unit -c nose.cfg
 
 # Run the fv tests.
 fv: 
-	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
-	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
+	docker run --rm -v `pwd`:/code \
 	calico/test \
-	nosetests calico_cni/tests/fv -c nose.cfg
+	nosetests tests/fv -c nose.cfg
 
 # Makes tests on Circle CI.
 test-circle: 
@@ -57,8 +46,7 @@ test-circle:
 	-v $(CIRCLE_TEST_REPORTS):/circle_output \
 	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
 	calico/test sh -c \
-	'>/dev/null 2>&1 & \
-	cd calico_cni; nosetests tests/unit tests/fv -c nose.cfg \
+	'nosetests tests -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 

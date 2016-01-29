@@ -14,7 +14,6 @@
 
 import logging
 import os
-from util import configure_logging
 
 from docker import Client
 from docker.errors import APIError

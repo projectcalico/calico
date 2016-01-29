@@ -26,13 +26,13 @@ from pycalico.netns import Namespace, CalledProcessError
 from pycalico.datastore import (DatastoreClient, ETCD_AUTHORITY_ENV, 
                                 ETCD_AUTHORITY_DEFAULT)
 from pycalico.datastore_errors import MultipleEndpointsMatch
-from util import (configure_logging, parse_cni_args, print_cni_error, 
+from calico_cni.util import (configure_logging, parse_cni_args, print_cni_error,
                   handle_datastore_error, CniError)
 
-from container_engines import DefaultEngine, DockerEngine, get_container_engine
-from constants import *
+from calico_cni.container_engines import get_container_engine
+from calico_cni.constants import *
 from ipam import IpamPlugin
-from policy_drivers import ApplyProfileError, get_policy_driver
+from calico_cni.policy_drivers import ApplyProfileError, get_policy_driver
 
 # Logging configuration.
 LOG_FILENAME = "cni.log"

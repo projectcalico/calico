@@ -20,9 +20,9 @@ import sys
 from netaddr import IPNetwork
 
 from pycalico.ipam import IPAMClient
-from util import configure_logging, print_cni_error
-from constants import *
-from util import CniError
+from calico_cni.util import configure_logging, print_cni_error
+from calico_cni.constants import *
+from calico_cni.util import CniError
 
 
 # Logging config.

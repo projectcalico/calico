@@ -12,24 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
 import json
 import unittest
-from mock import patch, MagicMock, Mock, call, ANY
-from netaddr import IPAddress, IPNetwork
-from subprocess32 import CalledProcessError, Popen, PIPE
-from nose.tools import assert_equal, assert_true, assert_false, assert_raises
 from StringIO import StringIO
 
-import pycalico.netns
-from pycalico.ipam import IPAMClient 
-from pycalico.datastore_datatypes import IPPool, Endpoint
-from pycalico.datastore_errors import MultipleEndpointsMatch
+from ipam import IpamPlugin, _exit_on_error, main
+from mock import patch, MagicMock, ANY
+from netaddr import IPNetwork
+from nose.tools import assert_equal, assert_raises
+from pycalico.ipam import IPAMClient
 
 from calico_cni.constants import *
 from calico_cni.util import CniError
-from calico_cni.ipam import IpamPlugin, _exit_on_error, main 
 
 
 class CniIpamTest(unittest.TestCase):
@@ -142,7 +136,7 @@ class CniIpamTest(unittest.TestCase):
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
-    @patch("calico_cni.ipam._exit_on_error", autospec=True)
+    @patch("ipam._exit_on_error", autospec=True)
     def test_assign_address_no_ipv4(self, m_exit):
         # Mock
         ip6 = IPNetwork("ba:ad::be:ef/128")
@@ -160,7 +154,7 @@ class CniIpamTest(unittest.TestCase):
         # Assert
         assert_equal(e.code, ERR_CODE_GENERIC)
 
-    @patch("calico_cni.ipam._exit_on_error", autospec=True)
+    @patch("ipam._exit_on_error", autospec=True)
     def test_assign_address_no_ipv6(self, m_exit):
         # Mock
         ip4 = IPNetwork("1.2.3.4/32")
@@ -214,10 +208,10 @@ class CniIpamTest(unittest.TestCase):
         e = err.exception
         assert_equal(e.code, 1)
 
-    @patch("calico_cni.ipam.os", autospec=True)
-    @patch("calico_cni.ipam.sys", autospec=True)
-    @patch("calico_cni.ipam.IpamPlugin", autospec=True)
-    @patch("calico_cni.ipam.configure_logging", autospec=True)
+    @patch("ipam.os", autospec=True)
+    @patch("ipam.sys", autospec=True)
+    @patch("ipam.IpamPlugin", autospec=True)
+    @patch("ipam.configure_logging", autospec=True)
     def test_main(self, m_conf_log, m_plugin, m_sys, m_os):
         # Mock
         m_os.environ = self.env
@@ -231,11 +225,11 @@ class CniIpamTest(unittest.TestCase):
         m_plugin.assert_called_once_with(self.env)
         m_plugin(self.env).execute.assert_called_once_with()
 
-    @patch("calico_cni.ipam.os", autospec=True)
-    @patch("calico_cni.ipam.sys", autospec=True)
-    @patch("calico_cni.ipam.IpamPlugin", autospec=True)
-    @patch("calico_cni.ipam.configure_logging", autospec=True)
-    @patch("calico_cni.ipam._exit_on_error", autospec=True)
+    @patch("ipam.os", autospec=True)
+    @patch("ipam.sys", autospec=True)
+    @patch("ipam.IpamPlugin", autospec=True)
+    @patch("ipam.configure_logging", autospec=True)
+    @patch("ipam._exit_on_error", autospec=True)
     def test_main_execute_cni_error(self, m_exit, m_conf_log, m_plugin, m_sys, m_os):
         # Mock
         m_os.environ = self.env
@@ -249,11 +243,11 @@ class CniIpamTest(unittest.TestCase):
         # Assert
         m_exit.assert_called_once_with(50, "Message", "Details")
 
-    @patch("calico_cni.ipam.os", autospec=True)
-    @patch("calico_cni.ipam.sys", autospec=True)
-    @patch("calico_cni.ipam.IpamPlugin", autospec=True)
-    @patch("calico_cni.ipam.configure_logging", autospec=True)
-    @patch("calico_cni.ipam._exit_on_error", autospec=True)
+    @patch("ipam.os", autospec=True)
+    @patch("ipam.sys", autospec=True)
+    @patch("ipam.IpamPlugin", autospec=True)
+    @patch("ipam.configure_logging", autospec=True)
+    @patch("ipam._exit_on_error", autospec=True)
     def test_main_execute_unhandled_error(self, m_exit, m_conf_log, m_plugin, m_sys, m_os):
         # Mock
         m_os.environ = self.env
