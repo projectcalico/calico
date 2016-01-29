@@ -7,7 +7,7 @@ MAINTAINER Tom Denham <tom@projectcalico.org>
 ADD . /code
 WORKDIR /code
 
-RUN apk -U add python py-setuptools libffi ip6tables ipset iputils && \
+RUN apk -U add python py-setuptools libffi ip6tables ipset iputils yajl && \
     apk add --virtual temp python-dev libffi-dev py-pip alpine-sdk && \
     pip install -e . && \
     apk del temp && rm -rf /var/cache/apk/*
