@@ -84,11 +84,11 @@ gcloud compute instances create \
   --image coreos-stable-835-9-0-v20151208 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config/node-config.yaml
+```
 
 You should have SSH access to your machines using the following command:
 ```
 gcloud compute ssh <INSTANCE NAME>
-```
 ```
 
 ## 3. Using your cluster
