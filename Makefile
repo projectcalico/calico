@@ -44,17 +44,23 @@ calico_node/.calico_node.created: $(NODE_CONTAINER_FILES)
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
 	mkdir -p certs
-	curl -L "https://github.com/projectcalico/etcd-ca/releases/download/v1.0/etcd-ca" -o certs/etcd-ca
-	chmod +x certs/etcd-ca
-	cd certs && find . ! -name 'etcd-ca' -type f -exec rm {} + && \
-	  ./etcd-ca init --organization "Metaswitch" --passphrase "" && \
-	  ./etcd-ca new-cert --passphrase "" --organization "Metaswitch" client && \
-	  ./etcd-ca new-cert --passphrase "" --ip "$(LOCAL_IP_ENV),127.0.0.1" --organization "Metaswitch" server && \
-	  ./etcd-ca sign --passphrase "" client && \
-	  ./etcd-ca sign --passphrase "" server && \
-	  ./etcd-ca export --insecure --passphrase "" client | tar xvf - && \
-	  ./etcd-ca export --insecure --passphrase "" server | tar xvf - && \
-	  ./etcd-ca export | tar xvf -
+	curl -L "https://pkg.cfssl.org/R1.1/cfssl_linux-amd64" -o certs/cfssl
+	curl -L "https://pkg.cfssl.org/R1.1/cfssljson_linux-amd64" -o certs/cfssljson
+	chmod a+x certs/cfssl
+	chmod a+x certs/cfssljson
+
+	certs/cfssl gencert -initca tests/st/ssl-config/ca-csr.json | certs/cfssljson -bare certs/ca
+	certs/cfssl gencert \
+	  -ca certs/ca.pem \
+	  -ca-key certs/ca-key.pem \
+	  -config tests/st/ssl-config/ca-config.json \
+	  tests/st/ssl-config/req-csr.json | certs/cfssljson -bare certs/client
+	certs/cfssl gencert \
+	  -ca certs/ca.pem \
+	  -ca-key certs/ca-key.pem \
+	  -config tests/st/ssl-config/ca-config.json \
+	  tests/st/ssl-config/req-csr.json | certs/cfssljson -bare certs/server
+
 	touch certs/.certificates.created
 
 calico-node.tar: calico_node/.calico_node.created
@@ -106,16 +112,16 @@ run-etcd:
 	--listen-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379"
 
 ## Run etcd in a container with SSL verification. Used primarily by STs.
-run-etcd-ssl: certs/.certificates.created
+run-etcd-ssl: certs/.certificates.created add-ssl-hostname
 	@-docker rm -f calico-etcd calico-etcd-ssl
 	docker run --detach \
 	--net=host \
 	-v `pwd`/certs:/etc/calico/certs \
 	--name calico-etcd-ssl quay.io/coreos/etcd:v2.0.11 \
-	--cert-file "/etc/calico/certs/server.crt" \
-	--key-file "/etc/calico/certs/server.key.insecure" \
-	--ca-file "/etc/calico/certs/ca.crt" \
-	--advertise-client-urls "https://$(LOCAL_IP_ENV):2379,https://127.0.0.1:2379" \
+	--cert-file "/etc/calico/certs/server.pem" \
+	--key-file "/etc/calico/certs/server-key.pem" \
+	--ca-file "/etc/calico/certs/ca.pem" \
+	--advertise-client-urls "https://etcd-authority-ssl:2379,https://localhost:2379" \
 	--listen-client-urls "https://0.0.0.0:2379"
 
 ## Run the STs in a container
@@ -156,15 +162,21 @@ st-ssl: run-etcd-ssl dist/calicoctl docker calico_test/.calico_test.created busy
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e ETCD_SCHEME=https \
-	           -e ETCD_CA_CERT_FILE=`pwd`/certs/ca.crt \
-	           -e ETCD_CERT_FILE=`pwd`/certs/client.crt \
-	           -e ETCD_KEY_FILE=`pwd`/certs/client.key.insecure \
+	           -e ETCD_CA_CERT_FILE=`pwd`/certs/ca.pem \
+	           -e ETCD_CERT_FILE=`pwd`/certs/client.pem \
+	           -e ETCD_KEY_FILE=`pwd`/certs/client-key.pem \
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v `pwd`:/code \
 	           -v `pwd`/certs:`pwd`/certs \
 	           calico/test \
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
+
+add-ssl-hostname:
+	# Set "LOCAL_IP etcd-authority-ssl" in /etc/hosts to use as a hostname for etcd with ssl
+	if ! grep -q "etcd-authority-ssl" /etc/hosts; then \
+	  echo "\n# Host used by Calico's ETCD with SSL\n$(LOCAL_IP_ENV) etcd-authority-ssl" >> /etc/hosts; \
+	fi
 
 semaphore:
 	# Clean up unwanted files to free disk space.
@@ -175,6 +187,11 @@ semaphore:
 
 	# Actually run the tests (refreshing the images as required)
 	make st
+
+	# Run subset of STs with secure etcd
+	ST_TO_RUN=tests/st/no_orchestrator/ make st-ssl
+	ST_TO_RUN=tests/st/bgp/test_route_reflector_cluster.py make st-ssl
+
 
 ## Run a Docker in Docker (DinD) container.
 create-dind: docker

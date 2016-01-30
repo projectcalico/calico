@@ -16,10 +16,11 @@ import subprocess
 from unittest import TestCase
 
 from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
-                                  ETCD_KEY, debug_failures)
+                                  ETCD_KEY, debug_failures, ETCD_HOSTNAME_SSL)
 import logging
 
 HOST_IPV6 = get_ip(v6=True)
+HOST_IPV4 = get_ip()
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class TestBase(TestCase):
         """
         Clean up before every test.
         """
-        self.ip = get_ip()
+        self.ip = HOST_IPV4
 
         # Delete /calico if it exists. This ensures each test has an empty data
         # store at start of day.
@@ -46,7 +47,7 @@ class TestBase(TestCase):
             subprocess.check_output(
                 "curl --cacert %s --cert %s --key %s "
                 "-sL https://%s:2379/v2/keys/calico?recursive=true -XDELETE"
-                % (ETCD_CA, ETCD_CERT, ETCD_KEY, self.ip),
+                % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL),
                 shell=True)
         else:
             subprocess.check_output(

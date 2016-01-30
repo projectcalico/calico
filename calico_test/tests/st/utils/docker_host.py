@@ -17,7 +17,7 @@ from subprocess import CalledProcessError
 from functools import partial
 
 from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
-                  ETCD_CA, ETCD_KEY, ETCD_CERT
+                  ETCD_CA, ETCD_KEY, ETCD_CERT, ETCD_HOSTNAME_SSL
 from workload import Workload
 from network import DockerNetwork
 
@@ -41,17 +41,21 @@ class DockerHost(object):
         # cleaned up.  If not used as a context manager, users of this object
         self._cleaned = False
 
+        docker_args = "--privileged -tid -v %s/docker:/usr/local/bin/docker " \
+                      "-v %s/certs:%s/certs -v %s:/code --name %s" % \
+                      (CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR,
+                       self.name)
+        if ETCD_SCHEME == "https":
+            docker_args += " --add-host %s:%s" % (ETCD_HOSTNAME_SSL, get_ip())
+
         if dind:
             log_and_run("docker rm -f %s || true" % self.name)
             # Pass the certs directory as a volume since the etcd SSL/TLS
             # environment variables use the full path on the host.
-            log_and_run("docker run --privileged -tid "
-                        "-v %s/docker:/usr/local/bin/docker "
-                        "-v %s/certs:%s/certs "
-                        "-v %s:/code --name %s "
-                        "calico/dind:latest docker daemon --storage-driver=aufs %s" %
-                    (CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR,
-                     self.name, additional_docker_options))
+            log_and_run("docker run %s "
+                        "calico/dind:latest "
+                        "docker daemon --storage-driver=aufs %s" %
+                    (docker_args, additional_docker_options))
 
             self.ip = log_and_run("docker inspect --format "
                               "'{{.NetworkSettings.Networks.bridge.IPAddress}}' %s" % self.name)
@@ -102,7 +106,10 @@ class DockerHost(object):
         """
         calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
 
-        etcd_auth = "%s:2379" % get_ip()
+        if ETCD_SCHEME == "https":
+            etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
+        else:
+            etcd_auth = "%s:2379" % get_ip()
         # Export the environment, in case the command has multiple parts, e.g.
         # use of | or ;
         #

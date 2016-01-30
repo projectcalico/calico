@@ -14,7 +14,7 @@
 
 import os
 from docker_host import DockerHost, CHECKOUT_DIR
-from utils import get_ip, ETCD_CA, ETCD_CERT, ETCD_KEY
+from utils import get_ip, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL
 
 from netaddr import IPAddress
 
@@ -56,23 +56,25 @@ class RouteReflectorCluster(object):
                 # for details.
                 if os.getenv("ETCD_SCHEME", None) == "https":
                     # Etcd is running with SSL/TLS, pass the key values
-                    etcd_ca = "-e ETCD_CA_CERT_FILE=%s" % ETCD_CA
-                    etcd_cert = "-e ETCD_CERT_FILE=%s" % ETCD_CERT
-                    etcd_key = "-e ETCD_KEY_FILE=%s" % ETCD_KEY
                     rr.execute("docker run --privileged --net=host -d "
-                               "--name rr %s %s %s %s %s "
+                               "--name rr %s "
+                               "-e ETCD_AUTHORITY=%s:2379 "
+                               "-e ETCD_CA_CERT_FILE=%s "
+                               "-e ETCD_CERT_FILE=%s "
+                               "-e ETCD_KEY_FILE=%s "
                                "-e ETCD_SCHEME=https "
                                "-v %s/certs:%s/certs "
                                "calico/routereflector" %
-                               (etcd_auth, etcd_ca, etcd_cert, etcd_key, ip,
-                                CHECKOUT_DIR, CHECKOUT_DIR))
+                               (ip, ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
+                                ETCD_KEY, CHECKOUT_DIR,CHECKOUT_DIR))
                     rr.execute(r'curl --cacert %s --cert %s --key %s '
                                r'-L https://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
                                r'-XPUT -d value="{'
                                  r'\"ip\":\"%s\",'
                                  r'\"cluster_id\":\"%s\"'
                                r'}"' % (ETCD_CA, ETCD_CERT, ETCD_KEY,
-                                        get_ip(), rr.ip, rr.ip, cluster_id))
+                                        ETCD_HOSTNAME_SSL, rr.ip, rr.ip,
+                                        cluster_id))
 
                 else:
                     rr.execute("docker run --privileged --net=host -d "
