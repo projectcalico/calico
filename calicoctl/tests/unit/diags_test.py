@@ -73,8 +73,7 @@ class TestDiags(unittest.TestCase):
         diags.save_diags(log_dir)
 
         # Assert
-        m_subprocess.call.assert_called_once_with(
-            ["docker", "exec", "calico-node", "pkill", "-SIGUSR1", "felix"])
+        m_subprocess.call.assert_called_once_with(["pkill", "-SIGUSR1", "felix"])
         m_tempfile.mkdtemp.assert_called_once_with()
         m_os_mkdir.assert_called_once_with(diags_dir)
         m_open.assert_has_calls([
@@ -86,7 +85,7 @@ class TestDiags(unittest.TestCase):
             call(diags_dir + '/ipset', 'w'),
             call(diags_dir + '/etcd_calico', 'w')
         ], any_order=True)
-        self.assertEqual(m_open.return_value.close.call_count, 7)
+        self.assertEqual(m_open.return_value.close.call_count, 8)
         m_sh_command.assert_has_calls([
             call('netstat'),
             call()(all=True, numeric=True),
@@ -137,7 +136,7 @@ class TestDiags(unittest.TestCase):
         m_datastore_client.etcd_client = Mock(spec=Client)
         m_datastore_client.etcd_client.read.side_effect = EtcdException
         m_DatastoreClient.return_value = m_datastore_client
-        m_open.return_value = Mock()
+        m_open.return_value = Mock(spec=file)
 
         # Set up arguments
         log_dir = '/log/dir'
@@ -148,8 +147,7 @@ class TestDiags(unittest.TestCase):
         diags.save_diags(log_dir)
 
         # Assert
-        m_subprocess.call.assert_called_once_with(
-            ["docker", "exec", "calico-node", "pkill", "-SIGUSR1", "felix"])
+        m_subprocess.call.assert_called_once_with(["pkill", "-SIGUSR1", "felix"])
         m_open.assert_has_calls([
             call(diags_dir + '/date', 'w'),
             call(diags_dir + '/hostname', 'w'),
@@ -163,7 +161,7 @@ class TestDiags(unittest.TestCase):
             call().__enter__().write(str(hostname)),
             call().__enter__().write('DATE=%s' % date_today)
         ], any_order=True)
-        self.assertEqual(m_open.return_value.close.call_count, 7)
+        self.assertEqual(m_open.return_value.close.call_count, 8)
         self.assertNotIn([
             call().__enter__().writelines(m_sh_command_return()),
             call().__enter__().write('route --numeric\n'),

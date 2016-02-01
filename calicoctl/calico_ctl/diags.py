@@ -13,13 +13,16 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl diags [--log-dir=<LOG_DIR>]
+  calicoctl diags [--log-dir=<LOG_DIR>] [--runtime=<RUNTIME>]
 
 Description:
   Save diagnostic information
 
 Options:
   --log-dir=<LOG_DIR>  The directory for logs [default: /var/log/calico]
+  --runtime=<RUNTIME>  Specify the runtime used to run the calico/node 
+                       container, either "docker" or "rkt". 
+                       [default: docker]
 """
 import sys
 import sh
@@ -48,11 +51,18 @@ def diags(arguments):
     :return: None
     """
     print("Collecting diags")
-    save_diags(arguments["--log-dir"])
+
+    # Check runtime.  
+    runtime = arguments.get("--runtime")
+    if not runtime in ["docker", "rkt"]:
+        print "Invalid runtime specified: '%s'" % runtime
+        sys.exit(1)
+
+    save_diags(arguments["--log-dir"], runtime)
     sys.exit(0)
 
 
-def save_diags(log_dir):
+def save_diags(log_dir, runtime="docker"):
     # Create temp directory
     temp_dir = tempfile.mkdtemp()
     temp_diags_dir = os.path.join(temp_dir, 'diagnostics')
@@ -135,9 +145,22 @@ def save_diags(log_dir):
             f.writelines("Error running ipset: %s\n" % e)
 
     # Ask Felix to dump stats to its log file - ignore errors as the
-    # calico-node might not be running
-    subprocess.call(["docker", "exec", "calico-node",
-                     "pkill", "-SIGUSR1", "felix"])
+    # calico/node container might not be running.
+    subprocess.call(["pkill", "-SIGUSR1", "felix"])
+
+    # If running under rkt, get the journal for the calico/node container.
+    print "Copying journal for calico-node.service"
+    f = open(temp_diags_dir + "/calico-node.journal", "w")
+    try:
+        journal = subprocess.check_output(["journalctl", "-u", 
+                                           "calico-node.service", 
+                                           "--no-pager"])
+    except OSError:
+        print "Unable to copy journal"
+    else:
+        f.write(journal)
+    finally:
+        f.close()
 
     if os.path.isdir(log_dir):
         print("Copying Calico logs")
