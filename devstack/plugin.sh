@@ -128,12 +128,9 @@ cgroup_device_acl = [
 ]
 EOF
 
-		    # Do DHCP-related configurations.
-		    iniset $NEUTRON_CONF DEFAULT dhcp_agents_per_network 9999
-		    iniset $Q_DHCP_CONF_FILE DEFAULT dhcp_agent_manager neutron.agent.dhcp_agent.DhcpAgentWithStateReport
-		    iniset $Q_DHCP_CONF_FILE DEFAULT interface_driver networking_calico.agent.linux.interface.RoutedInterfaceDriver
-		    iniset $Q_DHCP_CONF_FILE DEFAULT dhcp_driver networking_calico.agent.linux.dhcp.DnsmasqRouted
-
+		    # Propagate ENABLE_DEBUG_LOG_LEVEL to neutron.conf, so that
+		    # it applies to the Calico DHCP agent on each compute node.
+		    iniset $NEUTRON_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
 		    ;;
 
 		extra)
@@ -148,6 +145,9 @@ EOF
 		    # Run script to automatically generate and
 		    # maintain BIRD config for the cluster.
 		    run_process calico-bird "HOST_IP=$HOST_IP /opt/stack/networking-calico/devstack/auto-bird-conf.sh"
+
+		    # Run the Calico DHCP agent.
+		    run_process calico-dhcp "sudo /usr/local/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
 
 		    ;;
 

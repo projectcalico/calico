@@ -247,7 +247,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
+                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
                  "state": "active",
+                 "ipv6_subnet_ids": [],
                  "ipv6_nets": []},
             '/calico/v1/host/felix-host-1/workload/openstack/instance-2/'
             'endpoint/FACEBEEF-1234-5678':
@@ -256,7 +258,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "mac": "00:11:22:33:44:66",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.3/32"],
+                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
                  "state": "active",
+                 "ipv6_subnet_ids": [],
                  "ipv6_nets": []},
             '/calico/v1/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
@@ -312,7 +316,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
+                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
                  "state": "active",
+                 "ipv6_subnet_ids": [],
                  "ipv6_nets": []},
             '/calico/v1/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
@@ -348,7 +354,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             "mac": "00:11:22:33:44:55",
             "ipv4_gateway": "10.65.0.1",
             "ipv4_nets": ["10.65.0.2/32"],
+            "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
             "state": "active",
+            "ipv6_subnet_ids": [],
             "ipv6_nets": []
         }
         self.assertEtcdWrites(expected_writes)
@@ -371,7 +379,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.2/32"],
+                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
                  "state": "active",
+                 "ipv6_subnet_ids": [],
                  "ipv6_nets": []}
         }
 
@@ -391,9 +401,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "profile_ids": ["SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
+                 "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
                  "state": "active",
-                 "ipv4_nets": []},
+                 "ipv4_nets": [],
+                 "ipv4_subnet_ids": []},
             '/calico/v1/policy/profile/SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
@@ -535,9 +547,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "profile_ids": ["SG-1"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
+                 "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
                  "ipv6_nets": ["2001:db8:a41:2::12/128"],
                  "state": "active",
-                 "ipv4_nets": []},
+                 "ipv4_nets": [],
+                 "ipv4_subnet_ids": []},
             '/calico/v1/policy/profile/SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": ["5060:5061"],
@@ -641,7 +655,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         }
         old_ips = self.osdb_ports[0]['fixed_ips']
         self.osdb_ports[0]['fixed_ips'] = [
-            {'subnet_id': '10.65.0/24',
+            {'subnet_id': 'subnet-id-10.65.0--24',
              'ip_address': '10.65.0.188'}
         ]
         _log.info("Resync with edited data")
@@ -652,9 +666,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 {"name": "tapHELLO-1234-",
                  "profile_ids": ["SG-1"],
                  "mac": "00:11:22:33:44:66",
+                 "ipv6_subnet_ids": [],
                  "ipv6_nets": [],
                  "state": "active",
                  "ipv4_gateway": "10.65.0.1",
+                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
                  "ipv4_nets": ["10.65.0.188/32"]},
             '/calico/v1/policy/profile/SG-1/rules':
                 {"outbound_rules": [],
@@ -699,14 +715,164 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         implemented as no-ops (because Calico function does not need
         them).
         """
-        self.driver.update_subnet_postcommit(None)
         self.driver.update_network_postcommit(None)
-        self.driver.delete_subnet_postcommit(None)
         self.driver.delete_network_postcommit(None)
         self.driver.create_network_postcommit(None)
-        self.driver.create_subnet_postcommit(None)
         self.driver.update_network_postcommit(None)
-        self.driver.update_subnet_postcommit(None)
+
+    def test_subnet_hooks(self):
+        """Test subnet creation, update and deletion hooks."""
+
+        # Allow the etcd transport's resync thread to run.  Expect the usual
+        # writes.
+        self.give_way()
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites({
+            '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/Ready': True,
+            '/calico/v1/policy/profile/SGID-default/rules': {
+                "outbound_rules": [{"dst_ports": ["1:65535"],
+                                    "dst_net": "0.0.0.0/0",
+                                    "ip_version": 4},
+                                   {"dst_ports": ["1:65535"],
+                                    "dst_net": "::/0",
+                                    "ip_version": 6}],
+                "inbound_rules": [{"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 4},
+                                  {"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 6}]},
+            '/calico/v1/policy/profile/SGID-default/tags':
+            ["SGID-default"]
+        })
+
+        # Define two subnets.
+        subnet1 = {'enable_dhcp': True,
+                   'id': 'subnet-id-10.65.0--24',
+                   'cidr': '10.65.0/24',
+                   'gateway_ip': '10.65.0.1',
+                   'dns_nameservers': []}
+        subnet2 = {'enable_dhcp': False,
+                   'id': 'subnet-id-10.28.0--24',
+                   'cidr': '10.28.0/24',
+                   'gateway_ip': '10.28.0.1',
+                   'dns_nameservers': ['172.18.10.55']}
+        self.osdb_subnets = [subnet1, subnet2]
+
+        # Notify creation of subnet1, and expect corresponding etcd write.
+        context = mock.MagicMock()
+        context.current = subnet1
+        self.driver.create_subnet_postcommit(context)
+        self.assertEtcdWrites({
+            '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
+                'cidr': '10.65.0.0/24',
+                'gateway_ip': '10.65.0.1'
+            }
+        })
+
+        # Notify creation of subnet2, and expect no etcd write as this subnet
+        # is not DHCP-enabled.
+        context.current = subnet2
+        self.driver.create_subnet_postcommit(context)
+        self.assertEtcdWrites({})
+
+        # Allow the etcd transport's resync thread to run again.  Expect no
+        # change in etcd subnet data.
+        self.give_way()
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
+        # Update subnet1 so as not to be DHCP-enabled.
+        subnet1['enable_dhcp'] = False
+        context.current = subnet1
+        self.driver.update_subnet_postcommit(context)
+        self.assertEtcdDeletes(set([
+            '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24'
+        ]))
+
+        # Update subnet2 to be DHCP-enabled.
+        subnet2['enable_dhcp'] = True
+        context.current = subnet2
+        self.driver.update_subnet_postcommit(context)
+        self.assertEtcdWrites({
+            '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
+                'cidr': '10.28.0.0/24',
+                'gateway_ip': '10.28.0.1',
+                'dns_servers': ['172.18.10.55']
+            }
+        })
+
+        # Do a resync where we simulate the etcd data having been lost.
+        self.give_way()
+        self.etcd_data = {}
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({
+            '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
+                'cidr': '10.28.0.0/24',
+                'gateway_ip': '10.28.0.1',
+                'dns_servers': ['172.18.10.55']},
+            '/calico/v1/Ready': True,
+            '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/policy/profile/SGID-default/rules': {
+                'inbound_rules': [{'dst_ports': ['1:65535'],
+                                   'ip_version': 4,
+                                   'src_tag': 'SGID-default'},
+                                  {'dst_ports': ['1:65535'],
+                                   'ip_version': 6,
+                                   'src_tag': 'SGID-default'}],
+                'outbound_rules': [{'dst_net': '0.0.0.0/0',
+                                    'dst_ports': ['1:65535'],
+                                    'ip_version': 4},
+                                   {'dst_net': '::/0',
+                                    'dst_ports': ['1:65535'],
+                                    'ip_version': 6}]},
+            '/calico/v1/policy/profile/SGID-default/tags': ['SGID-default']
+        })
+        self.assertEtcdDeletes(set())
+
+        # Do a resync where we simulate having missed a dynamic update that
+        # changed which subnets where DHCP-enabled.
+        subnet1['enable_dhcp'] = True
+        subnet2['enable_dhcp'] = False
+        self.give_way()
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({
+            '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
+                'cidr': '10.65.0.0/24',
+                'gateway_ip': '10.65.0.1'}
+        })
+        self.assertEtcdDeletes(set([
+            '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24'
+        ]))
+
+        # Do a resync where we simulate having missed a dynamic update that
+        # changed a Calico-relevant property of a DHCP-enabled subnet.
+        subnet1['gateway_ip'] = '10.65.0.2'
+        self.give_way()
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({
+            '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
+                'cidr': '10.65.0.0/24',
+                'gateway_ip': '10.65.0.2'}
+        })
+        self.assertEtcdDeletes(set())
+
+        # Delete subnet2.  No etcd effect because it was already deleted from
+        # etcd above.
+        context.current = subnet2
+        self.driver.delete_subnet_postcommit(context)
+        self.assertEtcdDeletes(set())
+
+        # Delete subnet1.
+        context.current = subnet1
+        self.driver.delete_subnet_postcommit(context)
+        self.assertEtcdDeletes(set([
+            '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24'
+        ]))
 
     def test_check_segment_for_agent(self):
         """Test the mechanism driver's check_segment_for_agent entry point."""

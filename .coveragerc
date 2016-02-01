@@ -1,7 +1,9 @@
 [run]
 branch = True
 source = networking_calico
-omit = networking_calico/plugins/ml2/drivers/calico/test/*
+omit =
+    networking_calico/plugins/ml2/drivers/calico/test/*
+    networking_calico/tests/*
 concurrency = eventlet
 
 [report]

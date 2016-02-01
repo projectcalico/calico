@@ -61,7 +61,7 @@ port1 = {'binding:vif_type': 'tap',
          'id': 'DEADBEEF-1234-5678',
          'device_id': 'instance-1',
          'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '10.65.0/24',
+         'fixed_ips': [{'subnet_id': 'subnet-id-10.65.0--24',
                         'ip_address': '10.65.0.2'}],
          'mac_address': '00:11:22:33:44:55',
          'admin_state_up': True,
@@ -73,7 +73,7 @@ port2 = {'binding:vif_type': 'tap',
          'id': 'FACEBEEF-1234-5678',
          'device_id': 'instance-2',
          'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '10.65.0/24',
+         'fixed_ips': [{'subnet_id': 'subnet-id-10.65.0--24',
                         'ip_address': '10.65.0.3'}],
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
@@ -86,7 +86,7 @@ port3 = {'binding:vif_type': 'tap',
          'id': 'HELLO-1234-5678',
          'device_id': 'instance-3',
          'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': '2001:db8:a41:2::/64',
+         'fixed_ips': [{'subnet_id': 'subnet-id-2001:db8:a41:2--64',
                         'ip_address': '2001:db8:a41:2::12'}],
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
@@ -183,6 +183,9 @@ class Lib(object):
     # current ports.
     osdb_ports = []
 
+    # Subnets that the OpenStack database knows about.
+    osdb_subnets = []
+
     def setUp(self):
         # Announce the current test case.
         _log.info("TEST CASE: %s", self.id())
@@ -212,8 +215,9 @@ class Lib(object):
         self.db.get_ports.side_effect = self.get_ports
         self.db.get_port.side_effect = self.get_port
 
-        # Arrange DB's get_subnet call.
+        # Arrange DB's get_subnet and get_subnets calls.
         self.db.get_subnet.side_effect = self.get_subnet
+        self.db.get_subnets.side_effect = self.get_subnets
 
         # Arrange what the DB's get_security_groups query will return (the
         # default SG).
@@ -468,10 +472,22 @@ class Lib(object):
         return [p for p in self.osdb_ports if p['id'] in allowed_ids]
 
     def get_subnet(self, context, id):
-        if ':' in id:
+        matches = [s for s in self.osdb_subnets if s['id'] == id]
+        if matches and len(matches) == 1:
+            return matches[0]
+        elif ':' in id:
             return {'gateway_ip': '2001:db8:a41:2::1'}
         else:
             return {'gateway_ip': '10.65.0.1'}
+
+    def get_subnets(self, context, filters=None):
+        if filters:
+            self.assertTrue('id' in filters)
+            matches = [s for s in self.osdb_subnets
+                       if s['id'] in filters['id']]
+        else:
+            matches = [s for s in self.osdb_subnets]
+        return matches
 
     def notify_security_group_update(self, id, rules, port, type):
         """Notify a new or changed security group definition."""
