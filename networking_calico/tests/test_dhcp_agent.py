@@ -360,9 +360,9 @@ class TestDhcpAgent(base.BaseTestCase):
 
             # Notify deletion of one of that endpoint's parent directories.
             agent.etcd.on_dir_delete(None,
-                                     'hostname-ignored',
-                                     'openstack',
-                                     'workload-id-ignored')
+                                     hostname='hostname-ignored',
+                                     orchestrator='openstack',
+                                     workload_id='workload-id-ignored')
             self.assertTrue(agent.etcd.resync_after_current_poll)
 
     @mock.patch.object(EtcdWatcher, 'loop')

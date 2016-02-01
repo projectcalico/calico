@@ -401,12 +401,12 @@ class CalicoEtcdWatcher(EtcdWatcher):
         self.suppress_on_ports_changed = False
         self.on_ports_changed()
 
-    def on_dir_delete(self, response, *args):
+    def on_dir_delete(self, response, *args, **kwargs):
         """Called if an endpoint parent directory is deleted from etcd."""
         LOG.warning("Unexpected directory deletion from etcd; triggering" +
-                    " resync; %s %s", response, args)
+                    " resync; %s %s %s", response, args, kwargs)
 
-        # Unexpected, so handle by doing a resync.
+        # Handle by doing a resync.
         self.resync_after_current_poll = True
 
 
