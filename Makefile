@@ -24,6 +24,7 @@ binary: dist/calicoctl   ## Create the calicoctl binary
 node_image: calico_node/.calico_node.created ## Create the calico/node image
 test_image: calico_test/.calico_test.created ## Create the calico/test image
 test: st ut              ## Run all the tests
+ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 
 dist/calicoctl: $(CALICOCTL_FILE) birdcl 
 	# Ignore errors on docker command. CircleCI throws an benign error

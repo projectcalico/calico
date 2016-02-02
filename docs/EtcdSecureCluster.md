@@ -33,13 +33,28 @@ For example:
 ```
 export ETCD_AUTHORITY=hostname:2379
 export ETCD_SCHEME=https
-export ETCD_CA_CERT_FILE=/path/to/ca.crt
-export ETCD_CERT_FILE=/path/to/cert.crt
-export ETCD_KEY_FILE=/path/to/key.pem
+export ETCD_CA_CERT_FILE=/path/to/ca.pem
+export ETCD_CERT_FILE=/path/to/server.pem
+export ETCD_KEY_FILE=/path/to/server-key.pem
 ```
 
 > NOTE: The file extensions are not important, the files just need to exist and 
 > be readable.
+
+You can create self-signed certificates using the calico-containers Makefile:
+```
+make ssl-certs
+```
+
+This will create the CA certificate, a client certificate/key pair, and a 
+server certificate/key pair located at:
+```
+/path/to/calico-containers/certs/ca.pem
+/path/to/calico-containers/certs/client.pem
+/path/to/calico-containers/certs/client-key.pem
+/path/to/calico-containers/certs/server.pem
+/path/to/calico-containers/certs/server-key.pem
+```
 
 ### Commands that require root
 Some commands are required to be run as root.  The user's environment variables 
