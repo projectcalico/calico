@@ -13,4 +13,4 @@ cover
 .releasedata
 docker
 **/*.sw[pon]
-calico.spec
+birdcl
