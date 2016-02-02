@@ -8,7 +8,7 @@ ST_OPTIONS?=
 HOST_CHECKOUT_DIR?=$(shell pwd)
 
 CALICOCTL_DIR=calicoctl
-CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py)
+CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py) calicoctl.spec
 
 TEST_CONTAINER_DIR=calico_test
 TEST_CONTAINER_FILES=$(shell find calico_test/ -type f ! -name '*.created')
@@ -25,13 +25,13 @@ node_image: calico_node/.calico_node.created ## Create the calico/node image
 test_image: calico_test/.calico_test.created ## Create the calico/test image
 test: st ut              ## Run all the tests
 
-dist/calicoctl: $(CALICOCTL_FILE) 
+dist/calicoctl: $(CALICOCTL_FILE) birdcl 
 	# Ignore errors on docker command. CircleCI throws an benign error
 	# from the use of the --rm flag
 
 	-docker run -v `pwd`:/code --rm \
 	 calico/build \
-	 pyinstaller calicoctl/calicoctl.py -ayF
+	 pyinstaller calicoctl.spec -ayF
 
 calico_test/.calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && docker build -t calico/test:latest .
@@ -72,6 +72,10 @@ routereflector.tar:
 docker:
 	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.1 -o docker
 	chmod +x docker
+
+birdcl:
+	wget -N https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
+	chmod +x birdcl
 
 ## Run the UTs in a container.
 ut: calico_test/.calico_test.created

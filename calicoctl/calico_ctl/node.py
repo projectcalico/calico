@@ -388,6 +388,11 @@ def _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs
             {
                 "bind": "/var/log/calico",
                 "ro": False
+            },
+        "/var/run/calico":
+            {
+                "bind": "/var/run/calico",
+                "ro": False
             }
     }
     binds.update(etcd_binds)
@@ -398,7 +403,7 @@ def _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs
         network_mode="host",
         binds=binds)
 
-    volumes = ["/var/log/calico"] + etcd_volumes
+    volumes = ["/var/log/calico", "/var/run/calico"] + etcd_volumes
     container = docker_client.create_container(
         node_image,
         name="calico-node",

@@ -24,18 +24,17 @@ Options:
                             container, either "docker" or "rkt". 
                             [default: docker]
 """
-import os
 import re
 import sys
 
+import subprocess32
 from prettytable import PrettyTable
+from pycalico.datastore_errors import DataStoreError
 from requests import ConnectionError
+from subprocess32 import Popen, PIPE
 
 from connectors import docker_client, client
 from utils import hostname
-from subprocess32 import Popen, CalledProcessError, PIPE
-
-from pycalico.datastore_errors import DataStoreError
 
 # Extracts UUID, version and container status from rkt list output.
 RKT_CONTAINER_RE = re.compile("([a-z0-9]+)\s+.*calico\/node:([a-z0-9\.\_\-]+)\s+([a-z]+)\s+")
@@ -160,21 +159,25 @@ def pprint_bird_protocols(version):
     """
     # Based on the IP version, run the appropriate BIRD command, and select
     # the appropriate separator char for an IP address.
-    if version == 4:
-        bird_cmd = docker_client.exec_create("calico-node",
-                                    ["sh", "-c",
-                                     "echo show protocols | "
-                                     "birdcl -s /etc/service/bird/bird.ctl"])
-        results = docker_client.exec_start(bird_cmd)
-        ip_sep = "."
+    if getattr(sys, 'frozen', False):
+        # We're running under pyinstaller
+        birdcl = sys._MEIPASS + "/birdcl"
     else:
-        bird6_cmd = docker_client.exec_create("calico-node",
-                                    ["sh", "-c",
-                                     "echo show protocols | "
-                                     "birdcl -s "
-                                     "/etc/service/bird6/bird6.ctl"])
-        results = docker_client.exec_start(bird6_cmd)
-        ip_sep = ":"
+        birdcl = "birdcl"
+    try:
+        if version == 4:
+            results = subprocess32.check_output(
+                   "echo show protocols | %s -s /var/run/calico/bird.ctl" % birdcl,
+                   shell=True)
+            ip_sep = "."
+        else:
+            results = subprocess32.check_output(
+                  "echo show protocols | %s -s /var/run/calico/bird6.ctl" % birdcl,
+                  shell=True)
+            ip_sep = ":"
+    except subprocess32.CalledProcessError:
+        print "Couldn't connect to bird. Try running as root."
+        return
 
     # Parse the output from BIRD to extract the values in the protocol status
     # table.  We'll further parse the name since that includes details about

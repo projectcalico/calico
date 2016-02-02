@@ -318,6 +318,11 @@ class TestNode(unittest.TestCase):
                 {
                     "bind": "/var/log/calico",
                     "ro": False
+                },
+            "/var/run/calico":
+                {
+                    "bind": "/var/run/calico",
+                    "ro": False
                 }
         }
 
@@ -360,7 +365,7 @@ class TestNode(unittest.TestCase):
             detach=True,
             environment=environment,
             host_config='host_config',
-            volumes=['/var/log/calico']
+            volumes=['/var/log/calico', "/var/run/calico"]
         )
         m_docker_client.start.assert_called_once_with(container)
         m_attach_and_stream.assert_called_once_with(container)
@@ -462,6 +467,7 @@ class TestNode(unittest.TestCase):
         ]
         binds_node = {
             log_dir: {"bind": "/var/log/calico", "ro": False},
+            "/var/run/calico": {"bind": "/var/run/calico", "ro": False},
             etcd_ca_path: {"bind": ETCD_CA_CERT_NODE_FILE, "ro": True},
             etcd_cert_path: {"bind": ETCD_CERT_NODE_FILE, "ro": True},
             etcd_key_path: {"bind": ETCD_KEY_NODE_FILE, "ro": True}
@@ -472,7 +478,7 @@ class TestNode(unittest.TestCase):
             etcd_key_path: {"bind": ETCD_KEY_NODE_FILE, "ro": True},
             docker_plugin: {'bind': docker_plugin, 'ro': False}
         }
-        volumes_node = ['/var/log/calico', ETCD_CA_CERT_NODE_FILE,
+        volumes_node = ['/var/log/calico', "/var/run/calico", ETCD_CA_CERT_NODE_FILE,
                         ETCD_KEY_NODE_FILE, ETCD_CERT_NODE_FILE]
         volumes_libnetwork= [docker_plugin, ETCD_CA_CERT_NODE_FILE,
                              ETCD_KEY_NODE_FILE, ETCD_CERT_NODE_FILE]
