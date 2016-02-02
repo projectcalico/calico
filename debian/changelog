@@ -1,3 +1,9 @@
+networking-calico (1:1.0.1~pre7) trusty; urgency=low
+
+  * Add service framework around Calico DHCP agent
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Tue, 02 Feb 2016 11:36:24 +0000
+
 networking-calico (1:1.0.1~pre1-6) trusty; urgency=low
 
   * devstack/bootstrap.sh: Don't set SERVICE_HOST

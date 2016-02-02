@@ -1,0 +1,13 @@
+# vim:set ft=upstart ts=2 et:
+description "Calico DHCP agent"
+author "Neil Jerram <neil@projectcalico.org>"
+
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+limit nofile 32000 32000
+
+respawn
+respawn limit 5 10
+
+exec /usr/bin/calico-dhcp-agent --config-file /etc/neutron/neutron.conf
