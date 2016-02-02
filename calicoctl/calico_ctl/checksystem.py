@@ -13,7 +13,7 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl checksystem [--fix] [--libnetwork]
+  calicoctl checksystem [--fix] [--libnetwork] [--runtime=<RUNTIME>]
 
 Description:
   Check for incompatibilities between Calico and the host system
@@ -21,7 +21,11 @@ Description:
 Options:
   --fix  DEPRECATED: checksystem no longer fixes issues that it detects
   --libnetwork  Check for the correct docker version for libnetwork deployments
+  --runtime=<RUNTIME>  Specify the runtime used to run the calico/node 
+                       container, either "docker" or "rkt". 
+                       [default: docker]
 """
+import os
 import sys
 import re
 
@@ -49,8 +53,19 @@ def checksystem(arguments):
     if arguments["--fix"]:
         print >> sys.stderr, "WARNING: Deprecated flag --fix: " \
                              "checksystem no longer fixes detected issues"
+
+    # Check runtime.
+    runtime = arguments.get("--runtime")
+    if not runtime in ["docker", "rkt"]:
+        print "Invalid runtime specified: '%s'" % runtime
+        sys.exit(1)
+
+    # Only check Docker if we're using the Docker runtime.
+    check_docker = runtime == "docker"
+
     check_system(quit_if_error=True,
-                 libnetwork=arguments["--libnetwork"])
+                 libnetwork=arguments["--libnetwork"],
+                 check_docker=check_docker)
 
 def check_system(quit_if_error=False, libnetwork=False, check_docker=True):
     """

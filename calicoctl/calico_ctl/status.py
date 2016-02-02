@@ -13,12 +13,18 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl status
+  calicoctl status [--runtime=<RUNTIME>]
 
 Description:
   Print current status information regarding calico-node container
   and the BIRD routing daemon.
+
+Options:
+  --runtime=<RUNTIME>       Specify the runtime used to run the calico/node 
+                            container, either "docker" or "rkt". 
+                            [default: docker]
 """
+import os
 import re
 import sys
 
@@ -27,8 +33,13 @@ from requests import ConnectionError
 
 from connectors import docker_client, client
 from utils import hostname
+from subprocess32 import Popen, CalledProcessError, PIPE
 
 from pycalico.datastore_errors import DataStoreError
+
+# Extracts UUID, version and container status from rkt list output.
+RKT_CONTAINER_RE = re.compile("([a-z0-9]+)\s+.*calico\/node:([a-z0-9\.\_\-]+)\s+([a-z]+)\s+")
+
 
 def status(arguments):
     """
@@ -39,32 +50,22 @@ def status(arguments):
     this file's docstring with docopt
     :return: None
     """
+    # Check runtime.
+    runtime = arguments.get("--runtime")
+    if not runtime in ["docker", "rkt"]:
+        print "Invalid runtime specified: '%s'" % runtime
+        sys.exit(1)
+
     # Start by locating the calico-node container and querying the package
     # summary file.
-    try:
-        calico_node_info = filter(lambda container: "/calico-node" in
-                                  container["Names"],
-                                  docker_client.containers())
-        if len(calico_node_info) == 0:
-            print "calico-node container not running"
-            sys.exit(1)
-        else:
-            print "calico-node container is running. Status: %s" % \
-                  calico_node_info[0]["Status"]
+    if runtime == "rkt":
+        check_container_status_rkt()
 
-            libraries_cmd = docker_client.exec_create("calico-node",
-                                                      ["sh", "-c",
-                                                       "cat libraries.txt"])
-            libraries_out = docker_client.exec_start(libraries_cmd)
-            result = re.search(r"^calico\s*\((.*)\)\s*$", libraries_out,
-                               re.MULTILINE)
-
-            if result is not None:
-                print "Running felix version %s" % result.group(1)
-    except ConnectionError:
-        print "Docker is not running"
-        # TODO: Perform status checks in platform-independent way.
-        sys.exit(1)
+        # Return - until rkt enter works for fly containers, we can't 
+        # get BGP protocol information from within the node container.
+        return 
+    else:
+        check_container_status_docker()
 
     # Now query the host BGP details.  If the AS number is not specified on the
     # host then it must be inheriting the default.
@@ -97,6 +98,56 @@ def status(arguments):
         pprint_bird_protocols(6)
     else:
         print "No IPv6 address configured.\n"
+
+
+def check_container_status_docker():
+    """
+    Checks and prints the calico/node container status when running in Docker. 
+    """
+    try:
+        calico_node_info = filter(lambda container: "/calico-node" in
+                                  container["Names"],
+                                  docker_client.containers())
+        if len(calico_node_info) == 0:
+            print "calico-node container not running"
+            sys.exit(1)
+        else:
+            print "calico-node container is running. Status: %s" % \
+                  calico_node_info[0]["Status"]
+
+            libraries_cmd = docker_client.exec_create("calico-node",
+                                                      ["sh", "-c",
+                                                       "cat libraries.txt"])
+            libraries_out = docker_client.exec_start(libraries_cmd)
+            result = re.search(r"^calico\s*\((.*)\)\s*$", libraries_out,
+                               re.MULTILINE)
+
+            if result is not None:
+                print "Running felix version %s" % result.group(1)
+    except ConnectionError:
+        print "Docker is not running"
+        sys.exit(1)
+
+
+def check_container_status_rkt():
+    """
+    Checks and prints the calico/node container status when running in rkt. 
+    """
+    list_cmd = ["sudo", "rkt", "list"]
+    p = Popen(list_cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    containers = RKT_CONTAINER_RE.findall(stdout) 
+
+    if p.returncode:
+        print "Unable to list rkt containers: '%s'" % stderr.strip()
+        sys.exit(1)
+
+    if len(containers) == 0:
+        print "calico-node container not running"
+        sys.exit(1)
+    else:
+        print "calico-node container is running. Status: %s" % \
+              containers[0][2]
 
 
 def pprint_bird_protocols(version):
