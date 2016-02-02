@@ -34,10 +34,7 @@ from requests import ConnectionError
 from subprocess32 import Popen, PIPE
 
 from connectors import docker_client, client
-from utils import hostname
-
-# Extracts UUID, version and container status from rkt list output.
-RKT_CONTAINER_RE = re.compile("([a-z0-9]+)\s+.*calico\/node:([a-z0-9\.\_\-]+)\s+([a-z]+)\s+")
+from utils import hostname, RKT_CONTAINER_RE, enforce_root 
 
 
 def status(arguments):
@@ -58,6 +55,7 @@ def status(arguments):
     # Start by locating the calico-node container and querying the package
     # summary file.
     if runtime == "rkt":
+        enforce_root()
         check_container_status_rkt()
     else:
         check_container_status_docker()

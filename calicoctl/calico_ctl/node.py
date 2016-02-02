@@ -590,6 +590,11 @@ def node_stop(force):
     except docker.errors.APIError as err:
         if err.response.status_code != 404:
             raise
+    try:
+        call(["systemctl", "stop", "calico-node.service"])
+    except OSError:
+        # systemctl not installed, ignore error.
+        pass
 
     print "Node stopped"
 

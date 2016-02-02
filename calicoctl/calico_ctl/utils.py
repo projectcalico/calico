@@ -33,6 +33,9 @@ NAMESPACE_ORCHESTRATOR_ID = "namespace"
 REQUIRED_MODULES = ["xt_set", "ip6_tables"]
 hostname = get_hostname()
 
+# Extracts UUID, version and container status from rkt list output.
+RKT_CONTAINER_RE = re.compile("([a-z0-9]+)\s+.*calico\/node:([a-z0-9\.\_\-]+)\s+([a-z]+)\s+")
+
 
 def enforce_root():
     """
