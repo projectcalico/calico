@@ -27,7 +27,7 @@ Bare-metal guides:
 Calico can provide network policy for Kubernetes clusters.  This feature is currently experimental and disabled by default. [The policy documentation](Policy.md) explains how to enable and use Calico policy in a Kubernetes cluster.
 
 # Requirements
-- The kube-proxy should be started in `iptables` proxy mode.  Userspace mode may work for some deployments, but is not recommended. 
+- The kube-proxy must be started in `iptables` proxy mode.
 
 # Troubleshooting 
 - [Troubleshooting](Troubleshooting.md)

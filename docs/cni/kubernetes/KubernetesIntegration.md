@@ -146,7 +146,7 @@ This unit file ensures that the `kubelet` binary and the `calico` plugin are pre
 ### Configuring the Kube-Proxy
 In order to use Calico policy with Kubernetes, the `kube-proxy` component must
 be configured to leave the source address of service bound traffic intact.
-This feature is first officially supported in Kubernetes v1.1.0 and as of v1.1.4 is the default.
+This feature is first officially supported in Kubernetes v1.1.0. 
 
 We highly recommend using the latest stable Kubernetes release, but if you're using an older release
 there are two ways to enable this behavior.
