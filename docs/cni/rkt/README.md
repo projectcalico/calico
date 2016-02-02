@@ -74,23 +74,19 @@ You should also verify each host can access etcd.  The following will return an 
 
 ## 2. Starting Calico services
 
-Once you have your cluster up and running, start Calico on all the nodes.
-Because `rkt` doesn't support daemonizing containers directly, we'll use [systemd-run][systemd-run]
-to create a systemd service.
+Once you have your cluster up and running, start Calico on both hosts
 
-Run the following command on both hosts
+    sudo calicoctl node  --runtime=rkt
 
-    sudo systemd-run --unit=calico-node calicoctl node  --runtime=rkt
+This will create a systemd unit called `calico-node` which runs the Calico components under `rkt`
 
-
-You can check that it's running under `rkt`
+You can check that it's running
 
 	$ sudo rkt list
 	UUID            APP     IMAGE NAME                              STATE   NETWORKS
 	bc13af40        node    registry-1.docker.io/calico/node:latest running
 
-
-You can check the logs of the running Calico components using `journalctl -u calico-node`
+You can check the status and logs using normal systemd commands e.g. `systemctl status calico-node` and `journalctl -u calico-node`
 
 ## 3. Create the networks
 
@@ -134,7 +130,7 @@ With the networks created, let's start a container on `calico-01`
 ### On calico-01
 Create a webserver using an `nginx` container. We'll put this on `net1` network.
 
-We'll use systemd run to create the webserver service.
+We'll use `systemd-run` to create the webserver service.
 
     sudo systemd-run --unit=nginx rkt run --store-only=true --insecure-options=image --net=net1 --mount volume=myvol,target=/var/run --volume=myvol,kind=empty docker://nginx
  
