@@ -297,7 +297,8 @@ On each control node, perform the following steps:
    -  Find the ``mechanism_drivers`` setting and change it to read
       ``mechanism_drivers = calico``.
 
-4. Edit the ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
+4. With OpenStack releases earlier than Liberty, edit the
+   ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -417,24 +418,22 @@ On each compute node, perform the following steps:
 
        yum install openstack-neutron
 
-   Open ``/etc/neutron/dhcp_agent.ini``. For OpenStack Juno or Kilo, in the
-   ``[DEFAULT]`` section, add the following line (removing any existing
+   For OpenStack Juno or Kilo, open ``/etc/neutron/dhcp_agent.ini``, and in the
+   ``[DEFAULT]`` section add the following line (removing any existing
    ``interface_driver =`` line):
 
    ::
 
            interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
-   If you're using OpenStack Liberty, instead set the following in the
-   ``[DEFAULT]`` section:
+6.  Restart and enable the DHCP agent.  For OpenStack Liberty or later:
 
-   ::
+    ::
 
-       dhcp_driver = networking_calico.agent.linux.dhcp.DnsmasqRouted
-       interface_driver = networking_calico.agent.linux.interface.RoutedInterfaceDriver
-       use_namespaces = False
+        service calico-dhcp-agent restart
+        chkconfig calico-dhcp-agent on
 
-6.  Restart and enable the DHCP agent
+    For earlier OpenStack releases:
 
     ::
 

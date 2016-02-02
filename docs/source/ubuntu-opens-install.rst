@@ -220,7 +220,8 @@ perform the following steps:
    -  Find the line beginning with ``tenant_network_types``, and change
       it to read ``tenant_network_types = local``.
 
-4. Edit the ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
+4. With OpenStack releases earlier than Liberty, edit the
+   ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
 
    -  Find the line for the ``dhcp_agents_per_network`` setting,
       uncomment it, and set its value to the number of compute nodes
@@ -336,24 +337,21 @@ perform the following steps:
                     sudo apt-get update
                     sudo apt-get upgrade
 
-6. Open ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor.
-   If you're using OpenStack Icehouse, Juno or Kilo, set the following in the
-   ``[DEFAULT]`` section:
+6. If you're using OpenStack Icehouse, Juno or Kilo, open
+   ``/etc/neutron/dhcp_agent.ini`` in your preferred text editor, and set the
+   following in the ``[DEFAULT]`` section:
 
    ::
 
        interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
-   If you're using OpenStack Liberty, instead set the following in the
-   ``[DEFAULT]`` section:
+   Now restart the DHCP agent.  For OpenStack Liberty or later:
 
    ::
 
-       dhcp_driver = networking_calico.agent.linux.dhcp.DnsmasqRouted
-       interface_driver = networking_calico.agent.linux.interface.RoutedInterfaceDriver
-       use_namespaces = False
+       sudo service calico-dhcp-agent restart
 
-   Now restart the DHCP agent:
+   For earlier OpenStack releases:
 
    ::
 

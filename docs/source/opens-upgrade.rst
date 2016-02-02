@@ -101,6 +101,13 @@ agent.  This is required due to an upstream problem: oslo-rootwrap can't kill a
 process when the binary has been updated since it started running::
 
     pkill dnsmasq
+
+Then if you are using OpenStack Liberty or later::
+
+    service calico-dhcp-agent restart
+
+Or if you are using an earlier OpenStack release::
+
     service neutron-dhcp-agent restart
 
 Red Hat 7
@@ -122,7 +129,14 @@ required due to an upstream problem: oslo-rootwrap can't kill a process when
 the binary has been updated since it started running::
 
     pkill dnsmasq
-    service neutron-dhcp-agent-restart
+
+Then if you are using OpenStack Liberty or later::
+
+    service calico-dhcp-agent restart
+
+Or if you are using an earlier OpenStack release::
+
+    service neutron-dhcp-agent restart
 
 3: Upgrade control software
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

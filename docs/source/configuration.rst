@@ -206,6 +206,12 @@ configure the Neutron service.
 +==============================+========================================+===========================================+
 | core\_plugin                 | neutron.plugins.ml2.plugin.Ml2Plugin   | Use ML2 plugin                            |
 +------------------------------+----------------------------------------+-------------------------------------------+
+
+With OpenStack releases earlier than Liberty you will also need:
+
++------------------------------+----------------------------------------+-------------------------------------------+
+| Setting                      | Value                                  | Meaning                                   |
++==============================+========================================+===========================================+
 | dhcp\_agents\_per\_network   | 9999                                   | Allow unlimited DHCP agents per network   |
 +------------------------------+----------------------------------------+-------------------------------------------+
 
@@ -241,8 +247,9 @@ settings to configure the ML2 plugin.
 DHCP agent (.../dhcp\_agent.ini)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In ``/etc/neutron/dhcp_agent.ini`` you need the following settings to
-configure the Neutron DHCP agent.
+With OpenStack releases earlier than Liberty, in
+``/etc/neutron/dhcp_agent.ini`` you need the following setting to configure the
+Neutron DHCP agent.
 
 +---------------------+-------------------------+--------------------------------------------------------------------------------------------------------+
 | Setting             | Value                   | Meaning                                                                                                |
