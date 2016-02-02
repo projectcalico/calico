@@ -12,7 +12,7 @@ The Calico CNI plugin for Kubernetes allows you to specify network policy in the
 
 ## Prerequisites
 * A Kubernetes v1.1 Deployment using the Calico CNI plugin.
-* You must be using the iptables kube-proxy in your deployment. This is the default proxy mode in Kubernetes v1.1.3.  All of the Calico getting started guides configure the kube-proxy in this way.
+* You must be using the iptables kube-proxy in your deployment. All of the Calico getting started guides configure the kube-proxy in this way.
 
 ## Behavior
 Without annotation-based policy enabled, Calico follows the [Kubernetes networking model][k8s-network-model], allowing full connectivity between pods.
@@ -29,7 +29,7 @@ Since pods are, by default, isolated by namespace boundaries, they will:
 - not be accessible by the compute hosts in your cluster unless specifically allowed using an annotation. 
 
 ## Enabling annotation-based policy
-To enable annotation-based policy, add the `policy` section to your CNI network config file as shown - you will need to make this change on each Kubernetes node in your cluster.  The CNI network configuration file can usually be found in the `/etc/cni/net.d/` directory.
+To enable annotation-based policy, add the `policy` section to your CNI network config file as shown - you will need to make this change on each Kubernetes worker node in your cluster (any node that allows scheduling of pods).  The CNI network configuration file can usually be found in the `/etc/cni/net.d/` directory.
 ```
 $ cat /etc/cni/net.d/10-calico.conf
 {
