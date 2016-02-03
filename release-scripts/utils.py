@@ -239,7 +239,8 @@ def load_release_data():
             print_warning("You are continuing an existing release.  If this "
                           "an error, delete the release data file and try "
                           "again.  "
-                          "Filename = %s" % filen)
+                          "Filename = see below")
+            print filen
 
         return data
     except:
