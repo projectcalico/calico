@@ -49,7 +49,7 @@ To check if you have a default VPC, run the following command, then save VPC ID 
 aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"
 
 # Save VpcId from output as environment variable (without quotes)
-VPC_ID=<VpcId>
+export VPC_ID=<VpcId>
 ```
 
 If you do not have a default VPC or you would like to create a VPC specifically for your hosts that have Calico-networked containers, follow 
@@ -66,13 +66,13 @@ Create the VPC to use as the network for your hosts.  Set a `VPC_ID` environment
 make things a bit easier, replacing `<VpcId>` with the `VpcId` value returned from the command:
 ```
 aws ec2 create-vpc --cidr-block 172.35.0.0/24
-VPC_ID=<VpcId>
+export VPC_ID=<VpcId>
 ```
 
 Create a subnet for your hosts, then save a `SUBNET_ID` environment variable, replacing `<SubnetId>` with the `SubnetId` output value of the command.
 ```
 aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 172.35.0.0/24
-SUBNET_ID=<SubnetId>
+export SUBNET_ID=<SubnetId>
 ```
 
 Modify the Subnet to auto-assign public ip addresses:
@@ -83,7 +83,7 @@ aws ec2 modify-subnet-attribute --subnet-id $SUBNET_ID --map-public-ip-on-launch
 Create an Internet Gateway.  Save the `InternetGatewayId` value as an environment variable.
 ```
 aws ec2 create-internet-gateway
-GATEWAY_ID=<InternetGatewayId>
+export GATEWAY_ID=<InternetGatewayId>
 ```
 
 Attach the gateway to the VPC.
@@ -94,7 +94,7 @@ aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway $GATEWAY_ID
 Create a Route Table on the VPC. Save the `RouteTableId` as an environment variable.
 ```
 aws ec2 create-route-table --vpc-id $VPC_ID
-ROUTE_TABLE_ID=<RouteTableId>
+export ROUTE_TABLE_ID=<RouteTableId>
 ```
 
 Associate the route table with the Subnet and add a route to the Internet.
@@ -104,13 +104,18 @@ aws ec2 create-route --route-table-id $ROUTE_TABLE_ID --destination-cidr-block 0
   --gateway-id $GATEWAY_ID
 ```
 
+Enable DNS names on the VPC.
+```
+aws ec2 modify-vpc-attribute --vpc-id=$VPC_ID --enable-dns-support
+```
+
 ### 2.2 Configuring Key Pair and Security Group
 Create a Key Pair to use for ssh access to the instances. The following command will generate a key for you.
 ```
 aws ec2 create-key-pair --key-name mykey --output text
 ```
 
-Copy the output into a new file called mykey.pem.  The file should include ```-----BEGIN RSA PRIVATE KEY-----```, 
+Copy the output into a new file called mykey.pem.  The file must only include ```-----BEGIN RSA PRIVATE KEY-----```, 
 ```-----END RSA PRIVATE KEY-----```, and everything in between.  Then, set appropriate permissions for your key file.
 ```
 chmod 400 mykey.pem
@@ -123,7 +128,7 @@ aws ec2 create-security-group --group-name MySG \
   --description MySecurityGroup --vpc-id $VPC_ID
 
 # Save environment variable of GroupId
-SECURITY_GROUP_ID=<GroupId>
+export SECURITY_GROUP_ID=<GroupId>
 ```
 
 Allow SSH from the internet and allow all traffic between instances within the group.
@@ -156,18 +161,18 @@ Then, change into the directory for this guide.
 cd calico-containers/docs/cni/kubernetes/
 ```
 
-Before running the commands, note the following:
--  The `ami-########` represents the CoreOS stable HVM image type for the `us-west-2` region. 
-If you are using a region other than `us-west-2`, replace the image name with the correct CoreOS stable HVM image 
-from the [CoreOS image list](https://coreos.com/os/docs/latest/booting-on-ec2.html) for your zone. 
-Use `aws ec2 describe-availability-zones` to display your region if you do not remember.
--  It may take a couple of minutes for AWS to boot the machines after creating them.
+Find your CoreOS stable HVM image for your region and store it as an environment variable.  You can find the
+full list of available images on [the CoreOS website](https://coreos.com/os/docs/latest/booting-on-ec2.html).
+```
+export IMAGE_ID=<ami-########>
+```
+> Use `aws ec2 describe-availability-zones` to display your region if you do not remember.
 
 Deploy the Kubernetes master node using the following command:
 
 ```
 aws ec2 run-instances \
-  --image-id ami-99bfada9 \
+  --image-id $IMAGE_ID \
   --instance-type t2.micro \
   --key-name mykey \
   --security-group-ids $SECURITY_GROUP_ID \
@@ -176,11 +181,33 @@ aws ec2 run-instances \
 #  Include the subnet param above if using a non-default VPC
 ```
 
-Deploy at least one worker node using the following command:
+You may want to tag the instance so that you can distinguish it from the nodes later.  First, export the master's
+resource ID.
+```
+export MASTER_RESOURCE=<i-xxxxxxxx>
+```
+
+Then, tag it with "role=master". 
+```
+aws ec2 create-tags --resources i-fe63c139 --tags Key=role,Value=master
+```
+
+You can view tags with `aws ec2 describe-tags`.
+
+Now, deploy at least one worker node.
+
+First, edit `cloud-config/node-config.yaml` and replace all instances of `kubernetes-master` with your Master's private
+DNS name.  This can be found in the output of the previous command, or the AWS portal. You can do this with a `sed`
+command, replacing `<MASTER_PRIVATE_DNS>` with your master's private DNS name:
+```
+sed -i 's/kubernetes-master/<MASTER_PRIVATE_DNS>/g' cloud-config/node-config.yaml
+```
+
+Then, run the following command to start a node instance.
 
 ```
 aws ec2 run-instances \
-  --image-id ami-99bfada9 \
+  --image-id $IMAGE_ID \
   --instance-type t2.micro \
   --key-name mykey \
   --security-group-ids $SECURITY_GROUP_ID \
@@ -199,9 +226,19 @@ wget https://storage.googleapis.com/kubernetes-release/release/v1.1.4/bin/linux/
 chmod +x ./kubectl
 ```
 
-The following command sets up SSH forwarding of port 8080 to your master node so that you can run `kubectl` commands on your local machine. Replace `~/mykeypair.pem` with the location of the keypair you generated earlier, and replace `ec2-###-##-##-###.compute-1.amazonaws.com` with the master public DNS name of your cluster.
+Save the public DNS name for the master in an environment variable. Replace `ec2-###-##-##-###.compute-1.amazonaws.com` with the master public DNS name - you can find this in the AWS portal, or by running `aws ec2 describe-instances`.
 ```
-ssh -i ~/mykeypair.pem -N -L 8080:ec2-###-##-##-###.compute-1.amazonaws.com:8080 
+export MASTER_DNS=<ec2-###-##-##-###.compute-1.amazonaws.com>
+```
+
+Make sure you can ssh to the master. Replace `~/mykey.pem` with the location of the keypair you generated earlier. 
+```
+ssh -i ~/mykey.pem core@$MASTER_DNS
+```
+
+Close the SSH session, and forward port 8080 to your master.  The following command sets up SSH forwarding of port 8080 to your master node so that you can run `kubectl` commands on your local machine. 
+```
+ssh -i ~/mykey.pem -N -L 8080:${MASTER_DNS}:8080 core@$MASTER_DNS &
 ```
 
 Verify that you can access the Kubernetes API.  The following command should return a list of Kubernetes nodes.
@@ -251,7 +288,7 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 ```
 > In a production deployment, it is recommended to use an AWS [LoadBalancer][loadbalancers] service which automatically deploys an AWS load-balancer and configures a public IP address for the service.
 
-You should now be able to access the guestbook application from a browser at `http://<MASTER IP>:30001`.
+You should now be able to access the guestbook application from a browser at `http://<MASTER_DNS>:30001`.
 
 ### 4.4 Next Steps
 
