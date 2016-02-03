@@ -193,7 +193,7 @@ def start_release():
     bullet("CoreOS default networking", level=1)
     para("Follow the URL below to view the correct demonstration instructions "
          "for this release candidate.")
-    bullet("https://github.com/projectcalico/calico-containers/tree/%s-candidate" % new_version)
+    print "https://github.com/projectcalico/calico-containers/tree/%s-candidate" % new_version
     next("Once you have completed the testing, re-run the script.")
 
 
@@ -228,7 +228,7 @@ def cut_release():
 
     para("Attach the calicoctl binary to the release.  It can be downloaded "
          "from the following URL:")
-    bullet("http://www.projectcalico.org/builds/calicoctl?circleci-branch=%s-candidate" % new_version)
+    print "http://www.projectcalico.org/builds/calicoctl?circleci-branch=%s-candidate" % new_version
 
     para("Once the release has been created on GitHub, perform a final test "
          "of the release:")
