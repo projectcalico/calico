@@ -145,8 +145,18 @@ def check_container_status_rkt():
         print "calico-node container not running"
         sys.exit(1)
     else:
-        print "calico-node container is running. Status: %s" % \
-              containers[0][2]
+        # Get statuses for all calico/node containers, and determine
+        # if any are running.
+        statuses = [c[2] for c in containers]
+        running = "running" in statuses
+
+        # If one is running, status is "running".  Else, use the status of
+        # the first container.
+        status = "running" if running else statuses[0]
+
+        # Print status.  If it at least one is running, this will display
+        # "running" status.
+        print "calico-node container status: %s" % status
 
 
 def pprint_bird_protocols(version):
