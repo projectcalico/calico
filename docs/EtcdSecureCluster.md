@@ -15,29 +15,46 @@ Calico supports insecure and TLS/certificate-enabled etcd clusters.
 To use TLS-enabled etcd, the following environment variables need to be set
 before running any `calicoctl` command:
 
-- **`ETCD_AUTHORITY`**: The `<ip_address>:<port_number>` pair representing the 
+* **`ETCD_AUTHORITY`**: The `<hostname>:<port_number>` pair representing the 
  access point to the cluster. **Default**: 127.0.0.1:2379
-- **`ETCD_SCHEME`**: The http or https protocol used by the etcd datastore. 
+  * NOTE: When running Etcd with TLS enabled, the address of the ETCD_AUTHORITY 
+    must be a hostname value, NOT an IP address, such as `etcd-host:2379`.
+* **`ETCD_SCHEME`**: The http or https protocol used by the etcd datastore. 
  **Default**: http
-- **`ETCD_CA_CERT_FILE`**: The full path to the CA certificate file for the 
+* **`ETCD_CA_CERT_FILE`**: The full path to the CA certificate file for the 
  Certificate Authority that signed the etcd server key/certificate pair.
-- **`ETCD_CERT_FILE`**: The full path to the client certificate file for 
+* **`ETCD_CERT_FILE`**: The full path to the client certificate file for 
  accessing the etcd cluster.
-- **`ETCD_KEY_FILE`**: The full path to the client key file for accessing the 
+* **`ETCD_KEY_FILE`**: The full path to the client key file for accessing the 
  etcd cluster.
 
 For example:
 
 ```
-export ETCD_AUTHORITY=127.0.0.1:2379
+export ETCD_AUTHORITY=hostname:2379
 export ETCD_SCHEME=https
-export ETCD_CA_CERT_FILE=/path/to/ca.crt
-export ETCD_CERT_FILE=/path/to/cert.crt
-export ETCD_KEY_FILE=/path/to/key.pem
+export ETCD_CA_CERT_FILE=/path/to/ca.pem
+export ETCD_CERT_FILE=/path/to/server.pem
+export ETCD_KEY_FILE=/path/to/server-key.pem
 ```
 
 > NOTE: The file extensions are not important, the files just need to exist and 
 > be readable.
+
+You can create self-signed certificates using the calico-containers Makefile:
+```
+make ssl-certs
+```
+
+This will create the CA certificate, a client certificate/key pair, and a 
+server certificate/key pair located at:
+```
+/path/to/calico-containers/certs/ca.pem
+/path/to/calico-containers/certs/client.pem
+/path/to/calico-containers/certs/client-key.pem
+/path/to/calico-containers/certs/server.pem
+/path/to/calico-containers/certs/server-key.pem
+```
 
 ### Commands that require root
 Some commands are required to be run as root.  The user's environment variables 
@@ -49,7 +66,7 @@ For example, to run `calicoctl node`, you would call something like this:
 ```
 sudo ETCD_SCHEME=https ETCD_KEY_FILE=/path/to/client.key \
      ETCD_CA_CERT_FILE=/path/to/ca.crt ETCD_CERT_FILE=/path/to/client.crt \
-     ETCD_AUTHORITY=127.0.0.1:2379 calicoctl node
+     ETCD_AUTHORITY=hostname:2379 calicoctl node
 ```
 
 Alternatively, if you have previously defined/exported your environment

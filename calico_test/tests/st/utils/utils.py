@@ -31,6 +31,7 @@ ETCD_SCHEME = os.environ.get("ETCD_SCHEME", "http")
 ETCD_CA = os.environ.get("ETCD_CA_CERT_FILE", "")
 ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
 ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
+ETCD_HOSTNAME_SSL = "etcd-authority-ssl"
 
 def get_ip(v6=False):
     """
