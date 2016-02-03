@@ -59,10 +59,6 @@ def status(arguments):
     # summary file.
     if runtime == "rkt":
         check_container_status_rkt()
-
-        # Return - until rkt enter works for fly containers, we can't 
-        # get BGP protocol information from within the node container.
-        return 
     else:
         check_container_status_docker()
 
