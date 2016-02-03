@@ -61,6 +61,9 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile('calico/node:latest'),
      'calico/node:{version}'),
 
+    (re.compile('calico/build:latest'),
+     'calico/build:{libcalico-version}'),
+
     (re.compile('calico/node-libnetwork:latest'),
      'calico/node-libnetwork:{libnetwork-version}'),
 

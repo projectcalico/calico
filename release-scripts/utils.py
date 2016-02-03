@@ -14,7 +14,6 @@ sys.path.append(path.join(PATH_ROOT, "calicoctl"))
 from calico_ctl import __version__
 
 # Path names relative to the root of the project
-PATH_CALICOCTL_REQS = path.join("calicoctl", "requirements.txt")
 PATH_CALICOCTL_NODE = path.join("calicoctl", "calico_ctl", "node.py")
 PATH_CALICOCTL_INIT = path.join("calicoctl", "calico_ctl", "__init__.py")
 PATH_CALICONODE_BUILD = path.join("calico_node", "build.sh")
@@ -39,7 +38,6 @@ README_RE = re.compile(r'https://github\.com/projectcalico/calico\-containers/bl
 # paths are relative to the project root.
 UPDATE_FILES_STATIC = [PATH_MAIN_README,
                        PATH_CALICOCTL_NODE,
-                       PATH_CALICOCTL_REQS,
                        PATH_CALICONODE_BUILD,
                        PATH_CALICOCTL_INIT,
                        PATH_MAKEFILE]

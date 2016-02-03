@@ -31,7 +31,7 @@ dist/calicoctl: $(CALICOCTL_FILE) birdcl
 	# from the use of the --rm flag
 
 	-docker run -v `pwd`:/code --rm \
-	 calico/build \
+	 calico/build:latest \
 	 pyinstaller calicoctl.spec -ayF
 
 calico_test/.calico_test.created: $(TEST_CONTAINER_FILES)
