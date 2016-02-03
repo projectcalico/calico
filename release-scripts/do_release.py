@@ -2,7 +2,7 @@
 """do_release.py
 
 Usage:
-  do_release.py [--force] [--dry-run] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION]
+  do_release.py [--force] [--dry-run] [--skip-validation] [CALICO_DOCKER_VERSION CALICO_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION]
 
 Options:
   -h --help     Show this screen.
@@ -114,8 +114,9 @@ def start_release():
          "the master branch.")
     utils.check_or_exit("Are you currently on the correct revision")
 
-    # Before asking for version info, perform validation on the current code.
-    utils.validate_markdown_uris()
+    if not arguments["--skip-validation"]:
+        # Before asking for version info, perform validation on the current code.
+        utils.validate_markdown_uris()
 
     old_version = utils.get_calicoctl_version()
     para("Current version is: %s" % old_version)
