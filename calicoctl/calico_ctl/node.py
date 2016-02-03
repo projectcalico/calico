@@ -457,6 +457,11 @@ def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
     for env_var in environment:
         env_commands += ["--set-env=%s" % (env_var)]
 
+    # Ensure /var/run/calico exists on the host machine so it can be 
+    # mounted into the node container.
+    if not os.path.exists("/var/run/calico"):
+        os.makedirs("/var/run/calico")
+
     # Maybe in future we'll want to have a configurable path for the
     # stage1-fly.aci but for now use the following algorithm
     # 1) If there is a file in the current directory, use that.
