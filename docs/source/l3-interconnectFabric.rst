@@ -215,6 +215,8 @@ Fabric Design Considerations`_ appendix.
 
 The designs discussed below address these considerations.
 
+.. _as-per-rack:
+
 The *AS Per Rack* model
 -----------------------
 
@@ -292,6 +294,8 @@ This means that each compute server will see the ToR as the next hop for
 all external routes, and the individual compute servers are the next
 hop for all routes external to the rack.
 
+.. _as-per-cs:
+
 The *AS per Compute Server* model
 ---------------------------------
 
@@ -355,6 +359,8 @@ servers in the rack).
 
 The inter-ToR connectivity considerations are the same in scale and
 scope as in the AS per rack model.
+
+.. _downward-default:
 
 The *Downward Default* model
 ----------------------------
@@ -421,17 +427,21 @@ fraction of the total memory available on a modern compute server.
 Recommendation
 ==============
 
-The Project Calico team urges potential Calico users to consider the
-Ethernet fabric, due to its scale and simplicity. However, if an IP
-fabric is required or desired,  we recommend at this time, the AS per
-rack model.
+The Project Calico team recommends the use of the :ref:`as-per-rack` model
+if the resultant routing table size can be accommodated by the ToR and
+spine switches, remembering to account for projected growth.
+
+If there is concern about the route table size in the ToR switches,
+the team recommends the :ref:`downward-default`.
+
+If there are concerns about both the spine and ToR switch route table
+capacity, or there is a desire to run a very simple L2 fabric to
+connect the Calico nodes, then the user should consider the Ethernet
+fabric as detailed in :doc:`l2-interconnectFabric`
 
 If a Calico user is interested in the AS per compute server, the Project
 Calico team would be very interested in discussing the deployment of
 that model.
-
-Similarly, if a potential user has *very* constrained ToR switches
-deployed, the *Downward Default* model may be worthwhile considering.
 
 Appendix
 ========
