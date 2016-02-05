@@ -6,9 +6,9 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Deploying a Dockerized Mesos Cluster with Calico.
+# Manually Deploying a Dockerized Mesos Cluster with Calico
 
-In these instructions, we will run all cluster services as [Docker][docker] containers.  This speeds deployment and will prevent pesky issues like incompatible dependencies.  The services we will need are
+In these instructions, we will run a Mesos Cluster where all cluster services run as Docker containers.  This speeds deployment and will prevent pesky issues like incompatible dependencies.  The services we will need are:
 
  * Zookeeper
  * etcd
@@ -17,7 +17,9 @@ In these instructions, we will run all cluster services as [Docker][docker] cont
  * Calico
  * Marathon (Mesos framework)
 
-In these brief instructions, I'll concentrate on getting Mesos and Calico up and running as quickly as possible.  This means leaving out the details of how to configure highly-available services.  Instead, I'll install Zookeeper, etcd, and the Mesos Master on the same "master" node.
+We'll concentrate on getting Mesos and Calico up and running as quickly as possible.  This means leaving out the details of how to configure highly-available services.  Instead, we'll install Zookeeper, etcd, and the Mesos Master on the same "master" node.
+
+**For an automated install of a two-host Dockerized Mesos cluster using Vagrant and VirtualBox, follow the [Vagrant Dockerized Mesos Guide](DockerizedVagrant.md).**
 
 
 # Preparation
@@ -120,6 +122,10 @@ We'll use systemd to keep Zookeeper running.  Copy the unit into `/usr/lib/syste
 
 ## Mesos Master
 
+Before running the Master node, be sure to set the IP address of the Master to connect to the Mesos cluster.  Run the following command, replacing `<MASTER_IP>` with the Master's IP address.
+
+    sudo sh -c 'echo IP=<MASTER_IP> > /etc/sysconfig/mesos-master'
+
 Create and enable the `mesos-master` unit, which starts a Docker container running Mesos.
 
     sudo cp mesos-master.service /usr/lib/systemd/system/
@@ -168,9 +174,9 @@ Next, download the unit files
 
 You can learn more about `calicoctl` by running `calicoctl --help`.
 
-You'll need to configure Calico with the correct location of the etcd service.  In the following line, replace `masterip` with the IP address of the Master node.
+You'll need to configure Calico with the correct location of the etcd service.  In the following line, replace `<MASTER_IP>` with the IP address of the Master node.
 
-    sudo sh -c 'echo ETCD_AUTHORITY=masterip:4001 > /etc/sysconfig/calico'
+    sudo sh -c 'echo ETCD_AUTHORITY=<MASTER_IP>:4001 > /etc/sysconfig/calico'
 
 Then, enable the Calico service via `systemd`
 
@@ -184,9 +190,13 @@ Verify Calico is running
 
 ## Mesos Agent
 
-The Mesos Agent uses Zookeeper to keep track of the current Mesos Master.  Use the following command to tell the Mesos Agent where to find Zookeeper.  We installed it on the same host as the Mesos Master earlier, so substitute the name or IP of that host for `zookeeperip`.
+Use the following commands to tell the Mesos Agent where to find Zookeeper.  The Mesos Agent uses Zookeeper to keep track of the current Mesos Master.  We installed it on the same host as the Mesos Master earlier, so substitute the name or IP of that host for `<ZOOKEEPER_IP>`:
 
-    sudo sh -c 'echo ZK=zookeeperip > /etc/sysconfig/mesos-agent'
+    sudo sh -c 'echo ZK=<ZOKEEPER_IP> > /etc/sysconfig/mesos-agent'
+
+You also need to specify the IP address of the Agent to connect to the Mesos cluster.  Run the following command, replacing `<AGENT_IP>` with the Agent's IP address.
+
+    sudo sh -c 'echo IP=<AGENT_IP> >> /etc/sysconfig/mesos-agent'
 
 Then, enable the Mesos Agent service
 
@@ -196,25 +206,15 @@ Then, enable the Mesos Agent service
 
 # Test your cluster
 
-Verify Mesos is working and has the expected number of agents (what used to be called /slaves/ and still are in the UI).  Point your browser to the master node, port 5050 (e.g. http://mesos-master.mydomain:5050/ ).
+To ensure that your cluster is properly networking containers with Calico and enforcing policy as expected, run the Calico Mesos Test Framework, which launches various tasks across your Mesos cluster:
+```
+docker run calico/calico-mesos-framework 172.18.8.101:5050
+```
+> NOTE: Some tests require multiple hosts to ensure cross-host communication, and may fail unless you are running 2+ agents.
 
-Verify that Marathon is up and available on port 8080 (e.g. http://mesos-master.mydomain:8080/ ).
-
-Test Calico network functionality by running our test framework.  On the master node
-
-    sudo docker exec -ti mesos-master bash
-
-This will start a new shell inside the `mesos-master` container.
-
-    cd /framework
-    python calico_framework.py
-
-The Calico framework launches a series of tasks on your Mesos cluster to verify network connectivity and network isolation are working correctly.
-
-At time of writing Marathon still uses the old Mesos networking, rather than Calico IP-per-container networking.  We still include it so you can test backward compatibility.  Try launching some tasks.
+Additionally, you can launch your own tasks using Marathon. See our [Marathon Task Launch Instructions](README.md#3-launching-tasks) for more information.
 
 [calico]: http://projectcalico.org
 [mesos]: https://mesos.apache.org/
 [net-modules]: https://github.com/mesosphere/net-modules
-[docker]: https://www.docker.com/
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/DockerizedDeployment.md?pixel)](https://github.com/igrigorik/ga-beacon)
