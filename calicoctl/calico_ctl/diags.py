@@ -119,6 +119,22 @@ def save_diags(log_dir, runtime="docker"):
             print "  - Missing command: %s" % e.message
             f.writelines("Missing command: %s\n" % e.message)
 
+    # Write interface info
+    print("Dumping ip addr")
+    with DiagsErrorWriter(temp_diags_dir, 'ip_addr') as f:
+        try:
+            ip = sh.Command._create("ip")
+            f.write("ip addr\n")
+            f.writelines(ip("addr"))
+            f.write('\n')
+
+            f.write("ip -6 addr\n")
+            f.writelines(ip("-6", "addr"))
+            f.write('\n')
+        except sh.CommandNotFound as e:
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
+
     # Dump iptables
     with DiagsErrorWriter(temp_diags_dir, 'iptables') as f:
         try:
@@ -145,23 +161,24 @@ def save_diags(log_dir, runtime="docker"):
             f.writelines("Error running ipset: %s\n" % e)
 
     # Ask Felix to dump stats to its log file - ignore errors as the
-    # calico/node container might not be running.
+    # calico/node container might not be running.  Gathering of the logs is
+    # dependent on environment.
     subprocess.call(["pkill", "-SIGUSR1", "felix"])
 
     # If running under rkt, get the journal for the calico/node container.
     print "Copying journal for calico-node.service"
-    f = open(temp_diags_dir + "/calico-node.journal", "w")
-    try:
-        journal = subprocess.check_output(["journalctl", "-u", 
-                                           "calico-node.service", 
-                                           "--no-pager"])
-    except OSError:
-        print "Unable to copy journal"
-    else:
-        f.write(journal)
-    finally:
-        f.close()
+    with DiagsErrorWriter(temp_diags_dir, "calico-node.journal") as f:
+        try:
+            journalctl = sh.Command._create("journalctl")
+            f.write(journalctl("-u", "calico-node.service", "--no-pager"))
+        except sh.CommandNotFound as e:
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
+        except sh.ErrorReturnCode_1 as e:
+            print "  - Error running journalctl."
+            f.writelines("Error running journalctl: %s\n" % e)
 
+    # Otherwise, calico logs are in the log directory.
     if os.path.isdir(log_dir):
         print("Copying Calico logs")
         # Skip the lock files as they can only be copied by root.
@@ -170,6 +187,7 @@ def save_diags(log_dir, runtime="docker"):
     else:
         print('No logs found in %s; skipping log copying' % log_dir)
 
+    # Dump the contents of the etcd datastore.
     print("Dumping datastore")
     # TODO: May want to move this into datastore.py as a dump-calico function
     with DiagsErrorWriter(temp_diags_dir, 'etcd_calico') as f:
