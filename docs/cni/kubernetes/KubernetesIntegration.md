@@ -38,7 +38,7 @@ storing the required information can be achieved using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget http://www.projectcalico.org/latest/calicoctl 
+wget http://www.projectcalico.org/builds/calicoctl 
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -60,7 +60,7 @@ Requires=docker.service
 User=root
 Environment=ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
-ExecStartPre=/usr/bin/wget -N -P /opt/bin https://github.com/projectcalico/calico-containers/releases/download/v0.14.0/calicoctl
+ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
 ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
 ExecStart=/opt/bin/calicoctl node --detach=false
 Restart=always

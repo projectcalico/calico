@@ -43,7 +43,7 @@ UPDATE_FILES_STATIC = [PATH_MAIN_README,
                        PATH_MAKEFILE]
 UPDATE_FILES_DIRS = [PATH_DOCS]
 UPDATE_FILES_EXCLUDE = [PATH_BUILDING]
-UPDATE_FILES_RE = re.compile("(.*\.md)|(Vagrantfile)|(user\-data\-.*)")
+UPDATE_FILES_RE = re.compile("(.*\.md)|(Vagrantfile)|(user\-data\-.*)|(.*\.yaml)")
 
 # Indicators separating blocks of master only and release only text.
 BLOCK_INDICATOR_MASTER_START = "<!--- master only -->"
