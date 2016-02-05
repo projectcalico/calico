@@ -67,10 +67,15 @@ def checksystem(arguments):
                  libnetwork=arguments["--libnetwork"],
                  check_docker=check_docker)
 
-def check_system(quit_if_error=False, libnetwork=False, check_docker=True):
+
+def check_system(quit_if_error=False, libnetwork=False, check_docker=True,
+                 check_modules=True, check_etcd=True):
     """
     Checks that the system is setup correctly.
 
+    :param check_etcd: Whether to perform etcd checks.
+    :param check_docker: Whether to perform docker checks.
+    :param check_modules: Whether to perform module checks.
     :param quit_if_error: if True, quit with error code 1 if any issues are
     detected.
     :param libnetwork: If True, check for Docker version >= v1.21 to support libnetwork
@@ -80,9 +85,9 @@ def check_system(quit_if_error=False, libnetwork=False, check_docker=True):
     quit_if_error == True
     """
     enforce_root()
-    modules_ok = _check_modules()
+    modules_ok = _check_modules() if check_modules else True
     docker_ok = _check_docker_version(libnetwork) if check_docker else True
-    etcd_ok = _check_etcd_version()
+    etcd_ok = _check_etcd_version() if check_etcd else True
 
     system_ok = modules_ok and docker_ok and etcd_ok
 

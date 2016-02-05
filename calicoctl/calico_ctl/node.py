@@ -233,17 +233,22 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         except OSError:
             pass
 
-        # Print warnings for any known system issues before continuing
-        using_docker = True if runtime == 'docker' else False
+        # We will always want to setup IP forwarding
+        _setup_ip_forwarding()
+
+    # Print warnings for any known system issues before continuing
+        if runtime == 'docker' and not running_in_container():
+            using_docker = True
+        else:
+            using_docker = False
+
         (_, _, etcd_ok) = \
             check_system(quit_if_error=False, libnetwork=libnetwork_image,
-                         check_docker=using_docker)
+                         check_docker=using_docker,
+                         check_modules=not running_in_container())
 
         if not etcd_ok:
             sys.exit(1)
-
-        # We will always want to setup IP forwarding
-        _setup_ip_forwarding()
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):
