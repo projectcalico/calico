@@ -402,8 +402,9 @@ def validate_markdown_uris():
             for name, uri in MD_URL_RE.findall(line):
                 if name == "Analytics":
                     found_analytic_url = True
-                    validate_analytics_url(filename, uri)
-                valid = validate_uri(filename, uri)
+                    valid = validate_analytics_url(filename, uri)
+                else:
+                    valid = validate_uri(filename, uri)
                 all_valid = all_valid and valid
         if not found_analytic_url:
             print_bullet("%s: No analytics URL in file" % filename)
@@ -481,5 +482,3 @@ def validate_analytics_url(filename, analytics_url):
         return False
     else:
         return True
-
-    return False
