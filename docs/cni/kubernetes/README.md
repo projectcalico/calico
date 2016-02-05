@@ -17,6 +17,7 @@ Quick-start guides:
 - [CoreOS Vagrant](VagrantCoreOS.md)
 - [CoreOS on GCE](GCE.md)
 - [CoreOS on AWS](AWS.md)
+- [Docker Compose](https://github.com/projectcalico/docker-compose-kubernetes) 
 
 Bare-metal guides:
 - [CoreOS bare-metal](https://github.com/caseydavenport/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
