@@ -160,6 +160,11 @@ def save_diags(log_dir, runtime="docker"):
             print "  - Error running ipset. Maybe you need to run as root."
             f.writelines("Error running ipset: %s\n" % e)
 
+    # Ask Felix to dump stats to its log file - ignore errors as the
+    # calico/node container might not be running.  Gathering of the logs is
+    # dependent on environment.
+    subprocess.call(["pkill", "-SIGUSR1", "felix"])
+
     # If running under rkt, get the journal for the calico/node container.
     print "Copying journal for calico-node.service"
     with DiagsErrorWriter(temp_diags_dir, "calico-node.journal") as f:
@@ -173,10 +178,7 @@ def save_diags(log_dir, runtime="docker"):
             print "  - Error running journalctl."
             f.writelines("Error running journalctl: %s\n" % e)
 
-    # Ask Felix to dump stats to its log file - ignore errors as the
-    # calico/node container might not be running.  Gather Felix logs.
-    subprocess.call(["pkill", "-SIGUSR1", "felix"])
-
+    # Otherwise, calico logs are in the log directory.
     if os.path.isdir(log_dir):
         print("Copying Calico logs")
         # Skip the lock files as they can only be copied by root.
@@ -185,6 +187,7 @@ def save_diags(log_dir, runtime="docker"):
     else:
         print('No logs found in %s; skipping log copying' % log_dir)
 
+    # Dump the contents of the etcd datastore.
     print("Dumping datastore")
     # TODO: May want to move this into datastore.py as a dump-calico function
     with DiagsErrorWriter(temp_diags_dir, 'etcd_calico') as f:
