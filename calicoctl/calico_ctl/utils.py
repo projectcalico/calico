@@ -51,7 +51,7 @@ def running_in_container():
     Check whether the current code is running in a container.
     :return: True if in a container. False otherwise.
     """
-    return os.path.isfile("/.dockerinit")
+    return os.getenv("CALICO_CTL_CONTAINER")
 
 def print_paragraph(msg, file=sys.stdout):
     """
