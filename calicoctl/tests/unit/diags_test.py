@@ -81,11 +81,13 @@ class TestDiags(unittest.TestCase):
             call(diags_dir + '/hostname', 'w'),
             call(diags_dir + '/netstat', 'w'),
             call(diags_dir + '/route', 'w'),
+            call(diags_dir + '/ip_addr', 'w'),
             call(diags_dir + '/iptables', 'w'),
             call(diags_dir + '/ipset', 'w'),
+            call(diags_dir + '/calico-node.journal', 'w'),
             call(diags_dir + '/etcd_calico', 'w')
         ], any_order=True)
-        self.assertEqual(m_open.return_value.close.call_count, 8)
+        self.assertEqual(m_open.return_value.close.call_count, 9)
         m_sh_command.assert_has_calls([
             call('netstat'),
             call()(all=True, numeric=True),
@@ -94,10 +96,15 @@ class TestDiags(unittest.TestCase):
             call('ip'),
             call()('route'),
             call()('-6', 'route'),
+            call('ip'),
+            call()('addr'),
+            call()('-6', 'addr'),
             call('iptables-save'),
             call()(),
             call('ipset'),
-            call()('list')
+            call()('list'),
+            call()("journalctl"),
+            call()("-u", "calico-node.service", "--no-pager")
         ])
         m_datastore_client.etcd_client.read.assert_called_once_with('/calico', recursive=True)
         m_copytree.assert_called_once_with(log_dir, diags_dir + '/logs', ignore=ANY)
@@ -153,30 +160,17 @@ class TestDiags(unittest.TestCase):
             call(diags_dir + '/hostname', 'w'),
             call(diags_dir + '/netstat', 'w'),
             call(diags_dir + '/route', 'w'),
+            call(diags_dir + '/ip_addr', 'w'),
             call(diags_dir + '/iptables', 'w'),
             call(diags_dir + '/ipset', 'w'),
+            call(diags_dir + '/calico-node.journal', 'w'),
             call(diags_dir + '/etcd_calico', 'w')
         ], any_order=True)
         m_open.return_value.write.assert_has_calls([
             call().__enter__().write(str(hostname)),
             call().__enter__().write('DATE=%s' % date_today)
         ], any_order=True)
-        self.assertEqual(m_open.return_value.close.call_count, 8)
-        self.assertNotIn([
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().write('route --numeric\n'),
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().write('ip route\n'),
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().write('ip -6 route\n'),
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().writelines(m_sh_command_return()),
-            call().__enter__().writelines(m_sh_command_return()),
-            call(diags_dir + '/etcd_calico', 'w'),
-            call().__enter__().write('dir?, key, value\n'),
-            call().__enter__().write('DIR,  666,\n'),
-            call().__enter__().write('FILE, 555, 999\n')
-        ], m_open.mock_calls)
+        self.assertEqual(m_open.return_value.close.call_count, 9)
         self.assertFalse(m_copytree.called)
         m_tarfile_open.assert_called_once_with(temp_dir + date_today, 'w:gz')
 

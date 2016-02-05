@@ -119,6 +119,22 @@ def save_diags(log_dir, runtime="docker"):
             print "  - Missing command: %s" % e.message
             f.writelines("Missing command: %s\n" % e.message)
 
+    # Write interface info
+    print("Dumping ip addr")
+    with DiagsErrorWriter(temp_diags_dir, 'ip_addr') as f:
+        try:
+            ip = sh.Command._create("ip")
+            f.write("ip addr\n")
+            f.writelines(ip("addr"))
+            f.write('\n')
+
+            f.write("ip -6 addr\n")
+            f.writelines(ip("-6", "addr"))
+            f.write('\n')
+        except sh.CommandNotFound as e:
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
+
     # Dump iptables
     with DiagsErrorWriter(temp_diags_dir, 'iptables') as f:
         try:
@@ -144,23 +160,22 @@ def save_diags(log_dir, runtime="docker"):
             print "  - Error running ipset. Maybe you need to run as root."
             f.writelines("Error running ipset: %s\n" % e)
 
-    # Ask Felix to dump stats to its log file - ignore errors as the
-    # calico/node container might not be running.
-    subprocess.call(["pkill", "-SIGUSR1", "felix"])
-
     # If running under rkt, get the journal for the calico/node container.
     print "Copying journal for calico-node.service"
-    f = open(temp_diags_dir + "/calico-node.journal", "w")
-    try:
-        journal = subprocess.check_output(["journalctl", "-u", 
-                                           "calico-node.service", 
-                                           "--no-pager"])
-    except OSError:
-        print "Unable to copy journal"
-    else:
-        f.write(journal)
-    finally:
-        f.close()
+    with DiagsErrorWriter(temp_diags_dir, "calico-node.journal") as f:
+        try:
+            journalctl = sh.Command._create("journalctl")
+            f.write(journalctl("-u", "calico-node.service", "--no-pager"))
+        except sh.CommandNotFound as e:
+            print "  - Missing command: %s" % e.message
+            f.writelines("Missing command: %s\n" % e.message)
+        except sh.ErrorReturnCode_1 as e:
+            print "  - Error running journalctl."
+            f.writelines("Error running journalctl: %s\n" % e)
+
+    # Ask Felix to dump stats to its log file - ignore errors as the
+    # calico/node container might not be running.  Gather Felix logs.
+    subprocess.call(["pkill", "-SIGUSR1", "felix"])
 
     if os.path.isdir(log_dir):
         print("Copying Calico logs")
