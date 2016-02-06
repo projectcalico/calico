@@ -33,7 +33,7 @@ and add an ibound rule to allow port 80
 ```
 
 ### Add iptables nat and forwarding rules on your host
-Next you need to configure a forwarding rule on your Host-Interafce to port 80 of your container IP
+Next you need to configure a forwarding rule on your Host-Interface to port 80 of your container IP
 
 ```
 iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.0.1:80
