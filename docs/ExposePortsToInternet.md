@@ -13,7 +13,7 @@ or the [Calico as a Docker network plugin tutorial](calico-with-docker/docker-ne
 we created containers and assigned endpoints (a container interface) to them. This is used for Container-
 To-Container communication.
 
-The example below shows how to expose a port of a conatiner to the Host-Interface so this container is 
+The example below shows how to expose a port of a container to the Host-Interface so this container is 
 reachable from outside / the internet.
 
 ## Why isn't the `-p` flag on `docker run` working as expected?
@@ -33,14 +33,14 @@ and add an ibound rule to allow port 80
 ```
 
 ### Add iptables nat and forwarding rules on your host
-Next you need to configure a forwarding rule on your Host-Interafce to posrt 80 of your conatiner IP
+Next you need to configure a forwarding rule on your Host-Interafce to port 80 of your container IP
 
 ```
 iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.0.1:80
 iptables -t nat -A OUTPUT -p tcp -o lo --dport 80 -j DNAT --to-destination 192.168.0.1:80
 ```
 
-Now all traffic to your Host-Interface on Port 80 will be forwarded to the container IP 192.168.0.1
+Now all traffic to your Host-Interface on port 80 will be forwarded to the container IP 192.168.0.1
 
 Also check out the [Advanced Network Policy Guide](docs/AdvancedNetworkPolicy.md)
 for more information. 
