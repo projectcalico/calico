@@ -55,7 +55,7 @@ Please raise any encountered issues, or message us on [calico-slack](https://cal
 7. Install the additional binaries for Dockerless-calico:
     ```
     # calicoctl
-    curl -L https://github.com/projectcalico/calico-containers/releases/download/v0.13.0/calicoctl -o /usr/local/bin/calicoctl
+    curl -L http://www.projectcalico.org/builds/calicoctl -o /usr/local/bin/calicoctl
     chmod +x /usr/local/bin/calicoctl
     
     # bird

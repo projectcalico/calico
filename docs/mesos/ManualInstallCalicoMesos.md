@@ -101,7 +101,7 @@ The last Calico component required for Calico networking in Mesos is `calico-nod
 
 ```
 sudo yum install -y wget
-wget https://github.com/projectcalico/calico-containers/releases/download/v0.9.0/calicoctl
+wget https://github.com/projectcalico/calico-containers/releases/download/v0.8.0/calicoctl
 chmod +x calicoctl
 sudo ETCD_AUTHORITY=<IP of host with etcd>:4001 ./calicoctl node
 ```
