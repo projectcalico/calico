@@ -184,7 +184,8 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.docker', autospec=True)
     @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
-    def test_node_dockerless_start(self, m_attach_and_stream,
+    @patch('calico_ctl.node.running_in_container', autospec=True)
+    def test_node_dockerless_start(self, m_container, m_attach_and_stream,
                                    m_find_or_pull_node_image, m_docker,
                                    m_docker_client, m_client,
                                    m_error_if_bgp_ip_conflict,
@@ -197,6 +198,7 @@ class TestNode(unittest.TestCase):
         without making Docker calls when runtime=none.
         """
         # Set up mock objects
+        m_container.return_value = False
         m_os_path_exists.return_value = False
         ip_1 = '1.1.1.1'
         ip_2 = '2.2.2.2'
@@ -225,7 +227,9 @@ class TestNode(unittest.TestCase):
         m_os_makedirs.assert_called_once_with(log_dir)
         m_check_system.assert_called_once_with(quit_if_error=False,
                                                libnetwork=libnetwork,
-                                               check_docker=False)
+                                               check_docker=False,
+                                               check_modules=True
+                                               )
         m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*",
                                                         "virbr.*", "lxcbr.*",
@@ -249,6 +253,7 @@ class TestNode(unittest.TestCase):
 
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
+    @patch('calico_ctl.node.running_in_container', autospec=True)
     @patch('calico_ctl.node._remove_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node._ensure_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
@@ -268,13 +273,14 @@ class TestNode(unittest.TestCase):
                         m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
                         m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
                         m_check_system, m_ensure_host_tunnel_addr,
-                        m_remove_host_tunnel_addr, m_os_makedirs,
+                        m_remove_host_tunnel_addr, m_container, m_os_makedirs,
                         m_os_path_exists):
         """
         Test that the node_Start function does not make Docker calls
         function returns
         """
         # Set up mock objects
+        m_container.return_value = False
         m_os_path_exists.return_value = False
         ip_1 = '1.1.1.1'
         ip_2 = '2.2.2.2'
@@ -331,7 +337,8 @@ class TestNode(unittest.TestCase):
         m_os_makedirs.assert_called_once_with(log_dir)
         m_check_system.assert_called_once_with(quit_if_error=False,
                                                libnetwork=libnetwork,
-                                               check_docker=True)
+                                               check_docker=True,
+                                               check_modules=True)
         m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*",
                                                         "virbr.*", "lxcbr.*",
@@ -386,7 +393,8 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.docker', autospec=True)
     @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
-    def test_node_start_secure(self, m_attach_and_stream,
+    @patch('calico_ctl.node.running_in_container', autospec=True)
+    def test_node_start_secure(self, m_container, m_attach_and_stream,
                                m_find_or_pull_node_image, m_docker,
                                m_docker_client, m_client,
                                m_error_if_bgp_ip_conflict,
@@ -400,6 +408,7 @@ class TestNode(unittest.TestCase):
         secure etcd environment variables are present.
         """
         # Set up mock objects
+        m_container.return_value = False
         ip_1 = '1.1.1.1'
         ip_2 = '2.2.2.2'
         m_get_host_ips.return_value = [ip_1, ip_2]
@@ -487,7 +496,8 @@ class TestNode(unittest.TestCase):
         m_os_path_exists.assert_called_once_with(log_dir)
         m_check_system.assert_called_once_with(quit_if_error=False,
                                                libnetwork=libnetwork_image,
-                                               check_docker=True)
+                                               check_docker=True,
+                                               check_modules=True)
         m_setup_ip.assert_called_once_with()
         m_get_host_ips.assert_called_once_with(exclude=["^docker.*", "^cbr.*",
                                                         "virbr.*", "lxcbr.*",

@@ -33,7 +33,7 @@ from subprocess32 import call
 from checksystem import check_system
 from connectors import client
 from connectors import docker_client
-from utils import REQUIRED_MODULES
+from utils import REQUIRED_MODULES, running_in_container
 from utils import get_container_ipv_from_arguments
 from utils import hostname
 from utils import print_paragraph
@@ -227,22 +227,28 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     # We only make a best effort attempt because the command may fail if the
     # modules are built in.
     # We'll warn during the check_system() if the modules are unavailable.
-    try:
-        call(["modprobe", "-a"] + REQUIRED_MODULES)
-    except OSError:
-        pass
+    if not running_in_container():
+        try:
+            call(["modprobe", "-a"] + REQUIRED_MODULES)
+        except OSError:
+            pass
+
+        # We will always want to setup IP forwarding
+        _setup_ip_forwarding()
 
     # Print warnings for any known system issues before continuing
-    using_docker = True if runtime == 'docker' else False
-    (_, _, etcd_ok) = \
-        check_system(quit_if_error=False, libnetwork=libnetwork_image,
-                     check_docker=using_docker)
+        if runtime == 'docker' and not running_in_container():
+            using_docker = True
+        else:
+            using_docker = False
 
-    if not etcd_ok:
-        sys.exit(1)
+        (_, _, etcd_ok) = \
+            check_system(quit_if_error=False, libnetwork=libnetwork_image,
+                         check_docker=using_docker,
+                         check_modules=not running_in_container())
 
-    # We will always want to setup IP forwarding
-    _setup_ip_forwarding()
+        if not etcd_ok:
+            sys.exit(1)
 
     # Ensure log directory exists
     if not os.path.exists(log_dir):

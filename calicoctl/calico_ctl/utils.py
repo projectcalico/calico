@@ -13,16 +13,15 @@
 # limitations under the License.
 from __future__ import print_function
 
-import socket
 import os
+import re
 import sys
 import textwrap
-import netaddr
-import re
 import urllib
 
-from pycalico.util import get_hostname
+import netaddr
 from netaddr.core import AddrFormatError
+from pycalico.util import get_hostname
 
 DOCKER_VERSION = "1.16"
 DOCKER_LIBNETWORK_VERSION = "1.21"
@@ -46,6 +45,13 @@ def enforce_root():
         print("This command must be run as root.", file=sys.stderr)
         sys.exit(2)
 
+
+def running_in_container():
+    """
+    Check whether the current code is running in a container.
+    :return: True if in a container. False otherwise.
+    """
+    return os.getenv("CALICO_CTL_CONTAINER")
 
 def print_paragraph(msg, file=sys.stdout):
     """
