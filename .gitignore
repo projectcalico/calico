@@ -1,0 +1,5 @@
+*.pyc
+*.spec
+build/
+dist/
+*.tar

@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: calico-policy-agent
+  namespace: calico-system
+  labels:
+    version: v1
+    projectcalico.org/app: "policy-agent"
+spec:
+  replicas: 1
+  selector:
+    version: v1
+    projectcalico.org/app: "policy-agent"
+  template:
+    metadata:
+      labels:
+        version: v1
+        projectcalico.org/app: "policy-agent"
+    spec:
+      volumes:
+      - hostPath:
+          path: /var/log/calico/kubernetes/policy-agent/
+        name: logdir
+      containers:
+      - image: alexhersh/calico-policy-agent
+        volumeMounts:
+        - mountPath: /var/log/calico/kubernetes/policy-agent/
+          name: logdir
+        env:
+        - name: KUBE_API_ROOT
+          value: "https://<KUBERNETES_MASTER>:443/api/v1/"
+        - name: ETCD_AUTHORITY
+          value: "<KUBERNETES_MASTER>:2379"
+        - name: KUBE_AUTH_TOKEN
+          value: "<TOKEN>""
+        - name: CALICO_IPAM
+          value: "true"
+        - name: CALICO_POLICY
+          value: "true"
+        resources:
+          limits:
+            cpu: 100m
+            memory: 50Mi
+        name: policyagent

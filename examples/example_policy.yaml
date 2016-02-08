@@ -1,0 +1,16 @@
+kind: NetworkPolicy
+apiVersion: net.alpha.kubernetes.io/v1alpha1
+metadata:
+  name: test-policy
+  namespace: default
+applyTo:
+  tier: backend
+allowIncoming:
+  - toPorts:
+    - port: 80
+      protocol: TCP
+    from: 
+    - pods:
+       tier: middle
+    - pods:
+       role: test
