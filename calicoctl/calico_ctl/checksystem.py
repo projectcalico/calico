@@ -25,9 +25,9 @@ Options:
                        container, either "docker" or "rkt". 
                        [default: docker]
 """
-import os
-import sys
+import platform
 import re
+import sys
 
 import docker
 from etcd import EtcdConnectionFailed
@@ -38,6 +38,11 @@ from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION, REQUIRED_MODULES, \
     ETCD_VERSION
 from utils import enforce_root
 from connectors import docker_client, client, etcd_authority
+
+# The minimum allowed linux kernel version is 2.6.24, which introduced network
+# namespaces and veth pairs.
+MIN_KERNEL_VERSION_STR = "2.6.24"
+MIN_KERNEL_VERSION = [2, 6, 24]
 
 
 def checksystem(arguments):
@@ -69,7 +74,7 @@ def checksystem(arguments):
 
 
 def check_system(quit_if_error=False, libnetwork=False, check_docker=True,
-                 check_modules=True, check_etcd=True):
+                 check_modules=True, check_etcd=True, check_kernel=True):
     """
     Checks that the system is setup correctly.
 
@@ -88,8 +93,9 @@ def check_system(quit_if_error=False, libnetwork=False, check_docker=True,
     modules_ok = _check_modules() if check_modules else True
     docker_ok = _check_docker_version(libnetwork) if check_docker else True
     etcd_ok = _check_etcd_version() if check_etcd else True
+    kernel_ok = _check_kernel_version() if check_kernel else True
 
-    system_ok = modules_ok and docker_ok and etcd_ok
+    system_ok = modules_ok and docker_ok and etcd_ok and kernel_ok
 
     if quit_if_error and not system_ok:
         sys.exit(1)
@@ -202,6 +208,7 @@ def _check_docker_version(libnetwork=False):
 
     return system_ok
 
+
 def _check_etcd_version():
     """
     Check that etcd is running and supported.
@@ -246,3 +253,38 @@ def _check_etcd_version():
             system_ok = False
 
     return system_ok
+
+
+def _check_kernel_version():
+    """
+    Check that the kernel version meets the minimum required version for Calico.
+    Valid kernel versions have a Kernel number, Major number, and optional
+    Minor and Bug fix numbers for versioning.  The full version can be
+    followed by at least one non-digit value, then any other characters:
+    Ex.    "2.24.32-100-generic"
+           "2.30.16.28-46"
+           "3.19.0a-dev"
+           "2.8.1"
+           "3.0"
+           "4.5-rc3"
+    """
+    full_version = platform.uname()[2]
+
+    # Make sure version number makes sense and captures version numbers
+    regex = re.compile("^(\d+(?:\.\d+){1,3})(?:\D.*)?$")
+
+    try:
+        version_string = regex.match(full_version).group(1)
+    except AttributeError:
+        print "ERROR: The kernel version does not match expected semantic " \
+              "versioning."
+        return False
+
+    version_list = [int(num) for num in version_string.split(".")]
+    if version_list < MIN_KERNEL_VERSION:
+        print "Minimum kernel version to run Calico is %s." \
+              "\nDetected kernel version: %s" % \
+              (MIN_KERNEL_VERSION_STR, version_string)
+        return False
+
+    return True
