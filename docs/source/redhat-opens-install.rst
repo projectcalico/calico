@@ -412,13 +412,13 @@ On each compute node, perform the following steps:
    OpenStack packages and to ``dnsmasq``.  For OpenStack Liberty, this step
    only upgrades ``dnsmasq``.
 
-5. Install and configure the DHCP agent on the compute host:
+5. Install Neutron infrastructure code on the compute host:
 
    ::
 
        yum install openstack-neutron
 
-   For OpenStack Juno or Kilo, open ``/etc/neutron/dhcp_agent.ini``, and in the
+6. For OpenStack Juno or Kilo, open ``/etc/neutron/dhcp_agent.ini``, and in the
    ``[DEFAULT]`` section add the following line (removing any existing
    ``interface_driver =`` line):
 
@@ -426,19 +426,21 @@ On each compute node, perform the following steps:
 
            interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
-6.  Restart and enable the DHCP agent.  For OpenStack Liberty or later:
+   then restart and enable the Neutron DHCP agent:
 
-    ::
+   ::
 
-        service calico-dhcp-agent restart
-        chkconfig calico-dhcp-agent on
+       service neutron-dhcp-agent restart
+       chkconfig neutron-dhcp-agent on
 
-    For earlier OpenStack releases:
+   For OpenStack Liberty or later, stop and disable the Neutron DHCP agent, as
+   Calico will install and use its own DHCP agent (as part of the
+   ``calico-compute`` step below):
 
-    ::
+   ::
 
-        service neutron-dhcp-agent restart
-        chkconfig neutron-dhcp-agent on
+       service neutron-dhcp-agent stop
+       chkconfig neutron-dhcp-agent off
 
 7.  Stop and disable any other routing/bridging agents such as the L3
     routing agent or the Linux bridging agent.  These conflict with Calico.

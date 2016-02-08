@@ -104,6 +104,7 @@ process when the binary has been updated since it started running::
 
 Then if you are using OpenStack Liberty or later::
 
+    service neutron-dhcp-agent stop
     service calico-dhcp-agent restart
 
 Or if you are using an earlier OpenStack release::
@@ -132,6 +133,7 @@ the binary has been updated since it started running::
 
 Then if you are using OpenStack Liberty or later::
 
+    service neutron-dhcp-agent stop
     service calico-dhcp-agent restart
 
 Or if you are using an earlier OpenStack release::

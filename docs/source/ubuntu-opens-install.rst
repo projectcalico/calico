@@ -345,17 +345,19 @@ perform the following steps:
 
        interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
 
-   Now restart the DHCP agent.  For OpenStack Liberty or later:
-
-   ::
-
-       sudo service calico-dhcp-agent restart
-
-   For earlier OpenStack releases:
+   and then restart the DHCP agent:
 
    ::
 
        sudo service neutron-dhcp-agent restart
+
+   For OpenStack Liberty or later, stop the Neutron DHCP agent, as Calico will
+   install and use its own DHCP agent (as part of the following
+   ``calico-compute`` step):
+
+   ::
+
+       sudo service neutron-dhcp-agent stop
 
 7. Install the ``calico-compute`` package:
 
