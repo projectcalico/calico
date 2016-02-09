@@ -4,10 +4,11 @@ Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
 Version:        1.0.1
-Release:        0.6.pre1%{?dist}
+Release:        0.7.pre7%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
 Source0:        networking-calico-%{version}.tar.gz
+Source45:	calico-dhcp-agent.service
 BuildArch:	noarch
 
 
@@ -24,9 +25,9 @@ those workloads.
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
 %if 0%{?el6}
-Requires:       calico-common, calico-felix, networking-calico, openstack-neutron, iptables, python-argparse
+Requires:       calico-common, calico-dhcp-agent, calico-felix, networking-calico, openstack-neutron, iptables, python-argparse
 %else
-Requires:       calico-common, calico-felix, networking-calico, openstack-neutron, iptables
+Requires:       calico-common, calico-dhcp-agent, calico-felix, networking-calico, openstack-neutron, iptables
 %endif
 
 
@@ -34,8 +35,6 @@ Requires:       calico-common, calico-felix, networking-calico, openstack-neutro
 This package provides the pieces needed on a compute node.
 
 %files -n calico-compute
-%defattr(-,root,root,-)
-/usr/bin/calico-dhcp-agent
 
 %post -n calico-compute
 if [ $1 -eq 1 ] ; then
@@ -74,6 +73,47 @@ if [ $1 -ge 1 ] ; then
 fi
 
 
+%package -n calico-dhcp-agent
+Group:          Applications/Engineering
+Summary:        Project Calico networking for OpenStack/Neutron
+Requires:       calico-common, networking-calico
+
+%description -n calico-dhcp-agent
+This package provides the Calico DHCP agent.
+
+%files -n calico-dhcp-agent
+%defattr(-,root,root,-)
+/usr/bin/calico-dhcp-agent
+%{_unitdir}/calico-dhcp-agent.service
+
+%post -n calico-dhcp-agent
+%if 0%{?el7}
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    /usr/bin/systemctl daemon-reload
+    /usr/bin/systemctl enable calico-dhcp-agent
+    /usr/bin/systemctl start calico-dhcp-agent
+fi
+%endif
+
+%preun -n calico-dhcp-agent
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+%if 0%{?el7}
+    /usr/bin/systemctl disable calico-dhcp-agent
+    /usr/bin/systemctl stop calico-dhcp-agent
+%endif
+fi
+
+%postun -n calico-dhcp-agent
+if [ $1 -ge 1 ] ; then
+    # Package upgrade, not uninstall
+%if 0%{?el7}
+    /usr/bin/systemctl condrestart calico-dhcp-agent >/dev/null 2>&1 || :
+%endif
+fi
+
+
 %package -n calico-control
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
@@ -107,12 +147,21 @@ integration code.
 rm -rf $RPM_BUILD_ROOT
 %{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
 
+# For EL7, install systemd service files
+%if 0%{?el7}
+    install -d -m 755 %{buildroot}%{_unitdir}
+    install -p -D -m 755 %{SOURCE45} %{buildroot}%{_unitdir}/calico-dhcp-agent.service
+%endif
+
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Feb 02 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.0.1-0.7.pre7
+  - Add service framework around Calico DHCP agent
+
 * Thu Jan 21 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.0.1-0.6.pre1
   - devstack/bootstrap.sh: Don't set SERVICE_HOST
   - Various leader election improvements
