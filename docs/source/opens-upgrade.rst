@@ -90,7 +90,24 @@ Ubuntu 14.04
 First, upgrade packaged components::
 
     apt-get update
-    apt-get install dnsmasq-base nova-api-metadata neutron-dhcp-agent python-etcd calico-compute nova-compute
+    apt-get dist-upgrade
+
+We recommend upgrading the whole distribution as shown here.  In case you
+prefer to upgrade particular packages only, those needed for a Calico compute
+node are the following.
+
+::
+
+    calico-common
+    calico-compute
+    calico-dhcp-agent
+    calico-felix
+    dnsmasq-base
+    networking-calico
+    neutron-dhcp-agent
+    nova-api-metadata
+    nova-compute
+    python-etcd
 
 Then, restart Felix to ensure that it picks up any changes::
 
@@ -121,9 +138,25 @@ First, upgrade python-etcd::
     cd python-etcd-master
     python setup.py install
 
-Then, update the relevant components::
+Then, update packaged components::
 
-    yum update dnsmasq openstack-nova-api openstack-neutron calico-compute openstack-nova-compute
+    yum update
+
+We recommend upgrading the whole distribution as shown here.  In case you
+prefer to upgrade particular packages only, those needed for a Calico compute
+node are the following.
+
+::
+
+    calico-common
+    calico-compute
+    calico-dhcp-agent
+    calico-felix
+    dnsmasq
+    networking-calico
+    openstack-neutron
+    openstack-nova-api
+    openstack-nova-compute
 
 Finally, if dnsmasq was upgraded, kill it and restart the DHCP agent.  This is
 required due to an upstream problem: oslo-rootwrap can't kill a process when
@@ -152,7 +185,19 @@ Ubuntu 14.04
 First, update packaged components::
 
     apt-get update
-    apt-get install python-etcd etcd calico-control neutron-server
+    apt-get dist-upgrade
+
+We recommend upgrading the whole distribution as shown here.  In case you
+prefer to upgrade particular packages only, those needed for a Calico control
+node are the following.
+
+::
+
+    calico-common
+    calico-control
+    networking-calico
+    neutron-server
+    python-etcd
 
 Then, restart Neutron to ensure that it picks up any changes::
 
@@ -168,6 +213,21 @@ First, upgrade python-etcd::
     cd python-etcd-master
     python setup.py install
 
-Then, update the relevant components::
+Then, update packaged components::
 
-    yum update calico-control openstack-neutron
+    yum update
+
+We recommend upgrading the whole distribution as shown here.  In case you
+prefer to upgrade particular packages only, those needed for a Calico control
+node are the following.
+
+::
+
+    calico-common
+    calico-control
+    networking-calico
+    openstack-neutron
+
+Then, restart Neutron to ensure that it picks up any changes::
+
+    service neutron-server restart
