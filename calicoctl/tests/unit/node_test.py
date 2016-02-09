@@ -182,11 +182,12 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
     @patch('calico_ctl.node.docker', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
     @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
     @patch('calico_ctl.node.running_in_container', autospec=True)
     def test_node_dockerless_start(self, m_container, m_attach_and_stream,
-                                   m_find_or_pull_node_image, m_docker,
+                                   m_find_or_pull_node_image, m_call, m_docker,
                                    m_docker_client, m_client,
                                    m_error_if_bgp_ip_conflict,
                                    m_warn_if_hostname_conflict,
@@ -253,6 +254,7 @@ class TestNode(unittest.TestCase):
 
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
     @patch('calico_ctl.node.running_in_container', autospec=True)
     @patch('calico_ctl.node._remove_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node._ensure_host_tunnel_addr', autospec=True)
@@ -273,8 +275,8 @@ class TestNode(unittest.TestCase):
                         m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
                         m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
                         m_check_system, m_ensure_host_tunnel_addr,
-                        m_remove_host_tunnel_addr, m_container, m_os_makedirs,
-                        m_os_path_exists):
+                        m_remove_host_tunnel_addr, m_container, m_call,
+                        m_os_makedirs, m_os_path_exists):
         """
         Test that the node_Start function does not make Docker calls
         function returns
@@ -390,12 +392,13 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
     @patch('calico_ctl.node.docker', autospec=True)
     @patch('calico_ctl.node._find_or_pull_node_image', autospec=True)
     @patch('calico_ctl.node._attach_and_stream', autospec=True)
     @patch('calico_ctl.node.running_in_container', autospec=True)
     def test_node_start_secure(self, m_container, m_attach_and_stream,
-                               m_find_or_pull_node_image, m_docker,
+                               m_find_or_pull_node_image, m_docker, m_call,
                                m_docker_client, m_client,
                                m_error_if_bgp_ip_conflict,
                                m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
@@ -555,10 +558,12 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
+    @patch('calico_ctl.node.docker', autospec=True)
     def test_node_start_remove_container_error(
-            self, m_docker_client, m_client,
+            self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):
@@ -595,10 +600,12 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
+    @patch('calico_ctl.node.docker', autospec=True)
     def test_node_start_no_detected_ips(
-            self, m_docker_client, m_client,
+            self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists, m_sys_exit):
@@ -635,10 +642,12 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
     @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
+    @patch('calico_ctl.node.docker', autospec=True)
     def test_node_start_create_default_ip_pools(
-            self, m_docker_client, m_client,
+            self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists):

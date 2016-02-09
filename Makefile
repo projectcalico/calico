@@ -3,6 +3,7 @@
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 ST_TO_RUN?=tests/st/
+UT_TO_RUN?=tests/unit/
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 HOST_CHECKOUT_DIR?=$(shell pwd)
@@ -87,7 +88,7 @@ birdcl:
 ## Run the UTs in a container.
 ut: calico_test/.calico_test.created
 	docker run --rm -v `pwd`/calicoctl:/code calico/test \
-		nosetests tests/unit  -c nose.cfg
+		nosetests $(UT_TO_RUN) -c nose.cfg
 
 ut-circle: calico_test/.calico_test.created dist/calicoctl
 	# Test this locally using CIRCLE_TEST_REPORTS=/tmp COVERALLS_REPO_TOKEN=bad make ut-circle
