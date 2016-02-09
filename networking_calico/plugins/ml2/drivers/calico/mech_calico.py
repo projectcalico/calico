@@ -32,6 +32,7 @@ import os
 
 # OpenStack imports.
 import eventlet
+from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
 from neutron.common import constants
 from neutron.common.exceptions import PortNotFound
@@ -200,7 +201,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             'tap',
             {'port_filter': True,
              'mac_address': '00:61:fe:ed:ca:fe'})
-
+        # Lock to prevent concurrent initialisation.
+        self._init_lock = Semaphore()
         # Initialize fields for the database object and transport.  We will
         # initialize these properly when we first need them.
         self.db = None
@@ -252,60 +254,65 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         the fork (as would happen in __init__()) then the workers
         would share sockets incorrectly.
         """
-        current_pid = os.getpid()
-        if self._my_pid == current_pid:
-            # We've initialised our PID and it hasn't changed since last time,
-            # nothing to do.
-            return
-        # else: either this is the first call or our PID has changed:
-        # (re)initialise.
+        with self._init_lock:
+            current_pid = os.getpid()
+            if self._my_pid == current_pid:
+                # We've initialised our PID and it hasn't changed since last
+                # time, nothing to do.
+                return
+            # else: either this is the first call or our PID has changed:
+            # (re)initialise.
 
-        if self._my_pid is not None:
-            # This is unexpected but we can deal with it: Neutron should
-            # fork before we trigger the first call to _init_state().
-            LOG.warning("PID changed; unexpected fork after initialisation.  "
-                        "Reinitialising Calico driver.")
+            if self._my_pid is not None:
+                # This is unexpected but we can deal with it: Neutron should
+                # fork before we trigger the first call to _init_state().
+                LOG.warning("PID changed from %s to %s; unexpected fork after "
+                            "initialisation?  Reinitialising Calico driver.",
+                            self._my_pid, current_pid)
+            else:
+                LOG.info("Doing Calico mechanism driver initialisation in"
+                         "process %s", current_pid)
 
-        # (Re)init the DB.
-        self.db = None
-        self._get_db()
+            # (Re)init the DB.
+            self.db = None
+            self._get_db()
 
-        # Admin context used by (only) the thread that updates Felix agent
-        # status.
-        self._agent_update_context = ctx.get_admin_context()
+            # Admin context used by (only) the thread that updates Felix agent
+            # status.
+            self._agent_update_context = ctx.get_admin_context()
 
-        # Get RPC connection for fanning out Felix state reports.
-        try:
-            state_report_topic = topics.REPORTS
-        except AttributeError:
-            # Older versions of OpenStack share the PLUGIN topic.
-            state_report_topic = topics.PLUGIN
-        self.state_report_rpc = agent_rpc.PluginReportStateAPI(
-            state_report_topic
-        )
+            # Get RPC connection for fanning out Felix state reports.
+            try:
+                state_report_topic = topics.REPORTS
+            except AttributeError:
+                # Older versions of OpenStack share the PLUGIN topic.
+                state_report_topic = topics.PLUGIN
+            self.state_report_rpc = agent_rpc.PluginReportStateAPI(
+                state_report_topic
+            )
 
-        # Use Etcd-based transport.
-        if self.transport:
-            # If we've been forked then the old transport will incorrectly
-            # share file handles with the other process.
-            LOG.warning("Shutting down previous transport instance.")
-            self.transport.stop()
-        self.transport = t_etcd.CalicoTransportEtcd(self)
+            # Use Etcd-based transport.
+            if self.transport:
+                # If we've been forked then the old transport will incorrectly
+                # share file handles with the other process.
+                LOG.warning("Shutting down previous transport instance.")
+                self.transport.stop()
+            self.transport = t_etcd.CalicoTransportEtcd(self)
 
-        self._my_pid = current_pid
+            self._my_pid = current_pid
 
-        # Start our resynchronization process and status updating. Just in
-        # case we ever get two same threads running, use an epoch counter to
-        # tell the old thread to die.
-        # This is defensive: our greenlets don't actually seem to get forked
-        # with the process.
-        # We deliberately do this last, to ensure that all of the setup above
-        # is complete before we start running.
-        self._epoch += 1
-        eventlet.spawn(self.periodic_resync_thread, self._epoch)
-        eventlet.spawn(self._status_updating_thread, self._epoch)
-        for _ in xrange(cfg.CONF.calico.num_port_status_threads):
-            eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
+            # Start our resynchronization process and status updating. Just in
+            # case we ever get two same threads running, use an epoch counter
+            # to tell the old thread to die.
+            # We deliberately do this last, to ensure that all of the setup
+            # above is complete before we start running.
+            self._epoch += 1
+            eventlet.spawn(self.periodic_resync_thread, self._epoch)
+            eventlet.spawn(self._status_updating_thread, self._epoch)
+            for _ in xrange(cfg.CONF.calico.num_port_status_threads):
+                eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
+            LOG.info("Calico mechanism driver initialisation done in process "
+                     "%s", current_pid)
 
     @logging_exceptions(LOG)
     def _status_updating_thread(self, expected_epoch):
@@ -361,7 +368,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         :param hostname: hostname of the host containing the port.
         :param port_id: the port ID.
-        :param calico_status: new status dict for the port or None if the
+        :param status_dict: new status dict for the port or None if the
                status was deleted.
         """
         port_status_key = (intern(hostname.encode("utf8")), port_id)
