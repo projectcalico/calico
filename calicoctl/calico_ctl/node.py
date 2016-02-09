@@ -481,7 +481,7 @@ def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
     else:
         stage1_path = "/usr/share/rkt/stage1-fly.aci"
     rkt_command = ["systemd-run", "--unit=calico-node", "rkt", "run",
-                   "--stage1-image=%s" % stage1_path,
+                   "--stage1-path=%s" % stage1_path,
                    "--insecure-options=image",
                    "--volume=birdctl,kind=host,source=/var/run/calico,readOnly=false",
                    "--mount", "volume=birdctl,target=/var/run/calico"] + \
