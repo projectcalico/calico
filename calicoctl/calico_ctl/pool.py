@@ -33,6 +33,7 @@ import netaddr
 from netaddr import IPNetwork, IPRange, IPAddress
 from prettytable import PrettyTable
 from pycalico.datastore_datatypes import IPPool
+from pycalico.block import CidrTooSmallError, BLOCK_PREFIXLEN
 
 from connectors import client
 from utils import (validate_cidr, validate_ip,
@@ -109,7 +110,8 @@ def ip_pool_add(cidrs, version, ipip, masquerade):
 
     :param cidrs: The pools to set in CIDR format, e.g. 192.168.0.0/16
     :param version: 4 or 6
-    :param ipip: Use IP in IP for this pool.
+    :param ipip: Use IP in IP for the pool(s).
+    :param masquerade: Enable masquerade (outgoing NAT) for the pool(s).
     :return: None
     """
     if version == 6 and ipip:
@@ -117,8 +119,16 @@ def ip_pool_add(cidrs, version, ipip, masquerade):
         sys.exit(1)
 
     # TODO Reject any cidrs that overlap with existing cidrs in the pool
+    pools = []
     for cidr in cidrs:
-        pool = IPPool(cidr, ipip=ipip, masquerade=masquerade)
+        try:
+            pools.append(IPPool(cidr, ipip=ipip, masquerade=masquerade))
+        except CidrTooSmallError:
+            print "An IPv%s pool must have a prefix length of %s or lower." \
+                  "\nGiven: %s.\nNo pools added." % \
+                  (version, BLOCK_PREFIXLEN[version], cidr)
+            sys.exit(1)
+    for pool in pools:
         client.add_ip_pool(version, pool)
 
 
@@ -129,7 +139,8 @@ def ip_pool_range_add(start_ip, end_ip, version, ipip, masquerade):
     :param start_ip: The first ip address the ip range.
     :param end_ip: The last ip address in the ip range.
     :param version: 4 or 6
-    :param ipip: Use IP in IP for this pool.
+    :param ipip: Use IP in IP for the pool(s).
+    :param masquerade: Enable masquerade (outgoing NAT) for the pool(s).
     :return: None
     """
     if version == 6 and ipip:
@@ -151,8 +162,20 @@ def ip_pool_range_add(start_ip, end_ip, version, ipip, masquerade):
             sys.exit(1)
 
     cidrs = netaddr.iprange_to_cidrs(start_ip, end_ip)
+    new_pools = []
     for ip_net in cidrs:
-        new_pool = IPPool(ip_net.cidr, ipip=ipip, masquerade=masquerade)
+        try:
+            new_pools.append(IPPool(ip_net.cidr, ipip=ipip, masquerade=masquerade))
+        except CidrTooSmallError:
+            pool_strings = [str(net) for net in cidrs]
+            print "IPv%s ranges are split into pools, with the smallest pool " \
+                  "size allowed having a prefix length of /%s. One or more " \
+                  "of the generated pools is too small (prefix length is too " \
+                  "high).\nRange given: %s - %s\nPools: %s\nNo pools added." % \
+                  (version, BLOCK_PREFIXLEN[version], start_ip, end_ip,
+                   pool_strings)
+            sys.exit(1)
+    for new_pool in new_pools:
         client.add_ip_pool(version, new_pool)
 
 

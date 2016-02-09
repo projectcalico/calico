@@ -14,8 +14,9 @@
 
 import unittest
 
-from mock import patch
+from mock import patch, Mock
 from nose_parameterized import parameterized
+from pycalico.block import CidrTooSmallError
 
 from calico_ctl import pool
 
@@ -49,3 +50,32 @@ class TestPool(unittest.TestCase):
 
             # Call method under test for each test case
             self.assertEqual(m_sys_exit.called, sys_exit_called)
+
+    @patch("calico_ctl.pool.IPPool", autospec=True)
+    def test_add_bad_pool_size(self, m_IPPool):
+        """
+        Test ip_pool_add exits when pool with bad prefix is passed in.
+        """
+        m_IPPool.side_effect = CidrTooSmallError
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
+            pool.ip_pool_add(["10.10.10.10/32"], 4, False, False)
+
+            # Call method under test for each test case
+            self.assertTrue(m_sys_exit.called)
+
+    @patch("calico_ctl.pool.client", autospec=True)
+    @patch("calico_ctl.pool.IPPool", autospec=True)
+    def test_add_bad_pool_range(self, m_IPPool, m_client):
+        """
+        Test ip_pool_range_add exits when range with bad prefix is passed in.
+        """
+        m_client.get_ip_pools = Mock()
+        m_client.get_ip_pools.return_value = []
+        m_IPPool.side_effect = CidrTooSmallError
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
+            pool.ip_pool_range_add("10.10.10.10", "10.10.11.10", 4, False, False)
+
+            # Call method under test for each test case
+            self.assertTrue(m_sys_exit.called)
