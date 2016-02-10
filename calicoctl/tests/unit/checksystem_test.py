@@ -16,7 +16,8 @@ from mock import patch, Mock, call
 from sh import Command, ErrorReturnCode
 from subprocess32 import CalledProcessError
 from nose_parameterized import parameterized
-from calico_ctl.checksystem import check_system, _check_modules
+from calico_ctl.checksystem import (check_system, _check_modules,
+                                    _check_kernel_version)
 
 
 class TestCheckSystem(unittest.TestCase):
@@ -192,3 +193,39 @@ class TestCheckSystem(unittest.TestCase):
         m_check_out.side_effect = CalledProcessError
         return_val = _check_modules()
         self.assertFalse(return_val)
+
+    @patch("platform.uname", autospec=True)
+    def test_check_kernel_ok(self, m_uname):
+        """
+        Test _check_kernel_version returns True for valid kernel versions.
+        """
+        uname_outs = [
+            ("Linux", 'host', '3.19.0-25-generic', 'date', 'x86_64', 'x86_64'),
+            ("Linux", 'hostname', '2.6.24+100', 'date', 'x86_64', 'x86_64'),
+            ("a", 'b', '123.456.789.0-something', 'date', 'x86_64', 'x86_64')
+            ("a", 'b', '123.456.789.0', 'date', 'x86_64', 'x86_64')
+            ("a", 'b', '3.0', 'date', 'x86_64', 'x86_64')
+            ("a", 'b', '4.5.1-10', 'date', 'x86_64', 'x86_64')
+            ("a", 'b', '4.5.1', 'date', 'x86_64', 'x86_64')
+            ("a", 'b', '4.5-rc3', 'date', 'x86_64', 'x86_64')
+        ]
+        for uname_out in uname_outs:
+            m_uname.return_value = uname_out
+            return_val = _check_kernel_version()
+            self.assertTrue(return_val)
+
+    @patch("platform.uname", autospec=True)
+    def test_check_kernel_ok(self, m_uname):
+        """
+        Test _check_kernel_version returns False for bad kernel versions.
+        """
+        uname_outs = [
+            ("Linux", 'host', '1.1.1-too-small', 'date', 'x86_64', 'x86_64'),
+            ("Linux", 'host', 'bad-name+100', 'date', 'x86_64', 'x86_64'),
+            ("Linux", 'host', '2.6.23-800-2', 'date', 'x86_64', 'x86_64'),
+            ("Linux", 'host', '2.5.30+100-12', 'date', 'x86_64', 'x86_64')
+        ]
+        for uname_out in uname_outs:
+            m_uname.return_value = uname_out
+            return_val = _check_kernel_version()
+            self.assertFalse(return_val)
