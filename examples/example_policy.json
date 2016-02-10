@@ -1,33 +1,35 @@
 {
-  "applyTo": {
-    "tier": "backend"
-  }, 
   "kind": "NetworkPolicy", 
-  "allowIncoming": [
-    {
-      "from": [
-        {
-          "pods": {
-            "tier": "middle"
-          }
-        }, 
-        {
-          "pods": {
-            "role": "test"
-          }
-        }
-      ], 
-      "toPorts": [
-        {
-          "protocol": "TCP", 
-          "port": 80
-        }
-      ]
-    }
-  ], 
   "apiVersion": "net.alpha.kubernetes.io/v1alpha1", 
   "metadata": {
     "namespace": "default", 
     "name": "test-policy"
+  },
+  "spec": {
+    "applyTo": {
+      "tier": "backend"
+    }, 
+    "allowIncoming": [
+      {
+        "from": [
+          {
+            "pods": {
+              "tier": "middle"
+            }
+          }, 
+          {
+            "pods": {
+              "role": "test"
+            }
+          }
+        ], 
+        "toPorts": [
+          {
+            "protocol": "TCP", 
+            "port": 80
+          }
+        ]
+      }
+    ]
   }
 }

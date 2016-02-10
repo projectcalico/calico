@@ -9,7 +9,7 @@ from threading import Thread
 import requests
 
 import pycalico
-from pycalico.datastore_datatypes import Rules, Rule, Profile
+from pycalico.datastore_datatypes import Rules, Rule, GlobalPolicy
 from pycalico.datastore_errors import (ProfileNotInEndpoint, 
                                        ProfileAlreadyInEndpoint,
                                        MultipleEndpointsMatch)
@@ -33,7 +33,15 @@ POD_WATCH_PATH = "%s/api/v1/watch/pods"
 # API paths to get namespaces.
 NAMESPACE_WATCH_PATH = "%s/api/v1/watch/namespaces"
 
+# Annotation to look for network-isolation on namespaces.
 NS_POLICY_ANNOTATION = "net.alpha.kubernetes.io/network-isolation"
+
+# Groups to use for created policies.  Network policies are applied before 
+# namespace policies based on the group.
+NET_POL_GROUP_NAME = "50-k8s-net-policy"
+NAMESPACE_GROUP_NAME = "60-k8s-namespace"
+
+K8S_NAMESPACE_LABEL = "calico/k8s_namespace"
 
 # Resource types.
 RESOURCE_TYPE_NETWORK_POLICY = "NetworkPolicy"
@@ -144,7 +152,10 @@ class PolicyAgent():
                 update = self._event_queue.get(block=True)
             except KeyError:
                 # We'll hit this if we fail to parse an invalid update.
+                # Set update = None so we don't continue parsing the 
+                # invalid update.
                 _log.exception("Invalid update: %s", update)
+                update = None
                 time.sleep(10)
 
     def _process_update(self, update):
@@ -160,7 +171,7 @@ class PolicyAgent():
         if resource_type == RESOURCE_TYPE_NAMESPACE:
             # Namespaces are just keyed off of their name.
             name = update["object"]["metadata"]["name"]
-            key = (name)
+            key = (name,)
         else:
             # Objects are keyed off their name and namespace.
             name = update["object"]["metadata"]["name"]
@@ -217,7 +228,38 @@ class PolicyAgent():
         self._network_policies[key] = policy
 
         # Parse this network policy so we can convert it to the appropriate
-        # Calico policy.
+        # Calico policy.  First, get the selector from the API object.
+        k8s_selector = policy["object"]["spec"]["applyTo"]
+
+        # Build the appropriate Calico label selector.  This is done using 
+        # the labels provided in the NetworkPolicy, as well as the 
+        # NetworkPolicy's namespace.
+        namespace = policy["object"]["metadata"]["namespace"]
+        selectors = ["%s == '%s'" % (k,v) for k,v in k8s_selector.iteritems()]
+        selectors += ["%s == '%s'" % (K8S_NAMESPACE_LABEL, namespace)]
+        selector = " && ".join(selectors)
+
+        # Determine the name for this global policy.
+        name = "net_policy-%s" % policy["object"]["metadata"]["name"]
+
+        # Build the Calico rules.
+        try:
+            inbound_rules = self._calculate_inbound_rules(policy)
+        except Exception:
+            # It is possible bad rules will be passed - we don't want to 
+            # crash the agent, but we do want to indicate a problem in the
+            # logs, so that the policy can be fixed.
+            _log.exception("Error parsing policy: %s", 
+                           json.dumps(policy, indent=2))
+            return
+        else:
+            rules =  Rules(id=name,
+                           inbound_rules=inbound_rules,
+                           outbound_rules=[Rule(action="allow")])
+
+        # Create the network policy using the calculated selector and rules.
+        self._client.create_global_policy(NET_POL_GROUP_NAME, name, selector, rules)
+        _log.info("Updated global policy '%s' for NetworkPolicy %s", name, key)
 
     def _delete_network_policy(self, key, policy):
         """
@@ -229,8 +271,81 @@ class PolicyAgent():
         # Delete from internal dict.
         del self._network_policies[key]
 
+        # Determine the name for this global policy.
+        name = "net_policy-%s" % policy["object"]["metadata"]["name"]
+
         # Delete the corresponding Calico policy 
-        pass
+        self._client.remove_global_policy(NET_POL_GROUP_NAME, name)
+
+    def _calculate_inbound_rules(self, policy):
+        """
+        Takes a NetworkPolicy object from the API and returns a list of 
+        Calico Rules objects which should be applied on ingress.
+        """
+        # Store the rules to return.
+        rules = []
+
+        # Iterate through each allowIncoming object and create the appropriate
+        # rules.
+        allow_incomings = policy["object"]["spec"]["allowIncoming"]
+        for r in allow_incomings:
+            # Determine the destination ports to allow.  If no ports are
+            # specified, allow all port / protocol combinations.
+            ports_by_protocol = {}
+            for to_port in r.get("toPorts", []):
+                # Keep a dict of ports exposed, keyed by protocol.
+                protocol = to_port.get("protocol")
+                port = to_port.get("port")
+                ports = ports_by_protocol.setdefault(protocol, [])
+                if port:
+                    _log.debug("Allow to port: %s/%s", protocol, port)
+                    ports.append(port)
+
+            # Convert into arguments to be passed to a Rule object.
+            to_args = []
+            for protocol, ports in ports_by_protocol.iteritems():
+                arg = {"protocol": protocol.lower()}
+                if ports:
+                    arg["dst_ports"] = ports
+                to_args.append(arg)
+
+            if not to_args:
+                # There are not destination protocols / ports specified.
+                # Allow to all protocols and ports.
+                to_args = [{}]
+
+            # Determine the from criteria.  If no "from" block is specified,
+            # then we should allow from all sources.
+            from_args = []
+            for from_clause in r.get("from", []):
+                pod_selector = from_clause.get("pods", {})
+                namespaces = from_clause.get("namespaces", {})
+                if pod_selector:
+                    # There is a pod selector in this "from" clause.
+                    _log.debug("Allow from pods: %s", pod_selector)
+                    selectors = ["%s == '%s'" % (k,v) for k,v in pod_selector.iteritems()]
+                    selector = " && ".join(selectors)
+                    from_args.append({"src_selector": selector})
+                elif namespaces:
+                    _log.warning("'from: {namespaces: {}}' is not yet "
+                                 "supported - ignoring %s", from_clause)
+
+            if not from_args:
+                # There are no match criteria specified.  We should allow
+                # from all sources to the given ports.
+                from_args = [{}]
+
+            # A rule per-protocol, per-from-clause.
+            for to_arg in to_args: 
+                for from_arg in from_args:
+                    # Create a rule by combining a 'from' argument with
+                    # the protocol / ports arguments.
+                    from_arg.update(to_arg)
+                    from_arg.update({"action": "allow"})
+                    rules.append(Rule(**from_arg))
+
+        _log.debug("Calculated rules: %s", rules)
+        return rules
 
     def _add_new_namespace(self, key, namespace):
         """
@@ -246,12 +361,31 @@ class PolicyAgent():
         # This defaults to no isolation.
         annotations = namespace["object"]["metadata"].get("annotations", {})
         _log.debug("Namespace %s has annotations: %s", key, annotations)
-        net_isolation = annotations.get(NS_POLICY_ANNOTATION, "no")
+        net_isolation = annotations.get(NS_POLICY_ANNOTATION, "no") == "yes"
         _log.info("Namespace %s has: network-isolation=%s", key, net_isolation)
 
+        # Determine the policy name to create.
+        namespace_name = namespace["object"]["metadata"]["name"]
+        policy_name = "k8s_ns-%s" % namespace_name
+
+        # Determine the rules to use.
+        outbound_rules = [Rule(action="allow")]
+        if net_isolation:
+            inbound_rules = [Rule(action="deny")]
+        else:
+            inbound_rules = [Rule(action="allow")]
+        rules = Rules(id=policy_name,
+                      inbound_rules=inbound_rules,
+                      outbound_rules=outbound_rules)
+
         # Create the Calico policy to represent this namespace, or 
-        # update it if it already exists.
-        pass
+        # update it if it already exists.  Namespace policies select each
+        # pod within that namespace.
+        selector = "%s == '%s'" % (K8S_NAMESPACE_LABEL, namespace_name) 
+        self._client.create_global_policy(NAMESPACE_GROUP_NAME, policy_name, 
+                                          selector, rules=rules)
+        _log.info("Created/updated global policy for namespace %s", 
+                  namespace_name)
 
     def _delete_namespace(self, key, namespace):
         """
@@ -263,7 +397,9 @@ class PolicyAgent():
         # Delete the Calico policy which represnets this namespace.
         # We need to make sure that there are no pods running 
         # in this namespace first.
-        pass
+        namespace_name = namespace["object"]["metadata"]["name"]
+        policy_name = "k8s_ns-%s" % namespace_name
+        self._client.remove_global_policy(NAMESPACE_GROUP_NAME, policy_name)
 
         # Delete from internal dict.
         del self._namespaces[key]
@@ -303,10 +439,25 @@ class PolicyAgent():
             _log.error("Multiple Endpoints found matching ID %s", workload_id)
             sys.exit(1)
 
-        # Update labels on the pod.  We add a Calico label per Kubernetes
-        # label, as well as a label for this Pod's namespace.
+        # Get Kubernetes labels.
         labels = pod["object"]["metadata"].get("labels", {}) 
         _log.debug("Pod '%s' has labels: %s", key, labels)
+
+        # Add a special label for the Kubernetes namespace.
+        labels[K8S_NAMESPACE_LABEL] = pod["object"]["metadata"]["namespace"]
+
+        # Set the labels on the endpoint.
+        endpoint.labels = labels
+        self._client.set_endpoint(endpoint)
+        _log.info("Updated labels on pod %s", key)
+
+        # Remove the 'deny-inbound' profile from the pod now that 
+        # it has been configured with labels.  It will match at least the 
+        # per-namespace policy, and potentially others, which will 
+        # define what connectivity is allowed.
+        self._client.set_profiles_on_endpoint([], 
+                                              orchestrator_id="cni",
+                                              workload_id=endpoint.workload_id)
 
     def _delete_pod(self, key, pod):
         """
@@ -324,22 +475,27 @@ class PolicyAgent():
         """
         _log.info("Starting watch on path: %s", path)
         while True:
-           # Attempt to stream API resources.
-           response = self._get_api_stream(path, resource_version)
-           _log.info("Watch response for %s: %s", path, response)
+            # Attempt to stream API resources.
+            try:
+                response = self._get_api_stream(path, resource_version)
+                _log.info("Watch response for %s: %s", path, response)
+            except requests.ConnectionError:
+                _log.exception("Error querying path: %s", path)
+                time.sleep(10)
+                continue
 
-           # Check for successful response.
-           if response.status_code != 200:
-               _log.error("Error watching path: %s", response.json())
-               time.sleep(10)
-               continue
+            # Check for successful response.
+            if response.status_code != 200:
+                _log.error("Error watching path: %s", response.text)
+                time.sleep(10)
+                continue
 
-           # Success - add resources to the queue for processing.
-           for line in response.iter_lines():
-               # Filter out keep-alive new lines.
-               if line:
-                   _log.debug("Adding line to queue: %s", line)
-                   self._event_queue.put(json.loads(line))
+            # Success - add resources to the queue for processing.
+            for line in response.iter_lines():
+                # Filter out keep-alive new lines.
+                if line:
+                    _log.debug("Adding line to queue: %s", line)
+                    self._event_queue.put(json.loads(line))
 
     def _get_api_stream(self, path, resource_version=None):
         """

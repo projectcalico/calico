@@ -22,21 +22,12 @@ spec:
           path: /var/log/calico/kubernetes/policy-agent/
         name: logdir
       containers:
-      - image: alexhersh/calico-policy-agent
-        volumeMounts:
-        - mountPath: /var/log/calico/kubernetes/policy-agent/
-          name: logdir
+        - image: calico/k8s-policy-agent
         env:
-        - name: KUBE_API_ROOT
-          value: "https://<KUBERNETES_MASTER>:443/api/v1/"
         - name: ETCD_AUTHORITY
           value: "<KUBERNETES_MASTER>:2379"
-        - name: KUBE_AUTH_TOKEN
-          value: "<TOKEN>""
-        - name: CALICO_IPAM
-          value: "true"
-        - name: CALICO_POLICY
-          value: "true"
+        - name: K8S_AUTH_TOKEN
+          value: "<TOKEN>"
         resources:
           limits:
             cpu: 100m

@@ -3,7 +3,7 @@
 SRCDIR=.
 
 default: all
-all: binary 
+all: binary create 
 
 binary: 
 	# Build the kubernetes policy agent
@@ -11,6 +11,13 @@ binary:
 	-v `pwd`:/code \
 	calico/build \
 	pyinstaller policy_agent.py -ayF 
+
+create: 
+	# Build NetworkPolicy install tool. 
+	docker run --rm \
+	-v `pwd`:/code \
+	calico/build \
+	pyinstaller create.py -ayF 
 
 docker-image: binary
 	docker build -t calico/k8s-policy-agent . 
