@@ -31,7 +31,7 @@ class Workload(object):
     These are the end-users containers that will run application-level
     software.
     """
-    def __init__(self, host, name, image="busybox", network="bridge"):
+    def __init__(self, host, name, image="busybox", network="bridge", ip=None):
         """
         Create the workload and detect its IPs.
 
@@ -45,12 +45,14 @@ class Workload(object):
         has ping.
         :param network: The DockerNetwork to connect to.  Set to None to use
         default Docker networking.
+        :param ip: The ip address to assign to the container.
         """
         self.host = host
         self.name = name
-        command = "docker run -tid --name %s --net %s %s" % (name,
-                                                             network,
-                                                             image)
+
+        ip_option = ("--ip %s" % ip) if ip else ""
+        command = "docker run -tid --name %s --net %s %s %s" % \
+                  (name, network, ip_option, image)
         host.execute(command)
         self.ip = host.execute("docker inspect --format "
                               "'{{.NetworkSettings.Networks.%s.IPAddress}}' %s"

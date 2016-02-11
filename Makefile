@@ -1,4 +1,4 @@
-.PHONEY: all binary node_image test_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
+.PHONEY: all binary node_image test_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl docker create-dind help
 
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -76,9 +76,9 @@ routereflector.tar:
 	docker pull calico/routereflector:latest
 	docker save --output routereflector.tar calico/routereflector:latest
 
-## Download the latest docker binary
 docker:
-	curl https://get.docker.com/builds/Linux/x86_64/docker-1.9.1 -o docker
+	# Download the docker 1.10.1 binary
+	curl https://get.docker.com/builds/Linux/x86_64/docker-1.10.1 -o docker
 	chmod +x docker
 
 birdcl:
@@ -180,7 +180,13 @@ add-ssl-hostname:
 	  echo "\n# Host used by Calico's ETCD with SSL\n$(LOCAL_IP_ENV) etcd-authority-ssl" >> /etc/hosts; \
 	fi
 
-semaphore:
+semaphore: docker
+	# Use the downloaded docker locally, not just with Docker in Docker STs
+	service docker stop
+	cp ./docker $(shell which docker)
+	service docker start
+	docker version
+
 	# Clean up unwanted files to free disk space.
 	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
 
