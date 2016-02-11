@@ -185,9 +185,11 @@ class CniPlugin(object):
         # Assign IP addresses using the given IPAM plugin.
         ipv4, ipv6, ipam_result = self._assign_ips(self.ipam_env)
 
-        # Create the Calico endpoint object.  For now, we only 
-        # support creating endpoints with IPv4.
-        endpoint = self._create_endpoint([ipv4])
+        # Filter out addresses that didn't get assigned.
+        ip_list = [ip for ip in [ipv4, ipv6] if ip is not None]
+
+        # Create the Calico endpoint object.
+        endpoint = self._create_endpoint(ip_list)
     
         # Provision the veth for this endpoint.
         endpoint = self._provision_veth(endpoint)
@@ -311,10 +313,9 @@ class CniPlugin(object):
 
         try:
             ipv4 = IPNetwork(ipam_result["ip4"]["ip"])
+            _log.info("IPAM plugin assigned IPv4 address: %s", ipv4)
         except KeyError:
-            message = "IPAM plugin did not return an IPv4 address."
-            print_cni_error(ERR_CODE_GENERIC, message)
-            sys.exit(ERR_CODE_GENERIC)
+            ipv4 = None
         except (AddrFormatError, ValueError):
             message = "Invalid or Empty IPv4 address: %s" % \
                       (ipam_result["ip4"]["ip"])
@@ -323,18 +324,21 @@ class CniPlugin(object):
 
         try:
             ipv6 = IPNetwork(ipam_result["ip6"]["ip"])
+            _log.info("IPAM plugin assigned IPv6 address: %s", ipv6)
         except KeyError:
-            message = "IPAM plugin did not return an IPv6 address."
-            print_cni_error(ERR_CODE_GENERIC, message)
-            sys.exit(ERR_CODE_GENERIC)
+            ipv6 = None
         except (AddrFormatError, ValueError):
             message = "Invalid or Empty IPv6 address: %s" % \
                       (ipam_result["ip6"]["ip"])
             print_cni_error(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
 
-        _log.info("IPAM plugin assigned IPv4 address: %s", ipv4)
-        _log.info("IPAM plugin assigned IPv6 address: %s", ipv6)
+        if not ipv4 and not ipv6:
+            message = "IPAM plugin did not return any valid addresses."
+            _log.warning("Bad IPAM plugin response: %s", ipam_result)
+            print_cni_error(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
+
         return ipv4, ipv6, ipam_result
 
     def _release_ip(self, env):
