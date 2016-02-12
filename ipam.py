@@ -31,7 +31,7 @@ _log = logging.getLogger("calico_cni")
 
 
 class IpamPlugin(object):
-    def __init__(self, environment):
+    def __init__(self, environment, ipam_config):
         self.command = None
         """
         Command indicating which action to take - one of "ADD" or "DEL".
@@ -46,6 +46,16 @@ class IpamPlugin(object):
         """
         Access to the datastore client.  Relies on ETCD_AUTHORITY environment
         variable being set by the calling plugin.
+        """
+
+        self.assign_ipv4 = ipam_config.get(ASSIGN_IPV4_KEY, "true") == "true"
+        """
+        Whether we should assign an IPv4 address - defaults to True.
+        """
+
+        self.assign_ipv6 = ipam_config.get(ASSIGN_IPV6_KEY, "false") == "true"
+        """
+        Whether we should assign an IPv6 address - defaults to False.
         """
 
         # Validate the given environment and set fields.
@@ -63,10 +73,17 @@ class IpamPlugin(object):
             # Assign an IP address for this container.
             _log.info("Assigning address to container %s", self.container_id)
             ipv4, ipv6 = self._assign_address(handle_id=self.container_id)
+
+            # Build response dictionary.
+            response = {}
+            if ipv4:
+                response["ip4"] = {"ip": str(ipv4.cidr)}
+            if ipv6:
+                response["ip6"] = {"ip": str(ipv6.cidr)}
     
             # Output the response and exit successfully.
-            return json.dumps({"ip4": {"ip": str(ipv4.cidr)},
-                               "ip6": {"ip": str(ipv6.cidr)}})
+            _log.debug("Returning response: %s", response)
+            return json.dumps(response)
         else:
             # Release IPs using the container_id as the handle.
             _log.info("Releasing addresses on container %s", 
@@ -83,11 +100,17 @@ class IpamPlugin(object):
     
         :return: A tuple of (IPv4, IPv6) address assigned.
         """
-        ipv4 = IPNetwork("0.0.0.0") 
-        ipv6 = IPNetwork("::") 
+        ipv4 = None 
+        ipv6 = None 
+
+        # Determine which addresses to assign.
+        num_v4 = 1 if self.assign_ipv4 else 0
+        num_v6 = 1 if self.assign_ipv6 else 0
+        _log.info("Assigning %s IPv4 and %s IPv6 addresses", num_v4, num_v6)
         try:
             ipv4_addrs, ipv6_addrs = self.datastore_client.auto_assign_ips(
-                num_v4=1, num_v6=1, handle_id=handle_id, attributes=None,
+                num_v4=num_v4, num_v6=num_v6, handle_id=handle_id, 
+                attributes=None,
             )
             _log.debug("Allocated ip4s: %s, ip6s: %s", ipv4_addrs, ipv6_addrs)
         except RuntimeError as e:
@@ -96,21 +119,24 @@ class IpamPlugin(object):
                            msg="Failed to assign IP address",
                            details=e.message)
         else:
-            try:
-                ipv4 = ipv4_addrs[0]
-            except IndexError:
-                _log.error("No IPv4 address returned, exiting")
-                raise CniError(ERR_CODE_GENERIC,
-                               msg="No IPv4 addresses available in pool")
-            try:
-                ipv6 = ipv6_addrs[0]
-            except IndexError:
-                _log.error("No IPv6 address returned, exiting")
-                raise CniError(ERR_CODE_GENERIC,
-                               msg="No IPv6 addresses available in pool")
+            if num_v4:
+                try:
+                    ipv4 = IPNetwork(ipv4_addrs[0])
+                except IndexError:
+                    _log.error("No IPv4 address returned, exiting")
+                    raise CniError(ERR_CODE_GENERIC,
+                                   msg="No IPv4 addresses available in pool")
+
+            if num_v6:
+                try:
+                    ipv6 = IPNetwork(ipv6_addrs[0])
+                except IndexError:
+                    _log.error("No IPv6 address returned, exiting")
+                    raise CniError(ERR_CODE_GENERIC,
+                                   msg="No IPv6 addresses available in pool")
 
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
-            return IPNetwork(ipv4), IPNetwork(ipv6)
+            return ipv4, ipv6 
 
     def _parse_environment(self, env):
         """
@@ -171,7 +197,7 @@ def main():
 
     try:
         # Execute IPAM.
-        output = IpamPlugin(env).execute()
+        output = IpamPlugin(env, config["ipam"]).execute()
     except CniError as e:
         # We caught a CNI error - print the result to stdout and 
         # exit.

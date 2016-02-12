@@ -387,7 +387,7 @@ class CniPluginTest(unittest.TestCase):
         ip6 = "0:0:0:0:0:ffff:a00:1"
         env = {}
         out = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ip6}})
-        m_ipam_plugin(env).execute.return_value = out
+        m_ipam_plugin(env, self.network_config).execute.return_value = out
 
         # Set IPAM type.
         self.plugin.ipam_type = "calico-ipam"
@@ -409,7 +409,7 @@ class CniPluginTest(unittest.TestCase):
         # Mock out return values.
         env = {}
         err = CniError(150, "message", "details")
-        m_ipam_plugin(env).execute.side_effect = err 
+        m_ipam_plugin(env, self.network_config).execute.side_effect = err 
 
         # Set IPAM type.
         self.plugin.ipam_type = "calico-ipam"

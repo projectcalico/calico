@@ -48,6 +48,8 @@ K8S_POD_INFRA_CONTAINER_ID = "K8S_POD_INFRA_CONTAINER_ID"
 ETCD_AUTHORITY_KEY = "etcd_authority"
 LOG_LEVEL_KEY = "log_level"
 POLICY_KEY = "policy"
+ASSIGN_IPV4_KEY = "assign_ipv4"
+ASSIGN_IPV6_KEY = "assign_ipv6"
 
 # Constants for getting policy specific information 
 # from the policy dictionary in the network config file.

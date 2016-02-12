@@ -89,7 +89,9 @@ class CniPluginFvTest(unittest.TestCase):
             "name": self.network_name, 
             "type": self.plugin_type,
             "ipam": {
-                "type": self.ipam_type
+                "type": self.ipam_type,
+                "assign_ipv6": "true",
+                "assign_ipv4": "true"
             },
             "policy": self.policy
         }

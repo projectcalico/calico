@@ -40,10 +40,8 @@ class CniIpamTest(unittest.TestCase):
             "type": "calico",
             "ipam": {
                 "type": "calico-ipam",
-                "subnet": "10.22.0.0/16",
-                "routes": [{"dst": "0.0.0.0/0"}],
-                "range-start": "",
-                "range-end": ""
+                ASSIGN_IPV4_KEY: "true",
+                ASSIGN_IPV6_KEY: "true"
             }
         }
         self.env = {
@@ -56,7 +54,7 @@ class CniIpamTest(unittest.TestCase):
         }
 
         # Create the CniPlugin to test.
-        self.plugin = IpamPlugin(self.env)
+        self.plugin = IpamPlugin(self.env, self.network_config["ipam"])
 
         # Mock out the datastore client.
         self.m_datastore_client = MagicMock(spec=IPAMClient)
@@ -222,8 +220,8 @@ class CniIpamTest(unittest.TestCase):
         main()
 
         # Assert
-        m_plugin.assert_called_once_with(self.env)
-        m_plugin(self.env).execute.assert_called_once_with()
+        m_plugin.assert_called_once_with(self.env, self.network_config["ipam"])
+        m_plugin(self.env, self.network_config["ipam"]).execute.assert_called_once_with()
 
     @patch("ipam.os", autospec=True)
     @patch("ipam.sys", autospec=True)
@@ -235,7 +233,7 @@ class CniIpamTest(unittest.TestCase):
         m_os.environ = self.env
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
         m_plugin.reset_mock()
-        m_plugin(self.env).execute.side_effect = CniError(50, "Message", "Details") 
+        m_plugin(self.env, self.network_config["ipam"]).execute.side_effect = CniError(50, "Message", "Details") 
 
         # Call
         main()
@@ -253,7 +251,7 @@ class CniIpamTest(unittest.TestCase):
         m_os.environ = self.env
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
         m_plugin.reset_mock()
-        m_plugin(self.env).execute.side_effect = Exception
+        m_plugin(self.env, self.network_config["ipam"]).execute.side_effect = Exception
 
         # Call
         main()
