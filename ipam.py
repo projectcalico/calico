@@ -62,10 +62,11 @@ class IpamPlugin(object):
         if self.command == "ADD":
             # Assign an IP address for this container.
             _log.info("Assigning address to container %s", self.container_id)
-            ipv4, _ = self._assign_address(handle_id=self.container_id)
+            ipv4, ipv6 = self._assign_address(handle_id=self.container_id)
     
             # Output the response and exit successfully.
-            return json.dumps({"ip4": {"ip": str(ipv4.cidr)}})
+            return json.dumps({"ip4": {"ip": str(ipv4.cidr)},
+                               "ip6": {"ip": str(ipv6.cidr)}})
         else:
             # Release IPs using the container_id as the handle.
             _log.info("Releasing addresses on container %s", 
@@ -86,7 +87,7 @@ class IpamPlugin(object):
         ipv6 = IPNetwork("::") 
         try:
             ipv4_addrs, ipv6_addrs = self.datastore_client.auto_assign_ips(
-                num_v4=1, num_v6=0, handle_id=handle_id, attributes=None,
+                num_v4=1, num_v6=1, handle_id=handle_id, attributes=None,
             )
             _log.debug("Allocated ip4s: %s, ip6s: %s", ipv4_addrs, ipv6_addrs)
         except RuntimeError as e:
@@ -101,9 +102,15 @@ class IpamPlugin(object):
                 _log.error("No IPv4 address returned, exiting")
                 raise CniError(ERR_CODE_GENERIC,
                                msg="No IPv4 addresses available in pool")
+            try:
+                ipv6 = ipv6_addrs[0]
+            except IndexError:
+                _log.error("No IPv6 address returned, exiting")
+                raise CniError(ERR_CODE_GENERIC,
+                               msg="No IPv6 addresses available in pool")
 
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
-            return IPNetwork(ipv4), None
+            return IPNetwork(ipv4), IPNetwork(ipv6)
 
     def _parse_environment(self, env):
         """
