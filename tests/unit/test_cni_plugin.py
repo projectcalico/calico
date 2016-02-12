@@ -116,7 +116,7 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert.
         self.plugin._assign_ips.assert_called_once_with(self.plugin.ipam_env)
-        self.plugin._create_endpoint.assert_called_once_with([ip4])
+        self.plugin._create_endpoint.assert_called_once_with([ip4, ip6])
         self.plugin._provision_veth.assert_called_once_with(endpoint)
         self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
         m_json.dumps.assert_called_once_with(ipam_response)
@@ -341,11 +341,10 @@ class CniPluginTest(unittest.TestCase):
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
-    def test_assign_ip_no_ipv4(self):
+    def test_assign_ip_no_ip(self):
         # Mock _call_ipam_plugin.
-        ip6 = "0:0:0:0:0:ffff:a00:1"
         rc = 0
-        ipam_result = json.dumps({"ip4": {}, "ip6": {"ip": ip6}})
+        ipam_result = json.dumps({})
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
         self.plugin._call_ipam_plugin.return_value = rc, ipam_result
         env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
@@ -355,53 +354,6 @@ class CniPluginTest(unittest.TestCase):
             self.plugin._assign_ips(env)
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
-
-    def test_assign_ip_no_ipv6(self):
-        # Mock _call_ipam_plugin.
-        ip4 = "10.0.0.1"
-        rc = 0
-        ipam_result = json.dumps({"ip4": {"ip": ip4}})
-        self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
-        self.plugin._call_ipam_plugin.return_value = rc, ipam_result
-        env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
-
-        # Call _assign_ips.
-        with assert_raises(SystemExit) as err:
-            self.plugin._assign_ips(env)
-        e = err.exception
-        assert_equal(e.code, ERR_CODE_GENERIC)
-
-    def test_assign_ip_invalid_ipv6(self):
-        # Mock _call_ipam_plugin.
-        ip6 = "invalid"
-        ip4 = "10.0.0.5"
-        rc = 0
-        ipam_result = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ip6}})
-        self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
-        self.plugin._call_ipam_plugin.return_value = rc, ipam_result
-        env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
-
-        # Call _assign_ips.
-        with assert_raises(SystemExit) as err:
-            self.plugin._assign_ips(env)
-        e = err.exception
-        assert_equal(e.code, ERR_CODE_GENERIC)
-
-    def test_assign_ip_invalid_ipv4(self):
-        # Mock _call_ipam_plugin.
-        ip4 = "10.0.0.500"
-        rc = 0
-        ipam_result = json.dumps({"ip4": {"ip": ip4}})
-        self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
-        self.plugin._call_ipam_plugin.return_value = rc, ipam_result
-        env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
-
-        # Call _assign_ips.
-        with assert_raises(SystemExit) as err:
-            self.plugin._assign_ips(env)
-        e = err.exception
-        assert_equal(e.code, ERR_CODE_GENERIC)
-
 
     def test_release_ip_mainline(self):
         # Mock _call_ipam_plugin.
