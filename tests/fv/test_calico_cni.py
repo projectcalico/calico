@@ -128,9 +128,7 @@ class CniPluginFvTest(unittest.TestCase):
         # Configure.
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = "0:0:0:0:0:ffff:a00:1"
-        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
-                                  "ip6": {"ip": ip6}})
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}})
         self.set_ipam_result(0, ipam_stdout, "")
 
         # Create plugin.
@@ -150,7 +148,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
@@ -166,9 +164,7 @@ class CniPluginFvTest(unittest.TestCase):
         self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=default"
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = "0:0:0:0:0:ffff:a00:1"
-        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
-                                  "ip6": {"ip": ip6}})
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}})
         self.set_ipam_result(0, ipam_stdout, "")
 
         # Set up docker client response.
@@ -193,7 +189,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4),IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
@@ -210,9 +206,7 @@ class CniPluginFvTest(unittest.TestCase):
         self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=defaultns"
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = "0:0:0:0:0:ffff:a00:1"
-        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
-                                  "ip6": {"ip": ip6}})
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}})
         self.set_ipam_result(0, ipam_stdout, "")
         self.policy = {"type": "k8s-annotations"}
 
@@ -248,7 +242,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert profile was created.
         self.client.create_profile.assert_called_once_with(
@@ -439,9 +433,7 @@ class CniPluginFvTest(unittest.TestCase):
         # Configure.
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = "0:0:0:0:0:ffff:a00:1"
-        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
-                                  "ip6": {"ip": ip6}})
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}})
         self.set_ipam_result(0, ipam_stdout, "")
 
         # Create plugin.
@@ -463,7 +455,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert set_profile called by policy driver.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
@@ -533,10 +525,8 @@ class CniPluginFvWithIpamTest(CniPluginFvTest):
         if stdout and not rc:
             # A successful add response.
             ip4 = json.loads(stdout)["ip4"]["ip"]
-            ip6 = json.loads(stdout)["ip6"]["ip"]
             ip4s = [ip4] if ip4 else []
-            ip6s = [ip6] if ip6 else []
-            self.m_ipam_plugin_client().auto_assign_ips.return_value = ip4s, ip6s
+            self.m_ipam_plugin_client().auto_assign_ips.return_value = ip4s, None
  
     def test_add_ipam_error(self):
         # Mock out auto_assign_ips to throw an error.
