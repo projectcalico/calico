@@ -15,14 +15,14 @@ ipam: dist/calico-ipam
 dist/calico: $(SRCFILES) 
 	docker run  --rm \
 	-v `pwd`:/code \
-	calico/build \
+	calico/build:v0.11.0 \
 	pyinstaller calico.py -ayF
 
 # Makes the IPAM plugin.
 dist/calico-ipam: $(SRCFILES)
 	docker run --rm \
 	-v `pwd`:/code \
-	calico/build \
+	calico/build:v0.11.0 \
 	pyinstaller ipam.py -ayF -n calico-ipam
 
 # Run the unit tests.
