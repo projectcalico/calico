@@ -191,7 +191,7 @@ spec:
   template:
     metadata:
       annotations:
-        projectcalico.org/policy: "allow tcp to port 80; allow udp to port 80"
+        projectcalico.org/policy: "allow tcp to ports 80; allow udp to ports 80"
       labels:
         tier: frontend
     spec:
