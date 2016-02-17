@@ -229,7 +229,7 @@ class PolicyAgent():
 
         # Parse this network policy so we can convert it to the appropriate
         # Calico policy.  First, get the selector from the API object.
-        k8s_selector = policy["object"]["spec"]["applyTo"]
+        k8s_selector = policy["object"]["spec"]["podSelector"]
 
         # Build the appropriate Calico label selector.  This is done using 
         # the labels provided in the NetworkPolicy, as well as the 
@@ -285,14 +285,14 @@ class PolicyAgent():
         # Store the rules to return.
         rules = []
 
-        # Iterate through each allowIncoming object and create the appropriate
+        # Iterate through each inbound rule and create the appropriate
         # rules.
-        allow_incomings = policy["object"]["spec"]["allowIncoming"]
+        allow_incomings = policy["object"]["spec"]["inbound"]
         for r in allow_incomings:
             # Determine the destination ports to allow.  If no ports are
             # specified, allow all port / protocol combinations.
             ports_by_protocol = {}
-            for to_port in r.get("toPorts", []):
+            for to_port in r.get("ports", []):
                 # Keep a dict of ports exposed, keyed by protocol.
                 protocol = to_port.get("protocol")
                 port = to_port.get("port")
