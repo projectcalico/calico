@@ -1,0 +1,12 @@
+kind: NetworkPolicy 
+apiVersion: net.alpha.kubernetes.io/v1alpha1 
+metadata: 
+  namespace: default 
+  name: frontend-policy
+spec: 
+  podSelector:
+    tier: frontend
+  inbound: 
+    - ports:
+       - protocol: TCP 
+         port: 80

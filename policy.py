@@ -8,8 +8,13 @@ from prettytable import PrettyTable
 # Get the command
 command = sys.argv[1]
 
-# Get the API location.
+# Get the API location and token.
 KUBE_API = os.environ.get("KUBE_API_ROOT", "http://localhost:8080")
+AUTH_TOKEN = os.environ.get("KUBE_AUTH_TOKEN")
+
+session = requests.Session()
+if AUTH_TOKEN:
+    session.headers.update({'Authorization': 'Bearer ' + AUTH_TOKEN})
 
 if command == "create":
     # Load the policy.
@@ -22,7 +27,7 @@ if command == "create":
 
     #print "POST NetworkPolicy: \n%s" % json.dumps(input_loaded, indent=2)
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/namespaces/%s/networkpolicys" % (KUBE_API, namespace)
-    resp = requests.post(url, data=json.dumps(input_loaded))
+    resp = session.post(url, data=json.dumps(input_loaded), verify=False)
 
     if resp.status_code != 201:
         print "POST to url: %s" % url
@@ -33,7 +38,7 @@ elif command == "delete":
     namespace = sys.argv[2]
     policy = sys.argv[3]
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/namespaces/%s/networkpolicys/%s" % (KUBE_API, namespace, policy)
-    resp = requests.delete(url)
+    resp = session.delete(url, verify=False)
     if resp.status_code != 200:
         print "DELETE to url: %s" % url
         print resp.text
@@ -41,7 +46,7 @@ elif command == "delete":
         print "Successfully deleted policy %s/%s" % (namespace, policy)
 elif command == "list":
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/networkpolicys" % (KUBE_API)
-    resp = requests.get(url)
+    resp = session.get(url, verify=False)
     if resp.status_code != 200:
         print resp.text
         sys.exit(1)
@@ -56,7 +61,7 @@ elif command == "get":
     namespace = sys.argv[2]
     policy = sys.argv[3]
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/namespaces/%s/networkpolicys/%s" % (KUBE_API, namespace, policy)
-    resp = requests.get(url)
+    resp = session.get(url, verify=False)
     if resp.status_code != 200:
         print "GET to url: %s" % url
         print resp

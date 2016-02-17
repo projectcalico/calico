@@ -3,27 +3,22 @@
   "apiVersion": "net.alpha.kubernetes.io/v1alpha1", 
   "metadata": {
     "namespace": "default", 
-    "name": "test-policy"
+    "name": "backend-policy"
   },
   "spec": {
     "applyTo": {
       "tier": "backend"
     }, 
-    "allowIncoming": [
+    "inbound": [
       {
         "from": [
           {
             "pods": {
-              "tier": "middle"
-            }
-          }, 
-          {
-            "pods": {
-              "role": "test"
+              "tier": "frontend"
             }
           }
         ], 
-        "toPorts": [
+        "ports": [
           {
             "protocol": "TCP", 
             "port": 80
