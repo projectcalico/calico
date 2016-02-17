@@ -140,7 +140,7 @@ kubectl get pods
 
 The following command will start a pod with the label "access: true" and give you shell access. 
 ```
-kubectl run --tty -i has-access --image=busybox --overrides='{"apiVersion": "v1", "spec": {"metadata": {"labels": {"access": "true"}}}}'
+kubectl run --tty -i has-access --image=busybox --overrides='{"apiVersion": "v1", "spec": {"metadata": {"labels": {"access": "true", "run": "has-access"}}}}'
 ```
 
 From within the pod we just created, try to access the nginx service we just created.

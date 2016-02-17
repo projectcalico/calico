@@ -20,9 +20,8 @@ Quick-start guides:
 - [Docker Compose](https://github.com/projectcalico/docker-compose-kubernetes) 
 
 Bare-metal guides:
-- [CoreOS bare-metal](https://github.com/caseydavenport/kubernetes/blob/calico-cni-coreos-doc/docs/getting-started-guides/coreos/bare_metal_calico.md)
-- [Ubuntu bare-metal](https://github.com/caseydavenport/kubernetes/blob/calico-cni-ubuntu-doc/docs/getting-started-guides/ubuntu-calico.md)
-
+- [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
+- [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
 
 # Kubernetes with Calico policy
 Calico can provide network policy for Kubernetes clusters.  This feature is currently experimental and disabled by default. [The policy documentation](Policy.md) explains how to enable and use Calico policy in a Kubernetes cluster.
