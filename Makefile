@@ -12,12 +12,12 @@ binary:
 	calico/build \
 	pyinstaller policy_agent.py -ayF 
 
-create: 
+policy: 
 	# Build NetworkPolicy install tool. 
 	docker run --rm \
 	-v `pwd`:/code \
 	calico/build \
-	pyinstaller create.py -ayF 
+	pyinstaller policy.py -ayF 
 
 docker-image: binary
 	docker build -t calico/k8s-policy-agent . 
