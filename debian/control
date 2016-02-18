@@ -10,7 +10,6 @@ Package: calico-compute
 Architecture: all
 Depends:
  bird,
- calico-dhcp-agent,
  calico-felix,
  networking-calico,
  neutron-dhcp-agent,
