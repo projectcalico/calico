@@ -1,28 +1,5 @@
 #cloud-config
 ---
-write_files:
-  - path: /home/core/setup_calico.sh
-    permissions: 777
-    owner: root
-    content: |
-      #!/usr/bin/bash -e
-      # Add /opt/bin to the _front_ of the PATH.
-      # Can't directly write to .profile since it's a symlink to a RO filesystem
-      rm /home/core/.bashrc
-      echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
-      echo "Defaults  secure_path=/opt/bin:$PATH" >>/etc/sudoers.d/path
-      mkdir -p /opt/bin
-      mkdir -p /opt/bin
-      wget -N -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
-      chmod +x /opt/bin/calicoctl
-      mkdir -p /etc/rkt/net.d
-      chmod a+w /etc/rkt/net.d
-      wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.0.0/calico
-      chmod +x /etc/rkt/net.d/calico
-      rkt --insecure-options=image fetch docker://nginx
-      rkt --insecure-options=image fetch docker://busybox
-      rkt --insecure-options=image fetch docker://calico/node
-
 coreos:
   update:
     reboot-strategy: off
@@ -41,10 +18,19 @@ coreos:
         Description=Download calico
         After=network-online.target
         Requires=network-online.target
-
+        
         [Service]
         User=root
-        ExecStart=/home/core/setup_calico.sh
+        ExecStartPre=/usr/bin/mkdir -p /opt/bin
+        ExecStartPre=/usr/bin/mkdir -p /etc/rkt/net.d
+        ExecStartPre=/usr/bin/wget -N -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.0.2/calico
+        ExecStartPre=/usr/bin/chmod a+w -R /etc/rkt/net.d
+        ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl        
+        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch docker://busybox
+        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch docker://calico/node
+        ExecStart=/usr/bin/true
         RemainAfterExit=yes
         Type=oneshot
 

@@ -122,31 +122,30 @@ cat >/etc/rkt/net.d/10-calico-net2.conf <<EOF
 EOF
 ```
 
-
 ## 4. Create a webserver on one of the networks
 
 With the networks created, let's start a container on `calico-01`
 
 ### On calico-01
-Create a webserver using an `nginx` container. We'll put this on `net1` network.
+Create a webserver using an `busybox` container running an `httpd` daemon. We'll put this on `net1` network.
 
 We'll use `systemd-run` to create the webserver service.
 
-    sudo systemd-run --unit=nginx rkt run --store-only=true --insecure-options=image --net=net1 --mount volume=myvol,target=/var/run --volume=myvol,kind=empty docker://nginx
+    sudo systemd-run --unit=httpd sudo rkt run --net=net1 registry-1.docker.io/library/busybox --exec httpd -- -f -h /
  
 
  Normal [systemd commands][systemd-run] can then be used to get the status of the container and view its logs. 
  
  I can take a moment to download the container. After it's come up use `rkt list` to show the IP address.
- Check the status using `sudo rkt list` or `sudo journalctl -u nginx`
+ Check the status using `sudo rkt list` or `sudo journalctl -u httpd`
   
     $ sudo rkt list
 	UUID            APP     IMAGE NAME                                      STATE   NETWORKS
 	65f026a5        node    registry-1.docker.io/calico/node:latest         running
-	b2dd9cff        nginx   registry-1.docker.io/library/nginx:latest       running net1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
+	b2dd9cff        busybox registry-1.docker.io/library/busybox:latest     running net1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
 
  
- So we can see that we now have an `nginx` container running on the network `net1` with an IP address of `192.168.0.0`
+ So we can see that we now have a `busybox` container running on the network `net1` with an IP address of `192.168.0.0`
  rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking.md#the-default-restricted-network)
  
 ## 5. Validate access to webserver
@@ -154,48 +153,27 @@ We'll use `systemd-run` to create the webserver service.
 Now that we've created a webserver and we know it's IP address, we can access it using `wget` from containers running on 
 either host, as long as they are created on the same network.
 
-On calico-02 use wget to access the nginx webserver
+On calico-02 use wget to access the httpd webserver
 
-    sudo rkt run --net=net1 --store-only=true --insecure-options=image docker://busybox --exec=/bin/wget -- -T 1 -q -O - 192.168.0.0 2>/dev/null
+    sudo rkt run --net=net1 registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 1 192.168.0.0/etc/passwd 2>/dev/null
 
 Expected output
 
-    [ 1808.316525] wget[4]: <!DOCTYPE html>
-    [ 1808.316988] wget[4]: <html>
-    [ 1808.317384] wget[4]: <head>
-    [ 1808.317723] wget[4]: <title>Welcome to nginx!</title>
-    [ 1808.318226] wget[4]: <style>
-    [ 1808.318592] wget[4]: body {
-    [ 1808.318958] wget[4]: width: 35em;
-    [ 1808.319457] wget[4]: margin: 0 auto;
-    [ 1808.319833] wget[4]: font-family: Tahoma, Verdana, Arial, sans-serif;
-    [ 1808.320416] wget[4]: }
-    [ 1808.320793] wget[4]: </style>
-    [ 1808.321261] wget[4]: </head>
-    [ 1808.321655] wget[4]: <body>
-    [ 1808.322086] wget[4]: <h1>Welcome to nginx!</h1>
-    [ 1808.322549] wget[4]: <p>If you see this page, the nginx web server is successfully installed and
-    [ 1808.322918] wget[4]: working. Further configuration is required.</p>
-    [ 1808.323476] wget[4]: <p>For online documentation and support please refer to
-    [ 1808.323855] wget[4]: <a href="http://nginx.org/">nginx.org</a>.<br/>
-    [ 1808.334445] wget[4]: Commercial support is available at
-    [ 1808.335309] wget[4]: <a href="http://nginx.com/">nginx.com</a>.</p>
-    [ 1808.335545] wget[4]: <p><em>Thank you for using nginx.</em></p>
-    [ 1808.335777] wget[4]: </body>
-    [ 1808.336030] wget[4]: </html>
-
+   [62032.807862] wget[4]: Connecting to 192.168.0.14 (192.168.0.14:80)
+   [62032.813662] wget[4]: passwd               100% |*******************************|   334   0:00:00 ETA
     
 
-This command runs the `wget` command in a busybox container, telling `wget` to be quiet, to only wait a second for a response and to output to stdout. 
+This command runs the `wget` command in a busybox container to fetch the `passwd` file from our host. '-T 1' tells wget to only wait a second for a response.
 Stderr is redirected to `/dev/null` as we're not interested in the logs from `rkt` for this command.
 
 You can repeat this command on calico-01 and check that access works the same from any server in your cluster.
 
 ### 5.1 Checking cluster isolation 
-If you repeat the above command but place the container on network `net2` then the `nginx` server can no longer be reached.
+If you repeat the above command but place the container on network `net2` then the `httpd` server can no longer be reached.
 
-    sudo rkt run --net=net2 --insecure-options=image docker://busybox --exec=/bin/wget -- -T 1 -q -O - 192.168.0.0 2>/dev/null 
-    [ 1856.858027] wget[4]: wget: download timed out
+    sudo rkt run --net=net2 registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 1 192.168.0.0/etc/passwd 2>/dev/null
+    [62128.109283] wget[4]: Connecting to 192.168.0.0 (192.168.0.0:80)
+    [62129.109472] wget[4]: wget: download timed out
     
 ## Further reading
 
