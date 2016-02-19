@@ -1,18 +1,20 @@
-.PHONY: all binary ut clean
+.PHONY: all policy-agent policy-tool docker-image clean
 
 SRCDIR=.
 
 default: all
-all: binary create 
+all: policy-agent policy-tool 
+policy-agent: dist/policy_agent
+policy-tool: dist/policy
 
-binary: 
+dist/policy_agent: 
 	# Build the kubernetes policy agent
 	docker run --rm \
 	-v `pwd`:/code \
 	calico/build \
 	pyinstaller policy_agent.py -ayF 
 
-policy: 
+dist/policy: 
 	# Build NetworkPolicy install tool. 
 	docker run --rm \
 	-v `pwd`:/code \
@@ -20,8 +22,7 @@ policy:
 	pyinstaller policy.py -ayF 
 
 docker-image: binary
-	docker build -t calico/k8s-policy-agent . 
-	docker save -o k8s-network-policy.tar calico/k8s-policy-agent
+	docker build -t caseydavenport/k8s-policy-agent . 
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
