@@ -505,7 +505,7 @@ class EtcdDriver(object):
         :param snapshot_index: Index of the snapshot as a whole.
         """
         assert snapshot_index is not None
-        self._snap_keys_processed.store_occurance()
+        self._snap_keys_processed.store_occurence()
         old_hwm = self._hwms.update_hwm(snap_key, snapshot_index)
         if snap_mod > old_hwm:
             # This specific key's HWM is newer than the previous
@@ -591,7 +591,7 @@ class EtcdDriver(object):
         if event is None:
             self._watcher_queue = None
             raise WatcherDied()
-        self._event_keys_processed.store_occurance()
+        self._event_keys_processed.store_occurence()
         ev_mod, ev_key, ev_val = event
         if ev_val is not None:
             # Normal update.
@@ -693,7 +693,7 @@ class EtcdDriver(object):
             },
             flush=False
         )
-        self._felix_updates_sent.store_occurance()
+        self._felix_updates_sent.store_occurence()
 
     def _send_status(self, status):
         """

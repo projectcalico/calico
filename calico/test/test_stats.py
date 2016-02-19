@@ -44,16 +44,16 @@ class TestRateStat(TestCase):
         with patch("calico.stats.monotonic_time", autospec=True) as m_time:
             m_time.return_value = 1234
             self.stat.reset()
-            self.stat.store_occurance()
-            self.stat.store_occurance()
+            self.stat.store_occurence()
+            self.stat.store_occurence()
             self.assertEqual(str(self.stat), "foo: 2 in 0.0s (0.000/s)")
 
     def test_string_with_data_and_time(self):
         with patch("calico.stats.monotonic_time", autospec=True) as m_time:
             m_time.side_effect = iter([1234, 1235, 1235])
             self.stat.reset()
-            self.stat.store_occurance()
-            self.stat.store_occurance()
+            self.stat.store_occurence()
+            self.stat.store_occurence()
             self.assertEqual(str(self.stat), "foo: 2 in 1.0s (2.000/s)")
 
 

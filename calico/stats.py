@@ -40,7 +40,7 @@ class RateStat(object):
         self.start_time = monotonic_time()
         self.count = 0
 
-    def store_occurance(self):
+    def store_occurence(self):
         self.count += 1
 
     @property
@@ -78,7 +78,7 @@ class AggregateStat(RateStat):
         self.sum = 0.0
 
     def store_reading(self, value):
-        self.store_occurance()
+        self.store_occurence()
         self.sum += value
         if self.max is None or value > self.max:
             self.max = value
