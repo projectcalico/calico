@@ -106,15 +106,15 @@ profilerules.py.
 Since an endpoint may be in multiple profiles and we execute the policy
 chains of those profiles in sequence, the policy chains need to
 communicate three different "return values"; for this we use the packet
-MARK:
+Accept MARK (a configured bit in the MARK space):
 
 * Packet was matched by a deny rule.  In this case the packet is immediately
   dropped.
 * Packet was matched by an allow rule.  In this case the packet is returned
-  with MARK==1.  The calling chain can then return the packet to its caller
-  for further processing.
+  with Accept MARK==1.  The calling chain can then return the packet to its
+  caller for further processing.
 * Packet was not matched at all.  In this case, the packet is returned with
-  MARK==0.  The calling chain can then send the packet through the next
+  Accept MARK==0.  The calling chain can then send the packet through the next
   profile chain.
 
 """
