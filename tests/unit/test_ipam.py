@@ -60,6 +60,9 @@ class CniIpamTest(unittest.TestCase):
         self.m_datastore_client = MagicMock(spec=IPAMClient)
         self.plugin.datastore_client = self.m_datastore_client
 
+        # Set expected values.
+        self.expected_handle = self.container_id
+
     @patch('sys.stdout', new_callable=StringIO)
     def test_execute_add_mainline(self, m_stdout):
         # Mock
@@ -88,7 +91,7 @@ class CniIpamTest(unittest.TestCase):
         # Assert
         expected = ''
         assert_equal(m_stdout.getvalue().strip(), expected)
-        self.plugin.datastore_client.release_ip_by_handle.assert_called_once_with(handle_id=self.plugin.container_id)
+        self.plugin.datastore_client.release_ip_by_handle.assert_called_once_with(handle_id=self.expected_handle)
 
     @patch('sys.stdout', new_callable=StringIO)
     def test_execute_del_not_assigned(self, m_stdout):
@@ -258,3 +261,33 @@ class CniIpamTest(unittest.TestCase):
 
         # Assert
         m_exit.assert_called_once_with(ERR_CODE_GENERIC, message=ANY, details=ANY)
+
+
+class CniIpamKubernetesTest(CniIpamTest):
+    """
+    Test class for IPAM plugin when running under Kubernetes.
+    """
+    def setUp(self):
+        """
+        Per-test setup method.
+        """
+        CniIpamTest.setUp(self)
+        self.container_id = "ff3afbd1-17ad-499d-b514-72438c009e81"
+        self.env = {
+                CNI_CONTAINERID_ENV: self.container_id,
+                CNI_IFNAME_ENV: "eth0",
+                CNI_ARGS_ENV: "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=k8sns",
+                CNI_COMMAND_ENV: CNI_CMD_ADD, 
+                CNI_PATH_ENV: "/usr/bin/rkt/",
+                CNI_NETNS_ENV: "netns",
+        }
+
+        # Create the CniPlugin to test.
+        self.plugin = IpamPlugin(self.env, self.network_config["ipam"])
+
+        # Mock out the datastore client.
+        self.m_datastore_client = MagicMock(spec=IPAMClient)
+        self.plugin.datastore_client = self.m_datastore_client
+
+        # Set expected values.
+        self.expected_handle = "k8sns.podname" 

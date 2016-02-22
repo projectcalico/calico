@@ -166,6 +166,7 @@ class CniPluginFvTest(unittest.TestCase):
         """
         # Configure.
         self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=default"
+        workload_id = "default.podname"
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
         ip6 = "0:0:0:0:0:ffff:a00:1"
@@ -195,7 +196,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4),IPNetwork(ip6)])
+                "k8s", workload_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
@@ -210,6 +211,7 @@ class CniPluginFvTest(unittest.TestCase):
         """
         # Configure.
         self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=defaultns"
+        workload_id = "defaultns.podname"
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
         ip6 = "0:0:0:0:0:ffff:a00:1"
@@ -250,7 +252,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "k8s", workload_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert profile was created.
         self.client.create_profile.assert_called_once_with(

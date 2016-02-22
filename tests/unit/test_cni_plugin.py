@@ -15,7 +15,7 @@
 import json
 import unittest
 
-from mock import patch, MagicMock, ANY
+from mock import patch, MagicMock, ANY, call
 from netaddr import IPNetwork
 from nose.tools import assert_equal, assert_false, assert_raises
 from nose_parameterized import parameterized
@@ -26,6 +26,7 @@ from subprocess32 import CalledProcessError, Popen, PIPE
 
 from calico_cni.constants import *
 from calico_cni.policy_drivers import (DefaultPolicyDriver, ApplyProfileError)
+from calico_cni.container_engines import DockerEngine 
 from calico_cni.util import CniError
 from calico import main, CniPlugin
 
@@ -68,6 +69,10 @@ class CniPluginTest(unittest.TestCase):
         # Mock out the datastore client.
         self.m_datastore_client = MagicMock(spec=DatastoreClient)
         self.plugin._client = self.m_datastore_client
+
+        # Set expected values.
+        self.expected_orch_id = "cni"
+        self.expected_workload_id = self.container_id
 
     def test_execute_add_mainline(self):
         """Test execute() ADD
@@ -506,8 +511,8 @@ class CniPluginTest(unittest.TestCase):
         ep = self.plugin._create_endpoint(ip_list)
 
         # Assert.
-        self.plugin._client.create_endpoint.assert_called_once_with(ANY, "cni",
-                self.container_id, ip_list)
+        self.plugin._client.create_endpoint.assert_called_once_with(ANY, 
+                self.expected_orch_id, self.expected_workload_id, ip_list)
         assert_equal(ep, endpoint)
 
     def test_create_endpoint_error(self):
@@ -533,7 +538,8 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         self.plugin._client.remove_workload.assert_called_once_with(hostname=ANY,
-                workload_id=self.container_id, orchestrator_id="cni")
+                workload_id=self.expected_workload_id, 
+                orchestrator_id=self.expected_orch_id)
 
     def test_remove_workload_does_not_exist(self):
         """
@@ -623,7 +629,8 @@ class CniPluginTest(unittest.TestCase):
         # Assert
         assert_equal(ep, endpoint)
         self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
-                orchestrator_id="cni", workload_id=self.plugin.container_id)
+                orchestrator_id=self.expected_orch_id, 
+                workload_id=self.expected_workload_id)
 
     def test_get_endpoint_no_endpoint(self):
         # Mock
@@ -634,8 +641,11 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         assert_equal(ep, None)
-        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
-                orchestrator_id="cni", workload_id=self.plugin.container_id)
+        calls = [call(hostname=ANY, orchestrator_id=self.expected_orch_id, 
+                      workload_id=self.expected_workload_id),
+                 call(hostname=ANY, orchestrator_id="cni", 
+                      workload_id=self.container_id)]
+        self.plugin._client.get_endpoint.assert_has_calls(calls)
 
     def test_get_endpoint_multiple_endpoints(self):
         # Mock
@@ -649,7 +659,28 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
-                orchestrator_id="cni", workload_id=self.plugin.container_id)
+                orchestrator_id=self.expected_orch_id, 
+                workload_id=self.expected_workload_id)
+
+    def test_remove_stale_endpoint(self):
+        """
+        Test removal of endpoints from datastore.
+        """
+        endpoint = MagicMock(spec=Endpoint)
+        self.plugin._remove_stale_endpoint(endpoint)
+        self.plugin._client.remove_endpoint.assert_called_once_with(endpoint)
+
+    def test_remove_stale_endpoint_does_not_exist(self):
+        """
+        Test removal of endpoint from datastore when the endpoint
+        does not exist.
+        """
+        endpoint = MagicMock(spec=Endpoint)
+        self.plugin._client.remove_endpoint.side_effect = KeyError
+
+        # Error should not be re-raised.  If the endpoint does not exist,
+        # we're happy with that.
+        self.plugin._remove_stale_endpoint(endpoint)
 
     @patch("calico.os", autospec=True)
     def test_find_ipam_plugin(self, m_os):
@@ -711,7 +742,7 @@ class CniPluginTest(unittest.TestCase):
         # Mock out _execute to throw SystemExit
         m_os.environ = self.env
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
-        m_plugin(self.env, self.network_config).execute.side_effect = Exception 
+        m_plugin(self.env, self.network_config).execute.side_effect = Exception
         m_plugin.reset_mock()
 
         # Call
@@ -719,3 +750,91 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         m_sys.exit.assert_called_once_with(ERR_CODE_GENERIC)
+
+
+class CniPluginKubernetesTest(CniPluginTest):
+    """
+    Test class for CniPlugin class when running under Kubernetes. Runs all 
+    of the CniPluginTest cases with Kubernetes specific parameters specified.
+    """
+    def setUp(self):
+        """
+        Per-test setup method.
+        """
+        # Call superclass.
+        CniPluginTest.setUp(self)
+
+        self.container_id = "ff3afbd1-17ad-499d-b514-72438c009e81"
+        self.env = {
+                CNI_CONTAINERID_ENV: self.container_id,
+                CNI_IFNAME_ENV: "eth0",
+                CNI_ARGS_ENV: "K8S_POD_NAME=testpod;K8S_POD_NAMESPACE=k8sns",
+                CNI_COMMAND_ENV: CNI_CMD_ADD, 
+                CNI_PATH_ENV: "/opt/cni/bin",
+                CNI_NETNS_ENV: "netns",
+        }
+
+        # Create the CniPlugin to test, using Kubernetes specific
+        # config.
+        self.plugin = CniPlugin(self.network_config, self.env)
+
+        # Mock out policy driver. 
+        self.plugin.policy_driver = MagicMock(spec=DefaultPolicyDriver)
+
+        # Mock out container engine 
+        self.plugin.container_engine = MagicMock(spec=DockerEngine)
+        self.plugin.container_engine.uses_host_networking.return_value = False
+
+        # Mock out the datastore client.
+        self.m_datastore_client = MagicMock(spec=DatastoreClient)
+        self.plugin._client = self.m_datastore_client
+
+        # Set the expected values.
+        self.expected_orch_id = "k8s"
+        self.expected_workload_id = "k8sns.testpod" 
+
+    @patch("calico.json", autospec=True)
+    @patch("calico.IpamPlugin", autospec=True)
+    def test_add_exists_no_ips(self, m_ipam, m_json): 
+        """
+        In k8s, if an endpoint exists already, we must clean it up.
+        """
+        # Mock out _get_endpoint - endpoint exists.
+        endpoint = MagicMock(spec=Endpoint)
+        endpoint.ipv4_nets = []
+        endpoint.ipv6_nets = []
+        endpoint.name = "cali12345"
+        self.plugin._get_endpoint = MagicMock(spec=self.plugin._get_endpoint)
+        self.plugin._get_endpoint.return_value = endpoint
+
+        # Mock remove_stale_endpoint.
+        self.plugin._remove_stale_endpoint = MagicMock(spec=self.plugin._remove_stale_endpoint)
+
+        # Mock add_new_endpoint.
+        self.plugin._add_new_endpoint = MagicMock(spec=self.plugin._add_new_endpoint)
+
+        # Mock releasing of IPs.
+        self.plugin._release_ip = MagicMock(spec=self.plugin._release_ip)
+
+        # Call method.
+        self.plugin.add()
+
+        # Assert we remove the endpoint.
+        self.plugin._remove_stale_endpoint.assert_called_once_with(endpoint)
+
+        # Assert we release IPs.
+        self.plugin._release_ip.assert_called_once_with(ANY)
+        
+        # Assert we add a new endpoint.
+        self.plugin._add_new_endpoint.assert_called_once_with()
+
+    @patch("calico.json", autospec=True)
+    def test_add_exists_new_network(self, m_json): 
+        """
+        In k8s, we never add a new network to an existing endpoint.
+        """
+        pass
+
+    @patch("calico.json", autospec=True)
+    def test_add_exists_new_network_profile_error(self, m_json): 
+        pass
