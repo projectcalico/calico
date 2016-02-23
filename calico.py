@@ -369,7 +369,8 @@ class CniPlugin(object):
         if self.ipam_type == "calico-ipam":
             _log.info("Using Calico IPAM")
             try:
-                response = IpamPlugin(env).execute()
+                response = IpamPlugin(env, 
+                                      self.network_config["ipam"]).execute()
                 code = 0
             except CniError as e:
                 # We hit a CNI error - return the appropriate CNI formatted

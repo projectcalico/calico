@@ -40,10 +40,8 @@ class CniIpamTest(unittest.TestCase):
             "type": "calico",
             "ipam": {
                 "type": "calico-ipam",
-                "subnet": "10.22.0.0/16",
-                "routes": [{"dst": "0.0.0.0/0"}],
-                "range-start": "",
-                "range-end": ""
+                ASSIGN_IPV4_KEY: "true",
+                ASSIGN_IPV6_KEY: "true"
             }
         }
         self.env = {
@@ -56,7 +54,7 @@ class CniIpamTest(unittest.TestCase):
         }
 
         # Create the CniPlugin to test.
-        self.plugin = IpamPlugin(self.env)
+        self.plugin = IpamPlugin(self.env, self.network_config["ipam"])
 
         # Mock out the datastore client.
         self.m_datastore_client = MagicMock(spec=IPAMClient)
@@ -67,14 +65,16 @@ class CniIpamTest(unittest.TestCase):
         # Mock
         self.plugin.command = CNI_CMD_ADD
         ip4 = IPNetwork("1.2.3.4/32")
+        ip6 = IPNetwork("ba:ad::be:ef/128")
         self.plugin._assign_address = MagicMock(spec=self.plugin._assign_address)
-        self.plugin._assign_address.return_value = ip4, None
+        self.plugin._assign_address.return_value = ip4, ip6
 
         # Call 
         ret = self.plugin.execute()
 
         # Assert
-        expected = json.dumps({"ip4": {"ip": "1.2.3.4/32"}})
+        expected = json.dumps({"ip4": {"ip": "1.2.3.4/32"}, 
+                               "ip6": {"ip": "ba:ad::be:ef/128"}})
         assert_equal(ret, expected)
 
     @patch('sys.stdout', new_callable=StringIO)
@@ -106,17 +106,19 @@ class CniIpamTest(unittest.TestCase):
     def test_assign_address_mainline(self):
         # Mock
         ip4 = IPNetwork("1.2.3.4/32")
+        ip6 = IPNetwork("ba:ad::be:ef/128")
         self.plugin.datastore_client.auto_assign_ips = MagicMock(spec=self.plugin._assign_address)
-        self.plugin.datastore_client.auto_assign_ips.return_value = [ip4], []
+        self.plugin.datastore_client.auto_assign_ips.return_value = [ip4], [ip6]
 
         # Args
         handle_id = "abcdef12345"
 
         # Call
-        ret_ip4, _ = self.plugin._assign_address(handle_id)
+        ret_ip4, ret_ip6 = self.plugin._assign_address(handle_id)
 
         # Assert
         assert_equal(ip4, ret_ip4)
+        assert_equal(ip6, ret_ip6)
 
     def test_assign_address_runtime_err(self):
         # Mock
@@ -138,6 +140,24 @@ class CniIpamTest(unittest.TestCase):
         ip6 = IPNetwork("ba:ad::be:ef/128")
         self.plugin.datastore_client.auto_assign_ips = MagicMock(spec=self.plugin._assign_address)
         self.plugin.datastore_client.auto_assign_ips.return_value = [], [ip6]
+
+        # Args
+        handle_id = "abcdef12345"
+
+        # Call
+        with assert_raises(CniError) as err:
+            self.plugin._assign_address(handle_id)
+        e = err.exception
+
+        # Assert
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    @patch("ipam._exit_on_error", autospec=True)
+    def test_assign_address_no_ipv6(self, m_exit):
+        # Mock
+        ip4 = IPNetwork("1.2.3.4/32")
+        self.plugin.datastore_client.auto_assign_ips = MagicMock(spec=self.plugin._assign_address)
+        self.plugin.datastore_client.auto_assign_ips.return_value = [ip4], []
 
         # Args
         handle_id = "abcdef12345"
@@ -200,8 +220,8 @@ class CniIpamTest(unittest.TestCase):
         main()
 
         # Assert
-        m_plugin.assert_called_once_with(self.env)
-        m_plugin(self.env).execute.assert_called_once_with()
+        m_plugin.assert_called_once_with(self.env, self.network_config["ipam"])
+        m_plugin(self.env, self.network_config["ipam"]).execute.assert_called_once_with()
 
     @patch("ipam.os", autospec=True)
     @patch("ipam.sys", autospec=True)
@@ -213,7 +233,7 @@ class CniIpamTest(unittest.TestCase):
         m_os.environ = self.env
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
         m_plugin.reset_mock()
-        m_plugin(self.env).execute.side_effect = CniError(50, "Message", "Details") 
+        m_plugin(self.env, self.network_config["ipam"]).execute.side_effect = CniError(50, "Message", "Details") 
 
         # Call
         main()
@@ -231,7 +251,7 @@ class CniIpamTest(unittest.TestCase):
         m_os.environ = self.env
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
         m_plugin.reset_mock()
-        m_plugin(self.env).execute.side_effect = Exception
+        m_plugin(self.env, self.network_config["ipam"]).execute.side_effect = Exception
 
         # Call
         main()
