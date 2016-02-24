@@ -1,0 +1,15 @@
+kind: NetworkPolicy
+apiVersion: net.alpha.kubernetes.io/v1alpha1
+metadata:
+  namespace: stars
+  name: frontend-policy
+spec:
+  podSelector:
+    tier: frontend 
+  ingress:
+    - from:
+        - namespaces:
+            role: client
+      ports:
+        - protocol: TCP
+          port: 80

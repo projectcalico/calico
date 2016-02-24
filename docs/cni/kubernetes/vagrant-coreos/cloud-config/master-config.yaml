@@ -89,10 +89,10 @@ coreos:
         User=root
         Environment="ETCD_AUTHORITY=localhost:2379"
         PermissionsStartOnly=true
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/wget -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
-        ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-        ExecStart=/opt/bin/calicoctl node --ip=$private_ipv4 --detach=false
+        ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --nat-outgoing
+        ExecStart=/opt/bin/calicoctl node --ip=$private_ipv4 --detach=false --node-image=calico/node:v0.17.0-k8s-policy
         Restart=always
         RestartSec=10
 

@@ -6,12 +6,19 @@
 > You are viewing the calico-docker documentation for release **release**.
 <!--- end of master only -->
 
+
+# Deprecated
+Annotation based policy has been deprecated in favor of the new Kubernetes `NetworkPolicy` v1alpha1 API.  It is recommended 
+that you switch to using the new API.
+
+Please see our documentation on [Calico and Kubernetes NetworkPolicy](NetworkPolicy.md).
+
 # Calico Policy for Kubernetes
 The Calico CNI plugin for Kubernetes allows you to specify network policy in the Kubernetes API using annotations.  
 > *Note*: annotation-based policy is currently experimental and is subject to change in future releases. 
 
 ## Prerequisites
-* A Kubernetes v1.1 Deployment using the Calico CNI plugin.
+* A Kubernetes v1.1 Deployment using the Calico CNI plugin v1.0+.
 * You must be using the iptables kube-proxy in your deployment. All of the Calico getting started guides configure the kube-proxy in this way.
 
 ## Behavior
@@ -230,4 +237,4 @@ spec:
 
 [k8s-network-model]: https://github.com/kubernetes/kubernetes/blob/master/docs/design/networking.md#networking
 
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/Policy.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/AnnotationPolicy.md?pixel)](https://github.com/igrigorik/ga-beacon)
