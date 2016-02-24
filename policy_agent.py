@@ -48,10 +48,14 @@ WATCH_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/watch/pods",
 # Annotation to look for network-isolation on namespaces.
 NS_POLICY_ANNOTATION = "net.alpha.kubernetes.io/network-isolation"
 
-# Groups to use for created policies.  Network policies are applied before 
-# namespace policies based on the group.
+# Format to use for namespace profiles.
+NS_PROFILE_FMT = "k8s_ns.%s"
+
+# Format to use for labels inherited from a namespace. 
+NS_LABEL_KEY_FMT = "ns/label/%s"
+
+# Groups to use for created policies.
 NET_POL_GROUP_NAME = "50-k8s-net-policy"
-NAMESPACE_GROUP_NAME = "60-k8s-namespace"
 
 # Environment variables for getting the Kubernetes API.
 K8S_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
@@ -65,6 +69,11 @@ TYPE_ADDED = "ADDED"
 TYPE_MODIFIED = "MODIFIED"
 TYPE_DELETED = "DELETED"
 TYPE_ERROR = "ERROR"
+
+class PolicyError(Exception):
+    def __init__(self, msg=None, policy=None):
+        Exception.__init__(self, msg)
+        self.policy = policy
 
 
 class PolicyAgent():
@@ -97,11 +106,11 @@ class PolicyAgent():
 
         self._handlers = {}
         self.add_handler(RESOURCE_TYPE_NETWORK_POLICY, TYPE_ADDED, 
-                         self._add_new_network_policy)
+                         self._add_update_network_policy)
         self.add_handler(RESOURCE_TYPE_NETWORK_POLICY, TYPE_DELETED, 
                          self._delete_network_policy)
         self.add_handler(RESOURCE_TYPE_NAMESPACE, TYPE_ADDED, 
-                         self._add_new_namespace)
+                         self._add_update_namespace)
         self.add_handler(RESOURCE_TYPE_NAMESPACE, TYPE_DELETED, 
                          self._delete_namespace)
         self.add_handler(RESOURCE_TYPE_POD, TYPE_ADDED, 
@@ -127,6 +136,7 @@ class PolicyAgent():
         Gets the correct handler.
         """
         key = (resource_type, event_type)
+        _log.debug("Looking up handler for event: %s", key)
         return self._handlers[key]
 
     def run(self):
@@ -155,6 +165,8 @@ class PolicyAgent():
             # Process the existing resources.
             _log.info("%s existing %s(s)", len(updates), resource_type)
             for update in updates:
+                _log.debug("Processing existing resource: %s", 
+                           json.dumps(update, indent=2))
                 self._process_update(TYPE_ADDED, resource_type, update)
 
             # Start watching for updates from the last resourceVersion.
@@ -204,20 +216,26 @@ class PolicyAgent():
 
     def _process_update(self, event_type, resource_type, resource):
         """
-        Takes an update from the queue and updates our state accordingly.
+        Takes an event updates our state accordingly.
         """
         _log.info("Processing '%s' for kind '%s'", event_type, resource_type) 
 
-        # Determine the key for this object.
+        # Determine the key for this object using namespace and name.
+        # This is simply used for easy identification in logs, etc.
         name = resource["metadata"]["name"]
         namespace = resource["metadata"].get("namespace")
         key = (namespace, name)
 
-        # Get the right handler.
+        # Treat "modified" as "added".
+        if event_type == TYPE_MODIFIED: 
+            _log.info("Treating 'MODIFIED' as 'ADDED'")
+            event_type = TYPE_ADDED
+
+        # Call the right handler.
         try:
             handler = self.get_handler(resource_type, event_type) 
         except KeyError:    
-            _log.warning("No delete %s handlers for: %s", 
+            _log.warning("No %s handlers for: %s", 
                          event_type, resource_type)
         else:
             _log.debug("Calling handler: %s", handler)
@@ -227,7 +245,7 @@ class PolicyAgent():
                 _log.exception("Invalid %s: %s", resource_type, 
                                json.dumps(resource, indent=2))
 
-    def _add_new_network_policy(self, key, policy):
+    def _add_update_network_policy(self, key, policy):
         """
         Takes a new network policy from the Kubernetes API and 
         creates the corresponding Calico policy configuration.
@@ -283,23 +301,29 @@ class PolicyAgent():
         try:
             self._client.remove_global_policy(NET_POL_GROUP_NAME, name)
         except KeyError:
-            pass
+            _log.info("Unable to find policy '%s' - already deleted", key)
 
     def _calculate_inbound_rules(self, policy):
         """
         Takes a NetworkPolicy object from the API and returns a list of 
         Calico Rules objects which should be applied on ingress.
         """
+        _log.debug("Calculating inbound rules")
+
         # Store the rules to return.
         rules = []
 
+        # Get this policy's namespace.
+        policy_ns = policy["metadata"]["namespace"]
+
         # Iterate through each inbound rule and create the appropriate
         # rules.
-        allow_incomings = policy["spec"]["inbound"]
-        allow_incomings = allow_incomings or []
+        allow_incomings = policy["spec"].get("ingress") or []
+        _log.info("Found %s ingress rules", len(allow_incomings))
         for r in allow_incomings:
             # Determine the destination ports to allow.  If no ports are
             # specified, allow all port / protocol combinations.
+            _log.debug("Processing ingress rule: %s", r)
             ports_by_protocol = {}
             for to_port in r.get("ports", []):
                 # Keep a dict of ports exposed, keyed by protocol.
@@ -327,17 +351,53 @@ class PolicyAgent():
             # then we should allow from all sources.
             from_args = []
             for from_clause in r.get("from", []):
-                pod_selector = from_clause.get("pods", {})
-                namespaces = from_clause.get("namespaces", {})
-                if pod_selector:
+                # We need to check if the key exists, not just if there is 
+                # a non-null value.  The presence of the key with a null 
+                # value means "select all".
+                pods_present = "pods" in from_clause
+                namespaces_present = "namespaces" in from_clause
+                _log.debug("Is 'pods:' present? %s", pods_present)
+                _log.debug("Is 'namespaces:' present? %s", namespaces_present)
+
+                if pods_present and namespaces_present:
+                    # This is an error case according to the API.
+                    msg = "Policy API does not support both 'pods' and " \
+                          "'namespaces' selectors."
+                    raise PolicyError(msg, policy)
+                elif pods_present:
                     # There is a pod selector in this "from" clause.
+                    pod_selector = from_clause["pods"] or {}
                     _log.debug("Allow from pods: %s", pod_selector)
                     selectors = ["%s == '%s'" % (k,v) for k,v in pod_selector.iteritems()]
+
+                    # We can only select on pods in this namespace.
+                    selectors.append("%s == %s" % (K8S_NAMESPACE_LABEL, 
+                                                   policy_ns))
                     selector = " && ".join(selectors)
+
+                    # Append the selector to the from args.
+                    _log.debug("Allowing pods which match: %s", selector)
                     from_args.append({"src_selector": selector})
-                elif namespaces:
-                    _log.warning("'from: {namespaces: {}}' is not yet "
-                                 "supported - ignoring %s", from_clause)
+                elif namespaces_present:
+                    # There is a namespace selector.  Namespace labels are
+                    # applied to each pod in the namespace using 
+                    # the per-namespace profile.  We can select on namespace
+                    # labels using the NS_LABEL_KEY_FMT modifier.
+                    namespaces = from_clause["namespaces"] or {}
+                    _log.debug("Allow from namespaces: %s", namespaces)
+                    selectors = ["%s == '%s'" % (NS_LABEL_KEY_FMT % k, v) \
+                            for k,v in namespaces.iteritems()]
+                    selector = " && ".join(selectors)
+                    if selector:
+                        # Allow from the selected namespaces.
+                        _log.debug("Allowing from namespaces which match: %s", 
+                                    selector)
+                        from_args.append({"src_selector": selector})
+                    else:
+                        # Allow from all pods in all namespaces.
+                        _log.debug("Allowing from all pods in all namespaces")
+                        selector = "has(%s)" % K8S_NAMESPACE_LABEL
+                        from_args.append({"src_selector": selector})
 
             if not from_args:
                 # There are no match criteria specified.  We should allow
@@ -356,23 +416,24 @@ class PolicyAgent():
         _log.debug("Calculated rules: %s", rules)
         return rules
 
-    def _add_new_namespace(self, key, namespace):
+    def _add_update_namespace(self, key, namespace):
         """
-        Takes a new namespace from the Kubernetes API and 
-        creates the corresponding Calico policy configuration.
+        Configures the necessary policy in Calico for this
+        namespace.  Uses the `net.alpha.kubernetes.io/network-isolation` 
+        annotation.
         """
-        _log.info("Adding new namespace: %s", key)
+        _log.info("Adding/updating namespace: %s", key)
 
         # Determine the type of network-isolation specified by this namespace.
         # This defaults to no isolation.
         annotations = namespace["metadata"].get("annotations", {})
         _log.debug("Namespace %s has annotations: %s", key, annotations)
         net_isolation = annotations.get(NS_POLICY_ANNOTATION, "no") == "yes"
-        _log.info("Namespace %s has: network-isolation=%s", key, net_isolation)
+        _log.info("Namespace %s has network-isolation? %s", key, net_isolation)
 
-        # Determine the policy name to create.
+        # Determine the profile name to create.
         namespace_name = namespace["metadata"]["name"]
-        policy_name = "k8s_ns-%s" % namespace_name
+        profile_name = NS_PROFILE_FMT % namespace_name
 
         # Determine the rules to use.
         outbound_rules = [Rule(action="allow")]
@@ -380,18 +441,27 @@ class PolicyAgent():
             inbound_rules = [Rule(action="deny")]
         else:
             inbound_rules = [Rule(action="allow")]
-        rules = Rules(id=policy_name,
+        rules = Rules(id=profile_name,
                       inbound_rules=inbound_rules,
                       outbound_rules=outbound_rules)
 
         # Create the Calico policy to represent this namespace, or 
         # update it if it already exists.  Namespace policies select each
         # pod within that namespace.
-        selector = "%s == '%s'" % (K8S_NAMESPACE_LABEL, namespace_name) 
-        self._client.create_global_policy(NAMESPACE_GROUP_NAME, policy_name, 
-                                          selector, rules=rules)
-        _log.info("Created/updated global policy for namespace %s", 
-                  namespace_name)
+        self._client.create_profile(profile_name, rules)
+
+        # Assign labels to the profile.  We modify the keys to use 
+        # a special prefix to indicate that these labels are inherited 
+        # from the namespace.
+        labels = namespace["metadata"].get("labels", {})
+        for k,v in labels.iteritems():
+            labels[NS_LABEL_KEY_FMT % k] = v
+            del labels[k]
+        _log.debug("Generated namespace labels: %s", labels)
+
+        # TODO: Actually assign labels to the profile.
+
+        _log.info("Created/updated profile for namespace %s", namespace_name)
 
     def _delete_namespace(self, key, namespace):
         """
@@ -404,11 +474,11 @@ class PolicyAgent():
         # We need to make sure that there are no pods running 
         # in this namespace first.
         namespace_name = namespace["metadata"]["name"]
-        policy_name = "k8s_ns-%s" % namespace_name
+        profile_name = NS_PROFILE_FMT % namespace_name
         try:
-            self._client.remove_global_policy(NAMESPACE_GROUP_NAME, policy_name)
+            self._client.remove_profile(profile_name)
         except KeyError:
-            pass
+            _log.info("Unable to find profile for namespace '%s'", key)
 
     def _add_update_pod(self, key, pod):
         """
@@ -420,8 +490,9 @@ class PolicyAgent():
         # Get the Calico endpoint.  This may or may not have already been 
         # created by the CNI plugin.  If it hasn't been created, we need to 
         # wait until is has before we can do any meaningful work.
-        workload_id = "%s.%s" % (pod["metadata"]["namespace"],
-                                 pod["metadata"]["name"])
+        namespace = pod["metadata"]["namespace"]
+        name = pod["metadata"]["name"]
+        workload_id = "%s.%s" % (namespace, name)
         try:
             _log.debug("Looking for endpoint that matches workload_id=%s",
                        workload_id)
@@ -446,21 +517,20 @@ class PolicyAgent():
         labels = pod["metadata"].get("labels", {}) 
         _log.debug("Pod '%s' has labels: %s", key, labels)
 
-        # Add a special label for the Kubernetes namespace.
-        labels[K8S_NAMESPACE_LABEL] = pod["metadata"]["namespace"]
+        # Add a special label for the Kubernetes namespace.  This is used
+        # by selector-based policies to select all pods in a given namespace.
+        labels[K8S_NAMESPACE_LABEL] = namespace 
 
         # Set the labels on the endpoint.
         endpoint.labels = labels
         self._client.set_endpoint(endpoint)
         _log.info("Updated labels on pod %s", key)
 
-        # Remove the 'deny-inbound' profile from the pod now that 
-        # it has been configured with labels.  It will match at least the 
-        # per-namespace policy, and potentially others, which will 
-        # define what connectivity is allowed.
-        #self._client.set_profiles_on_endpoint([], 
-        #                                      orchestrator_id="cni",
-        #                                      workload_id=endpoint.workload_id)
+        # Configure this pod with its namespace profile.
+        ns_profile = NS_PROFILE_FMT % namespace
+        self._client.set_profiles_on_endpoint([ns_profile], 
+                                              orchestrator_id="cni",
+                                              workload_id=endpoint.workload_id)
 
     def _delete_pod(self, key, pod):
         """

@@ -6,6 +6,7 @@ default: all
 all: policy-agent policy-tool 
 policy-agent: dist/policy_agent
 policy-tool: dist/policy
+docker-image: image.created
 
 dist/policy_agent: 
 	# Build the kubernetes policy agent
@@ -21,10 +22,12 @@ dist/policy:
 	calico/build \
 	pyinstaller policy.py -ayF 
 
-docker-image: binary
+image.created: dist/policy_agent 
 	docker build -t caseydavenport/k8s-policy-agent . 
+	touch image.created
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
 	-rm -rf dist
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
+	-docker rmi caseydavenport/k8s-policy-agent
