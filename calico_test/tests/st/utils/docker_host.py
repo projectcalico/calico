@@ -234,15 +234,16 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network="bridge"):
+    def create_workload(self, name, image="busybox", network="bridge", ip=None):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, image=image, network=network)
+        workload = Workload(self, name, image=image, network=network, ip=ip)
         self.workloads.add(workload)
         return workload
 
-    def create_network(self, name, driver="calico", ipam_driver=None):
+    def create_network(self, name, driver="calico", ipam_driver=None,
+                       subnet=None):
         """
         Create a Docker network using this host.
 
@@ -254,10 +255,11 @@ class DockerHost(object):
         driver is the default.)
         :param ipam_driver:  The name of the IPAM driver to use, or None to use
         the default driver.
+        :param subnet: The subnet IP pool to assign IPs from.
         :return: A DockerNetwork object.
         """
-        return DockerNetwork(self, name, driver=driver,
-                             ipam_driver=ipam_driver)
+        return DockerNetwork(self, name, driver=driver, ipam_driver=ipam_driver,
+                             subnet=subnet)
 
     @staticmethod
     def escape_shell_single_quotes(command):

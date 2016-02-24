@@ -24,7 +24,8 @@ class DockerNetwork(object):
     by containers).
     """
 
-    def __init__(self, host, name, driver="calico", ipam_driver=None):
+    def __init__(self, host, name, driver="calico", ipam_driver=None,
+                 subnet=None):
         """
         Create the network.
         :param host: The Docker Host which creates the network (note that
@@ -37,6 +38,7 @@ class DockerNetwork(object):
         driver is the default.)
         :param ipam_driver:  The name of the IPAM driver to use, or None to use
         the default driver.
+        :param subnet: The subnet IP pool to assign IPs from.
         :return: A DockerNetwork object.
         """
         self.name = name
@@ -46,7 +48,10 @@ class DockerNetwork(object):
         """The host which created the network."""
 
         ipam_option = ("--ipam-driver %s" % ipam_driver) if ipam_driver else ""
-        cmd = "docker network create -d %s %s %s" % (driver, ipam_option, name)
+        subnet_option = ("--subnet %s" % subnet) if subnet else ""
+
+        cmd = "docker network create -d %s %s %s %s" % \
+              (driver, ipam_option, subnet_option, name)
         self.uuid = host.execute(cmd)
 
     def delete(self):
