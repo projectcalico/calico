@@ -161,6 +161,9 @@ def pprint_bird_protocols(version):
     :param version:  The IP version (4 or 6).
     :return: None.
     """
+    # This needs to be run as root to access the bird data in /var/run/calico
+    enforce_root()
+
     # Based on the IP version, run the appropriate BIRD command, and select
     # the appropriate separator char for an IP address.
     if getattr(sys, 'frozen', False):
@@ -180,7 +183,7 @@ def pprint_bird_protocols(version):
                   shell=True)
             ip_sep = ":"
     except subprocess32.CalledProcessError:
-        print "Couldn't connect to bird. Try running as root."
+        print "Couldn't connect to bird."
         return
 
     # Parse the output from BIRD to extract the values in the protocol status
