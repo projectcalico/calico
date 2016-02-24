@@ -93,7 +93,7 @@ containers is not required.
 
 The Calico IPAM driver assigns addresses with host aggregation - this is a more
 efficient approach for Calico requiring fewer programmed routes.  IPv6
-addresses are supported, although due limitations with Docker, it is not 
+addresses are supported, although with the current Docker API, it is not
 possible to have an IPv6-only network, and (unlike the IPv4 behavior) it is
 necessary to specify a subnet from which to assign addresses.
 
@@ -128,7 +128,7 @@ specific environment, you may need to choose different CIDRs.
 So, once you have decided which type of network to create, following the
 appropriate instructions for one of *a)*, *b)*, *c)* or *d)*.
 
-#### a. Networking using Calico IPAM in a non-cloud environment
+#### a) Networking using Calico IPAM in a non-cloud environment
 
 For Calico IPAM in a non-cloud environment, you need to first create a Calico
 IP Pool with no additional options.  Here we create a pool with CIDR
@@ -142,7 +142,7 @@ To create the networks, run:
     docker network create --driver calico --ipam-driver calico net2
     docker network create --driver calico --ipam-driver calico net3
     
-#### b. Networking using Calico IPAM in a cloud environment
+#### b) Networking using Calico IPAM in a cloud environment
 
 For Calico IPAM in a cloud environment (AWS, DigitalOcean, GCE), you need to 
 first create a Calico IP Pool using the `calicoctl pool add` command specifying
@@ -157,7 +157,7 @@ To create the networks, run:
     docker network create --driver calico --ipam-driver calico net2
     docker network create --driver calico --ipam-driver calico net3
 
-#### c. Networking using default IPAM in a non-cloud environment
+#### c) Networking using default IPAM in a non-cloud environment
 
 For default IPAM in a non-cloud environment, run: 
 
@@ -165,7 +165,7 @@ For default IPAM in a non-cloud environment, run:
     docker network create --driver calico --subnet=192.168.1.0/24 net2
     docker network create --driver calico --subnet=192.168.2.0/24 net3
     
-#### d. Networking using default IPAM in a cloud environment
+#### d) Networking using default IPAM in a cloud environment
 
 For default IPAM in a cloud environment (AWS, DigitalOcean, GCE), run:
 
@@ -235,7 +235,29 @@ fail.
 To see the list of networks, use
 
     docker network ls
-        
+
+## Assign Static IP when Starting a Container
+
+With the release of Docker 1.10, support has been added to allow users to
+configure a specific IP address when creating a container.  In order to use
+this feature, Docker requires that you specify the `--subnet` parameter when running
+`docker network create`.  This parameter can be used in any of the four **"Create the
+network"** sets above.
+
+If you are using the Calico IPAM driver, the `--subnet` value must be the same
+CIDR as an existing Calico IP pool.  So if you create a Calico IP pool for
+`192.168.1.0/24`, you can use `--subnet=192.168.1.0/24` as a valid subnet.
+
+For example, the following commands:
+ - create a Calico IP pool
+ - create a Docker network using the IP pool
+ - create a container using a specific IP address from the pool
+
+```
+calicoctl pool add 192.168.1.0/24
+docker network create --driver calico --ipam-driver calico --subnet=192.168.1.0/24 my_net
+docker run --net my_net --name my_workload --ip 192.168.1.100 -tid busybox
+```
 
 ## IPv6 (Optional)
 
