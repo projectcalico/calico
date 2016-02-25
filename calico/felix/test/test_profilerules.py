@@ -45,22 +45,22 @@ RULES_1 = {
 
 RULES_1_CHAINS = {
     'felix-p-prof1-i': [
-        '--append felix-p-prof1-i --jump MARK --set-mark 1',
+        '--append felix-p-prof1-i --jump MARK --set-mark 0x1000000/0x1000000',
         '--append felix-p-prof1-i --match set '
             '--match-set src-tag-name src --jump RETURN',
         '--append felix-p-prof1-i '
             '--match comment '
             '--comment "No match, fall through to next profile" '
-            '--jump MARK --set-mark 0',
+            '--jump MARK --set-mark 0/0x1000000',
     ],
     'felix-p-prof1-o': [
-        '--append felix-p-prof1-o --jump MARK --set-mark 1',
+        '--append felix-p-prof1-o --jump MARK --set-mark 0x1000000/0x1000000',
         '--append felix-p-prof1-o --match set '
             '--match-set dst-tag-name dst --jump RETURN',
         '--append felix-p-prof1-o '
             '--match comment '
             '--comment "No match, fall through to next profile" '
-            '--jump MARK --set-mark 0',
+            '--jump MARK --set-mark 0/0x1000000',
     ]
 }
 
@@ -77,22 +77,22 @@ RULES_2 = {
 
 RULES_2_CHAINS = {
     'felix-p-prof1-i': [
-        '--append felix-p-prof1-i --jump MARK --set-mark 1',
+        '--append felix-p-prof1-i --jump MARK --set-mark 0x1000000/0x1000000',
         '--append felix-p-prof1-i --match set '
             '--match-set src-tag-added-name src --jump RETURN',
         '--append felix-p-prof1-i '
             '--match comment '
             '--comment "No match, fall through to next profile" '
-            '--jump MARK --set-mark 0',
+            '--jump MARK --set-mark 0/0x1000000',
     ],
     'felix-p-prof1-o': [
-        '--append felix-p-prof1-o --jump MARK --set-mark 1',
+        '--append felix-p-prof1-o --jump MARK --set-mark 0x1000000/0x1000000',
         '--append felix-p-prof1-o --match set '
             '--match-set dst-tag-name dst --jump RETURN',
         '--append felix-p-prof1-o '
             '--match comment '
             '--comment "No match, fall through to next profile" '
-            '--jump MARK --set-mark 0',
+            '--jump MARK --set-mark 0/0x1000000',
     ]
 }
 

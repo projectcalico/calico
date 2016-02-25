@@ -68,6 +68,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.DEFAULT_INPUT_CHAIN_ACTION = None
         self.METADATA_IP = None
         self.METADATA_PORT = None
+        self.IPTABLES_MARK_ACCEPT = None
 
     def store_and_validate_config(self, config):
         # We don't have any plugin specific parameters, but we need to save
@@ -80,6 +81,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_IP = config.METADATA_IP
         self.METADATA_PORT = config.METADATA_PORT
         self.DEFAULT_INPUT_CHAIN_ACTION = config.DEFAULT_INPUT_CHAIN_ACTION
+        self.IPTABLES_MARK_ACCEPT = config.IPTABLES_MARK_ACCEPT
 
     def raw_rpfilter_failed_chain(self, ip_version):
         """
@@ -268,7 +270,7 @@ class FelixIptablesGenerator(FelixPlugin):
                 )
 
         return chain, deps
- 
+
     def filter_forward_chain(self, ip_version):
         """
         Generate the IPv4/IPv6 FILTER felix-FORWARD chains.
@@ -396,8 +398,8 @@ class FelixIptablesGenerator(FelixPlugin):
         # Generates an inbound and an outbound chain for each profile.
         # Within each chain, the logic is as follows:
         # * Start by marking all packets.
-        # * If we hit an allow rule, we'll return with the mark still set, to
-        #   indicate that we matched.
+        # * If we hit an allow rule, we'll return with the Accept mark still
+        #   set, to indicate that we matched.
         # * If we hit a deny rule, we'll drop the packet immediately.
         # * If we reach the end of the chain, we'll un-mark the packet again to
         #   indicate no match.
@@ -412,7 +414,11 @@ class FelixIptablesGenerator(FelixPlugin):
             rules = profile.get(rules_key, [])
 
             fragments = [
-                '--append %s --jump MARK --set-mark 1' % chain_name
+                '--append %(chain)s '
+                '--jump MARK --set-mark %(mark)s/%(mark)s' % {
+                    'chain': chain_name,
+                    'mark': self.IPTABLES_MARK_ACCEPT
+                }
             ]
             for r in rules:
                 rule_version = r.get('ip_version')
@@ -428,10 +434,13 @@ class FelixIptablesGenerator(FelixPlugin):
             # If we get to the end of the chain without a match, we remove the
             # mark again to indicate that the packet wasn't matched.
             fragments.append(
-                '--append %s '
+                '--append %(chain)s '
                 '--match comment --comment '
                 '"No match, fall through to next profile" '
-                '--jump MARK --set-mark 0' % chain_name
+                '--jump MARK --set-mark 0/%(mark)s' % {
+                    'chain': chain_name,
+                    'mark': self.IPTABLES_MARK_ACCEPT
+                }
             )
             updates[chain_name] = fragments
 
@@ -491,10 +500,13 @@ class FelixIptablesGenerator(FelixPlugin):
         set containing names of chains that this endpoint chain depends on.
         """
 
-        # Ensure the MARK is set to 0 when we start so that unmatched packets
-        # will be dropped.
+        # Ensure the Accept MARK is set to 0 when we start so that unmatched
+        # packets will be dropped.
         chain = [
-            "--append %s --jump MARK --set-mark 0" % chain_name
+            "--append %(chain)s --jump MARK --set-mark 0/%(mark)s" % {
+                'chain': chain_name,
+                'mark': self.IPTABLES_MARK_ACCEPT
+            }
         ]
         if expected_mac:
             _log.debug("Policing source MAC: %s", expected_mac)
@@ -507,20 +519,26 @@ class FelixIptablesGenerator(FelixPlugin):
         # Jump to each profile in turn.  The profile will do one of the
         # following:
         # * DROP the packet; in which case we won't see it again.
-        # * RETURN the packet with MARK==1, indicating it accepted the packet.
-        #   In which case, we RETURN and skip further profiles.
-        # * RETURN the packet with MARK==0, indicating it did not match the
-        #   packet.  In which case, we carry on and process the next profile.
+        # * RETURN the packet with Accept MARK==1, indicating it accepted the
+        #   packet.  In which case, we RETURN and skip further profiles.
+        # * RETURN the packet with Accept MARK==0, indicating it did not match
+        #   the packet.  In which case, we carry on and process the next
+        #   profile.
         deps = set()
         for profile_id in profile_ids:
             profile_chain = self._profile_to_chain_name(direction, profile_id)
             deps.add(profile_chain)
             chain.append("--append %s --jump %s" % (chain_name, profile_chain))
-            # If the profile accepted the packet, it sets MARK==1.  Immediately
-            # RETURN the packet to signal that it's been accepted.
-            chain.append('--append %s --match mark --mark 1/1 '
-                         '--match comment --comment "Profile accepted packet" '
-                         '--jump RETURN' % chain_name)
+            # If the profile accepted the packet, it sets Accept MARK==1.
+            # Immediately RETURN the packet to signal that it's been accepted.
+            chain.append(
+                '--append %(chain)s --match mark --mark %(mark)s/%(mark)s '
+                '--match comment --comment "Profile accepted packet" '
+                '--jump RETURN' % {
+                    'chain': chain_name,
+                    'mark': self.IPTABLES_MARK_ACCEPT
+                }
+            )
 
         # Default drop rule.
         chain.extend(

@@ -25,10 +25,12 @@ builds a singleton configuration object. That object may (once) be changed by
 etcd configuration being reported back to it.
 """
 import os
+from numbers import Number
 
 import ConfigParser
 import logging
 import socket
+
 import pkg_resources
 
 from calico import common
@@ -119,8 +121,13 @@ class ConfigParameter(object):
                 # the right value if / when it goes wrong.
                 self.value = value
                 try:
-                    self.value = int(value)
-                except ValueError:
+                    # The int(..., 0) form barfs on non-strings so we need to
+                    # check if we've already got a number in-hand.
+                    if isinstance(value, Number):
+                        self.value = int(value)
+                    else:
+                        self.value = int(value, 0)
+                except (ValueError, TypeError):
                     raise ConfigException("Field was not integer",
                                           self)
             elif self.value_is_bool:
@@ -234,6 +241,12 @@ class Config(object):
                            "to a value larger than the expected number of "
                            "IP addresses using a single tag.",
                            2**20, value_is_int=True)
+        self.add_parameter("IptablesMarkMask",
+                           "Mask that Felix selects its IPTables Mark bits "
+                           "from.  Should be a 32 bit hexadecimal number with "
+                           "at least 8 bits set, none of which clash with any "
+                           "other mark bits in use on the system.",
+                           0xff000000, value_is_int=True)
 
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
@@ -325,8 +338,19 @@ class Config(object):
         self.MAX_IPSET_SIZE = self.parameters["MaxIpsetSize"].value
         self.IPTABLES_GENERATOR_PLUGIN = \
             self.parameters["IptablesGeneratorPlugin"].value
+        self.IPTABLES_MARK_MASK =\
+            self.parameters["IptablesMarkMask"].value
 
         self._validate_cfg(final=final)
+
+        # Now the config has been validated, generate the IPTables mark masks
+        # we'll actually use internally.
+        mark_mask = self.IPTABLES_MARK_MASK
+
+        # Extract the least significant bit and use it as the accept mask.
+        next_mask = mark_mask & (mark_mask - 1)
+        self.IPTABLES_MARK_ACCEPT = "0x%x" % (mark_mask - next_mask)
+        mark_mask = next_mask
 
         for plugin in self.plugins.itervalues():
             # Plugins don't get loaded and registered until we've read config
@@ -553,6 +577,16 @@ class Config(object):
         if self.MAX_IPSET_SIZE <= 0:
             log.warning("Max ipset size is non-positive, defaulting to 2^20.")
             self.MAX_IPSET_SIZE = 2**20
+
+        if self.IPTABLES_MARK_MASK <= 0:
+            log.warning("Iptables mark mask contains insufficient bits, "
+                        "defaulting to 0xff000000")
+            self.IPTABLES_MARK_MASK = 0xff000000
+
+        if self.IPTABLES_MARK_MASK > 0xffffffff:
+            log.warning("Iptables mark mask out of range, "
+                        "defaulting to 0xff000000")
+            self.IPTABLES_MARK_MASK = 0xff000000
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

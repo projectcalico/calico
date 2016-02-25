@@ -27,12 +27,12 @@ from calico.felix.test.base import BaseTestCase, load_config
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_MARK = '--append %s --jump MARK --set-mark 1'
+DEFAULT_MARK = '--append %s --jump MARK --set-mark 0x1000000/0x1000000'
 
 DEFAULT_UNMARK = (
     '--append %s '
     '--match comment --comment "No match, fall through to next profile" '
-    '--jump MARK --set-mark 0'
+    '--jump MARK --set-mark 0/0x1000000'
 )
 
 INPUT_CHAINS = {
@@ -193,7 +193,7 @@ RULES_TESTS = [
 
 FROM_ENDPOINT_CHAIN = [
     # Always start with a 0 MARK.
-    '--append felix-from-abcd --jump MARK --set-mark 0',
+    '--append felix-from-abcd --jump MARK --set-mark 0/0x1000000',
     # From chain polices the MAC address.
     '--append felix-from-abcd --match mac ! --mac-source aa:22:33:44:55:66 '
                '--jump DROP -m comment --comment '
@@ -202,15 +202,15 @@ FROM_ENDPOINT_CHAIN = [
     # Jump to the first profile.
     '--append felix-from-abcd --jump felix-p-prof-1-o',
     # Short-circuit: return if the first profile matched.
-    '--append felix-from-abcd --match mark --mark 1/1 --match comment '
-               '--comment "Profile accepted packet" '
+    '--append felix-from-abcd --match mark --mark 0x1000000/0x1000000 '
+               '--match comment --comment "Profile accepted packet" '
                '--jump RETURN',
 
     # Jump to second profile.
     '--append felix-from-abcd --jump felix-p-prof-2-o',
     # Return if the second profile matched.
-    '--append felix-from-abcd --match mark --mark 1/1 --match comment '
-               '--comment "Profile accepted packet" '
+    '--append felix-from-abcd --match mark --mark 0x1000000/0x1000000 '
+               '--match comment --comment "Profile accepted packet" '
                '--jump RETURN',
 
     # Drop the packet if nothing matched.
@@ -220,18 +220,18 @@ FROM_ENDPOINT_CHAIN = [
 
 TO_ENDPOINT_CHAIN = [
     # Always start with a 0 MARK.
-    '--append felix-to-abcd --jump MARK --set-mark 0',
+    '--append felix-to-abcd --jump MARK --set-mark 0/0x1000000',
 
     # Jump to first profile and return iff it matched.
     '--append felix-to-abcd --jump felix-p-prof-1-i',
-    '--append felix-to-abcd --match mark --mark 1/1 --match comment '
-             '--comment "Profile accepted packet" '
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+             '--match comment --comment "Profile accepted packet" '
              '--jump RETURN',
 
     # Jump to second profile and return iff it matched.
     '--append felix-to-abcd --jump felix-p-prof-2-i',
-    '--append felix-to-abcd --match mark --mark 1/1 --match comment '
-             '--comment "Profile accepted packet" '
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+             '--match comment --comment "Profile accepted packet" '
              '--jump RETURN',
 
     # Drop anything that doesn't match.

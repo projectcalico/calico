@@ -138,6 +138,10 @@ The full list of parameters which can be set is as follows.
 | MaxIpsetSize                | 1048576                        | Maximum size for the ipsets used by Felix to implement tags.  Should be set to a number   |
 |                             |                                | that is greater than the maximum number of IP addresses that are ever expected in a tag.  |
 +-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| IptablesMarkMask            | 0xff000000                     | Mask that Felix selects its IPTables Mark bits from.  Should be a 32 bit hexadecimal      |
+|                             |                                | number with at least 8 bits set, none of which clash with any other mark bits in use on   |
+|                             |                                | the system.                                                                               |
++-----------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 
 
 Environment variables

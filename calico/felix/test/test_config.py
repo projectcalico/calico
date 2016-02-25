@@ -89,6 +89,8 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.METADATA_IP, "1.2.3.4")
             self.assertEqual(config.REPORTING_INTERVAL_SECS, 30)
             self.assertEqual(config.REPORTING_TTL_SECS, 90)
+            self.assertEqual(config.IPTABLES_MARK_MASK, 0xff000000)
+            self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x1000000")
 
     def test_bad_plugin_name(self):
         env_dict = {"FELIX_IPTABLESGENERATORPLUGIN": "unknown"}
@@ -398,6 +400,54 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.REPORTING_INTERVAL_SECS, 0)
         self.assertEqual(config.REPORTING_TTL_SECS, 0)
+
+    def test_insufficient_mark_bits(self):
+        """
+        Test that the mark masks are defaulted when there are insufficient
+        bits.
+        """
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IptablesMarkMask": "0" }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.IPTABLES_MARK_MASK, 0xff000000)
+        self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x1000000")
+
+    def test_exact_mark_bits(self):
+        """
+        Test that the IptablesMarkMask works when the minimum number of bits is
+        provided.
+        """
+        # This test is intended to catch if _validate_cfg() isn't updated when
+        # new mark bits are added.
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IptablesMarkMask": "4" }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.IPTABLES_MARK_MASK, 0x00000004)
+        self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x4")
+
+    def test_too_many_mark_bits(self):
+        """
+        Test that the mark masks are defaulted when the option is out of range.
+        """
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IptablesMarkMask": "9876543210" }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.IPTABLES_MARK_MASK, 0xff000000)
+        self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x1000000")
+
+    def test_hex_mark(self):
+        """
+        Test that the IptablesMarkMask accepts hexadecimal values.
+        """
+        cfg_dict = { "InterfacePrefix": "blah",
+                     "IptablesMarkMask": "0x60" }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.IPTABLES_MARK_MASK, 0x00000060)
+        self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x20")
 
     def test_default_ttl(self):
         """
