@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.3.0
-Release:        0.6.pre%{?dist}
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -145,6 +145,20 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Feb 25 2016 Shaun Crampton <shaun@projectcalico.org> 1.3.0-1
+  - Felix now parses the etcd snapshot in parallel with the event stream;
+    this dramatically increases scale when under load.
+  - Various performance and scale improvements.
+  - Removed support for Python 2.6.  python-etcd no longer supports 2.6
+    as of 0.4.3.
+  - Add IpInIpTunnelAddr configuration parameter to allow the IP address of
+    the IPIP tunnel device to be set.
+  - Add IptablesMarkMask configuration parameter to control which bits are
+    used from the iptables forwarding mark.
+  - Increase default size of ipsets and make configurable via the
+    MaxIpsetSize parameter.
+  - Bug fixes, including fixes to NAT when using IPIP mode.
+
 * Tue Jan 12 2016 Matt Dupre <matt@projectcalico.org> 1.3.0-0.6.pre
   - Pre-release of 1.3.0.
 
