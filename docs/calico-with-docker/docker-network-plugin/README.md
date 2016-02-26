@@ -258,6 +258,9 @@ it is possible to apply advanced policy to the network.
 For more details, read  
 [Accessing Calico policy with Calico as a network plugin](AdvancedPolicy.md).
 
+## Make a container reachable from the Host-Interface (Internet)
+
+You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet](../../ExposePortsToInternet.md)
 
 ## Further reading
 

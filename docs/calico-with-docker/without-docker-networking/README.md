@@ -167,6 +167,9 @@ See the [IPv6 worked example](IPv6.md) for a worked example.
 For details about advanced policy options read the 
 [Advanced Network Policy tutorial](../../AdvancedNetworkPolicy.md).
 
+## Make a container reachable from the Host-Interface (Internet)
+
+You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet](../../ExposePortsToInternet.md)
 
 ## Further reading
 
