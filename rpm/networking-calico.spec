@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.1.0
+Version:        1.1.2
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -159,6 +159,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Feb 29 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.1.2-1
+  - Improve workaround for requests/urllib3 vendoring issue
+
 * Fri Feb 26 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.1.0-1
   - Doc: explain networking-calico, to an OpenStack-savvy audience
   - Doc: add some implementation notes

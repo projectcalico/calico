@@ -1,3 +1,9 @@
+networking-calico (1:1.1.2) trusty; urgency=low
+
+  * Improve workaround for requests/urllib3 vendoring issue
+
+ -- Neil Jerram <Neil.Jerram@metaswitch.com>  Mon, 29 Feb 2016 15:24:18 +0000
+
 networking-calico (1:1.1.0) trusty; urgency=low
 
   * Doc: explain networking-calico, to an OpenStack-savvy audience
