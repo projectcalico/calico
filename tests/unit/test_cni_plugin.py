@@ -18,6 +18,7 @@ import unittest
 from mock import patch, MagicMock, ANY
 from netaddr import IPNetwork
 from nose.tools import assert_equal, assert_false, assert_raises
+from nose_parameterized import parameterized
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Endpoint
 from pycalico.datastore_errors import MultipleEndpointsMatch
@@ -345,6 +346,25 @@ class CniPluginTest(unittest.TestCase):
         # Mock _call_ipam_plugin.
         rc = 0
         ipam_result = json.dumps({})
+        self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
+        self.plugin._call_ipam_plugin.return_value = rc, ipam_result
+        env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
+
+        # Call _assign_ips.
+        with assert_raises(SystemExit) as err:
+            self.plugin._assign_ips(env)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    @parameterized.expand(["ip4", "ip6"])
+    def test_assign_ip_invalid_ip(self, ip_type):
+        """
+        Tests handling of invalid IP addresses returned by
+        the IPAM plugin.
+        """
+        # Mock _call_ipam_plugin.
+        rc = 0
+        ipam_result = json.dumps({ip_type: {"ip": "somebadip"}})
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
         self.plugin._call_ipam_plugin.return_value = rc, ipam_result
         env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
