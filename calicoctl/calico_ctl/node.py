@@ -24,20 +24,16 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_KEY_FILE_ENV, ETCD_CERT_FILE_ENV,
                                 ETCD_CA_CERT_FILE_ENV, ETCD_SCHEME_ENV,
                                 ETCD_SCHEME_DEFAULT)
-from pycalico.datastore_datatypes import BGPPeer
-from pycalico.datastore_datatypes import IPPool
+from pycalico.datastore_datatypes import BGPPeer, IPPool
 from pycalico.netns import remove_veth
 from pycalico.util import get_host_ips
 from subprocess32 import call
 
 from checksystem import check_system
-from connectors import client
-from connectors import docker_client
-from utils import REQUIRED_MODULES, running_in_container
-from utils import get_container_ipv_from_arguments
-from utils import hostname
-from utils import print_paragraph
-from utils import validate_ip, validate_asn, convert_asn_to_asplain
+from connectors import client, docker_client
+from utils import (REQUIRED_MODULES, running_in_container, enforce_root,
+                   get_container_ipv_from_arguments, hostname, print_paragraph,
+                   validate_ip, validate_asn, convert_asn_to_asplain)
 
 __doc__ = """
 Usage:
@@ -221,6 +217,9 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     use.  None, if not using libnetwork.
     :return:  None.
     """
+    # The command has to be run as root to access iptables and services
+    enforce_root()
+
     # Normally, Felix will load the modules it needs, but when running inside a
     # container it might not be able to do so. Ensure the required modules are
     # loaded each time the node starts.
@@ -574,6 +573,9 @@ def node_stop(force):
     Stop the Calico node.  This stops the containers (calico/node and
     calico/node-libnetwork) that are started by calicoctl node.
     """
+    # The command has to be run as root to stop the calico-node service
+    enforce_root()
+
     endpoints = len(client.get_endpoints(hostname=hostname))
     if endpoints:
         if not force:
