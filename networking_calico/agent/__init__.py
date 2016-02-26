@@ -1,4 +1,4 @@
-# Copyright 2015 Metaswitch Networks
+# Copyright 2015-2016 Metaswitch Networks
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -14,8 +14,24 @@
 #    under the License.
 
 # Workaround for https://github.com/kennethreitz/requests/issues/2870
-import sys
+
+# Some distributions 'unvendor' requests' bundled version of urllib3, leaving a
+# stub in requests.packages which monkey-patches requests.packages.urllib3
+# with the system-wide version.  Due to a bug in the implementation, this
+# causes sys["urllib3"].exceptions to point to
+# sys["requests.packages.urllib3.exceptions"] instead of
+# sys["urllib3.exceptions"].  In turn, this causes python-etcd to fail to catch
+# certain exceptions.
+#
+# Here we correct that bug.
+
+# Force clobber to happen now so it doesn't happen after this.
+import requests   # noqa
+
 import urllib3
 import urllib3.exceptions as u3e
-sys.modules["requests.packages.urllib3"] = urllib3
-sys.modules["requests.packages.urllib3.exceptions"] = u3e
+
+# This is what python-etcd actually cares about.
+if urllib3.exceptions is not u3e:
+    # So just fix it.
+    urllib3.exceptions = u3e
