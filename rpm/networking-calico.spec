@@ -3,8 +3,8 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.0.1
-Release:        0.7.pre7%{?dist}
+Version:        1.1.0
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
 Source0:        networking-calico-%{version}.tar.gz
@@ -159,6 +159,30 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Feb 26 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.1.0-1
+  - Doc: explain networking-calico, to an OpenStack-savvy audience
+  - Doc: add some implementation notes
+  - Move Calico's mechanism driver to networking-calico
+  - devstack/bootstrap.sh: Don't set SERVICE_HOST
+  - Various leader election improvements:
+  - Remove 'sqlalchemy' from requirements.txt
+  - Handle EtcdKeyNotFound in addition to EtcdCompareFailed.
+  - Reduce election refresh interval, handle EtcdEventIndexCleared.
+  - Fix deadlock in status reporting.
+  - Adjust tox and testr config to print coverage.
+  - Add TLS support to the Neutron driver's etcd connection.
+  - Skip all ports in DHCP agents on different hosts
+  - Use standard logging in test code, instead of print
+  - Decouple status reporting from etcd polling.
+  - Prevent concurrent initialisation of the mechanism driver.
+  - Update pbr requirement to match global-requirements
+  - New DHCP agent driven by etcd data instead of by Neutron RPC
+  - Pass a string to delete_onlink_route instead of an IPNetwork
+  - Fix handling of endpoint directory deletion
+  - Update test-requirements.txt to fix CI.
+  - Add service framework around Calico DHCP agent
+  - Don't automatically install and use Calico DHCP agent
+
 * Tue Feb 02 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.0.1-0.7.pre7
   - Add service framework around Calico DHCP agent
 
