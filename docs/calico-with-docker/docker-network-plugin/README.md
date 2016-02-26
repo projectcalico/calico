@@ -103,10 +103,20 @@ When running in a cloud environment we need to also set `ipip` and
 
 #### The default IPAM driver.
 
-Using the default IPAM driver will allow containers on the network to use
-Docker's port mapping feature.  However, in some circumstances packets
-routed between containers on different networks on the same host may not go 
-via the host vRouter and therefore not have Calico policy applied.
+When a network uses the Docker default IPAM driver, a new container on the
+network is allocated an IP address from the network's CIDR. The Calico plugin
+assigns this IP address to the Calico interface on the container. In addition to
+this, the container connects to the host's Docker gateway bridge over a separate
+interface on the container. All non-network traffic (i.e. destinations outside
+the CIDR) is routed via the Docker gateway bridge and may not be subjected to the
+Calico policy.
+
+Since the container is connected to the Docker gateway bridge, it can utilize
+Docker's port mapping feature.  However, it is important to note that using
+Docker's port-mapping feature is not secured by Calico policy since the packets
+are routed via the Docker bridge, rather than through the Calico interfaces.
+(For more information on port-forwarding with Calico, check out the [Expose
+Ports to Internet guide](../../ExposePortsToInternet.md).)
 
 When running in a cloud environment we need to also set `ipip` and 
 `nat-outgoing` options. If using the default IPAM driver, `ipip` and 
@@ -118,7 +128,7 @@ So, with the IPAM driver selected, we can start creating some networks.
 
 We specify the Calico networking driver (`calico`) when creating the network,
 and optionally specify the Calico IPAM driver (`calico`) if you chose to use
-Calico IPAM.  
+Calico IPAM.
 
 For this worked example, we explicitly choose an CIDR for each network 
 rather than using default selections - this is to avoid potential conflicts
@@ -281,8 +291,9 @@ For more details, read
 [Accessing Calico policy with Calico as a network plugin](AdvancedPolicy.md).
 
 ## Make a container reachable from the Host-Interface (Internet)
-
-You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet](../../ExposePortsToInternet.md)
+If you're interested in using port-forwarding, we have a working example on how
+to [expose a container port to the internet](../../ExposePortsToInternet.md)
+when using Calico.
 
 ## Further reading
 

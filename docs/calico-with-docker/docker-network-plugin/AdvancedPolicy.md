@@ -24,7 +24,7 @@ feature-rich policy associated with a network.
 
 > Note that if you want to access the feature rich Calico policy, you must use
 > both the Calico Network _and_ Calico IPAM drivers together.  Using the Calico
-> IPAM driver  ensures _all_ traffic from the container is routed via the host
+> IPAM driver ensures _all_ traffic from the container is routed via the host
 > vRouter and is subject to Calico policy. Using the default IPAM driver 
 > instructs the Calico network driver to route non-network traffic (i.e.
 > destinations outside the network CIDR) via the Docker gateway bridge, and in
