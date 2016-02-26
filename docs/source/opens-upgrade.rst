@@ -87,27 +87,17 @@ instead.)
 Ubuntu 14.04
 ^^^^^^^^^^^^
 
-First, upgrade packaged components::
+First, use ``apt-get`` to install the updated packages.  On each compute host
+upgrade the Calico packages, as follows::
 
     apt-get update
-    apt-get dist-upgrade
+    apt-get install calico-compute calico-felix calico-common python-etcd \
+                    networking-calico
 
-We recommend upgrading the whole distribution as shown here.  In case you
-prefer to upgrade particular packages only, those needed for a Calico compute
-node are the following.
-
-::
-
-    calico-common
-    calico-compute
-    calico-dhcp-agent
-    calico-felix
-    dnsmasq-base
-    networking-calico
-    neutron-dhcp-agent
-    nova-api-metadata
-    nova-compute
-    python-etcd
+.. warning:: Running ``apt-get upgrade`` is not sufficient to upgrade Calico
+             due to new dependent packages added in version 1.3.  If you want
+             to upgrade Calico as part of a system-wide update, you must use
+             ``apt-get dist-upgrade``.
 
 Then, restart Felix to ensure that it picks up any changes::
 
@@ -119,12 +109,23 @@ process when the binary has been updated since it started running::
 
     pkill dnsmasq
 
-Then if you are using OpenStack Liberty or later::
+For OpenStack Liberty or later, install the new Calico DHCP agent and disable
+the Neutron-provided one.  The Calico DHCP agent is backed by etcd, allowing
+it to scale to higher numbers of hosts::
 
     service neutron-dhcp-agent stop
-    service calico-dhcp-agent restart
+    echo manual > /etc/init/neutron-dhcp-agent.override
+    apt-get install calico-dhcp-agent
 
-Or if you are using an earlier OpenStack release::
+Check that only the Calico DHCP agent is now running::
+
+    # status calico-dhcp-agent
+    calico-dhcp-agent start/running, process <PID>
+    # status neutron-dhcp-agent
+    neutron-dhcp-agent stop/waiting
+
+Or if you are using an earlier OpenStack release, restart the Neutron-provided
+DHCP agent::
 
     service neutron-dhcp-agent restart
 
@@ -164,14 +165,28 @@ the binary has been updated since it started running::
 
     pkill dnsmasq
 
-Then if you are using OpenStack Liberty or later::
+For OpenStack Liberty or later, install the new Calico DHCP agent and disable
+the Neutron-provided one.  The Calico DHCP agent is backed by etcd, allowing
+it to scale to higher numbers of hosts::
 
-    service neutron-dhcp-agent stop
-    service calico-dhcp-agent restart
+    systemctl stop neutron-dhcp-agent
+    systemctl disable neutron-dhcp-agent
+    yum install calico-dhcp-agent
+
+Check that (only) the Calico DHCP agent is started::
+
+    # systemctl status calico-dhcp-agent
+    ...
+    Active: active (running)
+    ...
+    # systemctl status neutron-dhcp-agent
+    ...
+    Active: inactive
+    ...
 
 Or if you are using an earlier OpenStack release::
 
-    service neutron-dhcp-agent restart
+    systemctl restart neutron-dhcp-agent
 
 3: Upgrade control software
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -182,22 +197,16 @@ neutron-server), run the following upgrade steps.
 Ubuntu 14.04
 ^^^^^^^^^^^^
 
-First, update packaged components::
+First, use ``apt-get`` to install the updated packages.  On each control host
+you can upgrade only the Calico packages, as follows::
 
     apt-get update
-    apt-get dist-upgrade
+    apt-get install calico-control calico-common python-etcd networking-calico
 
-We recommend upgrading the whole distribution as shown here.  In case you
-prefer to upgrade particular packages only, those needed for a Calico control
-node are the following.
-
-::
-
-    calico-common
-    calico-control
-    networking-calico
-    neutron-server
-    python-etcd
+.. warning:: Running ``apt-get upgrade`` is not sufficient to upgrade Calico
+             due to new dependent packages added in version 1.3.  If you want
+             to upgrade Calico as part of a system-wide update, you must use
+             ``apt-get dist-upgrade``.
 
 Then, restart Neutron to ensure that it picks up any changes::
 
@@ -230,4 +239,5 @@ node are the following.
 
 Then, restart Neutron to ensure that it picks up any changes::
 
-    service neutron-server restart
+    systemctl restart neutron-server
+

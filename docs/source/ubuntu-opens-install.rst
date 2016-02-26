@@ -68,9 +68,10 @@ Add the Calico PPA.
 Where ``<release>`` is icehouse, juno, kilo or stable (choose stable for
 Liberty onwards, because we no longer require patches to OpenStack).
 
-If you're not using OpenStack Liberty, edit ``/etc/apt/preferences`` to add the
-following lines, whose effect is to prefer Calico-provided packages for Nova
-and Neutron even if later versions of those packages are released by Ubuntu.
+If you're using a version of OpenStack prior to Liberty, edit
+``/etc/apt/preferences`` to add the following lines, whose effect is to prefer
+Calico-provided packages for Nova and Neutron even if later versions of those
+packages are released by Ubuntu.
 
 ::
 
@@ -351,13 +352,15 @@ perform the following steps:
 
        sudo service neutron-dhcp-agent restart
 
-   For OpenStack Liberty or later, stop the Neutron DHCP agent, as Calico will
-   install and use its own DHCP agent (as part of the following
-   ``calico-compute`` step):
+   For OpenStack Liberty and later, install the Calico DHCP agent (which
+   uses etcd, allowing it to scale to higher numbers of hosts) and disable
+   the Neutron-provided one:
 
    ::
 
        sudo service neutron-dhcp-agent stop
+       echo manual | sudo tee /etc/init/neutron-dhcp-agent.override
+       sudo apt-get install calico-dhcp-agent
 
 7. Install the ``calico-compute`` package:
 

@@ -433,14 +433,15 @@ On each compute node, perform the following steps:
        service neutron-dhcp-agent restart
        chkconfig neutron-dhcp-agent on
 
-   For OpenStack Liberty or later, stop and disable the Neutron DHCP agent, as
-   Calico will install and use its own DHCP agent (as part of the
-   ``calico-compute`` step below):
+   For OpenStack Liberty or later, stop and disable the Neutron DHCP agent,
+   and install the Calico DHCP agent (which uses etcd, allowing it to scale
+   to higher numbers of hosts):
 
    ::
 
        service neutron-dhcp-agent stop
        chkconfig neutron-dhcp-agent off
+       yum install calico-dhcp-agent
 
 7.  Stop and disable any other routing/bridging agents such as the L3
     routing agent or the Linux bridging agent.  These conflict with Calico.
