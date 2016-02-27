@@ -64,15 +64,19 @@ Examples:
   $ calicoctl profile only-local-pings rule add inbound deny icmp
   $ calicoctl profile only-local-pings rule add inbound --at=0 allow from 192.168.0.0/16
 """
+import copy
 import sys
 import re
 
+import docker
+import docker.errors
 from prettytable import PrettyTable
 from pycalico.datastore import Rule
 from pycalico.datastore import Rules
 
-from connectors import client
-from utils import print_paragraph
+from connectors import client, DOCKER_URL
+from utils import print_paragraph, DOCKER_LIBNETWORK_VERSION
+from pycalico.datastore_datatypes import Profile
 from pycalico.util import (validate_characters, validate_ports,
                            validate_icmp_type)
 from utils import validate_cidr, validate_cidr_versions
@@ -317,12 +321,12 @@ def profile_show(detailed):
 def profile_tag_show(name):
     """Show the tags on the profile."""
     try:
-        profile = client.get_profile(name)
+        nmp = NetworkMappedProfile(name)
     except KeyError:
         print "Profile %s not found." % name
         sys.exit(1)
 
-    for tag in profile.tags:
+    for tag in nmp.profile.tags:
         print tag
 
 
@@ -334,13 +338,13 @@ def profile_tag_add(name, tag):
     :return: None
     """
     try:
-        profile = client.get_profile(name)
+        nmp = NetworkMappedProfile(name)
     except KeyError:
         print "Profile %s not found." % name
         sys.exit(1)
 
-    profile.tags.add(tag)
-    client.profile_update_tags(profile)
+    nmp.profile.tags.add(tag)
+    nmp.update_tags()
     print "Tag %s added to profile %s" % (tag, name)
 
 
@@ -352,44 +356,44 @@ def profile_tag_remove(name, tag):
     :return: None
     """
     try:
-        profile = client.get_profile(name)
+        nmp = NetworkMappedProfile(name)
     except KeyError:
         print "Profile %s not found." % name
         sys.exit(1)
 
     try:
-        profile.tags.remove(tag)
+        nmp.profile.tags.remove(tag)
     except KeyError:
         print "Tag %s is not on profile %s" % (tag, name)
         sys.exit(1)
-    client.profile_update_tags(profile)
+    nmp.update_tags()
     print "Tag %s removed from profile %s" % (tag, name)
 
 
 def profile_rule_show(name, human_readable=False):
     """Show the rules on the profile."""
     try:
-        profile = client.get_profile(name)
+        nmp = NetworkMappedProfile(name)
     except KeyError:
         print "Profile %s not found." % name
         sys.exit(1)
 
     if human_readable:
         print "Inbound rules:"
-        for i, rule in enumerate(profile.rules.inbound_rules, start=1):
+        for i, rule in enumerate(nmp.profile.rules.inbound_rules, start=1):
             print " %3d %s" % (i, rule.pprint())
         print "Outbound rules:"
-        for i, rule in enumerate(profile.rules.outbound_rules, start=1):
+        for i, rule in enumerate(nmp.profile.rules.outbound_rules, start=1):
             print " %3d %s" % (i, rule.pprint())
     else:
-        print profile.rules.to_json(indent=2)
+        print nmp.profile.rules.to_json(indent=2)
         print ""
 
 
 def profile_rule_update(name):
     """Update the rules on the profile"""
     try:
-        profile = client.get_profile(name)
+        nmp = NetworkMappedProfile(name)
     except KeyError:
         print "Profile %s not found." % name
         sys.exit(1)
@@ -402,8 +406,8 @@ def profile_rule_update(name):
               (rules.id, name)
         sys.exit(1)
 
-    profile.rules = rules
-    client.profile_update_rules(profile)
+    nmp.profile.rules = rules
+    nmp.update_rules()
     print "Successfully updated rules on profile %s" % name
 
 
@@ -444,15 +448,15 @@ def profile_rule_add_remove(
 
     # Get the profile.
     try:
-        profile = client.get_profile(name)
+        nmp = NetworkMappedProfile(name)
     except KeyError:
         print "Profile %s not found." % name
         sys.exit(1)
 
     if direction == "inbound":
-        rules = profile.rules.inbound_rules
+        rules = nmp.profile.rules.inbound_rules
     else:
-        rules = profile.rules.outbound_rules
+        rules = nmp.profile.rules.outbound_rules
 
     if operation == "add":
         if position is None:
@@ -480,7 +484,7 @@ def profile_rule_add_remove(
             except ValueError:
                 print "Rule not found."
                 sys.exit(1)
-    client.profile_update_rules(profile)
+    nmp.update_rules()
 
 
 def parse_ports(ports_str):
@@ -529,3 +533,268 @@ def parse_ports(ports_str):
                 sys.exit(1)
             parsed_ports.append(port)
     return parsed_ports
+
+
+class NoDockerNetwork(BaseException):
+    """
+    Exception indicating that a docker network does not exist.
+    """
+    def __init__(self, name):
+        self.name = name
+
+
+class NetworkMappedProfile(object):
+    """
+    Class encapsulating a profile and the mappings between the Docker
+    libnetwork naming and the profile naming.  Use this class for loading and
+    updating all existing profiles - it detects whether the profile is a
+    Docker network based profile and performs all necessary mappings.
+
+    For new profiles created using calicoctl it is not necessary to perform
+    any mappings since these profiles are not related to Docker networks.
+    """
+
+    def __init__(self, name):
+        self._id_by_name = {}
+        """
+        Docker network IDs keyed off the Docker network names.
+        """
+
+        self._name_by_id = {}
+        """
+        Docker network names keyed off the Docker network IDs.
+        """
+
+        self.docker_client = None
+        """
+        Docker client of version 1.21 to allow us inspect networks.  We
+        initialise this only if we are attempting to do a Docker network
+        inspection to convert between network names and IDs (i.e. between the
+        "nice" Docker network name and the ID that is used to name the profile.
+        """
+
+        self.profile = self._load_profile(name)
+        """
+        The mapped profile. The caller should make modifications to this
+        profile, and update the datastore by calling either the update_tags()
+        or update_rules() methods on this class.
+        """
+
+    def _load_profile(self, name):
+        """
+        Load the profile from the datastore.
+
+        If the profile exists under the supplied name, return the profile as
+        is.
+
+        If the profile does not exist under the supplied name, perform a docker
+        network inspect to determine if this is a network name and to look up
+        the network ID.  Look up the profile based on the network ID, and map
+        the profile name and the tags to the appropriate network name.  This
+        assumes the tags and profiles names are the same (which by default they
+        are).
+
+        :param name:  The profile or network name.
+        :return: The loaded and (if required) translated profile.
+        """
+        try:
+            # Load and store the profile.
+            profile = client.get_profile(name)
+        except KeyError as e:
+            # Profile is not found, check to see if it configured as a Docker
+            # network, and if so use the network ID to locate the profile.  The
+            # The profile will need converting to use network names rather than
+            # profile names and tags.
+            try:
+                network_id = self._get_id_from_name(name)
+            except NoDockerNetwork:
+                raise e
+            else:
+                # Found the network, get the profile and translate from IDs
+                # to names.
+                profile = client.get_profile(network_id)
+                profile = self._translate_profile(profile, self._get_name_from_id)
+
+        return profile
+
+    def update_tags(self):
+        """
+        Update the tags in the profile.
+        :return: None.
+        """
+        client.profile_update_tags(self._translate_profile_for_datastore())
+
+    def update_rules(self):
+        """
+        Update the tags in the profile.
+        :return:
+        """
+        client.profile_update_rules(self._translate_profile_for_datastore())
+
+    def is_docker_network_profile(self):
+        """
+        Whether the profile stored in this class represents a Docker network
+        profile or not.
+        :return:  True if this is a Docker network profile.  False otherwise.
+        """
+        # If we have a name to ID mapping then this is a Docker network
+        # profile.
+        return bool(self._id_by_name)
+
+    def _translate_profile_for_datastore(self):
+        """
+        Translate the profile for updating in the datastore.  This also checks
+        the updated tags reference real Docker networks when the profile is
+        for a Docker network.
+
+        :return: The translated profile.
+        """
+        # If this is not a Docker network profile then just return the profile
+        # unchanged.
+        if not self.is_docker_network_profile():
+            return self.profile
+
+        # This is a Docker network profile, so translate from names to IDs.
+        try:
+            profile = self._translate_profile(self.profile,
+                                              self._get_id_from_name)
+        except NoDockerNetwork as e:
+            # A tag in the profile does not reference a valid Docker network.
+            print_paragraph("You are referencing a Docker network (%s) that "
+                            "does not exist.  Create the network first and "
+                            "then update this profile rule to reference "
+                            "it." % e.name)
+            sys.exit(1)
+        else:
+            return profile
+
+    def _translate_profile(self, profile, mapping_fn):
+        """
+        Translate the profile by converting between Docker network names and
+        IDs in the profile name and tags.  The direction of transalation
+        depends on the mapping function provided.
+
+        This should only be called for Docker network profiles.
+        :return: The translated profile.
+        """
+        # Create a new profile mapping the name of the one supplied.
+        translated_profile = Profile(mapping_fn(profile.name))
+
+        # Add the translated tags.
+        for tag in profile.tags:
+            translated_profile.tags.add(mapping_fn(tag))
+
+        # Add the updated rules.
+        for rule in profile.rules.inbound_rules:
+            rule = copy.copy(rule)
+            if "src_tag" in rule:
+                rule["src_tag"] = mapping_fn(rule["src_tag"])
+            if "dst_tag" in rule:
+                rule["dst_tag"] = mapping_fn(rule["dst_tag"])
+            translated_profile.rules.inbound_rules.append(rule)
+        for rule in profile.rules.outbound_rules:
+            rule = copy.copy(rule)
+            if "src_tag" in rule:
+                rule["src_tag"] = mapping_fn(rule["src_tag"])
+            if "dst_tag" in rule:
+                rule["dst_tag"] = mapping_fn(rule["dst_tag"])
+            translated_profile.rules.outbound_rules.append(rule)
+
+        return translated_profile
+
+    def _get_name_from_id(self, network_id):
+        """
+        Get the Docker network name from the network ID.  If the network does
+        not exist we just use the network ID - this allows broken profiles to
+        be viewed and modified.
+
+        :param network_id: The network ID.
+        :return: The Docker network name if it exists, otherwise return the
+                 network ID.
+        """
+        # Police against empty ids.
+        if not network_id:
+            return network_id
+
+        # Check if we have already looked up the network based on the tag.
+        name = self._name_by_id.get(network_id)
+        if name:
+            return name
+
+        # The tag to network mapping is not found.  use the tag to perform a
+        # Docker network inspect, and check again.
+        self._network_inspect(network_id)
+        name = self._name_by_id.get(network_id)
+        if name:
+            return name
+
+        # The mapping is still not found, so we can't map the ID (used as a
+        # profile tag) to a Docker network name.  In that case just return the
+        # ID unchanged.  We also store the mapping so that when pushing changes
+        # back down again we can ignore rules with these invalid tags - this is
+        # necessary when there are multiple broken rules and you can only
+        # delete one at a time.
+        self._name_by_id[network_id] = network_id
+        self._id_by_name[network_id] = network_id
+        return network_id
+
+    def _get_id_from_name(self, name):
+        """
+        Get the profile tag name from the Docker network name.  If the name
+        cannot be mapped to a Docker Network then raise a NoDockerNetwork
+        exception.
+
+        :param name: The Docker network name.
+        :return: The profile tag name.  If the Docker network name is not
+          recognised then raise a NoDockerNetwork exception.
+        """
+        # Police against empty network names
+        if not name:
+            return name
+
+        # Check if we have already looked up the tag based on the network.
+        network_id = self._id_by_name.get(name)
+        if network_id:
+            return network_id
+
+        # The network to tag mapping is not found.  use the net to perform a
+        # Docker network inspect, and check again.
+        self._network_inspect(name)
+        network_id = self._id_by_name.get(name)
+        if network_id:
+            return network_id
+
+        # The network is not found so raise an Exception.
+        raise NoDockerNetwork(name)
+
+    def _network_inspect(self, name):
+        """
+        Perform a Docker network inspect and store the mapping.
+        :param name: The network ID or name.
+        :return: None.
+        """
+        # We need to be using a minimum version of Docker for handling
+        # libnetwork.  Create an appropriate Docker client - if Docker is not
+        # running at an appropriate version then there is nothing more to do
+        # since we can't be running with Calico as a Docker network.
+        #
+        # We only create this client when we need to perform a network
+        # inspection.  It is not possible to update the version of the client
+        # used by other calicoctl commands because we need to support older
+        # versions of Docker.
+        if not self.docker_client:
+            try:
+                self.docker_client = docker.Client(version=DOCKER_LIBNETWORK_VERSION,
+                                                   base_url=DOCKER_URL)
+            except docker.errors.APIError:
+                return
+
+        try:
+            network = self.docker_client.inspect_network(name)
+        except docker.errors.APIError:
+            pass
+        else:
+            network_id = network['Id']
+            name = network['Name']
+            self._id_by_name[name] = network_id
+            self._name_by_id[network_id] = name

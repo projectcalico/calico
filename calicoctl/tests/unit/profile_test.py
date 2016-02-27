@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import docker
 import unittest
 from mock import patch, Mock, call
 from nose_parameterized import parameterized
@@ -105,8 +106,10 @@ class TestProfile(unittest.TestCase):
             call.write('\n'),
         ])
 
+    @patch('docker.Client', autospec=True)
     @patch('calico_ctl.profile.client.get_profile', autospec=True)
-    def test_profile_rule_show_error_get_profile(self, m_client_get_profile):
+    def test_profile_rule_show_error_get_profile(self, m_client_get_profile,
+                                                 m_docker_client):
         """
         Test for profile_rule_show function when when the client cannot get the
         specified profile
@@ -114,6 +117,9 @@ class TestProfile(unittest.TestCase):
         client.get_profile raises a KeyError
         Assert that the system exits
         """
+        # Assume Docker version does not allow libnetwork.
+        m_docker_client.inspect_network.side_effect = docker.errors.APIError
+
         # Set up arguments
         profile_name = 'Profile_1'
 
@@ -152,9 +158,11 @@ class TestProfile(unittest.TestCase):
         m_Rules.from_json.assert_called_once_with('rules')
         m_client.profile_update_rules.assert_called_once_with(m_Profile)
 
+    @patch('docker.Client', autospec=True)
     @patch('calico_ctl.profile.client', autospec=True)
     @patch('sys.stdin', autospec=True)
-    def test_profile_rule_update_error_get_profile(self, m_sys_stdin, m_client):
+    def test_profile_rule_update_error_get_profile(self, m_sys_stdin, m_client,
+                                                   m_docker_client):
         """
         Test for profile_rule_update function when the client cannot get the
         specified profile
@@ -162,6 +170,9 @@ class TestProfile(unittest.TestCase):
         client.get_profile raises a KeyError
         Assert that the system exits
         """
+        # Do not allow network inspection.
+        m_docker_client.inspect_network.side_effect = docker.errors.APIError
+
         # Set up mock objects
         m_client.get_profile.side_effect = KeyError
 
@@ -309,13 +320,17 @@ class TestProfile(unittest.TestCase):
                           operation, name, position, action, direction,
                           protocol='icmp', src_ports=[40,60])
 
+    @patch('docker.Client', autospec=True)
     @patch('calico_ctl.profile.client', autospec=True)
-    def test_profile_rule_add_remove_fail_get_profile(self, m_client):
+    def test_profile_rule_add_remove_fail_get_profile(self, m_client, m_docker_client):
         """
         Test for profile_rule_add_remove when client cannot obtain a profile.
 
         Assert that the system exits.
         """
+        # Network inspect also returns no profile.
+        m_docker_client.inspect_network.side_effect = docker.errors.APIError
+
         # Set up mock objets
         m_client.get_profile.side_effect = KeyError
 

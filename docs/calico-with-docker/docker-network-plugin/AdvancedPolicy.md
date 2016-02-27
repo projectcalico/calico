@@ -8,103 +8,135 @@
 
 # Accessing Calico policy with Calico as a network plugin
 
-Calico networking provides feature-rich policy for controlling access to and
-from an endpoint.  However, Calico as a Docker network plugin has some 
-limitations when using the standard Docker commands for managing networks and
+## Background
+
+With Calico, a Docker network represents a logical set of rules that define the 
+allowed traffic in and out of containers assigned to that network.  The rules
+are encapsulated in a Calico "profile".
+
+When creating a Docker network using the Calico network driver, the Calico 
+driver creates a profile object for that network.  The default policy applied 
+by Calico when a new network is created allows communication between all 
+containers connected to that network, and no communication from other networks.
+
+Using the standard `calicoctl profile` commands it is possible to manage the
+feature-rich policy associated with a network.
+
+> Note that if you want to access the feature rich Calico policy, you must use
+> both the Calico Network _and_ Calico IPAM drivers together.  Using the Calico
+> IPAM driver  ensures _all_ traffic from the container is routed via the host
+> vRouter and is subject to Calico policy. Using the default IPAM driver 
+> instructs the Calico network driver to route non-network traffic (i.e.
+> destinations outside the network CIDR) via the Docker gateway bridge, and in
+> this case may not be subjected to the policy configured on the host vRouter.
+
+> The profile that is created by the Calico network driver is given the same 
+> name as the Docker-generated network ID.  This can be cumbersome to work
+> with, so the `calicoctl` tool that is used to manage the network policy 
+> handles the mapping between network names and IDs.  For the most part,
+> the detail about network IDs can be ignored, but it is mentioned here as a
+> side note for advanced users and developers,
+
+## Multiple networks
+
+Whilst the Docker API supports the ability to attach a container to multiple
+networks, it is not possible to use this feature of Docker when using Calico
+as the networking and IPAM provider.
+
+However, by defining multiple networks and modifying the Calico policy 
+associated with those networks it is possible to achieve the same isolation 
+that you would have if using multiple networks, with the additional bonus of a
+much richer policy set.
+
+For example, suppose with a standard Docker network approach you have two 
+networks A and B, and you have set of containers on network A, some on network
+B, and some on both networks A and B.  When using Calico as a Docker network
+plugin, you would configure networks A and B and then configure a third network
+(lets call it AB) to represent the "A and B" group where the policy would be
+modified to allow ingress traffic from both A and B.  Rather than attaching a
+container to network A and network B, with this model you would attach the 
+container to network AB.
+
+## Managing Calico policy for a network
+
+This section walks through an example of creating a docker network (with
+Calico) and using the `calicoctl` command line interface to modify the policy
+associated with that network.
+
+#### Create a Docker network
+
+To create a Docker network using Calico, run the `docker network create`
+command specifying "calico" as both the network and IPAM driver.
+
+For example, suppose we want to provide network policy for a set of database
+containers.  We can create a network called `databases` with the the following
+command:
+
+```
+docker network create --driver calico --ipam-driver calico databases 
+```
+
+#### View the policy associated with the network
+
+You can use the `calicoctl profile <profile> rule show` to display the
+rules in the profile associated with the `databases` network.
+
+The network name can be supplied as the profile name and the `calicoctl` tool
+will look up the profile associated with that network.
+
+```
+$ calicoctl profile databases rule show
+Inbound rules:
+   1 allow from tag databases
+Outbound rules:
+   1 allow
+```
+
+As you can see, the default rules allow all outbound traffic and accept inbound
+traffic only from containers attached the "databases" network.
+
+> Note that when managing profiles created by the Calico network driver, the
+> tag and network name can be regarded as the same thing.
+
+#### Configuring the network policy
+
+Calico has a rich set of policy rules that can be leveraged.  Rules can be
+created to allow and disallow packets based on a variety of parameters such
+as source and destination CIDR, port and tag.
+
+The `calicoctl profile <profile> rule add` and `calicoctl profile <profile> rule remove`
+commands can be used to add and remove rules in the profile.
+  
+As an example, suppose the databases network represents a group of MySQL
+databases which should allow TCP traffic to port 3306 from "application" 
 containers.
 
-The notable limitations are:
--  When using the Calico IPAM driver, it is not possible to join a container
-   to more than one network
--  There is no built-in mechanism to create a network with complex policy 
-   (currently the default policy is to allow full access between all endpoints
-   connected to that network).
+To achieve that, create a second network called "applications" which the
+application containers will be attached to.  Then, modify the network policy of
+the databases to allow the appropriate inbound traffic from the applications.
 
-Despite these limitations, it is still possible to use the full Calico policy 
-API by accessing the Calico data directly.
+```
+$ docker network create --driver calico --ipam-driver calico applications
+$ calicoctl profile databases rule add inbound allow tcp from tag applications to ports 3306
+```
 
-> Note that you must use both the Calico Network _and_ Calico IPAM drivers
-> together.  Using the Calico IPAM driver  ensures _all_ traffic from the
-> container is routed via the host vRouter and is subject to Calico policy.
-> Using the default IPAM driver routes non-network traffic (i.e. destinations
-> outside the network CIDR) via the Docker gateway bridge, and in this case
-> may not be subjected to the policy configured on the host vRouter.
+The second command adds a new rule to the databases network policy that allows
+inbound TCP traffic from the applications.
 
-Calico policy is wrapped up in a "profile" object.  The default profile created
-as part of the network creation simply contains a rule to allow traffic from
-all endpoints configured to use that profile.
+You can view the updated network policy of the databases to show the newly
+added rule:
 
-The Calico "endpoint" object is created as part of the `docker run`
-command.  Each endpoint object contains a list of profiles, the policy of which
-is applied in the list order.  This can be considered as the equivalent of
-having a container in multiple networks, where each network uses a different
-profile).
+```
+$ calicoctl profile databases rule show
+Inbound rules:
+   1 allow from tag databases
+   2 allow tcp from tag applications to ports 3306
+Outbound rules:
+   1 allow
+```
 
-> As a comparison, when using [Calico without Docker networking](../without-docker-networking/README.md),
-> the use of profiles is more transparent since it is necessary to explicitly
-> create a profile and configure a container endpoint to use it.
-
-Despite the Calico profile and endpoint configuration being "hidden", it is
-still possible to determine the profile and endpoint IDs which will allow you
-to use the [`calicoctl profile`](../../calicoctl/profile.md)
-commands to configure [advanced network policy](../../AdvancedNetworkPolicy.md).
-
-The Calico network driver directly maps the Docker Network "Id" to the Profile
-name, and the Docker "EndpointID" to the Calico Endpoint ID.  You can use 
-`docker network inspect` on a particular host to obtain the network ID and the
-list of containers on that host that are attached to the network.
-
-In the example below we run `docker network inspect testnet1` to inspect the 
-network "testnet1".  This has returned a JSON blob that contains the network ID
-and the Endpoint IDs (in this case there is a single endpoint):
-
-    host1:~$ docker network inspect testnet1
-    [
-        {
-            "Name": "testnet1",
-            "Id": "46007b33d4dd56b13ede0f10bb427ba4481e3c0efe64960b0567dd53a80d3420",
-            "Scope": "global",
-            "Driver": "calico",
-            "IPAM": {
-                "Driver": "calico",
-                "Config": [
-                    {}
-                ]
-            },
-            "Containers": {
-                "6a853ddc289c4754684a93115c43aa73e3d7a4dd565e272cdc3f18ee3c09ba78": {
-                    "EndpointID": "5a21f63bc17feb6b9c879bbbc271594dfa1483ddf9af5171efca7a2d509908e5",
-                    "MacAddress": "ee:ee:ee:ee:ee:ee",
-                    "IPv4Address": "10.0.0.2/24",
-                    "IPv6Address": ""
-                }
-            },
-            "Options": {}
-        }
-    ]
-
-The Docker EndpointID is identical to the Endpoint ID used by Calico and
-therefore can be manipulated using calicoctl.  For example, you can use
-calicoctl to display the list of profiles assigned to this endpoint:
-
-    host1:~$ calicoctl endpoint 5a21f63bc17feb6b9c879bbbc271594dfa1483ddf9af5171efca7a2d509908e5 profile show
-    +------------------------------------------------------------------+
-    |                               Name                               |
-    +------------------------------------------------------------------+
-    | 46007b33d4dd56b13ede0f10bb427ba4481e3c0efe64960b0567dd53a80d3420 |
-    +------------------------------------------------------------------+
-
-You can see that the profile name matches the Network ID returned by the
-`network inspect` command above.
-
-You can use the profile name to manipulate the Calico profile.  For example,
-here we can display the rules that are contained in the profile:
-
-    host1:~$ calicoctl profile 46007b33d4dd56b13ede0f10bb427ba4481e3c0efe64960b0567dd53a80d3420 rule show
-    Inbound rules:
-       1 allow from tag 46007b33d4dd56b13ede0f10bb427ba4481e3c0efe64960b0567dd53a80d3420
-    Outbound rules:
-       1 allow
+For more details on the syntax of the rules, run `calicoctl profile --help` to
+display the valid profile commands.
 
 ## Further reading
 
