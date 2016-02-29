@@ -433,9 +433,20 @@ On each compute node, perform the following steps:
        service neutron-dhcp-agent restart
        chkconfig neutron-dhcp-agent on
 
-   For OpenStack Liberty or later, stop and disable the Neutron DHCP agent,
-   and install the Calico DHCP agent (which uses etcd, allowing it to scale
-   to higher numbers of hosts):
+   For OpenStack Liberty or later, modify ``/etc/neutron/neutron.conf``.
+   In the ``[oslo_concurrency]`` section, ensure that the ``lock_path``
+   variable is uncommented and set as follows:
+
+   ::
+
+       # Directory to use for lock files. For security, the specified directory should
+       # only be writable by the user running the processes that need locking.
+       # Defaults to environment variable OSLO_LOCK_PATH. If external locks are used,
+       # a lock path must be set.
+       lock_path = $state_path/lock
+
+   Then, stop and disable the Neutron DHCP agent, and install the Calico DHCP
+   agent (which uses etcd, allowing it to scale to higher numbers of hosts):
 
    ::
 
