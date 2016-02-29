@@ -9,7 +9,7 @@ from threading import Thread
 import requests
 
 import pycalico
-from pycalico.datastore_datatypes import Rules, Rule, GlobalPolicy
+from pycalico.datastore_datatypes import Rules, Rule
 from pycalico.datastore_errors import (ProfileNotInEndpoint, 
                                        ProfileAlreadyInEndpoint,
                                        MultipleEndpointsMatch)
@@ -28,14 +28,14 @@ DEFAULT_API = "https://kubernetes.default:443"
 # Path to the CA certificate (if it exists).
 CA_CERT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
-# API paths to NetworkPolicy objects.
-NET_POLICY_PATH = "%s/apis/net.alpha.kubernetes.io/v1alpha1/networkpolicys"
-NET_POLICY_WATCH_PATH = "%s/apis/net.alpha.kubernetes.io/v1alpha1/watch/networkpolicys"
-
 # Resource types.
 RESOURCE_TYPE_NETWORK_POLICY = "NetworkPolicy"
 RESOURCE_TYPE_POD = "Pod"
 RESOURCE_TYPE_NAMESPACE = "Namespace"
+
+# API paths to NetworkPolicy objects.
+NET_POLICY_PATH = "%s/apis/net.alpha.kubernetes.io/v1alpha1/networkpolicys"
+NET_POLICY_WATCH_PATH = "%s/apis/net.alpha.kubernetes.io/v1alpha1/watch/networkpolicys"
 
 # Mapping of resource to api URL.
 GET_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/pods",
@@ -48,13 +48,13 @@ WATCH_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/watch/pods",
 # Annotation to look for network-isolation on namespaces.
 NS_POLICY_ANNOTATION = "net.alpha.kubernetes.io/network-isolation"
 
-# Format to use for namespace profiles.
+# Format to use for namespace profile names.
 NS_PROFILE_FMT = "k8s_ns.%s"
 
 # Format to use for labels inherited from a namespace. 
-NS_LABEL_KEY_FMT = "ns/label/%s"
+NS_LABEL_KEY_FMT = "k8s_ns/label/%s"
 
-# Groups to use for created policies.
+# Tier name to use for policies.
 NET_POL_TIER_NAME = "k8s-network-policy"
 
 # Environment variables for getting the Kubernetes API.
@@ -69,6 +69,7 @@ TYPE_ADDED = "ADDED"
 TYPE_MODIFIED = "MODIFIED"
 TYPE_DELETED = "DELETED"
 TYPE_ERROR = "ERROR"
+
 
 class PolicyError(Exception):
     def __init__(self, msg=None, policy=None):
@@ -154,9 +155,14 @@ class PolicyAgent():
             resp = self._api_get(get_url, stream=False)
             _log.info("Response: %s", resp)
 
+            # If we hit an error, raise it.  This will kill the agent,
+            # which will be re-started by Kubernetes.
             if resp.status_code != 200:
                 _log.error("Error querying API: %s", resp.json())
-                return
+                raise Exception("Failed to query resource: %s" % resource_type)
+
+            # Get the list of existing API objects from the response, as 
+            # well as the latest resourceVersion.
             updates = resp.json()["items"]
             metadata = resp.json().get("metadata", {})
             resource_version = metadata.get("resourceVersion")
@@ -253,7 +259,7 @@ class PolicyAgent():
         _log.info("Adding new network policy: %s", key)
         
         # Ensure the tier exists.
-        self._client.create_policy_tier(NET_POL_TIER_NAME, 50)
+        self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, 50)
 
         # Parse this network policy so we can convert it to the appropriate
         # Calico policy.  First, get the selector from the API object.
@@ -268,8 +274,9 @@ class PolicyAgent():
         selectors += ["%s == '%s'" % (K8S_NAMESPACE_LABEL, namespace)]
         selector = " && ".join(selectors)
 
-        # Determine the name for this global policy.
-        name = "net_policy-%s" % policy["metadata"]["name"]
+        # Determine the name for this policy.
+        name = "%s.%s" % (policy["metadata"]["namespace"],
+                          policy["metadata"]["name"])
 
         # Build the Calico rules.
         try:
@@ -287,8 +294,9 @@ class PolicyAgent():
                            outbound_rules=[Rule(action="allow")])
 
         # Create the network policy using the calculated selector and rules.
-        self._client.create_global_policy(NET_POL_TIER_NAME, name, selector, rules)
-        _log.info("Updated global policy '%s' for NetworkPolicy %s", name, key)
+        self._client.create_policy(NET_POL_TIER_NAME, name, 
+                                   selector, order=10, rules=rules)
+        _log.info("Updated policy '%s' for NetworkPolicy %s", name, key)
 
     def _delete_network_policy(self, key, policy):
         """
@@ -297,12 +305,13 @@ class PolicyAgent():
         """
         _log.info("Deleting network policy: %s", key)
 
-        # Determine the name for this global policy.
-        name = "net_policy-%s" % policy["metadata"]["name"]
+        # Determine the name for this policy.
+        name = "%s.%s" % (policy["metadata"]["namespace"],
+                          policy["metadata"]["name"])
 
         # Delete the corresponding Calico policy 
         try:
-            self._client.remove_global_policy(NET_POL_TIER_NAME, name)
+            self._client.remove_policy(NET_POL_TIER_NAME, name)
         except KeyError:
             _log.info("Unable to find policy '%s' - already deleted", key)
 
@@ -324,11 +333,16 @@ class PolicyAgent():
         allow_incomings = policy["spec"].get("ingress") or []
         _log.info("Found %s ingress rules", len(allow_incomings))
         for r in allow_incomings:
+            # If no "from" or "ports" keys are specified, we receive a 
+            # null allow_incoming rule (rather than an empty dict).  Treat
+            # this case as an empty dictionary.
+            r = r or {}
+
             # Determine the destination ports to allow.  If no ports are
             # specified, allow all port / protocol combinations.
             _log.debug("Processing ingress rule: %s", r)
             ports_by_protocol = {}
-            for to_port in r.get("ports", []):
+            for to_port in r.get("ports") or []:
                 # Keep a dict of ports exposed, keyed by protocol.
                 protocol = to_port.get("protocol")
                 port = to_port.get("port")
@@ -353,7 +367,7 @@ class PolicyAgent():
             # Determine the from criteria.  If no "from" block is specified,
             # then we should allow from all sources.
             from_args = []
-            for from_clause in r.get("from", []):
+            for from_clause in r.get("from") or []:
                 # We need to check if the key exists, not just if there is 
                 # a non-null value.  The presence of the key with a null 
                 # value means "select all".
@@ -374,7 +388,7 @@ class PolicyAgent():
                     selectors = ["%s == '%s'" % (k,v) for k,v in pod_selector.iteritems()]
 
                     # We can only select on pods in this namespace.
-                    selectors.append("%s == %s" % (K8S_NAMESPACE_LABEL, 
+                    selectors.append("%s == '%s'" % (K8S_NAMESPACE_LABEL, 
                                                    policy_ns))
                     selector = " && ".join(selectors)
 
@@ -448,21 +462,20 @@ class PolicyAgent():
                       inbound_rules=inbound_rules,
                       outbound_rules=outbound_rules)
 
-        # Create the Calico policy to represent this namespace, or 
-        # update it if it already exists.  Namespace policies select each
-        # pod within that namespace.
-        self._client.create_profile(profile_name, rules)
-
         # Assign labels to the profile.  We modify the keys to use 
         # a special prefix to indicate that these labels are inherited 
         # from the namespace.
         labels = namespace["metadata"].get("labels", {})
-        for k,v in labels.iteritems():
+        for k, v in labels.iteritems():
+            # Add a prefix to each label key to indicate this label
+            # come from a namespace.
             labels[NS_LABEL_KEY_FMT % k] = v
             del labels[k]
         _log.debug("Generated namespace labels: %s", labels)
 
-        # TODO: Actually assign labels to the profile.
+        # Create the Calico profile to represent this namespace, or 
+        # update it if it already exists.  
+        self._client.create_profile(profile_name, rules, labels)
 
         _log.info("Created/updated profile for namespace %s", namespace_name)
 
@@ -474,8 +487,6 @@ class PolicyAgent():
         _log.info("Deleting namespace: %s", key)
 
         # Delete the Calico policy which represnets this namespace.
-        # We need to make sure that there are no pods running 
-        # in this namespace first.
         namespace_name = namespace["metadata"]["name"]
         profile_name = NS_PROFILE_FMT % namespace_name
         try:
@@ -500,7 +511,7 @@ class PolicyAgent():
             _log.debug("Looking for endpoint that matches workload_id=%s",
                        workload_id)
             endpoint = self._client.get_endpoint(
-                orchestrator_id="cni",
+                orchestrator_id="k8s",
                 workload_id=workload_id
             )
         except KeyError:
@@ -532,7 +543,7 @@ class PolicyAgent():
         # Configure this pod with its namespace profile.
         ns_profile = NS_PROFILE_FMT % namespace
         self._client.set_profiles_on_endpoint([ns_profile], 
-                                              orchestrator_id="cni",
+                                              orchestrator_id="k8s",
                                               workload_id=endpoint.workload_id)
 
     def _delete_pod(self, key, pod):
@@ -580,9 +591,9 @@ class PolicyAgent():
 
     def _api_get(self, path, stream, resource_version=None):
         """
-        Watch a stream from the API given a resource.
+        Get or stream from the API, given a resource.
     
-        :param resource: The plural resource you would like to watch.
+        :param resource: The resource you would like to watch.
         :return: A stream of json objs e.g. {"type": "MODIFED"|"ADDED"|"DELETED", "object":{...}}
         :rtype stream
         """

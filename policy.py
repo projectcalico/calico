@@ -12,6 +12,17 @@ command = sys.argv[1]
 KUBE_API = os.environ.get("KUBE_API_ROOT", "http://localhost:8080")
 AUTH_TOKEN = os.environ.get("KUBE_AUTH_TOKEN")
 
+CA_PATH = os.environ.get("CA_PATH", "ca.pem")
+ca_exists = os.path.exists(CA_PATH)
+
+CA_KEY_PATH = os.environ.get("CA_KEY_PATH", "ca_key.pem")
+ca_key_exists = os.path.exists(CA_KEY_PATH)
+
+# For use in requests.
+CERT = (CA_PATH, CA_KEY_PATH)
+req_args = {verify: CA_PATH if cert else False, 
+            cert: CERT if ca_exists else None}
+
 session = requests.Session()
 if AUTH_TOKEN:
     session.headers.update({'Authorization': 'Bearer ' + AUTH_TOKEN})
@@ -25,9 +36,8 @@ if command == "create":
     namespace = input_loaded["metadata"].get("namespace", "default")
     name = input_loaded["metadata"]["name"]
 
-    #print "POST NetworkPolicy: \n%s" % json.dumps(input_loaded, indent=2)
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/namespaces/%s/networkpolicys" % (KUBE_API, namespace)
-    resp = session.post(url, data=json.dumps(input_loaded), verify=False)
+    resp = session.post(url, data=json.dumps(input_loaded), **req_args)
 
     if resp.status_code != 201:
         print "POST to url: %s" % url
@@ -38,7 +48,7 @@ elif command == "delete":
     namespace = sys.argv[2]
     policy = sys.argv[3]
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/namespaces/%s/networkpolicys/%s" % (KUBE_API, namespace, policy)
-    resp = session.delete(url, verify=False)
+    resp = session.delete(url, **req_args)
     if resp.status_code != 200:
         print "DELETE to url: %s" % url
         print resp.text
@@ -46,7 +56,7 @@ elif command == "delete":
         print "Successfully deleted policy %s/%s" % (namespace, policy)
 elif command == "list":
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/networkpolicys" % (KUBE_API)
-    resp = session.get(url, verify=False)
+    resp = session.get(url, **req_args)
     if resp.status_code != 200:
         print resp.text
         sys.exit(1)
@@ -61,7 +71,7 @@ elif command == "get":
     namespace = sys.argv[2]
     policy = sys.argv[3]
     url = "%s/apis/net.alpha.kubernetes.io/v1alpha1/namespaces/%s/networkpolicys/%s" % (KUBE_API, namespace, policy)
-    resp = session.get(url, verify=False)
+    resp = session.get(url, **req_args)
     if resp.status_code != 200:
         print "GET to url: %s" % url
         print resp
