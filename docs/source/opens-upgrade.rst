@@ -165,6 +165,18 @@ the binary has been updated since it started running::
 
     pkill dnsmasq
 
+For OpenStack Liberty or later, modify ``/etc/neutron/neutron.conf``. In the
+``[oslo_concurrency]`` section, ensure that the ``lock_path`` variable is
+uncommented and set as follows:
+
+::
+
+    # Directory to use for lock files. For security, the specified directory should
+    # only be writable by the user running the processes that need locking.
+    # Defaults to environment variable OSLO_LOCK_PATH. If external locks are used,
+    # a lock path must be set.
+    lock_path = $state_path/lock
+
 For OpenStack Liberty or later, install the new Calico DHCP agent and disable
 the Neutron-provided one.  The Calico DHCP agent is backed by etcd, allowing
 it to scale to higher numbers of hosts::
