@@ -19,12 +19,7 @@ There are many ways to try out Calico with OpenStack, because OpenStack is a
 sufficiently complex system that there is a small industry concerned with
 deploying it correctly and successfully.
 
-If you know nothing about OpenStack and just want to try out
-Calico, you should consider the :doc:`opens-chef-install`
-which can be used on Ubuntu 14.04 to set up a Calico OpenStack system.
-
-Otherwise, if you already use OpenStack, you can install Calico via any of the
-following methods:
+You can install Calico via any of the following methods:
 
 - the packaged install for Ubuntu 14.04 - see :doc:`ubuntu-opens-install`
 
@@ -34,6 +29,10 @@ following methods:
 - our integration of Calico with Mirantis Fuel 6.1 - see :doc:`fuel-integration`
 
 - our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`
+
+.. warning:: The :doc:`opens-chef-install`, which we used to recommend,
+             is now very old and it only supports Icehouse. For now, we
+             recommend using one of the above integrations.
 
 In all cases, you just need at least two to three servers to get going (one OpenStack
 controller, one OpenStack compute node and, for Mirantis Fuel, a third node to
