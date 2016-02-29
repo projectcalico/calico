@@ -55,7 +55,7 @@ NS_PROFILE_FMT = "k8s_ns.%s"
 NS_LABEL_KEY_FMT = "ns/label/%s"
 
 # Groups to use for created policies.
-NET_POL_GROUP_NAME = "50-k8s-net-policy"
+NET_POL_TIER_NAME = "k8s-network-policy"
 
 # Environment variables for getting the Kubernetes API.
 K8S_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
@@ -251,6 +251,9 @@ class PolicyAgent():
         creates the corresponding Calico policy configuration.
         """
         _log.info("Adding new network policy: %s", key)
+        
+        # Ensure the tier exists.
+        self._client.create_policy_tier(NET_POL_TIER_NAME, 50)
 
         # Parse this network policy so we can convert it to the appropriate
         # Calico policy.  First, get the selector from the API object.
@@ -284,7 +287,7 @@ class PolicyAgent():
                            outbound_rules=[Rule(action="allow")])
 
         # Create the network policy using the calculated selector and rules.
-        self._client.create_global_policy(NET_POL_GROUP_NAME, name, selector, rules)
+        self._client.create_global_policy(NET_POL_TIER_NAME, name, selector, rules)
         _log.info("Updated global policy '%s' for NetworkPolicy %s", name, key)
 
     def _delete_network_policy(self, key, policy):
@@ -299,7 +302,7 @@ class PolicyAgent():
 
         # Delete the corresponding Calico policy 
         try:
-            self._client.remove_global_policy(NET_POL_GROUP_NAME, name)
+            self._client.remove_global_policy(NET_POL_TIER_NAME, name)
         except KeyError:
             _log.info("Unable to find policy '%s' - already deleted", key)
 
@@ -645,9 +648,11 @@ if __name__ == '__main__':
     _log.addHandler(stdout_hdlr)
 
     # Configure /etc/hosts with Kubernetes API.
+    _log.info("Configuring /etc/hosts")
     configure_etc_hosts()
 
     try:
+        _log.info("Beginning execution")
         PolicyAgent().run()
     except Exception:
         # Log the exception

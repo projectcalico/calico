@@ -31,3 +31,4 @@ clean:
 	-rm -rf dist
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 	-docker rmi caseydavenport/k8s-policy-agent
+	rm -f image.created
