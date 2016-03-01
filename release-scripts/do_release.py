@@ -95,7 +95,7 @@ MASTER_VERSION_REPLACE = [
     (re.compile(r'__felix_version__\s*=\s*".*"'),
      '__felix_version__ = "{calico-version}-dev"'),
 
-    (re.compile(r'https://github\.com/projectcalico/calico\-containers/blob/v*/README\.md'),
+    (re.compile(r'https://github\.com/projectcalico/calico\-containers/blob/v.*/README\.md'),
      'https://github.com/projectcalico/calico-containers/blob/{version}/README.md')
 ]
 
