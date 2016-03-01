@@ -4,12 +4,14 @@ Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
 Version:        1.1.2
-Release:        1%{?dist}
+Release:        2%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
 Source0:        networking-calico-%{version}.tar.gz
 Source45:	calico-dhcp-agent.service
 BuildArch:	noarch
+Group:          Applications/Engineering
+Requires:       python-pbr
 
 
 %description
@@ -159,6 +161,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Mar 01 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.1.2-2
+  - Make networking-calico package depend on python-pbr
+
 * Mon Feb 29 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.1.2-1
   - Improve workaround for requests/urllib3 vendoring issue
 
