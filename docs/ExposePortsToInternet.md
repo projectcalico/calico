@@ -42,5 +42,7 @@ iptables -t nat -A OUTPUT -p tcp -o lo --dport 80 -j DNAT --to-destination 192.1
 
 Now all traffic to your Host-Interface on port 80 will be forwarded to the container IP 192.168.0.1
 
-Also check out the [Advanced Network Policy Guide](docs/AdvancedNetworkPolicy.md)
+Also check out the [Advanced Network Policy Guide](AdvancedNetworkPolicy.md)
 for more information. 
+
+[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/ExposePortsToInternet.md?pixel)](https://github.com/igrigorik/ga-beacon)

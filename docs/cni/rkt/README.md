@@ -146,7 +146,7 @@ We'll use `systemd-run` to create the webserver service.
 
  
  So we can see that we now have a `busybox` container running on the network `net1` with an IP address of `192.168.0.0`
- rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking.md#the-default-restricted-network)
+ rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking/overview.md#the-default-restricted-network)
  
 ## 5. Validate access to webserver
 
