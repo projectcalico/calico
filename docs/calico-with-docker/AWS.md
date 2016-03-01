@@ -158,9 +158,11 @@ A different file is used for the two servers.
 Copy these files onto your machine.
 
 Before running the commands, note the following:
--  The `ami-########` represents the CoreOS stable HVM image type for the `us-west-2` region. 
-If you are using a region other than `us-west-2`, replace the image name with the correct CoreOS stable HVM image 
-from the [CoreOS image list](https://coreos.com/os/docs/latest/booting-on-ec2.html) for your zone. 
+-  The `ami-########` represents the CoreOS alpha HVM image type for the `us-west-2` region
+(version 976.0.0 as of the writing of this document). The alpha version is used because it
+supports Docker 1.10. If you are using a region other than `us-west-2`, replace the
+image name with the correct CoreOS alpha HVM image from the [CoreOS image
+list](https://coreos.com/os/docs/latest/booting-on-ec2.html) for your zone. 
 Use `aws ec2 describe-availability-zones` to display your region if you do not remember.
 -  It may take a couple of minutes for AWS to boot the machines after creating them.
 
@@ -168,7 +170,7 @@ For the first server run:
 
 ```
 aws ec2 run-instances \
-  --image-id ami-99bfada9 \
+  --image-id ami-2b7d914b \
   --instance-type t2.micro \
   --key-name mykey \
   --security-group-ids $SECURITY_GROUP_ID \

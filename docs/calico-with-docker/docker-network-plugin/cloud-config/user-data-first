@@ -27,18 +27,6 @@ coreos:
       Type=oneshot
       ExecStart=/home/core/add_path.sh
       ExecStart=/home/core/get_calicoctl.sh
-  - name: download-latest.service
-    command: start
-    content: |-
-      [Unit]
-      Description=Download and unpack the prereqs
-      Wants=download-reqs.service
-      After=download-reqs.service
-
-      [Service]
-      RemainAfterExit=yes
-      Type=oneshot
-      ExecStart=/home/core/get_latest_docker.sh
   - name: docker.service
     command: restart
     content: |-
@@ -52,7 +40,7 @@ coreos:
       MountFlags=slave
       LimitNOFILE=1048576
       LimitNPROC=1048576
-      ExecStart=/opt/bin/docker --cluster-store=etcd://$private_ipv4:2379 --daemon --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
+      ExecStart=/usr/bin/docker daemon --cluster-store=etcd://$private_ipv4:2379 --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
       RestartSec=10
       Restart=always
 
@@ -68,16 +56,9 @@ write_files:
     # Can't directly write to .profile since it's a symlink to a RO filesystem
     mkdir -p /opt/bin
     rm /home/core/.bashrc
-    echo 'PATH=/opt/bin:$PATH' > /home/core/.bashrc
+    echo 'PATH=$PATH:/opt/bin' > /home/core/.bashrc
     echo 'export ETCD_AUTHORITY="$private_ipv4:2379"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_AUTHORITY"' >>/etc/sudoers.d/etcd
-- path: /home/core/get_latest_docker.sh
-  permissions: 777
-  owner: root
-  content: |
-    #!/usr/bin/bash -e
-    wget -O /opt/bin/docker https://get.docker.com/builds/Linux/x86_64/docker-1.9.0
-    chmod +x opt/bin/docker
 - path: /home/core/get_calicoctl.sh
   permissions: 777
   owner: root
