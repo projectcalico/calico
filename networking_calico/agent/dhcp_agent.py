@@ -127,7 +127,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
     def __init__(self, agent):
         super(CalicoEtcdWatcher, self).__init__(
-            'localhost:4001',
+            '127.0.0.1:4001',
             dir_for_host(socket.gethostname()) + "/workload"
         )
         self.agent = agent
@@ -413,7 +413,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
 class SubnetWatcher(EtcdWatcher):
 
     def __init__(self, endpoint_watcher):
-        super(SubnetWatcher, self).__init__('localhost:4001', SUBNET_DIR)
+        super(SubnetWatcher, self).__init__('127.0.0.1:4001', SUBNET_DIR)
         self.endpoint_watcher = endpoint_watcher
         self.register_path(
             SUBNET_DIR + "/<subnet_id>",
