@@ -442,8 +442,8 @@ def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
     :return: None.
     """
     if node_image == "calico/node:latest":
-        # The default image is being used so we need to append docker://
-        node_image = "docker://%s" % node_image
+        # The default image is being used so convert to the rkt format.
+        node_image = "registry-1.docker.io/calico/node:latest"
 
     calico_networking = os.getenv(CALICO_NETWORKING_ENV,
                                   CALICO_NETWORKING_DEFAULT)
@@ -479,6 +479,7 @@ def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
         stage1_path = stage1_filename
     else:
         stage1_path = "/usr/share/rkt/stage1-fly.aci"
+
     rkt_command = ["systemd-run", "--unit=calico-node", "rkt", "run",
                    "--stage1-path=%s" % stage1_path,
                    "--insecure-options=image",
