@@ -125,6 +125,20 @@ class CniPlugin(object):
         Path in which to search for CNI plugins.
         """
 
+        self.running_under_k8s = self.k8s_namespace and self.k8s_pod_name
+        if self.running_under_k8s:
+            self.workload_id = "%s.%s" % (self.k8s_namespace, self.k8s_pod_name)
+            self.orchestrator_id = "k8s"
+        else:
+            self.workload_id = self.container_id
+            self.orchestrator_id = "cni"
+        """
+        Configure orchestrator specific settings.
+        workload_id: In Kubernetes, this is the pod's namespace and name.  
+                     Otherwise, this is the container ID.
+        orchestrator_id: Either "k8s" or "cni".
+        """
+
     def execute(self):
         """
         Execute the CNI plugin - uses the given CNI_COMMAND to determine 
@@ -162,13 +176,33 @@ class CniPlugin(object):
 
         _log.debug("Checking for existing Calico endpoint")
         endpoint = self._get_endpoint()
-        if endpoint:
-            # This endpoint already exists, add it to another network.
+        if endpoint and not self.running_under_k8s:
+            # We've received a create for an existing container, likely on 
+            # a new CNI network.  We don't need to configure the veth or
+            # assign IP addresses, we simply need to add to the new 
+            # CNI network.  Kubernetes handles this case 
+            # differently (see below).
             _log.info("Endpoint for container exists - add to new network")
             output = self._add_existing_endpoint(endpoint)
+        elif endpoint and self.running_under_k8s:
+            # Running under Kubernetes and we've received a create for 
+            # an existing workload.  Kubernetes only supports a single CNI 
+            # network, which means that the old pod has been destroyed
+            # under our feet and we need to set up networking on the new one.
+            # We should also clean up any stale endpoint / IP assignment.
+            _log.info("Kubernetes pod has been recreated")
+            self._remove_stale_endpoint(endpoint)
+
+            # Release any previous IP addresses assigned to this workload.
+            self.ipam_env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
+            self._release_ip(self.ipam_env)
+
+            # Configure the new workload.
+            self.ipam_env[CNI_COMMAND_ENV] = CNI_CMD_ADD
+            output = self._add_new_endpoint()
         else:
             # No endpoint exists - we need to configure a new one.
-            _log.info("Configuring a new Endpoint for container")
+            _log.info("No endpoint exists for workload - creating")
             output = self._add_new_endpoint()
 
         # If all successful, print the IPAM plugin's output to stdout.
@@ -183,6 +217,7 @@ class CniPlugin(object):
         Handled adding a new container to a Calico network.
         """
         # Assign IP addresses using the given IPAM plugin.
+        _log.info("Configuring a new Endpoint")
         ipv4, ipv6, ipam_result = self._assign_ips(self.ipam_env)
 
         # Filter out addresses that didn't get assigned.
@@ -263,14 +298,14 @@ class CniPlugin(object):
         # exist, log a warning and exit successfully.
         endpoint = self._get_endpoint()
         if not endpoint:
-            _log.warning("No Calico Endpoint for container: %s",
-                         self.container_id)
+            _log.warning("No Calico Endpoint for workload: %s",
+                         self.workload_id)
             sys.exit(0)
 
         # Step 3: Delete the veth interface for this endpoint.
         self._remove_veth(endpoint)
 
-        # Step 4: Delete the Calico endpoint.
+        # Step 4: Delete the Calico workload.
         self._remove_workload()
 
         # Step 5: Delete any profiles for this endpoint
@@ -425,11 +460,12 @@ class CniPlugin(object):
         :param ip_list - list of IP addresses that have been already allocated
         :return Calico endpoint object
         """
-        _log.debug("Creating Calico endpoint")
+        _log.debug("Creating Calico endpoint with workload_id=%s", 
+                   self.workload_id)
         try:
             endpoint = self._client.create_endpoint(HOSTNAME,
-                                                    ORCHESTRATOR_ID,
-                                                    self.container_id,
+                                                    self.orchestrator_id,
+                                                    self.workload_id,
                                                     ip_list)
         except (AddrFormatError, KeyError) as e:
             # AddrFormatError: Raised when an IP address type is not 
@@ -444,21 +480,45 @@ class CniPlugin(object):
         _log.info("Created Calico endpoint with IP address(es) %s", ip_list)
         return endpoint
 
+    def _remove_stale_endpoint(self, endpoint):
+        """
+        Removes the given endpoint from Calico.  
+        Called when we discover a stale endpoint that is no longer in use.
+        Note that this doesn't release IP allocations - that must be done
+        using the designated IPAM plugin.
+        """
+        _log.info("Removing stale Calico endpoint '%s'", endpoint)
+        try:
+            self._client.remove_endpoint(endpoint)
+        except KeyError:
+            # Shouldn't hit this since we know the workload exists.
+            _log.info("Error removing stale endpoint, ignoring")
+
     def _remove_workload(self):
         """Removes the given endpoint from the Calico datastore
 
-        :param endpoint:
         :return: None
         """
         try:
-            _log.info("Removing Calico endpoint for container '%s'",
-                    self.container_id)
+            _log.info("Removing Calico workload '%s'", self.workload_id)
             self._client.remove_workload(hostname=HOSTNAME,
-                                         orchestrator_id=ORCHESTRATOR_ID,
-                                         workload_id=self.container_id)
+                                         orchestrator_id=self.orchestrator_id,
+                                         workload_id=self.workload_id)
         except KeyError:
-            _log.warning("Unable to remove workload with ID %s from datastore.",
-                         self.container_id)
+            # Attempt to remove the workload using the container ID as the
+            # workload ID.  Earlier releases of the plugin used the 
+            # container ID for the workload ID rather than the Kubernetes pod
+            # name and namespace.
+            _log.debug("Could not find workload with workload ID %s.",
+                         self.workload_id)
+            try:
+                self._client.remove_workload(hostname=HOSTNAME,
+                                             orchestrator_id="cni",
+                                             workload_id=self.container_id)
+            except KeyError:
+                _log.warning("Could not find workload with container ID %s.",
+                             self.container_id)
+
 
     def _provision_veth(self, endpoint):
         """Provisions veth for given endpoint.
@@ -506,7 +566,10 @@ class CniPlugin(object):
 
     @handle_datastore_error
     def _get_endpoint(self):
-        """Get endpoint matching self.container_id.
+        """Get endpoint matching self.workload_id.
+
+        If we cannot find an endpoint using self.workload_id, try 
+        using self.container_id.
 
         Return None if no endpoint is found.
         Exits with an error if multiple endpoints are found.
@@ -514,19 +577,33 @@ class CniPlugin(object):
         :return: Endpoint object if found, None if not found
         """
         try:
-            _log.debug("Looking for endpoint that matches container ID %s",
-                       self.container_id)
+            _log.debug("Looking for endpoint that matches workload ID %s",
+                       self.workload_id)
             endpoint = self._client.get_endpoint(
                 hostname=HOSTNAME,
-                orchestrator_id=ORCHESTRATOR_ID,
-                workload_id=self.container_id
+                orchestrator_id=self.orchestrator_id,
+                workload_id=self.workload_id
             )
         except KeyError:
-            _log.debug("No endpoint found matching ID %s", self.container_id)
-            endpoint = None
+            # Try to find using the container ID.  In earlier version of the 
+            # plugin, the container ID was used as the workload ID.
+            _log.debug("No endpoint found matching workload ID %s", 
+                       self.workload_id)
+            try:
+                endpoint = self._client.get_endpoint(
+                    hostname=HOSTNAME,
+                    orchestrator_id="cni",
+                    workload_id=self.container_id
+                )
+            except KeyError:
+                # We were unable to find an endpoint using either the 
+                # workload ID or the container ID.
+                _log.debug("No endpoint found matching container ID %s", 
+                           self.container_id)
+                endpoint = None
         except MultipleEndpointsMatch:
             message = "Multiple Endpoints found matching ID %s" % \
-                    self.container_id
+                    self.workload_id
             print_cni_error(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
 

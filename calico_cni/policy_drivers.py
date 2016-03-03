@@ -127,6 +127,19 @@ class DefaultPolicyDriver(object):
         return []
 
 
+class DefaultDenyInboundDriver(DefaultPolicyDriver):
+    """
+    This driver rejects all incoming traffic, but allows all outgoing traffic.
+    """
+    def generate_rules(self):
+        return Rules(id=self.profile_name,
+                     inbound_rules=[Rule(action="deny")],
+                     outbound_rules=[Rule(action="allow")])
+
+    def remove_profile(self):
+        _log.info("default-deny-inbound driver, do not remove profile")
+
+
 class KubernetesDefaultPolicyDriver(DefaultPolicyDriver):
     """
     Implements default network policy for a Kubernetes container manager.
@@ -326,7 +339,11 @@ def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
     policy_type = policy_config.get("type")
 
     # Determine which policy driver to use.
-    if k8s_pod_name:
+    if policy_type == POLICY_MODE_DENY_INBOUND:
+        # Use the deny-inbound driver. 
+        driver_cls = DefaultDenyInboundDriver 
+        driver_args = [network_name]
+    elif k8s_pod_name:
         # Runing under Kubernetes - decide which Kubernetes driver to use.
         if policy_type == POLICY_MODE_ANNOTATIONS: 
             _log.debug("Using Kubernetes Annotation Policy Driver")

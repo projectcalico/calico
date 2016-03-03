@@ -20,9 +20,9 @@ import sys
 from netaddr import IPNetwork
 
 from pycalico.ipam import IPAMClient
-from calico_cni.util import configure_logging, print_cni_error
+from calico_cni.util import (CniError, parse_cni_args, 
+                             configure_logging, print_cni_error)
 from calico_cni.constants import *
-from calico_cni.util import CniError
 
 
 # Logging config.
@@ -58,21 +58,37 @@ class IpamPlugin(object):
         Whether we should assign an IPv6 address - defaults to False.
         """
 
+        cni_args = parse_cni_args(environment.get(CNI_ARGS_ENV, ""))
+        self.k8s_pod_name = cni_args.get(K8S_POD_NAME)
+        self.k8s_namespace = cni_args.get(K8S_POD_NAMESPACE)
+        """
+        Only populated when running under Kubernetes.
+        """
+
         # Validate the given environment and set fields.
         self._parse_environment(environment)
 
+        if self.k8s_namespace and self.k8s_pod_name:
+            self.workload_id = "%s.%s" % (self.k8s_namespace, self.k8s_pod_name)
+        else:
+            self.workload_id = self.container_id
+        """
+        Identifier for the workload.  In Kubernetes, this is the
+        pod's namespace and name.  Otherwise, this is the container ID.
+        """
+
     def execute(self):
         """
-        Assigns or releases IP addresses for the specified container. 
+        Assigns or releases IP addresses for the specified workload. 
 
         May raise CniError.
         
         :return: CNI ipam dictionary for ADD, None for DEL.
         """
         if self.command == "ADD":
-            # Assign an IP address for this container.
-            _log.info("Assigning address to container %s", self.container_id)
-            ipv4, ipv6 = self._assign_address(handle_id=self.container_id)
+            # Assign an IP address for this workload.
+            _log.info("Assigning address to workload: %s", self.workload_id)
+            ipv4, ipv6 = self._assign_address(handle_id=self.workload_id)
 
             # Build response dictionary.
             response = {}
@@ -85,14 +101,27 @@ class IpamPlugin(object):
             _log.debug("Returning response: %s", response)
             return json.dumps(response)
         else:
-            # Release IPs using the container_id as the handle.
-            _log.info("Releasing addresses on container %s", 
-                      self.container_id)
+            # Release IPs using the workload_id as the handle.
+            _log.info("Releasing addresses on workload: %s", 
+                      self.workload_id)
             try:
-                self.datastore_client.release_ip_by_handle(handle_id=self.container_id)
+                self.datastore_client.release_ip_by_handle(
+                        handle_id=self.workload_id
+                )
             except KeyError:
-                _log.warning("No IPs assigned to container_id %s", 
-                             self.container_id)
+                _log.warning("No IPs assigned to workload: %s", 
+                             self.workload_id)
+                try:
+                    # Try to release using the container ID.  Earlier
+                    # versions of IPAM used the container ID alone 
+                    # as the handle. This allows us to be back-compatible.
+                    _log.debug("Try release using container ID")
+                    self.datastore_client.release_ip_by_handle(
+                            handle_id=self.container_id
+                    )
+                except KeyError:
+                    _log.debug("No IPs assigned to container: %s",
+                               self.container_id)
 
     def _assign_address(self, handle_id):
         """

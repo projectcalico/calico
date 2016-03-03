@@ -25,7 +25,8 @@ from calico_cni.policy_drivers import (ApplyProfileError,
                         get_policy_driver,
                         DefaultPolicyDriver,
                         KubernetesDefaultPolicyDriver,
-                        KubernetesAnnotationDriver)
+                        KubernetesAnnotationDriver,
+                        DefaultDenyInboundDriver)
 
 
 class DefaultPolicyDriverTest(unittest.TestCase):
@@ -342,6 +343,35 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Should be None
         assert_equal(annotations, None)
 
+class DefaultDenyInboundPolicyDriverTest(unittest.TestCase):
+    """
+    Test class for DefaultDenyInboundDriver class.
+    """
+    def setUp(self):
+        self.network_name = "deny-inbound"
+        self.driver = DefaultDenyInboundDriver(self.network_name) 
+
+        # Mock the DatastoreClient
+        self.client = MagicMock(spec=DatastoreClient)
+        self.driver._client = self.client
+
+    def test_generate_rules(self):
+        # Generate rules
+        rules = self.driver.generate_rules()
+
+        # Assert correct.
+        expected = Rules(id=self.network_name,
+                         inbound_rules=[Rule(action="deny")],
+                         outbound_rules=[Rule(action="allow")])
+        assert_equal(rules, expected)
+
+    def test_remove_profile(self):
+        """
+        Should do nothing.
+        """
+        self.driver.remove_profile()
+
+
 class GetPolicyDriverTest(unittest.TestCase): 
 
     def test_get_policy_driver_default_k8s(self):
@@ -358,6 +388,14 @@ class GetPolicyDriverTest(unittest.TestCase):
         config["policy"] = {"type": "k8s-annotations"}
         driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
         assert_true(isinstance(driver, KubernetesAnnotationDriver))
+
+    def test_get_policy_driver_deny_inbound(self):
+        k8s_pod_name = "podname"
+        k8s_namespace = "namespace"
+        config = {"name": "testnetwork"}
+        config["policy"] = {"type": "default-deny-inbound"}
+        driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        assert_true(isinstance(driver, DefaultDenyInboundDriver))
 
     @patch("calico_cni.policy_drivers.DefaultPolicyDriver", autospec=True)
     def test_get_policy_driver_value_error(self, m_driver):
