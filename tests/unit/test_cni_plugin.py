@@ -824,6 +824,9 @@ class CniPluginKubernetesTest(CniPluginTest):
 
         # Assert we release IPs.
         self.plugin._release_ip.assert_called_once_with(ANY)
+
+        # Assert we clean up policy.
+        self.plugin.policy_driver.remove_profile.assert_called_once_with()
         
         # Assert we add a new endpoint.
         self.plugin._add_new_endpoint.assert_called_once_with()

@@ -197,6 +197,9 @@ class CniPlugin(object):
             self.ipam_env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
             self._release_ip(self.ipam_env)
 
+            # Clean up any profiles for the stale endpoint
+            self.policy_driver.remove_profile()
+
             # Configure the new workload.
             self.ipam_env[CNI_COMMAND_ENV] = CNI_CMD_ADD
             output = self._add_new_endpoint()
