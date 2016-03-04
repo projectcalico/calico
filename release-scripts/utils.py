@@ -476,7 +476,7 @@ def validate_analytics_url(filename, analytics_url):
     :param url:  The analytics URL to validate.
     :return:  True if URL is valid and accessible
     """
-    expected_url = "https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/%s?pixel" % filename
+    expected_url = "https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/%s?pixel" % filename
     if analytics_url != expected_url:
         print_bullet("%s: Anayltics URL is incorrect, should be %s" % (filename, expected_url))
         return False
