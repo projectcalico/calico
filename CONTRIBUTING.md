@@ -53,4 +53,4 @@ then be merged as soon as possible! Occasionally we will sit on a change, for
 instance if we are planning to tag a release shortly, but this is only to
 ensure the stability of the branch. After the release we will merge your change
 promptly.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico/CONTRIBUTING.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico/CONTRIBUTING.md?pixel)](https://github.com/igrigorik/ga-beacon)

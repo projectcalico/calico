@@ -118,4 +118,4 @@ subset of the dependencies needed for those components.
 ### Docker
 
 Felix can be run inside Docker. See the `docker_build_and_run.sh` script for details on building and running it.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
