@@ -171,6 +171,7 @@ class TestNode(unittest.TestCase):
             # Assert that method exits on bad input
             self.assertEqual(m_sys_exit.called, sys_exit_called)
 
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
@@ -193,7 +194,7 @@ class TestNode(unittest.TestCase):
                                    m_warn_if_hostname_conflict,
                                    m_warn_if_unknown_ip, m_get_host_ips,
                                    m_setup_ip, m_check_system, m_os_makedirs,
-                                   m_os_path_exists):
+                                   m_os_path_exists, m_ipv6_enabled):
         """
         Test that the node_start function performs all necessary configurations
         without making Docker calls when runtime=none.
@@ -252,6 +253,7 @@ class TestNode(unittest.TestCase):
         self.assertFalse(m_docker_client.start.called)
         self.assertFalse(m_attach_and_stream.called)
 
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.call', autospec=True)
@@ -276,7 +278,7 @@ class TestNode(unittest.TestCase):
                         m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
                         m_check_system, m_ensure_host_tunnel_addr,
                         m_remove_host_tunnel_addr, m_container, m_call,
-                        m_os_makedirs, m_os_path_exists):
+                        m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
         """
         Test that the node_Start function does not make Docker calls
         function returns
@@ -379,6 +381,7 @@ class TestNode(unittest.TestCase):
         m_docker_client.start.assert_called_once_with(container)
         m_attach_and_stream.assert_called_once_with(container)
 
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('os.getenv', autospec=True)
@@ -405,7 +408,7 @@ class TestNode(unittest.TestCase):
                                m_get_host_ips, m_setup_ip, m_check_system,
                                m_ensure_host_tunnel_addr,
                                m_remove_host_tunnel_addr, m_os_getenv,
-                               m_os_makedirs, m_os_path_exists):
+                               m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
         """
         Test that the node_start function passes in correct values when
         secure etcd environment variables are present.
@@ -550,6 +553,7 @@ class TestNode(unittest.TestCase):
         m_attach_and_stream.assert_called_once_with(container1)
 
 
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
@@ -566,7 +570,7 @@ class TestNode(unittest.TestCase):
             self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
-            m_os_makedirs, m_os_path_exists):
+            m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
         """
         Test that the docker client raises an APIError when it fails to
         remove a container.
@@ -591,6 +595,7 @@ class TestNode(unittest.TestCase):
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
                           libnetwork)
 
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('sys.exit', autospec=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
@@ -608,7 +613,7 @@ class TestNode(unittest.TestCase):
             self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
-            m_os_makedirs, m_os_path_exists, m_sys_exit):
+            m_os_makedirs, m_os_path_exists, m_sys_exit, m_ipv6_enabled):
         """
         Test that system exits when no ip is provided and host ips cannot be
         obtained
@@ -634,6 +639,7 @@ class TestNode(unittest.TestCase):
         # Assert
         m_sys_exit.assert_called_once_with(1)
 
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
@@ -650,7 +656,7 @@ class TestNode(unittest.TestCase):
             self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
             m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
-            m_os_makedirs, m_os_path_exists):
+            m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
         """
         Test that the client creates default ipv4 and ipv6 pools when the
         client returns an empty ip_pool on etcd setup

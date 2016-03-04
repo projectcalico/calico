@@ -234,6 +234,16 @@ def convert_asn_to_asplain(asn):
     return asn
 
 
+def ipv6_enabled():
+    """
+    Return if IPv6 is enabled on the system.
+    :return:  True if IPv6 is enabled on the system.
+    """
+    # If the OS has not been built with IPv6 then the /proc config for IPv6
+    # will not be present.
+    return os.path.exists('/proc/sys/net/ipv6')
+
+
 class URLGetter(urllib.FancyURLopener):
     """
     Retrieves binaries.  Overridden in order to handle errors when

@@ -125,6 +125,17 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(expected_result, test_result)
 
 
+    @patch('os.path.exists', autospec=True)
+    def test_ipv6_enabled(self, m_exists):
+        """
+        Test ipv6_enabled.
+        """
+        for rc in (True, False):
+            m_exists.return_value = rc
+            self.assertEquals(rc, utils.ipv6_enabled())
+            m_exists.assert_called_with("/proc/sys/net/ipv6")
+
+
 class TestUrlGetter(unittest.TestCase):
     def setUp(self):
         self.getter = utils.URLGetter()
