@@ -148,4 +148,4 @@ To run the single no-orchestrator, mainline multi-host test:
 
     sudo ST_TO_RUN=calico_containers/tests/st/no_orchestrator/test_mainline_multi_host.py make st
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Building.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Building.md?pixel)](https://github.com/igrigorik/ga-beacon)

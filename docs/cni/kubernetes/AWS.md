@@ -304,4 +304,4 @@ You can also take a look at how you can use Calico [network policy on Kubernetes
 [loadbalancers]: http://kubernetes.io/v1.0/docs/user-guide/services.html#type-loadbalancer
 [examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/AWS.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/AWS.md?pixel)](https://github.com/igrigorik/ga-beacon)

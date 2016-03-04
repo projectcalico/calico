@@ -44,4 +44,4 @@ Referenced by the confd-generated bird.toml and bird6.toml files.
 
 These templates write out the main BIRD configuration when the full 
 node-to-node mesh is disabled.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/calico_node/filesystem/templates/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/calico_node/filesystem/templates/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

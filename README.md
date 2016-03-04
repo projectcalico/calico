@@ -102,4 +102,4 @@ the material listed below.
     - [FAQ](docs/FAQ.md)
     - [Troubleshooting](docs/Troubleshooting.md)
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

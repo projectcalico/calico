@@ -225,4 +225,4 @@ $ calicoctl container test-container endpoint show
 |  calico  |      docker     | 0d01b3f020fcadfd0090fcbbbbef9658acb26f71c1cb812827afafc625c5ae1a | d79123c4784511e5bd1a080027f532f6 | 192.168.1.4/32 | d6:43:59:f7:93:d3 |          | active |
 +----------+-----------------+------------------------------------------------------------------+----------------------------------+----------------+-------------------+----------+--------+
 ```
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calicoctl/container.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calicoctl/container.md?pixel)](https://github.com/igrigorik/ga-beacon)

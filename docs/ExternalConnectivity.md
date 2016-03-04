@@ -55,4 +55,4 @@ detailed datacenter networking recommendations are given in the main
 [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/ExternalConnectivity.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/ExternalConnectivity.md?pixel)](https://github.com/igrigorik/ga-beacon)

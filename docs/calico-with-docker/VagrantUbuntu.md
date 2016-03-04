@@ -98,4 +98,4 @@ the networking option that you chose in step (3).
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
 [calico-networking]: https://github.com/projectcalico/calico-containers
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/VagrantUbuntu.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/VagrantUbuntu.md?pixel)](https://github.com/igrigorik/ga-beacon)

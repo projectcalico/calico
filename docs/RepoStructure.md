@@ -81,4 +81,4 @@ integrations.
    Docker image (available on DockerHub).  When Calico node is started with the
    `--libnetwork` flag, a separate container is launched running the driver.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/RepoStructure.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/RepoStructure.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -178,4 +178,4 @@ learn more about Calico under-the-covers please refer to the
 [Further Reading](../../../README.md#further-reading) section on the main
 documentation README.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/without-docker-networking/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/without-docker-networking/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

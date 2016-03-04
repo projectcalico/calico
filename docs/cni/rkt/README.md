@@ -280,4 +280,4 @@ documentation README.
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/rkt/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/rkt/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

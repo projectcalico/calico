@@ -98,4 +98,4 @@ container.  e.g.
 
 For details on how to change the log levels for the plugin, please view the
 [libnetwork-plugin documentation](https://github.com/projectcalico/libnetwork-plugin/blob/master/README.md).
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/logging.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/logging.md?pixel)](https://github.com/igrigorik/ga-beacon)

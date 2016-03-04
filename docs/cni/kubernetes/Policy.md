@@ -230,4 +230,4 @@ spec:
 
 [k8s-network-model]: https://github.com/kubernetes/kubernetes/blob/master/docs/design/networking.md#networking
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/Policy.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/Policy.md?pixel)](https://github.com/igrigorik/ga-beacon)

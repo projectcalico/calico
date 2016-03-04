@@ -45,4 +45,4 @@ recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afte
 
 If you hit issues, please raise tickets. Diags can be collected with the 
 `sudo ./calicoctl diags` command.
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Troubleshooting.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Troubleshooting.md?pixel)](https://github.com/igrigorik/ga-beacon)

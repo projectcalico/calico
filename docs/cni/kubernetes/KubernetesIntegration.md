@@ -157,4 +157,4 @@ there are two ways to enable this behavior.
 See the [kube-proxy documentation](http://kubernetes.io/v1.1/docs/admin/kube-proxy.html)
 for more details.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)

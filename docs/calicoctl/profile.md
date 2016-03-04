@@ -544,4 +544,4 @@ Inbound rules:
 Outbound rules:
    1 allow
 ```
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calicoctl/profile.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calicoctl/profile.md?pixel)](https://github.com/igrigorik/ga-beacon)

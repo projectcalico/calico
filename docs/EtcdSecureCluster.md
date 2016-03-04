@@ -103,4 +103,4 @@ command line options to the Docker daemon.
      --cluster-store-opt kv.certfile=/path/to/cert.crt
      --cluster-store-opt kv.keyfile=/path/to/key.pem
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/EtcdSecureCluster.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/EtcdSecureCluster.md?pixel)](https://github.com/igrigorik/ga-beacon)

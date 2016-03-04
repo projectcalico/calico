@@ -22,4 +22,4 @@ The Calico CNI plugin should be compatible with any CNI IPAM plugin which return
 
 [appc-repo]: https://github.com/appc/cni
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

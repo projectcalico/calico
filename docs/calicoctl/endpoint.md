@@ -214,4 +214,4 @@ $ calicoctl endpoint d79123c4784511e5bd1a080027f532f6 profile show
 | WEB  |
 +------+
 ```
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calicoctl/endpoint.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calicoctl/endpoint.md?pixel)](https://github.com/igrigorik/ga-beacon)

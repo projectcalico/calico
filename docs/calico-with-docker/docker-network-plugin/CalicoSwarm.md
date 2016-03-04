@@ -164,4 +164,4 @@ B. These pings should fail.
 
     $ export WORKLOADB_IP=`docker -H $MANAGER_IP:$SWARM_PORT inspect --format "{{ .NetworkSettings.Networks.net2.IPAddress }}" workload-B`
     $ docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 $WORKLOADB_IP
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/docker-network-plugin/CalicoSwarm.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/docker-network-plugin/CalicoSwarm.md?pixel)](https://github.com/igrigorik/ga-beacon)

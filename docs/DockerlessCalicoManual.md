@@ -108,4 +108,4 @@ systemctl start calico-dockerless
 ```
 
 [libvirt-wiki]: http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/DockerlessCalicoManual.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/DockerlessCalicoManual.md?pixel)](https://github.com/igrigorik/ga-beacon)

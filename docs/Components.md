@@ -78,4 +78,4 @@ For a detailed look at how each component works when adding Docker containers
 to Calico networking, check out the [Lifecycle of a Docker Default Container]
 (./DockerContainerLifecycle.md) page.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Components.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Components.md?pixel)](https://github.com/igrigorik/ga-beacon)
