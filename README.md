@@ -85,6 +85,10 @@ the material listed below.
       for integration of a Calico cluster in your network
     - [External Connectivity](docs/ExternalConnectivity.md) describes how to
       configure external connectivity for hosts on their own Layer 2 segment
+    - [Running Calico Node Containers as a Service](docs/CalicoAsService.md)
+      describes how to run the `calico/node` and `calico/node-libnetwork` images
+      as system processes or services.  This guide includes example config for
+      systemd services.
   - **Learn how Calico works under the covers**
     - [Anatomy of a calico-node container](docs/Components.md) to understand
       the key components that make up the `calico/node` service. 
