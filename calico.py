@@ -18,26 +18,39 @@ import json
 import os
 import sys
 
-from subprocess import Popen, PIPE 
+from docopt import docopt
+from subprocess import Popen, PIPE
 from netaddr import IPNetwork, AddrFormatError
 
 from pycalico import netns
 from pycalico.netns import Namespace, CalledProcessError
-from pycalico.datastore import (DatastoreClient, ETCD_AUTHORITY_ENV, 
+from pycalico.datastore import (DatastoreClient, ETCD_AUTHORITY_ENV,
                                 ETCD_AUTHORITY_DEFAULT)
 from pycalico.datastore_errors import MultipleEndpointsMatch
+
+from calico_cni import __version__, __commit__, __branch__
 from calico_cni.util import (configure_logging, parse_cni_args, print_cni_error,
                   handle_datastore_error, CniError)
 
 from calico_cni.container_engines import get_container_engine
 from calico_cni.constants import *
-from ipam import IpamPlugin
 from calico_cni.policy_drivers import ApplyProfileError, get_policy_driver
+from ipam import IpamPlugin
 
 # Logging configuration.
 LOG_FILENAME = "cni.log"
 _log = logging.getLogger("calico_cni")
 
+__doc__ = """
+Usage: calico [-vh]
+
+Description:
+    Calico CNI plugin.
+
+Options:
+    -h --help           Print this message.
+    -v --version        Print the plugin version
+"""
 
 class CniPlugin(object):
     """
@@ -78,9 +91,9 @@ class CniPlugin(object):
         Type of IPAM to use, e.g calico-ipam.
         """
 
-        self.policy_driver = get_policy_driver(self.k8s_pod_name, 
-                                               self.k8s_namespace, 
-                                               self.network_config) 
+        self.policy_driver = get_policy_driver(self.k8s_pod_name,
+                                               self.k8s_namespace,
+                                               self.network_config)
         """
         Chooses the correct policy driver based on the given configuration
         """
@@ -99,7 +112,7 @@ class CniPlugin(object):
         assert self.command in [CNI_CMD_DELETE, CNI_CMD_ADD], \
                 "Invalid CNI command %s" % self.command
         """
-        The command to execute for this plugin instance. Required. 
+        The command to execute for this plugin instance. Required.
         One of:
           - CNI_CMD_ADD
           - CNI_CMD_DELETE
@@ -134,14 +147,14 @@ class CniPlugin(object):
             self.orchestrator_id = "cni"
         """
         Configure orchestrator specific settings.
-        workload_id: In Kubernetes, this is the pod's namespace and name.  
+        workload_id: In Kubernetes, this is the pod's namespace and name.
                      Otherwise, this is the container ID.
         orchestrator_id: Either "k8s" or "cni".
         """
 
     def execute(self):
         """
-        Execute the CNI plugin - uses the given CNI_COMMAND to determine 
+        Execute the CNI plugin - uses the given CNI_COMMAND to determine
         which action to take.
 
         :return: None.
@@ -152,7 +165,7 @@ class CniPlugin(object):
             self.delete()
 
     def add(self):
-        """"Handles CNI_CMD_ADD requests. 
+        """"Handles CNI_CMD_ADD requests.
 
         Configures Calico networking and prints required json to stdout.
 
@@ -163,7 +176,7 @@ class CniPlugin(object):
 
         :return: None.
         """
-        # If this container uses host networking, don't network it.  
+        # If this container uses host networking, don't network it.
         # This should only be hit when running in Kubernetes mode with
         # docker - rkt doesn't call plugins when using host networking.
         if self.container_engine.uses_host_networking(self.container_id):
@@ -171,22 +184,22 @@ class CniPlugin(object):
                       "with host networking.", self.container_id)
             sys.exit(0)
 
-        _log.info("Configuring network '%s' for container: %s", 
+        _log.info("Configuring network '%s' for container: %s",
                   self.network_name, self.container_id)
 
         _log.debug("Checking for existing Calico endpoint")
         endpoint = self._get_endpoint()
         if endpoint and not self.running_under_k8s:
-            # We've received a create for an existing container, likely on 
+            # We've received a create for an existing container, likely on
             # a new CNI network.  We don't need to configure the veth or
-            # assign IP addresses, we simply need to add to the new 
-            # CNI network.  Kubernetes handles this case 
+            # assign IP addresses, we simply need to add to the new
+            # CNI network.  Kubernetes handles this case
             # differently (see below).
             _log.info("Endpoint for container exists - add to new network")
             output = self._add_existing_endpoint(endpoint)
         elif endpoint and self.running_under_k8s:
-            # Running under Kubernetes and we've received a create for 
-            # an existing workload.  Kubernetes only supports a single CNI 
+            # Running under Kubernetes and we've received a create for
+            # an existing workload.  Kubernetes only supports a single CNI
             # network, which means that the old pod has been destroyed
             # under our feet and we need to set up networking on the new one.
             # We should also clean up any stale endpoint / IP assignment.
@@ -225,10 +238,10 @@ class CniPlugin(object):
 
         # Create the Calico endpoint object.
         endpoint = self._create_endpoint(ip_list)
-    
+
         # Provision the veth for this endpoint.
         endpoint = self._provision_veth(endpoint)
-        
+
         # Provision / apply profile on the created endpoint.
         try:
             self.policy_driver.apply_profile(endpoint)
@@ -252,7 +265,7 @@ class CniPlugin(object):
         We've already assigned an IP address and created the veth,
         we just need to apply a new profile to this endpoint.
         """
-        # Get the already existing IP information for this Endpoint. 
+        # Get the already existing IP information for this Endpoint.
         try:
             ip4 = next(iter(endpoint.ipv4_nets))
         except StopIteration:
@@ -278,9 +291,9 @@ class CniPlugin(object):
             print_cni_error(ERR_CODE_GENERIC, e.message)
             sys.exit(ERR_CODE_GENERIC)
 
-        return {"ip4": {"ip": str(ip4.cidr)}, 
+        return {"ip4": {"ip": str(ip4.cidr)},
                 "ip6": {"ip": str(ip6.cidr)}}
-    
+
     def delete(self):
         """Handles CNI_CMD_DELETE requests.
 
@@ -288,7 +301,7 @@ class CniPlugin(object):
 
         :return: None.
         """
-        _log.info("Remove network '%s' from container: %s", 
+        _log.info("Remove network '%s' from container: %s",
                 self.network_name, self.container_id)
 
         # Step 1: Remove any IP assignments.
@@ -326,7 +339,7 @@ class CniPlugin(object):
         rc, result = self._call_ipam_plugin(env)
 
         try:
-            # Load the response - either the assigned IP addresses or 
+            # Load the response - either the assigned IP addresses or
             # a CNI error message.
             ipam_result = json.loads(result)
         except ValueError:
@@ -396,7 +409,7 @@ class CniPlugin(object):
         Executes a CNI IPAM plugin.  If `calico-ipam` is the provided IPAM
         type, then calls directly into ipam.py as a performance optimization.
 
-        For all other types of IPAM, searches the CNI_PATH for the 
+        For all other types of IPAM, searches the CNI_PATH for the
         correct binary and executes it.
 
         :return: Tuple of return code, response from the IPAM plugin.
@@ -404,14 +417,14 @@ class CniPlugin(object):
         if self.ipam_type == "calico-ipam":
             _log.info("Using Calico IPAM")
             try:
-                response = IpamPlugin(env, 
+                response = IpamPlugin(env,
                                       self.network_config["ipam"]).execute()
                 code = 0
             except CniError as e:
                 # We hit a CNI error - return the appropriate CNI formatted
                 # error dictionary.
-                response = json.dumps({"code": e.code, 
-                                       "msg": e.msg, 
+                response = json.dumps({"code": e.code,
+                                       "msg": e.msg,
                                        "details": e.details})
                 code = e.code
         else:
@@ -424,7 +437,7 @@ class CniPlugin(object):
 
     def _call_binary_ipam_plugin(self, env):
         """Calls through to the specified IPAM plugin binary.
-    
+
         Utilizes the IPAM config as specified in the CNI network
         configuration file.  A dictionary with the following form:
             {
@@ -442,7 +455,7 @@ class CniPlugin(object):
                       (self.ipam_type, self.cni_path)
             print_cni_error(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
-    
+
         # Execute the plugin and return the result.
         _log.info("Using IPAM plugin at: %s", plugin_path)
         _log.debug("Passing in environment to IPAM plugin: \n%s",
@@ -450,7 +463,7 @@ class CniPlugin(object):
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
         stdout, stderr = p.communicate(json.dumps(self.network_config))
         _log.debug("IPAM plugin return code: %s", p.returncode)
-        _log.debug("IPAM plugin output: \nstdout:\n%s\nstderr:\n%s", 
+        _log.debug("IPAM plugin output: \nstdout:\n%s\nstderr:\n%s",
                    stdout, stderr)
         return p.returncode, stdout
 
@@ -460,7 +473,7 @@ class CniPlugin(object):
         :param ip_list - list of IP addresses that have been already allocated
         :return Calico endpoint object
         """
-        _log.debug("Creating Calico endpoint with workload_id=%s", 
+        _log.debug("Creating Calico endpoint with workload_id=%s",
                    self.workload_id)
         try:
             endpoint = self._client.create_endpoint(HOSTNAME,
@@ -468,7 +481,7 @@ class CniPlugin(object):
                                                     self.workload_id,
                                                     ip_list)
         except (AddrFormatError, KeyError) as e:
-            # AddrFormatError: Raised when an IP address type is not 
+            # AddrFormatError: Raised when an IP address type is not
             #                  compatible with the node.
             # KeyError: Raised when BGP config for host is not found.
             _log.exception("Failed to create Calico endpoint.")
@@ -482,7 +495,7 @@ class CniPlugin(object):
 
     def _remove_stale_endpoint(self, endpoint):
         """
-        Removes the given endpoint from Calico.  
+        Removes the given endpoint from Calico.
         Called when we discover a stale endpoint that is no longer in use.
         Note that this doesn't release IP allocations - that must be done
         using the designated IPAM plugin.
@@ -506,7 +519,7 @@ class CniPlugin(object):
                                          workload_id=self.workload_id)
         except KeyError:
             # Attempt to remove the workload using the container ID as the
-            # workload ID.  Earlier releases of the plugin used the 
+            # workload ID.  Earlier releases of the plugin used the
             # container ID for the workload ID rather than the Kubernetes pod
             # name and namespace.
             _log.debug("Could not find workload with workload ID %s.",
@@ -559,7 +572,7 @@ class CniPlugin(object):
         _log.info("Removing veth for endpoint: %s", endpoint.name)
         try:
             removed = netns.remove_veth(endpoint.name)
-            _log.debug("Successfully removed endpoint %s? %s", 
+            _log.debug("Successfully removed endpoint %s? %s",
                        endpoint.name, removed)
         except CalledProcessError:
             _log.warning("Unable to remove veth %s", endpoint.name)
@@ -568,7 +581,7 @@ class CniPlugin(object):
     def _get_endpoint(self):
         """Get endpoint matching self.workload_id.
 
-        If we cannot find an endpoint using self.workload_id, try 
+        If we cannot find an endpoint using self.workload_id, try
         using self.container_id.
 
         Return None if no endpoint is found.
@@ -585,9 +598,9 @@ class CniPlugin(object):
                 workload_id=self.workload_id
             )
         except KeyError:
-            # Try to find using the container ID.  In earlier version of the 
+            # Try to find using the container ID.  In earlier version of the
             # plugin, the container ID was used as the workload ID.
-            _log.debug("No endpoint found matching workload ID %s", 
+            _log.debug("No endpoint found matching workload ID %s",
                        self.workload_id)
             try:
                 endpoint = self._client.get_endpoint(
@@ -596,9 +609,9 @@ class CniPlugin(object):
                     workload_id=self.container_id
                 )
             except KeyError:
-                # We were unable to find an endpoint using either the 
+                # We were unable to find an endpoint using either the
                 # workload ID or the container ID.
-                _log.debug("No endpoint found matching container ID %s", 
+                _log.debug("No endpoint found matching container ID %s",
                            self.container_id)
                 endpoint = None
         except MultipleEndpointsMatch:
@@ -620,7 +633,7 @@ class CniPlugin(object):
         :rtype : str
         :return: plugin_path - absolute path of IPAM plugin binary
         """
-        plugin_type = self.ipam_type 
+        plugin_type = self.ipam_type
         plugin_path = ""
         for path in self.cni_path.split(":"):
             _log.debug("Looking for plugin %s in path %s", plugin_type, path)
@@ -646,17 +659,17 @@ def main():
 
     # Configure logging.
     configure_logging(_log, LOG_FILENAME, log_level=log_level)
-    _log.debug("Loaded network config:\n%s", 
+    _log.debug("Loaded network config:\n%s",
                json.dumps(network_config, indent=2))
 
-    # Get the etcd authority from the config file. Set the 
+    # Get the etcd authority from the config file. Set the
     # environment variable.
-    etcd_authority = network_config.get(ETCD_AUTHORITY_KEY, 
+    etcd_authority = network_config.get(ETCD_AUTHORITY_KEY,
                                         ETCD_AUTHORITY_DEFAULT)
     os.environ[ETCD_AUTHORITY_ENV] = etcd_authority
     _log.debug("Using ETCD_AUTHORITY=%s", etcd_authority)
 
-    # Get the CNI environment. 
+    # Get the CNI environment.
     env = os.environ.copy()
     _log.debug("Loaded environment:\n%s", json.dumps(env, indent=2))
 
@@ -681,12 +694,22 @@ def main():
 
 
 if __name__ == '__main__': # pragma: no cover
+    # Parse out the provided arguments.
+    command_args = docopt(__doc__)
+
+    # If the version argument was given, print version and exit.
+    if command_args.get("--version"):
+        print(json.dumps({"Version": __version__,
+                          "Commit": __commit__,
+                          "Branch": __branch__}, indent=2))
+        sys.exit(0)
+
     try:
         main()
     except Exception as e:
         # Catch any unhandled exceptions in the main() function.  Any errors
         # in CniPlugin.execute() are already handled.
-        print_cni_error(ERR_CODE_GENERIC, 
-                        "Unhandled Exception in main()", 
+        print_cni_error(ERR_CODE_GENERIC,
+                        "Unhandled Exception in main()",
                         e.message)
         sys.exit(ERR_CODE_GENERIC)

@@ -1,6 +1,9 @@
-.PHONY: all binary test plugin ipam ut clean
+.PHONY: all binary test plugin ipam ut clean update-version
 
-SRCFILES=$(shell find calico_cni)
+# The current CNI repo version.
+CALICO_CNI_VERSION=v1.0.2-dev
+
+SRCFILES=$(shell find calico_cni) calico.py ipam.py
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
 default: all
@@ -12,18 +15,25 @@ ipam: dist/calico-ipam
 
 
 # Builds the Calico CNI plugin binary.
-dist/calico: $(SRCFILES) 
+dist/calico: $(SRCFILES) update-version 
 	docker run  --rm \
 	-v `pwd`:/code \
 	calico/build:v0.11.0 \
 	pyinstaller calico.py -ayF
 
 # Makes the IPAM plugin.
-dist/calico-ipam: $(SRCFILES)
+dist/calico-ipam: $(SRCFILES) update-version
 	docker run --rm \
 	-v `pwd`:/code \
 	calico/build:v0.11.0 \
 	pyinstaller ipam.py -ayF -n calico-ipam
+
+# Updates the version information in __init__.py
+update-version:
+	echo "# Auto-generated contents.  Do not manually edit!" > calico_cni/__init__.py
+	echo "__version__ = '$(shell git describe --tags)'" >> calico_cni/__init__.py
+	echo "__commit__ = '$(shell git rev-parse HEAD)'" >> calico_cni/__init__.py 
+	echo "__branch__ = '$(shell git rev-parse --abbrev-ref HEAD)'" >> calico_cni/__init__.py
 
 # Run the unit tests.
 ut:
