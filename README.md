@@ -105,5 +105,7 @@ the material listed below.
   - **FAQ and Troubleshooting**
     - [FAQ](docs/FAQ.md)
     - [Troubleshooting](docs/Troubleshooting.md)
+    
+If you are interested in contributing, please review our [contributing guidelines](CONTRIBUTING.md). 
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
