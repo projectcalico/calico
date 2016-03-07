@@ -4,8 +4,14 @@ SRCDIR=.
 
 default: all
 all: policy-agent policy-tool 
+
+# Build the policy agent binary.
 policy-agent: dist/policy_agent
+
+# Build the policy command line tool.
 policy-tool: dist/policy
+
+# Build the calico/k8s-policy-agent Docker container.
 docker-image: image.created
 
 dist/policy_agent: 
@@ -20,15 +26,21 @@ dist/policy:
 	docker run --rm \
 	-v `pwd`:/code \
 	calico/build \
-	pyinstaller policy.py -ayF 
+	pyinstaller policy_tool/policy.py -ayF 
+
+# Run the unit tests.
+ut:
+	docker run --rm -v `pwd`:/code \
+	calico/test \
+	nosetests tests/unit -c nose.cfg
 
 image.created: dist/policy_agent 
-	docker build -t caseydavenport/k8s-policy-agent . 
+	# Build the docker image for the policy agent.
+	docker build -t calico/k8s-policy-agent . 
 	touch image.created
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
 	-sudo rm -rf dist
-	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
-	-docker rmi caseydavenport/k8s-policy-agent
+	-docker rmi calico/k8s-policy-agent
 	rm -f image.created
