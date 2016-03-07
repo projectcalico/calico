@@ -1,6 +1,6 @@
 ## Calico Network Policy for Kubernetes 
 
-This repository contains the Calico Kubernetes policy agent, which implements the [Kubernetes v1alpha network policy API](TODO).
+This repository contains the Calico Kubernetes policy agent, which implements the [Kubernetes v1alpha network policy API](README.md).
 
 See our documentation on [enabling network policy in Kubernetes](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/NetworkPolicy.md) to get started.
 
