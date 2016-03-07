@@ -17,13 +17,25 @@ import json
 import os
 import sys
 
+from docopt import docopt
 from netaddr import IPNetwork
 
 from pycalico.ipam import IPAMClient
-from calico_cni.util import (CniError, parse_cni_args, 
+from calico_cni import __version__, __commit__, __branch__
+from calico_cni.util import (CniError, parse_cni_args,
                              configure_logging, print_cni_error)
 from calico_cni.constants import *
 
+__doc__ = """
+Usage: calico-ipam [-vh]
+
+Description:
+    Calico CNI IPAM plugin.
+
+Options:
+    -h --help           Print this message.
+    -v --version        Print the plugin version
+"""
 
 # Logging config.
 LOG_FILENAME = "ipam.log"
@@ -79,10 +91,10 @@ class IpamPlugin(object):
 
     def execute(self):
         """
-        Assigns or releases IP addresses for the specified workload. 
+        Assigns or releases IP addresses for the specified workload.
 
         May raise CniError.
-        
+
         :return: CNI ipam dictionary for ADD, None for DEL.
         """
         if self.command == "ADD":
@@ -96,24 +108,24 @@ class IpamPlugin(object):
                 response["ip4"] = {"ip": str(ipv4.cidr)}
             if ipv6:
                 response["ip6"] = {"ip": str(ipv6.cidr)}
-    
+
             # Output the response and exit successfully.
             _log.debug("Returning response: %s", response)
             return json.dumps(response)
         else:
             # Release IPs using the workload_id as the handle.
-            _log.info("Releasing addresses on workload: %s", 
+            _log.info("Releasing addresses on workload: %s",
                       self.workload_id)
             try:
                 self.datastore_client.release_ip_by_handle(
                         handle_id=self.workload_id
                 )
             except KeyError:
-                _log.warning("No IPs assigned to workload: %s", 
+                _log.warning("No IPs assigned to workload: %s",
                              self.workload_id)
                 try:
                     # Try to release using the container ID.  Earlier
-                    # versions of IPAM used the container ID alone 
+                    # versions of IPAM used the container ID alone
                     # as the handle. This allows us to be back-compatible.
                     _log.debug("Try release using container ID")
                     self.datastore_client.release_ip_by_handle(
@@ -125,12 +137,12 @@ class IpamPlugin(object):
 
     def _assign_address(self, handle_id):
         """
-        Assigns an IPv4 and an IPv6 address. 
-    
+        Assigns an IPv4 and an IPv6 address.
+
         :return: A tuple of (IPv4, IPv6) address assigned.
         """
-        ipv4 = None 
-        ipv6 = None 
+        ipv4 = None
+        ipv6 = None
 
         # Determine which addresses to assign.
         num_v4 = 1 if self.assign_ipv4 else 0
@@ -138,13 +150,13 @@ class IpamPlugin(object):
         _log.info("Assigning %s IPv4 and %s IPv6 addresses", num_v4, num_v6)
         try:
             ipv4_addrs, ipv6_addrs = self.datastore_client.auto_assign_ips(
-                num_v4=num_v4, num_v6=num_v6, handle_id=handle_id, 
+                num_v4=num_v4, num_v6=num_v6, handle_id=handle_id,
                 attributes=None,
             )
             _log.debug("Allocated ip4s: %s, ip6s: %s", ipv4_addrs, ipv6_addrs)
         except RuntimeError as e:
             _log.error("Cannot auto assign IPAddress: %s", e.message)
-            raise CniError(ERR_CODE_GENERIC, 
+            raise CniError(ERR_CODE_GENERIC,
                            msg="Failed to assign IP address",
                            details=e.message)
         else:
@@ -165,14 +177,14 @@ class IpamPlugin(object):
                                    msg="No IPv6 addresses available in pool")
 
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
-            return ipv4, ipv6 
+            return ipv4, ipv6
 
     def _parse_environment(self, env):
         """
         Validates the plugins environment and extracts the required values.
         """
         _log.debug('Environment: %s', json.dumps(env, indent=2))
-    
+
         # Check the given environment contains the required fields.
         try:
             self.command = env[CNI_COMMAND_ENV]
@@ -196,7 +208,7 @@ class IpamPlugin(object):
 
 def _exit_on_error(code, message, details=""):
     """
-    Return failure information to the calling plugin as specified in the 
+    Return failure information to the calling plugin as specified in the
     CNI spec and exit.
     :param code: Error code to return (int)
     :param message: Short error message to return.
@@ -215,10 +227,10 @@ def main():
     # Get the log level from the config file, default to INFO.
     log_level = config.get(LOG_LEVEL_KEY, "INFO").upper()
 
-    # Setup logger. We log to file and to stderr based on the 
+    # Setup logger. We log to file and to stderr based on the
     # log level provided in the network configuration file.
-    configure_logging(_log, LOG_FILENAME, 
-                      log_level=log_level, 
+    configure_logging(_log, LOG_FILENAME,
+                      log_level=log_level,
                       stderr_level=logging.INFO)
 
     # Get copy of environment.
@@ -228,7 +240,7 @@ def main():
         # Execute IPAM.
         output = IpamPlugin(env, config["ipam"]).execute()
     except CniError as e:
-        # We caught a CNI error - print the result to stdout and 
+        # We caught a CNI error - print the result to stdout and
         # exit.
         _exit_on_error(e.code, e.msg, e.details)
     except Exception as e:
@@ -242,4 +254,14 @@ def main():
 
 
 if __name__ == '__main__': # pragma: no cover
+    # Parse out the provided arguments.
+    command_args = docopt(__doc__)
+
+    # If the version argument was given, print version and exit.
+    if command_args.get("--version"):
+        print(json.dumps({"Version": __version__,
+                          "Commit": __commit__,
+                          "Branch": __branch__}, indent=2))
+        sys.exit(0)
+
     main()
