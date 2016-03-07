@@ -35,6 +35,11 @@ dist/calicoctl: $(CALICOCTL_FILE) birdcl
 	 calico/build:latest \
 	 pyinstaller calicoctl.spec -ayF
 
+simple-binary:
+	pip install git+https://github.com/projectcalico/libcalico.git@master
+	pip install -r https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements.txt
+	pyinstaller calicoctl/calicoctl.py -ayF --clean
+
 calico_test/.calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && docker build -t calico/test:latest .
 	touch calico_test/.calico_test.created

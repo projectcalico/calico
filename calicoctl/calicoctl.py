@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""calicoctl
+# Two usage strings - 1 for linux and 1 for other OSes (e.g. Mac and Windows) which can't run the full set of commands.
 
-Override the host:port of the ETCD server by setting the environment variable
+linux_usage = """Override the host:port of the ETCD server by setting the environment variable
 ETCD_AUTHORITY [default: 127.0.0.1:2379]
 
 Usage: calicoctl <command> [<args>...]
@@ -31,6 +31,22 @@ Usage: calicoctl <command> [<args>...]
     ipam              Configure IP address management
     checksystem       Check for incompatibilities on the host system
     diags             Save diagnostic information
+    version           Display the version of calicoctl
+    config            Configure low-level component configuration
+
+See 'calicoctl <command> --help' to read about a specific subcommand.
+"""
+
+otheros_usage = """Override the host:port of the ETCD server by setting the environment variable
+ETCD_AUTHORITY [default: 127.0.0.1:2379]
+
+Usage: calicoctl <command> [<args>...]
+
+    profile           Configure endpoint profiles
+    endpoint          Configure the endpoints assigned to existing containers
+    pool              Configure ip-pools
+    bgp               Configure global bgp
+    ipam              Configure IP address management
     version           Display the version of calicoctl
     config            Configure low-level component configuration
 
@@ -57,7 +73,7 @@ import calico_ctl.version
 import calico_ctl.config
 import calico_ctl.ipam
 from calico_ctl.utils import print_paragraph
-
+from sys import platform as _platform
 # TODO: Implement secure platform support for urllib3. Temporarily ignore
 # insecure platform warnings when running calicoctl commands with secure etcd.
 # See https://github.com/projectcalico/calico-containers/issues/682
@@ -83,14 +99,19 @@ if __name__ == '__main__':
     Example:
       calico_ctl/node.py has a function called node(arguments)
     """
+    if _platform == "linux" or _platform == "linux2":
+        docstring = linux_usage
+    else:
+        docstring = otheros_usage
+
     # If no arguments were provided in the function call, add the help flag
     # to trigger the main help message
     if len(sys.argv) == 1:
-        docopt(__doc__, options_first=True, argv=['--help'])
+        docopt(docstring, options_first=True, argv=['--help'])
         sys.exit(1)
 
     # Run command through initial docopt processing to determine subcommand
-    command_args = docopt(__doc__, options_first=True)
+    command_args = docopt(docstring, options_first=True)
 
     # Group the additional args together and forward them along
     argv = [command_args['<command>']] + command_args['<args>']
@@ -108,7 +129,7 @@ if __name__ == '__main__':
             # command.  This protects against trying to run an invalid command that
             # happens to have the same name as a non-command module.
             if not hasattr(command_module, command):
-                docopt(__doc__, options_first=True, argv=['--help'])
+                docopt(docstring, options_first=True, argv=['--help'])
                 sys.exit(1)
 
             # docopt the arguments through that module's docstring
@@ -119,7 +140,7 @@ if __name__ == '__main__':
             cmd = getattr(command_module, command)
         except AttributeError:
             # Unrecognized submodule. Show main help message
-            docopt(__doc__, options_first=True, argv=['--help'])
+            docopt(docstring, options_first=True, argv=['--help'])
             sys.exit(1)
         else:
             cmd(arguments)
