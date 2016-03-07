@@ -66,7 +66,7 @@ For the first server run:
 gcloud compute instances create \
   calico-1 \
   --image-project coreos-cloud \
-  --image coreos-alpha-709-0-0-v20150611 \
+  --image coreos-alpha-976-0-0-v20160304 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=<PATH_TO_CLOUD_CONFIG>/user-data-first
 ```
@@ -79,7 +79,7 @@ Then, for the second server, run:
 gcloud compute instances create \
   calico-2 \
   --image-project coreos-cloud \
-  --image coreos-alpha-709-0-0-v20150611 \
+  --image coreos-alpha-976-0-0-v20160304 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=<PATH_TO_CLOUD_CONFIG>/user-data-others
 ```

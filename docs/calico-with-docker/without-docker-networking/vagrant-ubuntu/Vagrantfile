@@ -51,8 +51,11 @@ Vagrant.configure(2) do |config|
 
       # download calicoctl.
       host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl #{calicoctl_url}", :privileged => true
-
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
+
+      # Replace docker with the docker 1.10.1 build
+      host.vm.provision :shell, inline: "stop docker", :privileged => true
+      host.vm.provision :shell, inline: "wget -qO /usr/bin/docker https://get.docker.com/builds/Linux/x86_64/docker-1.10.1", :privileged => true
 
       # Calico uses etcd for clustering. Install it on the first host only.
       if i == 1
