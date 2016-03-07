@@ -10,22 +10,21 @@ export KUBE_AUTH_TOKEN="<auth_token>"
 ```
 > You can find your auth token using `kubectl describe secret`
 
-To create a new network policy from a file:
 ```
-cat policy.yaml | policy create
-```
+$ policy help
+Usage:
+    policy create [--namespace=<namespace>] [-f <filename>]
+    policy delete [--namespace=<namespace>] <policy>
+    policy get [--namespace=<namespace>] <policy>
+    policy list
+    policy help
 
-To delete a network policy:
-```
-policy delete <namespace> <policy-name>
-```
+Description:
+    Helper for creating, deleting, and listing Kubernetes
+    NetworkPolicy objects.
 
-To list all `NetworkPolicy` objects:
-```
-policy list
-```
-
-To get details about a specific `NetworkPolicy`:
-```
-policy get <namespace> <policy-name>
+Options:
+    --namespace=<namespace>             Kubernetes namespace to use.
+                                        [default: default]
+    -f --file                           Create from the provided file.
 ```

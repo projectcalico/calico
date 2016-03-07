@@ -21,7 +21,7 @@ dist/policy_agent:
 	calico/build \
 	pyinstaller policy_agent.py -ayF 
 
-dist/policy: 
+dist/policy: $(shell find policy_tool) 
 	# Build NetworkPolicy install tool. 
 	docker run --rm \
 	-v `pwd`:/code \
