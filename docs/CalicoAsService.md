@@ -8,8 +8,9 @@
 
 # Running Calico Node Containers as Services
 
-This guide explains how to run Calico as a system process or service. We
-include examples for Systemd, but the commands can be applied to other init
+This guide explains how to run Calico as a system process or service,
+with a focus on running in a Dockerized deployment. We include
+examples for Systemd, but the commands can be applied to other init
 daemons such as upstart as well.
 
 ## Running the Calico Node Container as a Service
@@ -152,4 +153,4 @@ the `[Unit]` section may be different (such `docker-engine.service`) depending
 on how you've installed Docker.
 Be sure to check this before starting the service.
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/docker-network-plugin/CalicoAsService.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/docker-network-plugin/CalicoAsService.md?pixel)](https://github.com/igrigorik/ga-beacon)
