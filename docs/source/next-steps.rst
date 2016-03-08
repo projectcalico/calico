@@ -61,3 +61,11 @@ instead of IPv4, the following page explains how to do that.
    :maxdepth: 2
 
    ipv6
+
+To update your Calico installation, please consult the following page for
+instructions on how to do so.
+
+.. toctree::
+   :maxdepth: 2
+
+   opens-upgrade
