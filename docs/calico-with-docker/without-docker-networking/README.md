@@ -9,11 +9,11 @@
 # Calico without Docker networking (i.e. `--net=none`)
 
 This tutorial describes how to set up a Calico cluster in a Docker environment
-without Docker networking (i.e. --net=none).  With this option, Docker creates 
+without Docker networking (i.e. --net=none).  With this option, Docker creates
 a container with its own network stack, but not to take any steps to configure
 its network.  Rather than have Docker configure the network, in this tutorial
-we use the `calicoctl` command line tool to add a container into a Calico 
-network: adding the required interface and routes in to the container, and 
+we use the `calicoctl` command line tool to add a container into a Calico
+network: adding the required interface and routes in to the container, and
 configuring Calico with the correct endpoint information.
 
 ## 1. Environment setup
@@ -34,7 +34,7 @@ appropriate instructions for using _Calico without Docker networking_.
 Altenatively, you can manually configure your hosts.
 - [Manual setup](ManualSetup.md)
 
-If you have everything set up properly you should have `calicoctl` in your 
+If you have everything set up properly you should have `calicoctl` in your
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
 
 ## 2. Starting Calico services
@@ -63,13 +63,26 @@ You should see output like this on each node
 
 If you are not running in the cloud you may skip this step and jump to step 4.
 
-If you are running in the cloud, you will need to first configure an IP Pool
-with the `ipip` and `nat-outgoing` options.
+### 3.1 AWS
+
+If all your endpoints are in the same subnet of your VPC, disable Source/Dest. checks on each instance.  You can disable this with the CLI, or right click the instance in the EC2 console and `Change Source/Dest. Check` from the `Networking` submenu.
+
+Using the AWS CLI installed, for each instance:
+
+    aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
+
+After disabling Source/Dest. Checks, configure the `nat-outgoing` option on either Calico node:
+
+    calicoctl pool add 192.168.0.0/16 --nat-outgoing
+
+### 3.2 GCE / DigitalOcean / Other
+
+If you are running in a cloud other than AWS, or your AWS instances are not in the same subnet, you will need to first configure an IP Pool with the `ipip` and `nat-outgoing` options.
 
 On either node:
 
     calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-    
+
 ## 4. Starting containers
 
 Let's go ahead and start a few containers on each host.
@@ -87,7 +100,7 @@ On calico-02
 
 ## 5. Adding Calico networking
 
-Now that docker is running the containers, we can use `calicoctl` to add 
+Now that docker is running the containers, we can use `calicoctl` to add
 networking to them.
 
 On calico-01
@@ -100,10 +113,10 @@ On calico-02
 
     sudo calicoctl container add workload-D 192.168.0.4
     sudo calicoctl container add workload-E 192.168.0.5
-    
-Once the containers have Calico networking added, they gain a new network 
-interface: the assigned IP address. At this point, the containers have not 
-been added to any policy profiles so they won't be able to communicate with 
+
+Once the containers have Calico networking added, they gain a new network
+interface: the assigned IP address. At this point, the containers have not
+been added to any policy profiles so they won't be able to communicate with
 any other containers.
 
 Create some profiles (this can be done on either host)
@@ -112,13 +125,13 @@ Create some profiles (this can be done on either host)
     calicoctl profile add PROF_B
     calicoctl profile add PROF_D
 
-When each container is added to Calico, an "endpoint" is registered for each 
-container's interface. Containers are only allowed to communicate with one 
-another when both of their endpoints are assigned the same profile. To assign 
+When each container is added to Calico, an "endpoint" is registered for each
+container's interface. Containers are only allowed to communicate with one
+another when both of their endpoints are assigned the same profile. To assign
 a profile to an endpoint run the following commands.
 
 On calico-01:
-    
+
     calicoctl container workload-A profile append PROF_A_C_E
     calicoctl container workload-B profile append PROF_B
     calicoctl container workload-C profile append PROF_A_C_E
@@ -128,18 +141,18 @@ On calico-02:
     calicoctl container workload-D profile append PROF_D
     calicoctl container workload-E profile append PROF_A_C_E
 
-*Note that whilst the `calicoctl endpoint commands` can be run on any Calico 
- node, the `calicoctl container` commands will only work on the Calico node 
+*Note that whilst the `calicoctl endpoint commands` can be run on any Calico
+ node, the `calicoctl container` commands will only work on the Calico node
  where the container is hosted.*
 
 
 ## 6. Validation
 
-By default, profiles are configured so that their members can communicate with 
-one another, but workloads in other profiles cannot reach them. A, C and E are 
-all in the same profile so should be able to ping each other.  B and D are in 
+By default, profiles are configured so that their members can communicate with
+one another, but workloads in other profiles cannot reach them. A, C and E are
+all in the same profile so should be able to ping each other.  B and D are in
 their own profile so shouldn't be able to ping anyone else.
-    
+
 Now, check that A can ping C (192.168.0.3) and E (192.168.0.5):
 
     docker exec workload-A ping -c 4 192.168.0.3
@@ -164,7 +177,7 @@ See the [IPv6 worked example](IPv6.md) for a worked example.
 
 ## Advanced network policy
 
-For details about advanced policy options read the 
+For details about advanced policy options read the
 [Advanced Network Policy tutorial](../../AdvancedNetworkPolicy.md).
 
 ## Make a container reachable from the Host-Interface (Internet)
@@ -174,7 +187,7 @@ You cannot simply use `-p`on `docker run` to expose ports. We have a working exa
 ## Further reading
 
 For details on configuring Calico for different network topologies and to
-learn more about Calico under-the-covers please refer to the 
+learn more about Calico under-the-covers please refer to the
 [Further Reading](../../../README.md#further-reading) section on the main
 documentation README.
 

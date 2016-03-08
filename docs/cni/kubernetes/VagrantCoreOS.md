@@ -10,7 +10,7 @@
 
 These instructions allow you to set up a Kubernetes cluster with [Calico networking][calico-networking] using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
 
-## 1. Deploy cluster using Vagrant 
+## 1. Deploy cluster using Vagrant
 
 ### 1.1 Install dependencies
 
@@ -28,7 +28,7 @@ These instructions allow you to set up a Kubernetes cluster with [Calico network
     git clone https://github.com/projectcalico/calico-containers.git
     git checkout tags/**release**
 <!--- end of master only -->
-    
+
 ### 1.3 Startup and SSH
 
 Change into the directory for this guide:
@@ -50,7 +50,7 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have two CoreOS servers - one Kubernetes master and one Kubernetes node. The servers are named calico-01 and calico-02 
+You should now have two CoreOS servers - one Kubernetes master and one Kubernetes node. The servers are named calico-01 and calico-02
 and have IP addresses 172.18.18.101 and 172.18.18.102.
 
 At this point, it's worth checking that your servers can ping each other.
@@ -63,8 +63,8 @@ From calico-02
 
     ping 172.18.18.101
 
-If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should 
-check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also 
+If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should
+check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also
 help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
@@ -74,12 +74,12 @@ You should also verify each host can access etcd.  The following will return an 
 And finally check that Docker is running on both hosts by running
 
     docker ps
-    
-## 2. Using your cluster 
-### 2.1 Deploy Calico Policy Agent 
-The Calico Policy Agent enables network policy on Kubenrnetes. 
 
-To install it: 
+## 2. Using your cluster
+### 2.1 Deploy Calico Policy Agent
+The Calico Policy Agent enables network policy on Kubenrnetes.
+
+To install it:
 
 Log on to the master.
 ```
@@ -116,7 +116,7 @@ NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
 kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
 ```
 
-Check that the DNS pod has been networked using Calico.  You should see a Calico endpoint created for the DNS pod. 
+Check that the DNS pod has been networked using Calico.  You should see a Calico endpoint created for the DNS pod.
 ```
 calicoctl endpoint show --detailed
 ```
