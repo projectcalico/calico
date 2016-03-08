@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: policyagent
-          image: calico/k8s-policy-agent
+          image: calico/k8s-policy-agent:v0.1.0
           imagePullPolicy: Always
           env:
           - name: ETCD_AUTHORITY
