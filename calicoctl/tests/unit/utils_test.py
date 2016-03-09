@@ -89,42 +89,6 @@ class TestUtils(unittest.TestCase):
         # Assert
         self.assertEqual(expected_result, test_result)
 
-    @parameterized.expand([
-        ('1.2.3.4', False),
-        ('abcde', False),
-        ('aa:bb::cc:1234', False),
-        ('aa::256', False),
-        ('aa...bb:256', False),
-        ('aa:256', True),
-        ('1.2.3.244:256', True),
-        ('1.2.a.244:256', True),
-        ('-asr:100', False),
-        ('asr-:100', False),
-        ('asr-temp-test.thr.yes-33:100', True),
-        ('asr-temp-test.-thr.yes-33:100', False),
-        ('asr-temp-test.thr-.yes-33:100', False),
-        ('asr-temp-test.thr-.yes-33:100', False),
-        ('validhostname:0', False),
-        ('validhostname:65536', False),
-        ('validhostname:1', True),
-        ('validhostname:65535', True),
-        ('#notvalidhostname:65535', False),
-        ('verylong' * 100 + ':200', False),
-        ('12.256.122.43:aaa', False)
-    ])
-    def test_validate_hostname_port(self, input_string, expected_result):
-        """
-        Test validate_hostname_port function.
-
-        This also tests validate_hostname which is invoked from
-        validate_hostname_port.
-        """
-        test_result = utils.validate_hostname_port(input_string)
-
-        # Assert expected result
-        self.assertEqual(expected_result, test_result)
-
-
     @patch('os.path.exists', autospec=True)
     def test_ipv6_enabled(self, m_exists):
         """

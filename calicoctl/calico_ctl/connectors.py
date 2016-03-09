@@ -23,7 +23,7 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_CA_CERT_FILE_ENV, DataStoreError)
 from utils import DOCKER_VERSION
 from utils import print_paragraph
-from utils import validate_hostname_port
+from pycalico.util import validate_hostname_port
 
 # If an ETCD_AUTHORITY is specified in the environment variables, validate
 # it.
