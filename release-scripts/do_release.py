@@ -50,7 +50,7 @@ CANDIDATE_VERSION_REPLACE = [
      'git+https://github.com/projectcalico/calico.git@{calico-version}'),
 
     (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git'),
-        'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
+     'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
 
     (re.compile(r'calico_docker_ver\s*=\s*"latest"'),
      'calico_docker_ver = "{version}"'),
@@ -63,6 +63,12 @@ CANDIDATE_VERSION_REPLACE = [
 
     (re.compile('calico/build:latest'),
      'calico/build:{libcalico-version}'),
+
+    (re.compile('git+https://github.com/projectcalico/libcalico.git@master'),
+     'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
+
+    (re.compile('https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements-nosh.txt'),
+     'https://raw.githubusercontent.com/projectcalico/libcalico/{libcalico-version}/build-requirements-nosh.txt'),
 
     (re.compile('calico/node-libnetwork:latest'),
      'calico/node-libnetwork:{libnetwork-version}'),
