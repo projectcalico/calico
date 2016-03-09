@@ -17,8 +17,8 @@ above.
 
 Using the Calico network driver, the required network setup and configuration
 for networking containers using Calico is handled automatically as part of the
-standard network and container lifecycle.  Provided the network is created 
-using the Calico driver, creating a container using that network will 
+standard network and container lifecycle.  Provided the network is created
+using the Calico driver, creating a container using that network will
 automatically add the container to the Calico network, creating all necessary
 Calico configuration and setting up the interface and routes in the container
 accordingly.
@@ -46,13 +46,13 @@ appropriate instructions for _Calico as a Docker network plugin_.
 Altenatively, you can manually configure your hosts.
 - [Manual setup](ManualSetup.md)
 
-If you have everything set up properly you should have `calicoctl` in your 
+If you have everything set up properly you should have `calicoctl` in your
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
 
 ## 2. Starting Calico services
 
-Once you have your cluster up and running, start calico on all the nodes, 
-specifying the `--libnetwork` option to start the Calico network and IPAM 
+Once you have your cluster up and running, start calico on all the nodes,
+specifying the `--libnetwork` option to start the Calico network and IPAM
 driver in a separate container.
 
 On calico-01
@@ -76,7 +76,7 @@ You should see output like this on each node
 
 ## 3. Create the networks
 
-This worked example creates three Docker networks, where containers on a 
+This worked example creates three Docker networks, where containers on a
 particular network are isolated from containers in the other networks.
 
 ### 3.1 Select the IPAM driver
@@ -97,7 +97,7 @@ addresses are supported, although with the current Docker API, it is not
 possible to have an IPv6-only network, and (unlike the IPv4 behavior) it is
 necessary to specify a subnet from which to assign addresses.
 
-When running in a cloud environment we need to also set `ipip` and 
+When running in a cloud environment we need to also set `ipip` and
 `nat-outgoing` options. If using the Calico IPAM driver `calico`, the
 `ipip` and `nat-outgoing` options are configured on the Calico IP Pool.
 
@@ -118,8 +118,8 @@ are routed via the Docker bridge, rather than through the Calico interfaces.
 (For more information on port-forwarding with Calico, check out the [Expose
 Ports to Internet guide](../../ExposePortsToInternet.md).)
 
-When running in a cloud environment we need to also set `ipip` and 
-`nat-outgoing` options. If using the default IPAM driver, `ipip` and 
+When running in a cloud environment we need to also set `ipip` and
+`nat-outgoing` options. If using the default IPAM driver, `ipip` and
 `nat-outgoing` are specified as options on the `network create`.
 
 ### 3.2 Create the network
@@ -130,13 +130,19 @@ We specify the Calico networking driver (`calico`) when creating the network,
 and optionally specify the Calico IPAM driver (`calico`) if you chose to use
 Calico IPAM.
 
-For this worked example, we explicitly choose an CIDR for each network 
+For this worked example, we explicitly choose an CIDR for each network
 rather than using default selections - this is to avoid potential conflicts
 with the default NAT IP assignment used by VirtualBox.  Depending on your
 specific environment, you may need to choose different CIDRs.
 
 So, once you have decided which type of network to create, following the
 appropriate instructions for one of *a)*, *b)*, *c)* or *d)*.
+
+For AWS, chose a) or c), and `Change Source/Dest. Check` on your instances with
+the following EC2 CLI command or by right clicking the instance in the EC2
+console, and selecting it from the Networking submenu.
+
+    aws ec2 modify-instance-attribute --instance-id <instance_id> --source-dest-check "{\"Value\": false}"
 
 #### a) Networking using Calico IPAM in a non-cloud environment
 
@@ -145,19 +151,19 @@ IP Pool with no additional options.  Here we create a pool with CIDR
 192.168.0.0/16.
 
     calicoctl pool add 192.168.0.0/16
-    
+
 To create the networks, run:
 
     docker network create --driver calico --ipam-driver calico net1
     docker network create --driver calico --ipam-driver calico net2
     docker network create --driver calico --ipam-driver calico net3
-    
+
 #### b) Networking using Calico IPAM in a cloud environment
 
-For Calico IPAM in a cloud environment (AWS, DigitalOcean, GCE), you need to 
-first create a Calico IP Pool using the `calicoctl pool add` command specifying
-the `ipip` and `nat-outgoing` options.  Here we create a pool with CIDR
-192.168.0.0/16.
+For Calico IPAM in a cloud environment that doesn't enable direct container to
+container communication (DigitalOcean, GCE), you need to first create a Calico
+IP Pool using the `calicoctl pool add` command specifying the `ipip` and
+`nat-outgoing` options.  Here we create a pool with CIDR 192.168.0.0/16.
 
     calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 
@@ -169,12 +175,12 @@ To create the networks, run:
 
 #### c) Networking using default IPAM in a non-cloud environment
 
-For default IPAM in a non-cloud environment, run: 
+For default IPAM in a non-cloud environment, run:
 
     docker network create --driver calico --subnet=192.168.0.0/24 net1
     docker network create --driver calico --subnet=192.168.1.0/24 net2
     docker network create --driver calico --subnet=192.168.2.0/24 net3
-    
+
 #### d) Networking using default IPAM in a cloud environment
 
 For default IPAM in a cloud environment (AWS, DigitalOcean, GCE), run:
@@ -200,14 +206,14 @@ On calico-02
     docker run --net net3 --name workload-D -tid busybox
     docker run --net net1 --name workload-E -tid busybox
 
-By default, networks are configured so that their members can communicate with 
+By default, networks are configured so that their members can communicate with
 one another, but workloads in other networks cannot reach them.  A, C and E are
-all in the same network so should be able to ping each other.  B and D are in 
+all in the same network so should be able to ping each other.  B and D are in
 their own networks so shouldn't be able to ping anyone else.
 
 ## 5. Validation
-    
-On calico-01 check that A can ping C and E.  We can ping workloads within a 
+
+On calico-01 check that A can ping C and E.  We can ping workloads within a
 containers networks by name.
 
     docker exec workload-A ping -c 4 workload-C.net1
@@ -218,21 +224,21 @@ hostnames for different networks will not be added to the host configuration of
 the container - so we need to determine the IP addresses assigned to containers
 B and D.
 
-Since A and B are on the same host, we can run a single command that inspects 
+Since A and B are on the same host, we can run a single command that inspects
 the IP address and issues the ping.  On calico-01
 
     docker exec workload-A ping -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net2.IPAddress }}" workload-B`
-    
+
 These pings will fail.
 
-To test connectivity between A and D which are on different hosts, it is 
-necessary to run the `docker inspect` command on the host for D (calico-02) 
+To test connectivity between A and D which are on different hosts, it is
+necessary to run the `docker inspect` command on the host for D (calico-02)
 and then run the ping command on the host for A (calico-01).
-    
+
 On calico-02
 
     docker inspect --format "{{ .NetworkSettings.Networks.net3.IPAddress }}" workload-D
-    
+
 This returns the IP address of workload-D.
 
 On calico-01
@@ -277,7 +283,7 @@ the host.
 
 For example:
 
-    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork 
+    calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
 
 See the [IPv6 tutorial](IPv6.md) for a worked example.
 
@@ -287,7 +293,7 @@ See the [IPv6 tutorial](IPv6.md) for a worked example.
 If you are using both the Calico network driver and the Calico IPAM driver
 it is possible to apply advanced policy to the network.
 
-For more details, read  
+For more details, read
 [Accessing Calico policy with Calico as a network plugin](AdvancedPolicy.md).
 
 ## Make a container reachable from the Host-Interface (Internet)
@@ -298,7 +304,7 @@ when using Calico.
 ## Further reading
 
 For details on configuring Calico for different network topologies and to
-learn more about Calico under-the-covers please refer to the 
+learn more about Calico under-the-covers please refer to the
 [Further Reading](../../../README.md#further-reading) section on the main
 documentation README.
 

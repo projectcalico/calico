@@ -6,18 +6,18 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Deploying Calico and Kubernetes on GCE 
+# Deploying Calico and Kubernetes on GCE
 
 These instructions allow you to set up a Kubernetes cluster with Calico networking on GCE using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
 
 ## 1. Getting started with GCE
-These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see 
+These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see
 [the CoreOS on GCE documentation][coreos-gce].
 
 ### 1.1 Install the gcloud tool
 If you already have the `gcloud` utility installed, and a GCE project configured, you may skip this step.
 
-Download and install GCE, then restart your terminal: 
+Download and install GCE, then restart your terminal:
 ```
 curl https://sdk.cloud.google.com | bash
 ```
@@ -28,7 +28,7 @@ Log into your account:
 gcloud auth login
 ```
 
-In the GCE web console, create a project and enable the Compute Engine API.  
+In the GCE web console, create a project and enable the Compute Engine API.
 Set the project as the default for gcloud:
 ```
 gcloud config set project PROJECT_ID
@@ -39,7 +39,7 @@ gcloud config set compute/zone us-central1-a
 ```
 
 ### 1.2 Setting up GCE networking
-GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between 
+GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between
 containers on different hosts:
 ```
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
@@ -59,8 +59,8 @@ gcloud compute firewall-rules list
     git clone https://github.com/projectcalico/calico-containers.git
     git checkout tags/**release**
 <!--- end of master only -->
-    
-## 2. Deploy the VMs 
+
+## 2. Deploy the VMs
 Change into the directory for this guide.
 ```
 cd calico-containers/docs/cni/kubernetes/
@@ -73,7 +73,7 @@ gcloud compute instances create \
   --image-project coreos-cloud \
   --image coreos-stable-835-9-0-v20151208 \
   --machine-type n1-standard-1 \
-  --metadata-from-file user-data=cloud-config/master-config.yaml
+  --metadata-from-file user-data=cloud-config/master-config-ipip.yaml
 ```
 
 Deploy at least one worker node using the following command:
